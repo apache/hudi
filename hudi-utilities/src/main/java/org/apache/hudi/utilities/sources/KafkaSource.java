@@ -57,8 +57,10 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
       long totalNewMsgs = KafkaOffsetGen.CheckpointUtils.totalNewMessages(offsetRanges);
       LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
       if (totalNewMsgs <= 0) {
+        metrics.updateDeltaStreamerKafkaMessageInCount(0);
         return new InputBatch<>(Option.empty(), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
       }
+      metrics.updateDeltaStreamerKafkaMessageInCount(totalNewMsgs);
       JavaRDD<T> newDataRDD = toRDD(offsetRanges);
       return new InputBatch<>(Option.of(newDataRDD), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
     } catch (org.apache.kafka.common.errors.TimeoutException e) {

@@ -145,7 +145,7 @@ public class HoodieWriteClientExample {
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instant.get());
         client.commitCompaction(instant.get(), compactionMetadata.getCommitMetadata().get(), Option.empty());
       }
-
+      client.close();
     }
   }
 

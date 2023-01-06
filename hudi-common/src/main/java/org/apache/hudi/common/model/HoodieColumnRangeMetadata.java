@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import javax.annotation.Nullable;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -147,5 +148,42 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   public static HoodieColumnRangeMetadata<Comparable> stub(String filePath,
                                                            String columnName) {
     return new HoodieColumnRangeMetadata<>(filePath, columnName, null, null, -1, -1, -1, -1);
+  }
+
+  /**
+   * Merges the given two column range metadata.
+   */
+  public static HoodieColumnRangeMetadata<Comparable> merge(
+      HoodieColumnRangeMetadata<Comparable> left,
+      HoodieColumnRangeMetadata<Comparable> right) {
+    String filePath = left.getFilePath();
+    String columnName = left.getColumnName();
+    Comparable min = minVal(left.getMinValue(), right.getMinValue());
+    Comparable max = maxVal(left.getMaxValue(), right.getMaxValue());
+    long nullCount = left.getNullCount() + right.getNullCount();
+    long valueCount = left.getValueCount() + right.getValueCount();
+    long totalSize = left.getTotalSize() + right.getTotalSize();
+    long totalUncompressedSize = left.getTotalUncompressedSize() + right.getTotalUncompressedSize();
+    return create(filePath, columnName, min, max, nullCount, valueCount, totalSize, totalUncompressedSize);
+  }
+
+  private static Comparable minVal(Comparable val1, Comparable val2) {
+    if (val1 == null) {
+      return val2;
+    }
+    if (val2 == null) {
+      return val1;
+    }
+    return val1.compareTo(val2) < 0 ? val1 : val2;
+  }
+
+  private static Comparable maxVal(Comparable val1, Comparable val2) {
+    if (val1 == null) {
+      return val2;
+    }
+    if (val2 == null) {
+      return val1;
+    }
+    return val1.compareTo(val2) > 0 ? val1 : val2;
   }
 }

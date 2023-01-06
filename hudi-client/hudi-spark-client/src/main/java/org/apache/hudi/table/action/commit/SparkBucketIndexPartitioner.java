@@ -33,7 +33,6 @@ import scala.Tuple2;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -46,7 +45,7 @@ import org.apache.hudi.table.WorkloadStat;
 /**
  * Packs incoming records to be inserted into buckets (1 bucket = 1 RDD partition).
  */
-public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> extends
+public class SparkBucketIndexPartitioner<T> extends
     SparkHoodiePartitioner<T> {
 
   private final int numBuckets;

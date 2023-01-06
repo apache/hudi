@@ -30,6 +30,8 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -37,6 +39,8 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -49,16 +53,35 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+/**
+ * Tests {@link TimelineUtils}.
+ */
 public class TestTimelineUtils extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
     initMetaClient();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanMetaClient();
   }
 
   @Test
@@ -74,7 +97,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     activeTimeline.createNewInstant(instant1);
     // create replace metadata only with replaced file Ids (no new files created)
     activeTimeline.saveAsComplete(instant1,
-        Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2, 
+        Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
             newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
     metaClient.reloadActiveTimeline();
 
@@ -109,7 +132,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     String olderPartition = "0"; // older partitions that is modified by all cleans
     for (int i = 1; i <= 5; i++) {
       String ts = i + "";
-      HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, ts);
+      HoodieInstant instant = new HoodieInstant(true, COMMIT_ACTION, ts);
       activeTimeline.createNewInstant(instant);
       activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap())));
 
@@ -123,24 +146,24 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     // verify modified partitions included cleaned data
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(5, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[] {"0", "2", "3", "4", "5"}));
+    assertEquals(partitions, Arrays.asList("0", "2", "3", "4", "5"));
 
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
     assertEquals(4, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[] {"0", "2", "3", "4"}));
+    assertEquals(partitions, Arrays.asList("0", "2", "3", "4"));
 
     // verify only commit actions
-    partitions = TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
+    partitions = TimelineUtils.getWrittenPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(4, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4", "5"}));
+    assertEquals(partitions, Arrays.asList("2", "3", "4", "5"));
 
-    partitions = TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
+    partitions = TimelineUtils.getWrittenPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
     assertEquals(3, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4"}));
+    assertEquals(partitions, Arrays.asList("2", "3", "4"));
   }
 
   @Test
-  public void testGetPartitionsUnpartitioned() throws IOException {
+  public void testGetPartitionsUnPartitioned() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertTrue(activeCommitTimeline.empty());
@@ -148,7 +171,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     String partitionPath = "";
     for (int i = 1; i <= 5; i++) {
       String ts = i + "";
-      HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, ts);
+      HoodieInstant instant = new HoodieInstant(true, COMMIT_ACTION, ts);
       activeTimeline.createNewInstant(instant);
       activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, partitionPath, ts, 2, Collections.emptyMap())));
 
@@ -177,17 +200,17 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       String ts = i + "";
       HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, ts);
       activeTimeline.createNewInstant(instant);
-      activeTimeline.saveAsComplete(instant, Option.of(getRestoreMetadata(basePath, ts, ts, 2, HoodieTimeline.COMMIT_ACTION)));
+      activeTimeline.saveAsComplete(instant, Option.of(getRestoreMetadata(basePath, ts, ts, 2, COMMIT_ACTION)));
     }
 
     metaClient.reloadActiveTimeline();
 
     // verify modified partitions included cleaned data
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
-    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4", "5"}));
+    assertEquals(partitions, Arrays.asList("2", "3", "4", "5"));
 
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
-    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4"}));
+    assertEquals(partitions, Arrays.asList("2", "3", "4"));
   }
 
   @Test
@@ -200,12 +223,12 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, extraMetadataKey).isPresent());
 
     String ts = "0";
-    HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, ts);
+    HoodieInstant instant = new HoodieInstant(true, COMMIT_ACTION, ts);
     activeTimeline.createNewInstant(instant);
     activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap())));
 
     ts = "1";
-    instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, ts);
+    instant = new HoodieInstant(true, COMMIT_ACTION, ts);
     activeTimeline.createNewInstant(instant);
     Map<String, String> extraMetadata = new HashMap<>();
     extraMetadata.put(extraMetadataKey, extraMetadataValue1);
@@ -216,8 +239,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     // verify modified partitions included cleaned data
     verifyExtraMetadataLatestValue(extraMetadataKey, extraMetadataValue1, false);
     assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, "unknownKey").isPresent());
-    
-    // verify adding clustering commit doesnt change behavior of getExtraMetadataFromLatest
+
+    // verify adding clustering commit doesn't change behavior of getExtraMetadataFromLatest
     String ts2 = "2";
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts2);
     activeTimeline.createNewInstant(instant2);
@@ -227,7 +250,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         Option.of(getReplaceCommitMetadata(basePath, ts2, "p2", 0,
             "p2", 3, extraMetadata, WriteOperationType.CLUSTER)));
     metaClient.reloadActiveTimeline();
-    
+
     verifyExtraMetadataLatestValue(extraMetadataKey, extraMetadataValue1, false);
     verifyExtraMetadataLatestValue(extraMetadataKey, newValueForMetadata, true);
     assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, "unknownKey").isPresent());
@@ -240,10 +263,85 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     assertTrue(extraMetadataEntries.get("2").isPresent());
     assertEquals(newValueForMetadata, extraMetadataEntries.get("2").get());
   }
-  
+
+  @Test
+  public void testGetCommitsTimelineAfter() throws IOException {
+    // Should only load active timeline
+    String startTs = "010";
+    HoodieTableMetaClient mockMetaClient = prepareMetaClient(
+        Arrays.asList(
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "009"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "011"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "012")),
+        Arrays.asList(new HoodieInstant(COMPLETED, COMMIT_ACTION, "001"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "002")),
+        startTs
+    );
+    verifyTimeline(
+        Arrays.asList(
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "011"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "012")),
+        TimelineUtils.getCommitsTimelineAfter(mockMetaClient, startTs));
+    verify(mockMetaClient, never()).getArchivedTimeline(any());
+
+    // Should load both archived and active timeline
+    startTs = "001";
+    mockMetaClient = prepareMetaClient(
+        Arrays.asList(
+            new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "009"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "011"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "012")),
+        Arrays.asList(new HoodieInstant(COMPLETED, COMMIT_ACTION, "001"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "002")),
+        startTs
+    );
+    verifyTimeline(
+        Arrays.asList(
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "002"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "011"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "012")),
+        TimelineUtils.getCommitsTimelineAfter(mockMetaClient, startTs));
+    verify(mockMetaClient, times(1)).getArchivedTimeline(any());
+  }
+
+  private HoodieTableMetaClient prepareMetaClient(
+      List<HoodieInstant> activeInstants,
+      List<HoodieInstant> archivedInstants,
+      String startTs
+  ) throws IOException {
+    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieArchivedTimeline mockArchivedTimeline = mock(HoodieArchivedTimeline.class);
+    when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), eq(true)))
+        .thenReturn(activeInstants);
+    HoodieActiveTimeline activeTimeline = new HoodieActiveTimeline(mockMetaClient);
+    when(mockMetaClient.getActiveTimeline())
+        .thenReturn(activeTimeline);
+    when(mockMetaClient.getArchivedTimeline(any()))
+        .thenReturn(mockArchivedTimeline);
+    HoodieDefaultTimeline mergedTimeline = new HoodieDefaultTimeline(
+        archivedInstants.stream()
+            .filter(instant -> instant.getTimestamp().compareTo(startTs) >= 0),
+        i -> Option.empty())
+        .mergeTimeline(activeTimeline);
+    when(mockArchivedTimeline.mergeTimeline(eq(activeTimeline)))
+        .thenReturn(mergedTimeline);
+
+    return mockMetaClient;
+  }
+
+  public void verifyTimeline(List<HoodieInstant> expectedInstants, HoodieTimeline timeline) {
+    assertEquals(
+        expectedInstants.stream().sorted().collect(Collectors.toList()),
+        timeline.getInstants().stream().sorted().collect(Collectors.toList())
+    );
+  }
+
   private void verifyExtraMetadataLatestValue(String extraMetadataKey, String expected, boolean includeClustering) {
     final Option<String> extraLatestValue;
-    if (includeClustering) {       
+    if (includeClustering) {
       extraLatestValue = TimelineUtils.getExtraMetadataFromLatestIncludeClustering(metaClient, extraMetadataKey);
     } else {
       extraLatestValue = TimelineUtils.getExtraMetadataFromLatest(metaClient, extraMetadataKey);
@@ -338,6 +436,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         .setTotalFilesDeleted(1)
         .setStartCleanTime(time)
         .setEarliestCommitToRetain(time)
+        .setLastCompletedCommitTimestamp("")
         .setPartitionMetadata(partitionToFilesCleaned).build();
 
     return TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata);

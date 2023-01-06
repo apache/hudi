@@ -28,8 +28,8 @@ import java.io.Serializable;
 public interface BucketIndexLocationMapper extends Serializable {
 
   /**
-   * Get record location given hoodie key and partition path
+   * Get record location given hoodie key
    */
-  Option<HoodieRecordLocation> getRecordLocation(HoodieKey key, String partitionPath);
+  Option<HoodieRecordLocation> getRecordLocation(HoodieKey key);
 
 }

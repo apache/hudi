@@ -153,13 +153,6 @@
             <artifactId>protobuf-java</artifactId>
             <version>${proto.version}</version>
         </dependency>
-
-        <!-- Logging -->
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-core</artifactId>
-            <scope>compile</scope>
-        </dependency>
         
         <!-- Fasterxml -->
         <dependency>

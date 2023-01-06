@@ -19,7 +19,7 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -67,7 +67,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.io.storage.HoodieHFileReader.SCHEMA_KEY;
+import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
 
 /**
  * Utility methods to aid testing inside the HoodieClient module.
@@ -92,7 +92,9 @@ public class HoodieClientTestUtils {
    */
   public static SparkConf getSparkConfForTest(String appName) {
     SparkConf sparkConf = new SparkConf().setAppName(appName)
-        .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").setMaster("local[8]");
+        .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").setMaster("local[4]")
+        .set("spark.sql.shuffle.partitions", "4")
+        .set("spark.default.parallelism", "4");
 
     String evlogDir = System.getProperty("SPARK_EVLOG_DIR");
     if (evlogDir != null) {
@@ -100,7 +102,7 @@ public class HoodieClientTestUtils {
       sparkConf.set("spark.eventLog.dir", evlogDir);
     }
 
-    return HoodieReadClient.addHoodieSupport(sparkConf);
+    return SparkRDDReadClient.addHoodieSupport(sparkConf);
   }
 
   private static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,
@@ -155,8 +157,8 @@ public class HoodieClientTestUtils {
   public static long countRecordsOptionallySince(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
                                                  HoodieTimeline commitTimeline, Option<String> lastCommitTimeOpt) {
     List<HoodieInstant> commitsToReturn =
-        lastCommitTimeOpt.isPresent() ? commitTimeline.findInstantsAfter(lastCommitTimeOpt.get(), Integer.MAX_VALUE).getInstants().collect(Collectors.toList()) :
-            commitTimeline.getInstants().collect(Collectors.toList());
+        lastCommitTimeOpt.isPresent() ? commitTimeline.findInstantsAfter(lastCommitTimeOpt.get(), Integer.MAX_VALUE).getInstants() :
+            commitTimeline.getInstants();
     try {
       // Go over the commit metadata, and obtain the new files that need to be read.
       HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);

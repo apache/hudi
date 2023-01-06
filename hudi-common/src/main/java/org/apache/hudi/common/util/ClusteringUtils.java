@@ -30,12 +30,14 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -65,7 +67,7 @@ public class ClusteringUtils {
   public static Stream<Pair<HoodieInstant, HoodieClusteringPlan>> getAllPendingClusteringPlans(
       HoodieTableMetaClient metaClient) {
     List<HoodieInstant> pendingReplaceInstants =
-        metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants().collect(Collectors.toList());
+        metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants();
     return pendingReplaceInstants.stream().map(instant -> getClusteringPlan(metaClient, instant))
         .filter(Option::isPresent).map(Option::get);
   }
@@ -215,12 +217,48 @@ public class ClusteringUtils {
   }
 
   public static List<HoodieInstant> getPendingClusteringInstantTimes(HoodieTableMetaClient metaClient) {
-    return metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants()
+    return metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstantsAsStream()
             .filter(instant -> isPendingClusteringInstant(metaClient, instant))
             .collect(Collectors.toList());
   }
 
   public static boolean isPendingClusteringInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     return getClusteringPlan(metaClient, instant).isPresent();
+  }
+
+  /**
+   * Checks whether the latest clustering instant has a subsequent cleaning action. Returns
+   * the clustering instant if there is such cleaning action or empty.
+   *
+   * @param activeTimeline The active timeline
+   * @param metaClient     The meta client
+   * @return the oldest instant to retain for clustering
+   */
+  public static Option<HoodieInstant> getOldestInstantToRetainForClustering(
+      HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient) throws IOException {
+    HoodieTimeline replaceTimeline = activeTimeline.getCompletedReplaceTimeline();
+    if (!replaceTimeline.empty()) {
+      Option<HoodieInstant> cleanInstantOpt =
+          activeTimeline.getCleanerTimeline().filter(instant -> !instant.isCompleted()).firstInstant();
+      if (cleanInstantOpt.isPresent()) {
+        // The first clustering instant of which timestamp is greater than or equal to the earliest commit to retain of
+        // the clean metadata.
+        HoodieInstant cleanInstant = cleanInstantOpt.get();
+        String earliestCommitToRetain =
+            CleanerUtils.getCleanerPlan(metaClient,
+                    cleanInstant.isRequested()
+                        ? cleanInstant
+                        : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
+                .getEarliestInstantToRetain().getTimestamp();
+        return StringUtils.isNullOrEmpty(earliestCommitToRetain)
+            ? Option.empty()
+            : replaceTimeline.filter(instant ->
+                HoodieTimeline.compareTimestamps(instant.getTimestamp(),
+                    HoodieTimeline.GREATER_THAN_OR_EQUALS,
+                    earliestCommitToRetain))
+            .firstInstant();
+      }
+    }
+    return Option.empty();
   }
 }

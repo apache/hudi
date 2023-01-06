@@ -32,6 +32,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.util.stream.IntStream;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -63,7 +64,7 @@ public class TestCkpMetadata {
 
     assertThat(metadata.lastPendingInstant(), is("2"));
     metadata.commitInstant("2");
-    assertThat(metadata.lastPendingInstant(), is("1"));
+    assertThat(metadata.lastPendingInstant(), equalTo(null));
 
     // test cleaning
     IntStream.range(3, 6).forEach(i -> metadata.startInstant(i + ""));

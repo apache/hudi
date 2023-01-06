@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -124,28 +125,28 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                           Properties properties)
-      throws IOException {
-    properties = HoodieTableMetaClient.withPropertyBuilder()
-      .setTableName(RAW_TRIPS_TEST_NAME)
-      .setTableType(tableType)
-      .setPayloadClass(HoodieAvroPayload.class)
-      .fromProperties(properties)
-      .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
+                                           Properties properties) throws IOException {
+    return init(hadoopConf, basePath, tableType, properties, null);
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                            Properties properties, String databaseName)
       throws IOException {
-    properties = HoodieTableMetaClient.withPropertyBuilder()
-      .setDatabaseName(databaseName)
-      .setTableName(RAW_TRIPS_TEST_NAME)
-      .setTableType(tableType)
-      .setPayloadClass(HoodieAvroPayload.class)
-      .fromProperties(properties)
-      .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
+    HoodieTableMetaClient.PropertyBuilder builder =
+        HoodieTableMetaClient.withPropertyBuilder()
+            .setDatabaseName(databaseName)
+            .setTableName(RAW_TRIPS_TEST_NAME)
+            .setTableType(tableType)
+            .setPayloadClass(HoodieAvroPayload.class);
+
+    String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
+    if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
+      builder.setPartitionFields("some_nonexistent_field");
+    }
+
+    Properties processedProperties = builder.fromProperties(properties).build();
+
+    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, processedProperties);
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat) throws IOException {

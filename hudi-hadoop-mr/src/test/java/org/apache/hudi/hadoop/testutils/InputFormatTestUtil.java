@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop.testutils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -86,7 +87,10 @@ public class InputFormatTestUtil {
           baseFileFormat);
     }
 
-    java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
+    java.nio.file.Path partitionPath = useNonPartitionedKeyGen
+        ? basePath
+        : basePath.resolve(Paths.get("2016", "05", "01"));
+
     setupPartition(basePath, partitionPath);
 
     if (injectData) {
@@ -363,7 +367,7 @@ public class InputFormatTestUtil {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, rolledBackInstant);
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     // if update belongs to an existing log file
     writer.appendBlock(new HoodieCommandBlock(header));
     return writer;
@@ -392,13 +396,14 @@ public class InputFormatTestUtil {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchema.toString());
     HoodieDataBlock dataBlock = null;
+    List<HoodieRecord> hoodieRecords = records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     if (logBlockType == HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK) {
       dataBlock = new HoodieHFileDataBlock(
-          records, header, Compression.Algorithm.GZ, writer.getLogFile().getPath());
+          hoodieRecords, header, Compression.Algorithm.GZ, writer.getLogFile().getPath());
     } else if (logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
-      dataBlock = new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP);
+      dataBlock = new HoodieParquetDataBlock(hoodieRecords, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP, 0.1, true);
     } else {
-      dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      dataBlock = new HoodieAvroDataBlock(hoodieRecords, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
     }
     writer.appendBlock(dataBlock);
     return writer;
@@ -417,7 +422,7 @@ public class InputFormatTestUtil {
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, oldCommit);
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     HoodieCommandBlock rollbackBlock = new HoodieCommandBlock(header);
     writer.appendBlock(rollbackBlock);
     return writer;

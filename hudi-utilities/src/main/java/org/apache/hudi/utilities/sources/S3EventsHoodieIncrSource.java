@@ -32,7 +32,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 
-import com.esotericsoftware.minlog.Log;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -109,7 +108,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       } catch (IOException e) {
         throw new HoodieException(String.format("Failed to parse sparkOptions: %s", props.getString(Config.SPARK_DATASOURCE_OPTIONS)), e);
       }
-      Log.info(String.format("sparkOptions loaded: %s", sparkOptionsMap));
+      LOG.info(String.format("sparkOptions loaded: %s", sparkOptionsMap));
       dataFrameReader = dataFrameReader.options(sparkOptionsMap);
     }
     return dataFrameReader;
@@ -157,7 +156,9 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL()).load(srcPath)
           // add filtering so that only interested records are returned.
           .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              queryTypeAndInstantEndpts.getRight().getLeft()));
+              queryTypeAndInstantEndpts.getRight().getLeft()))
+          .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+              queryTypeAndInstantEndpts.getRight().getRight()));
     }
 
     if (source.isEmpty()) {

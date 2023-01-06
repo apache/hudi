@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -31,7 +30,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-public class SparkBulkInsertPreppedCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class SparkBulkInsertPreppedCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
 
   private final HoodieData<HoodieRecord<T>> preppedInputRecordRdd;

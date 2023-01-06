@@ -22,11 +22,14 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -37,6 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -59,13 +63,16 @@ import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.hudi.utilities.deltastreamer.BootstrapExecutor;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.functions;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -86,7 +93,7 @@ import static org.apache.hudi.utilities.UtilHelpers.readConfig;
  */
 public class SparkMain {
 
-  private static final Logger LOG = Logger.getLogger(SparkMain.class);
+  private static final Logger LOG = LogManager.getLogger(SparkMain.class);
 
   /**
    * Commands.
@@ -95,7 +102,7 @@ public class SparkMain {
     BOOTSTRAP, ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN, COMPACT_SCHEDULE_AND_EXECUTE,
     COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLUSTERING_SCHEDULE,
     CLUSTERING_RUN, CLUSTERING_SCHEDULE_AND_EXECUTE, CLEAN, DELETE_MARKER, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE,
-    REPAIR_DEPRECATED_PARTITION, RENAME_PARTITION
+    REPAIR_DEPRECATED_PARTITION, RENAME_PARTITION, ARCHIVE
   }
 
   public static void main(String[] args) throws Exception {
@@ -144,7 +151,7 @@ public class SparkMain {
           }
           configs = new ArrayList<>();
           if (args.length > 10) {
-            configs.addAll(Arrays.asList(args).subList(9, args.length));
+            configs.addAll(Arrays.asList(args).subList(10, args.length));
           }
           returnCode = compact(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[7],
               Integer.parseInt(args[8]), HoodieCompactor.EXECUTE, propsFilePath, configs);
@@ -287,6 +294,10 @@ public class SparkMain {
           assert (args.length == 6);
           returnCode = renamePartition(jsc, args[3], args[4], args[5]);
           break;
+        case ARCHIVE:
+          assert (args.length == 8);
+          returnCode = archive(jsc, Integer.parseInt(args[3]), Integer.parseInt(args[4]), Integer.parseInt(args[5]), Boolean.parseBoolean(args[6]), args[7]);
+          break;
         default:
           break;
       }
@@ -309,8 +320,8 @@ public class SparkMain {
   }
 
   protected static int deleteMarker(JavaSparkContext jsc, String instantTime, String basePath) {
-    try {
-      SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false);
+    try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
+
       HoodieWriteConfig config = client.getConfig();
       HoodieEngineContext context = client.getEngineContext();
       HoodieSparkTable table = HoodieSparkTable.create(config, context);
@@ -455,8 +466,15 @@ public class SparkMain {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
       Map<String, String> propsMap = getPropsForRewrite(metaClient);
       rewriteRecordsToNewPartition(basePath, newPartition, recordsToRewrite, metaClient, propsMap);
-      // after re-writing, we can safely delete older data.
+      // after re-writing, we can safely delete older partition.
       deleteOlderPartition(basePath, oldPartition, recordsToRewrite, propsMap);
+      // also, we can physically delete the old partition.
+      FileSystem fs = FSUtils.getFs(new Path(basePath), metaClient.getHadoopConf());
+      try {
+        fs.delete(new Path(basePath, oldPartition), true);
+      } catch (IOException e) {
+        LOG.warn("Failed to delete older partition " + basePath);
+      }
     }
     return 0;
   }
@@ -472,10 +490,14 @@ public class SparkMain {
   }
 
   private static void rewriteRecordsToNewPartition(String basePath, String newPartition, Dataset<Row> recordsToRewrite, HoodieTableMetaClient metaClient, Map<String, String> propsMap) {
-    recordsToRewrite.withColumn(metaClient.getTableConfig().getPartitionFieldProp(), functions.lit(newPartition))
+    String partitionFieldProp = metaClient.getTableConfig().getPartitionFieldProp();
+    StructType structType = recordsToRewrite.schema();
+    int partitionIndex = structType.fieldIndex(partitionFieldProp);
+
+    recordsToRewrite.withColumn(metaClient.getTableConfig().getPartitionFieldProp(), functions.lit(null).cast(structType.apply(partitionIndex).dataType()))
         .write()
         .options(propsMap)
-        .option("hoodie.datasource.write.operation", "insert")
+        .option("hoodie.datasource.write.operation", WriteOperationType.BULK_INSERT.value())
         .format("hudi")
         .mode("Append")
         .save(basePath);
@@ -483,10 +505,8 @@ public class SparkMain {
 
   private static Dataset<Row> getRecordsToRewrite(String basePath, String oldPartition, SQLContext sqlContext) {
     return sqlContext.read()
-        .option("hoodie.datasource.read.extract.partition.values.from.path", "false")
         .format("hudi")
-        .load(basePath)
-        .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == '" + oldPartition + "'")
+        .load(basePath + "/" + oldPartition)
         .drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
         .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
         .drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)
@@ -553,8 +573,7 @@ public class SparkMain {
 
   private static int createSavepoint(JavaSparkContext jsc, String commitTime, String user,
                                      String comments, String basePath) throws Exception {
-    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false);
-    try {
+    try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
       client.savepoint(commitTime, user, comments);
       LOG.info(String.format("The commit \"%s\" has been savepointed.", commitTime));
       return 0;
@@ -565,8 +584,7 @@ public class SparkMain {
   }
 
   private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath, boolean lazyCleanPolicy) throws Exception {
-    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, lazyCleanPolicy);
-    try {
+    try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, lazyCleanPolicy)) {
       client.restoreToSavepoint(savepointTime);
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
       return 0;
@@ -577,8 +595,7 @@ public class SparkMain {
   }
 
   private static int deleteSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
-    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false);
-    try {
+    try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
       client.deleteSavepoint(savepointTime);
       LOG.info(String.format("Savepoint \"%s\" deleted.", savepointTime));
       return 0;
@@ -633,5 +650,24 @@ public class SparkMain {
         .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(lazyCleanPolicy ? HoodieFailedWritesCleaningPolicy.LAZY :
             HoodieFailedWritesCleaningPolicy.EAGER).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+  }
+
+  private static int archive(JavaSparkContext jsc, int minCommits, int maxCommits, int commitsRetained, boolean enableMetadata, String basePath) {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits,maxCommits).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(commitsRetained).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
+        .build();
+    HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
+    HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
+    try {
+      HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
+      archiver.archiveIfRequired(context,true);
+    } catch (IOException ioe) {
+      LOG.error("Failed to archive with IOException: " + ioe);
+      return  -1;
+    }
+    return 0;
   }
 }

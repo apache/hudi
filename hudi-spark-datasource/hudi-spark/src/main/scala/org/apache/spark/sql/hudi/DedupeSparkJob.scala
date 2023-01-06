@@ -53,7 +53,7 @@ class DedupeSparkJob(basePath: String,
       s"""
       select  `${HoodieRecord.RECORD_KEY_METADATA_FIELD}` as dupe_key,
       count(*) as dupe_cnt
-      from ${tblName}
+      from $tblName
       group by `${HoodieRecord.RECORD_KEY_METADATA_FIELD}`
       having dupe_cnt > 1
       """

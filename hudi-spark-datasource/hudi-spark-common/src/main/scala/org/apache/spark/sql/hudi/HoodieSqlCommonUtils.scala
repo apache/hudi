@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig}
 import org.apache.hudi.common.fs.FSUtils
@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
-import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper, DataSourceReadOptions, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
@@ -76,6 +76,20 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
     FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala
+  }
+
+  def getFilesInPartitions(spark: SparkSession,
+                           table: CatalogTable,
+                           partitionPaths: Seq[String]): Map[String, Array[FileStatus]] = {
+    val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
+    val metadataConfig = {
+      val properties = new Properties()
+      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++
+        table.properties).asJava)
+      HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
+    }
+    FSUtils.getFilesInPartitions(sparkEngine, metadataConfig, getTableLocation(table, spark),
+      partitionPaths.toArray).asScala.toMap
   }
 
   /**
@@ -201,7 +215,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     val conf = sparkSession.sessionState.newHadoopConf()
     uri.map(makePathQualified(_, conf))
       .map(removePlaceHolder)
-      .getOrElse(throw new IllegalArgumentException(s"Missing location for ${identifier}"))
+      .getOrElse(throw new IllegalArgumentException(s"Missing location for $identifier"))
   }
 
   private def removePlaceHolder(path: String): String = {
@@ -249,9 +263,17 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   def withSparkConf(spark: SparkSession, options: Map[String, String])
                    (baseConfig: Map[String, String] = Map.empty): Map[String, String] = {
     baseConfig ++ DFSPropertiesConfiguration.getGlobalProps.asScala ++ // Table options has the highest priority
-      (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mappingSqlOptionToHoodieParam(options))
-        .filterKeys(_.startsWith("hoodie."))
+      (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(options))
+        .filterKeys(isHoodieConfigKey)
   }
+
+  /**
+   * Check if Sql options are Hoodie Config keys.
+   *
+   * TODO: standardize the key prefix so that we don't need this helper (HUDI-4935)
+   */
+  def isHoodieConfigKey(key: String): Boolean =
+    key.startsWith("hoodie.") || key == DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key
 
   /**
    * Checks whether Spark is using Hive as Session's Catalog

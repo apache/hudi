@@ -29,7 +29,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
@@ -37,12 +39,12 @@ import org.apache.hudi.utils.TestSQL;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -63,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * IT cases for {@link org.apache.hudi.common.model.HoodieRecord}.
  */
+@ExtendWith(FlinkMiniCluster.class)
 public class ITTestHoodieFlinkCompactor {
 
   protected static final Logger LOG = LoggerFactory.getLogger(ITTestHoodieFlinkCompactor.class);
@@ -134,7 +137,7 @@ public class ITTestHoodieFlinkCompactor {
     // infer changelog mode
     CompactionUtil.inferChangelogMode(conf, metaClient);
 
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
 
     String compactionInstantTime = scheduleCompactionPlan(metaClient, writeClient);
 
@@ -154,8 +157,8 @@ public class ITTestHoodieFlinkCompactor {
         .rebalance()
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
-            new ProcessOperator<>(new CompactFunction(conf)))
-        .setParallelism(compactionPlan.getOperations().size())
+            new CompactOperator(conf))
+        .setParallelism(FlinkMiniCluster.DEFAULT_PARALLELISM)
         .addSink(new CompactionCommitSink(conf))
         .name("clean_commits")
         .uid("uid_clean_commits")
@@ -188,15 +191,15 @@ public class ITTestHoodieFlinkCompactor {
     tableEnv.executeSql(TestSQL.UPDATE_INSERT_T1).await();
 
     // Make configuration and setAvroSchema.
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
     FlinkCompactionConfig cfg = new FlinkCompactionConfig();
     cfg.path = tempFile.getAbsolutePath();
     cfg.minCompactionIntervalSeconds = 3;
     cfg.schedule = true;
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
     conf.setString(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
+    conf.setInteger(FlinkOptions.COMPACTION_TASKS.key(), FlinkMiniCluster.DEFAULT_PARALLELISM);
 
-    HoodieFlinkCompactor.AsyncCompactionService asyncCompactionService = new HoodieFlinkCompactor.AsyncCompactionService(cfg, conf, env);
+    HoodieFlinkCompactor.AsyncCompactionService asyncCompactionService = new HoodieFlinkCompactor.AsyncCompactionService(cfg, conf);
     asyncCompactionService.start(null);
 
     // wait for the asynchronous commit to finish
@@ -237,7 +240,7 @@ public class ITTestHoodieFlinkCompactor {
 
     List<String> compactionInstantTimeList = new ArrayList<>(2);
 
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
 
     compactionInstantTimeList.add(scheduleCompactionPlan(metaClient, writeClient));
 
@@ -251,7 +254,7 @@ public class ITTestHoodieFlinkCompactor {
     // re-create the write client/fs view server
     // or there is low probability that connection refused occurs then
     // the reader metadata view is not complete
-    writeClient = StreamerUtil.createWriteClient(conf);
+    writeClient = FlinkWriteClients.createWriteClient(conf);
 
     metaClient.reloadActiveTimeline();
     compactionInstantTimeList.add(scheduleCompactionPlan(metaClient, writeClient));
@@ -277,7 +280,7 @@ public class ITTestHoodieFlinkCompactor {
         .rebalance()
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
-            new ProcessOperator<>(new CompactFunction(conf)))
+            new CompactOperator(conf))
         .setParallelism(1)
         .addSink(new CompactionCommitSink(conf))
         .name("compaction_commit")
@@ -294,7 +297,7 @@ public class ITTestHoodieFlinkCompactor {
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
     tableEnv.getConfig().getConfiguration()
-            .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "2");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());

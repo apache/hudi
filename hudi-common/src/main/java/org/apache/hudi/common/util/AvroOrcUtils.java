@@ -18,42 +18,45 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericData.StringType;
+import org.apache.avro.util.Utf8;
+import org.apache.hadoop.hive.common.type.HiveDecimal;
+import org.apache.hadoop.hive.ql.exec.vector.BytesColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.ColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.DecimalColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.DoubleColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.ListColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.LongColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.MapColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.StructColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.TimestampColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.UnionColumnVector;
+import org.apache.hadoop.hive.serde2.io.DateWritable;
+import org.apache.orc.TypeDescription;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalType;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.generic.GenericData;
-import java.nio.charset.StandardCharsets;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData.StringType;
-import org.apache.avro.util.Utf8;
-import org.apache.orc.storage.common.type.HiveDecimal;
-import org.apache.orc.storage.ql.exec.vector.BytesColumnVector;
-import org.apache.orc.storage.ql.exec.vector.ColumnVector;
-import org.apache.orc.storage.ql.exec.vector.DecimalColumnVector;
-import org.apache.orc.storage.ql.exec.vector.DoubleColumnVector;
-import org.apache.orc.storage.ql.exec.vector.ListColumnVector;
-import org.apache.orc.storage.ql.exec.vector.LongColumnVector;
-import org.apache.orc.storage.ql.exec.vector.MapColumnVector;
-import org.apache.orc.storage.ql.exec.vector.StructColumnVector;
-import org.apache.orc.storage.ql.exec.vector.TimestampColumnVector;
-import org.apache.orc.storage.ql.exec.vector.UnionColumnVector;
-import org.apache.orc.storage.serde2.io.DateWritable;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.orc.TypeDescription;
 
 import static org.apache.avro.JsonProperties.NULL_VALUE;
+import static org.apache.hudi.common.util.BinaryUtil.toBytes;
 
 /**
  * Methods including addToVector, addUnionValue, createOrcSchema are originally from
@@ -221,8 +224,7 @@ public class AvroOrcUtils {
           binaryBytes = ((GenericData.Fixed)value).bytes();
         } else if (value instanceof ByteBuffer) {
           final ByteBuffer byteBuffer = (ByteBuffer) value;
-          binaryBytes = new byte[byteBuffer.remaining()];
-          byteBuffer.get(binaryBytes);
+          binaryBytes = toBytes(byteBuffer);
         } else if (value instanceof byte[]) {
           binaryBytes = (byte[]) value;
         } else {

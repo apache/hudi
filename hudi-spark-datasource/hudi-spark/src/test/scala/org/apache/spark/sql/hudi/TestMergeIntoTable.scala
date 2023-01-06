@@ -17,13 +17,13 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.hudi.common.fs.FSUtils
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto Basic") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -109,11 +109,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
        """.stripMargin)
       val cnt = spark.sql(s"select * from $tableName where id = 1").count()
       assertResult(0)(cnt)
-    }
+    })
   }
 
   test("Test MergeInto with ignored record") {
-    withTempDir {tmp =>
+    withRecordType()(withTempDir {tmp =>
       val sourceTable = generateTableName
       val targetTable = generateTableName
       // Create source table
@@ -187,11 +187,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 20.0, 1001),
         Seq(3, "a3", 12.0, 1000)
       )
-    }
+    })
   }
 
   test("Test MergeInto for MOR table ") {
-    withTempDir {tmp =>
+    withRecordType()(withTempDir {tmp =>
       val tableName = generateTableName
       // Create a mor partitioned table.
       spark.sql(
@@ -298,11 +298,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id,name,price,dt from $tableName order by id")(
         Seq(1, "a1", 12, "2021-03-21")
       )
-    }
+    })
   }
 
   test("Test MergeInto with insert only") {
-    withTempDir {tmp =>
+    withRecordType()(withTempDir {tmp =>
       // Create a partitioned mor table
       val tableName = generateTableName
       spark.sql(
@@ -352,11 +352,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 10, "2021-03-21"),
         Seq(2, "a2", 10, "2021-03-20")
       )
-    }
+    })
   }
 
   test("Test MergeInto For PreCombineField") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName1 = generateTableName
         // Create a mor partitioned table.
@@ -425,11 +425,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 12, "2021-03-21", 1002)
         )
       }
-    }
+    })
   }
 
   test("Test MergeInto with preCombine field expression") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName1 = generateTableName
         spark.sql(
@@ -485,11 +485,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 24, "2021-03-21", 1002)
         )
       }
-    }
+    })
   }
 
   test("Test MergeInto with primaryKey expression") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       val tableName1 = generateTableName
       spark.sql(
         s"""
@@ -544,11 +544,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id,name,price,v,dt from $tableName1 order by id")(
         Seq(1, "a1", 10, 1000, "2021-03-21")
       )
-    }
+    })
   }
 
   test("Test MergeInto with combination of delete update insert") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       val sourceTable = generateTableName
       val targetTable = generateTableName
       // Create source table
@@ -606,11 +606,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         Seq(11, "s11", 110, 2011, "2021-03-21"),
         Seq(12, "s12", 120, 2012, "2021-03-21")
       )
-    }
+    })
   }
 
   test("Merge Hudi to Hudi") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val sourceTable = generateTableName
         spark.sql(
@@ -711,11 +711,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(2, "a2", 10, 1001)
         )
       }
-    }
+    })
   }
 
   test("Test Different Type of PreCombineField") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       val typeAndValue = Seq(
         ("string", "'1000'"),
         ("int", 1000),
@@ -771,11 +771,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 20.0)
         )
       }
-    }
+    })
   }
 
   test("Test MergeInto For MOR With Compaction On") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -821,11 +821,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         Seq(3, "a3", 10.0, 1000),
         Seq(4, "a4", 11.0, 1000)
       )
-    }
+    })
   }
 
   test("Test MereInto With Null Fields") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       val types = Seq(
         "string" ,
         "int",
@@ -866,11 +866,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", null, 1000)
         )
       }
-    }
+    })
   }
 
-  test("Test MereInto With All Kinds Of DataType") {
-    withTempDir { tmp =>
+  test("Test MergeInto With All Kinds Of DataType") {
+    withRecordType()(withTempDir { tmp =>
       val dataAndTypes = Seq(
         ("string", "'a1'"),
         ("int", "10"),
@@ -912,6 +912,121 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", extractRawValue(dataValue), 1000)
         )
       }
-    }
+    })
+  }
+
+  test("Test MergeInto with no-full fields source") {
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  value int,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           | select 1 as id, 1001 as ts
+           | ) s0
+           | on h0.id = s0.id
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)
+      checkAnswer(s"select id, name, value, ts from $tableName")(
+        Seq(1, "a1", 10, 1001)
+      )
+    })
+  }
+
+  test("Test Merge Into with target matched columns cast-ed") {
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  value int,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+      // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
+      val errorMsg = if (HoodieSparkUtils.gteqSpark3_2) {
+        "Invalid MERGE INTO matching condition: s0.id: can't cast s0.id (of LongType) to IntegerType"
+      } else {
+        "Invalid MERGE INTO matching condition: s0.`id`: can't cast s0.`id` (of LongType) to IntegerType"
+      }
+
+      checkExceptionContain(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select cast(1 as long) as id, 1001 as ts
+           | ) s0
+           | on cast(h0.id as long) = s0.id
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)(errorMsg)
+
+      // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
+      checkExceptionContain(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select cast(1 as long) as id, 1002 as ts
+           | ) s0
+           | on h0.id = s0.id
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)(errorMsg)
+
+      // Can up-cast incoming dataset's primary-key w/o loss of precision (should succeed)
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select cast(1 as short) as id, 1003 as ts
+           | ) s0
+           | on h0.id = s0.id
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, value, ts from $tableName")(
+        Seq(1, "a1", 10, 1003)
+      )
+
+      // Can remove redundant symmetrical casting on both sides (should succeed)
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select cast(1 as int) as id, 1004 as ts
+           | ) s0
+           | on cast(h0.id as string) = cast(s0.id as string)
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, value, ts from $tableName")(
+        Seq(1, "a1", 10, 1004)
+      )
+    })
   }
 }

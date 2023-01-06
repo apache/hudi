@@ -43,7 +43,6 @@ public class InternalSchemaBuilder implements Serializable {
   private InternalSchemaBuilder() {
   }
 
-
   /**
    * Build a mapping from id to full field name for a internal Type.
    * if a field y belong to a struct filed x, then the full name of y is x.y

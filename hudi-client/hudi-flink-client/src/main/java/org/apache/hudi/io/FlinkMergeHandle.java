@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -51,7 +50,7 @@ import java.util.List;
  *
  * @see FlinkMergeAndReplaceHandle
  */
-public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
+public class FlinkMergeHandle<T, I, K, O>
     extends HoodieMergeHandle<T, I, K, O>
     implements MiniBatchHandle {
 
@@ -143,13 +142,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
           break;
         }
 
-        // Override the old file name,
-        // In rare cases, when a checkpoint was aborted and the instant time
-        // is reused, the merge handle generates a new file name
-        // with the reused instant time of last checkpoint, which is duplicate,
-        // use the same name file as new base file in case data loss.
-        oldFilePath = newFilePath;
-        rolloverPaths.add(oldFilePath);
+        rolloverPaths.add(newFilePath);
         newFileName = newFileNameWithRollover(rollNumber++);
         newFilePath = makeNewFilePath(partitionPath, newFileName);
         LOG.warn("Duplicate write for MERGE bucket with path: " + oldFilePath + ", rolls over to new path: " + newFilePath);

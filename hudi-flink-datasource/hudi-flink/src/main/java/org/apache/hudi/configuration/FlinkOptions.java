@@ -23,12 +23,15 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieSyncTableStrategy;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -40,8 +43,6 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -115,12 +116,30 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.\n"
           + "This will render any value set for the option in-effective");
 
+  public static final ConfigOption<String> RECORD_MERGER_IMPLS = ConfigOptions
+      .key("record.merger.impls")
+      .stringType()
+      .defaultValue(HoodieAvroRecordMerger.class.getName())
+      .withDescription("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
+          + "These merger impls will filter by record.merger.strategy. "
+          + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
+
+  public static final ConfigOption<String> RECORD_MERGER_STRATEGY = ConfigOptions
+      .key("record.merger.strategy")
+      .stringType()
+      .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .withDescription("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in record.merger.impls which has the same merger strategy id");
+
   public static final ConfigOption<String> PARTITION_DEFAULT_NAME = ConfigOptions
       .key("partition.default_name")
       .stringType()
       .defaultValue(DEFAULT_PARTITION_PATH) // keep sync with hoodie style
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
+
+  // ------------------------------------------------------------------------
+  //  Changelog Capture Options
+  // ------------------------------------------------------------------------
 
   public static final ConfigOption<Boolean> CHANGELOG_ENABLED = ConfigOptions
       .key("changelog.enabled")
@@ -132,6 +151,23 @@ public class FlinkOptions extends HoodieConfig {
           + "2). The source try to emit every changes of a record.\n"
           + "The semantics is best effort because the compaction job would finally merge all changes of a record into one.\n"
           + " default false to have UPSERT semantics");
+
+  public static final ConfigOption<Boolean> CDC_ENABLED = ConfigOptions
+      .key("cdc.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withFallbackKeys(HoodieTableConfig.CDC_ENABLED.key())
+      .withDescription("When enable, persist the change data if necessary, and can be queried as a CDC query mode");
+
+  public static final ConfigOption<String> SUPPLEMENTAL_LOGGING_MODE = ConfigOptions
+      .key("cdc.supplemental.logging.mode")
+      .stringType()
+      .defaultValue("cdc_data_before_after") // default record all the change log images
+      .withFallbackKeys(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key())
+      .withDescription("The supplemental logging mode:"
+          + "1) 'cdc_op_key': persist the 'op' and the record key only,"
+          + "2) 'cdc_data_before': persist the additional 'before' image,"
+          + "3) 'cdc_data_before_after': persist the 'before' and 'after' images at the same time");
 
   // ------------------------------------------------------------------------
   //  Metadata table Options
@@ -260,6 +296,14 @@ public class FlinkOptions extends HoodieConfig {
           + "1) you are definitely sure that the consumer reads faster than any compaction instants, "
           + "usually with delta time compaction strategy that is long enough, for e.g, one week;\n"
           + "2) changelog mode is enabled, this option is a solution to keep data integrity");
+
+  // this option is experimental
+  public static final ConfigOption<Boolean> READ_STREAMING_SKIP_CLUSTERING = ConfigOptions
+          .key("read.streaming.skip_clustering")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to skip clustering instants for streaming read,\n"
+              + "to avoid reading duplicates");
 
   public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
@@ -580,7 +624,7 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
       .withDescription("Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
-          +  "Default is KEEP_LATEST_COMMITS.");
+          + "Default is KEEP_LATEST_COMMITS.");
 
   public static final ConfigOption<Integer> CLEAN_RETAIN_COMMITS = ConfigOptions
       .key("clean.retain_commits")
@@ -668,16 +712,16 @@ public class FlinkOptions extends HoodieConfig {
           + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
           + PARTITION_FILTER_END_PARTITION.key() + "'].");
 
-  public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES = ConfigOptions
+  public static final ConfigOption<Long> CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES = ConfigOptions
       .key("clustering.plan.strategy.target.file.max.bytes")
-      .intType()
-      .defaultValue(1024 * 1024 * 1024) // default 1 GB
+      .longType()
+      .defaultValue(1024 * 1024 * 1024L) // default 1 GB
       .withDescription("Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups, default 1 GB");
 
-  public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigOptions
+  public static final ConfigOption<Long> CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigOptions
       .key("clustering.plan.strategy.small.file.limit")
-      .intType()
-      .defaultValue(600) // default 600 MB
+      .longType()
+      .defaultValue(600L) // default 600 MB
       .withDescription("Files smaller than the size specified here are candidates for clustering, default 600 MB");
 
   public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigOptions
@@ -703,9 +747,10 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
 
   public static final ConfigOption<Boolean> HIVE_SYNC_ENABLED = ConfigOptions
-      .key("hive_sync.enable")
+      .key("hive_sync.enabled")
       .booleanType()
       .defaultValue(false)
+      .withFallbackKeys("hive_sync.enable")
       .withDescription("Asynchronously sync Hive meta to HMS, default false");
 
   public static final ConfigOption<String> HIVE_SYNC_DB = ConfigOptions
@@ -824,6 +869,12 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine");
 
+  public static final ConfigOption<String> HIVE_SYNC_TABLE_STRATEGY = ConfigOptions
+          .key("hive_sync.table.strategy")
+          .stringType()
+          .defaultValue(HoodieSyncTableStrategy.ALL.name())
+          .withDescription("Hive table synchronization strategy. Available option: RO, RT, ALL.");
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -899,18 +950,6 @@ public class FlinkOptions extends HoodieConfig {
    * Returns all the config options.
    */
   public static List<ConfigOption<?>> allOptions() {
-    Field[] declaredFields = FlinkOptions.class.getDeclaredFields();
-    List<ConfigOption<?>> options = new ArrayList<>();
-    for (Field field : declaredFields) {
-      if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
-          && field.getType().equals(ConfigOption.class)) {
-        try {
-          options.add((ConfigOption<?>) field.get(ConfigOption.class));
-        } catch (IllegalAccessException e) {
-          throw new HoodieException("Error while fetching static config option", e);
-        }
-      }
-    }
-    return options;
+    return OptionsResolver.allOptions(FlinkOptions.class);
   }
 }

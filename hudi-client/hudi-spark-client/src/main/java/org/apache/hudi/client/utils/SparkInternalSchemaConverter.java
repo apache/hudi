@@ -80,17 +80,6 @@ public class SparkInternalSchemaConverter {
   public static final String HOODIE_TABLE_PATH = "hoodie.tablePath";
   public static final String HOODIE_VALID_COMMITS_LIST = "hoodie.valid.commits.list";
 
-  /**
-   * Convert a spark schema to an hudi internal schema. Fields without IDs are kept and assigned fallback IDs.
-   *
-   * @param sparkSchema a spark schema
-   * @return a matching internal schema for the provided spark schema
-   */
-  public static InternalSchema convertStructTypeToInternalSchema(StructType sparkSchema) {
-    Type newType = buildTypeFromStructType(sparkSchema, true, new AtomicInteger(0));
-    return new InternalSchema(((Types.RecordType)newType).fields());
-  }
-
   public static Type buildTypeFromStructType(DataType sparkType, Boolean firstVisitRoot, AtomicInteger nextId) {
     if (sparkType instanceof StructType) {
       StructField[] fields = ((StructType) sparkType).fields();
@@ -142,7 +131,7 @@ public class SparkInternalSchemaConverter {
       return Types.StringType.get();
     } else if (sparkType instanceof DateType) {
       return Types.DateType.get();
-      // spark 3.3.0 support TimeStampNTZ, to do support spark3.3.0
+      // TODO support spark 3.3.x as it supports TimeStampNTZ (SPARK-35662)
     } else if (sparkType instanceof TimestampType) {
       return Types.TimestampType.get();
     } else if (sparkType instanceof DecimalType) {

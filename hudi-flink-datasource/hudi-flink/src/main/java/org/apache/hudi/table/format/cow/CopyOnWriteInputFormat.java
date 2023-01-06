@@ -18,8 +18,11 @@
 
 package org.apache.hudi.table.format.cow;
 
+import java.util.Comparator;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
+import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.flink.api.common.io.FileInputFormat;
@@ -42,7 +45,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -74,13 +76,15 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private final SerializableConfiguration conf;
   private final long limit;
 
-  private transient ParquetColumnarRowSplitReader reader;
+  private transient ClosableIterator<RowData> itr;
   private transient long currentReadCount;
 
   /**
    * Files filter for determining what files/directories should be included.
    */
   private FilePathFilter localFilesFilter = new GlobFilePathFilter();
+
+  private final InternalSchemaManager internalSchemaManager;
 
   public CopyOnWriteInputFormat(
       Path[] paths,
@@ -90,7 +94,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       String partDefaultName,
       long limit,
       Configuration conf,
-      boolean utcTimestamp) {
+      boolean utcTimestamp,
+      InternalSchemaManager internalSchemaManager) {
     super.setFilePaths(paths);
     this.limit = limit;
     this.partDefaultName = partDefaultName;
@@ -99,6 +104,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.selectedFields = selectedFields;
     this.conf = new SerializableConfiguration(conf);
     this.utcTimestamp = utcTimestamp;
+    this.internalSchemaManager = internalSchemaManager;
   }
 
   @Override
@@ -109,7 +115,13 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
         fileSplit.getPath());
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
     partSpec.forEach((k, v) -> {
-      DataType fieldType = fullFieldTypes[fieldNameList.indexOf(k)];
+      final int idx = fieldNameList.indexOf(k);
+      if (idx == -1) {
+        // for any rare cases that the partition field does not exist in schema,
+        // fallback to file read
+        return;
+      }
+      DataType fieldType = fullFieldTypes[idx];
       if (!DataTypeUtils.isDatetimeType(fieldType)) {
         // date time type partition field is formatted specifically,
         // read directly from the data file to avoid format mismatch or precision loss
@@ -117,7 +129,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       }
     });
 
-    this.reader = ParquetSplitReaderUtil.genPartColumnarRowReader(
+    this.itr = RecordIterators.getParquetRecordIterator(
+        internalSchemaManager,
         utcTimestamp,
         true,
         conf.conf(),
@@ -214,13 +227,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
         // get the block locations and make sure they are in order with respect to their offset
         final BlockLocation[] blocks = fs.getFileBlockLocations(file, 0, len);
-        Arrays.sort(blocks, new Comparator<BlockLocation>() {
-          @Override
-          public int compare(BlockLocation o1, BlockLocation o2) {
-            long diff = o1.getLength() - o2.getOffset();
-            return Long.compare(diff, 0L);
-          }
-        });
+        Arrays.sort(blocks, Comparator.comparingLong(BlockLocation::getOffset));
 
         long bytesUnassigned = len;
         long position = 0;
@@ -270,26 +277,26 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   }
 
   @Override
-  public boolean reachedEnd() throws IOException {
+  public boolean reachedEnd() {
     if (currentReadCount >= limit) {
       return true;
     } else {
-      return reader.reachedEnd();
+      return !itr.hasNext();
     }
   }
 
   @Override
   public RowData nextRecord(RowData reuse) {
     currentReadCount++;
-    return reader.nextRecord();
+    return itr.next();
   }
 
   @Override
   public void close() throws IOException {
-    if (reader != null) {
-      this.reader.close();
+    if (itr != null) {
+      this.itr.close();
     }
-    this.reader = null;
+    this.itr = null;
   }
 
   /**
@@ -393,4 +400,5 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       return null;
     }
   }
+
 }

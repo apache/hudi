@@ -100,6 +100,10 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
 
     val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, Dataset.ofRows(sparkSession, alignedQuery))
 
+    if (!success) {
+      throw new HoodieException("Insert Into to Hudi table failed")
+    }
+
     if (success && refreshTable) {
       sparkSession.catalog.refreshTable(table.identifier.unquotedString)
     }
@@ -128,7 +132,6 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     val targetPartitionSchema = catalogTable.partitionSchema
     val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
 
-    validate(removeMetaFields(query.schema), partitionsSpec, catalogTable)
     // Make sure we strip out meta-fields from the incoming dataset (these will have to be discarded anyway)
     val cleanedQuery = stripMetaFields(query)
     // To validate and align properly output of the query, we simply filter out partition columns with already
@@ -140,6 +143,8 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     //       positionally for example
     val expectedQueryColumns = catalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name))
     val coercedQueryOutput = coerceQueryOutputColumns(StructType(expectedQueryColumns), cleanedQuery, catalogTable, conf)
+    // After potential reshaping validate that the output of the query conforms to the table's schema
+    validate(removeMetaFields(coercedQueryOutput.schema), partitionsSpec, catalogTable)
 
     val staticPartitionValuesExprs = createStaticPartitionValuesExpressions(staticPartitionValues, targetPartitionSchema, conf)
 

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -41,6 +42,7 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.hive.serde2.typeinfo.VarcharTypeInfo;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -50,7 +52,9 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * Utilities for Hive field schema.
  */
 public class HiveSchemaUtils {
-  /** Get field names from field schemas. */
+  /**
+   * Get field names from field schemas.
+   */
   public static List<String> getFieldNames(List<FieldSchema> fieldSchemas) {
     return fieldSchemas.stream().map(FieldSchema::getName).collect(Collectors.toList());
   }
@@ -58,14 +62,14 @@ public class HiveSchemaUtils {
   public static org.apache.flink.table.api.Schema convertTableSchema(Table hiveTable) {
     List<FieldSchema> allCols = hiveTable.getSd().getCols().stream()
         // filter out the metadata columns
-        .filter(s -> !HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.containsKey(s.getName()))
+        .filter(s -> !HoodieAvroUtils.isMetadataField(s.getName()))
         .collect(Collectors.toList());
     // need to refactor the partition key field positions: they are not always in the last
     allCols.addAll(hiveTable.getPartitionKeys());
 
     String pkConstraintName = hiveTable.getParameters().get(TableOptionProperties.PK_CONSTRAINT_NAME);
     String pkColumnStr = hiveTable.getParameters().getOrDefault(FlinkOptions.RECORD_KEY_FIELD.key(), FlinkOptions.RECORD_KEY_FIELD.defaultValue());
-    List<String> pkColumns = StringUtils.split(pkColumnStr,",");
+    List<String> pkColumns = StringUtils.split(pkColumnStr, ",");
 
     String[] colNames = new String[allCols.size()];
     DataType[] colTypes = new DataType[allCols.size()];
@@ -172,17 +176,24 @@ public class HiveSchemaUtils {
     }
   }
 
-  /** Create Hive field schemas from Flink table schema including the hoodie metadata fields. */
-  public static List<FieldSchema> toHiveFieldSchema(TableSchema schema) {
+  /**
+   * Create Hive field schemas from Flink table schema including the hoodie metadata fields.
+   */
+  public static List<FieldSchema> toHiveFieldSchema(TableSchema schema, boolean withOperationField) {
     List<FieldSchema> columns = new ArrayList<>();
-    for (String metaField : HoodieRecord.HOODIE_META_COLUMNS) {
+    Collection<String> metaFields = withOperationField
+        ? HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION // caution that the set may break sequence
+        : HoodieRecord.HOODIE_META_COLUMNS;
+    for (String metaField : metaFields) {
       columns.add(new FieldSchema(metaField, "string", null));
     }
     columns.addAll(createHiveColumns(schema));
     return columns;
   }
 
-  /** Create Hive columns from Flink table schema. */
+  /**
+   * Create Hive columns from Flink table schema.
+   */
   private static List<FieldSchema> createHiveColumns(TableSchema schema) {
     final DataType dataType = schema.toPersistedRowDataType();
     final RowType rowType = (RowType) dataType.getLogicalType();
@@ -209,7 +220,6 @@ public class HiveSchemaUtils {
    * checkPrecision is true.
    *
    * @param dataType a Flink DataType
-   *
    * @return the corresponding Hive data type
    */
   public static TypeInfo toHiveTypeInfo(DataType dataType) {
@@ -223,7 +233,6 @@ public class HiveSchemaUtils {
    *
    * @param fieldSchemas  The Hive field schemas.
    * @param partitionKeys The partition keys.
-   *
    * @return The pair of (regular columns, partition columns) schema fields
    */
   public static Pair<List<FieldSchema>, List<FieldSchema>> splitSchemaByPartitionKeys(

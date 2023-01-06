@@ -18,10 +18,11 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -49,7 +50,7 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public AWSDmsAvroPayload(Option<GenericRecord> record) {
-    this(record.get(), 0); // natural order
+    this(record.isPresent() ? record.get() : null, 0); // natural order
   }
 
   /**
@@ -69,8 +70,7 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
-    IndexedRecord insertValue = super.getInsertValue(schema, properties).get();
-    return handleDeleteOperation(insertValue);
+    return getInsertValue(schema);
   }
 
   @Override
@@ -82,14 +82,16 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties)
       throws IOException {
-    IndexedRecord insertValue = super.getInsertValue(schema, properties).get();
-    return handleDeleteOperation(insertValue);
+    return combineAndGetUpdateValue(currentValue, schema);
   }
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
       throws IOException {
-    IndexedRecord insertValue = super.getInsertValue(schema).get();
-    return handleDeleteOperation(insertValue);
+    Option<IndexedRecord> insertValue = super.getInsertValue(schema);
+    if (!insertValue.isPresent()) {
+      return Option.empty();
+    }
+    return handleDeleteOperation(insertValue.get());
   }
 }

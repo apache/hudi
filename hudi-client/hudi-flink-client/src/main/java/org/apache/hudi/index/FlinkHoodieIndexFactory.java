@@ -25,7 +25,10 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
+import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.bloom.ListBasedHoodieBloomIndexHelper;
+import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
+import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.index.state.FlinkInMemoryStateIndex;
 
@@ -49,8 +52,14 @@ public final class FlinkHoodieIndexFactory {
         return new FlinkInMemoryStateIndex(context, config);
       case BLOOM:
         return new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
+      case GLOBAL_BLOOM:
+        return new HoodieGlobalBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
       case SIMPLE:
         return new HoodieSimpleIndex(config, Option.empty());
+      case GLOBAL_SIMPLE:
+        return new HoodieGlobalSimpleIndex(config, Option.empty());
+      case BUCKET:
+        return new HoodieSimpleBucketIndex(config);
       default:
         throw new HoodieIndexException("Unsupported index type " + config.getIndexType());
     }

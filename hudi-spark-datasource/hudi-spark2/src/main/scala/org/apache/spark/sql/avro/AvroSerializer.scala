@@ -149,7 +149,7 @@ class AvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable:
         // output the timestamp value as with millisecond precision.
         case null => (getter, ordinal) => getter.getLong(ordinal) / 1000
         case other => throw new IncompatibleSchemaException(
-          s"Cannot convert Catalyst Timestamp type to Avro logical type ${other}")
+          s"Cannot convert Catalyst Timestamp type to Avro logical type $other")
       }
 
       case (ArrayType(et, containsNull), ARRAY) =>

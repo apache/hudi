@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.DataSourceWriteOptions.{MERGER_IMPLS, _}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -29,7 +29,6 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
-
 import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
@@ -58,7 +57,6 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(TABLE_TYPE)
     hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
     hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
-    hoodieConfig.setDefaultValue(RECORDKEY_FIELD)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     hoodieConfig.setDefaultValue(ENABLE)
     hoodieConfig.setDefaultValue(COMMIT_METADATA_KEYPREFIX)
@@ -112,7 +110,7 @@ object HoodieWriterUtils {
   def getOriginKeyGenerator(parameters: Map[String, String]): String = {
     val kg = parameters.getOrElse(KEYGENERATOR_CLASS_NAME.key(), null)
     if (classOf[SqlKeyGenerator].getCanonicalName == kg) {
-      parameters.getOrElse(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
+      parameters.getOrElse(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, null)
     } else {
       kg
     }
@@ -159,6 +157,13 @@ object HoodieWriterUtils {
         if (null != datasourceKeyGen && null != tableConfigKeyGen
           && datasourceKeyGen != tableConfigKeyGen) {
           diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
+        }
+
+        val datasourcePartitionFields = params.getOrElse(PARTITIONPATH_FIELD.key(), null)
+        val tableConfigPartitionFields = tableConfig.getString(HoodieTableConfig.PARTITION_FIELDS)
+        if (null != datasourcePartitionFields && null != tableConfigPartitionFields
+          && datasourcePartitionFields != tableConfigPartitionFields) {
+          diffConfigs.append(s"PartitionPath:\t$datasourcePartitionFields\t$tableConfigPartitionFields\n")
         }
       }
 
@@ -218,7 +223,8 @@ object HoodieWriterUtils {
     PRECOMBINE_FIELD -> HoodieTableConfig.PRECOMBINE_FIELD,
     PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
     RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
-    PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME
+    PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,
+    MERGER_STRATEGY -> HoodieTableConfig.MERGER_STRATEGY
   )
   def mappingSparkDatasourceConfigsToTableConfigs(options: Map[String, String]): Map[String, String] = {
     val includingTableConfigs = scala.collection.mutable.Map() ++ options
