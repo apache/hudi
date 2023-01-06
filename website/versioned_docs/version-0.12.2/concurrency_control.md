@@ -51,10 +51,20 @@ There are 4 different lock providers that require different configurations to be
 
 **`FileSystem`** based lock provider
 
+FileSystem based lock provider provides an out-of-box way to support multiple writers cross different jobs/applications based on atomic
+create/delete operations of the underlying filesystem
+
 ```
 hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
-hoodie.write.lock.filesystem.path
+hoodie.write.lock.filesystem.path (optional)
+hoodie.write.lock.filesystem.expire (optional)
 ```
+
+When using the FileSystem based lock provider, by default, the lock file will store into `hoodie.base.path`+`/.hoodie/lock`,
+in addition, you can use a custom folder to store the lock file by specify `hoodie.write.lock.filesystem.path`
+
+In case the lock cannot release during job crash, you can set `hoodie.write.lock.filesystem.expire`, provide an expiry time in minutes, lock will never expire as default. 
+you can also delete lock file manually in such situation
 
 **`Zookeeper`** based lock provider
 
