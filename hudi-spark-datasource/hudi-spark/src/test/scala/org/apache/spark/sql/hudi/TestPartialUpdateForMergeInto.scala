@@ -128,16 +128,5 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
          | primaryKey = 'id',
          | preCombineField = '_ts'
          |)""".stripMargin)
-
-    checkExceptionContain(
-      s"""
-         |merge into $tableName2 t0
-         |using ( select 1 as id, 'a1' as name, 12 as price, 1000 as ts) s0
-         |on t0.id = s0.id
-         |when matched then update set price = s0.price, _ts = s0.ts
-        """.stripMargin)(
-      "Missing specify the value for target field: 'id' in merge into update action for MOR table. " +
-        "Currently we cannot support partial update for MOR, please complete all the target fields " +
-        "just like '...update set id = s0.id, name = s0.name ....'")
   }
 }
