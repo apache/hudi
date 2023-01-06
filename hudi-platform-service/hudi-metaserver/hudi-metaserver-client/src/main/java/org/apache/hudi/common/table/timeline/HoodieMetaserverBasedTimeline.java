@@ -74,7 +74,7 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
     FileStatus status = new FileStatus();
     status.setPath(detailPath);
     HoodieInstant instant = new HoodieInstant(status);
-    return metaserverClient.getInstantMeta(databaseName, tableName, instant);
+    return metaserverClient.getInstantMetadata(databaseName, tableName, instant);
   }
 
   @Override

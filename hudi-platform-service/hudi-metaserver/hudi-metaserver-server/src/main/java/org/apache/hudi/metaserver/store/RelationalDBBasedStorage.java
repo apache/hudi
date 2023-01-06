@@ -56,7 +56,7 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
     dao.updateBySql("createPartitions", null);
     dao.updateBySql("createTableTimestamp", null);
     dao.updateBySql("createInstant", null);
-    dao.updateBySql("createInstantMeta", null);
+    dao.updateBySql("createInstantMetadata", null);
     dao.updateBySql("createFiles", null);
   }
 
@@ -195,19 +195,19 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
 
   // todo: check correctness
   @Override
-  public void saveInstantMeta(long tableId, THoodieInstant instant, byte[] metadata) throws MetaserverStorageException {
+  public void saveInstantMetadata(long tableId, THoodieInstant instant, byte[] metadata) throws MetaserverStorageException {
     InstantBean instantBean = new InstantBean(tableId, instant);
     Map<String, Object> params = new HashMap<>();
     params.put("instant", instantBean);
     params.put("metadata", metadata);
     // todo: array bytes to longblob
-    timelineDao.insertBySql("insertInstantMeta", params);
+    timelineDao.insertBySql("insertInstantMetadata", params);
   }
 
   @Override
-  public boolean deleteInstantMeta(long tableId, THoodieInstant instant) throws MetaserverStorageException {
+  public boolean deleteInstantMetadata(long tableId, THoodieInstant instant) throws MetaserverStorageException {
     InstantBean instantBean = new InstantBean(tableId, instant);
-    return timelineDao.deleteBySql("deleteInstantMeta", instantBean) == 1;
+    return timelineDao.deleteBySql("deleteInstantMetadata", instantBean) == 1;
   }
 
   @Override
@@ -215,13 +215,13 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
     Map<String, Object> params = new HashMap<>();
     params.put("tableId", tableId);
     params.put("ts", timestamp);
-    return timelineDao.deleteBySql("deleteInstantAllMeta", params) >= 1;
+    return timelineDao.deleteBySql("deleteInstantAllMetadata", params) >= 1;
   }
 
   @Override
-  public byte[] getInstantMeta(long tableId, THoodieInstant instant) throws MetaserverStorageException {
+  public byte[] getInstantMetadata(long tableId, THoodieInstant instant) throws MetaserverStorageException {
     InstantBean instantBean = new InstantBean(tableId, instant);
-    Map<String, Object> result = timelineDao.queryForObjectBySql("selectInstantMeta", instantBean);
+    Map<String, Object> result = timelineDao.queryForObjectBySql("selectInstantMetadata", instantBean);
     return result == null ? null : (byte[]) result.get("data");
   }
 

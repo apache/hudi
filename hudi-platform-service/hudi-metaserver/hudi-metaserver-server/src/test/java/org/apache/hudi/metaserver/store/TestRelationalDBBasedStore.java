@@ -93,17 +93,17 @@ public class TestRelationalDBBasedStore {
     // instant meta CRUD
     byte[] requestedMeta = "requested".getBytes(StandardCharsets.UTF_8);
     byte[] inflightMeta = "inflight".getBytes(StandardCharsets.UTF_8);
-    store.saveInstantMeta(tableId, requested, requestedMeta);
-    store.saveInstantMeta(tableId, inflight, inflightMeta);
-    assertTrue(store.deleteInstantMeta(tableId, requested));
-    assertNull(store.getInstantMeta(tableId, requested));
-    assertEquals("inflight", new String(store.getInstantMeta(tableId, inflight)));
+    store.saveInstantMetadata(tableId, requested, requestedMeta);
+    store.saveInstantMetadata(tableId, inflight, inflightMeta);
+    assertTrue(store.deleteInstantMetadata(tableId, requested));
+    assertNull(store.getInstantMetadata(tableId, requested));
+    assertEquals("inflight", new String(store.getInstantMetadata(tableId, inflight)));
     // delete all metadata of a timestamp
-    store.saveInstantMeta(tableId, requested, requestedMeta);
-    assertEquals("requested", new String(store.getInstantMeta(tableId, requested)));
+    store.saveInstantMetadata(tableId, requested, requestedMeta);
+    assertEquals("requested", new String(store.getInstantMetadata(tableId, requested)));
     assertTrue(store.deleteInstantAllMeta(tableId, ts));
-    assertNull(store.getInstantMeta(tableId, requested));
-    assertNull(store.getInstantMeta(tableId, inflight));
+    assertNull(store.getInstantMetadata(tableId, requested));
+    assertNull(store.getInstantMetadata(tableId, inflight));
   }
 
 }

@@ -62,9 +62,9 @@ public class TimelineService implements Serializable {
     return completeds;
   }
 
-  public ByteBuffer getInstantMeta(String db, String tb, THoodieInstant instant) throws TException {
+  public ByteBuffer getInstantMetadata(String db, String tb, THoodieInstant instant) throws TException {
     Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
-    return ByteBuffer.wrap(store.getInstantMeta(tableId, instant));
+    return ByteBuffer.wrap(store.getInstantMetadata(tableId, instant));
   }
 
   public String createNewInstantTime(String db, String tb) throws MetaserverStorageException, NoSuchObjectException {
@@ -81,7 +81,7 @@ public class TimelineService implements Serializable {
       result.setSuccess(true);
       return result;
     }
-    store.saveInstantMeta(tableId, instant, content.array());
+    store.saveInstantMetadata(tableId, instant, content.array());
     result.setSuccess(store.createInstant(tableId, instant));
     return result;
   }
@@ -108,7 +108,7 @@ public class TimelineService implements Serializable {
       return result;
     }
     // todo: add conflict check for inflight
-    store.saveInstantMeta(tableId, toInstant, metadata.array());
+    store.saveInstantMetadata(tableId, toInstant, metadata.array());
     result.setSuccess(store.updateInstant(tableId, fromInstant, toInstant));
     return result;
   }
@@ -124,7 +124,7 @@ public class TimelineService implements Serializable {
       return result;
     }
     // todo: add conflict check for completed
-    store.saveInstantMeta(tableId, toInstant, metadata.array());
+    store.saveInstantMetadata(tableId, toInstant, metadata.array());
     // todo: sync snapshot
     result.setSuccess(store.updateInstant(tableId, fromInstant, toInstant));
     return result;

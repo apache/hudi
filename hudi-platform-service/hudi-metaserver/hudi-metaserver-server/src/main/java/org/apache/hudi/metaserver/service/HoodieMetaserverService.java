@@ -61,8 +61,8 @@ public class HoodieMetaserverService implements ThriftHoodieMetaserver.Iface, Se
   }
 
   @Override
-  public ByteBuffer getInstantMeta(String db, String tb, THoodieInstant instant) throws TException {
-    return timelineService.getInstantMeta(db, tb, instant);
+  public ByteBuffer getInstantMetadata(String db, String tb, THoodieInstant instant) throws TException {
+    return timelineService.getInstantMetadata(db, tb, instant);
   }
 
   @Override

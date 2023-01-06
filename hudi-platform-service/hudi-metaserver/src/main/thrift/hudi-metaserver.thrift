@@ -92,7 +92,7 @@ service ThriftHoodieMetaserver {
 
   // timeline related
   list<THoodieInstant> listInstants(1:string db, 2:string tb, 3:i32 num)
-  binary getInstantMeta(1:string db, 2:string tb, 3:THoodieInstant instant)
+  binary getInstantMetadata(1:string db, 2:string tb, 3:THoodieInstant instant)
   string createNewInstantTime(1:string db, 2:string tb)
   HoodieInstantChangeResult createNewInstantWithTime(1:string db, 2:string tb, 3:THoodieInstant instant, 4:optional binary content)
   HoodieInstantChangeResult transitionInstantState(1:string db, 2:string tb, 3: THoodieInstant fromInstant, 4: THoodieInstant toInstant, 5:optional binary metadata)

@@ -114,8 +114,8 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient, AutoCl
   }
 
   @Override
-  public Option<byte[]> getInstantMeta(String db, String tb, HoodieInstant instant) {
-    ByteBuffer byteBuffer = exceptionWrapper(() -> this.client.getInstantMeta(db, tb, EntityConversions.toTHoodieInstant(instant))).get();
+  public Option<byte[]> getInstantMetadata(String db, String tb, HoodieInstant instant) {
+    ByteBuffer byteBuffer = exceptionWrapper(() -> this.client.getInstantMetadata(db, tb, EntityConversions.toTHoodieInstant(instant))).get();
     byte[] bytes = new byte[byteBuffer.remaining()];
     byteBuffer.get(bytes);
     return byteBuffer.hasRemaining() ? Option.empty() : Option.of(bytes);

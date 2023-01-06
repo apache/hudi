@@ -38,7 +38,7 @@ public interface HoodieMetaserverClient {
 
   List<HoodieInstant> listInstants(String db, String tb, int commitNum);
 
-  Option<byte[]> getInstantMeta(String db, String tb, HoodieInstant instant);
+  Option<byte[]> getInstantMetadata(String db, String tb, HoodieInstant instant);
 
   String createNewTimestamp(String db, String tb);
 

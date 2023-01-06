@@ -104,38 +104,38 @@
     </select>
 
     <!-- instant meta related -->
-    <resultMap id="instantMetaMap" type="java.util.Map">
+    <resultMap id="instantMetadataMap" type="java.util.Map">
         <result column="data" property="data" jdbcType="BLOB"  typeHandler="org.apache.ibatis.type.BlobTypeHandler" />
     </resultMap>
-    <insert id="insertInstantMeta" parameterType="java.util.HashMap" useGeneratedKeys="true" keyProperty="commit_id">
-        INSERT IGNORE INTO instant_meta (tbl_id, ts, action, state, data)
+    <insert id="insertInstantMetadata" parameterType="java.util.HashMap" useGeneratedKeys="true" keyProperty="commit_id">
+        INSERT IGNORE INTO instant_meta_data (tbl_id, ts, action, state, data)
         VALUES (#{instant.tableId}, #{instant.ts}, #{instant.action}, #{instant.state}, #{metadata, typeHandler=org.apache.ibatis.type.BlobTypeHandler})
     </insert>
 
-    <delete id="deleteInstantAllMeta" parameterType="java.util.HashMap">
+    <delete id="deleteInstantAllMetadata" parameterType="java.util.HashMap">
         DELETE
         FROM
-            instant_meta
+            instant_meta_data
         WHERE
             tbl_id = #{tableId}
           AND ts = #{ts}
     </delete>
 
-    <delete id="deleteInstantMeta" parameterType="InstantBean">
+    <delete id="deleteInstantMetadata" parameterType="InstantBean">
         DELETE
         FROM
-            instant_meta
+            instant_meta_data
         WHERE
             tbl_id = #{tableId}
           AND ts = #{ts}
           AND state = #{state}
     </delete>
 
-    <select id="selectInstantMeta" parameterType="InstantBean" resultMap="instantMetaMap">
+    <select id="selectInstantMetadata" parameterType="InstantBean" resultMap="instantMetadataMap">
         SELECT
             data
         FROM
-            instant_meta
+            instant_meta_data
         WHERE
             tbl_id = #{tableId}
           AND action = #{action}

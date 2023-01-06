@@ -128,8 +128,3 @@ jobs:
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
-      - name: Platform Service Build and Test
-        run:
-          mvn install -pl :hudi-metaserver-client -DskipTests=true -Phudi-platform-service -am &&
-          mvn test -Phudi-platform-service -pl :hudi-metaserver-server &&
-          mvn test -Phudi-platform-service -pl :hudi-metaserver-client

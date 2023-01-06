@@ -95,8 +95,8 @@
         ) COMMENT 'timeline';
     </update>
 
-    <update id="createInstantMeta">
-        CREATE TABLE instant_meta
+    <update id="createInstantMetadata">
+        CREATE TABLE instant_meta_data
         (
             commit_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
             tbl_id BIGINT COMMENT 'table id',
@@ -106,7 +106,7 @@
             data LONGBLOB COMMENT 'instant metadata',
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'instant meta created time',
             UNIQUE KEY uniq_inst3 (tbl_id, state, ts, action)
-        ) COMMENT 'instant meta';
+        ) COMMENT 'instant meta data';
     </update>
 
     <update id="createFiles">

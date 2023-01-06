@@ -61,13 +61,13 @@ public interface MetaserverStorage extends AutoCloseable {
 
   boolean instantExists(long tableId, THoodieInstant instant) throws MetaserverStorageException;
 
-  void saveInstantMeta(long tableId, THoodieInstant instant, byte[] metadata) throws MetaserverStorageException;
+  void saveInstantMetadata(long tableId, THoodieInstant instant, byte[] metadata) throws MetaserverStorageException;
 
-  boolean deleteInstantMeta(long tableId, THoodieInstant instant) throws MetaserverStorageException;
+  boolean deleteInstantMetadata(long tableId, THoodieInstant instant) throws MetaserverStorageException;
 
   boolean deleteInstantAllMeta(long tableId, String timestamp) throws MetaserverStorageException;
 
-  byte[] getInstantMeta(long tableId, THoodieInstant instant) throws MetaserverStorageException;
+  byte[] getInstantMetadata(long tableId, THoodieInstant instant) throws MetaserverStorageException;
 
   void close();
 
