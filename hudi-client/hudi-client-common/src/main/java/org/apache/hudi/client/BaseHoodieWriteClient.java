@@ -282,6 +282,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     writeTableMetadata(table, instantTime, commitActionType, metadata);
     activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    // reload active timeline
+    table.getMetaClient().reloadActiveTimeline();
   }
 
   // Save internal schema

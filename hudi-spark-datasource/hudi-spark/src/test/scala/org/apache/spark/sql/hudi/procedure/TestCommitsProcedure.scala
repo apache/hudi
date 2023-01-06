@@ -37,7 +37,8 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
            |  preCombineField = 'ts',
            |  hoodie.keep.max.commits = 3,
            |  hoodie.keep.min.commits = 2,
-           |  hoodie.cleaner.commits.retained = 1
+           |  hoodie.cleaner.commits.retained = 1,
+           |  hoodie.metadata.enable = false
            | )
        """.stripMargin)
 
@@ -83,7 +84,8 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
            |  preCombineField = 'ts',
            |  hoodie.keep.max.commits = 3,
            |  hoodie.keep.min.commits = 2,
-           |  hoodie.cleaner.commits.retained = 1
+           |  hoodie.cleaner.commits.retained = 1,
+           |  hoodie.metadata.enable = false
            | )
        """.stripMargin)
 
