@@ -219,55 +219,6 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
-  public void testStopHeartbeatForUncommittedEventWithLazyCleanPolicy() throws Exception {
-    // reset
-    reset();
-    // override the default configuration
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieFailedWritesCleaningPolicy.LAZY.name());
-    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, context);
-    coordinator.start();
-    coordinator.setExecutor(new MockCoordinatorExecutor(context));
-
-    assertTrue(coordinator.getWriteClient().getConfig().getFailedWritesCleanPolicy().isLazy());
-
-    final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
-
-    // start one instant and not commit it
-    coordinator.handleEventFromOperator(0, event0);
-    String instant = coordinator.getInstant();
-    HoodieHeartbeatClient heartbeatClient = coordinator.getWriteClient().getHeartbeatClient();
-    assertNotNull(heartbeatClient.getHeartbeat(instant), "Heartbeat is missing");
-
-    String basePath = tempFile.getAbsolutePath();
-    HoodieWrapperFileSystem fs = coordinator.getWriteClient().getHoodieTable().getMetaClient().getFs();
-
-    assertTrue(HoodieHeartbeatClient.heartbeatExists(fs, basePath, instant), "Heartbeat is existed");
-
-    // send bootstrap event to stop the heartbeat for this instant
-    WriteMetadataEvent event1 = WriteMetadataEvent.emptyBootstrap(0);
-    coordinator.handleEventFromOperator(0, event1);
-
-    assertFalse(HoodieHeartbeatClient.heartbeatExists(fs, basePath, instant), "Heartbeat is stopped and cleared");
-  }
-
-  @Test
-  public void testRecommitWithLazyFailedWritesCleanPolicy() {
-    coordinator.getWriteClient().getConfig().setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY, HoodieFailedWritesCleaningPolicy.LAZY.name());
-    assertTrue(coordinator.getWriteClient().getConfig().getFailedWritesCleanPolicy().isLazy());
-    final CompletableFuture<byte[]> future = new CompletableFuture<>();
-    coordinator.checkpointCoordinator(1, future);
-    String instant = coordinator.getInstant();
-    WriteMetadataEvent event1 = createOperatorEvent(0, instant, "par1", false, 0.2);
-    event1.setBootstrap(true);
-    WriteMetadataEvent event2 = WriteMetadataEvent.emptyBootstrap(1);
-    coordinator.handleEventFromOperator(0, event1);
-    coordinator.handleEventFromOperator(1, event2);
-    assertThat("Recommits the instant with lazy failed writes clean policy", TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()), is(instant));
-  }
-
-  @Test
   public void testHiveSyncInvoked() throws Exception {
     // reset
     reset();
