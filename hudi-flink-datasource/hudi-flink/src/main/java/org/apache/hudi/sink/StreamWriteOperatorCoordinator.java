@@ -394,7 +394,7 @@ public class StreamWriteOperatorCoordinator
     HoodieTimeline completedTimeline =
         StreamerUtil.createMetaClient(conf).getActiveTimeline().filterCompletedInstants();
     executor.execute(() -> {
-      if (instant.equals("") || completedTimeline.containsInstant(instant)) {
+      if (instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT) || completedTimeline.containsInstant(instant)) {
         // the last instant committed successfully
         reset();
       } else {
@@ -412,7 +412,11 @@ public class StreamWriteOperatorCoordinator
     this.eventBuffer[event.getTaskID()] = event;
     if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
       // start to initialize the instant.
-      initInstant(event.getInstantTime());
+      final String instant = Arrays.stream(eventBuffer)
+          .filter(evt -> evt.getWriteStatuses().size() > 0)
+          .findFirst().map(WriteMetadataEvent::getInstantTime)
+          .orElse(WriteMetadataEvent.BOOTSTRAP_INSTANT);
+      initInstant(instant);
     }
   }
 
