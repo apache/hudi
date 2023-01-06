@@ -18,10 +18,10 @@
 
 package org.apache.hudi.client;
 
-import org.apache.curator.test.TestingServer;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -37,21 +37,21 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.marker.SimpleDirectMarkerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.table.marker.SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.testutils.HoodieClientTestBase;
-
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy;
+
+import org.apache.curator.test.TestingServer;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -237,7 +237,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     });
 
     List<String> completedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .filterCompletedInstants().getInstants().stream()
+        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
     assertEquals(3, completedInstant.size());
     assertTrue(completedInstant.contains(nextCommitTime1));

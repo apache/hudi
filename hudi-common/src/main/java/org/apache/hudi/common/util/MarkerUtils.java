@@ -236,7 +236,8 @@ public class MarkerUtils {
 
   public static boolean hasCommitConflict(HoodieActiveTimeline activeTimeline, Set<String> currentFileIDs, Set<HoodieInstant> completedCommitInstants) {
 
-    Set<HoodieInstant> currentInstants = activeTimeline.reload().getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
+    Set<HoodieInstant> currentInstants = new HashSet<>(
+        activeTimeline.reload().getCommitsTimeline().filterCompletedInstants().getInstants());
 
     currentInstants.removeAll(completedCommitInstants);
     Set<String> missingFileIDs = currentInstants.stream().flatMap(instant -> {

@@ -26,17 +26,17 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieWriteHandle;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.HashSet;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Operates on markers for a given write action (commit, delta commit, compaction).
@@ -89,7 +89,8 @@ public abstract class WriteMarkers implements Serializable {
         return create(partitionPath, dataFileName, type, checkIfExists);
       }
 
-      Set<HoodieInstant> completedCommitInstants = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
+      Set<HoodieInstant> completedCommitInstants = new HashSet<>(
+          activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants());
 
       String fileId = handler.get().getFileId();
       HoodieWriteConfig config = handler.get().getConfig();
