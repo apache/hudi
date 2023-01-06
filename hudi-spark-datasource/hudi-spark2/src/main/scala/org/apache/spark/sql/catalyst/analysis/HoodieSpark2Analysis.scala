@@ -37,49 +37,38 @@ object HoodieSpark2Analysis {
     private val resolver = spark.sessionState.conf.resolver
 
     override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
-      case mit @ MergeIntoTable(targetTable, sourceTable, _, _, _)
-        // NOTE: In Spark < 3.2, `update *` and `insert *` clauses are going to be parsed by the parser
-        //       as just an _empty_ list of assignments (whereas in Spark >= 3.2, these will be parsed as
-        //       [[UnresolvedStar]]). This would affect how [[MergeIntoTable]] is going to be resolved and as such
-        //       we have to modify this conditional to also accept fully resolved MIT in cases when there's
-        //       star assignment
-        if (!mit.resolved || containsUnresolvedStarAssignments(mit)) && targetTable.resolved =>
-          val resolved = if (sourceTable.resolved) {
-            mit
-          } else {
-            val analyzer = spark.sessionState.analyzer
-            mit.copy(sourceTable = analyzer.execute(sourceTable))
-          }
+      case m @ MergeIntoTable(targetTable, sourceTable, _, _, _)
+        if (!m.resolved || containsUnresolvedStarAssignments(m)) && targetTable.resolved && sourceTable.resolved =>
 
-          EliminateSubqueryAliases(targetTable) match {
-            case _ =>
-              val newMatchedActions = resolved.matchedActions.map {
-                case DeleteAction(deleteCondition) =>
-                  val resolvedDeleteCondition = deleteCondition.map(resolveExpressionTopDown(_, resolved))
-                  DeleteAction(resolvedDeleteCondition)
-                case UpdateAction(updateCondition, assignments) =>
-                  val resolvedUpdateCondition = updateCondition.map(resolveExpressionTopDown(_, resolved))
-                  // The update value can access columns from both target and source tables.
-                  UpdateAction(
-                    resolvedUpdateCondition,
-                    resolveAssignments(assignments, resolved, resolveValuesWithSourceOnly = false))
-                case o => o
-              }
-              val newNotMatchedActions = resolved.notMatchedActions.map {
-                case InsertAction(insertCondition, assignments) =>
-                  // The insert action is used when not matched, so its condition and value can only
-                  // access columns from the source table.
-                  val resolvedInsertCondition =
-                    insertCondition.map(resolveExpressionTopDown(_, Project(Nil, resolved.sourceTable)))
-                  InsertAction(
-                    resolvedInsertCondition,
-                    resolveAssignments(assignments, resolved, resolveValuesWithSourceOnly = true))
-                case o => o
-              }
-              val resolvedMergeCondition = resolveExpressionTopDown(resolved.mergeCondition, resolved)
-              resolved.copy(mergeCondition = resolvedMergeCondition,
-                matchedActions = newMatchedActions,
-                notMatchedActions = newNotMatchedActions)
+        EliminateSubqueryAliases(targetTable) match {
+          case _ =>
+            val newMatchedActions = m.matchedActions.map {
+              case DeleteAction(deleteCondition) =>
+                val resolvedDeleteCondition = deleteCondition.map(resolveExpressionTopDown(_, m))
+                DeleteAction(resolvedDeleteCondition)
+              case UpdateAction(updateCondition, assignments) =>
+                val resolvedUpdateCondition = updateCondition.map(resolveExpressionTopDown(_, m))
+                // The update value can access columns from both target and source tables.
+                UpdateAction(
+                  resolvedUpdateCondition,
+                  resolveAssignments(assignments, m, resolveValuesWithSourceOnly = false))
+              case o => o
+            }
+            val newNotMatchedActions = m.notMatchedActions.map {
+              case InsertAction(insertCondition, assignments) =>
+                // The insert action is used when not matched, so its condition and value can only
+                // access columns from the source table.
+                val resolvedInsertCondition =
+                  insertCondition.map(resolveExpressionTopDown(_, Project(Nil, m.sourceTable)))
+                InsertAction(
+                  resolvedInsertCondition,
+                  resolveAssignments(assignments, m, resolveValuesWithSourceOnly = true))
+              case o => o
+            }
+            val resolvedMergeCondition = resolveExpressionTopDown(m.mergeCondition, m)
+            m.copy(mergeCondition = resolvedMergeCondition,
+              matchedActions = newMatchedActions,
+              notMatchedActions = newNotMatchedActions)
         }
     }
 
