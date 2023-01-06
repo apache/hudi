@@ -273,7 +273,7 @@ Spark SQL needs an explicit create table command.
 2. Similar to `hoodie.datasource.write.recordkey.field`, `uuid` is used as primary key by default; if that's the case
    for your table, you can skip setting `primaryKey` in `tblproperties`.
 3. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
-4. `preCombineField` is required for MOR tables.
+4. `preCombineField` is required for MOR tables but for COW tables it is not required for immutable workloads (no upserts).
 5. When set `primaryKey`, `preCombineField`, `type` or other Hudi configs, `tblproperties` is preferred over `options`.
 6. A new Hudi table created by Spark SQL will by default set `hoodie.datasource.write.hive_style_partitioning=true`.
 :::
