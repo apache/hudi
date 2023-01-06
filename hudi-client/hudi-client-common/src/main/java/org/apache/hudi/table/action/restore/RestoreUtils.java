@@ -48,17 +48,17 @@ public class RestoreUtils {
   }
 
   /**
-   * Get the restore time for a restore instant
+   * Get the savepoint timestamp that this restore instant is restoring
    * @param table          the HoodieTable
    * @param restoreInstant Instant referring to restore action
-   * @return restore time of the rollback instant
+   * @return timestamp of the savepoint we are restoring
    * @throws IOException
    *
    * */
-  public static String getRestoreTime(HoodieTable table, HoodieInstant restoreInstant) throws IOException {
+  public static String getSavepointToRestoreTimestamp(HoodieTable table, HoodieInstant restoreInstant) throws IOException {
     HoodieRestorePlan plan = getRestorePlan(table.getMetaClient(), restoreInstant);
     if (plan.getVersion().compareTo(RestorePlanActionExecutor.RESTORE_PLAN_VERSION_1) > 0) {
-      return plan.getSavepointTimestamp();
+      return plan.getSavepointToRestoreTimestamp();
     }
     //get earliest rollback
     String firstRollback = plan.getInstantsToRollback().get(plan.getInstantsToRollback().size() - 1).getCommitTime();

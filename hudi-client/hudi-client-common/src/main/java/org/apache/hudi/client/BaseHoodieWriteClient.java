@@ -61,6 +61,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -837,31 +838,19 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * NOTE : This action requires all writers (ingest and compact) to a table to be stopped before proceeding. Revert
    * the (inflight/committed) record changes for all commits after the provided instant time.
    *
-   * @param instantTime Instant time to which restoration is requested
+   * @param savepointToRestoreTimestamp savepoint intstant time to which restoration is requested
    */
-  public HoodieRestoreMetadata restoreToInstant(final String instantTime, boolean initialMetadataTableIfNecessary) throws HoodieRestoreException {
-    LOG.info("Begin restore to instant " + instantTime);
-    final String restoreInstantTime;
+  public HoodieRestoreMetadata restoreToInstant(final String savepointToRestoreTimestamp, boolean initialMetadataTableIfNecessary) throws HoodieRestoreException {
+    LOG.info("Begin restore to instant " + savepointToRestoreTimestamp);
     Timer.Context timerContext = metrics.getRollbackCtx();
-    Option<HoodieRestorePlan> restorePlanOption;
     try {
-      //Use the previous restore if it failed
-      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
-      Option<HoodieInstant> failedRestore = table.getRestoreTimeline().filterInflightsAndRequested().lastInstant();
-      if (failedRestore.isPresent() && instantTime.equals(RestoreUtils.getRestoreTime(table, failedRestore.get()))) {
-        if (failedRestore.get().isRequested()) {
-          table.getActiveTimeline().transitionRestoreRequestedToInflight(failedRestore.get());
-        }
-        restoreInstantTime = failedRestore.get().getTimestamp();
-        restorePlanOption = Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get()));
-      } else {
-        restoreInstantTime = HoodieActiveTimeline.createNewInstantTime();
-        table = initTable(WriteOperationType.UNKNOWN, Option.of(restoreInstantTime), initialMetadataTableIfNecessary);
-        restorePlanOption = table.scheduleRestore(context, restoreInstantTime, instantTime);
-      }
+      Triple<String, Option<HoodieRestorePlan>, HoodieTable<T, I, K, O>> restorePlanReturn = getRestorePlan(savepointToRestoreTimestamp, initialMetadataTableIfNecessary);
+      final String restoreInstantTimestamp = restorePlanReturn.getLeft();
+      Option<HoodieRestorePlan> restorePlanOption = restorePlanReturn.getMiddle();
+      HoodieTable<T, I, K, O> table = restorePlanReturn.getRight();
 
       if (restorePlanOption.isPresent()) {
-        HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTime, instantTime);
+        HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTimestamp, savepointToRestoreTimestamp);
         if (timerContext != null) {
           final long durationInMs = metrics.getDurationInMs(timerContext.stop());
           final long totalFilesDeleted = restoreMetadata.getHoodieRestoreMetadata().values().stream()
@@ -872,11 +861,29 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         }
         return restoreMetadata;
       } else {
-        throw new HoodieRestoreException("Failed to restore " + config.getBasePath() + " to commit " + instantTime);
+        throw new HoodieRestoreException("Failed to restore " + config.getBasePath() + " to commit " + savepointToRestoreTimestamp);
       }
     } catch (Exception e) {
-      throw new HoodieRestoreException("Failed to restore to " + instantTime, e);
+      throw new HoodieRestoreException("Failed to restore to " + savepointToRestoreTimestamp, e);
     }
+  }
+
+  private Triple<String, Option<HoodieRestorePlan>, HoodieTable<T, I, K, O>> getRestorePlan(final String savepointToRestoreTimestamp, boolean initialMetadataTableIfNecessary) throws IOException {
+    //Use the previous restore if it failed
+    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
+    Option<HoodieInstant> failedRestore = table.getRestoreTimeline().filterInflightsAndRequested().lastInstant();
+    final String restoreInstantTimestamp;
+    Option<HoodieRestorePlan> restorePlanOption;
+    if (failedRestore.isPresent() && savepointToRestoreTimestamp.equals(RestoreUtils.getSavepointToRestoreTimestamp(table, failedRestore.get()))) {
+      restoreInstantTimestamp = failedRestore.get().getTimestamp();
+      restorePlanOption = Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get()));
+      table = initTable(WriteOperationType.UNKNOWN, Option.of(restoreInstantTimestamp), initialMetadataTableIfNecessary);
+    } else {
+      restoreInstantTimestamp = HoodieActiveTimeline.createNewInstantTime();
+      table = initTable(WriteOperationType.UNKNOWN, Option.of(restoreInstantTimestamp), initialMetadataTableIfNecessary);
+      restorePlanOption = table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp);
+    }
+    return Triple.of(restoreInstantTimestamp, restorePlanOption, table);
   }
 
   /**
