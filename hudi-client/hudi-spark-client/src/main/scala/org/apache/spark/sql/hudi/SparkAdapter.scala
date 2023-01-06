@@ -123,6 +123,8 @@ trait SparkAdapter extends Serializable {
    */
   def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
     EliminateSubqueryAliases(plan) match {
+      // First, we need to weed out unresolved plans
+      case plan if !plan.resolved => None
       // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
       //       on top of it
       case PhysicalOperation(_, _, LogicalRelation(_, _, Some(table), _)) if isHoodieTable(table) => Some(table)

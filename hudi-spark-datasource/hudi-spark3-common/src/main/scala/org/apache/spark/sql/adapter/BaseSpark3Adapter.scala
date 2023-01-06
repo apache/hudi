@@ -57,6 +57,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
     super.resolveHoodieTable(plan).orElse {
       EliminateSubqueryAliases(plan) match {
+        // First, we need to weed out unresolved plans
+        case plan if !plan.resolved => None
         // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
         //       on top of it
         case PhysicalOperation(_, _, DataSourceV2Relation(v2: V2TableWithV1Fallback, _, _, _, _)) if isHoodieTable(v2.v1Table) =>
