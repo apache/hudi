@@ -30,7 +30,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ValidationUtils.{checkArgument, checkState}
 import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, JsonUtils, StringUtils}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
@@ -75,6 +75,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     STREAMING_RETRY_INTERVAL_MS.defaultValue).toLong
   private val ignoreFailedBatch = options.getOrDefault(STREAMING_IGNORE_FAILED_BATCH.key,
     STREAMING_IGNORE_FAILED_BATCH.defaultValue).toBoolean
+  private val disableCompaction = options.getOrDefault(HoodieCompactionConfig.DISABLE_ASYNC_COMPACT_FOR_SPARK_STREAMING.key,
+    HoodieCompactionConfig.DISABLE_ASYNC_COMPACT_FOR_SPARK_STREAMING.defaultValue).toBoolean
 
   private var isAsyncCompactorServiceShutdownAbnormally = false
   private var isAsyncClusteringServiceShutdownAbnormally = false
@@ -117,7 +119,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     retry(retryCnt, retryIntervalMs)(
       Try(
         HoodieSparkSqlWriter.write(
-          sqlContext, mode, updatedOptions, data, hoodieTableConfig, writeClient, Some(triggerAsyncCompactor), Some(triggerAsyncClustering),
+          sqlContext, mode, updatedOptions, data, hoodieTableConfig, writeClient,
+          if (disableCompaction) None else Some(triggerAsyncCompactor), Some(triggerAsyncClustering),
           extraPreCommitFn = Some(new BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata] {
 
             override def accept(metaClient: HoodieTableMetaClient,
