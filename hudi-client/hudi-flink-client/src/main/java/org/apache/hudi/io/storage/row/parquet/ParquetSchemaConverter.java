@@ -539,13 +539,11 @@ public class ParquetSchemaConverter {
   public static MessageType convertToParquetMessageType(String name, RowType rowType) {
     Type[] types = new Type[rowType.getFieldCount()];
     for (int i = 0; i < rowType.getFieldCount(); i++) {
-      types[i] = convertToParquetType(rowType.getFieldNames().get(i), rowType.getTypeAt(i));
+      String fieldName = rowType.getFieldNames().get(i);
+      LogicalType fieldType = rowType.getTypeAt(i);
+      types[i] = convertToParquetType(fieldName, fieldType, fieldType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED);
     }
     return new MessageType(name, types);
-  }
-
-  private static Type convertToParquetType(String name, LogicalType type) {
-    return convertToParquetType(name, type, Type.Repetition.OPTIONAL);
   }
 
   private static Type convertToParquetType(

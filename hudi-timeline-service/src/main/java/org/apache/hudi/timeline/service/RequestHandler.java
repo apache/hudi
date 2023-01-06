@@ -60,7 +60,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.stream.Collectors;
 
 /**
  * Main REST Handler class that handles and delegates calls to timeline relevant handlers.
@@ -159,10 +158,10 @@ public class RequestHandler {
         viewManager.getFileSystemView(basePath).getTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
     if (LOG.isDebugEnabled()) {
       LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
-          + "], localTimeline=" + localTimeline.getInstants().collect(Collectors.toList()));
+          + "], localTimeline=" + localTimeline.getInstants());
     }
 
-    if ((!localTimeline.getInstants().findAny().isPresent())
+    if ((!localTimeline.getInstantsAsStream().findAny().isPresent())
         && HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)) {
       return false;
     }
@@ -530,7 +529,7 @@ public class RequestHandler {
                   "Last known instant from client was "
                       + lastKnownInstantFromClient
                       + " but server has the following timeline "
-                      + localTimeline.getInstants().collect(Collectors.toList());
+                      + localTimeline.getInstants();
               throw new BadRequestResponse(errMsg);
             }
           }

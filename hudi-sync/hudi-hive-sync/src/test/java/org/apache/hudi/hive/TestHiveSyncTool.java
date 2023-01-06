@@ -62,6 +62,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
@@ -97,12 +98,24 @@ public class TestHiveSyncTool {
     return SYNC_MODES;
   }
 
-  // useSchemaFromCommitMetadata, syncMode
+  // syncMode, enablePushDown
+  private static Iterable<Object[]> syncModeAndEnablePushDown() {
+    List<Object[]> opts = new ArrayList<>();
+    for (Object mode : SYNC_MODES) {
+      opts.add(new Object[] {mode, "true"});
+      opts.add(new Object[] {mode, "false"});
+    }
+    return opts;
+  }
+
+  // useSchemaFromCommitMetadata, syncMode, enablePushDown
   private static Iterable<Object[]> syncModeAndSchemaFromCommitMetadata() {
     List<Object[]> opts = new ArrayList<>();
     for (Object mode : SYNC_MODES) {
-      opts.add(new Object[] {true, mode});
-      opts.add(new Object[] {false, mode});
+      opts.add(new Object[] {true, mode, "true"});
+      opts.add(new Object[] {false, mode, "true"});
+      opts.add(new Object[] {true, mode, "false"});
+      opts.add(new Object[] {false, mode, "false"});
     }
     return opts;
   }
@@ -115,21 +128,26 @@ public class TestHiveSyncTool {
     HiveTestUtil.shutdown();
   }
 
+  // (useSchemaFromCommitMetadata, isManagedTable, syncMode, enablePushDown)
   private static Iterable<Object[]> syncModeAndSchemaFromCommitMetadataAndManagedTable() {
     List<Object[]> opts = new ArrayList<>();
     for (Object mode : SYNC_MODES) {
-      opts.add(new Object[] {true, true, mode});
-      opts.add(new Object[] {false, false, mode});
+      opts.add(new Object[] {true, true, mode, "true"});
+      opts.add(new Object[] {false, false, mode, "true"});
+      opts.add(new Object[] {true, true, mode, "false"});
+      opts.add(new Object[] {false, false, mode, "false"});
     }
     return opts;
   }
 
-  // (useJdbc, useSchemaFromCommitMetadata, syncAsDataSource)
+  // (useJdbc, useSchemaFromCommitMetadata, syncAsDataSource, enablePushDown)
   private static Iterable<Object[]> syncDataSourceTableParams() {
     List<Object[]> opts = new ArrayList<>();
     for (Object mode : SYNC_MODES) {
-      opts.add(new Object[] {true, true, mode});
-      opts.add(new Object[] {false, false, mode});
+      opts.add(new Object[] {true, true, mode, "true"});
+      opts.add(new Object[] {false, false, mode, "true"});
+      opts.add(new Object[] {true, true, mode, "false"});
+      opts.add(new Object[] {false, false, mode, "false"});
     }
     return opts;
   }
@@ -146,8 +164,9 @@ public class TestHiveSyncTool {
 
   @ParameterizedTest
   @MethodSource({"syncModeAndSchemaFromCommitMetadata"})
-  public void testBasicSync(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {
+  public void testBasicSync(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
 
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
@@ -253,7 +272,8 @@ public class TestHiveSyncTool {
   @MethodSource({"syncDataSourceTableParams"})
   public void testSyncCOWTableWithProperties(boolean useSchemaFromCommitMetadata,
                                              boolean syncAsDataSourceTable,
-                                             String syncMode) throws Exception {
+                                             String syncMode,
+                                             String enablePushDown) throws Exception {
     Map<String, String> serdeProperties = new HashMap<String, String>() {
       {
         put("path", HiveTestUtil.basePath);
@@ -270,6 +290,7 @@ public class TestHiveSyncTool {
     hiveSyncProps.setProperty(HIVE_SYNC_AS_DATA_SOURCE_TABLE.key(), String.valueOf(syncAsDataSourceTable));
     hiveSyncProps.setProperty(HIVE_TABLE_SERDE_PROPERTIES.key(), ConfigUtils.configToString(serdeProperties));
     hiveSyncProps.setProperty(HIVE_TABLE_PROPERTIES.key(), ConfigUtils.configToString(tableProperties));
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
 
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
@@ -345,7 +366,8 @@ public class TestHiveSyncTool {
   @MethodSource({"syncDataSourceTableParams"})
   public void testSyncMORTableWithProperties(boolean useSchemaFromCommitMetadata,
                                              boolean syncAsDataSourceTable,
-                                             String syncMode) throws Exception {
+                                             String syncMode,
+                                             String enablePushDown) throws Exception {
     Map<String, String> serdeProperties = new HashMap<String, String>() {
       {
         put("path", HiveTestUtil.basePath);
@@ -362,6 +384,7 @@ public class TestHiveSyncTool {
     hiveSyncProps.setProperty(HIVE_SYNC_AS_DATA_SOURCE_TABLE.key(), String.valueOf(syncAsDataSourceTable));
     hiveSyncProps.setProperty(HIVE_TABLE_SERDE_PROPERTIES.key(), ConfigUtils.configToString(serdeProperties));
     hiveSyncProps.setProperty(HIVE_TABLE_PROPERTIES.key(), ConfigUtils.configToString(tableProperties));
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
 
     String instantTime = "100";
     String deltaCommitTime = "101";
@@ -417,9 +440,11 @@ public class TestHiveSyncTool {
   @MethodSource({"syncModeAndSchemaFromCommitMetadataAndManagedTable"})
   public void testSyncManagedTable(boolean useSchemaFromCommitMetadata,
                                    boolean isManagedTable,
-                                   String syncMode) throws Exception {
+                                   String syncMode,
+                                   String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     hiveSyncProps.setProperty(HIVE_CREATE_MANAGED_TABLE.key(), String.valueOf(isManagedTable));
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
 
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
@@ -444,9 +469,11 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("syncMode")
-  public void testSyncWithSchema(String syncMode) throws Exception {
+  @MethodSource("syncModeAndEnablePushDown")
+  public void testSyncWithSchema(String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+
     String commitTime = "100";
     HiveTestUtil.createCOWTableWithSchema(commitTime, "/complex.schema.avsc");
 
@@ -459,9 +486,11 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("syncMode")
-  public void testSyncIncremental(String syncMode) throws Exception {
+  @MethodSource("syncModeAndEnablePushDown")
+  public void testSyncIncremental(String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+
     String commitTime1 = "100";
     HiveTestUtil.createCOWTable(commitTime1, 5, true);
     reinitHiveSyncClient();
@@ -494,9 +523,11 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("syncMode")
-  public void testSyncIncrementalWithSchemaEvolution(String syncMode) throws Exception {
+  @MethodSource("syncModeAndEnablePushDown")
+  public void testSyncIncrementalWithSchemaEvolution(String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+
     String commitTime1 = "100";
     HiveTestUtil.createCOWTable(commitTime1, 5, true);
     reinitHiveSyncClient();
@@ -595,8 +626,10 @@ public class TestHiveSyncTool {
 
   @ParameterizedTest
   @MethodSource("syncModeAndSchemaFromCommitMetadata")
-  public void testSyncMergeOnRead(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {
+  public void testSyncMergeOnRead(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+
     String instantTime = "100";
     String deltaCommitTime = "101";
     HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true,
@@ -659,8 +692,10 @@ public class TestHiveSyncTool {
 
   @ParameterizedTest
   @MethodSource("syncModeAndSchemaFromCommitMetadata")
-  public void testSyncMergeOnReadRT(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {
+  public void testSyncMergeOnReadRT(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+
     String instantTime = "100";
     String deltaCommitTime = "101";
     String snapshotTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
@@ -724,9 +759,11 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("syncMode")
-  public void testMultiPartitionKeySync(String syncMode) throws Exception {
+  @MethodSource("syncModeAndEnablePushDown")
+  public void testMultiPartitionKeySync(String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
 
@@ -791,9 +828,10 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("syncMode")
-  public void testDropPartitionKeySync(String syncMode) throws Exception {
+  @MethodSource("syncModeAndEnablePushDown")
+  public void testDropPartitionKeySync(String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
 
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 1, true);
@@ -835,9 +873,10 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("syncMode")
-  public void testDropPartition(String syncMode) throws Exception {
+  @MethodSource("syncModeAndEnablePushDown")
+  public void testDropPartition(String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
 
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 1, true);
@@ -887,9 +926,11 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("syncMode")
-  public void testNonPartitionedSync(String syncMode) throws Exception {
+  @MethodSource("syncModeAndEnablePushDown")
+  public void testNonPartitionedSync(String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
     // Set partition value extractor to NonPartitionedExtractor
@@ -913,9 +954,11 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("syncMode")
-  public void testReadSchemaForMOR(String syncMode) throws Exception {
+  @MethodSource("syncModeAndEnablePushDown")
+  public void testReadSchemaForMOR(String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+
     String commitTime = "100";
     String snapshotTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
     HiveTestUtil.createMORTable(commitTime, "", 5, false, true);
@@ -1044,7 +1087,7 @@ public class TestHiveSyncTool {
     HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, getHiveConf());
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + hiveClient.getActiveTimeline().getInstants()
+        + hiveClient.getActiveTimeline().getInstantsAsStream()
         .filter(inst -> inst.getTimestamp().equals(commitTime2))
         .findFirst().get().getFileName());
     assertTrue(HiveTestUtil.fileSystem.delete(fullPath, false));
@@ -1088,7 +1131,7 @@ public class TestHiveSyncTool {
     reinitHiveSyncClient();
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + hiveClient.getActiveTimeline().getInstants()
+        + hiveClient.getActiveTimeline().getInstantsAsStream()
         .filter(inst -> inst.getTimestamp().equals(commitTime2))
         .findFirst().get().getFileName());
     assertTrue(HiveTestUtil.fileSystem.delete(fullPath, false));

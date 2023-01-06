@@ -20,6 +20,8 @@ package org.apache.hudi.utils.source;
 
 import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
 
+import org.apache.flink.api.common.functions.AbstractRichFunction;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
@@ -49,7 +51,7 @@ import static org.apache.hudi.utils.factory.ContinuousFileSourceFactory.CHECKPOI
  * A continuous file source that can trigger checkpoints continuously.
  *
  * <p>It loads the data in the specified file and split the data into number of checkpoints batches.
- * Say, if you want 4 checkpoints and there are 8 records in the file, the emit strategy is:
+ * Say, if you want 4 checkpoints and there are 8 records in the file, the emission strategy is:
  *
  * <pre>
  *   | 2 records | 2 records | 2 records | 2 records |
@@ -85,6 +87,7 @@ public class ContinuousFileSource implements ScanTableSource {
       @Override
       public DataStream<RowData> produceDataStream(StreamExecutionEnvironment execEnv) {
         final RowType rowType = (RowType) tableSchema.toSourceRowDataType().getLogicalType();
+
         JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
             rowType,
             InternalTypeInfo.of(rowType),
@@ -95,7 +98,7 @@ public class ContinuousFileSource implements ScanTableSource {
         return execEnv.addSource(new BoundedSourceFunction(path, conf.getInteger(CHECKPOINTS)))
             .name("continuous_file_source")
             .setParallelism(1)
-            .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)),
+            .map(new JsonDeserializationFunction(deserializationSchema),
                 InternalTypeInfo.of(rowType));
       }
     };
@@ -181,6 +184,30 @@ public class ContinuousFileSource implements ScanTableSource {
     @Override
     public void notifyCheckpointComplete(long l) {
       this.currentCP.incrementAndGet();
+    }
+  }
+
+  /**
+   * Wrapper function that manages the lifecycle of the JSON deserialization schema.
+   */
+  public static class JsonDeserializationFunction
+      extends AbstractRichFunction
+      implements MapFunction<String, RowData> {
+    private final JsonRowDataDeserializationSchema deserializationSchema;
+
+    public JsonDeserializationFunction(JsonRowDataDeserializationSchema deserializationSchema) {
+      this.deserializationSchema = deserializationSchema;
+    }
+
+    @Override
+    public void open(Configuration parameters) throws Exception {
+      super.open(parameters);
+      this.deserializationSchema.open(null);
+    }
+
+    @Override
+    public RowData map(String record) throws Exception {
+      return deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8));
     }
   }
 }

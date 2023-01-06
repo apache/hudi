@@ -18,13 +18,17 @@
 
 package org.apache.hudi.table.format;
 
+import java.util.stream.Collectors;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
@@ -34,7 +38,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -141,15 +147,17 @@ public class FormatUtils {
   public static HoodieMergedLogRecordScanner logScanner(
       MergeOnReadInputSplit split,
       Schema logSchema,
+      InternalSchema internalSchema,
       org.apache.flink.configuration.Configuration flinkConf,
       Configuration hadoopConf) {
-    HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(flinkConf);
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
     FileSystem fs = FSUtils.getFs(split.getTablePath(), hadoopConf);
     return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(split.getTablePath())
         .withLogFilePaths(split.getLogPaths().get())
         .withReaderSchema(logSchema)
+        .withInternalSchema(internalSchema)
         .withLatestInstantTime(split.getLatestCommit())
         .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
         .withReverseReader(false)
@@ -160,32 +168,7 @@ public class FormatUtils {
         .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
         .withInstantRange(split.getInstantRange())
         .withOperationField(flinkConf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
-        .build();
-  }
-
-  private static HoodieUnMergedLogRecordScanner unMergedLogScanner(
-      MergeOnReadInputSplit split,
-      Schema logSchema,
-      org.apache.flink.configuration.Configuration flinkConf,
-      Configuration hadoopConf,
-      HoodieUnMergedLogRecordScanner.LogRecordScannerCallback callback) {
-    FileSystem fs = FSUtils.getFs(split.getTablePath(), hadoopConf);
-    return HoodieUnMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
-        .withBasePath(split.getTablePath())
-        .withLogFilePaths(split.getLogPaths().get())
-        .withReaderSchema(logSchema)
-        .withLatestInstantTime(split.getLatestCommit())
-        .withReadBlocksLazily(
-            string2Boolean(
-                flinkConf.getString(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
-                    HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
-        .withReverseReader(false)
-        .withBufferSize(
-            flinkConf.getInteger(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
-                HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
-        .withInstantRange(split.getInstantRange())
-        .withLogRecordScannerCallback(callback)
+        .withRecordMerger(writeConfig.getRecordMerger())
         .build();
   }
 
@@ -193,9 +176,6 @@ public class FormatUtils {
    * Utility to read and buffer the records in the unMerged log record scanner.
    */
   public static class BoundedMemoryRecords {
-    // Log Record unmerged scanner
-    private final HoodieUnMergedLogRecordScanner scanner;
-
     // Executor that runs the above producers in parallel
     private final BoundedInMemoryExecutor<HoodieRecord<?>, HoodieRecord<?>, ?> executor;
 
@@ -205,21 +185,44 @@ public class FormatUtils {
     public BoundedMemoryRecords(
         MergeOnReadInputSplit split,
         Schema logSchema,
+        InternalSchema internalSchema,
         Configuration hadoopConf,
         org.apache.flink.configuration.Configuration flinkConf) {
+      List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
+          .map(String::trim)
+          .distinct()
+          .collect(Collectors.toList());
+      HoodieRecordMerger merger = HoodieRecordUtils.createRecordMerger(
+          split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY));
+      HoodieUnMergedLogRecordScanner.Builder scannerBuilder = HoodieUnMergedLogRecordScanner.newBuilder()
+          .withFileSystem(FSUtils.getFs(split.getTablePath(), hadoopConf))
+          .withBasePath(split.getTablePath())
+          .withLogFilePaths(split.getLogPaths().get())
+          .withReaderSchema(logSchema)
+          .withInternalSchema(internalSchema)
+          .withLatestInstantTime(split.getLatestCommit())
+          .withReadBlocksLazily(
+              string2Boolean(
+                  flinkConf.getString(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
+                      HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
+          .withReverseReader(false)
+          .withBufferSize(
+              flinkConf.getInteger(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
+                  HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
+          .withInstantRange(split.getInstantRange())
+          .withRecordMerger(merger);
+
       this.executor = new BoundedInMemoryExecutor<>(
           StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf),
-          getParallelProducers(),
+          getParallelProducers(scannerBuilder),
           Option.empty(),
           Function.identity(),
           new DefaultSizeEstimator<>(),
           Functions.noop());
-      // Consumer of this record reader
-      this.iterator = this.executor.getQueue().iterator();
-      this.scanner = FormatUtils.unMergedLogScanner(split, logSchema, flinkConf, hadoopConf,
-          record -> executor.getQueue().insertRecord(record));
+      this.iterator = this.executor.getRecordIterator();
+
       // Start reading and buffering
-      this.executor.startProducers();
+      this.executor.startProducingAsync();
     }
 
     public Iterator<HoodieRecord<?>> getRecordsIterator() {
@@ -229,12 +232,18 @@ public class FormatUtils {
     /**
      * Setup log and parquet reading in parallel. Both write to central buffer.
      */
-    private List<HoodieProducer<HoodieRecord<?>>> getParallelProducers() {
+    private List<HoodieProducer<HoodieRecord<?>>> getParallelProducers(
+        HoodieUnMergedLogRecordScanner.Builder scannerBuilder
+    ) {
       List<HoodieProducer<HoodieRecord<?>>> producers = new ArrayList<>();
-      producers.add(new FunctionBasedQueueProducer<>(buffer -> {
+      producers.add(new FunctionBasedQueueProducer<>(queue -> {
+        HoodieUnMergedLogRecordScanner scanner =
+            scannerBuilder.withLogRecordScannerCallback(queue::insertRecord).build();
+        // Scan all the delta-log files, filling in the queue
         scanner.scan();
         return null;
       }));
+
       return producers;
     }
 
@@ -263,6 +272,7 @@ public class FormatUtils {
         .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
         .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+        .withRecordMerger(writeConfig.getRecordMerger())
         .build();
   }
 

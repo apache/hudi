@@ -18,8 +18,6 @@
 
 package org.apache.hudi.internal.schema.visitor;
 
-import static org.apache.hudi.internal.schema.utils.InternalSchemaUtils.createFullName;
-
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
@@ -29,6 +27,8 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.internal.schema.utils.InternalSchemaUtils.createFullName;
 
 /**
  * Schema visitor to produce name -> id map for internalSchema.

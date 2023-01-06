@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-/*
+/**
  * Simple utility to test validation conditions (to replace Guava's PreConditions)
  */
 public class ValidationUtils {

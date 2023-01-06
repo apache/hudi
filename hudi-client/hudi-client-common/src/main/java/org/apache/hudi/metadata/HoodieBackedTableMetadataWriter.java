@@ -576,7 +576,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     // We can only initialize if there are no pending operations on the dataset
     List<HoodieInstant> pendingDataInstant = dataMetaClient.getActiveTimeline()
-        .getInstants().filter(i -> !i.isCompleted())
+        .getInstantsAsStream().filter(i -> !i.isCompleted())
         .filter(i -> !inflightInstantTimestamp.isPresent() || !i.getTimestamp().equals(inflightInstantTimestamp.get()))
         // regular writers should not be blocked due to pending indexing action
         .filter(i -> !HoodieTimeline.INDEXING_ACTION.equals(i.getAction()))
@@ -752,6 +752,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       LOG.warn("Deleting pending indexing instant from the timeline for partition: " + partitionPath);
       deletePendingIndexingInstant(dataMetaClient, partitionPath);
     }
+    closeInternal();
   }
 
   /**
@@ -760,7 +761,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * if the partition path in the plan matches with the given partition path.
    */
   private static void deletePendingIndexingInstant(HoodieTableMetaClient metaClient, String partitionPath) {
-    metaClient.reloadActiveTimeline().filterPendingIndexTimeline().getInstants().filter(instant -> REQUESTED.equals(instant.getState()))
+    metaClient.reloadActiveTimeline().filterPendingIndexTimeline().getInstantsAsStream().filter(instant -> REQUESTED.equals(instant.getState()))
         .forEach(instant -> {
           try {
             HoodieIndexPlan indexPlan = deserializeIndexPlan(metaClient.getActiveTimeline().readIndexPlanAsBytes(instant).get());
@@ -885,6 +886,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   public void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableServiceAction) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(
         engineContext, commitMetadata, instantTime, getRecordsGenerationParams()), !isTableServiceAction);
+    closeInternal();
   }
 
   /**
@@ -897,6 +899,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   public void update(HoodieCleanMetadata cleanMetadata, String instantTime) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
         cleanMetadata, getRecordsGenerationParams(), instantTime), false);
+    closeInternal();
   }
 
   /**
@@ -910,6 +913,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
         metadataMetaClient.getActiveTimeline(), restoreMetadata, getRecordsGenerationParams(), instantTime,
         metadata.getSyncedInstantTime()), false);
+    closeInternal();
   }
 
   /**
@@ -938,6 +942,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
               rollbackMetadata, getRecordsGenerationParams(), instantTime,
               metadata.getSyncedInstantTime(), wasSynced);
       commit(instantTime, records, false);
+      closeInternal();
     }
   }
 
@@ -989,7 +994,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
         FileSlice slice = finalFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
             fileGroupCount));
+        r.unseal();
         r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
+        r.seal();
         return r;
       });
 
@@ -1015,7 +1022,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     String latestDeltaCommitTime = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
         .get().getTimestamp();
     List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
-        .findInstantsBefore(instantTime).getInstants().collect(Collectors.toList());
+        .findInstantsBefore(instantTime).getInstants();
 
     if (!pendingInstants.isEmpty()) {
       LOG.info(String.format("Cannot compact metadata table as there are %d inflight instants before latest deltacommit %s: %s",
@@ -1123,6 +1130,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     });
 
     return filesPartitionRecords.union(fileListRecords);
+  }
+
+  protected void closeInternal() {
+    try {
+      close();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to close HoodieMetadata writer ", e);
+    }
   }
 
   /**

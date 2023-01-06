@@ -72,6 +72,10 @@
       </resource>
       <resource>
         <directory>src/test/resources</directory>
+        <excludes>
+          <exclude>*-site.xml</exclude>
+        </excludes>
+        <filtering>false</filtering>
       </resource>
     </resources>
   </build>
@@ -235,6 +239,10 @@
         <exclusion>
           <groupId>org.slf4j</groupId>
           <artifactId>slf4j-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.zookeeper</groupId>
+          <artifactId>zookeeper</artifactId>
         </exclusion>
       </exclusions>
     </dependency>

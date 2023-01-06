@@ -65,7 +65,7 @@ public class TimelineUtils {
   public static List<String> getDroppedPartitions(HoodieTimeline timeline) {
     HoodieTimeline replaceCommitTimeline = timeline.getWriteTimeline().filterCompletedInstants().getCompletedReplaceTimeline();
 
-    return replaceCommitTimeline.getInstants().flatMap(instant -> {
+    return replaceCommitTimeline.getInstantsAsStream().flatMap(instant -> {
       try {
         HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
             replaceCommitTimeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
@@ -85,7 +85,7 @@ public class TimelineUtils {
    * Returns partitions that have been modified including internal operations such as clean in the passed timeline.
    */
   public static List<String> getAffectedPartitions(HoodieTimeline timeline) {
-    return timeline.filterCompletedInstants().getInstants().flatMap(s -> {
+    return timeline.filterCompletedInstants().getInstantsAsStream().flatMap(s -> {
       switch (s.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:
         case HoodieTimeline.DELTA_COMMIT_ACTION:
@@ -211,10 +211,29 @@ public class TimelineUtils {
   }
 
   /**
+   * Returns a Hudi timeline with commits after the given instant time (exclusive).
+   *
+   * @param metaClient                {@link HoodieTableMetaClient} instance.
+   * @param exclusiveStartInstantTime Start instant time (exclusive).
+   * @return Hudi timeline.
+   */
+  public static HoodieTimeline getCommitsTimelineAfter(
+      HoodieTableMetaClient metaClient, String exclusiveStartInstantTime) {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieDefaultTimeline timeline =
+        activeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
+            ? metaClient.getArchivedTimeline(exclusiveStartInstantTime)
+            .mergeTimeline(activeTimeline)
+            : activeTimeline;
+    return timeline.getCommitsTimeline()
+        .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
+  }
+  
+  /**
    * Returns the commit metadata of the given instant.
    *
-   * @param instant   The hoodie instant
-   * @param timeline  The timeline
+   * @param instant  The hoodie instant
+   * @param timeline The timeline
    * @return the commit metadata
    */
   public static HoodieCommitMetadata getCommitMetadata(

@@ -131,7 +131,7 @@ public class TransactionUtils {
         .getActiveTimeline()
         .getTimelineOfActions(timelineActions)
         .filterInflightsAndRequested()
-        .getInstants()
+        .getInstantsAsStream()
         .map(HoodieInstant::getTimestamp)
         .collect(Collectors.toSet());
   }
@@ -144,7 +144,7 @@ public class TransactionUtils {
         .reloadActiveTimeline()
         .getCommitsTimeline()
         .filterCompletedInstants()
-        .getInstants()
+        .getInstantsAsStream()
         .filter(f -> pendingInstants.contains(f.getTimestamp()));
   }
 }

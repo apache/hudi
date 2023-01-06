@@ -310,7 +310,7 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call show_commit_extra_metadata()""")(
-        s"arguments is empty")
+        s"Argument: table is required")
 
       // collect commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()

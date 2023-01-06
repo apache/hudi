@@ -18,10 +18,9 @@
 
 package org.apache.hudi.client.functional;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -35,7 +34,6 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -43,13 +41,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,9 +78,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestDataValidationCheckForLogCompactionActions extends HoodieClientTestBase {
 
-  private HoodieTestTable testTable;
-  Random random = new Random();
-  public static final String RECORD_KEY_APPEND_VALUE = "-EXP";
+  private static final String RECORD_KEY_APPEND_VALUE = "-EXP";
+  private static final int PARALLELISM = 2;
+  private final Random random = new Random();
 
   @TempDir
   java.nio.file.Path secondTableBasePath;
@@ -98,7 +98,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
 
   @BeforeEach
   public void setUpTestTable() {
-    testTable = HoodieSparkWriteableTestTable.of(metaClient);
+    HoodieSparkWriteableTestTable.of(metaClient);
   }
 
   //TODO: include both the table's contents.
@@ -112,7 +112,6 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     cleanupSparkContexts();
     cleanupTestDataGenerator();
     cleanupFileSystem();
-    cleanupDFS();
     cleanupExecutorService();
     System.gc();
   }
@@ -157,9 +156,9 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
         scheduleLogCompactionOnExperimentTable(experimentTable);
 
         // Verify that no compaction plans are left on the timeline.
-        assertEquals(0, mainTable.metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().getInstants().count());
-        assertEquals(0, experimentTable.metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().getInstants().count());
-        assertEquals(0, experimentTable.metaClient.reloadActiveTimeline().filterPendingLogCompactionTimeline().getInstants().count());
+        assertEquals(0, mainTable.metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants());
+        assertEquals(0, experimentTable.metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants());
+        assertEquals(0, experimentTable.metaClient.reloadActiveTimeline().filterPendingLogCompactionTimeline().countInstants());
 
         // Verify the records in both the tables.
         verifyRecords(mainTable, experimentTable);
@@ -253,7 +252,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     int numRecords = 50 + random.nextInt(10);
     List<HoodieRecord> records = insertsGenFunction.apply(dataGen, commitTime, numRecords);
     mainTable.updatePreviousGeneration(records, commitTime, 0);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, PARALLELISM);
     return insertsFunction.apply(mainTable.client, writeRecords, commitTime);
   }
 
@@ -261,7 +260,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     int numRecords = 10 + random.nextInt(10);
     List<HoodieRecord> records = updatesGenFunction.apply(dataGen, commitTime, numRecords);
     mainTable.updatePreviousGeneration(records, commitTime, 1);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, PARALLELISM);
     return updatesFunction.apply(mainTable.client, writeRecords, commitTime);
   }
 
@@ -269,22 +268,22 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     int numRecords = 5 + random.nextInt(10);
     List<HoodieKey> keys = deletesGenFunction.apply(dataGen, numRecords);
     mainTable.updatePreviousGenerationForDelete(keys, commitTime);
-    JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(keys, 1);
+    JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(keys, PARALLELISM);
     return deletesFunction.apply(mainTable.client, deleteKeys, commitTime);
   }
 
   private JavaRDD<WriteStatus> insertDataIntoExperimentTable(TestTableContents mainTable, TestTableContents experimentTable) throws IOException {
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(mainTable.generatedRecords, 1);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(mainTable.generatedRecords, PARALLELISM);
     return insertsFunction.apply(experimentTable.client, writeRecords, mainTable.commitTimeOnMainTable);
   }
 
   private JavaRDD<WriteStatus> updateDataIntoExperimentTable(TestTableContents mainTable, TestTableContents experimentTable) throws IOException {
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(mainTable.generatedRecords, 1);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(mainTable.generatedRecords, PARALLELISM);
     return updatesFunction.apply(experimentTable.client, writeRecords, mainTable.commitTimeOnMainTable);
   }
 
   private JavaRDD<WriteStatus> deleteDataIntoExperimentTable(TestTableContents mainTable, TestTableContents experimentTable) throws IOException {
-    JavaRDD<HoodieKey> writeKeys = jsc.parallelize(mainTable.generatedKeysForDelete, 1);
+    JavaRDD<HoodieKey> writeKeys = jsc.parallelize(mainTable.generatedKeysForDelete, PARALLELISM);
     return deletesFunction.apply(experimentTable.client, writeKeys, mainTable.commitTimeOnMainTable);
   }
 
@@ -395,7 +394,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     Properties properties = new Properties();
     properties.setProperty("hoodie.parquet.small.file.limit", "0");
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
-        .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
+        .withParallelism(PARALLELISM, PARALLELISM).withBulkInsertParallelism(PARALLELISM).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())

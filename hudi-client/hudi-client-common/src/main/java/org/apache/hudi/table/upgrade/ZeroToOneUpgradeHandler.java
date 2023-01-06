@@ -86,7 +86,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
                                  int parallelism) throws HoodieRollbackException {
     try {
       // fetch hoodie instant
-      Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstants()
+      Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstantsAsStream()
           .filter(instant -> HoodieActiveTimeline.EQUALS.test(instant.getTimestamp(), commitInstantTime))
           .findFirst());
       if (commitInstantOpt.isPresent()) {
