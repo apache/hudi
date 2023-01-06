@@ -47,6 +47,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -399,7 +400,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         }).flatMap(Collection::stream);
   }
 
-  private Stream<HoodieInstant> getCommitInstantsToArchive() {
+  private Stream<HoodieInstant> getCommitInstantsToArchive() throws IOException {
     // TODO (na) : Add a way to return actions associated with a timeline and then merge/unify
     // with logic above to avoid Stream.concat
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
@@ -432,6 +433,11 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               table.getActiveTimeline(), config.getInlineCompactDeltaCommitMax())
               : Option.empty();
 
+      // The clustering commit instant can not be archived unless we ensure that the replaced files have been cleaned,
+      // without the replaced files metadata on the timeline, the fs view would expose duplicates for readers.
+      Option<HoodieInstant> oldestInstantToRetainForClustering =
+          ClusteringUtils.getOldestInstantToRetainForClustering(table.getActiveTimeline(), table.getMetaClient());
+
       // Actually do the commits
       Stream<HoodieInstant> instantToArchiveStream = commitTimeline.getInstantsAsStream()
           .filter(s -> {
@@ -444,7 +450,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               return !(firstSavepoint.isPresent() && compareTimestamps(firstSavepoint.get().getTimestamp(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
             }
           }).filter(s -> {
-            // Ensure commits >= oldest pending compaction commit is retained
+            // Ensure commits >= the oldest pending compaction commit is retained
             return oldestPendingCompactionAndReplaceInstant
                 .map(instant -> compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
                 .orElse(true);
@@ -461,6 +467,10 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               oldestInstantToRetainForCompaction.map(instantToRetain ->
                       compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
                   .orElse(true)
+          ).filter(s ->
+              oldestInstantToRetainForClustering.map(instantToRetain ->
+                      HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
+                  .orElse(true)
           );
       return instantToArchiveStream.limit(commitTimeline.countInstants() - minInstantsToKeep);
     } else {
@@ -468,7 +478,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
-  private Stream<HoodieInstant> getInstantsToArchive() {
+  private Stream<HoodieInstant> getInstantsToArchive() throws IOException {
     Stream<HoodieInstant> instants = Stream.concat(getCleanInstantsToArchive(), getCommitInstantsToArchive());
     if (config.isMetastoreEnabled()) {
       return Stream.empty();
