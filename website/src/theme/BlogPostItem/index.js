@@ -7,16 +7,15 @@
 import React from 'react';
 import clsx from 'clsx';
 import {MDXProvider} from '@mdx-js/react';
-import Translate, {translate} from '@docusaurus/Translate';
+import {translate} from '@docusaurus/Translate';
 import Link from '@docusaurus/Link';
 import {useBaseUrlUtils} from '@docusaurus/useBaseUrl';
 import {usePluralForm} from '@docusaurus/theme-common';
 import MDXComponents from '@theme/MDXComponents';
 import EditThisPage from '@theme/EditThisPage';
 import styles from './styles.module.css';
-import TagsListInline from '@theme/TagsListInline';
-import BlogPostAuthors from '@theme/BlogPostAuthors'; // Very simple pluralization: probably good enough for now
 import Tag from '@theme/Tag';
+import AuthorName from "@site/src/components/AuthorName";
 
 function useReadingTimePlural() {
     const {selectMessage} = usePluralForm();
@@ -99,54 +98,14 @@ function BlogPostItem(props) {
                     <time dateTime={date} itemProp="datePublished">
                         {formattedDate}
                     </time>
-
-                    {authors.map((author, idx) => (
-
-                        <div key={idx}>
-                            <div className="avatar">
-                                {author.name && (
-                                    <div>
-                                        <>
-                                            {idx !== 0 ? idx !== authors.length - 1 ? ',' : 'and' : ''}</>
-                                        <Link href={author.url} itemProp="url">
-                                    <span className={clsx(styles.blogPostAuthorsList)}
-                                          itemProp="name">{author.name}</span>
-                                        </Link>
-                                    </div>
-                                )
-                                }
-                            </div>
-                        </div>
-                    ))}
+                    <AuthorName authors={authors} className={styles.blogPostAuthorsList} />
 
                 </div> : <div
                     className={clsx(styles.authorTimeTags, "row 'margin-vert--md'")}>
                     <time dateTime={date} itemProp="datePublished">
                         {formattedDate} by
                     </time>
-
-                    {authors.map((author, idx) => (
-
-                        <div key={idx}>
-                            <div className="avatar">
-
-                                {author.name && (
-                                    <div>
-                                        <>
-                                            {idx !== 0 ? idx !== authors.length - 1 ? ',' : 'and' : ''}</>
-                                        <Link href={author.url} itemProp="url">
-
-                                            <span className={clsx(styles.authorsList)}
-                                                  itemProp="name">{author.name}</span>
-                                        </Link>
-
-                                    </div>
-                                )
-                                }
-                            </div>
-                        </div>
-                    ))}
-
+                    <AuthorName authors={authors} className={styles.authorsList} />
                 </div>}
 
             </>
