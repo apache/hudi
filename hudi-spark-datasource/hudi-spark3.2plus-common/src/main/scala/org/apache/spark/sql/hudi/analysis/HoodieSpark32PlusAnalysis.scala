@@ -22,6 +22,7 @@ import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.UnresolvedPartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
 import org.apache.spark.sql.catalyst.plans.logcal.HoodieQuery
+import org.apache.spark.sql.catalyst.plans.logcal.HoodieQuery.parseOptions
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
@@ -75,7 +76,7 @@ case class HoodieDataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Ru
 /**
  * Rule for resolve hoodie's extended syntax or rewrite some logical plan.
  */
-case class HoodieSpark32PlusResolveReferences(sparkSession: SparkSession) extends Rule[LogicalPlan]
+case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
@@ -87,7 +88,7 @@ case class HoodieSpark32PlusResolveReferences(sparkSession: SparkSession) extend
       val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
       val dataSource =
         DataSource(
-          sparkSession,
+          spark,
           userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
           partitionColumns = table.partitionColumnNames,
           bucketSpec = table.bucketSpec,
@@ -99,6 +100,18 @@ case class HoodieSpark32PlusResolveReferences(sparkSession: SparkSession) extend
       val relation = dataSource.resolveRelation(checkFilesExist = false)
 
       LogicalRelation(relation, table)
+
+    case q: HoodieQuery =>
+      val (tableName, opts) = parseOptions(q.args)
+
+      val tableId = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
+      val catalogTable = spark.sessionState.catalog.getTableMetadata(tableId)
+
+      val hoodieDataSource = new DefaultSource
+      val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" ->
+        catalogTable.location.toString))
+
+      LogicalRelation(relation, catalogTable)
   }
 }
 
