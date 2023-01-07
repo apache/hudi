@@ -19,8 +19,9 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSeq, GenericInternalRow}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
@@ -67,7 +68,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //       meta-fields are not affecting the resolution of the target columns to be updated by Spark.
     //       For more details please check out the scala-doc of the rule
     // TODO limit adapters to only Spark < 3.2
-    val adaptIngestionTargetLogicalRelations: RuleBuilder = _ => AdaptIngestionTargetLogicalRelations()
+    val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
     if (HoodieSparkUtils.isSpark2) {
       val spark2ResolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
@@ -159,26 +160,32 @@ object HoodieAnalysis extends SparkAdapterSupport {
    *
    * In Spark < 3.2 however, this is worked around by simply removing any meta-fields from the output
    * of the [[LogicalRelation]] resolving into Hudi table. Note that, it's a safe operation since we
-   * actually need to ignore this values (at that level) anyway
+   * actually need to ignore these values anyway
    */
-  case class AdaptIngestionTargetLogicalRelations() extends Rule[LogicalPlan] {
+  case class AdaptIngestionTargetLogicalRelations(spark: SparkSession) extends Rule[LogicalPlan] {
 
     override def apply(plan: LogicalPlan): LogicalPlan =
       AnalysisHelper.allowInvokingTransformsInAnalyzer {
-        // NOTE: It's critical to transform the tree in post-order here to make sure this traversal isn't
-        //       looping infinitely
-        plan.transformUp {
+        plan transformDown {
           // NOTE: In case of [[MergeIntoTable]] Hudi tables could be on both sides -- receiving and providing
           //       the data, as such we have to make sure that we handle both of these cases
           case mit @ MergeIntoTable(targetTable, query, _, _, _) =>
             val updatedTargetTable = targetTable match {
-              // NOTE: In the receiving side of the MIT, we can't project meta-field attributes out,
-              //       and instead have to explicitly remove them
+              // In the receiving side of the MIT, we can't project meta-field attributes out,
+              // and instead have to explicitly remove them
               case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(targetTable))
               case _ => None
             }
+
             val updatedQuery = query match {
-              case ResolvesToHudiTable(_) => Some(projectOutMetaFieldsAttributes(query))
+              // In the producing side of the MIT, we simply check whether the query will be yielding
+              // Hudi meta-fields attributes. In cases when it does we simply project them out
+              //
+              // NOTE: We have to handle both cases when [[query]] is fully resolved and when it's not,
+              //       since, unfortunately, there's no reliable way for us to control the ordering of the
+              //       application of the rules (during next iteration we might not even reach this rule again),
+              //       therefore we have to make sure projection is handled in a single pass
+              case ProducesHudiMetaFields(output) => Some(projectOutMetaFieldsAttributes(query, output))
               case _ => None
             }
 
@@ -195,13 +202,21 @@ object HoodieAnalysis extends SparkAdapterSupport {
           //       the data, as such we have to make sure that we handle both of these cases
           case iis @ MatchInsertIntoStatement(targetTable, _, query, _, _) =>
             val updatedTargetTable = targetTable match {
-              // NOTE: In the receiving side of the MIT, we can't project meta-field attributes out,
-              //       and instead have to explicitly remove them
+              // In the receiving side of the IIS, we can't project meta-field attributes out,
+              // and instead have to explicitly remove them
               case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(targetTable))
               case _ => None
             }
+
             val updatedQuery = query match {
-              case ResolvesToHudiTable(_) => Some(projectOutMetaFieldsAttributes(query))
+              // In the producing side of the MIT, we simply check whether the query will be yielding
+              // Hudi meta-fields attributes. In cases when it does we simply project them out
+              //
+              // NOTE: We have to handle both cases when [[query]] is fully resolved and when it's not,
+              //       since, unfortunately, there's no reliable way for us to control the ordering of the
+              //       application of the rules (during next iteration we might not even reach this rule again),
+              //       therefore we have to make sure projection is handled in a single pass
+              case ProducesHudiMetaFields(output) => Some(projectOutMetaFieldsAttributes(query, output))
               case _ => None
             }
 
@@ -213,22 +228,58 @@ object HoodieAnalysis extends SparkAdapterSupport {
             }
 
           case ut @ UpdateTable(relation @ ResolvesToHudiTable(_), _, _) =>
-            ut.copy(table = projectOutMetaFieldsAttributes(relation))
+            ut.copy(table = projectOutResolvedMetaFieldsAttributes(relation))
         }
       }
-  }
 
-  private def projectOutMetaFieldsAttributes(plan: LogicalPlan): LogicalPlan = {
-    if (plan.output.exists(attr => isMetaField(attr.name))) {
-      Project(removeMetaFields(plan.output), plan)
-    } else {
-      plan
+    private def projectOutMetaFieldsAttributes(plan: LogicalPlan, output: Seq[Attribute]): LogicalPlan = {
+      if (plan.resolved) {
+        projectOutResolvedMetaFieldsAttributes(plan)
+      } else {
+        projectOutUnresolvedMetaFieldsAttributes(plan, output)
+      }
     }
-  }
 
-  private def stripMetaFieldsAttributes(relation: LogicalPlan): LogicalPlan = {
-    relation.transformUp {
-      case r: LogicalRelation => r.copy(output = removeMetaFields(r.output))
+    private def projectOutUnresolvedMetaFieldsAttributes(plan: LogicalPlan, expected: Seq[Attribute]): LogicalPlan = {
+      val filtered = expected.attrs.filterNot(attr => isMetaField(attr.name))
+      if (filtered != expected) {
+        Project(filtered.map(attr => UnresolvedAttribute(attr.name)), plan)
+      } else {
+        plan
+      }
+    }
+
+    private def projectOutResolvedMetaFieldsAttributes(plan: LogicalPlan): LogicalPlan = {
+      if (plan.output.exists(attr => isMetaField(attr.name))) {
+        Project(removeMetaFields(plan.output), plan)
+      } else {
+        plan
+      }
+    }
+
+    private def stripMetaFieldsAttributes(plan: LogicalPlan): LogicalPlan = {
+      plan transformUp {
+        case lr: LogicalRelation if lr.output.exists(attr => isMetaField(attr.name)) =>
+          lr.copy(output = removeMetaFields(lr.output))
+      }
+    }
+
+    private object ProducesHudiMetaFields {
+
+      def unapply(plan: LogicalPlan): Option[Seq[Attribute]] = {
+        val resolved = if (plan.resolved) {
+          plan
+        } else {
+          val analyzer = spark.sessionState.analyzer
+          analyzer.execute(plan)
+        }
+
+        if (resolved.output.exists(attr => isMetaField(attr.name))) {
+          Some(resolved.output)
+        } else {
+          None
+        }
+      }
     }
   }
 
@@ -261,7 +312,7 @@ case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
       // Convert to InsertIntoHoodieTableCommand
-      case iis @ MatchInsertIntoStatement(relation@ResolvesToHudiTable(_), partition, query, overwrite, _) if query.resolved =>
+      case iis @ MatchInsertIntoStatement(relation @ ResolvesToHudiTable(_), partition, query, overwrite, _) if query.resolved =>
         relation match {
           // NOTE: In Spark >= 3.2, Hudi relations will be resolved as [[DataSourceV2Relation]]s by default;
           //       However, currently, fallback will be applied downgrading them to V1 relations, hence
