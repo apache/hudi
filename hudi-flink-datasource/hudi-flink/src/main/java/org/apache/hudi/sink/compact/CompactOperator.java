@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.CompactionOperation;
@@ -35,6 +34,7 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.watermark.Watermark;
+import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.table.runtime.operators.TableStreamOperator;
 import org.apache.flink.table.runtime.util.StreamRecordCollector;
@@ -99,13 +99,12 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   }
 
   @Override
-  public void processWatermark(Watermark mark) throws Exception {
+  public void processWatermark(Watermark mark) {
     // no need to propagate the watermark
   }
 
   @Override
-  public void processLatencyMarker(LatencyMarker latencyMarker)
-      throws Exception {
+  public void processLatencyMarker(LatencyMarker latencyMarker) {
     // no need to propagate the latencyMarker
   }
 
@@ -118,9 +117,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
       executor.execute(
           () -> doCompaction(instantTime, compactionOperation, collector, reloadWriteConfig()),
-          (errMsg, t) -> {
-            collector.collect(new CompactionCommitEvent(instantTime,
-                compactionOperation.getFileId(), taskID));},
+          (errMsg, t) -> collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), taskID)),
           "Execute compaction for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the compaction task synchronously for batch mode.
@@ -146,8 +143,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
         compactionOperation,
         instantTime, maxInstantTime,
         writeClient.getHoodieTable().getTaskContextSupplier());
-    collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(),
-        writeStatuses, taskID));
+    collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }
 
   private HoodieWriteConfig reloadWriteConfig() throws Exception {
