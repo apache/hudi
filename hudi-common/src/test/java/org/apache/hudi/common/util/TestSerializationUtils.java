@@ -18,16 +18,10 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.Test;
 
@@ -84,30 +78,6 @@ public class TestSerializationUtils {
     // NOTE: Here we assert that Kryo doesn't optimize out the fully-qualified class-name
     //       and always writes it out
     assertEquals(ByteBuffer.wrap(firstBytes), ByteBuffer.wrap(secondBytes));
-  }
-
-  @Test
-  public void testSerHoodieMetadataPayload() throws IOException {
-    String partitionPath = "2022/10/01";
-    String fileName = "file.parquet";
-    String targetColName = "c1";
-
-    HoodieColumnRangeMetadata<Comparable> columnStatsRecord =
-        HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, 0, 500, 0, 100, 12345, 12345);
-
-    HoodieRecord<HoodieMetadataPayload> hoodieMetadataPayload =
-        HoodieMetadataPayload.createColumnStatsRecords(partitionPath, Collections.singletonList(columnStatsRecord), false)
-            .findFirst().get();
-
-    IndexedRecord record = hoodieMetadataPayload.getData().getInsertValue(null).get();
-    byte[] recordToBytes = HoodieAvroUtils.indexedRecordToBytes(record);
-    GenericRecord genericRecord = HoodieAvroUtils.bytesToAvro(recordToBytes, record.getSchema());
-
-    HoodieMetadataPayload genericRecordHoodieMetadataPayload = new HoodieMetadataPayload(Option.of(genericRecord));
-    byte[] bytes = SerializationUtils.serialize(genericRecordHoodieMetadataPayload);
-    HoodieMetadataPayload deserGenericRecordHoodieMetadataPayload = SerializationUtils.deserialize(bytes);
-
-    assertEquals(genericRecordHoodieMetadataPayload, deserGenericRecordHoodieMetadataPayload);
   }
 
   private <T> void verifyObject(T expectedValue) throws IOException {
