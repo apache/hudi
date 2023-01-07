@@ -79,15 +79,12 @@ case class HoodieSpark32PlusResolveReferences(sparkSession: SparkSession) extend
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
-    case TimeTravelRelation(plan @ ResolvesToHudiTable(table), timestamp, version) =>
+    case TimeTravelRelation(ResolvesToHudiTable(table), timestamp, version) =>
       if (timestamp.isEmpty && version.nonEmpty) {
-        throw new AnalysisException(
-          "Version expression is not supported for time travel")
+        throw new AnalysisException("Version expression is not supported for time travel")
       }
 
       val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
-      val instantOption = Map(
-        DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestamp.get.toString())
       val dataSource =
         DataSource(
           sparkSession,
@@ -95,12 +92,13 @@ case class HoodieSpark32PlusResolveReferences(sparkSession: SparkSession) extend
           partitionColumns = table.partitionColumnNames,
           bucketSpec = table.bucketSpec,
           className = table.provider.get,
-          options = table.storage.properties ++ pathOption ++ instantOption,
+          options = table.storage.properties ++ pathOption ++ Map(
+            DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestamp.get.toString()),
           catalogTable = Some(table))
 
-      LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
+      val relation = dataSource.resolveRelation(checkFilesExist = false)
 
-    case p => p
+      LogicalRelation(relation, table)
   }
 }
 
