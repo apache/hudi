@@ -90,7 +90,7 @@ public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
     // setup s3 record
     String bucket = "test-bucket";
     String key = "part%3Dpart%2Bpart%24part%A3part%23part%26part%3Fpart%7Epart%25.snappy.parquet";
-    String key_res = "part=part+part$part£part#part&part?part~part%.snappy.parquet";
+    String keyRes = "part=part+part$part£part#part&part?part~part%.snappy.parquet";
     Path path = new Path(bucket, key);
     CloudObjectTestUtils.setMessagesInQueue(sqs, path);
 
@@ -103,7 +103,7 @@ public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
     assertEquals(1, eventFromQueue.getLeft().size());
     assertEquals(1, processed.size());
     assertEquals(
-        key_res,
+        keyRes,
         new JSONObject(eventFromQueue.getLeft().get(0))
             .getJSONObject("s3")
             .getJSONObject("object")
