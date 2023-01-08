@@ -61,8 +61,9 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.internal.StaticSQLConf
+import org.apache.spark.sql.sources.v2.DataSourceOptions
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.{SPARK_VERSION, SparkContext}
+import org.apache.spark.{SPARK_VERSION, SparkContext, TaskContext}
 
 import java.util.function.BiConsumer
 import scala.collection.JavaConversions._
@@ -341,7 +342,8 @@ object HoodieSparkSqlWriter {
               avroRecordNamespace,
               writerSchema,
               dataFileSchemaStr,
-              operation)
+              operation,
+              instantTime)
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
               asyncCompactionTriggerFn.get.apply(client)
@@ -1037,7 +1039,8 @@ object HoodieSparkSqlWriter {
                                     recordNameSpace: String,
                                     writerSchema: Schema,
                                     dataFileSchemaStr: String,
-                                    operation: WriteOperationType) = {
+                                    operation: WriteOperationType,
+                                    instantTime: String) = {
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps))
     val recordType = config.getRecordMerger.getRecordType
@@ -1053,25 +1056,46 @@ object HoodieSparkSqlWriter {
         val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, recordName, recordNameSpace,
           Some(writerSchema))
 
-        avroRecords.mapPartitions(it => {
+        val autoGenerateKeys : Boolean = parameters.getOrElse(DataSourceWriteOptions.AUTO_GENERATE_RECORD_KEYS.key(),
+          DataSourceWriteOptions.AUTO_GENERATE_RECORD_KEYS.defaultValue()).toBoolean
+
+          avroRecords.mapPartitions(it => {
           val dataFileSchema = new Schema.Parser().parse(dataFileSchemaStr)
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
+            var seqIdCounter = 0
 
-          it.map { avroRecord =>
+            // we will override record keys if auto generation if keys is enabled.
+            val recordsWithKeyOverride = it.map(avroRecord =>
+              if (autoGenerateKeys) {
+                val recordKey : String = HoodieRecord.generateSequenceId(instantTime, TaskContext.getPartitionId(), seqIdCounter)
+                seqIdCounter += 1
+                (avroRecord, recordKey)
+              } else {
+                (avroRecord, Option.empty)
+              }
+            )
+
+            recordsWithKeyOverride.map { avroRecordRecordKeyOverRide =>
             val processedRecord = if (shouldDropPartitionColumns) {
-              HoodieAvroUtils.rewriteRecord(avroRecord, dataFileSchema)
+              HoodieAvroUtils.rewriteRecord(avroRecordRecordKeyOverRide._1, dataFileSchema)
             } else {
-              avroRecord
+              avroRecordRecordKeyOverRide._1
             }
+              // Generate HoodieKey for records
+              val hoodieKey = if (autoGenerateKeys) {
+                new HoodieKey(avroRecordRecordKeyOverRide._2.asInstanceOf[String], keyGenerator.getKey(avroRecordRecordKeyOverRide._1).getPartitionPath)
+              } else {
+                keyGenerator.getKey(avroRecordRecordKeyOverRide._1)
+              }
             val hoodieRecord = if (shouldCombine) {
-              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRecord, config.getString(PRECOMBINE_FIELD),
+              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRecordRecordKeyOverRide._1, config.getString(PRECOMBINE_FIELD),
                 false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
-              DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, keyGenerator.getKey(avroRecord),
+              DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getString(PAYLOAD_CLASS_NAME))
             } else {
-              DataSourceUtils.createHoodieRecord(processedRecord, keyGenerator.getKey(avroRecord),
+              DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey,
                 config.getString(PAYLOAD_CLASS_NAME))
             }
             hoodieRecord

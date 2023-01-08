@@ -473,6 +473,12 @@ object DataSourceWriteOptions {
         + "null records from the table (for updating, for ex). Note, that this config has only effect when "
         + "'hoodie.datasource.write.reconcile.schema' is set to false.")
 
+  val AUTO_GENERATE_RECORD_KEYS: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.auto.generate.record.keys")
+    .defaultValue("false")
+    .withDocumentation("When enabled, auto generates record keys for incoming records. Every record will be given a new " +
+      "record key and so updates via spark-datasource is not feasible when enabling this.")
+
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
   // unexpected issues with config getting reset

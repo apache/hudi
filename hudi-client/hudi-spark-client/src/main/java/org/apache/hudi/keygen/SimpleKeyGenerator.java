@@ -20,6 +20,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -36,10 +37,12 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;
+  private boolean doNotExposeRecordKeys;
 
   public SimpleKeyGenerator(TypedProperties props) {
     this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
         props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
+    this.doNotExposeRecordKeys = props.getBoolean("hoodie.auto.generate.record.keys", false);
   }
 
   SimpleKeyGenerator(TypedProperties props, String partitionPathField) {
@@ -59,7 +62,11 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return simpleAvroKeyGenerator.getRecordKey(record);
+    if (doNotExposeRecordKeys) {
+      return StringUtils.EMPTY_STRING;
+    }
+    return
+        simpleAvroKeyGenerator.getRecordKey(record);
   }
 
   @Override
@@ -69,6 +76,9 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
+    if (doNotExposeRecordKeys) {
+      return StringUtils.EMPTY_STRING;
+    }
     tryInitRowAccessor(row.schema());
 
     Object[] recordKeys = rowAccessor.getRecordKeyParts(row);
@@ -116,8 +126,8 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
         String.format("Single partition-path field is expected; provided (%s)", partitionPathField));
   }
 
-  private static void validateRecordKey(String recordKeyField) {
-    checkArgument(recordKeyField == null || !recordKeyField.isEmpty(),
+  private void validateRecordKey(String recordKeyField) {
+    checkArgument(doNotExposeRecordKeys || (recordKeyField == null || !recordKeyField.isEmpty()),
         "Record key field has to be non-empty!");
     checkArgument(recordKeyField == null || !recordKeyField.contains(FIELDS_SEP),
         String.format("Single record-key field is expected; provided (%s)", recordKeyField));

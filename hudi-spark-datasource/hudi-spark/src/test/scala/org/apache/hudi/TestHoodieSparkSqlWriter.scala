@@ -26,10 +26,12 @@ import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils.gteqSpark3_0
 import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
@@ -156,6 +158,7 @@ class TestHoodieSparkSqlWriter {
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
   }
 
@@ -1179,6 +1182,43 @@ class TestHoodieSparkSqlWriter {
     assertTrue(kg2 == classOf[SimpleKeyGenerator].getName)
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testAutoGenerationOfRecordKeys(tableType: String): Unit = {
+    val dataGen = new HoodieTestDataGenerator()
+    var initialOpts = getCommonParams(tempPath, hoodieFooTableName, tableType) +
+      (DataSourceWriteOptions.AUTO_GENERATE_RECORD_KEYS.key() -> "true")
+
+    val writeOpts = if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
+      initialOpts + (HoodieCompactionConfig.INLINE_COMPACT.key() -> "true") +
+        (HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2")
+    } else {
+      initialOpts
+    }
+
+    var totalRecs = 0
+    for (x <- 1 to 5) {
+      val instantTime = "00" + x
+      val genRecsList = if (x == 1) {
+        totalRecs = 1000
+        dataGen.generateInserts(instantTime, 1000)
+      } else {
+        totalRecs += 100
+        dataGen.generateUniqueUpdates(instantTime, 100)
+      }
+      val records =  recordsToStrings(genRecsList).toList
+      val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+      inputDF.write.format("org.apache.hudi")
+        .options(writeOpts)
+        .mode(SaveMode.Append)
+        .save(tempBasePath)
+
+      val snapshotDF = spark.read.format("org.apache.hudi")
+        .load(tempBasePath)
+      assertEquals(totalRecs, snapshotDF.count())
+    }
+  }
+
   /**
    *
    * Test that you can't have consistent hashing bucket index on a COW table
@@ -1215,6 +1255,7 @@ class TestHoodieSparkSqlWriter {
     new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
   }
 }
+
 
 object TestHoodieSparkSqlWriter {
   def testDatasourceInsert: java.util.stream.Stream[Arguments] = {
