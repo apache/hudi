@@ -101,7 +101,12 @@ class HoodieStreamSource(
     metaClient.reloadActiveTimeline()
     metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants() match {
       case activeInstants if !activeInstants.empty() =>
-        Some(HoodieSourceOffset(activeInstants.lastInstant().get().getTimestamp))
+        val timestamp = activeInstants.getInstantsOrderedByStateTransitionTs
+          .skip(activeInstants.countInstants() - 1)
+          .findFirst()
+          .get()
+          .getStateTransitionTime
+        Some(HoodieSourceOffset(timestamp))
       case _ =>
         None
     }
@@ -137,6 +142,8 @@ class HoodieStreamSource(
         // Consume the data between (startCommitTime, endCommitTime]
         val incParams = parameters ++ Map(
           DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+          // Will force to use state transition time to fetch commits to avoid the commit missing issue
+          DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.key -> "true",
           DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCommitTime(startOffset),
           DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime
         )
@@ -163,10 +170,7 @@ class HoodieStreamSource(
     startOffset match {
       case INIT_OFFSET => startOffset.commitTime
       case HoodieSourceOffset(commitTime) =>
-        val time = HoodieActiveTimeline.parseDateFromInstantTime(commitTime).getTime
-        // As we consume the data between (start, end], start is not included,
-        // so we +1s to the start commit time here.
-        HoodieActiveTimeline.formatDate(new Date(time + 1000))
+        commitTime
       case _=> throw new IllegalStateException("UnKnow offset type.")
     }
   }

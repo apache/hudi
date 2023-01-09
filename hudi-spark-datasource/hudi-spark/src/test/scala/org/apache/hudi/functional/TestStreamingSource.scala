@@ -189,7 +189,7 @@ class TestStreamingSource extends StreamTest {
       addData(tablePath, Seq(("3", "a1", "12", "002")))
 
       val timestamp = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
-        .firstInstant().get().getTimestamp
+        .firstInstant().get().getStateTransitionTime
       val df = spark.readStream
         .format("org.apache.hudi")
         .option(START_OFFSET.key(), timestamp)

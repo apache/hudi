@@ -200,6 +200,10 @@ object DataSourceReadOptions {
 
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
 
+  val INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME: ConfigProperty[Boolean] =
+    HoodieCommonConfig.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME
+
+
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()
