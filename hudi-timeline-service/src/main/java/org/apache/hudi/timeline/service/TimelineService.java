@@ -153,8 +153,10 @@ public class TimelineService {
             + "The period in milliseconds between consecutive runs of async marker conflict detection.")
     public Long asyncConflictDetectorBatchPeriodMs = 30000L;
 
-    @Parameter(names = {"--early-conflict-async-checker-heart-beat-interval"}, description = "Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. "
-        + "Instants whose heartbeat is greater than the current value will not be used in early conflict detection.")
+    @Parameter(names = {"--early-conflict-detection-max-heartbeat-interval-ms"}, description =
+        "Used for timeline-server-based markers with "
+            + "`AsyncTimelineMarkerConflictResolutionStrategy`. "
+            + "Instants whose heartbeat is greater than the current value will not be used in early conflict detection.")
     public Long maxAllowableHeartbeatIntervalInMs = 60000L;
 
     @Parameter(names = {"--help", "-h"})
@@ -281,7 +283,7 @@ public class TimelineService {
         return this;
       }
 
-      public Builder markerEarlyConflictMaxAllowableHeartbeatIntervalInMs(Long maxAllowableHeartbeatIntervalInMs) {
+      public Builder earlyConflictDetectionMaxAllowableHeartbeatIntervalInMs(Long maxAllowableHeartbeatIntervalInMs) {
         this.maxAllowableHeartbeatIntervalInMs = maxAllowableHeartbeatIntervalInMs;
         return this;
       }

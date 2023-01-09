@@ -178,7 +178,8 @@ public class MarkerHandler extends Handler {
 
           // markerDir => $base_path/.hoodie/.temp/$instant_time
           // If markerDir is changed like move to the next instant action, we need to fresh this earlyConflictDetectionStrategy.
-          // For specific instant related create marker action, we only call this check/fresh once instead of starting the checker for every request
+          // For specific instant related create marker action, we only call this check/fresh once
+          // instead of starting the conflict detector for every request
           if (!markerDir.equalsIgnoreCase(currentMarkerDir)) {
             this.currentMarkerDir = markerDir;
             Set<String> actions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);

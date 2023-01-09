@@ -18,9 +18,6 @@
 
 package org.apache.hudi.timeline.service.handlers.marker;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -29,6 +26,10 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -101,7 +102,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
             + "Table markers: " + tableMarkers);
         hasConflict.compareAndSet(false, true);
       }
-      LOG.info("Finish batch marker checker in " + timer.endTimer() + " ms");
+      LOG.info("Finish batching marker-based conflict detection in " + timer.endTimer() + " ms");
 
     } catch (IOException e) {
       throw new HoodieIOException("IOException occurs during checking marker conflict");

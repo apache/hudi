@@ -95,7 +95,7 @@ public class EmbeddedTimelineService {
           .earlyConflictDetectionCheckCommitConflict(writeConfig.earlyConflictDetectionCheckCommitConflict())
           .asyncConflictDetectorBatchIntervalMs(writeConfig.getAsyncConflictDetectorBatchIntervalMs())
           .asyncConflictDetectorBatchPeriodMs(writeConfig.getAsyncConflictDetectorPeriodMs())
-          .markerEarlyConflictMaxAllowableHeartbeatIntervalInMs(writeConfig.getHoodieClientHeartbeatIntervalInMs());
+          .earlyConflictDetectionMaxAllowableHeartbeatIntervalInMs(writeConfig.getHoodieClientHeartbeatIntervalInMs());
     }
 
     server = new TimelineService(context, hadoopConf.newCopy(), timelineServiceConfBuilder.build(),

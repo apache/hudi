@@ -589,7 +589,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "The time in milliseconds to delay first async marker conflict detection.");
 
   public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_PERIOD_MS = ConfigProperty
-      .key(CONCURRENCY_PREFIX + "early.conflict.async.checker.period_ms")
+      .key(CONCURRENCY_PREFIX + "early.conflict.async.detector.period_ms")
       .defaultValue(30000L)
       .sinceVersion("0.13.0")
       .withDocumentation("Used for timeline-server-based markers with "

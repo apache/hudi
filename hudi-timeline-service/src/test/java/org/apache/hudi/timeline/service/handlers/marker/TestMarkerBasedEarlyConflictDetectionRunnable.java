@@ -18,14 +18,15 @@
 
 package org.apache.hudi.timeline.service.handlers.marker;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
@@ -67,15 +68,15 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
   /**
    * Prepare dataset :
    * $base_path/.hoodie/.temp/2016/001/MARKERS0 => 2016/b21adfa2-7013-4452-a565-4cc39fea5b73-0_4-17-21_001.parquet.marker.CREATE (same)
-   *                                               2016/4a266542-c7d5-426f-8fb8-fb85a2e88448-0_3-17-20_001.parquet.marker.CREATE
-   *                              /002/MARKERS0 => 2016/b21adfa2-7013-4452-a565-4cc39fea5b73-0_40-170-210_002.parquet.marker.MERGE (same)
-   *                                            => 2016/1228caeb-4188-4e19-a18d-848e6f9b0448-0_55-55-425_002.parquet.marker.MERGE
-   *
-   *
-   * Run MarkerCheckerRunnable and find there is a conflict 2016/b21adfa2-7013-4452-a565-4cc39fea5b73-0
+   * 2016/4a266542-c7d5-426f-8fb8-fb85a2e88448-0_3-17-20_001.parquet.marker.CREATE
+   * /002/MARKERS0 => 2016/b21adfa2-7013-4452-a565-4cc39fea5b73-0_40-170-210_002.parquet.marker.MERGE (same)
+   * => 2016/1228caeb-4188-4e19-a18d-848e6f9b0448-0_55-55-425_002.parquet.marker.MERGE
+   * <p>
+   * <p>
+   * Run MarkerBasedEarlyConflictDetectionRunnable and find there is a conflict 2016/b21adfa2-7013-4452-a565-4cc39fea5b73-0
    */
   @Test
-  public void testMarkerCheckerRunnable() throws IOException, InterruptedException {
+  public void testMarkerConflictDetectionRunnable() throws IOException, InterruptedException {
 
     AtomicBoolean hasConflict = new AtomicBoolean(false);
     FileSystem fs = new Path(basePath).getFileSystem(new Configuration());
@@ -100,12 +101,12 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
     oldInstants.add(new HoodieInstant(false, "commit", oldInstant));
     when(markerHandler.getAllMarkers(currentMarkerDir)).thenReturn(currentMarkers);
 
-    ScheduledExecutorService markerChecker = Executors.newSingleThreadScheduledExecutor();
-    markerChecker.submit(new MarkerBasedEarlyConflictDetectionRunnable(hasConflict, markerHandler, currentMarkerDir,
+    ScheduledExecutorService detectorExecutor = Executors.newSingleThreadScheduledExecutor();
+    detectorExecutor.submit(new MarkerBasedEarlyConflictDetectionRunnable(hasConflict, markerHandler, currentMarkerDir,
         basePath, fs, Long.MAX_VALUE, oldInstants, true));
 
-    markerChecker.shutdown();
-    markerChecker.awaitTermination(60, TimeUnit.SECONDS);
+    detectorExecutor.shutdown();
+    detectorExecutor.awaitTermination(60, TimeUnit.SECONDS);
 
     assertTrue(hasConflict.get());
   }

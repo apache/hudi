@@ -18,11 +18,12 @@
 
 package org.apache.hudi.timeline.service.handlers.marker;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.conflict.detection.HoodieTimelineServerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -38,7 +39,7 @@ public class AsyncTimelineMarkerEarlyConflictDetectionStrategy extends HoodieTim
   private static final Logger LOG = LogManager.getLogger(AsyncTimelineMarkerEarlyConflictDetectionStrategy.class);
 
   private AtomicBoolean hasConflict = new AtomicBoolean(false);
-  private ScheduledExecutorService markerChecker;
+  private ScheduledExecutorService asyncDetectorExecutor;
 
   public AsyncTimelineMarkerEarlyConflictDetectionStrategy(String basePath, String markerDir, String markerName, Boolean checkCommitConflict) {
     super(basePath, markerDir, markerName, checkCommitConflict);
@@ -56,13 +57,13 @@ public class AsyncTimelineMarkerEarlyConflictDetectionStrategy extends HoodieTim
 
   public void fresh(Long batchInterval, Long period, String markerDir, String basePath,
                     Long maxAllowableHeartbeatIntervalInMs, FileSystem fileSystem, Object markerHandler, Set<HoodieInstant> oldInstants) {
-    if (markerChecker != null) {
-      markerChecker.shutdown();
+    if (asyncDetectorExecutor != null) {
+      asyncDetectorExecutor.shutdown();
     }
     hasConflict.set(false);
-    markerChecker = Executors.newSingleThreadScheduledExecutor();
-    markerChecker.scheduleAtFixedRate(new MarkerBasedEarlyConflictDetectionRunnable(hasConflict, (MarkerHandler) markerHandler, markerDir, basePath,
-        fileSystem, maxAllowableHeartbeatIntervalInMs, oldInstants, checkCommitConflict),
+    asyncDetectorExecutor = Executors.newSingleThreadScheduledExecutor();
+    asyncDetectorExecutor.scheduleAtFixedRate(new MarkerBasedEarlyConflictDetectionRunnable(hasConflict, (MarkerHandler) markerHandler, markerDir, basePath,
+            fileSystem, maxAllowableHeartbeatIntervalInMs, oldInstants, checkCommitConflict),
         batchInterval, period, TimeUnit.MILLISECONDS);
   }
 
