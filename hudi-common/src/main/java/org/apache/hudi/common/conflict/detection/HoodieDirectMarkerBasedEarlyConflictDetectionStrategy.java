@@ -43,30 +43,21 @@ import java.util.stream.Stream;
 public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy implements HoodieEarlyConflictDetectionStrategy {
 
   private static final Logger LOG = LogManager.getLogger(HoodieDirectMarkerBasedEarlyConflictDetectionStrategy.class);
-  protected final String basePath;
   protected final FileSystem fs;
   protected final String partitionPath;
   protected final String fileId;
   protected final String instantTime;
   protected final HoodieActiveTimeline activeTimeline;
   protected final HoodieConfig config;
-  protected Set<HoodieInstant> completedCommitInstants;
-  protected final Boolean checkCommitConflict;
-  protected final Long maxAllowableHeartbeatIntervalInMs;
 
-  public HoodieDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                               HoodieActiveTimeline activeTimeline, HoodieConfig config, Boolean checkCommitConflict, Long maxAllowableHeartbeatIntervalInMs,
-                                                               HashSet<HoodieInstant> completedCommitInstants) {
-    this.basePath = basePath;
+  public HoodieDirectMarkerBasedEarlyConflictDetectionStrategy(HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
+                                                               HoodieActiveTimeline activeTimeline, HoodieConfig config) {
     this.fs = fs;
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.instantTime = instantTime;
-    this.completedCommitInstants = completedCommitInstants;
     this.activeTimeline = activeTimeline;
     this.config = config;
-    this.checkCommitConflict = checkCommitConflict;
-    this.maxAllowableHeartbeatIntervalInMs = maxAllowableHeartbeatIntervalInMs;
   }
 
   /**
@@ -74,13 +65,11 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
    * In order to reduce the list pressure as much as possible, first we build path prefix in advance:  '$base_path/.temp/instant_time/partition_path',
    * and only list these specific partition_paths we need instead of list all the '$base_path/.temp/'
    * @param basePath
-   * @param partitionPath
-   * @param fileId 162b13d7-9530-48cf-88a4-02241817ae0c-0_1-74-100_003.parquet
+   * @param maxAllowableHeartbeatIntervalInMs
    * @return true if current fileID is already existed under .temp/instant_time/partition_path/..
    * @throws IOException
    */
-  public boolean checkMarkerConflict(HoodieActiveTimeline activeTimeline, String basePath, String partitionPath, String fileId,
-                                      FileSystem fs, String instantTime) throws IOException {
+  public boolean checkMarkerConflict(String basePath, long maxAllowableHeartbeatIntervalInMs) throws IOException {
     String tempFolderPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME;
 
     List<String> candidateInstants = MarkerUtils.getCandidateInstants(activeTimeline, Arrays.stream(fs.listStatus(new Path(tempFolderPath))).map(FileStatus::getPath).collect(Collectors.toList()),

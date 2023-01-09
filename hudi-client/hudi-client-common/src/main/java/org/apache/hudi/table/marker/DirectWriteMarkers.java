@@ -48,6 +48,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Marker operations of directly accessing the file system to create and delete
@@ -161,14 +162,12 @@ public class DirectWriteMarkers extends WriteMarkers {
   }
 
   @Override
-  public Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists, Set<HoodieInstant> completedCommitInstants,
+  public Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
                                                        HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
-
-    long maxAllowableHeartbeatIntervalInMs = config.getHoodieClientHeartbeatIntervalInMs() * config.getHoodieClientHeartbeatTolerableMisses();
 
     HoodieDirectMarkerBasedEarlyConflictDetectionStrategy strategy =
         (HoodieDirectMarkerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(config.getEarlyConflictDetectionStrategyClassName(),
-        basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config, config.earlyConflictDetectionCheckCommitConflict(), maxAllowableHeartbeatIntervalInMs, completedCommitInstants);
+        fs, partitionPath, fileId, instantTime, activeTimeline, config);
 
     strategy.detectAndResolveConflictIfNecessary();
     return create(getMarkerPath(partitionPath, dataFileName, type), checkIfExists);

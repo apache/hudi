@@ -23,20 +23,17 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Operates on markers for a given write action (commit, delta commit, compaction).
@@ -59,7 +56,7 @@ public abstract class WriteMarkers implements Serializable {
   }
 
   public Option<Path> create(String partitionPath, String dataFileName, IOType type) {
-    return create(partitionPath, dataFileName, type, Option.empty());
+    return create(partitionPath, dataFileName, type, false);
   }
 
   /**
@@ -68,35 +65,27 @@ public abstract class WriteMarkers implements Serializable {
    * @param partitionPath partition path in the table
    * @param dataFileName data file name
    * @param type  write IO type
-   * @param handler could be empty
    * @return the marker path
    */
-  public Option<Path> create(String partitionPath, String dataFileName, IOType type, Option<HoodieWriteHandle> handler) {
-    boolean checkIfExists = false;
+  public Option<Path> create(String partitionPath, String dataFileName, IOType type, Option<HoodieWriteConfig> writeConfig,
+                             Option<String> fileId, Option<HoodieTableMetaClient> metaClient) {
+    if (writeConfig.isPresent() && fileId.isPresent() && metaClient.isPresent()
+        && writeConfig.get().getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
+        && writeConfig.get().isEarlyConflictDetectionEnable()) {
 
-    if (handler.isPresent()
-        && handler.get().getConfig().getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
-        && handler.get().getConfig().isEarlyConflictDetectionEnable()) {
-
-      HoodieTableMetaClient metaClient = handler.get().getHoodieTableMetaClient();
-      HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+      HoodieActiveTimeline activeTimeline = metaClient.get().getActiveTimeline();
 
       HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
       HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceTimeline();
-      // TODO if current is compact or clustering then create marker directly without early conflict detection.
+      // TODO If current is compact or clustering then create marker directly without early conflict detection.
       // Need to support early conflict detection between table service and common writers.
       if (pendingCompactionTimeline.containsInstant(instantTime) || pendingReplaceTimeline.containsInstant(instantTime)) {
-        return create(partitionPath, dataFileName, type, checkIfExists);
+        return create(partitionPath, dataFileName, type, false);
       }
 
-      Set<HoodieInstant> completedCommitInstants = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
-
-      String fileId = handler.get().getFileId();
-      HoodieWriteConfig config = handler.get().getConfig();
-      return createWithEarlyConflictDetection(partitionPath, dataFileName, type, checkIfExists, completedCommitInstants, config, fileId, activeTimeline);
+      return createWithEarlyConflictDetection(partitionPath, dataFileName, type, false, writeConfig.get(), fileId.get(), activeTimeline);
     } else {
-      // create marker directly
-      return create(partitionPath, dataFileName, type, checkIfExists);
+      return create(partitionPath, dataFileName, type, false);
     }
   }
 
@@ -211,6 +200,6 @@ public abstract class WriteMarkers implements Serializable {
    * @param checkIfExists whether to check if the marker already exists
    * @return the marker path or empty option if already exists and {@code checkIfExists} is true
    */
-  public abstract Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists, Set<HoodieInstant> completedCommitInstants,
+  public abstract Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
                                                                 HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline);
 }

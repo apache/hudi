@@ -189,7 +189,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    */
   protected void createMarkerFile(String partitionPath, String dataFileName) {
     WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime)
-        .create(partitionPath, dataFileName, getIOType(), Option.of(this));
+        .create(partitionPath, dataFileName, getIOType(), Option.of(config), Option.of(fileId), Option.of(hoodieTable.getMetaClient()));
   }
 
   public Schema getWriterSchemaWithMetaFields() {

@@ -32,6 +32,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.ConcurrentModificationException;
 import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -42,17 +43,25 @@ import java.util.stream.Stream;
 public class SimpleDirectMarkerBasedEarlyConflictDetectionStrategy extends HoodieDirectMarkerBasedEarlyConflictDetectionStrategy {
 
   private static final Logger LOG = LogManager.getLogger(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class);
+  private final String basePath;
+  private final boolean checkCommitConflict;
+  private final Set<HoodieInstant> completedCommitInstants;
+  private final long maxAllowableHeartbeatIntervalInMs;
 
-  public SimpleDirectMarkerBasedEarlyConflictDetectionStrategy(String basePath, HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                               HoodieActiveTimeline activeTimeline, HoodieWriteConfig config, Boolean checkCommitConflict, Long maxAllowableHeartbeatIntervalInMs,
-                                                               HashSet<HoodieInstant> completedCommitInstants) {
-    super(basePath, fs, partitionPath, fileId, instantTime, activeTimeline, config, checkCommitConflict, maxAllowableHeartbeatIntervalInMs, completedCommitInstants);
+  public SimpleDirectMarkerBasedEarlyConflictDetectionStrategy(HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
+                                                               HoodieActiveTimeline activeTimeline, HoodieWriteConfig config) {
+    super(fs, partitionPath, fileId, instantTime, activeTimeline, config);
+    this.basePath = config.getBasePath();
+    this.checkCommitConflict = config.earlyConflictDetectionCheckCommitConflict();
+    this.completedCommitInstants = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
+    this.maxAllowableHeartbeatIntervalInMs = config.getHoodieClientHeartbeatIntervalInMs() * config.getHoodieClientHeartbeatTolerableMisses();
+
   }
 
   @Override
   public boolean hasMarkerConflict() {
     try {
-      return checkMarkerConflict(activeTimeline, basePath, partitionPath, fileId, fs, instantTime)
+      return checkMarkerConflict(basePath, maxAllowableHeartbeatIntervalInMs)
           || (checkCommitConflict && MarkerUtils.hasCommitConflict(activeTimeline, Stream.of(fileId).collect(Collectors.toSet()), completedCommitInstants));
     } catch (IOException e) {
       LOG.warn("Exception occurs during create marker file in eager conflict detection mode.");
