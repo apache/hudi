@@ -54,7 +54,7 @@ public class TableBean {
     table.setTableName(tableName);
     table.setOwner(owner);
     table.setLocation(location);
-    table.setCreateTime(createTime);
+    table.setCreateTime(createTime.longValue());
     return table;
   }
 
