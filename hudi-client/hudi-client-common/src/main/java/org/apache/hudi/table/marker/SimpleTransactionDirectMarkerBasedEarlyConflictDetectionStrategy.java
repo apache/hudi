@@ -21,13 +21,10 @@ package org.apache.hudi.table.marker;
 import org.apache.hudi.client.transaction.DirectMarkerTransactionManager;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
-import java.util.HashSet;
 
 /**
  * This strategy is used for direct marker writers, trying to do early conflict detection.
