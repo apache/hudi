@@ -75,9 +75,9 @@ import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.marker.SimpleDirectMarkerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
+import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.orc.CompressionKind;
@@ -568,33 +568,40 @@ public class HoodieWriteConfig extends HoodieConfig {
             return Option.of(AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName());
         }
       })
-      .withDocumentation("Early conflict detection class name, this should be subclass of "
-          + "org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy");
+      .withDocumentation("The class name of the early conflict detection strategy to use. "
+          + "This should be a subclass of "
+          + "`org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy`.");
 
   public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_ENABLE = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.detection.enable")
       .defaultValue(false)
       .sinceVersion("0.13.0")
-      .withDocumentation("Enable early conflict detection based on markers. It will try to detect writing conflict before create markers and fast fail"
-          + " which will release cluster resources as soon as possible.");
+      .withDocumentation("Whether to enable early conflict detection based on markers. "
+          + "It eagerly detects writing conflict before create markers and fails fast if a "
+          + "conflict is detected, to release cluster compute resources as soon as possible.");
 
-  public static final ConfigProperty<Long> MARKER_CONFLICT_CHECKER_BATCH_INTERVAL = ConfigProperty
-      .key(CONCURRENCY_PREFIX + "early.conflict.async.checker.batch.interval")
+  public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_BATCH_INTERVAL_MS = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "early.conflict.async.detector.batch.interval_ms")
       .defaultValue(30000L)
       .sinceVersion("0.13.0")
-      .withDocumentation("Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. The time to delay first async marker conflict checking.");
+      .withDocumentation("Used for timeline-server-based markers with "
+          + "`AsyncTimelineMarkerConflictResolutionStrategy`. "
+          + "The time in milliseconds to delay first async marker conflict detection.");
 
-  public static final ConfigProperty<Long> MARKER_CONFLICT_CHECKER_PERIOD = ConfigProperty
-      .key(CONCURRENCY_PREFIX + "early.conflict.async.checker.period")
+  public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_PERIOD_MS = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "early.conflict.async.checker.period_ms")
       .defaultValue(30000L)
       .sinceVersion("0.13.0")
-      .withDocumentation("Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. The period between each marker conflict checking.");
+      .withDocumentation("Used for timeline-server-based markers with "
+          + "`AsyncTimelineMarkerConflictResolutionStrategy`. "
+          + "The period in milliseconds between consecutive runs of async marker conflict detection.");
 
-  public static final ConfigProperty<Boolean> MARKER_CONFLICT_CHECK_COMMIT_CONFLICT = ConfigProperty
+  public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.check.commit.conflict")
       .defaultValue(false)
       .sinceVersion("0.13.0")
-      .withDocumentation("Enable check commit conflict or not during early conflict detect");
+      .withDocumentation("Whether to enable commit conflict checking or not during early "
+          + "conflict detection.");
 
 
   private ConsistencyGuardConfig consistencyGuardConfig;
@@ -2236,12 +2243,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return ReflectionUtils.loadClass(getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME));
   }
 
-  public Long getEarlyConflictDetectionAsyncCheckerBatchInterval() {
-    return getLong(MARKER_CONFLICT_CHECKER_BATCH_INTERVAL);
+  public Long getAsyncConflictDetectorBatchIntervalMs() {
+    return getLong(ASYNC_CONFLICT_DETECTOR_BATCH_INTERVAL_MS);
   }
 
-  public Long getEarlyConflictDetectionAsyncCheckerPeriod() {
-    return getLong(MARKER_CONFLICT_CHECKER_PERIOD);
+  public Long getAsyncConflictDetectorPeriodMs() {
+    return getLong(ASYNC_CONFLICT_DETECTOR_PERIOD_MS);
   }
 
   public Long getLockAcquireWaitTimeoutInMs() {
@@ -2261,7 +2268,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean earlyConflictDetectionCheckCommitConflict() {
-    return getBoolean(MARKER_CONFLICT_CHECK_COMMIT_CONFLICT);
+    return getBoolean(EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT);
   }
 
   // misc configs
@@ -2796,18 +2803,18 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withMarkerConflictCheckerBatchInterval(long interval) {
-      writeConfig.setValue(MARKER_CONFLICT_CHECKER_BATCH_INTERVAL, String.valueOf(interval));
+    public Builder withAsyncConflictDetectorBatchIntervalMs(long intervalMs) {
+      writeConfig.setValue(ASYNC_CONFLICT_DETECTOR_BATCH_INTERVAL_MS, String.valueOf(intervalMs));
       return this;
     }
 
-    public Builder withMarkerConflictCheckerPeriod(long period) {
-      writeConfig.setValue(MARKER_CONFLICT_CHECKER_PERIOD, String.valueOf(period));
+    public Builder withAsyncConflictDetectorPeriodMs(long periodMs) {
+      writeConfig.setValue(ASYNC_CONFLICT_DETECTOR_PERIOD_MS, String.valueOf(periodMs));
       return this;
     }
 
-    public Builder withCheckCommitConflict(boolean enable) {
-      writeConfig.setValue(MARKER_CONFLICT_CHECK_COMMIT_CONFLICT, String.valueOf(enable));
+    public Builder withEarlyConflictDetectionCheckCommitConflict(boolean enable) {
+      writeConfig.setValue(EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT, String.valueOf(enable));
       return this;
     }
 

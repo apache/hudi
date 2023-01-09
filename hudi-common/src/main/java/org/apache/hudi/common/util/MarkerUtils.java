@@ -52,6 +52,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.isHeartbeatExpired;
 import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
 
 /**
@@ -303,33 +304,5 @@ public class MarkerUtils {
   public static String markerDirToInstantTime(String marker) {
     String[] ele = marker.split("/");
     return ele[ele.length - 1];
-  }
-
-  /**
-   * Use modification time as last heart beat time
-   * @param fs
-   * @param basePath
-   * @param instantTime
-   * @return
-   * @throws IOException
-   */
-  public static Long getLastHeartbeatTime(FileSystem fs, String basePath, String instantTime) throws IOException {
-    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
-    if (fs.exists(heartbeatFilePath)) {
-      return fs.getFileStatus(heartbeatFilePath).getModificationTime();
-    } else {
-      // NOTE : This can happen when a writer is upgraded to use lazy cleaning and the last write had failed
-      return 0L;
-    }
-  }
-
-  public static boolean isHeartbeatExpired(String instantTime, long maxAllowableHeartbeatIntervalInMs, FileSystem fs, String basePath) throws IOException {
-    Long currentTime = System.currentTimeMillis();
-    Long lastHeartbeatTime = getLastHeartbeatTime(fs, basePath, instantTime);
-    if (currentTime - lastHeartbeatTime > maxAllowableHeartbeatIntervalInMs) {
-      LOG.warn("Heartbeat expired, for instant: " + instantTime);
-      return true;
-    }
-    return false;
   }
 }

@@ -86,16 +86,15 @@ public class EmbeddedTimelineService {
           .enableMarkerRequests(true)
           .markerBatchNumThreads(writeConfig.getMarkersTimelineServerBasedBatchNumThreads())
           .markerBatchIntervalMs(writeConfig.getMarkersTimelineServerBasedBatchIntervalMs())
-          .markerParallelism(writeConfig.getMarkersDeleteParallelism())
-      ;
+          .markerParallelism(writeConfig.getMarkersDeleteParallelism());
     }
 
     if (writeConfig.isEarlyConflictDetectionEnable()) {
-      timelineServiceConfBuilder.markerEarlyConflictDetectEnable(true)
-          .markerEarlyConflictDetectStrategy(writeConfig.getEarlyConflictDetectionStrategyClassName())
-          .markerEarlyConflictDetectCheckCommitConflict(writeConfig.earlyConflictDetectionCheckCommitConflict())
-          .markerEarlyConflictAsyncCheckerBatchInterval(writeConfig.getEarlyConflictDetectionAsyncCheckerBatchInterval())
-          .markerEarlyConflictAsyncCheckerBatchPeriod(writeConfig.getEarlyConflictDetectionAsyncCheckerPeriod())
+      timelineServiceConfBuilder.earlyConflictDetectionEnable(true)
+          .earlyConflictDetectionStrategy(writeConfig.getEarlyConflictDetectionStrategyClassName())
+          .earlyConflictDetectionCheckCommitConflict(writeConfig.earlyConflictDetectionCheckCommitConflict())
+          .asyncConflictDetectorBatchIntervalMs(writeConfig.getAsyncConflictDetectorBatchIntervalMs())
+          .asyncConflictDetectorBatchPeriodMs(writeConfig.getAsyncConflictDetectorPeriodMs())
           .markerEarlyConflictMaxAllowableHeartbeatIntervalInMs(writeConfig.getHoodieClientHeartbeatIntervalInMs());
     }
 

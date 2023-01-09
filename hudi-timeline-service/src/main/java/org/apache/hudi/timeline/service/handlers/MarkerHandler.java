@@ -172,7 +172,7 @@ public class MarkerHandler extends Handler {
       try {
         synchronized (earlyConflictDetectionLock) {
           if (earlyConflictDetectionStrategy == null) {
-            earlyConflictDetectionStrategy = (HoodieTimelineServerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(timelineServiceConfig.earlyConflictDetectStrategy,
+            earlyConflictDetectionStrategy = (HoodieTimelineServerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(timelineServiceConfig.earlyConflictDetectionStrategy,
                 basePath, markerDir, markerName, timelineServiceConfig.checkCommitConflict);
           }
 
@@ -189,8 +189,8 @@ public class MarkerHandler extends Handler {
                     .filter(instant -> actions.contains(instant.getAction()))
                     .getInstants());
 
-            earlyConflictDetectionStrategy.fresh(timelineServiceConfig.earlyConflictAsyncCheckerBatchInterval,
-                timelineServiceConfig.earlyConflictAsyncCheckerBatchPeriod, markerDir, basePath, timelineServiceConfig.maxAllowableHeartbeatIntervalInMs, fileSystem,
+            earlyConflictDetectionStrategy.fresh(timelineServiceConfig.asyncConflictDetectorBatchIntervalMs,
+                timelineServiceConfig.asyncConflictDetectorBatchPeriodMs, markerDir, basePath, timelineServiceConfig.maxAllowableHeartbeatIntervalInMs, fileSystem,
                 this, oldInstants);
           }
         }

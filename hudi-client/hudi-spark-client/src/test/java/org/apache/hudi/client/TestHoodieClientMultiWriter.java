@@ -832,8 +832,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           .withMarkersType(MarkerType.DIRECT.name())
           .withEarlyConflictDetectionEnable(true)
           .withEarlyConflictDetectionStrategy(earlyConflictDetectionStrategy)
-          .withMarkerConflictCheckerBatchInterval(0)
-          .withMarkerConflictCheckerPeriod(100)
+          .withAsyncConflictDetectorBatchIntervalMs(0)
+          .withAsyncConflictDetectorPeriodMs(100)
           .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(lockProvider).build())
           .withAutoCommit(false).withProperties(properties).build();
     } else {
@@ -853,8 +853,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(lockProvider).build())
           .withEarlyConflictDetectionEnable(true)
           .withEarlyConflictDetectionStrategy(earlyConflictDetectionStrategy)
-          .withMarkerConflictCheckerBatchInterval(0)
-          .withMarkerConflictCheckerPeriod(100)
+          .withAsyncConflictDetectorBatchIntervalMs(0)
+          .withAsyncConflictDetectorPeriodMs(100)
           .withAutoCommit(false).withProperties(properties).build();
     }
   }
