@@ -1,0 +1,167 @@
+org.apache.hudi:hudi-timeline-server-bundle:0.12.2:compile
++- org.apache.hudi:hudi-common:0.12.2:compile
+|  +- org.openjdk.jol:jol-core:0.16:compile
+|  +- com.github.ben-manes.caffeine:caffeine:2.9.1:compile
+|  |  +- org.checkerframework:checker-qual:3.10.0:compile
+|  |  \- com.google.errorprone:error_prone_annotations:2.5.1:compile
+|  +- org.apache.orc:orc-core:1.6.0:compile
+|  |  +- org.apache.orc:orc-shims:1.6.0:compile
+|  |  +- io.airlift:aircompressor:0.15:compile
+|  |  +- javax.xml.bind:jaxb-api:2.2.11:compile
+|  |  +- org.apache.hive:hive-storage-api:2.6.0:compile
+|  |  \- org.jetbrains:annotations:17.0.0:compile
+|  +- org.apache.httpcomponents:fluent-hc:4.4.1:compile
+|  +- org.apache.httpcomponents:httpclient:4.4.1:compile
+|  |  \- org.apache.httpcomponents:httpcore:4.4.1:compile
+|  +- com.esotericsoftware:kryo-shaded:4.0.2:compile
+|  |  +- com.esotericsoftware:minlog:1.3.0:compile
+|  |  \- org.objenesis:objenesis:2.5.1:compile
+|  +- org.apache.hbase:hbase-client:2.4.9:compile
+|  |  +- org.apache.hbase.thirdparty:hbase-shaded-protobuf:3.5.1:compile
+|  |  +- org.apache.hbase:hbase-common:2.4.9:compile
+|  |  |  +- org.apache.hbase:hbase-logging:2.4.9:compile
+|  |  |  \- org.apache.hbase.thirdparty:hbase-shaded-gson:3.5.1:compile
+|  |  +- org.apache.hbase:hbase-hadoop-compat:2.4.9:compile
+|  |  +- org.apache.hbase:hbase-hadoop2-compat:2.4.9:compile
+|  |  |  \- javax.activation:javax.activation-api:1.2.0:runtime
+|  |  +- org.apache.hbase:hbase-protocol-shaded:2.4.9:compile
+|  |  +- org.apache.hbase:hbase-protocol:2.4.9:compile
+|  |  +- org.apache.hbase.thirdparty:hbase-shaded-miscellaneous:3.5.1:compile
+|  |  +- org.apache.hbase.thirdparty:hbase-shaded-netty:3.5.1:compile
+|  |  +- org.jruby.jcodings:jcodings:1.0.55:compile
+|  |  +- org.jruby.joni:joni:2.1.31:compile
+|  |  +- io.dropwizard.metrics:metrics-core:4.1.1:compile
+|  |  +- org.apache.commons:commons-crypto:1.0.0:compile
+|  |  \- org.apache.yetus:audience-annotations:0.5.0:compile
+|  +- org.apache.hbase:hbase-server:2.4.9:compile
+|  |  +- org.apache.hbase:hbase-http:2.4.9:compile
+|  |  |  +- org.apache.hbase.thirdparty:hbase-shaded-jetty:3.5.1:compile
+|  |  |  +- org.apache.hbase.thirdparty:hbase-shaded-jersey:3.5.1:compile
+|  |  |  |  +- jakarta.ws.rs:jakarta.ws.rs-api:2.1.6:compile
+|  |  |  |  +- jakarta.annotation:jakarta.annotation-api:1.3.5:compile
+|  |  |  |  +- jakarta.validation:jakarta.validation-api:2.0.2:compile
+|  |  |  |  +- org.glassfish.hk2.external:jakarta.inject:2.6.1:compile
+|  |  |  |  \- org.javassist:javassist:3.25.0-GA:compile
+|  |  |  \- javax.ws.rs:javax.ws.rs-api:2.1.1:compile
+|  |  +- org.apache.hbase:hbase-procedure:2.4.9:compile
+|  |  +- org.apache.hbase:hbase-zookeeper:2.4.9:compile
+|  |  +- org.apache.hbase:hbase-replication:2.4.9:compile
+|  |  +- org.apache.hbase:hbase-metrics-api:2.4.9:compile
+|  |  +- org.apache.hbase:hbase-metrics:2.4.9:compile
+|  |  +- org.apache.hbase:hbase-asyncfs:2.4.9:compile
+|  |  +- org.glassfish.web:javax.servlet.jsp:2.3.2:compile
+|  |  |  \- org.glassfish:javax.el:3.0.1-b12:provided
+|  |  +- javax.servlet.jsp:javax.servlet.jsp-api:2.3.1:compile
+|  |  +- org.jamon:jamon-runtime:2.4.1:compile
+|  |  +- com.lmax:disruptor:3.4.2:compile
+|  |  \- org.apache.hadoop:hadoop-distcp:2.10.0:compile
+|  \- org.lz4:lz4-java:1.8.0:compile
++- org.apache.hudi:hudi-timeline-service:0.12.2:compile
++- com.fasterxml.jackson.core:jackson-annotations:2.6.7:compile
++- com.fasterxml.jackson.core:jackson-core:2.6.7:compile
++- com.fasterxml.jackson.core:jackson-databind:2.6.7.3:compile
++- io.javalin:javalin:4.6.7:compile
+|  +- org.slf4j:slf4j-api:1.7.36:provided
+|  +- org.eclipse.jetty:jetty-server:9.4.48.v20220622:compile
+|  |  +- javax.servlet:javax.servlet-api:3.1.0:compile
+|  |  +- org.eclipse.jetty:jetty-http:9.4.48.v20220622:compile
+|  |  |  \- org.eclipse.jetty:jetty-util:9.4.48.v20220622:compile
+|  |  \- org.eclipse.jetty:jetty-io:9.4.48.v20220622:compile
+|  +- org.eclipse.jetty:jetty-webapp:9.4.48.v20220622:compile
+|  |  +- org.eclipse.jetty:jetty-xml:9.4.48.v20220622:compile
+|  |  \- org.eclipse.jetty:jetty-servlet:9.4.48.v20220622:compile
+|  |     +- org.eclipse.jetty:jetty-security:9.4.48.v20220622:compile
+|  |     \- org.eclipse.jetty:jetty-util-ajax:9.4.48.v20220622:compile
+|  +- org.eclipse.jetty.websocket:websocket-server:9.4.48.v20220622:compile
+|  |  +- org.eclipse.jetty.websocket:websocket-common:9.4.48.v20220622:compile
+|  |  |  \- org.eclipse.jetty.websocket:websocket-api:9.4.48.v20220622:compile
+|  |  +- org.eclipse.jetty.websocket:websocket-client:9.4.48.v20220622:compile
+|  |  |  \- org.eclipse.jetty:jetty-client:9.4.48.v20220622:compile
+|  |  \- org.eclipse.jetty.websocket:websocket-servlet:9.4.48.v20220622:compile
+|  \- org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.5.32:compile
+|     +- org.jetbrains.kotlin:kotlin-stdlib:1.5.32:compile
+|     |  \- org.jetbrains.kotlin:kotlin-stdlib-common:1.5.32:compile
+|     \- org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.5.32:compile
++- com.beust:jcommander:1.78:compile
++- org.rocksdb:rocksdbjni:6.29.4.1:compile
++- org.apache.hadoop:hadoop-hdfs:2.10.1:provided
+|  +- org.apache.hadoop:hadoop-hdfs-client:2.10.1:provided
+|  |  \- com.squareup.okhttp:okhttp:2.7.5:provided
+|  |     \- com.squareup.okio:okio:1.6.0:provided
+|  +- com.google.guava:guava:11.0.2:provided
+|  +- com.sun.jersey:jersey-core:1.9:provided
+|  +- com.sun.jersey:jersey-server:1.9:provided
+|  |  \- asm:asm:3.1:provided
+|  +- commons-cli:commons-cli:1.2:provided
+|  +- commons-codec:commons-codec:1.4:compile
+|  +- commons-io:commons-io:2.4:compile
+|  +- commons-lang:commons-lang:2.6:compile
+|  +- commons-logging:commons-logging:1.1.3:compile
+|  +- commons-daemon:commons-daemon:1.0.13:provided
+|  +- com.google.protobuf:protobuf-java:2.5.0:compile
+|  +- org.codehaus.jackson:jackson-core-asl:1.9.13:provided
+|  +- org.codehaus.jackson:jackson-mapper-asl:1.9.13:provided
+|  +- xmlenc:xmlenc:0.52:provided
+|  +- io.netty:netty:3.10.6.Final:compile
+|  +- io.netty:netty-all:4.1.50.Final:provided
+|  +- xerces:xercesImpl:2.9.1:provided
+|  |  \- xml-apis:xml-apis:1.3.04:provided
+|  +- org.apache.htrace:htrace-core4:4.1.0-incubating:compile
+|  \- org.fusesource.leveldbjni:leveldbjni-all:1.8:provided
++- org.apache.hadoop:hadoop-common:2.10.1:provided
+|  +- org.apache.hadoop:hadoop-annotations:2.10.1:compile
+|  +- org.apache.commons:commons-math3:3.1.1:compile
+|  +- commons-net:commons-net:3.1:provided
+|  +- commons-collections:commons-collections:3.2.2:provided
+|  +- com.sun.jersey:jersey-json:1.9:provided
+|  |  +- org.codehaus.jettison:jettison:1.1:provided
+|  |  +- com.sun.xml.bind:jaxb-impl:2.2.3-1:provided
+|  |  +- org.codehaus.jackson:jackson-jaxrs:1.8.3:provided
+|  |  \- org.codehaus.jackson:jackson-xc:1.8.3:provided
+|  +- net.java.dev.jets3t:jets3t:0.9.0:provided
+|  |  \- com.jamesmurty.utils:java-xmlbuilder:0.4:provided
+|  +- commons-configuration:commons-configuration:1.6:provided
+|  +- commons-digester:commons-digester:1.8:provided
+|  +- commons-beanutils:commons-beanutils:1.9.4:provided
+|  +- org.apache.commons:commons-lang3:3.4:compile
+|  +- org.apache.avro:avro:1.8.2:provided
+|  |  +- com.thoughtworks.paranamer:paranamer:2.7:provided
+|  |  \- org.tukaani:xz:1.5:provided
+|  +- com.google.code.gson:gson:2.2.4:provided
+|  +- org.apache.hadoop:hadoop-auth:2.10.1:provided
+|  |  +- com.nimbusds:nimbus-jose-jwt:7.9:provided
+|  |  |  +- com.github.stephenc.jcip:jcip-annotations:1.0-1:provided
+|  |  |  \- net.minidev:json-smart:2.3:provided
+|  |  |     \- net.minidev:accessors-smart:1.2:provided
+|  |  |        \- org.ow2.asm:asm:5.0.4:provided
+|  |  +- org.apache.directory.server:apacheds-kerberos-codec:2.0.0-M15:provided
+|  |  |  +- org.apache.directory.server:apacheds-i18n:2.0.0-M15:provided
+|  |  |  +- org.apache.directory.api:api-asn1-api:1.0.0-M20:provided
+|  |  |  \- org.apache.directory.api:api-util:1.0.0-M20:provided
+|  |  \- org.apache.curator:curator-framework:2.7.1:provided
+|  +- com.jcraft:jsch:0.1.55:provided
+|  +- org.apache.curator:curator-client:2.7.1:provided
+|  +- org.apache.curator:curator-recipes:2.7.1:provided
+|  +- com.google.code.findbugs:jsr305:3.0.2:compile
+|  +- org.apache.zookeeper:zookeeper:3.4.14:compile
+|  |  \- com.github.spotbugs:spotbugs-annotations:3.1.9:compile
+|  +- org.apache.commons:commons-compress:1.19:provided
+|  +- org.codehaus.woodstox:stax2-api:3.1.4:provided
+|  \- com.fasterxml.woodstox:woodstox-core:5.0.3:provided
+\- org.apache.hadoop:hadoop-client:2.10.1:provided
+   +- org.apache.hadoop:hadoop-mapreduce-client-app:2.10.1:provided
+   |  +- org.apache.hadoop:hadoop-mapreduce-client-common:2.10.1:provided
+   |  \- org.apache.hadoop:hadoop-mapreduce-client-shuffle:2.10.1:provided
+   |     \- org.apache.hadoop:hadoop-yarn-server-common:2.10.1:provided
+   |        +- org.apache.hadoop:hadoop-yarn-registry:2.10.1:provided
+   |        +- org.apache.geronimo.specs:geronimo-jcache_1.0_spec:1.0-alpha-1:provided
+   |        +- org.ehcache:ehcache:3.3.1:provided
+   |        +- com.zaxxer:HikariCP-java7:2.4.12:provided
+   |        \- com.microsoft.sqlserver:mssql-jdbc:6.2.1.jre7:provided
+   +- org.apache.hadoop:hadoop-yarn-api:2.10.1:provided
+   +- org.apache.hadoop:hadoop-mapreduce-client-core:2.10.1:provided
+   |  +- org.apache.hadoop:hadoop-yarn-client:2.10.1:provided
+   |  \- org.apache.hadoop:hadoop-yarn-common:2.10.1:provided
+   |     +- org.mortbay.jetty:jetty-util:6.1.26:provided
+   |     \- com.sun.jersey:jersey-client:1.9:provided
+   \- org.apache.hadoop:hadoop-mapreduce-client-jobclient:2.10.1:provided
