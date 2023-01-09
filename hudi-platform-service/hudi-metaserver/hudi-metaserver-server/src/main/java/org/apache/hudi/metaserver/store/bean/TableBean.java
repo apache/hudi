@@ -20,6 +20,8 @@ package org.apache.hudi.metaserver.store.bean;
 
 import org.apache.hudi.metaserver.thrift.Table;
 
+import java.sql.Timestamp;
+
 /**
  * Table entity for store.
  */
@@ -27,7 +29,7 @@ public class TableBean {
   private String dbName;
   private Long tblId;
   private String tableName;
-  private String createTime;
+  private Long createTime;  // ms
   private String owner;
   private String location;
 
@@ -37,11 +39,11 @@ public class TableBean {
     this.location = table.location;
   }
 
-  public TableBean(String dbName, Long tblId, String tableName, String createTime, String owner, String location) {
+  public TableBean(String dbName, Long tblId, String tableName, Timestamp createTime, String owner, String location) {
     this.dbName = dbName;
     this.tblId = tblId;
     this.tableName = tableName;
-    this.createTime = createTime;
+    this.createTime = createTime.getTime();
     this.owner = owner;
     this.location = location;
   }
@@ -52,6 +54,7 @@ public class TableBean {
     table.setTableName(tableName);
     table.setOwner(owner);
     table.setLocation(location);
+    table.setCreateTime(createTime);
     return table;
   }
 
@@ -79,12 +82,16 @@ public class TableBean {
     this.tableName = tableName;
   }
 
-  public String getCreateTime() {
+  public Long getCreateTime() {
     return createTime;
   }
 
-  public void setCreateTime(String createTime) {
+  public void setCreateTime(Long createTime) {
     this.createTime = createTime;
+  }
+
+  public void setCreateTime(Timestamp createTime) {
+    this.createTime = createTime.getTime();
   }
 
   public String getOwner() {

@@ -28,7 +28,14 @@ import org.apache.thrift.TException;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -68,6 +75,9 @@ public class TestRelationalDBBasedStore {
     assertTrue(store.createTable(dbId, table));
     Long tableId = store.getTableId(db, tb);
     assertNotNull(tableId);
+    Table storedTable = store.getTable(db, tb);
+    assertTrue(System.currentTimeMillis() - storedTable.getCreateTime() <= 1000);
+    table.setCreateTime(storedTable.getCreateTime());
     assertEquals(store.getTable(db, tb).toString(), table.toString());
   }
 

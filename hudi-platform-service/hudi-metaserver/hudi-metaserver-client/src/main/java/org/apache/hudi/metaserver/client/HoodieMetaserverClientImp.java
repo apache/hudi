@@ -118,7 +118,7 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient, AutoCl
     ByteBuffer byteBuffer = exceptionWrapper(() -> this.client.getInstantMetadata(db, tb, EntityConversions.toTHoodieInstant(instant))).get();
     byte[] bytes = new byte[byteBuffer.remaining()];
     byteBuffer.get(bytes);
-    return byteBuffer.hasRemaining() ? Option.empty() : Option.of(bytes);
+    return bytes.length > 0 ? Option.of(bytes) : Option.empty();
   }
 
   @Override

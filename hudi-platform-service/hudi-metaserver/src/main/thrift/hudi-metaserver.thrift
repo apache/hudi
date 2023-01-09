@@ -22,7 +22,7 @@
    1: string tableName,
    2: string dbName,
    3: string owner,
-   4: i32 createTime,
+   4: i64 createTime,
    5: string location,
    6: string tableType,
    7: list<FieldSchema> partitionKeys,

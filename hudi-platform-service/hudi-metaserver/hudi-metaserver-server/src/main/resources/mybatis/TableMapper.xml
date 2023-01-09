@@ -39,7 +39,7 @@
 
     <select id="selectTable" parameterType="java.util.Map" resultType="TableBean">
         SELECT
-            dbs.name AS databaseName, t.tbl_id, t.name AS tableName, from_unixtime(unix_timestamp(t.create_time), '%Y-%m-%d %H-%i-%S'), t.owner_name, t.location
+            dbs.name AS databaseName, t.tbl_id, t.name AS tableName, t.create_time, t.owner_name, t.location
         FROM
             dbs JOIN tbls t ON dbs.db_id = t.db_id
         WHERE
