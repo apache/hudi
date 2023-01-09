@@ -37,7 +37,7 @@
     {
            "name": "savepointToRestoreTimestamp",
            "type": ["string", "null"],
-           "default": "0"
+           "default": null
     }
     ]
 }

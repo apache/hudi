@@ -61,7 +61,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -844,10 +843,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     LOG.info("Begin restore to instant " + savepointToRestoreTimestamp);
     Timer.Context timerContext = metrics.getRollbackCtx();
     try {
-      Triple<String, Option<HoodieRestorePlan>, HoodieTable<T, I, K, O>> restorePlanReturn = getRestorePlan(savepointToRestoreTimestamp, initialMetadataTableIfNecessary);
+      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
+      Pair<String, Option<HoodieRestorePlan>> restorePlanReturn = getRestorePlan(savepointToRestoreTimestamp, table);
       final String restoreInstantTimestamp = restorePlanReturn.getLeft();
-      Option<HoodieRestorePlan> restorePlanOption = restorePlanReturn.getMiddle();
-      HoodieTable<T, I, K, O> table = restorePlanReturn.getRight();
+      Option<HoodieRestorePlan> restorePlanOption = restorePlanReturn.getRight();
 
       if (restorePlanOption.isPresent()) {
         HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTimestamp, savepointToRestoreTimestamp);
@@ -868,22 +867,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
   }
 
-  private Triple<String, Option<HoodieRestorePlan>, HoodieTable<T, I, K, O>> getRestorePlan(final String savepointToRestoreTimestamp, boolean initialMetadataTableIfNecessary) throws IOException {
-    //Use the previous restore if it failed
-    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
+  /**
+   * Check if there is a failed restore with the same savepointToRestoreTimestamp. Reusing the commit instead of
+   * creating a new one will prevent causing some issues with the metadata table.
+   * */
+  private Pair<String, Option<HoodieRestorePlan>> getRestorePlan(final String savepointToRestoreTimestamp, HoodieTable<T, I, K, O> table) throws IOException {
     Option<HoodieInstant> failedRestore = table.getRestoreTimeline().filterInflightsAndRequested().lastInstant();
-    final String restoreInstantTimestamp;
-    Option<HoodieRestorePlan> restorePlanOption;
     if (failedRestore.isPresent() && savepointToRestoreTimestamp.equals(RestoreUtils.getSavepointToRestoreTimestamp(table, failedRestore.get()))) {
-      restoreInstantTimestamp = failedRestore.get().getTimestamp();
-      restorePlanOption = Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get()));
-      table = initTable(WriteOperationType.UNKNOWN, Option.of(restoreInstantTimestamp), initialMetadataTableIfNecessary);
-    } else {
-      restoreInstantTimestamp = HoodieActiveTimeline.createNewInstantTime();
-      table = initTable(WriteOperationType.UNKNOWN, Option.of(restoreInstantTimestamp), initialMetadataTableIfNecessary);
-      restorePlanOption = table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp);
+      return Pair.of(failedRestore.get().getTimestamp(), Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get())));
     }
-    return Triple.of(restoreInstantTimestamp, restorePlanOption, table);
+    final String restoreInstantTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    return Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp));
   }
 
   /**
