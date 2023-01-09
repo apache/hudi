@@ -47,6 +47,14 @@ public class RestoreUtils {
         metaClient.getActiveTimeline().readRestoreInfoAsBytes(requested).get(), HoodieRestorePlan.class);
   }
 
+  public static String getSavepointToRestoreTimestampV1Schema(HoodieTable table, HoodieRestorePlan plan) {
+    //get earliest rollback
+    String firstRollback = plan.getInstantsToRollback().get(plan.getInstantsToRollback().size() - 1).getCommitTime();
+    //find last instant before first rollback
+    Option<HoodieInstant> savepointInstance = table.getActiveTimeline().getSavePointTimeline().findInstantsBefore(firstRollback).lastInstant();
+    return savepointInstance.isPresent() ? savepointInstance.get().getTimestamp() : null;
+  }
+
   /**
    * Get the savepoint timestamp that this restore instant is restoring
    * @param table          the HoodieTable
@@ -60,10 +68,6 @@ public class RestoreUtils {
     if (plan.getVersion().compareTo(RestorePlanActionExecutor.RESTORE_PLAN_VERSION_1) > 0) {
       return plan.getSavepointToRestoreTimestamp();
     }
-    //get earliest rollback
-    String firstRollback = plan.getInstantsToRollback().get(plan.getInstantsToRollback().size() - 1).getCommitTime();
-    //find last instant before first rollback
-    Option<HoodieInstant> savepointInstance = table.getActiveTimeline().findInstantsBefore(firstRollback).lastInstant();
-    return savepointInstance.isPresent() ? savepointInstance.get().getTimestamp() : firstRollback;
+    return getSavepointToRestoreTimestampV1Schema(table, plan);
   }
 }

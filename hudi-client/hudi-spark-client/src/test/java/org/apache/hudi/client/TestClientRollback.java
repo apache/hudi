@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieInstantInfo;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -37,6 +38,7 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -55,6 +57,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -64,6 +67,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.table.action.restore.RestoreUtils.getRestorePlan;
+import static org.apache.hudi.table.action.restore.RestoreUtils.getSavepointToRestoreTimestampV1Schema;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -206,6 +211,54 @@ public class TestClientRollback extends HoodieClientTestBase {
     }
   }
 
+  private List<HoodieRecord> updateRecords(SparkRDDWriteClient client, List<HoodieRecord> records, String newCommitTime) throws IOException {
+    client.startCommitWithTime(newCommitTime);
+    List<HoodieRecord> recs = dataGen.generateUpdates(newCommitTime, records);
+    List<WriteStatus> statuses = client.upsert(jsc.parallelize(recs, 1), newCommitTime).collect();
+    assertNoWriteErrors(statuses);
+    return recs;
+  }
+
+  @Test
+  public void testGetSavepointOldSchema() throws Exception {
+    HoodieWriteConfig cfg = getConfigBuilder().withCleanConfig(HoodieCleanConfig.newBuilder()
+        .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build()).build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
+
+      /**
+       * Write 1 (only inserts)
+       */
+      String newCommitTime = "001";
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+      assertNoWriteErrors(statuses);
+
+      records = updateRecords(client, records, "002");
+
+      client.savepoint("hoodie-unit-test", "test");
+
+
+      records = updateRecords(client, records, "003");
+      updateRecords(client, records, "004");
+
+      // rollback to savepoint 002
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      HoodieInstant savepoint = table.getCompletedSavepointTimeline().lastInstant().get();
+      client.restoreToSavepoint(savepoint.getTimestamp());
+
+      //verify that getSavepointToRestoreTimestampV1Schema is correct
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      HoodieRestorePlan plan = getRestorePlan(metaClient, table.getActiveTimeline().getRestoreTimeline().lastInstant().get());
+      assertEquals("002", getSavepointToRestoreTimestampV1Schema(table, plan));
+    }
+  }
   /**
    * Test case for rollback-savepoint with KEEP_LATEST_FILE_VERSIONS policy.
    */
