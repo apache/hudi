@@ -266,13 +266,11 @@ public class MarkerUtils {
   public static List<String> getCandidateInstants(HoodieActiveTimeline activeTimeline, List<Path> instants, String currentInstantTime,
                                                   long maxAllowableHeartbeatIntervalInMs, FileSystem fs, String basePath) {
 
-    HoodieActiveTimeline reloadActive = activeTimeline.reload();
-
     return instants.stream().map(Path::toString).filter(instantPath -> {
       String instantTime = markerDirToInstantTime(instantPath);
       return instantTime.compareToIgnoreCase(currentInstantTime) < 0
-          && !reloadActive.filterPendingCompactionTimeline().containsInstant(instantTime)
-          && !reloadActive.filterPendingReplaceTimeline().containsInstant(instantTime);
+          && !activeTimeline.filterPendingCompactionTimeline().containsInstant(instantTime)
+          && !activeTimeline.filterPendingReplaceTimeline().containsInstant(instantTime);
     }).filter(instantPath -> {
       try {
         return !isHeartbeatExpired(markerDirToInstantTime(instantPath), maxAllowableHeartbeatIntervalInMs, fs, basePath);

@@ -53,7 +53,7 @@ public class SimpleDirectMarkerBasedEarlyConflictDetectionStrategy extends Hoodi
     super(fs, partitionPath, fileId, instantTime, activeTimeline, config);
     this.basePath = config.getBasePath();
     this.checkCommitConflict = config.earlyConflictDetectionCheckCommitConflict();
-    this.completedCommitInstants = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().collect(Collectors.toSet());
+    this.completedCommitInstants = new HashSet<>(activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants());
     this.maxAllowableHeartbeatIntervalInMs = config.getHoodieClientHeartbeatIntervalInMs() * config.getHoodieClientHeartbeatTolerableMisses();
 
   }

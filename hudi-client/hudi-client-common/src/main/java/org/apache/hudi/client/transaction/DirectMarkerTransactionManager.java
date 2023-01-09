@@ -68,7 +68,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
    */
   private static TypedProperties createUpdatedLockProps(
       HoodieWriteConfig writeConfig, String partitionPath, String fileId) {
-    if (ZookeeperBasedLockProvider.class.getName().equals(writeConfig.getLockProviderClass())) {
+    if (!ZookeeperBasedLockProvider.class.getName().equals(writeConfig.getLockProviderClass())) {
       throw new HoodieNotSupportedException("Only Support ZK-based lock for DirectMarkerTransactionManager now.");
     }
     TypedProperties props = new TypedProperties(writeConfig.getProps());
