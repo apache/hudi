@@ -62,8 +62,8 @@ import org.apache.log4j.Logger;
 import org.apache.orc.OrcFile;
 import org.apache.orc.TypeDescription;
 import org.apache.orc.Writer;
-import org.apache.orc.storage.ql.exec.vector.ColumnVector;
-import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
+import org.apache.hadoop.hive.ql.exec.vector.ColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter.Mode;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -114,10 +114,10 @@ public class UtilitiesTestBase {
   protected static ZookeeperTestService zookeeperTestService;
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  protected transient JavaSparkContext jsc;
-  protected transient HoodieSparkEngineContext context;
-  protected transient SparkSession sparkSession;
-  protected transient SQLContext sqlContext;
+  protected static JavaSparkContext jsc;
+  protected static HoodieSparkEngineContext context;
+  protected static SparkSession sparkSession;
+  protected static SQLContext sqlContext;
 
   @BeforeAll
   public static void setLogLevel() {
@@ -155,10 +155,15 @@ public class UtilitiesTestBase {
       zookeeperTestService = new ZookeeperTestService(hadoopConf);
       zookeeperTestService.start();
     }
+
+    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[4]");
+    context = new HoodieSparkEngineContext(jsc);
+    sqlContext = new SQLContext(jsc);
+    sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanUpUtilitiesTestServices() {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
       hdfsTestService = null;
@@ -175,20 +180,6 @@ public class UtilitiesTestBase {
       zookeeperTestService.stop();
       zookeeperTestService = null;
     }
-  }
-
-  @BeforeEach
-  public void setup() throws Exception {
-    TestDataSource.initDataGen();
-    jsc = UtilHelpers.buildSparkContext(this.getClass().getName() + "-hoodie", "local[2]");
-    context = new HoodieSparkEngineContext(jsc);
-    sqlContext = new SQLContext(jsc);
-    sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
-  }
-
-  @AfterEach
-  public void teardown() throws Exception {
-    TestDataSource.resetDataGen();
     if (jsc != null) {
       jsc.stop();
       jsc = null;
@@ -200,6 +191,16 @@ public class UtilitiesTestBase {
     if (context != null) {
       context = null;
     }
+  }
+
+  @BeforeEach
+  public void setup() throws Exception {
+    TestDataSource.initDataGen();
+  }
+
+  @AfterEach
+  public void teardown() throws Exception {
+    TestDataSource.resetDataGen();
   }
 
   /**

@@ -97,6 +97,15 @@ public interface HoodieMetaSyncOperations {
   }
 
   /**
+   * Get the metadata of partitions that belong to the specified table
+   * @param tableName
+   * @return
+   */
+  default List<Partition> getPartitionsByFilter(String tableName, String filter) {
+    return Collections.emptyList();
+  }
+
+  /**
    * Check if a database already exists in the metastore.
    */
   default boolean databaseExists(String databaseName) {

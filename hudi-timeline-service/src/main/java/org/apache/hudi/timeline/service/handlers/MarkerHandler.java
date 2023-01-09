@@ -18,13 +18,6 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
-import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hudi.common.conflict.detection.HoodieTimelineServerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
@@ -39,6 +32,8 @@ import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationDispatchin
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.http.Context;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -46,16 +41,22 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 
 /**
  * REST Handler servicing marker requests.
@@ -171,25 +172,26 @@ public class MarkerHandler extends Handler {
       try {
         synchronized (earlyConflictDetectionLock) {
           if (earlyConflictDetectionStrategy == null) {
-            earlyConflictDetectionStrategy = (HoodieTimelineServerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(timelineServiceConfig.earlyConflictDetectStrategy,
+            earlyConflictDetectionStrategy = (HoodieTimelineServerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(timelineServiceConfig.earlyConflictDetectionStrategy,
                 basePath, markerDir, markerName, timelineServiceConfig.checkCommitConflict);
           }
 
           // markerDir => $base_path/.hoodie/.temp/$instant_time
           // If markerDir is changed like move to the next instant action, we need to fresh this earlyConflictDetectionStrategy.
-          // For specific instant related create marker action, we only call this check/fresh once instead of starting the checker for every request
+          // For specific instant related create marker action, we only call this check/fresh once
+          // instead of starting the conflict detector for every request
           if (!markerDir.equalsIgnoreCase(currentMarkerDir)) {
             this.currentMarkerDir = markerDir;
             Set<String> actions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);
-            Set<HoodieInstant> oldInstants = viewManager.getFileSystemView(basePath)
-                .getTimeline()
-                .filterCompletedInstants()
-                .filter(instant -> actions.contains(instant.getAction()))
-                .getInstants()
-                .collect(Collectors.toSet());
+            Set<HoodieInstant> oldInstants = new HashSet<>(
+                viewManager.getFileSystemView(basePath)
+                    .getTimeline()
+                    .filterCompletedInstants()
+                    .filter(instant -> actions.contains(instant.getAction()))
+                    .getInstants());
 
-            earlyConflictDetectionStrategy.fresh(timelineServiceConfig.earlyConflictAsyncCheckerBatchInterval,
-                timelineServiceConfig.earlyConflictAsyncCheckerBatchPeriod, markerDir, basePath, timelineServiceConfig.maxAllowableHeartbeatIntervalInMs, fileSystem,
+            earlyConflictDetectionStrategy.fresh(timelineServiceConfig.asyncConflictDetectorBatchIntervalMs,
+                timelineServiceConfig.asyncConflictDetectorBatchPeriodMs, markerDir, basePath, timelineServiceConfig.maxAllowableHeartbeatIntervalInMs, fileSystem,
                 this, oldInstants);
           }
         }

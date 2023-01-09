@@ -40,8 +40,11 @@ public class FunctionBasedQueueProducer<I> implements HoodieProducer<I> {
 
   @Override
   public void produce(HoodieMessageQueue<I, ?> queue) {
-    LOG.info("starting function which will enqueue records");
+    LOG.info("Starting to produce records into the queue");
     producerFunction.apply(queue);
-    LOG.info("finished function which will enqueue records");
+    LOG.info("Finished producing records into the queue");
   }
+
+  @Override
+  public void close() { /* no-op */ }
 }

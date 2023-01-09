@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import java.util.stream.Collectors;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
@@ -42,9 +41,13 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 
+/**
+ * Utils for clean action.
+ */
 public class CleanerUtils {
 
   private static final Logger LOG = LogManager.getLogger(CleanerUtils.class);
@@ -83,7 +86,7 @@ public class CleanerUtils {
     }
 
     return new HoodieCleanMetadata(startCleanTime, durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
-      lastCompletedCommitTimestamp, partitionMetadataMap, CLEAN_METADATA_VERSION_2, partitionBootstrapMetadataMap);
+        lastCompletedCommitTimestamp, partitionMetadataMap, CLEAN_METADATA_VERSION_2, partitionBootstrapMetadataMap);
   }
 
   /**

@@ -190,11 +190,13 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
 
   /**
    * init create marker related config maps.
+   *
    * @param partitionPath
    * @param markerFileName
    * @return
    */
-  private Map<String, String> initConfigMap(String partitionPath, String markerFileName, boolean initEarlyConflictConfigs) {
+  private Map<String, String> initConfigMap(
+      String partitionPath, String markerFileName, boolean initEarlyConflictDetectionConfigs) {
 
     Map<String, String> paramsMap = new HashMap<>();
     paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
@@ -204,7 +206,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
       paramsMap.put(MARKER_NAME_PARAM, partitionPath + "/" + markerFileName);
     }
 
-    if (initEarlyConflictConfigs) {
+    if (initEarlyConflictDetectionConfigs) {
       paramsMap.put(MARKER_BASEPATH_PARAM, basePath);
     }
 

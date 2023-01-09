@@ -37,11 +37,11 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -66,11 +66,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestFSUtils extends HoodieCommonTestHarness {
 
-  private final long minRollbackToKeep = 10;
-  private final long minCleanToKeep = 10;
-
-  private static String TEST_WRITE_TOKEN = "1-0-1";
-  public static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
+  private static final String TEST_WRITE_TOKEN = "1-0-1";
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
   @Rule
   public final EnvironmentVariables environmentVariables = new EnvironmentVariables();
@@ -78,7 +75,11 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp() throws IOException {
     initMetaClient();
-    basePath = "file:" + basePath;
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanMetaClient();
   }
 
   @Test
@@ -95,7 +96,6 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(FSUtils.maskWithoutFileId(instantTime, taskPartitionId), "*_" + taskPartitionId + "_" + instantTime + BASE_FILE_EXTENSION);
   }
 
-  @Test
   /**
    * Tests if process Files return only paths excluding marker directories Cleaner, Rollback and compaction-scheduling
    * logic was recursively processing all subfolders including that of ".hoodie" when looking for partition-paths. This
@@ -103,6 +103,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
    * of ".hoodie" folder) is deleted underneath by compactor. This code tests the fix by ensuring ".hoodie" and their
    * subfolders are never processed.
    */
+  @Test
   public void testProcessFiles() throws Exception {
     // All directories including marker dirs.
     List<String> folders =
@@ -117,9 +118,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     // Files inside partitions and marker directories
     List<String> files = Stream.of("2016/04/15/1_1-0-1_20190528120000",
-        "2016/05/16/2_1-0-1_20190528120000",
-        ".hoodie/.temp/2/2016/05/16/2_1-0-1_20190528120000",
-        ".hoodie/.temp/2/2016/04/15/1_1-0-1_20190528120000")
+            "2016/05/16/2_1-0-1_20190528120000",
+            ".hoodie/.temp/2/2016/05/16/2_1-0-1_20190528120000",
+            ".hoodie/.temp/2/2016/04/15/1_1-0-1_20190528120000")
         .map(fileName -> fileName + BASE_FILE_EXTENSION)
         .collect(Collectors.toList());
 
@@ -353,7 +354,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(LOG_STR, FSUtils.getFileExtensionFromLog(new Path(logFileName)));
 
     // create three versions of log file
-    java.nio.file.Path partitionPath = Paths.get(URI.create(basePath + "/" + partitionStr));
+    java.nio.file.Path partitionPath = Paths.get(basePath, partitionStr);
     Files.createDirectories(partitionPath);
     String log1 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 1, writeToken);
     Files.createFile(partitionPath.resolve(log1));
@@ -376,7 +377,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals("file4.parquet", FSUtils.getFileName("file4.parquet", ""));
   }
 
-  private void prepareTestDirectory(FileSystem fileSystem, String rootDir) throws IOException {
+  private void prepareTestDirectory(FileSystem fileSystem, Path rootDir) throws IOException {
     // Directory structure
     // .hoodie/.temp/
     //  - subdir1
@@ -384,14 +385,13 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     //  - subdir2
     //    - file2.txt
     //  - file3
-    Path dirPath = new Path(rootDir);
     String subDir1 = rootDir + "/subdir1";
     String file1 = subDir1 + "/file1.txt";
     String subDir2 = rootDir + "/subdir2";
     String file2 = subDir2 + "/file2.txt";
     String file3 = rootDir + "/file3.txt";
-    String[] dirs = new String[]{rootDir, subDir1, subDir2};
-    String[] files = new String[]{file1, file2, file3};
+    String[] dirs = new String[] {rootDir.toString(), subDir1, subDir2};
+    String[] files = new String[] {file1, file2, file3};
     // clean up first
     cleanUpTestDirectory(fileSystem, rootDir);
     for (String dir : dirs) {
@@ -402,86 +402,85 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     }
   }
 
-  private void cleanUpTestDirectory(FileSystem fileSystem, String rootDir) throws IOException {
-    fileSystem.delete(new Path(rootDir), true);
+  private void cleanUpTestDirectory(FileSystem fileSystem, Path rootDir) throws IOException {
+    fileSystem.delete(rootDir, true);
   }
 
   @Test
   public void testDeleteExistingDir() throws IOException {
-    String rootDir = basePath + "/.hoodie/.temp";
+    Path rootDir = getHoodieTempDir();
     FileSystem fileSystem = metaClient.getFs();
     prepareTestDirectory(fileSystem, rootDir);
 
-    Path rootDirPath = new Path(rootDir);
-    assertTrue(fileSystem.exists(rootDirPath));
+    assertTrue(fileSystem.exists(rootDir));
     assertTrue(FSUtils.deleteDir(
-        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem, rootDirPath, 2));
-    assertFalse(fileSystem.exists(rootDirPath));
+        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem, rootDir, 2));
+    assertFalse(fileSystem.exists(rootDir));
   }
 
   @Test
   public void testDeleteNonExistingDir() throws IOException {
-    String rootDir = basePath + "/.hoodie/.temp";
+    Path rootDir = getHoodieTempDir();
     FileSystem fileSystem = metaClient.getFs();
     cleanUpTestDirectory(fileSystem, rootDir);
 
     assertFalse(FSUtils.deleteDir(
-        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem, new Path(rootDir), 2));
+        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem, rootDir, 2));
   }
 
   @Test
   public void testDeleteSubDirectoryRecursively() throws IOException {
-    String rootDir = basePath + "/.hoodie/.temp";
-    String subPathStr = rootDir + "/subdir1";
+    Path rootDir = getHoodieTempDir();
+    Path subDir = new Path(rootDir, "subdir1");
     FileSystem fileSystem = metaClient.getFs();
     prepareTestDirectory(fileSystem, rootDir);
 
     assertTrue(FSUtils.deleteSubPath(
-        subPathStr, new SerializableConfiguration(fileSystem.getConf()), true));
+        subDir.toString(), new SerializableConfiguration(fileSystem.getConf()), true));
   }
 
   @Test
   public void testDeleteSubDirectoryNonRecursively() throws IOException {
-    String rootDir = basePath + "/.hoodie/.temp";
-    String subPathStr = rootDir + "/subdir1";
+    Path rootDir = getHoodieTempDir();
+    Path subDir = new Path(rootDir, "subdir1");
     FileSystem fileSystem = metaClient.getFs();
     prepareTestDirectory(fileSystem, rootDir);
 
     assertThrows(
         HoodieIOException.class,
         () -> FSUtils.deleteSubPath(
-            subPathStr, new SerializableConfiguration(fileSystem.getConf()), false));
+            subDir.toString(), new SerializableConfiguration(fileSystem.getConf()), false));
   }
 
   @Test
   public void testDeleteSubPathAsFile() throws IOException {
-    String rootDir = basePath + "/.hoodie/.temp";
-    String subPathStr = rootDir + "/file3.txt";
+    Path rootDir = getHoodieTempDir();
+    Path subDir = new Path(rootDir, "file3.txt");
     FileSystem fileSystem = metaClient.getFs();
     prepareTestDirectory(fileSystem, rootDir);
 
     assertTrue(FSUtils.deleteSubPath(
-        subPathStr, new SerializableConfiguration(fileSystem.getConf()), false));
+        subDir.toString(), new SerializableConfiguration(fileSystem.getConf()), false));
   }
 
   @Test
   public void testDeleteNonExistingSubDirectory() throws IOException {
-    String rootDir = basePath + "/.hoodie/.temp";
-    String subPathStr = rootDir + "/subdir10";
+    Path rootDir = getHoodieTempDir();
+    Path subDir = new Path(rootDir, "subdir10");
     FileSystem fileSystem = metaClient.getFs();
     cleanUpTestDirectory(fileSystem, rootDir);
 
     assertFalse(FSUtils.deleteSubPath(
-        subPathStr, new SerializableConfiguration(fileSystem.getConf()), true));
+        subDir.toString(), new SerializableConfiguration(fileSystem.getConf()), true));
   }
 
   @Test
   public void testParallelizeSubPathProcessWithExistingDir() throws IOException {
-    String rootDir = basePath + "/.hoodie/.temp";
+    Path rootDir = getHoodieTempDir();
     FileSystem fileSystem = metaClient.getFs();
     prepareTestDirectory(fileSystem, rootDir);
     Map<String, List<String>> result = FSUtils.parallelizeSubPathProcess(
-        new HoodieLocalEngineContext(fileSystem.getConf()), fileSystem, new Path(rootDir), 2,
+        new HoodieLocalEngineContext(fileSystem.getConf()), fileSystem, rootDir, 2,
         fileStatus -> !fileStatus.getPath().getName().contains("1"),
         pairOfSubPathAndConf -> {
           Path subPath = new Path(pairOfSubPathAndConf.getKey());
@@ -509,18 +508,22 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testGetFileStatusAtLevel() throws IOException {
-    String rootDir = basePath + "/.hoodie/.temp";
+    Path hoodieTempDir = getHoodieTempDir();
     FileSystem fileSystem = metaClient.getFs();
-    prepareTestDirectory(fileSystem, rootDir);
+    prepareTestDirectory(fileSystem, hoodieTempDir);
     List<FileStatus> fileStatusList = FSUtils.getFileStatusAtLevel(
         new HoodieLocalEngineContext(fileSystem.getConf()), fileSystem,
-        new Path(basePath), 3, 2);
+        new Path(baseUri), 3, 2);
     assertEquals(CollectionUtils.createImmutableSet(
-            basePath + "/.hoodie/.temp/subdir1/file1.txt",
-            basePath + "/.hoodie/.temp/subdir2/file2.txt"),
+            new Path(baseUri.toString(), ".hoodie/.temp/subdir1/file1.txt"),
+            new Path(baseUri.toString(), ".hoodie/.temp/subdir2/file2.txt")),
         fileStatusList.stream()
-            .map(fileStatus -> fileStatus.getPath().toString())
-            .filter(filePath -> filePath.endsWith(".txt"))
+            .map(FileStatus::getPath)
+            .filter(filePath -> filePath.getName().endsWith(".txt"))
             .collect(Collectors.toSet()));
+  }
+
+  private Path getHoodieTempDir() {
+    return new Path(baseUri.toString(), ".hoodie/.temp");
   }
 }

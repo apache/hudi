@@ -23,10 +23,10 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.orc.CompressionKind;
@@ -51,7 +51,7 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
   }
 
   @Override
-  protected HoodieFileWriter<GenericRecord> createWriter(
+  protected HoodieAvroOrcWriter createWriter(
       Schema avroSchema, boolean populateMetaFields) throws Exception {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.00001, -1, BloomFilterTypeCode.SIMPLE.name());
     Configuration conf = new Configuration();
@@ -64,13 +64,13 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
     when(mockTaskContextSupplier.getPartitionIdSupplier()).thenReturn(partitionSupplier);
     when(partitionSupplier.get()).thenReturn(10);
     String instantTime = "000";
-    return new HoodieOrcWriter<>(instantTime, getFilePath(), config, avroSchema, mockTaskContextSupplier);
+    return new HoodieAvroOrcWriter(instantTime, getFilePath(), config, avroSchema, mockTaskContextSupplier);
   }
 
   @Override
-  protected HoodieFileReader<GenericRecord> createReader(
+  protected HoodieAvroFileReader createReader(
       Configuration conf) throws Exception {
-    return HoodieFileReaderFactory.getFileReader(conf, getFilePath());
+    return (HoodieAvroFileReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(conf, getFilePath());
   }
 
   @Override

@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import javax.annotation.Nullable;
+
 import java.io.Serializable;
 import java.util.Objects;
 

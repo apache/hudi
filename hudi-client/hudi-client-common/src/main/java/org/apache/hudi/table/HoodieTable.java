@@ -43,7 +43,7 @@ import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -58,6 +58,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -98,6 +99,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.isSchemaCompatible;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
@@ -112,7 +114,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTable.class);
 
@@ -279,6 +281,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     return metaClient;
   }
 
+  /**
+   * @return if the table is physically partitioned, based on the partition fields stored in the table config.
+   */
+  public boolean isPartitioned() {
+    return getMetaClient().getTableConfig().isTablePartitioned();
+  }
+
   public Configuration getHadoopConf() {
     return metaClient.getHadoopConf();
   }
@@ -371,7 +380,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * Get the list of savepoint timestamps in this table.
    */
   public Set<String> getSavepointTimestamps() {
-    return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+    return getCompletedSavepointTimeline().getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
   }
 
   public HoodieActiveTimeline getActiveTimeline() {
@@ -781,7 +790,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   private void validateSchema() throws HoodieUpsertException, HoodieInsertException {
 
-    if (!config.getAvroSchemaValidate() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
+    if (!config.shouldValidateAvroSchema() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
       // Check not required
       return;
     }
@@ -793,7 +802,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
       TableSchemaResolver schemaResolver = new TableSchemaResolver(getMetaClient());
       writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
       tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaResolver.getTableAvroSchemaWithoutMetadataFields());
-      isValid = TableSchemaResolver.isSchemaCompatible(tableSchema, writerSchema);
+      isValid = isSchemaCompatible(tableSchema, writerSchema);
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
     }
@@ -808,7 +817,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     try {
       validateSchema();
     } catch (HoodieException e) {
-      throw new HoodieUpsertException("Failed upsert schema compatibility check.", e);
+      throw new HoodieUpsertException("Failed upsert schema compatibility check", e);
     }
   }
 
@@ -816,7 +825,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     try {
       validateSchema();
     } catch (HoodieException e) {
-      throw new HoodieInsertException("Failed insert schema compability check.", e);
+      throw new HoodieInsertException("Failed insert schema compatibility check", e);
     }
   }
 
@@ -858,10 +867,23 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   /**
    * Check if action type is a table service.
-   * @param actionType action type of interest.
+   * @param actionType action type of the instant
+   * @param instantTime instant time of the instant.
    * @return true if action represents a table service. false otherwise.
    */
-  public abstract boolean isTableServiceAction(String actionType);
+  public boolean isTableServiceAction(String actionType, String instantTime) {
+    if (actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      Option<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlan = ClusteringUtils.getClusteringPlan(metaClient, new HoodieInstant(HoodieInstant.State.NIL, actionType, instantTime));
+      // only clustering is table service with replace commit action
+      return instantPlan.isPresent();
+    } else {
+      if (this.metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
+        return !actionType.equals(HoodieTimeline.COMMIT_ACTION);
+      } else {
+        return !actionType.equals(HoodieTimeline.DELTA_COMMIT_ACTION);
+      }
+    }
+  }
 
   /**
    * Get Table metadata writer.

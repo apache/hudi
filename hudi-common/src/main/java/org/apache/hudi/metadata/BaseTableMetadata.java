@@ -55,6 +55,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -65,6 +66,9 @@ import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * Abstract class for implementing common table metadata operations.
+ */
 public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   private static final Logger LOG = LogManager.getLogger(BaseTableMetadata.class);
@@ -149,7 +153,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitions)
+  public Map<String, FileStatus[]> getAllFilesInPartitions(Collection<String> partitions)
       throws IOException {
     if (partitions.isEmpty()) {
       return Collections.emptyMap();

@@ -65,7 +65,7 @@ public class TestSqlSource extends UtilitiesTestBase {
 
   @AfterAll
   public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach

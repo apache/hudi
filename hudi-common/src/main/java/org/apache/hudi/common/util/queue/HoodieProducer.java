@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.util.queue;
 
+import java.io.Closeable;
+
 /**
  * Producer for {@link HoodieMessageQueue}. Memory Bounded Buffer supports multiple producers single consumer pattern.
  *
  * @param <I> Input type for buffer items produced
  */
-public interface HoodieProducer<I> {
+public interface HoodieProducer<I> extends Closeable {
 
   /**
    * API to enqueue entries to bounded queue.
@@ -31,4 +33,7 @@ public interface HoodieProducer<I> {
    * @param queue In Memory bounded queue
    */
   void produce(HoodieMessageQueue<I, ?> queue) throws Exception;
+
+  @Override
+  void close();
 }

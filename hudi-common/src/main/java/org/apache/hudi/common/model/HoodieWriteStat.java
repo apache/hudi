@@ -18,8 +18,9 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.util.JsonUtils;
+
+import org.apache.hadoop.fs.Path;
 
 import javax.annotation.Nullable;
 

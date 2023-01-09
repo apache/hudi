@@ -192,5 +192,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       writeClient.startCommitWithTime(instantTime, actionType);
       writeClient.deletePartitions(partitionsToDrop, instantTime);
     }
+    closeInternal();
   }
 }

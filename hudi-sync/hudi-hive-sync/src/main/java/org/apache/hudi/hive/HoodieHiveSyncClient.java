@@ -182,6 +182,19 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   @Override
+  public List<Partition> getPartitionsByFilter(String tableName, String filter) {
+    try {
+      return client.listPartitionsByFilter(databaseName, tableName, filter, (short)-1)
+          .stream()
+          .map(p -> new Partition(p.getValues(), p.getSd().getLocation()))
+          .collect(Collectors.toList());
+    } catch (TException e) {
+      throw new HoodieHiveSyncException("Failed to get partitions for table "
+          + tableId(databaseName, tableName) + " with filter " + filter, e);
+    }
+  }
+
+  @Override
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
                           String outputFormatClass, String serdeClass,
                           Map<String, String> serdeProperties, Map<String, String> tableProperties) {
@@ -249,7 +262,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
-    if (getActiveTimeline().getInstants().noneMatch(i -> i.getTimestamp().equals(timeStamp))) {
+    if (getActiveTimeline().getInstantsAsStream().noneMatch(i -> i.getTimestamp().equals(timeStamp))) {
       throw new HoodieHiveSyncException(
           "Not a valid completed timestamp " + timeStamp + " for table " + tableName);
     }

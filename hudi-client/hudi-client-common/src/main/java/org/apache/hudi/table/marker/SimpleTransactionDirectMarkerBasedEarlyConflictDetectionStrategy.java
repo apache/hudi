@@ -18,11 +18,12 @@
 
 package org.apache.hudi.table.marker;
 
-import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.transaction.DirectMarkerTransactionManager;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -43,10 +44,11 @@ public class SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy ex
 
   @Override
   public void detectAndResolveConflictIfNecessary() {
-    TransactionManager txnManager = new TransactionManager((HoodieWriteConfig) config, fs, partitionPath, fileId);
+    DirectMarkerTransactionManager txnManager =
+        new DirectMarkerTransactionManager((HoodieWriteConfig) config, fs, partitionPath, fileId);
     try {
       // Need to do transaction before create marker file when using early conflict detection
-      txnManager.beginTransaction(partitionPath, fileId);
+      txnManager.beginTransaction(instantTime);
       super.detectAndResolveConflictIfNecessary();
 
     } catch (Exception e) {
@@ -54,7 +56,7 @@ public class SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy ex
       throw e;
     } finally {
       // End transaction after created marker file.
-      txnManager.endTransaction(partitionPath, fileId);
+      txnManager.endTransaction(instantTime);
       txnManager.close();
     }
   }

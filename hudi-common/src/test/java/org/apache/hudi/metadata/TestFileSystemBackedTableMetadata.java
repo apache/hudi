@@ -18,12 +18,13 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,9 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+/**
+ * Tests {@link FileSystemBackedTableMetadata}.
+ */
 public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
 
   private static final String DEFAULT_PARTITION = "";
@@ -54,6 +58,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
   @AfterEach
   public void tearDown() throws IOException {
     metaClient.getFs().delete(new Path(metaClient.getBasePath()), true);
+    cleanMetaClient();
   }
 
   /**

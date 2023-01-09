@@ -38,6 +38,11 @@ object JFunction {
   // From Scala to Java
   ////////////////////////////////////////////////////////////
 
+  implicit def toJavaSupplier[R](f: () => R): java.util.function.Supplier[R] =
+    new java.util.function.Supplier[R] {
+      override def get(): R = f.apply()
+    }
+
   implicit def toJavaFunction[T, R](f: Function[T, R]): java.util.function.Function[T, R] =
     new java.util.function.Function[T, R] {
       override def apply(t: T): R = f.apply(t)
@@ -53,7 +58,7 @@ object JFunction {
       override def call(t: T): collection.Pair[K, V] = f.apply(t)
     }
 
-  implicit def toJava[T](f: T => Unit): java.util.function.Consumer[T] =
+  implicit def toJavaConsumer[T](f: T => Unit): java.util.function.Consumer[T] =
     new java.util.function.Consumer[T] {
       override def accept(t: T): Unit = f.apply(t)
     }

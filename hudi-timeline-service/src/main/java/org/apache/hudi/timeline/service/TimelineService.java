@@ -31,6 +31,8 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
+import io.javalin.core.JavalinConfig;
+import io.javalin.jetty.JettyServer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -122,27 +124,39 @@ public class TimelineService {
     @Parameter(names = {"--marker-parallelism", "-mdp"}, description = "Parallelism to use for reading and deleting marker files")
     public int markerParallelism = 100;
 
-    @Parameter(names = {"--early-conflict-detection-strategy"}, description = "Early conflict detection class name, this should be subclass of "
-        + "org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy")
-    public String earlyConflictDetectStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy";
+    @Parameter(names = {"--early-conflict-detection-strategy"}, description =
+        "The class name of the early conflict detection strategy to use. "
+            + "This should be subclass of "
+            + "`org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy`")
+    public String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy";
 
-    @Parameter(names = {"--early-conflict-detection-check-commit-conflict"}, description = "Enable check commit conflict or not during early conflict detect")
+    @Parameter(names = {"--early-conflict-detection-check-commit-conflict"}, description =
+        "Whether to enable commit conflict checking or not during early "
+            + "conflict detection.")
     public Boolean checkCommitConflict = false;
 
-    @Parameter(names = {"--early-conflict-detection-enable"}, description = "Enable early conflict detection based on markers. It will try to detect writing conflict "
-        + "before create markers and fast fail which will release cluster resources as soon as possible.")
+    @Parameter(names = {"--early-conflict-detection-enable"}, description =
+        "Whether to enable early conflict detection based on markers. "
+            + "It eagerly detects writing conflict before create markers and fails fast if a "
+            + "conflict is detected, to release cluster compute resources as soon as possible.")
     public Boolean earlyConflictDetectionEnable = false;
 
-    @Parameter(names = {"--early-conflict-async-checker-batch-interval"}, description = "Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. "
-        + "The time to delay first async marker conflict checking.")
-    public Long earlyConflictAsyncCheckerBatchInterval = 30000L;
+    @Parameter(names = {"--async-conflict-detector-batch-interval-ms"}, description =
+        "Used for timeline-server-based markers with "
+            + "`AsyncTimelineMarkerConflictResolutionStrategy`. "
+            + "The time in milliseconds to delay first async marker conflict detection.")
+    public Long asyncConflictDetectorBatchIntervalMs = 30000L;
 
-    @Parameter(names = {"--early-conflict-async-checker-batch-period"}, description = "Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy."
-        + " The period between each marker conflict checking.")
-    public Long earlyConflictAsyncCheckerBatchPeriod = 30000L;
+    @Parameter(names = {"--async-conflict-detector-batch-period-ms"}, description =
+        "Used for timeline-server-based markers with "
+            + "`AsyncTimelineMarkerConflictResolutionStrategy`. "
+            + "The period in milliseconds between consecutive runs of async marker conflict detection.")
+    public Long asyncConflictDetectorBatchPeriodMs = 30000L;
 
-    @Parameter(names = {"--early-conflict-async-checker-heart-beat-interval"}, description = "Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. "
-        + "Instants whose heartbeat is greater than the current value will not be used in early conflict detection.")
+    @Parameter(names = {"--early-conflict-detection-max-heartbeat-interval-ms"}, description =
+        "Used for timeline-server-based markers with "
+            + "`AsyncTimelineMarkerConflictResolutionStrategy`. "
+            + "Instants whose heartbeat is greater than the current value will not be used in early conflict detection.")
     public Long maxAllowableHeartbeatIntervalInMs = 60000L;
 
     @Parameter(names = {"--help", "-h"})
@@ -169,11 +183,11 @@ public class TimelineService {
       private int markerBatchNumThreads = 20;
       private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
-      private String earlyConflictDetectStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy";
+      private String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy";
       private Boolean checkCommitConflict = false;
       private Boolean earlyConflictDetectionEnable = false;
-      private Long earlyConflictAsyncCheckerBatchInterval = 30000L;
-      private Long earlyConflictAsyncCheckerBatchPeriod = 30000L;
+      private Long asyncConflictDetectorBatchIntervalMs = 30000L;
+      private Long asyncConflictDetectorBatchPeriodMs = 30000L;
       private Long maxAllowableHeartbeatIntervalInMs = 60000L;
 
       public Builder() {
@@ -244,32 +258,32 @@ public class TimelineService {
         return this;
       }
 
-      public Builder markerEarlyConflictDetectStrategy(String earlyConflictDetectStrategy) {
-        this.earlyConflictDetectStrategy = earlyConflictDetectStrategy;
+      public Builder earlyConflictDetectionStrategy(String earlyConflictDetectionStrategy) {
+        this.earlyConflictDetectionStrategy = earlyConflictDetectionStrategy;
         return this;
       }
 
-      public Builder markerEarlyConflictDetectCheckCommitConflict(Boolean checkCommitConflict) {
+      public Builder earlyConflictDetectionCheckCommitConflict(Boolean checkCommitConflict) {
         this.checkCommitConflict = checkCommitConflict;
         return this;
       }
 
-      public Builder markerEarlyConflictDetectEnable(Boolean earlyConflictDetectionEnable) {
+      public Builder earlyConflictDetectionEnable(Boolean earlyConflictDetectionEnable) {
         this.earlyConflictDetectionEnable = earlyConflictDetectionEnable;
         return this;
       }
 
-      public Builder markerEarlyConflictAsyncCheckerBatchInterval(Long earlyConflictAsyncCheckerBatchInterval) {
-        this.earlyConflictAsyncCheckerBatchInterval = earlyConflictAsyncCheckerBatchInterval;
+      public Builder asyncConflictDetectorBatchIntervalMs(Long asyncConflictDetectorBatchIntervalMs) {
+        this.asyncConflictDetectorBatchIntervalMs = asyncConflictDetectorBatchIntervalMs;
         return this;
       }
 
-      public Builder markerEarlyConflictAsyncCheckerBatchPeriod(Long earlyConflictAsyncCheckerBatchPeriod) {
-        this.earlyConflictAsyncCheckerBatchPeriod = earlyConflictAsyncCheckerBatchPeriod;
+      public Builder asyncConflictDetectorBatchPeriodMs(Long asyncConflictDetectorBatchPeriodMs) {
+        this.asyncConflictDetectorBatchPeriodMs = asyncConflictDetectorBatchPeriodMs;
         return this;
       }
 
-      public Builder markerEarlyConflictMaxAllowableHeartbeatIntervalInMs(Long maxAllowableHeartbeatIntervalInMs) {
+      public Builder earlyConflictDetectionMaxAllowableHeartbeatIntervalInMs(Long maxAllowableHeartbeatIntervalInMs) {
         this.maxAllowableHeartbeatIntervalInMs = maxAllowableHeartbeatIntervalInMs;
         return this;
       }
@@ -289,11 +303,11 @@ public class TimelineService {
         config.markerBatchNumThreads = this.markerBatchNumThreads;
         config.markerBatchIntervalMs = this.markerBatchIntervalMs;
         config.markerParallelism = this.markerParallelism;
-        config.earlyConflictDetectStrategy = this.earlyConflictDetectStrategy;
+        config.earlyConflictDetectionStrategy = this.earlyConflictDetectionStrategy;
         config.checkCommitConflict = this.checkCommitConflict;
         config.earlyConflictDetectionEnable = this.earlyConflictDetectionEnable;
-        config.earlyConflictAsyncCheckerBatchInterval = this.earlyConflictAsyncCheckerBatchInterval;
-        config.earlyConflictAsyncCheckerBatchPeriod = this.earlyConflictAsyncCheckerBatchPeriod;
+        config.asyncConflictDetectorBatchIntervalMs = this.asyncConflictDetectorBatchIntervalMs;
+        config.asyncConflictDetectorBatchPeriodMs = this.asyncConflictDetectorBatchPeriodMs;
         config.maxAllowableHeartbeatIntervalInMs = this.maxAllowableHeartbeatIntervalInMs;
         return config;
       }
@@ -328,10 +342,12 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? new Server() : new Server(new QueuedThreadPool(timelineServerConf.numThreads));
-
+    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? new JettyServer(new JavalinConfig()).server() :
+            new Server(new QueuedThreadPool(timelineServerConf.numThreads));
     app = Javalin.create(c -> {
-      c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
+      if (!timelineServerConf.compress) {
+        c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
+      }
       c.server(() -> server);
     });
 

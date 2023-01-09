@@ -99,12 +99,23 @@ public class HoodieFlinkStreamer {
     }
 
     OptionsInference.setupSinkTasks(conf, env.getParallelism());
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
-    if (OptionsResolver.needsAsyncCompaction(conf)) {
-      Pipelines.compact(conf, pipeline);
+    DataStream<Object> pipeline;
+    // Append mode
+    if (OptionsResolver.isAppendMode(conf)) {
+      pipeline = Pipelines.append(conf, rowType, dataStream, false);
+      if (OptionsResolver.needsAsyncClustering(conf)) {
+        Pipelines.cluster(conf, rowType, pipeline);
+      } else {
+        Pipelines.dummySink(pipeline);
+      }
     } else {
-      Pipelines.clean(conf, pipeline);
+      DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
+      pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      if (OptionsResolver.needsAsyncCompaction(conf)) {
+        Pipelines.compact(conf, pipeline);
+      } else {
+        Pipelines.clean(conf, pipeline);
+      }
     }
 
     env.execute(cfg.targetTableName);

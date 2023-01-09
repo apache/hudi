@@ -18,6 +18,7 @@
 
 package org.apache.hudi.functional.cdc
 
+import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
@@ -278,8 +279,8 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val cdcDataFromCDCLogFile2 = getCDCLogFile(instant2).flatMap(readCDCLogFile(_, cdcSchema))
     assertEquals(cdcDataFromCDCLogFile2.size, 50)
     // check op
-    assertEquals(cdcDataFromCDCLogFile2.count(r => r.get(0).toString == "u"), 30)
-    assertEquals(cdcDataFromCDCLogFile2.count(r => r.get(0).toString == "i"), 20)
+    assertEquals(cdcDataFromCDCLogFile2.count(r => r.getData.asInstanceOf[GenericRecord].get(0).toString == "u"), 30)
+    assertEquals(cdcDataFromCDCLogFile2.count(r => r.getData.asInstanceOf[GenericRecord].get(0).toString == "i"), 20)
 
     val commitTime2 = instant2.getTimestamp
     var currentSnapshotData = spark.read.format("hudi").load(basePath)

@@ -20,6 +20,7 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 
 public class HiveSyncConfigHolder {
   /*
@@ -130,4 +131,9 @@ public class HiveSyncConfigHolder {
       .key("hoodie.datasource.hive_sync.sync_comment")
       .defaultValue("false")
       .withDocumentation("Whether to sync the table column comments while syncing the table.");
+
+  public static final ConfigProperty<String> HIVE_SYNC_TABLE_STRATEGY = ConfigProperty
+          .key("hoodie.datasource.hive_sync.table.strategy")
+          .defaultValue(HoodieSyncTableStrategy.ALL.name())
+          .withDocumentation("Hive table synchronization strategy. Available option: ONLY_RO, ONLY_RT, ALL.");
 }

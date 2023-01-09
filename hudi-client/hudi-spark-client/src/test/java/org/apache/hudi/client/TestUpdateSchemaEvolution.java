@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -48,6 +49,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -59,7 +61,7 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
+public class TestUpdateSchemaEvolution extends HoodieClientTestHarness implements Serializable {
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -133,7 +135,8 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
                 new Path(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),
                 mergeHandle.getWriterSchemaWithMetaFields());
         for (GenericRecord rec : oldRecords) {
-          mergeHandle.write(rec);
+          // TODO create hoodie record with rec can getRecordKey
+          mergeHandle.write(new HoodieAvroIndexedRecord(rec));
         }
         mergeHandle.close();
       };

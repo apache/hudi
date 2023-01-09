@@ -20,6 +20,7 @@ package org.apache.spark.sql
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.{SimpleAnalyzer, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Like}
+import org.apache.spark.sql.catalyst.optimizer.SimplifyCasts
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
 import org.apache.spark.sql.execution.command.{AlterTableRecoverPartitionsCommand, ExplainCommand}
@@ -31,8 +32,14 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
                            expected: Seq[Attribute],
                            query: LogicalPlan,
                            byName: Boolean,
-                           conf: SQLConf): LogicalPlan =
-    SimpleAnalyzer.ResolveOutputRelation.resolveOutputColumns(tableName, expected, query, byName)
+                           conf: SQLConf): LogicalPlan = {
+    // NOTE: We have to apply [[ResolveUpCast]] and [[SimplifyCasts]] rules since by default Spark 2.x will
+    //       always be wrapping matched attributes into [[UpCast]]s which aren't resolvable and render some
+    //       APIs like [[QueryPlan.schema]] unusable
+    SimplifyCasts.apply(
+      SimpleAnalyzer.ResolveUpCast.apply(
+        SimpleAnalyzer.ResolveOutputRelation.resolveOutputColumns(tableName, expected, query, byName)))
+  }
 
   def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan =
     ExplainCommand(plan, extended = extended)

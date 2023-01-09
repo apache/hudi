@@ -18,23 +18,23 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.avro.Schema;
-
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
  * <p>Computing the records batch locations all at a time is a pressure to the engine,
  * we should avoid that in streaming system.
  */
-public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, List<HoodieRecord<T>>,
+public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>, R> {
 
   private FlinkWriteHelper() {
@@ -90,8 +90,8 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
   }
 
   @Override
-  public List<HoodieRecord<T>> deduplicateRecords(
-      List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr) {
+  protected List<HoodieRecord<T>> doDeduplicateRecords(
+      List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, TypedProperties props, HoodieRecordMerger merger) {
     // If index used is global, then records are expected to differ in their partitionPath
     Map<Object, List<HoodieRecord<T>>> keyedRecords = records.stream()
         .collect(Collectors.groupingBy(record -> record.getKey().getRecordKey()));
@@ -99,17 +99,20 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
     // caution that the avro schema is not serializable
     final Schema schema = new Schema.Parser().parse(schemaStr);
     return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
-      final T data1 = rec1.getData();
-      final T data2 = rec2.getData();
-
-      @SuppressWarnings("unchecked") final T reducedData = (T) data2.preCombine(data1, schema, CollectionUtils.emptyProps());
+      HoodieRecord<T> reducedRecord;
+      try {
+        // Precombine do not need schema and do not return null
+        reducedRecord =  merger.merge(rec1, schema, rec2, schema, props).get().getLeft();
+      } catch (IOException e) {
+        throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
+      }
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.
-      boolean choosePrev = data1 == reducedData;
+      boolean choosePrev = rec1 == reducedRecord;
       HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
       HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
-      HoodieRecord<T> hoodieRecord = new HoodieAvroRecord<>(reducedKey, reducedData, operation);
+      HoodieRecord<T> hoodieRecord = reducedRecord.newInstance(reducedKey, operation);
       // reuse the location from the first record.
       hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
       return hoodieRecord;

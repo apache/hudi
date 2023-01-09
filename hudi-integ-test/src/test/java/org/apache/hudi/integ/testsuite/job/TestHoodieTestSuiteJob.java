@@ -137,7 +137,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
 
   @AfterAll
   public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach
@@ -212,7 +212,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
-    assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 2);
+    assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), 2);
   }
 
   @Test
@@ -231,7 +231,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
-    assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 1);
+    assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), 1);
   }
 
   @Test
@@ -246,7 +246,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
-    //assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 5);
+    //assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), 5);
   }
 
   @Test
@@ -261,7 +261,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
-    //assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 7);
+    //assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), 7);
   }
 
   @Test
@@ -282,7 +282,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
-    assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 3);
+    assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), 3);
   }
 
   @Test

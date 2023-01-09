@@ -34,6 +34,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests {@link ParquetReaderIterator}.
+ */
 public class TestParquetReaderIterator {
 
   @Test

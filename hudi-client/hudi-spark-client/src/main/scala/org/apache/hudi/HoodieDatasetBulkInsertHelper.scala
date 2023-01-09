@@ -33,7 +33,9 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
+import org.apache.spark.sql.catalyst.plans.logical.Project
+import org.apache.spark.sql.types.{DataType, StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -58,31 +60,6 @@ object HoodieDatasetBulkInsertHelper extends Logging {
     val populateMetaFields = config.populateMetaFields()
     val schema = df.schema
 
-    val keyGeneratorClassName = config.getStringOrThrow(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME,
-      "Key-generator class name is required")
-
-    val prependedRdd: RDD[InternalRow] =
-      df.queryExecution.toRdd.mapPartitions { iter =>
-        val keyGenerator =
-          ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps))
-            .asInstanceOf[SparkKeyGeneratorInterface]
-
-        iter.map { row =>
-          val (recordKey, partitionPath) =
-            if (populateMetaFields) {
-              (keyGenerator.getRecordKey(row, schema), keyGenerator.getPartitionPath(row, schema))
-            } else {
-              (UTF8String.EMPTY_UTF8, UTF8String.EMPTY_UTF8)
-            }
-          val commitTimestamp = UTF8String.EMPTY_UTF8
-          val commitSeqNo = UTF8String.EMPTY_UTF8
-          val filename = UTF8String.EMPTY_UTF8
-
-          // TODO use mutable row, avoid re-allocating
-          new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
-        }
-      }
-
     val metaFields = Seq(
       StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, StringType),
       StructField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, StringType),
@@ -92,11 +69,44 @@ object HoodieDatasetBulkInsertHelper extends Logging {
 
     val updatedSchema = StructType(metaFields ++ schema.fields)
 
-    val updatedDF = if (populateMetaFields && config.shouldCombineBeforeInsert) {
-      val dedupedRdd = dedupeRows(prependedRdd, updatedSchema, config.getPreCombineField, SparkHoodieIndexFactory.isGlobalIndex(config))
+    val updatedDF = if (populateMetaFields) {
+      val keyGeneratorClassName = config.getStringOrThrow(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME,
+        "Key-generator class name is required")
+
+      val prependedRdd: RDD[InternalRow] =
+        df.queryExecution.toRdd.mapPartitions { iter =>
+          val keyGenerator =
+            ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps))
+              .asInstanceOf[SparkKeyGeneratorInterface]
+
+          iter.map { row =>
+            val recordKey = keyGenerator.getRecordKey(row, schema)
+            val partitionPath = keyGenerator.getPartitionPath(row, schema)
+            val commitTimestamp = UTF8String.EMPTY_UTF8
+            val commitSeqNo = UTF8String.EMPTY_UTF8
+            val filename = UTF8String.EMPTY_UTF8
+
+            // TODO use mutable row, avoid re-allocating
+            new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
+          }
+        }
+
+      val dedupedRdd = if (config.shouldCombineBeforeInsert) {
+        dedupeRows(prependedRdd, updatedSchema, config.getPreCombineField, SparkHoodieIndexFactory.isGlobalIndex(config))
+      } else {
+        prependedRdd
+      }
+
       HoodieUnsafeUtils.createDataFrameFromRDD(df.sparkSession, dedupedRdd, updatedSchema)
     } else {
-      HoodieUnsafeUtils.createDataFrameFromRDD(df.sparkSession, prependedRdd, updatedSchema)
+      // NOTE: In cases when we're not populating meta-fields we actually don't
+      //       need access to the [[InternalRow]] and therefore can avoid the need
+      //       to dereference [[DataFrame]] into [[RDD]]
+      val query = df.queryExecution.logical
+      val metaFieldsStubs = metaFields.map(f => Alias(Literal(UTF8String.EMPTY_UTF8, dataType = StringType), f.name)())
+      val prependedQuery = Project(metaFieldsStubs ++ query.output, query)
+
+      HoodieUnsafeUtils.createDataFrameFrom(df.sparkSession, prependedQuery)
     }
 
     val trimmedDF = if (shouldDropPartitionColumns) {
@@ -114,7 +124,7 @@ object HoodieDatasetBulkInsertHelper extends Logging {
    */
   def bulkInsert(dataset: Dataset[Row],
                  instantTime: String,
-                 table: HoodieTable[_ <: HoodieRecordPayload[_ <: HoodieRecordPayload[_ <: AnyRef]], _, _, _],
+                 table: HoodieTable[_, _, _, _],
                  writeConfig: HoodieWriteConfig,
                  partitioner: BulkInsertPartitioner[Dataset[Row]],
                  parallelism: Int,

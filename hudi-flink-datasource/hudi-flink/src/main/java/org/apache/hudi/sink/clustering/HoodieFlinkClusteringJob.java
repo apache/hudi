@@ -35,6 +35,7 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
@@ -75,12 +76,10 @@ public class HoodieFlinkClusteringJob {
   }
 
   public static void main(String[] args) throws Exception {
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
     FlinkClusteringConfig cfg = getFlinkClusteringConfig(args);
     Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
 
-    AsyncClusteringService service = new AsyncClusteringService(cfg, conf, env);
+    AsyncClusteringService service = new AsyncClusteringService(cfg, conf);
 
     new HoodieFlinkClusteringJob(service).start(cfg.serviceMode);
   }
@@ -165,19 +164,13 @@ public class HoodieFlinkClusteringJob {
     private final HoodieFlinkTable<?> table;
 
     /**
-     * Flink Execution Environment.
-     */
-    private final StreamExecutionEnvironment env;
-
-    /**
      * Executor Service.
      */
     private final ExecutorService executor;
 
-    public AsyncClusteringService(FlinkClusteringConfig cfg, Configuration conf, StreamExecutionEnvironment env) throws Exception {
+    public AsyncClusteringService(FlinkClusteringConfig cfg, Configuration conf) throws Exception {
       this.cfg = cfg;
       this.conf = conf;
-      this.env = env;
       this.executor = Executors.newFixedThreadPool(1);
 
       // create metaClient
@@ -198,7 +191,7 @@ public class HoodieFlinkClusteringJob {
       // set table schema
       CompactionUtil.setAvroSchema(conf, metaClient);
 
-      this.writeClient = StreamerUtil.createWriteClient(conf);
+      this.writeClient = FlinkWriteClients.createWriteClientV2(conf);
       this.writeConfig = writeClient.getConfig();
       this.table = writeClient.getHoodieTable();
     }
@@ -336,6 +329,8 @@ public class HoodieFlinkClusteringJob {
       final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
       final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
+
+      StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
       // setup configuration
       long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();

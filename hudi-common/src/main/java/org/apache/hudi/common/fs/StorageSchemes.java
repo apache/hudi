@@ -69,7 +69,11 @@ public enum StorageSchemes {
   // Baidu Object Storage
   BOS("bos", false),
   // Oracle Cloud Infrastructure Object Storage
-  OCI("oci", false);
+  OCI("oci", false),
+  // Volcengine Object Storage
+  TOS("tos", false),
+  // Volcengine Cloud HDFS
+  CFS("cfs", true);
 
   private String scheme;
   private boolean supportsAppend;

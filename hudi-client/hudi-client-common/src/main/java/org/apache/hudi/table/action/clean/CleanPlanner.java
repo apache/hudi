@@ -30,7 +30,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
@@ -74,7 +73,7 @@ import java.util.stream.Stream;
  * <p>
  * 2) It bounds the growth of the files in the file system
  */
-public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public class CleanPlanner<T, I, K, O> implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(CleanPlanner.class);
 
@@ -187,7 +186,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     LOG.info("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
         + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
         + ". New Instant to retain : " + newInstantToRetain);
-    return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(
+    return hoodieTable.getCompletedCommitsTimeline().getInstantsAsStream().filter(
         instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
             cleanMetadata.getEarliestCommitToRetain()) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
             HoodieTimeline.LESSER_THAN, newInstantToRetain.get().getTimestamp())).flatMap(instant -> {
@@ -493,7 +492,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       Instant instant = Instant.now();
       ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
       String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(hoursRetained).toInstant()));
-      earliestCommitToRetain = Option.fromJavaOptional(commitTimeline.getInstants().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
+      earliestCommitToRetain = Option.fromJavaOptional(commitTimeline.getInstantsAsStream().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
               HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
     }
     return earliestCommitToRetain;

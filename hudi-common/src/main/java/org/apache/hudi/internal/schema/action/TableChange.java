@@ -37,7 +37,9 @@ import java.util.Map;
  * to do support partition changes
  */
 public interface TableChange {
-  /* The action Type of schema change. */
+  /**
+   * The action Type of schema change.
+   */
   enum ColumnChangeID {
     ADD, UPDATE, DELETE, PROPERTY_CHANGE, REPLACE;
     private String name;
@@ -74,6 +76,9 @@ public interface TableChange {
     return false;
   }
 
+  /**
+   * Information of base column changes
+   */
   abstract class BaseColumnChange implements TableChange {
     protected final InternalSchema internalSchema;
     protected final Map<Integer, Integer> id2parent;

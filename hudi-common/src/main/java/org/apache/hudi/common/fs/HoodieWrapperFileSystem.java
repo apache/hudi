@@ -73,6 +73,9 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   private static final String TMP_PATH_POSTFIX = ".tmp";
 
+  /**
+   * Names for metrics.
+   */
   protected enum MetricName {
     create, rename, delete, listStatus, mkdirs, getFileStatus, globStatus, listFiles, read, write
   }
@@ -91,6 +94,11 @@ public class HoodieWrapperFileSystem extends FileSystem {
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
 
+  /**
+   * Checked function interface.
+   *
+   * @param <R> Type of return value.
+   */
   @FunctionalInterface
   public interface CheckedFunction<R> {
     R get() throws IOException;
