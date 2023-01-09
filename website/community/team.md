@@ -9,6 +9,7 @@ last_modified_at: 2020-09-01T15:59:57-04:00
 
 | Image                                                        | Name                                                         | Role            | Apache ID    |
 | ------------------------------------------------------------ | ------------------------------------------------------------ | --------------- | ------------ |
+| <img src={"https://avatars.githubusercontent.com/alexeykudinkin"} className="profile-pic" alt="alexeykudinkin" align="middle" /> | [Alexey Kudinkin](https://github.com/alexeykudinkin)           | Committer | akudinkin       |
 | <img src={"https://avatars.githubusercontent.com/alunarbeach"} className="profile-pic" alt="alunarbeach" align="middle" /> | [Anbu Cheeralan](https://github.com/alunarbeach)             | PMC, Committer | anchee       |
 | <img src={"https://avatars.githubusercontent.com/bhasudha"} className="profile-pic" alt="bhasudha" align="middle" /> | [Bhavani Sudha](https://github.com/bhasudha)                 | PMC, Committer | bhavanisudha |
 | <img src={"https://avatars.githubusercontent.com/bvaradar"} className="profile-pic" alt="bvaradar" align="middle" /> | [Balaji Varadarajan](https://github.com/bvaradar)            | PMC, Committer | vbalaji      |
@@ -28,14 +29,16 @@ last_modified_at: 2020-09-01T15:59:57-04:00
 | <img src={"https://avatars.githubusercontent.com/codope"} className="profile-pic" alt="codope" /> | [Sagar Sumit](https://github.com/codope)                       | Committer       | codope     |
 | <img src={"https://avatars.githubusercontent.com/satishkotha"} className="profile-pic" alt="satishkotha" /> | [Satish Kotha](https://github.com/satishkotha)                       | Committer       | satishkotha     |
 | <img src={"https://avatars.githubusercontent.com/smarthi"} className="profile-pic" alt="smarthi" align="middle" /> | [Suneel Marthi](https://github.com/smarthi)                  | PMC, Committer | smarthi      |
+| <img src={"https://avatars.githubusercontent.com/xiarixiaoyao"} className="profile-pic" alt="xiarixiaoyao" align="middle" /> | [Tao Meng](https://github.com/xiarixiaoyao)                      | Committer       | mengtao        |
 | <img src={"https://avatars.githubusercontent.com/tweise"} className="profile-pic" alt="tweise" align="middle" /> | [Thomas Weise](https://github.com/tweise)                    | PMC, Committer | thw          |
 | <img src={"https://avatars.githubusercontent.com/umehrot2"} className="profile-pic" alt="umehrot2" align="middle" /> | [Udit Mehrotra](https://github.com/umehrot2)                      | Committer       | uditme        |
 | <img src={"https://avatars.githubusercontent.com/vinothchandar"} className="profile-pic" alt="vinothchandar" align="middle" /> | [Vinoth Chandar](https://github.com/vinothchandar)           | PMC, Committer | vinoth       |
+| <img src={"https://avatars.githubusercontent.com/vingov"} className="profile-pic" alt="vingov" align="middle" /> | [Vinoth Govindarajan](https://github.com/vingov)               | Committer | vino          |
 | <img src={"https://avatars.githubusercontent.com/yanghua"} className="profile-pic" alt="yanghua" /> | [vinoyang](https://github.com/yanghua)                       | PMC, Committer       | vinoyang     |
 | <img src={"https://avatars.githubusercontent.com/lw309637554"} alt="liway" className="profile-pic" align="middle" /> | [Wei Li](https://github.com/lw309637554)               | Committer | liway|
 | <img src={"https://avatars.githubusercontent.com/zhedoubushishi"} className="profile-pic" alt="zhedoubushishi" /> | [Wenning Ding](https://github.com/zhedoubushishi)                       | Committer       | wenningd     |
 | <img src={"https://avatars.githubusercontent.com/wangxianghu"} alt="wangxianghu" className="profile-pic" align="middle" /> | [Xianghu Wang](https://github.com/wangxianghu)               | Committer | wangxianghu|
 | <img src={"https://avatars.githubusercontent.com/YannByron"} className="profile-pic" alt="Yann Byron" align="middle" /> | [Yann Byron](https://github.com/YannByron)                     | Committer       | biyan           |
-| <img src={"https://avatars.githubusercontent.com/pengzhiwei2018"} className="profile-pic" alt="pengzhiwei2018" align="middle" /> | [Zhiwei Peng](https://github.com/pengzhiwei2018)                      | Committer       | zhiwei        |
-| <img src={"https://avatars.githubusercontent.com/xiarixiaoyao"} className="profile-pic" alt="xiarixiaoyao" align="middle" /> | [Tao Meng](https://github.com/xiarixiaoyao)                      | Committer       | mengtao        |
+| <img src={"https://avatars.githubusercontent.com/zhangyue19921010"} className="profile-pic" alt="zhangyue19921010" align="middle" /> | [Yue Zhang](https://github.com/zhangyue19921010)                      | Committer | zhangyue19921010           |
 | <img src={"https://avatars.githubusercontent.com/yuzhaojing"} className="profile-pic" alt="yuzhaojing" align="middle" /> | [Zhaojing Yu](https://github.com/yuzhaojing)                      | Committer       | yuzhaojing        |
+| <img src={"https://avatars.githubusercontent.com/pengzhiwei2018"} className="profile-pic" alt="pengzhiwei2018" align="middle" /> | [Zhiwei Peng](https://github.com/pengzhiwei2018)                      | Committer       | zhiwei        |
