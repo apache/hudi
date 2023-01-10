@@ -199,8 +199,8 @@ public class MarkerHandler extends Handler {
 
         earlyConflictDetectionStrategy.detectAndResolveConflictIfNecessary();
 
-      } catch (HoodieEarlyConflictDetectionException ex) {
-        LOG.warn("Detect write conflict, failed to create marker with early conflict detection enable", ex);
+      } catch (HoodieEarlyConflictDetectionException e) {
+        LOG.warn("Detect write conflict, failed to create marker with early conflict detection enable", e);
         return finishCreateMarkerFuture(context, markerDir, markerName);
       } catch (Exception ex) {
         LOG.warn("Catch exception during detect and resolve write conflict.");
