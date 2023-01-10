@@ -116,6 +116,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   // from the metadata payload schema.
   private static final String RECORD_KEY_FIELD_NAME = HoodieMetadataPayload.KEY_FIELD_NAME;
 
+  public static final int MAX_LOG_FILE_LIST_LENGTH = 1000;
+
   protected HoodieWriteConfig metadataWriteConfig;
   protected HoodieWriteConfig dataWriteConfig;
   protected String tableName;
@@ -1026,6 +1028,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .findInstantsBefore(instantTime).getInstants();
 
     if (!pendingInstants.isEmpty()) {
+      checkLogFileListLength();
       LOG.info(String.format("Cannot compact metadata table as there are %d inflight instants before latest deltacommit %s: %s",
           pendingInstants.size(), latestDeltaCommitTime, Arrays.toString(pendingInstants.toArray())));
       return;
@@ -1037,6 +1040,23 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     final String compactionInstantTime = latestDeltaCommitTime + "001";
     if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       writeClient.compact(compactionInstantTime);
+    }
+  }
+
+  /**
+   * If there is an instant that is stuck pending, compaction will never occur and the log length will grow unbounded.
+   * Throw an exception if MAX_LOG_FILE_LIST_LENGTH is exceeded.
+   */
+  private void checkLogFileListLength() {
+    Option<HoodieInstant> lastCompaction = metadataMetaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
+    int logSize;
+    if (lastCompaction.isPresent()) {
+      logSize = metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().findInstantsAfter(lastCompaction.get().getTimestamp()).countInstants();
+    } else {
+      logSize = metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().countInstants();
+    }
+    if (logSize > MAX_LOG_FILE_LIST_LENGTH) {
+      throw new HoodieException("List of log files has grown beyond " + MAX_LOG_FILE_LIST_LENGTH + ".");
     }
   }
 

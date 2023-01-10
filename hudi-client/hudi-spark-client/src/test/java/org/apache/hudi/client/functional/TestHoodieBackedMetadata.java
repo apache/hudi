@@ -82,6 +82,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
@@ -859,6 +860,33 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       doWriteOperation(testTable, "0000009", UPSERT);
       validateMetadata(testTable);
     }
+  }
+
+  /**
+   * Tests to make sure that compaction won't be delayed forever due to a stuck pending commit
+   * */
+  @Test
+  public void testMetadataTableWithLongLog() throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    init(tableType, false);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableFullScan(true)
+            .enableMetrics(false)
+            .build()).build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+
+    HoodieException e =  assertThrows(HoodieException.class, () -> {
+      for (int i = 0; i < HoodieBackedTableMetadataWriter.MAX_LOG_FILE_LIST_LENGTH + 100; i++) {
+        if (i == 20) {
+          testTable.addRequestedCommit(String.format("%016d", i));
+        } else {
+          doWriteOperation(testTable, String.format("%016d", i));
+        }
+      }
+    });
+    assertTrue(e.getMessage().contains("List of log files has grown beyond"));
   }
 
   /**
