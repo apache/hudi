@@ -124,6 +124,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   public final void scan(boolean skipProcessingBlocks) {
+    if (forceFullScan) {
+      // NOTE: When full-scan is enforced, scanning is invoked upfront (during initialization)
+      return;
+    }
+
     scanInternal(Option.empty(), skipProcessingBlocks);
   }
 
