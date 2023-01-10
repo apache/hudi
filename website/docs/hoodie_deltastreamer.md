@@ -158,13 +158,14 @@ and then ingest it as follows.
 
 In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](/docs/migration_guide).
 
+### Note on hudi utilities bundle usage for different spark versions
 From 0.11.0 release, we start to provide a new `hudi-utilities-slim-bundle` which aims to exclude dependencies that can
 cause conflicts and compatibility issues with different versions of Spark.  The `hudi-utilities-slim-bundle` should be
 used along with a Hudi Spark bundle corresponding the Spark version used to make utilities work with Spark, e.g.,
 `--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:0.12.1,org.apache.hudi:hudi-spark3.1-bundle_2.12:0.12.1`,
 if using `hudi-utilities-bundle` solely to run `HoodieDeltaStreamer` in Spark encounters compatibility issues.
 
-### MultiTableDeltaStreamer
+#### MultiTableDeltaStreamer
 
 `HoodieMultiTableDeltaStreamer`, a wrapper on top of `HoodieDeltaStreamer`, enables one to ingest multiple tables at a single go into hudi datasets. Currently it only supports sequential processing of tables to be ingested and COPY_ON_WRITE storage type. The command line options for `HoodieMultiTableDeltaStreamer` are pretty much similar to `HoodieDeltaStreamer` with the only exception that you are required to provide table wise configs in separate files in a dedicated config folder. The following command line options are introduced
 
