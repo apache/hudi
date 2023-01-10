@@ -128,8 +128,6 @@ public abstract class AbstractHoodieLogRecordReader {
   private AtomicLong totalLogFiles = new AtomicLong(0);
   // Internal schema, used to support full schema evolution.
   private final InternalSchema internalSchema;
-  // Hoodie table path.
-  private final String path;
   // Total log blocks read - for metrics
   private AtomicLong totalLogBlocks = new AtomicLong(0);
   // Total log records read - for metrics
@@ -142,7 +140,6 @@ public abstract class AbstractHoodieLogRecordReader {
   private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
   // Enables full scan of log records
   protected final boolean forceFullScan;
-  private int totalScannedLogFiles;
   // Progress
   private float progress = 0.0f;
   // Populate meta fields for the records
@@ -187,11 +184,14 @@ public abstract class AbstractHoodieLogRecordReader {
     this.withOperationField = withOperationField;
     this.forceFullScan = forceFullScan;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
-    this.path = basePath;
     this.useScanV2 = useScanV2;
 
     if (keyFieldOverride.isPresent()) {
-      // TODO elaborate
+      // NOTE: This branch specifically is leveraged handling Metadata Table
+      //       log-block merging sequence. Here we do
+      //         - Override the record-key field (which isn't configured t/h table-config)
+      //         - Override partition-path value w/ static "partition-name" (in MT all partitions
+      //         are static, like "files", "col_stats", etc)
       checkState(partitionNameOverride.isPresent());
 
       this.populateMetaFields = false;
