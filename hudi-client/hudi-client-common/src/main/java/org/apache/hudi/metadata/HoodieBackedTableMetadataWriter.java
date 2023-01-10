@@ -1056,7 +1056,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       logSize = metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().countInstants();
     }
     if (logSize > MAX_LOG_FILE_LIST_LENGTH) {
-      throw new HoodieException("List of log files has grown beyond " + MAX_LOG_FILE_LIST_LENGTH + ".");
+      throw new HoodieException("The metadata table log files appear to be growing unbounded due to a pending instant in the data table timeline. "
+          + "Please fix that and restart the pipeline.");
     }
   }
 

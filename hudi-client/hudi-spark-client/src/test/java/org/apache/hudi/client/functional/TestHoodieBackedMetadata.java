@@ -886,7 +886,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         }
       }
     });
-    assertTrue(e.getMessage().contains("List of log files has grown beyond"));
+    assertTrue(e.getMessage().contains("The metadata table log files appear to be growing unbounded due to a pending instant in the data table timeline."));
   }
 
   /**
