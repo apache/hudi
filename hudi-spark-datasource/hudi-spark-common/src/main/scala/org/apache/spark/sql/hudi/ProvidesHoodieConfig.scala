@@ -34,9 +34,9 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hive.HiveExternalCatalog
-import org.apache.spark.sql.hudi.HoodieOptionConfig.mappingSqlOptionToHoodieParam
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isHoodieConfigKey, isUsingHiveCatalog, withSparkConf}
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, filterHoodieConfigs, withCombinedOptions}
+import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isHoodieConfigKey, isUsingHiveCatalog}
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, withCombinedOptions}
 import org.apache.spark.sql.hudi.command.{SqlKeyGenerator, ValidateDuplicateKeyPayload}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
@@ -324,7 +324,7 @@ object ProvidesHoodieConfig {
     DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++
       // NOTE: Catalog table provided t/h `TBLPROPERTIES` clause might contain Spark SQL specific
       //       properties that need to be mapped into Hudi's conventional ones
-      mappingSqlOptionToHoodieParam(catalogTable.catalogProperties) ++
+      mapSqlOptionsToDataSourceWriteConfigs(catalogTable.catalogProperties) ++
       tableConfig.getProps.asScala.toMap ++
       filterHoodieConfigs(sqlConf.getAllConfs) ++
       filterNullValues(optionOverrides)
