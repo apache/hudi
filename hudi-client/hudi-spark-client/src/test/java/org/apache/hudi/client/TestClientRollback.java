@@ -38,7 +38,6 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -259,6 +258,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       assertEquals("002", getSavepointToRestoreTimestampV1Schema(table, plan));
     }
   }
+  
   /**
    * Test case for rollback-savepoint with KEEP_LATEST_FILE_VERSIONS policy.
    */
