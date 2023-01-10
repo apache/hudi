@@ -1217,8 +1217,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         } else {
           throw new HoodieIOException("Latest commit does not have any schema in commit metadata");
         }
-      } else {
-        throw new HoodieIOException("Deletes issued without any prior commits");
       }
     } catch (IOException e) {
       throw new HoodieIOException("IOException thrown while reading last commit metadata", e);
