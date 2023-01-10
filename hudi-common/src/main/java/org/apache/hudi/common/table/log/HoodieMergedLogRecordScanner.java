@@ -48,10 +48,12 @@ import javax.annotation.concurrent.NotThreadSafe;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
@@ -76,7 +78,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = new HoodieTimer();
   // Map of compacted/merged records
-  protected final ExternalSpillableMap<String, HoodieRecord> records;
+  private final ExternalSpillableMap<String, HoodieRecord> records;
+  // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
+  private final Set<String> scannedPrefixes;
   // count of merged records in log
   private long numMergedRecordsInLog;
   private final long maxMemorySizeInBytes;
@@ -98,11 +102,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, useScanV2, recordMerger);
     try {
+      this.maxMemorySizeInBytes = maxMemorySizeInBytes;
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
-
-      this.maxMemorySizeInBytes = maxMemorySizeInBytes;
+      this.scannedPrefixes = new HashSet<>();
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -155,9 +159,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
    * @param keyPrefixes to be looked up
    */
   public void scanByKeyPrefixes(List<String> keyPrefixes) {
-    // TODO add caching for queried prefixes
-    if (forceFullScan) {
-      return; // no-op
+    if (forceFullScan || scannedPrefixes.containsAll(keyPrefixes)) {
+      // We can skip scanning in following 2 cases
+      //    - Reader is in full-scan mode, in which case all blocks are processed
+      //    upfront (no additional scanning is necessary)
+      //    - When same prefixes had already been handled
+      return;
     }
 
     // NOTE: When looking up by key-prefixes unfortunately we can't short-circuit
@@ -165,6 +172,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     //       the records cached) whether particular prefix was scanned or just records
     //       matching the prefix looked up (by [[scanByFullKeys]] API)
     scanInternal(Option.of(KeySpec.prefixKeySpec(keyPrefixes)), false);
+    scannedPrefixes.addAll(keyPrefixes);
   }
 
   private void performScan() {
