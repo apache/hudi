@@ -124,6 +124,7 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
     }
 
     newRecordKeysSorted.clear();
+    keyToNewRecords.clear();
 
     return super.close();
   }
