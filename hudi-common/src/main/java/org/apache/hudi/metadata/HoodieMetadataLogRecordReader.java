@@ -39,8 +39,9 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * A {@code HoodieMergedLogRecordScanner} implementation which only merged records matching providing keys. This is
- * useful in limiting memory usage when only a small subset of updates records are to be read.
+ * Metadata log-block records reading implementation, internally relying on
+ * {@link HoodieMergedLogRecordScanner} to merge corresponding Metadata Table's delta log-blocks
+ * sequence
  */
 @ThreadSafe
 public class HoodieMetadataLogRecordReader implements Closeable {
