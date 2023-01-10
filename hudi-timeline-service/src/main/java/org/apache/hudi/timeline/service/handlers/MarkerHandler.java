@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationDispatchingRunnable;
@@ -198,16 +199,12 @@ public class MarkerHandler extends Handler {
 
         earlyConflictDetectionStrategy.detectAndResolveConflictIfNecessary();
 
+      } catch (HoodieEarlyConflictDetectionException ex) {
+        LOG.warn("Detect write conflict, failed to create marker with early conflict detection enable", ex);
+        return finishCreateMarkerFuture(context, markerDir, markerName);
       } catch (Exception ex) {
-        LOG.warn("Failed to create marker with early conflict detection enable", ex);
-        MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
-        try {
-          future.complete(jsonifyResult(
-              future.getContext(), future.isSuccessful(), metricsRegistry, new ObjectMapper(), LOG));
-        } catch (JsonProcessingException e) {
-          throw new HoodieException("Failed to JSON encode the value", e);
-        }
-        return future;
+        LOG.warn("Catch exception during detect and resolve write conflict.");
+        return finishCreateMarkerFuture(context, markerDir, markerName);
       }
     }
 
@@ -226,6 +223,17 @@ public class MarkerHandler extends Handler {
           firstCreationRequestSeen = true;
         }
       }
+    }
+    return future;
+  }
+
+  private CompletableFuture<String> finishCreateMarkerFuture(Context context, String markerDir, String markerName) {
+    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
+    try {
+      future.complete(jsonifyResult(
+          future.getContext(), future.isSuccessful(), metricsRegistry, new ObjectMapper(), LOG));
+    } catch (JsonProcessingException e) {
+      throw new HoodieException("Failed to JSON encode the value", e);
     }
     return future;
   }
