@@ -446,7 +446,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test Insert Overwrite Table for V2 Table") {
     withRecordType()(withTempDir { tmp =>
-      if (spark.conf.get("spark.sql.catalog.spark_catalog").equals("org.apache.spark.sql.hudi.catalog.HoodieCatalog")) {
+      if (HoodieSparkUtils.gteqSpark3_2) {
         val tableName = generateTableName
 
         spark.sql(s"set ${SCHEMA_EVOLUTION_ENABLED.key()}=true")
