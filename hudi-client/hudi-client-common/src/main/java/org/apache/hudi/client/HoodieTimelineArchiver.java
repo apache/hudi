@@ -516,14 +516,14 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           .setConf(metaClient.getHadoopConf())
           .build();
       Option<HoodieInstant> qualifiedEarliestInstant =
-          TimelineUtils.getEarliestInstantForMetadataArchival(dataMetaClient.getActiveTimeline());
+          TimelineUtils.getEarliestInstantForMetadataArchival(
+              dataMetaClient.getActiveTimeline(), config.shouldArchiveBeyondSavepoint());
 
       // Do not archive the instants after the earliest commit (COMMIT, DELTA_COMMIT, and
-      // REPLACE_COMMIT only) and the earliest inflight instant (all actions).
+      // REPLACE_COMMIT only, considering non-savepoint commit only if enabling archive
+      // beyond savepoint) and the earliest inflight instant (all actions).
       // This is required by metadata table, see HoodieTableMetadataUtil#processRollbackMetadata
       // for details.
-      // The savepoints are seamlessly handled here, i.e., the completed savepoints do not affect
-      // the archive process in the metadata table.
       // Note that we cannot blindly use the earliest instant of all actions, because CLEAN and
       // ROLLBACK instants are archived separately apart from commits (check
       // HoodieTimelineArchiver#getCleanInstantsToArchive).  If we do so, a very old completed

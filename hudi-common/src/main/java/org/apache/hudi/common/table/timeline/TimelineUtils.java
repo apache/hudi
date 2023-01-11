@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -38,6 +39,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
 
 /**
  * TimelineUtils provides a common way to query incremental meta-data changes for a hoodie table.
@@ -87,15 +93,15 @@ public class TimelineUtils {
   public static List<String> getAffectedPartitions(HoodieTimeline timeline) {
     return timeline.filterCompletedInstants().getInstantsAsStream().flatMap(s -> {
       switch (s.getAction()) {
-        case HoodieTimeline.COMMIT_ACTION:
-        case HoodieTimeline.DELTA_COMMIT_ACTION:
+        case COMMIT_ACTION:
+        case DELTA_COMMIT_ACTION:
           try {
             HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(s).get(), HoodieCommitMetadata.class);
             return commitMetadata.getPartitionToWriteStats().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions written at " + s, e);
           }
-        case HoodieTimeline.REPLACE_COMMIT_ACTION:
+        case REPLACE_COMMIT_ACTION:
           try {
             HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
                 timeline.getInstantDetails(s).get(), HoodieReplaceCommitMetadata.class);
@@ -187,7 +193,7 @@ public class TimelineUtils {
 
   public static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     try {
-      if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
+      if (REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
         // replacecommit is used for multiple operations: insert_overwrite/cluster etc. 
         // Check operation type to see if this instant is related to clustering.
         HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(
@@ -240,7 +246,7 @@ public class TimelineUtils {
       HoodieInstant instant,
       HoodieTimeline timeline) throws IOException {
     byte[] data = timeline.getInstantDetails(instant).get();
-    if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+    if (instant.getAction().equals(REPLACE_COMMIT_ACTION)) {
       return HoodieReplaceCommitMetadata.fromBytes(data, HoodieReplaceCommitMetadata.class);
     } else {
       return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
@@ -252,17 +258,26 @@ public class TimelineUtils {
    * for the archival in metadata table.
    * <p>
    * the qualified earliest instant is chosen as the earlier one between the earliest
-   * commit (COMMIT, DELTA_COMMIT, and REPLACE_COMMIT only) and the earliest inflight
+   * commit (COMMIT, DELTA_COMMIT, and REPLACE_COMMIT only, considering non-savepoint
+   * commit only if enabling archive beyond savepoint) and the earliest inflight
    * instant (all actions).
    *
-   * @param dataTableActiveTimeline the active timeline of the data table.
+   * @param dataTableActiveTimeline      the active timeline of the data table.
+   * @param shouldArchiveBeyondSavepoint whether to archive beyond savepoint.
    * @return the instant meeting the requirement.
    */
   public static Option<HoodieInstant> getEarliestInstantForMetadataArchival(
-      HoodieActiveTimeline dataTableActiveTimeline) {
+      HoodieActiveTimeline dataTableActiveTimeline, boolean shouldArchiveBeyondSavepoint) {
     // This is for commits only, not including CLEAN, ROLLBACK, etc.
-    Option<HoodieInstant> earliestCommit =
-        dataTableActiveTimeline.getCommitsTimeline().firstInstant();
+    // When archive beyond savepoint is enabled, there are chances that there could be holes
+    // in the timeline due to archival and savepoint interplay.  So, the first non-savepoint
+    // commit in the data timeline is considered as beginning of the active timeline.
+    Option<HoodieInstant> earliestCommit = shouldArchiveBeyondSavepoint
+        ? dataTableActiveTimeline.getTimelineOfActions(
+            CollectionUtils.createSet(
+                COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, SAVEPOINT_ACTION))
+        .getFirstNonSavepointCommit()
+        : dataTableActiveTimeline.getCommitsTimeline().firstInstant();
     // This is for all instants which are in-flight
     Option<HoodieInstant> earliestInflight =
         dataTableActiveTimeline.filterInflightsAndRequested().firstInstant();

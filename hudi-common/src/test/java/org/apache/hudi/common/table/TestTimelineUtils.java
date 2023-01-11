@@ -62,6 +62,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -349,7 +350,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     assertEquals(
         Option.empty(),
         TimelineUtils.getEarliestInstantForMetadataArchival(
-            prepareActiveTimeline(new ArrayList<>())));
+            prepareActiveTimeline(new ArrayList<>()), false));
 
     // Earlier request clean action before commits
     assertEquals(
@@ -361,7 +362,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
                     new HoodieInstant(COMPLETED, CLEAN_ACTION, "002"),
                     new HoodieInstant(REQUESTED, CLEAN_ACTION, "003"),
                     new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
-                    new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011")))));
+                    new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011"))), false));
 
     // No inflight instants
     assertEquals(
@@ -373,7 +374,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
                     new HoodieInstant(COMPLETED, CLEAN_ACTION, "002"),
                     new HoodieInstant(COMPLETED, CLEAN_ACTION, "003"),
                     new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
-                    new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011")))));
+                    new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011"))), false));
 
     // Rollbacks only
     assertEquals(
@@ -383,7 +384,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
                 Arrays.asList(
                     new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001"),
                     new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "002"),
-                    new HoodieInstant(INFLIGHT, ROLLBACK_ACTION, "003")))));
+                    new HoodieInstant(INFLIGHT, ROLLBACK_ACTION, "003"))), false));
 
     assertEquals(
         Option.empty(),
@@ -392,7 +393,22 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
                 Arrays.asList(
                     new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001"),
                     new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "002"),
-                    new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "003")))));
+                    new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "003"))), false));
+
+    // With savepoints
+    HoodieActiveTimeline timeline = prepareActiveTimeline(
+        Arrays.asList(
+            new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "003"),
+            new HoodieInstant(COMPLETED, SAVEPOINT_ACTION, "003"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "011")));
+    assertEquals(
+        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "003")),
+        TimelineUtils.getEarliestInstantForMetadataArchival(timeline, false));
+    assertEquals(
+        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "010")),
+        TimelineUtils.getEarliestInstantForMetadataArchival(timeline, true));
   }
 
   private HoodieActiveTimeline prepareActiveTimeline(
