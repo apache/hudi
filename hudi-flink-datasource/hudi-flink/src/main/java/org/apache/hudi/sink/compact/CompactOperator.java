@@ -18,10 +18,12 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.flink.metrics.Histogram;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
@@ -78,6 +80,8 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
    */
   private transient NonThrownExecutor executor;
 
+  private transient Histogram compactionHistogram;
+
   /**
    * Output records collector.
    */
@@ -96,6 +100,8 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
     this.collector = new StreamRecordCollector<>(output);
+    this.compactionHistogram = writeClient.registerMetricsGroup(HoodieTimeline.COMPACTION_ACTION, getClass().getSimpleName()).getCompactionHistogram();
+
   }
 
   @Override
@@ -130,6 +136,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
                             CompactionOperation compactionOperation,
                             Collector<CompactionCommitEvent> collector,
                             HoodieWriteConfig writeConfig) throws IOException {
+    long startCompaction = System.currentTimeMillis();
     HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
     HoodieTableMetaClient metaClient = writeClient.getHoodieTable().getMetaClient();
     String maxInstantTime = compactor.getMaxInstantTime(metaClient);
@@ -143,6 +150,8 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
         compactionOperation,
         instantTime, maxInstantTime,
         writeClient.getHoodieTable().getTaskContextSupplier());
+    long now = System.currentTimeMillis();
+    compactionHistogram.update(now - startCompaction);
     collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }
 

@@ -492,6 +492,11 @@ public class SparkRDDWriteClient<T> extends
     initializeMetadataTable(instantTime);
   }
 
+  @Override
+  protected HoodieTable getTableAndStats(HoodieTable table) {
+    return null;
+  }
+
   /**
    * Initialize the metadata table if needed. Creating the metadata table writer
    * will trigger the initial bootstrapping from the data table.

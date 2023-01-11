@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.bootstrap;
 
+import org.apache.flink.metrics.Histogram;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -37,6 +38,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.HoodieFlinkMetrics;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.table.HoodieTable;
@@ -98,9 +100,13 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
   private final Pattern pattern;
   private String lastInstantTime;
 
+  private Histogram bootstrapHistogram;
+
   public BootstrapOperator(Configuration conf) {
     this.conf = conf;
     this.pattern = Pattern.compile(conf.getString(FlinkOptions.INDEX_PARTITION_REGEX));
+    this.bootstrapHistogram = new HoodieFlinkMetrics("bootstrap", getRuntimeContext().getMetricGroup().addGroup(getClass().getSimpleName())).getBootstrapHistogram();
+
   }
 
   @Override
@@ -209,6 +215,8 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
         }
         LOG.info("Load records from {}.", fileSlice);
 
+        long startProcessFileSlice = System.currentTimeMillis();
+
         // load parquet records
         fileSlice.getBaseFile().ifPresent(baseFile -> {
           // filter out crushed files
@@ -239,6 +247,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
         } catch (Exception e) {
           throw new HoodieException(String.format("Error when loading record keys from files: %s", logPaths), e);
         } finally {
+          bootstrapHistogram.update(System.currentTimeMillis() - startProcessFileSlice);
           scanner.close();
         }
       }
