@@ -84,25 +84,25 @@ public interface BulkInsertPartitioner<I> extends Serializable {
    * This will not change the desired sort order, it is just a performance improvement.
    **/
   static String[] tryPrependPartitionPathColumns(String[] columnNames, HoodieWriteConfig config) {
+    String partitionPath;
+    if (config.getMetadataConfig().populateMetaFields()) {
+      partitionPath = HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName();
+    } else {
+      partitionPath = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+    }
+    if (partitionPath == null || partitionPath.isEmpty()) {
+      return columnNames;
+    }
     ArrayList<String> sortCols = new ArrayList<>();
     Set<String> used = new HashSet<>();
-    if (config.getMetadataConfig().populateMetaFields()) {
-      //If we have meta fields we can just leverage those instead
-      sortCols.add(HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName());
-      used.add(HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName());
-    } else {
-      String partitionPath = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
-      if (partitionPath == null || partitionPath.isEmpty()) {
-        return columnNames;
-      }
-      Arrays.stream(partitionPath.split(","))
-          .map(String::trim)
-          .filter(s -> !s.isEmpty())
-          .forEach(col -> {
-            sortCols.add(col);
-            used.add(col);
-          });
-    }
+    Arrays.stream(partitionPath.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .forEach(col -> {
+          sortCols.add(col);
+          used.add(col);
+        });
+
     for (String col : columnNames) {
       if (!used.contains(col)) {
         sortCols.add(col);
