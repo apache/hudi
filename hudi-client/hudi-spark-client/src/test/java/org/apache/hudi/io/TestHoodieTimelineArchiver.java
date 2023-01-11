@@ -1301,8 +1301,15 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
         .setLoadActiveTimelineOnLoad(true).build();
 
     for (int i = 1; i <= 17; i++) {
-      testTable.doWriteOperation("000000" + String.format("%02d", i), WriteOperationType.UPSERT,
-          i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      if (i != 2) {
+        testTable.doWriteOperation("000000" + String.format("%02d", i), WriteOperationType.UPSERT,
+            i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      } else {
+        // For i == 2, roll back the first commit "00000001", so the active timeline of the
+        // data table has one rollback instant
+        // The completed rollback should not block the archival in the metadata table
+        testTable.doRollback("00000001", "00000002");
+      }
       // archival
       archiveAndGetCommitsList(writeConfig);
 
@@ -1324,10 +1331,9 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
       } else if (i == 8) {
         // i == 8
         // The instant "00000000000000" was archived since it's less than
-        // the earliest instant on the dataset active timeline,
-        // the dataset active timeline has instants of range [00000001 ~ 00000008]
-        // because when it does the archiving, no compaction instant on the
-        // metadata active timeline exists yet.
+        // the earliest commit on the dataset active timeline,
+        // the dataset active timeline has instants:
+        //   00000002.rollback, 00000007.commit, 00000008.commit
         assertEquals(9, metadataTableInstants.size());
         assertTrue(metadataTableInstants.contains(
             new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000007001")));
