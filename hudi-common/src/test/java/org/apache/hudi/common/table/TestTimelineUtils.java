@@ -56,8 +56,13 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
+import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
+import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -136,7 +141,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       activeTimeline.createNewInstant(instant);
       activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap())));
 
-      HoodieInstant cleanInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, ts);
+      HoodieInstant cleanInstant = new HoodieInstant(true, CLEAN_ACTION, ts);
       activeTimeline.createNewInstant(cleanInstant);
       activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(olderPartition, ts));
     }
@@ -175,7 +180,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       activeTimeline.createNewInstant(instant);
       activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, partitionPath, ts, 2, Collections.emptyMap())));
 
-      HoodieInstant cleanInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, ts);
+      HoodieInstant cleanInstant = new HoodieInstant(true, CLEAN_ACTION, ts);
       activeTimeline.createNewInstant(cleanInstant);
       activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(partitionPath, ts));
     }
@@ -337,6 +342,81 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         expectedInstants.stream().sorted().collect(Collectors.toList()),
         timeline.getInstants().stream().sorted().collect(Collectors.toList())
     );
+  }
+
+  @Test
+  public void testGetEarliestInstantForMetadataArchival() throws IOException {
+    // Empty timeline
+    assertEquals(
+        Option.empty(),
+        TimelineUtils.getEarliestInstantForMetadataArchival(
+            prepareActiveTimeline(new ArrayList<>()), false));
+
+    // Earlier request clean action before commits
+    assertEquals(
+        Option.of(new HoodieInstant(REQUESTED, CLEAN_ACTION, "003")),
+        TimelineUtils.getEarliestInstantForMetadataArchival(
+            prepareActiveTimeline(
+                Arrays.asList(
+                    new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001"),
+                    new HoodieInstant(COMPLETED, CLEAN_ACTION, "002"),
+                    new HoodieInstant(REQUESTED, CLEAN_ACTION, "003"),
+                    new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
+                    new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011"))), false));
+
+    // No inflight instants
+    assertEquals(
+        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "010")),
+        TimelineUtils.getEarliestInstantForMetadataArchival(
+            prepareActiveTimeline(
+                Arrays.asList(
+                    new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001"),
+                    new HoodieInstant(COMPLETED, CLEAN_ACTION, "002"),
+                    new HoodieInstant(COMPLETED, CLEAN_ACTION, "003"),
+                    new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
+                    new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011"))), false));
+
+    // Rollbacks only
+    assertEquals(
+        Option.of(new HoodieInstant(INFLIGHT, ROLLBACK_ACTION, "003")),
+        TimelineUtils.getEarliestInstantForMetadataArchival(
+            prepareActiveTimeline(
+                Arrays.asList(
+                    new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001"),
+                    new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "002"),
+                    new HoodieInstant(INFLIGHT, ROLLBACK_ACTION, "003"))), false));
+
+    assertEquals(
+        Option.empty(),
+        TimelineUtils.getEarliestInstantForMetadataArchival(
+            prepareActiveTimeline(
+                Arrays.asList(
+                    new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001"),
+                    new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "002"),
+                    new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "003"))), false));
+
+    // With savepoints
+    HoodieActiveTimeline timeline = prepareActiveTimeline(
+        Arrays.asList(
+            new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "003"),
+            new HoodieInstant(COMPLETED, SAVEPOINT_ACTION, "003"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "011")));
+    assertEquals(
+        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "003")),
+        TimelineUtils.getEarliestInstantForMetadataArchival(timeline, false));
+    assertEquals(
+        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "010")),
+        TimelineUtils.getEarliestInstantForMetadataArchival(timeline, true));
+  }
+
+  private HoodieActiveTimeline prepareActiveTimeline(
+      List<HoodieInstant> activeInstants) throws IOException {
+    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
+    when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), eq(true)))
+        .thenReturn(activeInstants);
+    return new HoodieActiveTimeline(mockMetaClient);
   }
 
   private void verifyExtraMetadataLatestValue(String extraMetadataKey, String expected, boolean includeClustering) {
