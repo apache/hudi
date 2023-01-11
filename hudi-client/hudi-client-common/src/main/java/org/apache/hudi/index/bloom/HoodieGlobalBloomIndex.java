@@ -41,7 +41,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * This filter will only work with hoodie table since it will only load partitions
@@ -74,7 +74,7 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
    */
 
   @Override
-  HoodieData<Pair<String, HoodieKey>> explodeRecordsWithFileComparisons(
+  HoodiePairData<String, HoodieKey> explodeRecordsWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       HoodiePairData<String, String> partitionRecordKeyPairs) {
 
@@ -88,9 +88,9 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
 
       return indexFileFilter.getMatchingFilesAndPartition(partitionPath, recordKey).stream()
           .map(partitionFileIdPair -> (Pair<String, HoodieKey>) new ImmutablePair<>(partitionFileIdPair.getRight(),
-              new HoodieKey(recordKey, partitionFileIdPair.getLeft())))
-          .collect(Collectors.toList());
-    }).flatMap(List::iterator);
+              new HoodieKey(recordKey, partitionFileIdPair.getLeft())));
+    })
+        .flatMapToPair(Stream::iterator);
   }
 
   /**

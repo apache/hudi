@@ -201,7 +201,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
         jsc.parallelize(Arrays.asList(new Tuple2<>("2017/10/21", "003"), new Tuple2<>("2017/10/22", "002"),
             new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/23", "004"))).mapToPair(t -> t);
 
-    List<Pair<String, HoodieKey>> comparisonKeyList = HoodieJavaRDD.getJavaRDD(
+    List<Tuple2<String, HoodieKey>> comparisonKeyList = HoodieJavaRDD.getJavaRDD(
         index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo,
             HoodieJavaPairRDD.of(partitionRecordKeyPairRDD))).collect();
 
@@ -216,7 +216,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     assertEquals(10, comparisonKeyList.size());
 
     Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
-        .collect(Collectors.groupingBy(t -> t.getRight().getRecordKey(), Collectors.mapping(Pair::getKey, Collectors.toList())));
+        .collect(Collectors.groupingBy(t -> t._2.getRecordKey(), Collectors.mapping(Tuple2::_1, Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
     assertEquals(new HashSet<>(Arrays.asList("f4", "f1", "f3")), new HashSet<>(recordKeyToFileComps.get("002")));
