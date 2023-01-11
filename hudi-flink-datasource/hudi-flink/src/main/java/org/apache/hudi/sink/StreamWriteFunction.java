@@ -135,6 +135,9 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   public void processElement(I value, ProcessFunction<I, Object>.Context ctx, Collector<Object> out) throws Exception {
     HoodieRecord<?> record = (HoodieRecord<?>) value;
     bufferRecord(record);
+    if (!extractPartitionPathValue) {
+      return;
+    }
     String partitionPath = record.getPartitionPath();
     if (partitionPath != null && out != null) {
       out.collect(partitionPath);

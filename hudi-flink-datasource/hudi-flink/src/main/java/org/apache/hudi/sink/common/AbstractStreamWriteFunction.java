@@ -127,12 +127,18 @@ public abstract class AbstractStreamWriteFunction<I>
   private transient boolean inputEnded;
 
   /**
+   * Whether extract and emit partition path value to next operator.
+   */
+  protected boolean extractPartitionPathValue;
+
+  /**
    * Constructs a StreamWriteFunctionBase.
    *
    * @param config The config options
    */
   public AbstractStreamWriteFunction(Configuration config) {
     this.config = config;
+    this.extractPartitionPathValue = config.getBoolean(FlinkOptions.PARTITION_WRITE_SUCCESS_FILE_ENABLE);
   }
 
   @Override

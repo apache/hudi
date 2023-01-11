@@ -44,10 +44,10 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 
 
 /**
@@ -88,11 +88,13 @@ public class SuccessFileWriteFunction<I> extends RichSinkFunction<I> implements 
   private OperatorEventGateway gateway;
   // The task id .
   private int taskID;
+  // The watermark currently.
+  private Long currentWatermark;
 
   public SuccessFileWriteFunction(Configuration conf) {
     this.conf = conf;
-    activePartitions = new TreeSet<>();
-    finishedPartitions = new TreeSet<>();
+    activePartitions = new HashSet<>();
+    finishedPartitions = new HashSet<>();
   }
 
   @Override
@@ -113,6 +115,7 @@ public class SuccessFileWriteFunction<I> extends RichSinkFunction<I> implements 
     }
     partitionTimeExtractor = new PartitionTimeExtractorAdapter(partitionTimestampExtractPattern, null);
     taskID = getRuntimeContext().getIndexOfThisSubtask();
+    currentWatermark = Long.MIN_VALUE;
   }
 
   // Extract the partition time value from partition path, and convert them to timestamp.
@@ -126,20 +129,7 @@ public class SuccessFileWriteFunction<I> extends RichSinkFunction<I> implements 
   public void invoke(Object value, Context context) throws Exception {
     String partition = (String) value;
     activePartitions.add(partition);
-    long watermark = context.currentWatermark();
-    Iterator<String> it = activePartitions.iterator();
-    while (it.hasNext()) {
-      String partitionPath = it.next();
-      // Convert the partition path to timestamp if the table is partitioned by time field, like day, hour
-      Long partitionTimestamp = convertTimestampByPartitionPath(partitionPath);
-      // If the watermark is greater than the partition timestamp plus the delay time, it represents the
-      // minimum timestamp in the streaming data is beyond the partition max timestamp, so add the partition
-      // path to the finished partitions set and remove it from active partitions set.
-      if (partitionTimestamp + partitionSuccessFileDelay.toMillis() < watermark) {
-        finishedPartitions.add(partitionPath);
-        it.remove();
-      }
-    }
+    this.currentWatermark = context.currentWatermark();
   }
 
   @Override
@@ -149,6 +139,20 @@ public class SuccessFileWriteFunction<I> extends RichSinkFunction<I> implements 
     Preconditions.checkNotNull(finishedPartitions);
     activePartitionsState.update(new ArrayList<>(activePartitions));
     finishedPartitionsState.update(new ArrayList<>(finishedPartitions));
+
+    Iterator<String> it = activePartitions.iterator();
+    while (it.hasNext()) {
+      String partitionPath = it.next();
+      // Convert the partition path to timestamp if the table is partitioned by time field, like day, hour
+      Long partitionTimestamp = convertTimestampByPartitionPath(partitionPath);
+      // If the watermark is greater than the partition timestamp plus the delay time, it represents the
+      // minimum timestamp in the streaming data is beyond the partition max timestamp, so add the partition
+      // path to the finished partitions set and remove it from active partitions set.
+      if (partitionTimestamp + partitionSuccessFileDelay.toMillis() < currentWatermark) {
+        finishedPartitions.add(partitionPath);
+        it.remove();
+      }
+    }
 
     // Send write success file event to coordinator while finished partitions is not empty.
     if (!finishedPartitions.isEmpty()) {
