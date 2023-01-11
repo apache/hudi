@@ -108,7 +108,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
             clusteringPlan.getInputGroups().stream()
                 .map(inputGroup -> {
-                  if (getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", false)) {
+                  if (getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", true)) {
                     return runClusteringForGroupAsyncAsRow(inputGroup,
                         clusteringPlan.getStrategy().getStrategyParams(),
                         shouldPreserveMetadata,
