@@ -35,7 +35,6 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
@@ -45,10 +44,10 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
@@ -210,34 +209,35 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     // also obtain file ranges, if range pruning is enabled
     context.setJobStatus(this.getClass().getName(), "Load meta index key ranges for file slices: " + config.getTableName());
 
-    final String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
-    return context.flatMap(partitions, partitionName -> {
-      // Partition and file name pairs
-      List<Pair<String, String>> partitionFileNameList = HoodieIndexUtils.getLatestBaseFilesForPartition(partitionName,
-              hoodieTable).stream().map(baseFile -> Pair.of(partitionName, baseFile.getFileName()))
-          .sorted()
-          .collect(toList());
-      if (partitionFileNameList.isEmpty()) {
-        return Stream.empty();
-      }
-      try {
-        Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatsMap =
-            hoodieTable.getMetadataTable().getColumnStats(partitionFileNameList, keyField);
-        List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>();
-        for (Map.Entry<Pair<String, String>, HoodieMetadataColumnStats> entry : fileToColumnStatsMap.entrySet()) {
-          result.add(Pair.of(entry.getKey().getLeft(),
-              new BloomIndexFileInfo(
-                  FSUtils.getFileId(entry.getKey().getRight()),
-                  // NOTE: Here we assume that the type of the primary key field is string
-                  (String) unwrapStatisticValueWrapper(entry.getValue().getMinValue()),
-                  (String) unwrapStatisticValueWrapper(entry.getValue().getMaxValue())
-              )));
-        }
-        return result.stream();
-      } catch (MetadataNotFoundException me) {
-        throw new HoodieMetadataException("Unable to find column range metadata for partition:" + partitionName, me);
-      }
-    }, Math.max(partitions.size(), 1));
+    String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
+
+    // Partition and file name pairs
+    List<Pair<String, String>> partitionFileNameList =
+        HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable).stream()
+            .map(partitionBaseFilePair -> Pair.of(partitionBaseFilePair.getLeft(), partitionBaseFilePair.getRight().getFileName()))
+            .sorted()
+            .collect(toList());
+
+    if (partitionFileNameList.isEmpty()) {
+      return Collections.emptyList();
+    }
+
+    Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatsMap =
+        hoodieTable.getMetadataTable().getColumnStats(partitionFileNameList, keyField);
+
+    List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>(fileToColumnStatsMap.size());
+
+    for (Map.Entry<Pair<String, String>, HoodieMetadataColumnStats> entry : fileToColumnStatsMap.entrySet()) {
+      result.add(Pair.of(entry.getKey().getLeft(),
+          new BloomIndexFileInfo(
+              FSUtils.getFileId(entry.getKey().getRight()),
+              // NOTE: Here we assume that the type of the primary key field is string
+              (String) unwrapStatisticValueWrapper(entry.getValue().getMinValue()),
+              (String) unwrapStatisticValueWrapper(entry.getValue().getMaxValue())
+          )));
+    }
+
+    return result;
   }
 
   @Override
