@@ -396,4 +396,65 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test DROP_PARTITION + INSERT_INTO_PARTITION on index.type=CONSISTENT_HASHING") {
+    withTempDir { tmp =>
+      val tableName = "consistent_hashing_mor_table"
+      // Create a partitioned table which will be initialised with 1 bucket
+      // This will force all data to be written to this bucket (if row count is small)
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  dt string
+           |) using hudi
+           |options
+           |(
+           |    type = 'mor'
+           |    ,primaryKey = 'id'
+           |    ,hoodie.index.type = 'BUCKET'
+           |    ,hoodie.index.bucket.engine = 'CONSISTENT_HASHING'
+           |    ,hoodie.bucket.index.num.buckets = 1
+           |    ,hoodie.bucket.index.min.num.buckets = 1
+           |    ,hoodie.bucket.index.max.num.buckets = 32
+           |    ,hoodie.storage.layout.partitioner.class = 'org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner'
+           |)
+           | tblproperties (primaryKey = 'id')
+           | partitioned by (dt)
+           | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+
+      // Note: Do not write the field alias, the partition field must be placed last.
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (1, 'a1', 10, 1000, "2021-01-05"),
+           | (2, 'a2', 20, 2000, "2021-01-06"),
+           | (3, 'a3', 30, 3000, "2021-01-07")
+              """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+        Seq(3, "a3", 30.0, 3000, "2021-01-07")
+      )
+
+      spark.sql(s"alter table $tableName drop partition (dt='2021-01-05')")
+
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (4, 'a4', 40, 4000, "2021-01-05")
+              """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(4, "a4", 40.0, 4000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+        Seq(3, "a3", 30.0, 3000, "2021-01-07")
+      )
+    }
+  }
 }

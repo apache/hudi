@@ -59,6 +59,7 @@ case class AlterHoodieTableDropPartitionCommand(
     // drop partitions to lazy clean (https://github.com/apache/hudi/pull/4489)
     // delete partition files by enabling cleaner and setting retention policies.
     val partitionsToDrop = getPartitionPathToDrop(hoodieCatalogTable, normalizedSpecs)
+
     val parameters = buildHoodieDropPartitionsConfig(sparkSession, hoodieCatalogTable, partitionsToDrop)
     val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(
       sparkSession.sqlContext,
