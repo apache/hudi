@@ -53,14 +53,17 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.genPseudoRandomUUID;
 
 /**
  * A utility class for testing schema.
  */
 public final class SchemaTestUtil {
+
+  private static final Random RANDOM = new Random(0xDEED);
 
   private static final String RESOURCE_SAMPLE_DATA = "/sample.data";
 
@@ -137,7 +140,7 @@ public final class SchemaTestUtil {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, hoodieFieldsSchema)).map(p -> {
-      p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, UUID.randomUUID().toString());
+      p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, genRandomUUID());
       p.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
       p.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
       return p;
@@ -149,7 +152,7 @@ public final class SchemaTestUtil {
       throws IOException, URISyntaxException {
     List<IndexedRecord> records = generateTestRecords(from, limit);
     return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema))
-        .map(p -> convertToHoodieRecords(p, UUID.randomUUID().toString(), "000/00/00")).collect(Collectors.toList());
+        .map(p -> convertToHoodieRecords(p, genRandomUUID(), "000/00/00")).collect(Collectors.toList());
   }
 
   private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
@@ -173,7 +176,7 @@ public final class SchemaTestUtil {
       throws IOException, URISyntaxException {
 
     List<IndexedRecord> iRecords = generateTestRecords(from, limit);
-    return iRecords.stream().map(r -> new HoodieAvroRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+    return iRecords.stream().map(r -> new HoodieAvroRecord<>(new HoodieKey(genRandomUUID(), "0000/00/00"),
         new HoodieAvroPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
   }
 
@@ -357,5 +360,9 @@ public final class SchemaTestUtil {
         }
       };
     }
+  }
+
+  private static String genRandomUUID() {
+    return genPseudoRandomUUID(RANDOM).toString();
   }
 }
