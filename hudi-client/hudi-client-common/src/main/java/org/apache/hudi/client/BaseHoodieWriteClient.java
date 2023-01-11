@@ -844,9 +844,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     Timer.Context timerContext = metrics.getRollbackCtx();
     try {
       HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
-      Pair<String, Option<HoodieRestorePlan>> restorePlanReturn = getRestorePlan(savepointToRestoreTimestamp, table);
-      final String restoreInstantTimestamp = restorePlanReturn.getLeft();
-      Option<HoodieRestorePlan> restorePlanOption = restorePlanReturn.getRight();
+      Pair<String, Option<HoodieRestorePlan>> timestampAndRestorePlan = scheduleAndGetRestorePlan(savepointToRestoreTimestamp, table);
+      final String restoreInstantTimestamp = timestampAndRestorePlan.getLeft();
+      Option<HoodieRestorePlan> restorePlanOption = timestampAndRestorePlan.getRight();
 
       if (restorePlanOption.isPresent()) {
         HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTimestamp, savepointToRestoreTimestamp);
@@ -871,7 +871,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Check if there is a failed restore with the same savepointToRestoreTimestamp. Reusing the commit instead of
    * creating a new one will prevent causing some issues with the metadata table.
    * */
-  private Pair<String, Option<HoodieRestorePlan>> getRestorePlan(final String savepointToRestoreTimestamp, HoodieTable<T, I, K, O> table) throws IOException {
+  private Pair<String, Option<HoodieRestorePlan>> scheduleAndGetRestorePlan(final String savepointToRestoreTimestamp, HoodieTable<T, I, K, O> table) throws IOException {
     Option<HoodieInstant> failedRestore = table.getRestoreTimeline().filterInflightsAndRequested().lastInstant();
     if (failedRestore.isPresent() && savepointToRestoreTimestamp.equals(RestoreUtils.getSavepointToRestoreTimestamp(table, failedRestore.get()))) {
       return Pair.of(failedRestore.get().getTimestamp(), Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get())));

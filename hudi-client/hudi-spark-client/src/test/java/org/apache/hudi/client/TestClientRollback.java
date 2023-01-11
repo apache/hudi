@@ -191,20 +191,26 @@ public class TestClientRollback extends HoodieClientTestBase {
       if (testFailedRestore) {
         //test to make sure that restore commit is reused when the restore fails and is re-ran
         HoodieInstant inst =  table.getActiveTimeline().getRestoreTimeline().getInstants().get(0);
-        String restoreFile = table.getMetaClient().getBasePathV2().toString() + "/.hoodie/" +  inst.getFileName();
-        File commitFile = new File(restoreFile);
-        commitFile.delete();
+        String restoreFileName = table.getMetaClient().getBasePathV2().toString() + "/.hoodie/" +  inst.getFileName();
+
+        //delete restore commit file
+        assertTrue((new File(restoreFileName)).delete());
+
         if (!failedRestoreInflight) {
-          File inflightFile = new File(restoreFile + ".inflight");
-          inflightFile.delete();
+          //delete restore inflight file
+          assertTrue((new File(restoreFileName + ".inflight")).delete());
         }
         try (SparkRDDWriteClient newClient = getHoodieWriteClient(cfg)) {
           //restore again
           newClient.restoreToSavepoint(savepoint.getTimestamp());
+
+          //verify that we resuse the existing restore commit
           metaClient = HoodieTableMetaClient.reload(metaClient);
           table = HoodieSparkTable.create(getConfig(), context, metaClient);
-          //verify that there is only 1 restore commit
-          assertEquals(1, table.getActiveTimeline().getRestoreTimeline().getInstants().size());
+          List<HoodieInstant> restoreInstants = table.getActiveTimeline().getRestoreTimeline().getInstants();
+          assertEquals(1, restoreInstants.size());
+          assertEquals(HoodieInstant.State.COMPLETED, restoreInstants.get(0).getState());
+          assertEquals(inst.getTimestamp(), restoreInstants.get(0).getTimestamp());
         }
       }
     }
