@@ -62,7 +62,6 @@ import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -73,8 +72,11 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.utils.TestConfigurations.catalog;
 import static org.apache.hudi.utils.TestConfigurations.sql;
+import static org.apache.hudi.utils.TestData.array;
+import static org.apache.hudi.utils.TestData.assertRowsEqualsUnordered;
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.apache.hudi.utils.TestData.map;
+import static org.apache.hudi.utils.TestData.row;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1352,7 +1354,7 @@ public class ITTestHoodieDataSource {
         row(1, array("abc1", "def1"), map("abc1", 1, "def1", 3), row(1, "abc1")),
         row(2, array("abc2", "def2"), map("abc2", 1, "def2", 3), row(2, "abc2")),
         row(3, array("abc3", "def3"), map("abc3", 1, "def3", 3), row(3, "abc3")));
-    assertEqualsUnordered(result, expected);
+    assertRowsEqualsUnordered(result, expected);
   }
 
   @ParameterizedTest
@@ -1381,7 +1383,7 @@ public class ITTestHoodieDataSource {
         row(1, array("abc1", "def1"), array(1, 1),  map("abc1", 1, "def1", 3), row(array("abc1", "def1"), row(1, "abc1"))),
         row(2, array("abc2", "def2"), array(2, 2),  map("abc2", 1, "def2", 3), row(array("abc2", "def2"), row(2, "abc2"))),
         row(3, array("abc3", "def3"), array(3, 3),  map("abc3", 1, "def3", 3), row(array("abc3", "def3"), row(3, "abc3"))));
-    assertEqualsUnordered(result, expected);
+    assertRowsEqualsUnordered(result, expected);
   }
 
   @ParameterizedTest
@@ -1755,28 +1757,5 @@ public class ITTestHoodieDataSource {
     return CollectSinkTableFactory.RESULT.values().stream()
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
-  }
-
-  private Row row(Object... args) {
-    return Row.of(args);
-  }
-
-  @SafeVarargs
-  private final <T> T[] array(T... args) {
-    return args;
-  }
-
-  private <K, V> Map<K, V> map(Object... kwargs) {
-    HashMap<Object, Object> map = new HashMap<>();
-    for (int i = 0; i < kwargs.length; i += 2) {
-      map.put(kwargs[i], kwargs[i + 1]);
-    }
-    @SuppressWarnings("unchecked")
-    Map<K, V> resultMap = (Map<K, V>) map;
-    return resultMap;
-  }
-
-  private void assertEqualsUnordered(List<Row> expected, List<Row> actual) {
-    assertEquals(new HashSet<>(expected), new HashSet<>(actual));
   }
 }
