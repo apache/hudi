@@ -28,9 +28,9 @@ import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.ValidationUtils.{checkArgument, checkState}
+import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, JsonUtils, StringUtils}
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
@@ -75,8 +75,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     STREAMING_RETRY_INTERVAL_MS.defaultValue).toLong
   private val ignoreFailedBatch = options.getOrDefault(STREAMING_IGNORE_FAILED_BATCH.key,
     STREAMING_IGNORE_FAILED_BATCH.defaultValue).toBoolean
-  private val disableCompaction = options.getOrDefault(HoodieCompactionConfig.DISABLE_ASYNC_COMPACT_FOR_SPARK_STREAMING.key,
-    HoodieCompactionConfig.DISABLE_ASYNC_COMPACT_FOR_SPARK_STREAMING.defaultValue).toBoolean
+  private val disableCompaction = options.getOrDefault(STREAMING_DISABLE_COMPACTION.key,
+    STREAMING_DISABLE_COMPACTION.defaultValue).toBoolean
 
   private var isAsyncCompactorServiceShutdownAbnormally = false
   private var isAsyncClusteringServiceShutdownAbnormally = false

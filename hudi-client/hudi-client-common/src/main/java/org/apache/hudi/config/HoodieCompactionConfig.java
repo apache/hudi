@@ -67,13 +67,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("When set to true, logcompaction service is triggered after each write. While being "
           + " simpler operationally, this adds extra latency on the write path.");
 
-  public static final ConfigProperty<String> DISABLE_ASYNC_COMPACT_FOR_SPARK_STREAMING = ConfigProperty
-      .key("hoodie.compact.disable.for.spark.streaming")
-      .defaultValue("false")
-      .withDocumentation("When set to true, compaction will not run inline nor asynchronously. Compaction can take up significant resources "
-          + "in Spark Streaming and this option allows the decoupling of resources between ingestion and compaction. When this option is enabled, "
-          + "it is expected that the user will run asynchronous compaction in a separate process. If asynchronous compaction is not running in "
-          + "conjunction while this configuration is enabled, then compaction will NOT occur.");
   public static final ConfigProperty<String> INLINE_COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key("hoodie.compact.inline.max.delta.commits")
       .defaultValue("5")
@@ -348,11 +341,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withInlineLogCompaction(Boolean inlineLogCompaction) {
       compactionConfig.setValue(INLINE_LOG_COMPACT, String.valueOf(inlineLogCompaction));
-      return this;
-    }
-
-    public Builder withOfflineCompaction(Boolean useOfflineCompaction) {
-      compactionConfig.setValue(DISABLE_ASYNC_COMPACT_FOR_SPARK_STREAMING, String.valueOf(useOfflineCompaction));
       return this;
     }
 
