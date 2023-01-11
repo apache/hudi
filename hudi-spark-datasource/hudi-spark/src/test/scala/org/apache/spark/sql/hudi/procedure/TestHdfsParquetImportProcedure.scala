@@ -115,16 +115,14 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
       records.add(new HoodieTestDataGenerator().generateGenericRecord(recordNum.toString,
         "0", "rider-" + recordNum, "driver-" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)))
     }
+    val writer: ParquetWriter[GenericRecord] = AvroParquetWriter.builder[GenericRecord](srcFile)
+      .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf).build
     try {
-      val writer: ParquetWriter[GenericRecord] = AvroParquetWriter.builder[GenericRecord](srcFile)
-        .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf).build
-      try {
-        for (record <- records) {
-          writer.write(record)
-        }
-      } finally {
-        if (writer != null) writer.close()
+      for (record <- records) {
+        writer.write(record)
       }
+    } finally {
+      if (writer != null) writer.close()
     }
     records
   }
@@ -145,16 +143,12 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
     for (recordNum <- 96 until 100) {
       records.add(dataGen.generateGenericRecord(recordNum.toString, "0", "rider-upsert-" + recordNum, "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)))
     }
+    val writer = AvroParquetWriter.builder[GenericRecord](srcFile).withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf).build
     try {
-      val writer = AvroParquetWriter.builder[GenericRecord](srcFile).withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf).build
-      try {
-        for (record <- records) {
-          writer.write(record)
-        }
-      } finally {
-        if (writer != null) writer.close()
+      for (record <- records) {
+        writer.write(record)
       }
-    }
+    } finally if (writer != null) writer.close()
     records
   }
 

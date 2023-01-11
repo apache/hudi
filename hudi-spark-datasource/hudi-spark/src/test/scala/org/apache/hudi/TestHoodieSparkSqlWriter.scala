@@ -1137,7 +1137,7 @@ class TestHoodieSparkSqlWriter {
         .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
         .mode(SaveMode.Append).save(tablePath1)
     } catch {
-      case _ => fail("Switching from no keygen to explicit SimpleKeyGenerator should not fail");
+      case _: Throwable => fail("Switching from no keygen to explicit SimpleKeyGenerator should not fail");
     }
   }
 
@@ -1170,7 +1170,7 @@ class TestHoodieSparkSqlWriter {
         .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
         .mode(SaveMode.Append).save(tablePath1)
     } catch {
-      case _ => fail("Switching from  explicit SimpleKeyGenerator to default keygen should not fail");
+      case _: Throwable => fail("Switching from  explicit SimpleKeyGenerator to default keygen should not fail");
     }
   }
 
