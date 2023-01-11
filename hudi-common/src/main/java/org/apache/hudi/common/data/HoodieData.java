@@ -118,6 +118,11 @@ public interface HoodieData<T> extends Serializable {
   <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func);
 
   /**
+   * TODO java-doc
+   */
+  <K, V> HoodiePairData<K, V> flatMapToPair(SerializableFunction<T, Iterator<? extends Pair<K, V>>> func);
+
+  /**
    * Maps every element in the collection using provided mapping {@code func} into a {@link Pair<K, V>}
    * of elements {@code K} and {@code V}
    * <p>
