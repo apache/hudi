@@ -56,11 +56,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -138,11 +136,11 @@ public abstract class AbstractHoodieLogRecordReader {
   private AtomicLong totalRollbacks = new AtomicLong(0);
   // Total number of corrupt blocks written across all log files
   private AtomicLong totalCorruptBlocks = new AtomicLong(0);
-  // Store the last instant log blocks (needed to implement rollback)
-  private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
+  // Store the valid instant log blocks (needed to implement rollback)
+  private List<HoodieLogBlock> currentInstantLogBlocks = new ArrayList<>();
+  private Map<String, List<HoodieLogBlock>> instantTimesToLogBlocks = new HashMap<>();
   // Enables full scan of log records
   protected final boolean forceFullScan;
-  private int totalScannedLogFiles;
   // Progress
   private float progress = 0.0f;
   // Partition name
@@ -233,7 +231,7 @@ public abstract class AbstractHoodieLogRecordReader {
   }
 
   private synchronized void scanInternal(Option<KeySpec> keySpecOpt) {
-    currentInstantLogBlocks = new ArrayDeque<>();
+    currentInstantLogBlocks = new ArrayList<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
     totalRollbacks = new AtomicLong(0);
@@ -286,17 +284,19 @@ public abstract class AbstractHoodieLogRecordReader {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
           case PARQUET_DATA_BLOCK:
+            String logBlockInstantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
             LOG.info("Reading a data block from file " + logFile.getPath() + " at instant "
-                + logBlock.getLogBlockHeader().get(INSTANT_TIME));
+                + logBlockInstantTime);
             if (isNewInstantBlock(logBlock) && !readBlocksLazily) {
               // If this is an avro data block belonging to a different commit/instant,
               // then merge the last blocks and records into the main result
               processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
             }
             // store the current block
-            currentInstantLogBlocks.push(logBlock);
+            trackLogBlock(logBlock, logBlockInstantTime);
             break;
           case DELETE_BLOCK:
+            logBlockInstantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
             LOG.info("Reading a delete block from file " + logFile.getPath());
             if (isNewInstantBlock(logBlock) && !readBlocksLazily) {
               // If this is a delete data block belonging to a different commit/instant,
@@ -304,7 +304,7 @@ public abstract class AbstractHoodieLogRecordReader {
               processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
             }
             // store deletes so can be rolled back
-            currentInstantLogBlocks.push(logBlock);
+            trackLogBlock(logBlock, logBlockInstantTime);
             break;
           case COMMAND_BLOCK:
             // Consider the following scenario
@@ -326,7 +326,9 @@ public abstract class AbstractHoodieLogRecordReader {
                 logBlock.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME);
             switch (commandBlock.getType()) { // there can be different types of command blocks
               case ROLLBACK_BLOCK:
-                // Rollback the last read log block
+                // in case of multi-writers, rollback block could have interleaved valid commits compared to its original log block.
+                // so, we will use instantTimesToLogBlocks to track back to original log blocks.
+                // if there are duplicate rollbacks, is original log block has already removed, its a no-op.
                 // Get commit time from last record block, compare with targetCommitTime,
                 // rollback only if equal, this is required in scenarios of invalid/extra
                 // rollback blocks written due to failures during the rollback operation itself
@@ -335,19 +337,35 @@ public abstract class AbstractHoodieLogRecordReader {
                 int numBlocksRolledBack = 0;
                 totalRollbacks.incrementAndGet();
                 while (!currentInstantLogBlocks.isEmpty()) {
-                  HoodieLogBlock lastBlock = currentInstantLogBlocks.peek();
+                  HoodieLogBlock lastBlock = currentInstantLogBlocks.get(currentInstantLogBlocks.size() - 1);
                   // handle corrupt blocks separately since they may not have metadata
                   if (lastBlock.getBlockType() == CORRUPT_BLOCK) {
                     LOG.info("Rolling back the last corrupted log block read in " + logFile.getPath());
-                    currentInstantLogBlocks.pop();
+                    currentInstantLogBlocks.remove(currentInstantLogBlocks.size() - 1);
                     numBlocksRolledBack++;
                   } else if (targetInstantForCommandBlock.contentEquals(lastBlock.getLogBlockHeader().get(INSTANT_TIME))) {
+                    // incase of single writer, rollback block will immediately succeed the log block to be rolled back.
                     // rollback last data block or delete block
                     LOG.info("Rolling back the last log block read in " + logFile.getPath());
-                    currentInstantLogBlocks.pop();
+                    currentInstantLogBlocks.remove(currentInstantLogBlocks.size() - 1);
                     numBlocksRolledBack++;
+                    if (instantTimesToLogBlocks.containsKey(targetInstantForCommandBlock)) {
+                      List<HoodieLogBlock> matchingLogBlocks = instantTimesToLogBlocks.get(targetInstantForCommandBlock);
+                      matchingLogBlocks.forEach(matchingLogBlock -> currentInstantLogBlocks.remove(matchingLogBlock));
+                      numBlocksRolledBack += matchingLogBlocks.size();
+                      instantTimesToLogBlocks.remove(targetInstantForCommandBlock);
+                    } else {
+                      throw new HoodieException("Found a log block not tracked via instantTimesToLogBlocks for " + targetInstantForCommandBlock);
+                    }
+                  } else if (instantTimesToLogBlocks.containsKey(targetInstantForCommandBlock)) {
+                    // incase of multi-writer, rollback block could have interleaved log blocks compared to the original log blocks to be rolled back.
+                    // remove any previous log blocks w/ matching instant times.
+                    List<HoodieLogBlock> matchingLogBlocks = instantTimesToLogBlocks.get(targetInstantForCommandBlock);
+                    matchingLogBlocks.forEach(matchingLogBlock -> currentInstantLogBlocks.remove(matchingLogBlock));
+                    numBlocksRolledBack += matchingLogBlocks.size();
+                    instantTimesToLogBlocks.remove(targetInstantForCommandBlock);
                   } else if (!targetInstantForCommandBlock
-                      .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME))) {
+                      .contentEquals(currentInstantLogBlocks.get(currentInstantLogBlocks.size() - 1).getLogBlockHeader().get(INSTANT_TIME))) {
                     // invalid or extra rollback block
                     LOG.warn("TargetInstantTime " + targetInstantForCommandBlock
                         + " invalid or extra rollback command block in " + logFile.getPath());
@@ -367,7 +385,7 @@ public abstract class AbstractHoodieLogRecordReader {
             LOG.info("Found a corrupt block in " + logFile.getPath());
             totalCorruptBlocks.incrementAndGet();
             // If there is a corrupt block - we will assume that this was the next data block
-            currentInstantLogBlocks.push(logBlock);
+            currentInstantLogBlocks.add(logBlock);
             break;
           default:
             throw new UnsupportedOperationException("Block type not supported yet");
@@ -398,8 +416,17 @@ public abstract class AbstractHoodieLogRecordReader {
     }
   }
 
+  private void trackLogBlock(HoodieLogBlock logBlock, String logBlockInstantTime) {
+    currentInstantLogBlocks.add(logBlock);
+    if (instantTimesToLogBlocks.containsKey(logBlockInstantTime)) {
+      instantTimesToLogBlocks.get(logBlockInstantTime).add(logBlock);
+    } else {
+      instantTimesToLogBlocks.put(logBlockInstantTime, Collections.singletonList(logBlock));
+    }
+  }
+
   private synchronized void scanInternalV2(Option<KeySpec> keySpecOption, boolean skipProcessingBlocks) {
-    currentInstantLogBlocks = new ArrayDeque<>();
+    currentInstantLogBlocks = new ArrayList<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
     totalRollbacks = new AtomicLong(0);
@@ -576,7 +603,7 @@ public abstract class AbstractHoodieLogRecordReader {
             // If it is not compacted then add the blocks related to the instant time at the end of the queue and continue.
             List<HoodieLogBlock> logBlocks = instantToBlocksMap.get(instantTime);
             Collections.reverse(logBlocks);
-            logBlocks.forEach(block -> currentInstantLogBlocks.addLast(block));
+            logBlocks.forEach(block -> currentInstantLogBlocks.add(block));
             instantTimesIncluded.add(instantTime);
             validBlockInstants.add(instantTime);
             continue;
@@ -588,7 +615,7 @@ public abstract class AbstractHoodieLogRecordReader {
           // If the compacted block exists and it is not already added then add all the blocks related to that instant time.
           List<HoodieLogBlock> logBlocks = instantToBlocksMap.get(compactedFinalInstantTime);
           Collections.reverse(logBlocks);
-          logBlocks.forEach(block -> currentInstantLogBlocks.addLast(block));
+          logBlocks.forEach(block -> currentInstantLogBlocks.add(block));
           instantTimesIncluded.add(compactedFinalInstantTime);
           validBlockInstants.add(compactedFinalInstantTime);
         }
@@ -628,9 +655,9 @@ public abstract class AbstractHoodieLogRecordReader {
    * Checks if the current logblock belongs to a later instant.
    */
   private boolean isNewInstantBlock(HoodieLogBlock logBlock) {
-    return currentInstantLogBlocks.size() > 0 && currentInstantLogBlocks.peek().getBlockType() != CORRUPT_BLOCK
+    return currentInstantLogBlocks.size() > 0 && currentInstantLogBlocks.get(currentInstantLogBlocks.size() - 1).getBlockType() != CORRUPT_BLOCK
         && !logBlock.getLogBlockHeader().get(INSTANT_TIME)
-        .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME));
+        .contentEquals(currentInstantLogBlocks.get(currentInstantLogBlocks.size() - 1).getLogBlockHeader().get(INSTANT_TIME));
   }
 
   /**
@@ -674,12 +701,13 @@ public abstract class AbstractHoodieLogRecordReader {
   /**
    * Process the set of log blocks belonging to the last instant which is read fully.
    */
-  private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> logBlocks, int numLogFilesSeen,
+  private void processQueuedBlocksForInstant(List<HoodieLogBlock> logBlocks, int numLogFilesSeen,
                                              Option<KeySpec> keySpecOpt) throws Exception {
     while (!logBlocks.isEmpty()) {
+      int totalLogBlocks = logBlocks.size();
       LOG.info("Number of remaining logblocks to merge " + logBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted
-      HoodieLogBlock lastBlock = logBlocks.pollLast();
+      HoodieLogBlock lastBlock = logBlocks.get(totalLogBlocks - 1);
       switch (lastBlock.getBlockType()) {
         case AVRO_DATA_BLOCK:
           processDataBlock((HoodieAvroDataBlock) lastBlock, keySpecOpt);
@@ -699,6 +727,7 @@ public abstract class AbstractHoodieLogRecordReader {
         default:
           break;
       }
+      totalLogBlocks--;
     }
     // At this step the lastBlocks are consumed. We track approximate progress by number of log-files seen
     progress = (numLogFilesSeen - 1) / logFilePaths.size();
@@ -760,7 +789,7 @@ public abstract class AbstractHoodieLogRecordReader {
     }
   }
 
-  public Deque<HoodieLogBlock> getCurrentInstantLogBlocks() {
+  public List<HoodieLogBlock> getCurrentInstantLogBlocks() {
     return currentInstantLogBlocks;
   }
 
