@@ -200,7 +200,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testStructuredStreaming(tableType: HoodieTableType): Unit = {
-    structuredStreamingTestRunner(tableType, false, false)
+    structuredStreamingTestRunner(
+      tableType, addCompactionConfigs = false, isAsyncCompaction = false)
   }
 
   @throws[InterruptedException]
@@ -213,7 +214,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     var success = false
     while ({!success && (currTime - beginTime) < timeoutMsecs}) try {
       val timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, tablePath)
-      log.info("Timeline :" + timeline.getInstants.toArray)
+      log.info("Timeline :" + timeline.getInstants.toArray.mkString("Array(", ", ", ")"))
       if (timeline.countInstants >= numCommits) {
         numInstants = timeline.countInstants
         success = true
@@ -240,7 +241,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       // check have schedule clustering and clustering file group to one
       waitTillHasCompletedReplaceInstant(destPath, 120, 1)
       metaClient.reloadActiveTimeline()
-      assertEquals(1, getLatestFileGroupsFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).size)
+      assertEquals(1, getLatestFileGroupsFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).length)
     }
 
     structuredStreamingForTestClusteringRunner(sourcePath, destPath, HoodieTableType.COPY_ON_WRITE,
@@ -250,7 +251,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testStructuredStreamingWithCompaction(isAsyncCompaction: Boolean): Unit = {
-    structuredStreamingTestRunner(HoodieTableType.MERGE_ON_READ, true, isAsyncCompaction)
+    structuredStreamingTestRunner(
+      HoodieTableType.MERGE_ON_READ, addCompactionConfigs = true, isAsyncCompaction = isAsyncCompaction)
   }
 
   @Test
@@ -271,7 +273,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       .options(commonOpts)
       .outputMode(OutputMode.Append)
       .option(STREAMING_CHECKPOINT_IDENTIFIER.key(), "streaming_identifier1")
-      .option("checkpointLocation", s"${basePath}/checkpoint1")
+      .option("checkpointLocation", s"$basePath/checkpoint1")
       .start(destPath)
 
     query1.processAllAvailable()
@@ -294,7 +296,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       .options(commonOpts)
       .outputMode(OutputMode.Append)
       .option(STREAMING_CHECKPOINT_IDENTIFIER.key(), "streaming_identifier2")
-      .option("checkpointLocation", s"${basePath}/checkpoint2")
+      .option("checkpointLocation", s"$basePath/checkpoint2")
       .start(destPath)
     query2.processAllAvailable()
     query1.processAllAvailable()
@@ -381,13 +383,13 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     var success = false
     while ({!success && (currTime - beginTime) < timeoutMsecs}) try {
       this.metaClient.reloadActiveTimeline()
-      val completeReplaceSize = this.metaClient.getActiveTimeline.getCompletedReplaceTimeline().getInstants.toArray.size
+      val completeReplaceSize = this.metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.toArray.length
       println("completeReplaceSize:" + completeReplaceSize)
       if (completeReplaceSize > 0) {
         success = true
       }
     } catch {
-      case te: TableNotFoundException =>
+      case _: TableNotFoundException =>
         log.info("Got table not found exception. Retrying")
     } finally {
       Thread.sleep(sleepSecsAfterEachRun * 1000)
