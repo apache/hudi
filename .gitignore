@@ -1,6 +1,7 @@
 # Directories #
 /build/
 target/
+metastore_db/
 .mvn/
  
 # OS Files #
