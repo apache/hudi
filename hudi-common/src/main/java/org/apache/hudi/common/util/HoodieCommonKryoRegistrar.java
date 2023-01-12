@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import com.esotericsoftware.kryo.Kryo;
 import org.apache.hudi.common.HoodieJsonPayload;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -36,6 +37,8 @@ import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 
+import java.util.Arrays;
+
 /**
  * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
  *
@@ -52,14 +55,13 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
  *   or renamed (w/o correspondingly updating such usages)</li>
  * </ol>
  */
-public class HoodieCommonKryoProvider {
+public class HoodieCommonKryoRegistrar {
 
-  public Class<?>[] registerClasses() {
+  public void registerClasses(Kryo kryo) {
     ///////////////////////////////////////////////////////////////////////////
     // NOTE: DO NOT REORDER REGISTRATIONS
     ///////////////////////////////////////////////////////////////////////////
-
-    return new Class<?>[] {
+    Arrays.stream(new Class<?>[] {
         HoodieAvroRecord.class,
         HoodieAvroIndexedRecord.class,
         HoodieEmptyRecord.class,
@@ -81,7 +83,8 @@ public class HoodieCommonKryoProvider {
 
         HoodieRecordLocation.class,
         HoodieRecordGlobalLocation.class
-    };
+    })
+        .forEachOrdered(kryo::register);
   }
 
 }
