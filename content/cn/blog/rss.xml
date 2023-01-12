@@ -4,9 +4,17 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Thu, 29 Dec 2022 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 11 Jan 2023 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Apache Hudi vs Delta Lake vs Apache Iceberg - Lakehouse Feature Comparison]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/01/11/Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison</link>
+            <guid>/2023/01/11/Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison</guid>
+            <pubDate>Wed, 11 Jan 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/apache-hudi-vs-delta-lake-vs-apache-iceberg-lakehouse-feature-comparison">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Apache Hudi 2022 - A year in Review]]></title>
             <link>https://hudi.apache.org/cn/blog/2022/12/29/Apache-Hudi-2022-A-Year-In-Review</link>
@@ -94,14 +102,6 @@ where people are sharing and helping each other!</p><img src="/assets/images/blo
             <pubDate>Wed, 24 Aug 2022 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://medium.com/walmartglobaltech/implementation-of-scd-2-slowly-changing-dimension-with-apache-hudi-465e0eb94a5">Redirecting... please wait!! </div>]]></content:encoded>
-        </item>
-        <item>
-            <title><![CDATA[Apache Hudi vs Delta Lake vs Apache Iceberg - Lakehouse Feature Comparison]]></title>
-            <link>https://hudi.apache.org/cn/blog/2022/08/18/Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison</link>
-            <guid>/2022/08/18/Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison</guid>
-            <pubDate>Thu, 18 Aug 2022 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/apache-hudi-vs-delta-lake-vs-apache-iceberg-lakehouse-feature-comparison">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Use Flink Hudi to Build a Streaming Data Lake Platform]]></title>
