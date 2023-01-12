@@ -117,6 +117,7 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
             writeRecord(hoodieRecord, Option.of(hoodieRecord), writeSchema, config.getProps());
           }
           insertRecordsWritten++;
+          writtenRecordKeys.add(hoodieRecord.getRecordKey());
         }
       } catch (IOException e) {
         throw new HoodieUpsertException("Failed to close UpdateHandle", e);
@@ -124,7 +125,6 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
     }
 
     newRecordKeysSorted.clear();
-    keyToNewRecords.clear();
 
     return super.close();
   }
