@@ -126,7 +126,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   protected HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
                                 ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
-                                String payloadClassName, String mergerStrategy, FileSystemRetryConfig fileSystemRetryConfig) {
+                                String payloadClassName, String recordMergerStrategy, FileSystemRetryConfig fileSystemRetryConfig) {
     LOG.info("Loading HoodieTableMetaClient from " + basePath);
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.fileSystemRetryConfig = fileSystemRetryConfig;
@@ -135,7 +135,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.metaPath = new SerializablePath(new CachingPath(basePath, METAFOLDER_NAME));
     this.fs = getFs();
     TableNotFoundException.checkTableValidity(fs, this.basePath.get(), metaPath.get());
-    this.tableConfig = new HoodieTableConfig(fs, metaPath.toString(), payloadClassName, mergerStrategy);
+    this.tableConfig = new HoodieTableConfig(fs, metaPath.toString(), payloadClassName, recordMergerStrategy);
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
@@ -170,7 +170,7 @@ public class HoodieTableMetaClient implements Serializable {
         .setConsistencyGuardConfig(oldMetaClient.consistencyGuardConfig)
         .setLayoutVersion(Option.of(oldMetaClient.timelineLayoutVersion))
         .setPayloadClassName(null)
-        .setMergerStrategy(null)
+        .setRecordMergerStrategy(null)
         .setFileSystemRetryConfig(oldMetaClient.fileSystemRetryConfig).build();
   }
 
@@ -680,7 +680,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   private static HoodieTableMetaClient newMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
       ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
-      String payloadClassName, String mergerStrategy, FileSystemRetryConfig fileSystemRetryConfig, Properties props) {
+      String payloadClassName, String recordMergerStrategy, FileSystemRetryConfig fileSystemRetryConfig, Properties props) {
     HoodieMetastoreConfig metastoreConfig = null == props
         ? new HoodieMetastoreConfig.Builder().build()
         : new HoodieMetastoreConfig.Builder().fromProperties(props).build();
@@ -690,7 +690,7 @@ public class HoodieTableMetaClient implements Serializable {
             conf, consistencyGuardConfig, fileSystemRetryConfig,
             props.getProperty(HoodieTableConfig.DATABASE_NAME.key()), props.getProperty(HoodieTableConfig.NAME.key()), metastoreConfig)
         : new HoodieTableMetaClient(conf, basePath,
-        loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, mergerStrategy, fileSystemRetryConfig);
+        loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, recordMergerStrategy, fileSystemRetryConfig);
   }
 
   public static Builder builder() {
@@ -706,7 +706,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String basePath;
     private boolean loadActiveTimelineOnLoad = false;
     private String payloadClassName = null;
-    private String mergerStrategy = null;
+    private String recordMergerStrategy = null;
     private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
     private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
     private Option<TimelineLayoutVersion> layoutVersion = Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION);
@@ -732,8 +732,8 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public Builder setMergerStrategy(String mergerStrategy) {
-      this.mergerStrategy = mergerStrategy;
+    public Builder setRecordMergerStrategy(String recordMergerStrategy) {
+      this.recordMergerStrategy = recordMergerStrategy;
       return this;
     }
 
@@ -762,7 +762,7 @@ public class HoodieTableMetaClient implements Serializable {
       ValidationUtils.checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
       return newMetaClient(conf, basePath,
           loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName,
-          mergerStrategy, fileSystemRetryConfig, props);
+          recordMergerStrategy, fileSystemRetryConfig, props);
     }
   }
 
@@ -782,7 +782,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String recordKeyFields;
     private String archiveLogFolder;
     private String payloadClassName;
-    private String mergerStrategy;
+    private String recordMergerStrategy;
     private Integer timelineLayoutVersion;
     private String baseFileFormat;
     private String preCombineField;
@@ -852,8 +852,8 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setMergerStrategy(String mergerStrategy) {
-      this.mergerStrategy = mergerStrategy;
+    public PropertyBuilder setRecordMergerStrategy(String recordMergerStrategy) {
+      this.recordMergerStrategy = recordMergerStrategy;
       return this;
     }
 
@@ -977,7 +977,7 @@ public class HoodieTableMetaClient implements Serializable {
           .setTableName(metaClient.getTableConfig().getTableName())
           .setArchiveLogFolder(metaClient.getArchivePath())
           .setPayloadClassName(metaClient.getTableConfig().getPayloadClass())
-          .setMergerStrategy(metaClient.getTableConfig().getMergerStrategy());
+          .setRecordMergerStrategy(metaClient.getTableConfig().getRecordMergerStrategy());
     }
 
     public PropertyBuilder fromProperties(Properties properties) {
@@ -1007,9 +1007,9 @@ public class HoodieTableMetaClient implements Serializable {
         setPayloadClassName(
             hoodieConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
       }
-      if (hoodieConfig.contains(HoodieTableConfig.MERGER_STRATEGY)) {
-        setMergerStrategy(
-            hoodieConfig.getString(HoodieTableConfig.MERGER_STRATEGY));
+      if (hoodieConfig.contains(HoodieTableConfig.RECORD_MERGER_STRATEGY)) {
+        setRecordMergerStrategy(
+            hoodieConfig.getString(HoodieTableConfig.RECORD_MERGER_STRATEGY));
       }
       if (hoodieConfig.contains(HoodieTableConfig.TIMELINE_LAYOUT_VERSION)) {
         setTimelineLayoutVersion(hoodieConfig.getInt(HoodieTableConfig.TIMELINE_LAYOUT_VERSION));
@@ -1097,8 +1097,8 @@ public class HoodieTableMetaClient implements Serializable {
       if (tableType == HoodieTableType.MERGE_ON_READ && payloadClassName != null) {
         tableConfig.setValue(HoodieTableConfig.PAYLOAD_CLASS_NAME, payloadClassName);
       }
-      if (tableType == HoodieTableType.MERGE_ON_READ && mergerStrategy != null) {
-        tableConfig.setValue(HoodieTableConfig.MERGER_STRATEGY, mergerStrategy);
+      if (tableType == HoodieTableType.MERGE_ON_READ && recordMergerStrategy != null) {
+        tableConfig.setValue(HoodieTableConfig.RECORD_MERGER_STRATEGY, recordMergerStrategy);
       }
 
       if (null != tableCreateSchema) {

@@ -200,7 +200,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         case _ => (classOf[HoodieAvroRecordMerger].getName, "avro")
       }
       val config = Map(
-        HoodieWriteConfig.MERGER_IMPLS.key -> merger,
+        HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> merger,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> format) ++ recordConfig.getOrElse(recordType, Map.empty)
       withSQLConf(config.toList:_*) {
         f
@@ -211,7 +211,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def getRecordType(): HoodieRecordType = {
-    val merger = spark.sessionState.conf.getConfString(HoodieWriteConfig.MERGER_IMPLS.key, HoodieWriteConfig.MERGER_IMPLS.defaultValue())
+    val merger = spark.sessionState.conf.getConfString(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue())
     if (merger.equals(classOf[HoodieSparkRecordMerger].getName)) {
       HoodieRecordType.SPARK
     } else {
