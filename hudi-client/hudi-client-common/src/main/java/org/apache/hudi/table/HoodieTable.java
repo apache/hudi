@@ -85,7 +85,7 @@ import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.util.TransientLazy;
+import org.apache.hudi.util.Transient;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -130,17 +130,20 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
   // NOTE: These are managed by {@code TransientLazy} to implement transient semantic,
   //       where corresponding values (if initialized) will be dropped when during serialization
   //       and later re-initialized when accessed again
-  private final TransientLazy<HoodieTableMetadata> tableMetadata;
-  private final TransientLazy<FileSystemViewManager> viewManager;
+  private final Transient<HoodieTableMetadata> tableMetadata;
+  private final Transient<FileSystemViewManager> viewManager;
 
-  protected final transient HoodieEngineContext context;
+  private final Transient<HoodieEngineContext> context;
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.hadoopConfiguration = context.getHadoopConf();
-    this.context = context;
+    // NOTE: We keep context as [[Transient]] to make sure we can pass on [[HoodieTable]] object
+    //       from the driver to the executors: we can't propagate whole context to the executor,
+    //       and therefore instead we re-create it as [[HoodieLocalEngineContext]]
+    this.context = Transient.eager(context, () -> new HoodieLocalEngineContext(hadoopConfiguration.get()));
 
-    this.tableMetadata = TransientLazy.lazily(() -> {
+    this.tableMetadata = Transient.lazy(() -> {
       HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
           .fromProperties(config.getMetadataConfig().getProps())
           .build();
@@ -149,7 +152,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
       return HoodieTableMetadata.create(getContext(), metadataConfig, config.getBasePath(),
           FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
     });
-    this.viewManager = TransientLazy.lazily(() ->
+    this.viewManager = Transient.lazy(() ->
         // NOTE: It's critical we use {@code getContext()} here since {@code context} is
         //       also a transient field
         FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(),
