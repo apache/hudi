@@ -783,26 +783,39 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .enable(true)
             .enableFullScan(true)
             .enableMetrics(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(3)
+            .withMaxNumDeltaCommitsBeforeCompaction(4)
             .build()).build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
     doWriteOperation(testTable, "0000001", INSERT);
     String commitInstant = "0000002";
     doWriteOperation(testTable, commitInstant, INSERT);
-    // create an inflight commit
+
+    // test multi-writer scenario. lets add 1,2,3,4 where 1,2,4 succeeded, but 3 is still inflight. so latest delta commit in MDT is 4, while 3 is still pending
+    // in DT and not seen by MDT yet. compaction should not trigger until 3 goes to completion.
+
+    // create an inflight commit for 3
     HoodieCommitMetadata inflightCommitMeta = testTable.doWriteOperation("0000003", UPSERT, emptyList(),
         asList("p1", "p2"), 2, false, true);
     doWriteOperation(testTable, "0000004");
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
-    // verify that compaction of metadata table has not happened
-    // because there is inflight commit after latest deltacommit
+    // verify that compaction of metadata table does not kick in.
     assertFalse(tableMetadata.getLatestCompactionTime().isPresent());
-    // do a rollback
-    testTable.doRollback("0000004", "0000005");
+    doWriteOperation(testTable, "0000005", INSERT);
+    doWriteOperation(testTable, "0000006", INSERT);
+    doWriteOperation(testTable, "0000007", INSERT);
+
+    tableMetadata = metadata(writeConfig, context);
+    // verify that compaction of metadata table does not kick in.
+    assertFalse(tableMetadata.getLatestCompactionTime().isPresent());
+
     // move inflight to completed
     testTable.moveInflightCommitToComplete("0000003", inflightCommitMeta);
+
+    // we have to add another commit for compaction to trigger. if not, latest delta commit in MDT is 7, but the new incoming i.e 3 is still inflight in DT while "3"
+    // is getting applied to MDT.
+    doWriteOperation(testTable, "0000008", INSERT);
     // verify compaction kicked in now
-    String metadataCompactionInstant = "0000005" + METADATA_COMPACTION_TIME_SUFFIX;
+    String metadataCompactionInstant = "0000007" + METADATA_COMPACTION_TIME_SUFFIX;
     tableMetadata = metadata(writeConfig, context);
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
     assertEquals(tableMetadata.getLatestCompactionTime().get(), metadataCompactionInstant);

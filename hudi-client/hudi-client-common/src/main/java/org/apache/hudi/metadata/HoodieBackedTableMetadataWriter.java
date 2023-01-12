@@ -1026,16 +1026,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .filterCompletedInstants()
         .lastInstant().orElseThrow(() -> new HoodieMetadataException("No completed deltacommit in metadata table"))
         .getTimestamp();
-    List<HoodieInstant> pendingInstantsInDataTable = dataMetaClient.reloadActiveTimeline()
-        .filterInflightsAndRequested()
-        .getInstantsAsStream()
-        .filter(instant -> !instant.getTimestamp().equals(instantTime))
-        .collect(Collectors.toList());
+    List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
+        .findInstantsBefore(latestDeltaCommitTimeInMetadataTable).getInstants();
 
-    if (!pendingInstantsInDataTable.isEmpty()) {
+    if (!pendingInstants.isEmpty()) {
       LOG.info(String.format(
-          "Cannot compact metadata table as there are %d inflight instants in data table. Latest deltacommit in metadata table: %s. Inflight instants in data table: %s",
-          pendingInstantsInDataTable.size(), latestDeltaCommitTimeInMetadataTable, Arrays.toString(pendingInstantsInDataTable.toArray())));
+          "Cannot compact metadata table as there are %d inflight instants in data table before latest deltacommit in metadata table: %s. Inflight instants in data table: %s",
+          pendingInstants.size(), latestDeltaCommitTimeInMetadataTable, Arrays.toString(pendingInstants.toArray())));
       return;
     }
 
