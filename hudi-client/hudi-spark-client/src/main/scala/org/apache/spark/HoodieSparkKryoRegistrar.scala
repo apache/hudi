@@ -19,7 +19,9 @@
 package org.apache.spark
 
 import com.esotericsoftware.kryo.Kryo
+import com.esotericsoftware.kryo.serializers.JavaSerializer
 import org.apache.hudi.client.model.HoodieInternalRow
+import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.model.HoodieSparkRecord
 import org.apache.hudi.common.util.HoodieCommonKryoRegistrar
 import org.apache.hudi.config.HoodieWriteConfig
@@ -52,6 +54,10 @@ class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegist
 
     kryo.register(classOf[HoodieSparkRecord])
     kryo.register(classOf[HoodieInternalRow])
+
+    // NOTE: Hadoop's configuration is not a serializable object by itself, and hence
+    //       we're relying on [[SerializableConfiguration]] wrapper to work it around
+    kryo.register(classOf[SerializableConfiguration], new JavaSerializer())
   }
 }
 
