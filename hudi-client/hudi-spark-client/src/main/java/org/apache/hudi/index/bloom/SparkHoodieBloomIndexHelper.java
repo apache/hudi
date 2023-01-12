@@ -19,6 +19,7 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -88,7 +89,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
       // Step 2: Use bloom filter to filter and the actual log file to get the record location
       keyLookupResultRDD = sortedFileIdAndKeyPairs.mapPartitionsWithIndex(
-          new HoodieMetadataBloomIndexCheckFunction(hoodieTable), true);
+          new HoodieMetadataBloomIndexCheckFunction((HoodieSparkEngineContext) context, hoodieTable), true);
     } else if (config.useBloomIndexBucketizedChecking()) {
       Map<String, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(
           config, recordsPerPartition, partitionToFileInfo, fileComparisonsRDD, context);
