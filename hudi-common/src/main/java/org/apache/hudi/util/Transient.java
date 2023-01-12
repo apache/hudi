@@ -26,20 +26,26 @@ import java.io.Serializable;
 /**
  * {@link Serializable} counterpart of {@link Lazy}
  *
- * @param <T> type of the object being held by {@link TransientLazy}
+ * @param <T> type of the object being held by {@link Transient}
  */
 @ThreadSafe
-public class TransientLazy<T> implements Serializable {
+public class Transient<T> implements Serializable {
 
-  private transient volatile boolean initialized;
+  private transient boolean initialized;
 
   private final SerializableSupplier<T> initializer;
   private transient T ref;
 
-  private TransientLazy(SerializableSupplier<T> initializer) {
+  private Transient(SerializableSupplier<T> initializer) {
     this.initializer = initializer;
     this.ref = null;
     this.initialized = false;
+  }
+
+  private Transient(T value, SerializableSupplier<T> initializer) {
+    this.initializer = initializer;
+    this.ref = value;
+    this.initialized = true;
   }
 
   public T get() {
@@ -56,11 +62,20 @@ public class TransientLazy<T> implements Serializable {
   }
 
   /**
-   * Executes provided {@code initializer} lazily, while providing for "exactly once" semantic,
-   * to instantiate value of type {@link T} being subsequently held by the returned instance of
-   * {@link TransientLazy}
+   * Creates instance of {@link Transient} by lazily executing provided {@code initializer},
+   * to instantiate value of type {@link T}. Same initializer will be used to re-instantiate
+   * the value after original one being dropped during serialization/deserialization cycle
    */
-  public static <T> TransientLazy<T> lazily(SerializableSupplier<T> initializer) {
-    return new TransientLazy<>(initializer);
+  public static <T> Transient<T> lazy(SerializableSupplier<T> initializer) {
+    return new Transient<>(initializer);
+  }
+
+  /**
+   * Creates instance of {@link Transient} by eagerly setting it to provided {@code value},
+   * while given {@code initializer} will be used to re-instantiate the value after original
+   * one being dropped during serialization/deserialization cycle
+   */
+  public static <T> Transient<T> eager(T value, SerializableSupplier<T> initializer) {
+    return new Transient<>(value, initializer);
   }
 }
