@@ -189,7 +189,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // Create the write parameters
     val parameters = buildMergeIntoConfig(hoodieCatalogTable)
     // TODO Remove it when we implement ExpressionPayload for SparkRecord
-    val parametersWithAvroRecordMerger = parameters ++ Map(HoodieWriteConfig.MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName)
+    val parametersWithAvroRecordMerger = parameters ++ Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName)
     executeUpsert(sourceDF, parametersWithAvroRecordMerger)
 
     sparkSession.catalog.refreshTable(targetTableIdentify.unquotedString)
