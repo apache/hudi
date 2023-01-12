@@ -445,107 +445,105 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Overwrite Table for V2 Table") {
-    withRecordType()(withTempDir { tmp =>
-      if (HoodieSparkUtils.gteqSpark3_2) {
-        val tableName = generateTableName
+    withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+      withRecordType()(withTempDir { tmp =>
+        if (HoodieSparkUtils.gteqSpark3_2) {
+          val tableName = generateTableName
+          // Create a partitioned table
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  dt string
+               |) using hudi
+               | tblproperties (primaryKey = 'id', preCombineField='dt')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}/$tableName'
+        """.stripMargin)
 
-        spark.sql(s"set ${SCHEMA_EVOLUTION_ENABLED.key()}=true")
+          //  Test insert overwrite table
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName
+               | values(1, 'a1', 10.0, 1000, '2021-01-05')
+         """.stripMargin)
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a1", 10.0, 1000, "2021-01-05")
+          )
 
-        // Create a partitioned table
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long,
-             |  dt string
-             |) using hudi
-             | tblproperties (primaryKey = 'id', preCombineField='dt')
-             | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}/$tableName'
-      """.stripMargin)
+          //  Insert overwrite table
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName
+               | values (2, 'a2', 10.0, 1000, '2021-01-06')
+                 """.stripMargin)
+          checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
+            Seq(2, "a2", 10.0, 1000, "2021-01-06")
+          )
 
-        //  Test insert overwrite table
-        spark.sql(
-          s"""
-             | insert overwrite table $tableName
-             | values(1, 'a1', 10.0, 1000, '2021-01-05')
-       """.stripMargin)
-        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-          Seq(1, "a1", 10.0, 1000, "2021-01-05")
-        )
+          // Insert overwrite static partition
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName partition(dt = '2021-01-05')
+               | select * from (select 2 , 'a2', 12.0, 1000) limit 10
+                 """.stripMargin)
+          checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
+            Seq(2, "a2", 12.0, 1000, "2021-01-05"),
+            Seq(2, "a2", 10.0, 1000, "2021-01-06")
+          )
 
-        //  Insert overwrite table
-        spark.sql(
-          s"""
-             | insert overwrite table $tableName
-             | values (2, 'a2', 10.0, 1000, '2021-01-06')
-               """.stripMargin)
-        checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
-          Seq(2, "a2", 10.0, 1000, "2021-01-06")
-        )
+          // Insert data from another table
+          val tblNonPartition = generateTableName
+          spark.sql(
+            s"""
+               | create table $tblNonPartition (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               | ) using hudi
+               | tblproperties (primaryKey = 'id')
+               | location '${tmp.getCanonicalPath}/$tblNonPartition'
+                  """.stripMargin)
+          spark.sql(s"insert into $tblNonPartition select 1, 'a1', 10.0, 1000")
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName partition(dt ='2021-01-04')
+               | select * from $tblNonPartition limit 10
+                 """.stripMargin)
+          checkAnswer(s"select id, name, price, ts, dt from $tableName order by id,dt")(
+            Seq(1, "a1", 10.0, 1000, "2021-01-04"),
+            Seq(2, "a2", 12.0, 1000, "2021-01-05"),
+            Seq(2, "a2", 10.0, 1000, "2021-01-06")
+          )
 
-        // Insert overwrite static partition
-        spark.sql(
-          s"""
-             | insert overwrite table $tableName partition(dt = '2021-01-05')
-             | select * from (select 2 , 'a2', 12.0, 1000) limit 10
-               """.stripMargin)
-        checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
-          Seq(2, "a2", 12.0, 1000, "2021-01-05"),
-          Seq(2, "a2", 10.0, 1000, "2021-01-06")
-        )
+          // Insert overwrite partitioned table, all partitions will be truncated
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName
+               | select id + 2, name, price, ts , '2021-01-04' from $tblNonPartition limit 10
+                 """.stripMargin)
+          checkAnswer(s"select id, name, price, ts, dt from $tableName " +
+            s"where dt >='2021-01-04' and dt <= '2021-01-06' order by id,dt")(
+            Seq(3, "a1", 10.0, 1000, "2021-01-04")
+          )
 
-        // Insert data from another table
-        val tblNonPartition = generateTableName
-        spark.sql(
-          s"""
-             | create table $tblNonPartition (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             | ) using hudi
-             | tblproperties (primaryKey = 'id')
-             | location '${tmp.getCanonicalPath}/$tblNonPartition'
-                """.stripMargin)
-        spark.sql(s"insert into $tblNonPartition select 1, 'a1', 10.0, 1000")
-        spark.sql(
-          s"""
-             | insert overwrite table $tableName partition(dt ='2021-01-04')
-             | select * from $tblNonPartition limit 10
-               """.stripMargin)
-        checkAnswer(s"select id, name, price, ts, dt from $tableName order by id,dt")(
-          Seq(1, "a1", 10.0, 1000, "2021-01-04"),
-          Seq(2, "a2", 12.0, 1000, "2021-01-05"),
-          Seq(2, "a2", 10.0, 1000, "2021-01-06")
-        )
+          // Test insert overwrite non-partitioned table
+          spark.sql(s"insert overwrite table $tblNonPartition select 2, 'a2', 10.0, 1000")
+          checkAnswer(s"select id, name, price, ts from $tblNonPartition")(
+            Seq(2, "a2", 10.0, 1000)
+          )
 
-        // Insert overwrite partitioned table, all partitions will be truncated
-        spark.sql(
-          s"""
-             | insert overwrite table $tableName
-             | select id + 2, name, price, ts , '2021-01-04' from $tblNonPartition limit 10
-               """.stripMargin)
-        checkAnswer(s"select id, name, price, ts, dt from $tableName " +
-          s"where dt >='2021-01-04' and dt <= '2021-01-06' order by id,dt")(
-          Seq(3, "a1", 10.0, 1000, "2021-01-04")
-        )
-
-        // Test insert overwrite non-partitioned table
-        spark.sql(s"insert overwrite table $tblNonPartition select 2, 'a2', 10.0, 1000")
-        checkAnswer(s"select id, name, price, ts from $tblNonPartition")(
-          Seq(2, "a2", 10.0, 1000)
-        )
-
-        spark.sql(s"insert overwrite table $tblNonPartition select 2, 'a2', 10.0, 2000")
-        checkAnswer(s"select id, name, price, ts from $tblNonPartition")(
-          Seq(2, "a2", 10.0, 2000)
-        )
-
-      }
-    })
+          spark.sql(s"insert overwrite table $tblNonPartition select 2, 'a2', 10.0, 2000")
+          checkAnswer(s"select id, name, price, ts from $tblNonPartition")(
+            Seq(2, "a2", 10.0, 2000)
+          )
+        }
+      })
+    }
   }
 
 
