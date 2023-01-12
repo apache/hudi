@@ -61,6 +61,13 @@ public class Transient<T> implements Serializable {
     return ref;
   }
 
+  public void reset() {
+    synchronized (this) {
+      this.ref = null;
+      this.initialized = false;
+    }
+  }
+
   /**
    * Creates instance of {@link Transient} by lazily executing provided {@code initializer},
    * to instantiate value of type {@link T}. Same initializer will be used to re-instantiate
