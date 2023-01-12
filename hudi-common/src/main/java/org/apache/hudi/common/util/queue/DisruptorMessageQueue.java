@@ -62,9 +62,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   @Override
   public void insertRecord(I value) throws Exception {
     if (!isStart) {
-      synchronized (this) {
-        wait();
-      }
+      throw new HoodieException("Can't insert into the queue since the queue is not started yet");
     }
 
     if (isShutdown) {
@@ -100,7 +98,6 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
       if (!isShutdown) {
         isShutdown = true;
         queue.shutdown();
-        notifyAll();
       }
     }
   }
@@ -112,11 +109,10 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   }
 
   protected void start() {
-    queue.start();
     synchronized (this) {
       if (!isStart) {
+        queue.start();
         isStart = true;
-        notifyAll();
       }
     }
   }
