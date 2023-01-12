@@ -35,10 +35,12 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.hudi.util.Transient;
 
 import java.util.List;
 
@@ -49,8 +51,43 @@ public abstract class HoodieFlinkTable<T>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
     implements ExplicitWriteHandleTable<T> {
 
+  private final Transient<HoodieTableMetadata> metadata;
+
   protected HoodieFlinkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
+
+    this.metadata = Transient.lazy(() -> createMetadataTable(getContext(), config));
+  }
+
+  @Override
+  public HoodieTableMetadata getMetadataTable() {
+    return metadata.get();
+  }
+
+  @Override
+  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+    return FlinkHoodieIndexFactory.createIndex((HoodieFlinkEngineContext) context, config);
+  }
+
+  /**
+   * Fetch instance of {@link HoodieTableMetadataWriter}.
+   *
+   * @return instance of {@link HoodieTableMetadataWriter}
+   */
+  @Override
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
+                                                                                            Option<T> actionMetadata) {
+    if (config.isMetadataTableEnabled()) {
+      return Option.of(FlinkHoodieBackedTableMetadataWriter.create(getContext().getHadoopConf().get(), config,
+          getContext(), actionMetadata, Option.of(triggeringInstantTimestamp)));
+    } else {
+      return Option.empty();
+    }
+  }
+
+  @Override
+  public void close() throws Exception {
+    metadata.get().close();
   }
 
   public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
@@ -85,27 +122,6 @@ public abstract class HoodieFlinkTable<T>
   public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
       HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
     return metadata.clone(metadata.getWriteStatuses().collectAsList());
-  }
-
-  @Override
-  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return FlinkHoodieIndexFactory.createIndex((HoodieFlinkEngineContext) context, config);
-  }
-
-  /**
-   * Fetch instance of {@link HoodieTableMetadataWriter}.
-   *
-   * @return instance of {@link HoodieTableMetadataWriter}
-   */
-  @Override
-  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
-                                                                                            Option<T> actionMetadata) {
-    if (config.isMetadataTableEnabled()) {
-      return Option.of(FlinkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
-          context, actionMetadata, Option.of(triggeringInstantTimestamp)));
-    } else {
-      return Option.empty();
-    }
   }
 
   private static void setLatestInternalSchema(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {

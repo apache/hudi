@@ -19,7 +19,6 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.fs.FSUtils;
@@ -35,7 +34,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.function.Function2;
-import org.apache.spark.broadcast.Broadcast;
 import scala.Tuple2;
 
 import java.util.ArrayList;
@@ -62,10 +60,11 @@ public class HoodieMetadataBloomIndexCheckFunction implements
   // Assuming each file bloom filter takes up 512K, sizing the max file count
   // per batch so that the total fetched bloom filters would not cross 128 MB.
   private static final long BLOOM_FILTER_CHECK_MAX_FILE_COUNT_PER_BATCH = 256;
-  private final Broadcast<HoodieTable> hoodieTableBroadcast;
 
-  public HoodieMetadataBloomIndexCheckFunction(HoodieSparkEngineContext context, HoodieTable hoodieTable) {
-    this.hoodieTableBroadcast = context.getJavaSparkContext().broadcast(hoodieTable);
+  private final HoodieTable hoodieTable;
+
+  public HoodieMetadataBloomIndexCheckFunction(HoodieTable hoodieTable) {
+    this.hoodieTable = hoodieTable;
   }
 
   @Override
@@ -95,9 +94,7 @@ public class HoodieMetadataBloomIndexCheckFunction implements
         final String fileId = entry._1;
         if (!fileIDBaseFileMap.containsKey(fileId)) {
           Option<HoodieBaseFile> baseFile =
-              hoodieTableBroadcast.getValue()
-                  .getBaseFileOnlyView()
-                  .getLatestBaseFile(partitionPath, fileId);
+              hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId);
 
           if (!baseFile.isPresent()) {
             throw new HoodieIndexException("Failed to find the base file for partition: " + partitionPath
@@ -117,7 +114,7 @@ public class HoodieMetadataBloomIndexCheckFunction implements
 
       List<Pair<String, String>> partitionNameFileNameList = new ArrayList<>(fileToKeysMap.keySet());
       Map<Pair<String, String>, BloomFilter> fileToBloomFilterMap =
-          hoodieTableBroadcast.getValue().getMetadataTable().getBloomFilters(partitionNameFileNameList);
+          hoodieTable.getMetadataTable().getBloomFilters(partitionNameFileNameList);
 
       final AtomicInteger totalKeys = new AtomicInteger(0);
       fileToKeysMap.forEach((partitionPathFileNamePair, hoodieKeyList) -> {
@@ -142,7 +139,7 @@ public class HoodieMetadataBloomIndexCheckFunction implements
         final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
         List<String> matchingKeys =
             HoodieIndexUtils.filterKeysFromFile(new Path(dataFile.getPath()), candidateRecordKeys,
-                hoodieTableBroadcast.getValue().getHadoopConf());
+                hoodieTable.getHadoopConf());
         LOG.debug(
             String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)",
                 hoodieKeyList.size(), candidateRecordKeys.size(),

@@ -130,7 +130,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
   // NOTE: These are managed by {@code TransientLazy} to implement transient semantic,
   //       where corresponding values (if initialized) will be dropped when during serialization
   //       and later re-initialized when accessed again
-  private final Transient<HoodieTableMetadata> tableMetadata;
   private final Transient<FileSystemViewManager> viewManager;
 
   private final Transient<HoodieEngineContext> context;
@@ -143,15 +142,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
     //       and therefore instead we re-create it as [[HoodieLocalEngineContext]]
     this.context = Transient.eager(context, () -> new HoodieLocalEngineContext(hadoopConfiguration.get()));
 
-    this.tableMetadata = Transient.lazy(() -> {
-      HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-          .fromProperties(config.getMetadataConfig().getProps())
-          .build();
-      // NOTE: It's critical we use {@code getContext()} here since {@code context} is
-      //       also a transient field
-      return HoodieTableMetadata.create(getContext(), metadataConfig, config.getBasePath(),
-          FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
-    });
     this.viewManager = Transient.lazy(() ->
         // NOTE: It's critical we use {@code getContext()} here since {@code context} is
         //       also a transient field
@@ -1010,16 +1000,21 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
     }
   }
 
-  public HoodieTableMetadata getMetadataTable() {
-    return tableMetadata.get();
-  }
+  public abstract HoodieTableMetadata getMetadataTable();
 
   public Runnable getPreExecuteRunnable() {
     return Functions.noop();
   }
 
   @Override
-  public void close() throws Exception {
-    tableMetadata.get().close();
+  public abstract void close() throws Exception;
+
+  protected static HoodieTableMetadata createMetadataTable(HoodieEngineContext context, HoodieWriteConfig config) {
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .fromProperties(config.getMetadataConfig().getProps())
+        .build();
+
+    return HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
   }
 }

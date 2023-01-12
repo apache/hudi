@@ -31,14 +31,36 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.util.Transient;
 
 import java.util.List;
 
 public abstract class HoodieJavaTable<T>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+
+  private final Transient<HoodieTableMetadata> metadata;
+
   protected HoodieJavaTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
+
+    this.metadata = Transient.lazy(() -> createMetadataTable(getContext(), config));
+  }
+
+  @Override
+  public HoodieTableMetadata getMetadataTable() {
+    return metadata.get();
+  }
+
+  @Override
+  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+    return JavaHoodieIndexFactory.createIndex(config);
+  }
+
+  @Override
+  public void close() throws Exception {
+    metadata.get().close();
   }
 
   public static <T> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
@@ -65,10 +87,5 @@ public abstract class HoodieJavaTable<T>
   public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
       HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
     return metadata.clone(metadata.getWriteStatuses().collectAsList());
-  }
-
-  @Override
-  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return JavaHoodieIndexFactory.createIndex(config);
   }
 }
