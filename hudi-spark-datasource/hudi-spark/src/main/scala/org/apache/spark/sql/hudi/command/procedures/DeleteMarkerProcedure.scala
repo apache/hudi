@@ -62,10 +62,11 @@ class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Log
         true
       case Failure(e) =>
         logWarning(s"Failed: Could not clean marker instantTime: $instantTime.", e)
-        if (client != null) {
-          client.close()
-        }
         false
+    }
+
+    if (client != null) {
+      client.close()
     }
 
     Seq(Row(result))
