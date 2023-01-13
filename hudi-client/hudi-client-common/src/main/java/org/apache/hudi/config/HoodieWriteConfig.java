@@ -34,7 +34,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -136,7 +135,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MERGER_IMPLS = ConfigProperty
       .key("hoodie.datasource.write.merger.impls")
-      .defaultValue( "org.apache.hudi.common.model.HoodieAvroRecordMerger,org.apache.hudi.HoodieSparkRecordMerger")
+      .defaultValue("org.apache.hudi.common.model.HoodieAvroRecordMerger,org.apache.hudi.HoodieSparkRecordMerger")
       .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
           + "These merger impls will filter by hoodie.datasource.write.merger.strategy "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
