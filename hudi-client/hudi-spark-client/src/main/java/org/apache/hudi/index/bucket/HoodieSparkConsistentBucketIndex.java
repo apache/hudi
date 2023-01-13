@@ -167,14 +167,17 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
     if (metadataOption.isPresent()) {
       return metadataOption.get();
     }
-
-    return createMetadata(table, partition);
+    return createMetadata(table, partition, false);
   }
 
   public HoodieConsistentHashingMetadata createMetadata(HoodieTable table, String partition) {
+   return createMetadata(table, partition, true);
+  }
+
+  private HoodieConsistentHashingMetadata createMetadata(HoodieTable table, String partition, boolean overwrite) {
     // There is no metadata, so try to create a new one and save it.
     HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
-    if (saveMetadata(table, metadata, false)) {
+    if (saveMetadata(table, metadata, overwrite)) {
       return metadata;
     }
 
