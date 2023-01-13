@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import java.io.IOException;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
@@ -82,15 +81,6 @@ public class SparkDeletePartitionCommitActionExecutor<T>
         table.getMetaClient().getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant,
             TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
       }
-
-      // remove consistent hashing metadata for the partition to be dropped
-      partitions.forEach(p -> {
-        try {
-          table.getMetaClient().getFs().delete(new Path(table.getMetaClient().getHashingMetadataPath(), p));
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      });
 
       this.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())),
           instantTime);
