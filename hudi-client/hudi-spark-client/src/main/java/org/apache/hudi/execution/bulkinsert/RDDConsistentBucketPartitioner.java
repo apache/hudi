@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.FlatLists;
@@ -150,9 +151,14 @@ public class RDDConsistentBucketPartitioner<T> extends RDDBucketIndexPartitioner
   /**
    * Get (construct) the bucket identifier of the given partition
    */
-  private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
+  private ConsistentBucketIdentifier getBucketIdentifier(String partition, List<String> droppedPartitions) {
     HoodieSparkConsistentBucketIndex index = (HoodieSparkConsistentBucketIndex) table.getIndex();
-    HoodieConsistentHashingMetadata metadata = index.loadOrCreateMetadata(this.table, partition);
+    HoodieConsistentHashingMetadata metadata;
+    if (droppedPartitions.contains(partition)) {
+      metadata = index.createMetadata(table, partition);
+    } else {
+      metadata = index.loadOrCreateMetadata(this.table, partition);
+    }
     if (hashingChildrenNodes.containsKey(partition)) {
       metadata.setChildrenNodes(hashingChildrenNodes.get(partition));
     }
@@ -164,8 +170,9 @@ public class RDDConsistentBucketPartitioner<T> extends RDDBucketIndexPartitioner
    * the mapping from partition to its bucket identifier is constructed.
    */
   private Map<String, ConsistentBucketIdentifier> initializeBucketIdentifier(JavaRDD<HoodieRecord<T>> records) {
+    List<String> droppedPartitions = TimelineUtils.getDroppedPartitions(table.getMetaClient().getActiveTimeline());
     return records.map(HoodieRecord::getPartitionPath).distinct().collect().stream()
-        .collect(Collectors.toMap(p -> p, p -> getBucketIdentifier(p)));
+        .collect(Collectors.toMap(p -> p, p -> getBucketIdentifier(p, droppedPartitions)));
   }
 
   /**

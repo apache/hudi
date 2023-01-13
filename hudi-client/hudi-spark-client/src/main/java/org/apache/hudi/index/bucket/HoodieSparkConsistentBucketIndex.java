@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -167,6 +168,10 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
       return metadataOption.get();
     }
 
+    return createMetadata(table, partition);
+  }
+
+  public HoodieConsistentHashingMetadata createMetadata(HoodieTable table, String partition) {
     // There is no metadata, so try to create a new one and save it.
     HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
     if (saveMetadata(table, metadata, false)) {
@@ -175,7 +180,7 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
 
     // The creation failed, so try load metadata again. Concurrent creation of metadata should have succeeded.
     // Note: the consistent problem of cloud storage is handled internal in the HoodieWrapperFileSystem, i.e., ConsistentGuard
-    metadataOption = loadMetadata(table, partition);
+    Option<HoodieConsistentHashingMetadata> metadataOption = loadMetadata(table, partition);
     ValidationUtils.checkState(metadataOption.isPresent(), "Failed to load or create metadata, partition: " + partition);
     return metadataOption.get();
   }
@@ -251,9 +256,15 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
     private final Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
 
     public ConsistentBucketIndexLocationMapper(HoodieTable table, List<String> partitions) {
+      List<String> droppedPartitions = TimelineUtils.getDroppedPartitions(table.getMetaClient().getActiveTimeline());
       // TODO maybe parallel
       partitionToIdentifier = partitions.stream().collect(Collectors.toMap(p -> p, p -> {
-        HoodieConsistentHashingMetadata metadata = loadOrCreateMetadata(table, p);
+        HoodieConsistentHashingMetadata metadata;
+        if (droppedPartitions.contains(p)) {
+          metadata = createMetadata(table, p);
+        } else {
+          metadata = loadOrCreateMetadata(table, p);
+        }
         return new ConsistentBucketIdentifier(metadata);
       }));
     }
