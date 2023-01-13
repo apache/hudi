@@ -19,14 +19,11 @@
 package org.apache.hudi.utils.source;
 
 import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
+import org.apache.hudi.util.JsonDeserializationFunction;
 
-import org.apache.flink.api.common.functions.AbstractRichFunction;
-import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
-import org.apache.flink.formats.common.TimestampFormat;
-import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
@@ -39,7 +36,6 @@ import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
@@ -59,6 +55,8 @@ import static org.apache.hudi.utils.factory.ContinuousFileSourceFactory.CHECKPOI
  * </pre>
  *
  * <p>If all the data are flushed out, it waits for the next checkpoint to finish and tear down the source.
+ *
+ * <p>NOTE: this class is represented twice: in test utils and in quickstart. Don't forget to update both files.
  */
 public class ContinuousFileSource implements ScanTableSource {
 
@@ -87,19 +85,10 @@ public class ContinuousFileSource implements ScanTableSource {
       @Override
       public DataStream<RowData> produceDataStream(StreamExecutionEnvironment execEnv) {
         final RowType rowType = (RowType) tableSchema.toSourceRowDataType().getLogicalType();
-
-        JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
-            rowType,
-            InternalTypeInfo.of(rowType),
-            false,
-            true,
-            TimestampFormat.ISO_8601);
-
         return execEnv.addSource(new BoundedSourceFunction(path, conf.getInteger(CHECKPOINTS)))
             .name("continuous_file_source")
             .setParallelism(1)
-            .map(new JsonDeserializationFunction(deserializationSchema),
-                InternalTypeInfo.of(rowType));
+            .map(JsonDeserializationFunction.getInstance(rowType), InternalTypeInfo.of(rowType));
       }
     };
   }
@@ -184,30 +173,6 @@ public class ContinuousFileSource implements ScanTableSource {
     @Override
     public void notifyCheckpointComplete(long l) {
       this.currentCP.incrementAndGet();
-    }
-  }
-
-  /**
-   * Wrapper function that manages the lifecycle of the JSON deserialization schema.
-   */
-  public static class JsonDeserializationFunction
-      extends AbstractRichFunction
-      implements MapFunction<String, RowData> {
-    private final JsonRowDataDeserializationSchema deserializationSchema;
-
-    public JsonDeserializationFunction(JsonRowDataDeserializationSchema deserializationSchema) {
-      this.deserializationSchema = deserializationSchema;
-    }
-
-    @Override
-    public void open(Configuration parameters) throws Exception {
-      super.open(parameters);
-      this.deserializationSchema.open(null);
-    }
-
-    @Override
-    public RowData map(String record) throws Exception {
-      return deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8));
     }
   }
 }
