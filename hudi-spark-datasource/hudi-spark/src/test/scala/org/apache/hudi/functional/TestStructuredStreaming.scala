@@ -20,24 +20,23 @@ package org.apache.hudi.functional
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER
 import org.apache.hudi.HoodieSinkCheckpoint.SINK_CHECKPOINT_KEY
+import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable}
-import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.TableNotFoundException
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSinkCheckpoint}
 import org.apache.log4j.LogManager
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, Trigger}
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 
@@ -45,8 +44,6 @@ import scala.collection.JavaConversions._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
-
-import org.apache.hudi.common.config.HoodieStorageConfig
 
 /**
  * Basic tests on the spark datasource for structured streaming sink
@@ -70,13 +67,6 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     initTestDataGenerator()
     initFileSystem()
     initTimelineService()
-  }
-
-  @AfterEach override def tearDown() = {
-    cleanupTimelineService()
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
   }
 
   def initStreamingWriteFuture(schema: StructType, sourcePath: String, destPath: String, hudiOptions: Map[String, String]): Future[Unit] = {
@@ -210,7 +200,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testStructuredStreaming(tableType: HoodieTableType): Unit = {
-    structuredStreamingTestRunner(tableType, false, false)
+    structuredStreamingTestRunner(
+      tableType, addCompactionConfigs = false, isAsyncCompaction = false)
   }
 
   @throws[InterruptedException]
@@ -223,7 +214,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     var success = false
     while ({!success && (currTime - beginTime) < timeoutMsecs}) try {
       val timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, tablePath)
-      log.info("Timeline :" + timeline.getInstants.toArray)
+      log.info("Timeline :" + timeline.getInstants.toArray.mkString("Array(", ", ", ")"))
       if (timeline.countInstants >= numCommits) {
         numInstants = timeline.countInstants
         success = true
@@ -250,7 +241,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       // check have schedule clustering and clustering file group to one
       waitTillHasCompletedReplaceInstant(destPath, 120, 1)
       metaClient.reloadActiveTimeline()
-      assertEquals(1, getLatestFileGroupsFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).size)
+      assertEquals(1, getLatestFileGroupsFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).length)
     }
 
     structuredStreamingForTestClusteringRunner(sourcePath, destPath, HoodieTableType.COPY_ON_WRITE,
@@ -260,7 +251,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testStructuredStreamingWithCompaction(isAsyncCompaction: Boolean): Unit = {
-    structuredStreamingTestRunner(HoodieTableType.MERGE_ON_READ, true, isAsyncCompaction)
+    structuredStreamingTestRunner(
+      HoodieTableType.MERGE_ON_READ, addCompactionConfigs = true, isAsyncCompaction = isAsyncCompaction)
   }
 
   @Test
@@ -281,7 +273,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       .options(commonOpts)
       .outputMode(OutputMode.Append)
       .option(STREAMING_CHECKPOINT_IDENTIFIER.key(), "streaming_identifier1")
-      .option("checkpointLocation", s"${basePath}/checkpoint1")
+      .option("checkpointLocation", s"$basePath/checkpoint1")
       .start(destPath)
 
     query1.processAllAvailable()
@@ -304,7 +296,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       .options(commonOpts)
       .outputMode(OutputMode.Append)
       .option(STREAMING_CHECKPOINT_IDENTIFIER.key(), "streaming_identifier2")
-      .option("checkpointLocation", s"${basePath}/checkpoint2")
+      .option("checkpointLocation", s"$basePath/checkpoint2")
       .start(destPath)
     query2.processAllAvailable()
     query1.processAllAvailable()
@@ -391,13 +383,13 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     var success = false
     while ({!success && (currTime - beginTime) < timeoutMsecs}) try {
       this.metaClient.reloadActiveTimeline()
-      val completeReplaceSize = this.metaClient.getActiveTimeline.getCompletedReplaceTimeline().getInstants.toArray.size
+      val completeReplaceSize = this.metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.toArray.length
       println("completeReplaceSize:" + completeReplaceSize)
       if (completeReplaceSize > 0) {
         success = true
       }
     } catch {
-      case te: TableNotFoundException =>
+      case _: TableNotFoundException =>
         log.info("Got table not found exception. Retrying")
     } finally {
       Thread.sleep(sleepSecsAfterEachRun * 1000)
