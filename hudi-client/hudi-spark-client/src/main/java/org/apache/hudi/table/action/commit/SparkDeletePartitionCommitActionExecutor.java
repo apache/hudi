@@ -18,6 +18,9 @@
 
 package org.apache.hudi.table.action.commit;
 
+import java.util.ArrayList;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
@@ -25,6 +28,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -59,6 +63,25 @@ public class SparkDeletePartitionCommitActionExecutor<T>
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
+    List<String> instantsOfOffendingPendingTableServiceAction = new ArrayList<>();
+    // ensure that there are no pending inflight clustering/compaction operations involving this partition
+    SyncableFileSystemView fileSystemView = (SyncableFileSystemView) table.getSliceView();
+
+    Stream.concat(fileSystemView.getPendingCompactionOperations(), fileSystemView.getPendingLogCompactionOperations())
+        .filter(op -> partitions.contains(op.getRight().getPartitionPath()))
+        .forEach(op -> instantsOfOffendingPendingTableServiceAction.add(op.getLeft()));
+
+    fileSystemView.getFileGroupsInPendingClustering()
+        .filter(fgIdInstantPair -> partitions.contains(fgIdInstantPair.getLeft().getPartitionPath()))
+        .forEach(x -> instantsOfOffendingPendingTableServiceAction.add(x.getRight().getTimestamp()));
+
+    if (instantsOfOffendingPendingTableServiceAction.size() > 0) {
+      throw new HoodieDeletePartitionException("Failed to drop partitions. "
+          + "Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: " + partitions + ". "
+          + "Instant(s) of offending pending table service action: "
+          + instantsOfOffendingPendingTableServiceAction.stream().distinct().collect(Collectors.toList()));
+    }
+
     try {
       HoodieTimer timer = HoodieTimer.start();
       context.setJobStatus(this.getClass().getSimpleName(), "Gather all file ids from all deleting partitions.");

@@ -18,9 +18,11 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
@@ -396,4 +398,45 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Prevent a partition from being dropped if there are pending table service actions") {
+    withTempDir { tmp =>
+      Seq("cow").foreach { tableType =>
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}t/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | options (
+             |  primaryKey ='id',
+             |  type = '$tableType',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by(ts)
+             | location '$basePath'
+       """.stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+        val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
+        // Generate the first clustering plan
+        val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
+        client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
+
+        checkAnswer(s"call show_clustering('$tableName')")(
+          Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
+        )
+
+        val partition = "ts=1002"
+        val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
+        checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+      }
+    }
+  }
+
 }
