@@ -100,12 +100,12 @@ import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthorit
  * between metadata table and filesystem.
  * <p>
  * There are five validation tasks, that can be enabled independently through the following CLI options:
- * - `--validate-latest-file-slices`: validate latest file slices for all partitions.
- * - `--validate-latest-base-files`: validate latest base files for all partitions.
+ * - `--validate-latest-file-slices`: validate the latest file slices for all partitions.
+ * - `--validate-latest-base-files`: validate the latest base files for all partitions.
  * - `--validate-all-file-groups`: validate all file groups, and all file slices within file groups.
  * - `--validate-all-column-stats`: validate column stats for all columns in the schema
  * - `--validate-bloom-filters`: validate bloom filters of base files
- *
+ * <p>
  * If the Hudi table is on the local file system, the base path passed to `--base-path` must have
  * "file:" prefix to avoid validation failure.
  * <p>
@@ -114,37 +114,36 @@ import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthorit
  * Example command:
  * ```
  * spark-submit \
- *  --class org.apache.hudi.utilities.HoodieMetadataTableValidator \
- *  --master spark://xxxx:7077 \
- *  --driver-memory 1g \
- *  --executor-memory 1g \
- *  $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
- *  --base-path basePath \
- *  --validate-latest-file-slices \
- *  --validate-latest-base-files \
- *  --validate-all-file-groups
+ * --class org.apache.hudi.utilities.HoodieMetadataTableValidator \
+ * --master spark://xxxx:7077 \
+ * --driver-memory 1g \
+ * --executor-memory 1g \
+ * $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.13.0-SNAPSHOT.jar \
+ * --base-path basePath \
+ * --validate-latest-file-slices \
+ * --validate-latest-base-files \
+ * --validate-all-file-groups
  * ```
  *
  * <p>
- * Also You can set `--continuous` for long running this validator.
+ * Also, You can set `--continuous` for long running this validator.
  * And use `--min-validate-interval-seconds` to control the validation frequency, default is 10 minutes.
  * <p>
  * Example command:
  * ```
  * spark-submit \
- *  --class org.apache.hudi.utilities.HoodieMetadataTableValidator \
- *  --master spark://xxxx:7077 \
- *  --driver-memory 1g \
- *  --executor-memory 1g \
- *  $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
- *  --base-path basePath \
- *  --validate-latest-file-slices \
- *  --validate-latest-base-files \
- *  --validate-all-file-groups \
- *  --continuous \
- *  --min-validate-interval-seconds 60
+ * --class org.apache.hudi.utilities.HoodieMetadataTableValidator \
+ * --master spark://xxxx:7077 \
+ * --driver-memory 1g \
+ * --executor-memory 1g \
+ * $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.13.0-SNAPSHOT.jar \
+ * --base-path basePath \
+ * --validate-latest-file-slices \
+ * --validate-latest-base-files \
+ * --validate-all-file-groups \
+ * --continuous \
+ * --min-validate-interval-seconds 60
  * ```
- *
  */
 public class HoodieMetadataTableValidator implements Serializable {
 
