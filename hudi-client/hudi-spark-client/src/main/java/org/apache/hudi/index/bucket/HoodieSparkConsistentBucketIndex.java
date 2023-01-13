@@ -171,7 +171,7 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
   }
 
   public HoodieConsistentHashingMetadata createMetadata(HoodieTable table, String partition) {
-   return createMetadata(table, partition, true);
+    return createMetadata(table, partition, true);
   }
 
   private HoodieConsistentHashingMetadata createMetadata(HoodieTable table, String partition, boolean overwrite) {
