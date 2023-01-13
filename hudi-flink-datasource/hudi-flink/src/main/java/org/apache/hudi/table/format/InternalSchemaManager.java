@@ -106,13 +106,31 @@ public class InternalSchemaManager implements Serializable {
     return new InternalSchemaMerger(fileSchemaUnmerged, querySchema, true, true).mergeSchema();
   }
 
+  /**
+   * This method returns a mapping of columns that have type inconsistencies between the fileSchema and querySchema.
+   * This is done by:
+   * <li>1. Finding the columns with type changes</li>
+   * <li>2. Get a map storing the index of these columns with type changes; Map of -> (colIdxInQueryFieldNames, colIdxInQuerySchema)</li>
+   * <li>3. For each selectedField with type changes, build a castMap containing the cast/conversion details;
+   * Map of -> (selectedPos, Cast([from] fileType, [to] queryType))</li>
+   *
+   * @param fileSchema InternalSchema representation of the file's schema (acquired from commit/.schema metadata)
+   * @param queryFieldNames array containing the columns of a Hudi Flink table
+   * @param queryFieldTypes array containing the field types of the columns of a Hudi Flink table
+   * @param selectedFields array containing the index of the columns of interest required (indexes are based on queryFieldNames and queryFieldTypes)
+   * @return a castMap containing the information of how to cast a selectedField from the fileType to queryType.
+   *
+   * @see CastMap
+   */
   CastMap getCastMap(InternalSchema fileSchema, String[] queryFieldNames, DataType[] queryFieldTypes, int[] selectedFields) {
     Preconditions.checkArgument(!querySchema.isEmptySchema(), "querySchema cannot be empty");
     Preconditions.checkArgument(!fileSchema.isEmptySchema(), "fileSchema cannot be empty");
 
     CastMap castMap = new CastMap();
+    // map storing the indexes of columns with type changes Map of -> (colIdxInQueryFieldNames, colIdxInQuerySchema)
     Map<Integer, Integer> posProxy = getPosProxy(fileSchema, queryFieldNames);
     if (posProxy.isEmpty()) {
+      // no type changes
       castMap.setFileFieldTypes(queryFieldTypes);
       return castMap;
     }
@@ -123,12 +141,17 @@ public class InternalSchemaManager implements Serializable {
     for (int i = 0; i < queryFieldTypes.length; i++) {
       Integer posOfChangedType = posProxy.get(i);
       if (posOfChangedType == null) {
+        // no type change for column; fileFieldType == queryFieldType
         fileFieldTypes[i] = queryFieldTypes[i];
       } else {
+        // type change detected for column;
         DataType fileType = fileSchemaAsDataTypes.get(posOfChangedType);
+        // update fileFieldType match the type found in fileSchema
         fileFieldTypes[i] = fileType;
         int selectedPos = selectedFieldList.indexOf(i);
         if (selectedPos != -1) {
+          // if the column is part of user's query, add it into the castMap
+          // castMap -> (position, Cast([from] fileType, [to] queryType))
           castMap.add(selectedPos, fileType.getLogicalType(), queryFieldTypes[i].getLogicalType());
         }
       }
@@ -137,6 +160,23 @@ public class InternalSchemaManager implements Serializable {
     return castMap;
   }
 
+  /**
+   * For columns that have been modified via the column renaming operation, the column name might be inconsistent
+   * between querySchema and fileSchema.
+   * <p>
+   * As such, this method will identify all columns that have been renamed, and return a string array of column names
+   * corresponding to the column names found in the fileSchema.
+   * <p>
+   * This is done by:
+   * <li>1. Get the rename mapping of -> (colNameFromNewSchema, colNameLastPartFromOldSchema)</li>
+   * <li>2. For columns that have been renamed, replace them with the old column name</li>
+   *
+   * @param fileSchema InternalSchema representation of the file's schema (acquired from commit/.schema metadata)
+   * @param queryFieldNames array containing the columns of a Hudi Flink table
+   * @return String array containing column names corresponding to the column names found in the fileSchema
+   *
+   * @see InternalSchemaUtils#collectRenameCols(InternalSchema, InternalSchema)
+   */
   String[] getFileFieldNames(InternalSchema fileSchema, String[] queryFieldNames) {
     Preconditions.checkArgument(!querySchema.isEmptySchema(), "querySchema cannot be empty");
     Preconditions.checkArgument(!fileSchema.isEmptySchema(), "fileSchema cannot be empty");
