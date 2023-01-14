@@ -97,6 +97,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     synchronized (this) {
       if (!isShutdown) {
         isShutdown = true;
+        isStart = false;
         queue.shutdown();
       }
     }
