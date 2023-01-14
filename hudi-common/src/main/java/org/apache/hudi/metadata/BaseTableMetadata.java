@@ -73,8 +73,10 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   private static final Logger LOG = LogManager.getLogger(BaseTableMetadata.class);
 
-  public static final long MAX_MEMORY_SIZE_IN_BYTES = 1024 * 1024 * 1024;
-  public static final int BUFFER_SIZE = 10 * 1024 * 1024;
+  protected static final long MAX_MEMORY_SIZE_IN_BYTES = 1024 * 1024 * 1024;
+  // NOTE: Buffer-size is deliberately set pretty low, since MT internally is relying
+  //       on HFile (serving as persisted binary key-value mapping) to do caching
+  protected static final int BUFFER_SIZE = 10 * 1024; // 10Kb
 
   protected final transient HoodieEngineContext engineContext;
   protected final SerializableConfiguration hadoopConf;
@@ -205,6 +207,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     HoodieTimer timer = HoodieTimer.start();
     Set<String> partitionIDFileIDSortedStrings = new TreeSet<>();
     Map<String, Pair<String, String>> fileToKeyMap = new HashMap<>();
+    // TODO simplify (no sorting is required)
     partitionNameFileNameList.forEach(partitionNameFileNamePair -> {
           final String bloomFilterIndexKey = HoodieMetadataPayload.getBloomFilterIndexKey(
               new PartitionIndexID(partitionNameFileNamePair.getLeft()), new FileIndexID(partitionNameFileNamePair.getRight()));

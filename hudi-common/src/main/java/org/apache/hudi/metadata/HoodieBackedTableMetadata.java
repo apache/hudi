@@ -97,7 +97,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private Transient<HoodieTableFileSystemView> metadataFileSystemView;
 
   // Readers for the latest file slice corresponding to file groups in the metadata partition
-  private Transient<Map<Pair<String, String>, Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader>>> partitionReaders =
+  private final Transient<Map<Pair<String, String>, Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader>>> partitionReaders =
       Transient.lazy(ConcurrentHashMap::new);
 
   public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
@@ -197,14 +197,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
               return mergedRecords.stream()
                 .map(keyRecordPair -> keyRecordPair.getValue().orElse(null))
+                .filter(Objects::nonNull)
                 .iterator();
             } catch (IOException ioe) {
               throw new HoodieIOException("Error merging records from metadata table for  " + sortedKeyPrefixes.size() + " key : ", ioe);
             } finally {
               closeReader(readers);
             }
-          })
-        .filter(Objects::nonNull);
+          });
   }
 
   @Override
