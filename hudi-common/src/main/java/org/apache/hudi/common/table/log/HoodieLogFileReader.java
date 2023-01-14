@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.fs.BoundedFsDataInputStream;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.LeakTrackingFSDataInputStream;
 import org.apache.hudi.common.fs.SchemeAwareFSDataInputStream;
 import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -488,25 +489,24 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private static FSDataInputStream getFSDataInputStream(FileSystem fs,
                                                         HoodieLogFile logFile,
                                                         int bufferSize) throws IOException {
-    FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
+    FSDataInputStream inputStream = fs.open(logFile.getPath(), bufferSize);
+    FSDataInputStream targetInputStream;
 
     if (FSUtils.isGCSFileSystem(fs)) {
       // in GCS FS, we might need to interceptor seek offsets as we might get EOF exception
-      return new SchemeAwareFSDataInputStream(getFSDataInputStreamForGCS(fsDataInputStream, logFile, bufferSize), true);
+      targetInputStream = new SchemeAwareFSDataInputStream(getFSDataInputStreamForGCS(inputStream, logFile, bufferSize), true);
+    } else if (FSUtils.isCHDFileSystem(fs)) {
+      targetInputStream = new BoundedFsDataInputStream(fs, logFile.getPath(), inputStream);
+    } else if (inputStream.getWrappedStream() instanceof FSInputStream) {
+      targetInputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
+          new BufferedFSInputStream((FSInputStream) inputStream.getWrappedStream(), bufferSize)));
+    } else {
+      // inputStream.getWrappedStream() maybe a BufferedFSInputStream
+      // need to wrap in another BufferedFSInputStream the make bufferSize work?
+      targetInputStream = inputStream;
     }
 
-    if (FSUtils.isCHDFileSystem(fs)) {
-      return new BoundedFsDataInputStream(fs, logFile.getPath(), fsDataInputStream);
-    }
-
-    if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-      return new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
-          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
-    }
-
-    // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
-    // need to wrap in another BufferedFSInputStream the make bufferSize work?
-    return fsDataInputStream;
+    return new LeakTrackingFSDataInputStream(targetInputStream);
   }
 
   /**

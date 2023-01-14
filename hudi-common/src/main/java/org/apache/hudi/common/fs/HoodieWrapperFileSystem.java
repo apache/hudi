@@ -200,7 +200,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path f, int bufferSize) throws IOException {
-    return wrapInputStream(f, fileSystem.open(convertToDefaultPath(f), bufferSize));
+    return wrapStream(f, fileSystem.open(convertToDefaultPath(f), bufferSize));
   }
 
   @Override
@@ -223,13 +223,6 @@ public class HoodieWrapperFileSystem extends FileSystem {
         () -> openStreams.remove(path.getName()));
     openStreams.put(path.getName(), os);
     return os;
-  }
-
-  private FSDataInputStream wrapInputStream(final Path path, FSDataInputStream fsDataInputStream) throws IOException {
-    if (fsDataInputStream instanceof TimedFSDataInputStream) {
-      return fsDataInputStream;
-    }
-    return new TimedFSDataInputStream(path, fsDataInputStream);
   }
 
   @Override
@@ -473,7 +466,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path f) throws IOException {
-    return wrapInputStream(f, fileSystem.open(convertToDefaultPath(f)));
+    return wrapStream(f, fileSystem.open(convertToDefaultPath(f)));
   }
 
   @Override
@@ -1063,5 +1056,23 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   public FileSystem getFileSystem() {
     return fileSystem;
+  }
+
+  private static FSDataInputStream wrapLeakTrackingStream(FSDataInputStream fsDataInputStream) throws IOException {
+    if (fsDataInputStream instanceof LeakTrackingFSDataInputStream) {
+      return fsDataInputStream;
+    }
+    return new LeakTrackingFSDataInputStream(fsDataInputStream);
+  }
+
+  private static FSDataInputStream wrapTimeTrackingStream(final Path path, FSDataInputStream fsDataInputStream) throws IOException {
+    if (fsDataInputStream instanceof TimedFSDataInputStream) {
+      return fsDataInputStream;
+    }
+    return new TimedFSDataInputStream(path, fsDataInputStream);
+  }
+
+  private static FSDataInputStream wrapStream(final Path path, FSDataInputStream fsDataInputStream) throws IOException {
+    return wrapLeakTrackingStream(wrapTimeTrackingStream(path, fsDataInputStream));
   }
 }
