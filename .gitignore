@@ -2,7 +2,7 @@
 /build/
 target/
 metastore_db/
-.mvn/
+.mvn/wrapper/*.jar
 
 # OS Files #
 .DS_Store
