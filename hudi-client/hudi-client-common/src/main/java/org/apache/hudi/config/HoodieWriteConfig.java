@@ -549,6 +549,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When table is upgraded from pre 0.12 to 0.12, we check for \"default\" partition and fail if found one. "
           + "Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation");
 
+  public static final ConfigProperty<Boolean> AUTO_GENERATE_RECORD_KEYS = ConfigProperty.key("hoodie.auto.generate.record.keys")
+      .defaultValue(false)
+      .sinceVersion("0.13.0")
+      .withDocumentation("to be added");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
 
@@ -2201,6 +2206,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(SKIP_DEFAULT_PARTITION_VALIDATION);
   }
 
+  public Boolean doAutoGenerateRecordKeys() {
+    return getBooleanOrDefault(AUTO_GENERATE_RECORD_KEYS);
+  }
+
   /**
    * Are any table services configured to run inline for both scheduling and execution?
    *
@@ -2720,6 +2729,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder doSkipDefaultPartitionValidation(boolean skipDefaultPartitionValidation) {
       writeConfig.setValue(SKIP_DEFAULT_PARTITION_VALIDATION, String.valueOf(skipDefaultPartitionValidation));
+      return this;
+    }
+
+    public Builder withAutoGenerateRecordKeys(boolean autoGenerateRecordKeys) {
+      writeConfig.setValue(AUTO_GENERATE_RECORD_KEYS, String.valueOf(autoGenerateRecordKeys));
       return this;
     }
 

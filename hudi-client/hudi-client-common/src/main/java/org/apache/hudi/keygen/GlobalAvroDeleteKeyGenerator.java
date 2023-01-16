@@ -20,6 +20,7 @@ package org.apache.hudi.keygen;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.factory.RecordKeyGeneratorFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,15 +33,17 @@ import java.util.List;
 public class GlobalAvroDeleteKeyGenerator extends BaseKeyGenerator {
 
   private static final String EMPTY_PARTITION = "";
+  private final RecordKeyGenerator recordKeyGenerator;
 
   public GlobalAvroDeleteKeyGenerator(TypedProperties config) {
     super(config);
     this.recordKeyFields = Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","));
+    this.recordKeyGenerator = RecordKeyGeneratorFactory.getRecordKeyGenerator(config, recordKeyFields, isConsistentLogicalTimestampEnabled(), new ArrayList<>());
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
+    return recordKeyGenerator.getRecordKey(record);
   }
 
   @Override

@@ -20,13 +20,17 @@ package org.apache.hudi.keygen;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.factory.RecordKeyGeneratorFactory;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 /**
  * Avro simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
 public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
+
+  private final RecordKeyGenerator recordKeyGenerator;
 
   public SimpleAvroKeyGenerator(TypedProperties props) {
     this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
@@ -39,15 +43,14 @@ public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
 
   SimpleAvroKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
     super(props);
-    this.recordKeyFields = recordKeyField == null
-        ? Collections.emptyList()
-        : Collections.singletonList(recordKeyField);
+    this.recordKeyFields = Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","));
     this.partitionPathFields = Collections.singletonList(partitionPathField);
+    this.recordKeyGenerator = RecordKeyGeneratorFactory.getRecordKeyGenerator(config, recordKeyFields, isConsistentLogicalTimestampEnabled(), partitionPathFields);
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames().get(0), isConsistentLogicalTimestampEnabled());
+    return recordKeyGenerator.getRecordKey(record);
   }
 
   @Override

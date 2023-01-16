@@ -30,7 +30,7 @@ import java.util.List;
  * Base abstract class to extend for {@link KeyGenerator} with default logic of taking
  * partitioning and timestamp configs.
  */
-public abstract class BaseKeyGenerator extends KeyGenerator {
+public abstract class BaseKeyGenerator extends KeyGenerator implements RecordKeyGenerator {
 
   protected List<String> recordKeyFields;
   protected List<String> partitionPathFields;
@@ -51,7 +51,7 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
   /**
    * Generate a record Key out of provided generic record.
    */
-  public abstract String getRecordKey(GenericRecord record);
+  //public abstract String getRecordKey(GenericRecord record);
 
   /**
    * Generate a partition path out of provided generic record.
