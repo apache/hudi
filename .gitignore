@@ -3,7 +3,7 @@
 target/
 metastore_db/
 .mvn/
- 
+
 # OS Files #
 .DS_Store
  
