@@ -209,11 +209,11 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     // NOTE: We're sorting the columns to make sure final index schema matches layout
     //       of the transposed table
     val sortedTargetColumnsSet = TreeSet(queryColumns:_*)
-    val sortedTargetColumns = sortedTargetColumnsSet.toSeq
 
     // NOTE: This is a trick to avoid pulling all of [[ColumnStatsIndexSupport]] object into the lambdas'
     //       closures below
     val indexedColumns = this.indexedColumns
+    val sortedTargetColumns = sortedTargetColumnsSet.filter(indexedColumns.contains(_)).toSeq
 
     // Here we perform complex transformation which requires us to modify the layout of the rows
     // of the dataset, and therefore we rely on low-level RDD API to avoid incurring encoding/decoding
