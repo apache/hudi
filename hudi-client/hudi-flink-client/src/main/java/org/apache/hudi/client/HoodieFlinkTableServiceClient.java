@@ -173,6 +173,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
   }
 
+  @Override
   public void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
     try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter()) {
       metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType, instantTime));

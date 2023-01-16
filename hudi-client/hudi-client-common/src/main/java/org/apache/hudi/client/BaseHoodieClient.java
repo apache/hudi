@@ -20,10 +20,12 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.client.transaction.TransactionManager;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.utils.TransactionUtils;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -31,6 +33,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 
@@ -43,6 +46,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
@@ -159,6 +163,31 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   public HoodieHeartbeatClient getHeartbeatClient() {
     return heartbeatClient;
+  }
+
+  /**
+   * Resolve write conflicts before commit.
+   *
+   * @param table A hoodie table instance created after transaction starts so that the latest commits and files are captured.
+   * @param metadata Current committing instant's metadata
+   * @param pendingInflightAndRequestedInstants
+   * @see {@link BaseHoodieWriteClient#preCommit}
+   * @see {@link BaseHoodieTableServiceClient#preCommit}
+   */
+  protected void resolveWriteConflict(HoodieTable table, HoodieCommitMetadata metadata, Set<String> pendingInflightAndRequestedInstants) {
+    Timer.Context conflictResolutionTimer = metrics.getConflictResolutionCtx();
+    try {
+      TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
+          Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), false, pendingInflightAndRequestedInstants);
+      metrics.emitConflictResolutionSuccessful();
+    } catch (HoodieWriteConflictException e) {
+      metrics.emitConflictResolutionFailed();
+      throw e;
+    } finally {
+      if (conflictResolutionTimer != null) {
+        conflictResolutionTimer.stop();
+      }
+    }
   }
 
   /**

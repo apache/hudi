@@ -41,7 +41,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -70,6 +69,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient implements RunsTableService {
 
@@ -129,6 +130,14 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
   protected void setPendingInflightAndRequestedInstants(Set<String> pendingInflightAndRequestedInstants) {
     this.pendingInflightAndRequestedInstants = pendingInflightAndRequestedInstants;
+  }
+
+  /**
+   * Any pre-commit actions like conflict resolution goes here.
+   * @param metadata commit metadata for which pre commit is being invoked.
+   */
+  protected void preCommit(HoodieCommitMetadata metadata) {
+    // To be overridden by specific engines to perform conflict resolution if any.
   }
 
   /**
@@ -504,7 +513,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    * @param metadata    instance of {@link HoodieCommitMetadata}.
    */
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
-    ValidationUtils.checkArgument(table.isTableServiceAction(actionType, instantTime), "Not support action actionType");
+    checkArgument(table.isTableServiceAction(actionType, instantTime), String.format("Unsupported action: %s.%s is not table service.", actionType, instantTime));
     context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
     table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime, true));
   }

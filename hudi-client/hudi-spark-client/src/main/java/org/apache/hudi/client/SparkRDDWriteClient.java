@@ -20,7 +20,6 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
@@ -37,7 +36,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -354,19 +352,7 @@ public class SparkRDDWriteClient<T> extends
     // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
     // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
     HoodieTable table = createTable(config, hadoopConf);
-    Timer.Context conflictResolutionTimer = metrics.getConflictResolutionCtx();
-    try {
-      TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
-          Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), false, this.pendingInflightAndRequestedInstants);
-      metrics.emitConflictResolutionSuccessful();
-    } catch (HoodieWriteConflictException e) {
-      metrics.emitConflictResolutionFailed();
-      throw e;
-    } finally {
-      if (conflictResolutionTimer != null) {
-        conflictResolutionTimer.stop();
-      }
-    }
+    resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
   }
 
   @Override
