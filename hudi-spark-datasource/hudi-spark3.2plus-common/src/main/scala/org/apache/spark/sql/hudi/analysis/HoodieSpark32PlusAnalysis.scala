@@ -27,12 +27,13 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
+import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusAnalysis.{HoodieV1OrV2Table, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
-import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
+import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, AlterHoodieTableSetPropertiesCommand, AlterHoodieTableUnsetPropertiesCommand, ShowHoodieTablePropertiesCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 import org.apache.spark.sql.{AnalysisException, SQLContext, SparkSession}
 
 /**
@@ -141,6 +142,14 @@ case class HoodieSpark32PlusPostAnalysisRule(sparkSession: SparkSession) extends
           purge,
           retainData = true
         )
+
+      case AlterTableSetPropertiesCommand(tableName, properties, isView) =>
+        AlterHoodieTableSetPropertiesCommand(tableName, properties, isView)
+
+      case AlterTableUnsetPropertiesCommand(tableName, propKeys, ifExists, isView) =>
+        AlterHoodieTableUnsetPropertiesCommand(tableName, propKeys, ifExists, isView)
+
+      case s: ShowTablePropertiesCommand => ShowHoodieTablePropertiesCommand(s.table, s.propertyKey)
 
       case _ => plan
     }

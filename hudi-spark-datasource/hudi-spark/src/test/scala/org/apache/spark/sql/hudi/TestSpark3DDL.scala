@@ -249,6 +249,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           val unsetMeta = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
           assert(Seq("key1", "key2").filter(unsetMeta.properties.contains(_)).size == 0)
           assert(unsetMeta.comment.isEmpty)
+
           // test forbidden operation.
           checkException(s"Alter table $tableName add columns(col_new1 int first)")("forbid adjust top-level columns position by using through first syntax")
           HoodieRecord.HOODIE_META_COLUMNS.subList(0, HoodieRecord.HOODIE_META_COLUMNS.size - 2).asScala.foreach {f =>
