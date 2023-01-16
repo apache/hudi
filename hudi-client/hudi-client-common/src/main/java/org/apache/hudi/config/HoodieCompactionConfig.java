@@ -187,7 +187,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> USE_LOG_RECORD_READER_SCAN_V2 = ConfigProperty
       .key("hoodie.log.record.reader.use.scanV2")
-      .defaultValue("false")
+      .defaultValue("true")
       .sinceVersion("0.13.0")
       .withDocumentation("ScanV2 logic address all the multiwriter challenges while appending to log files. "
           + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
