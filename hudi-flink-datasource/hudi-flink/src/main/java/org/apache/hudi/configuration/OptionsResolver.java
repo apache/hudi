@@ -132,8 +132,9 @@ public class OptionsResolver {
    * @return true if the source is read as streaming with changelog mode enabled
    */
   public static boolean emitChangelog(Configuration conf) {
-    return conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
-        && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
+    return conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)
+        || conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && conf.getBoolean(FlinkOptions.CDC_ENABLED)
+        || isIncrementalQuery(conf) && conf.getBoolean(FlinkOptions.CDC_ENABLED);
   }
 
   /**
@@ -217,6 +218,13 @@ public class OptionsResolver {
    */
   public static boolean isSchemaEvolutionEnabled(Configuration conf) {
     return conf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue());
+  }
+
+  /**
+   * Returns whether the query is incremental.
+   */
+  public static boolean isIncrementalQuery(Configuration conf) {
+    return conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent() || conf.getOptional(FlinkOptions.READ_END_COMMIT).isPresent();
   }
 
   // -------------------------------------------------------------------------
