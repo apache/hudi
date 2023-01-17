@@ -51,8 +51,9 @@ import java.util.stream.Collectors;
 public class HoodieJavaWriteClient<T> extends
     BaseHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
-  public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig, JavaUpgradeDowngradeHelper.getInstance());
+  public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
+    super(context, writeConfig, JavaUpgradeDowngradeHelper.getInstance());
+    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig);
   }
 
   public HoodieJavaWriteClient(HoodieEngineContext context,
@@ -60,6 +61,7 @@ public class HoodieJavaWriteClient<T> extends
                                boolean rollbackPending,
                                Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, JavaUpgradeDowngradeHelper.getInstance());
+    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig);
   }
 
   @Override
