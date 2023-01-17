@@ -617,6 +617,19 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         metadata.addMetadata(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), "true");
         inlineScheduleClustering(extraMetadata);
       }
+
+      // if clustering is disabled, but we might need to rollback any inflight clustering when clustering was enabled previously.
+      if (!config.inlineClusteringEnabled() && !config.isAsyncClusteringEnabled() && !config.scheduleInlineClustering()
+          && config.isRollbackPendingClusteringWhenDisabled()) {
+        // rollback any pending clustering
+        table.getActiveTimeline().filterPendingReplaceTimeline().getInstants().forEach(instant -> {
+          Option<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlan = ClusteringUtils.getClusteringPlan(table.getMetaClient(), instant);
+          if (instantPlan.isPresent()) {
+            LOG.info("Rolling back pending clustering at instant " + instantPlan.get().getLeft());
+            rollback(instant.getTimestamp());
+          }
+        });
+      }
     }
   }
 

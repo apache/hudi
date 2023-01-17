@@ -1426,8 +1426,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return inlineClusteringEnabled() || isAsyncClusteringEnabled();
   }
 
-  public boolean isRollbackPendingClustering() {
+  public boolean isRollbackPendingClusteringOnConflict() {
     return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT);
+  }
+
+  public boolean isRollbackPendingClusteringWhenDisabled() {
+    return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_WHEN_DISABLED);
   }
 
   public int getInlineClusterMaxCommits() {
