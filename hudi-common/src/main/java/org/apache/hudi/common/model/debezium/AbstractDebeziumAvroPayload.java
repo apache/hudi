@@ -55,19 +55,26 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    IndexedRecord insertRecord = getInsertRecord(schema);
-    return handleDeleteOperation(insertRecord);
+    Option<IndexedRecord> insertRecord = getInsertRecord(schema);
+    if (!insertRecord.isPresent()) {
+      return insertRecord;
+    }
+    return handleDeleteOperation(insertRecord.get());
   }
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
     // Step 1: If the time occurrence of the current record in storage is higher than the time occurrence of the
     // insert record (including a delete record), pick the current record.
-    if (shouldPickCurrentRecord(currentValue, getInsertRecord(schema), schema)) {
-      return Option.of(currentValue);
+    Option<IndexedRecord> indexedRecordOption = getInsertValue(schema);
+    if (indexedRecordOption.isPresent()) {
+      if (shouldPickCurrentRecord(currentValue, getInsertRecord(schema).get(), schema)) {
+        return Option.of(currentValue);
+      }
+      // Step 2: Pick the insert record (as a delete record if its a deleted event)
+      return getInsertValue(schema);
     }
-    // Step 2: Pick the insert record (as a delete record if its a deleted event)
-    return getInsertValue(schema);
+    return indexedRecordOption;
   }
 
   protected abstract boolean shouldPickCurrentRecord(IndexedRecord currentRecord, IndexedRecord insertRecord, Schema schema) throws IOException;
@@ -83,7 +90,7 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
     return delete ? Option.empty() : Option.of(insertRecord);
   }
 
-  private IndexedRecord getInsertRecord(Schema schema) throws IOException {
-    return super.getInsertValue(schema).get();
+  private Option<IndexedRecord> getInsertRecord(Schema schema) throws IOException {
+    return super.getInsertValue(schema);
   }
 }
