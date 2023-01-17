@@ -20,7 +20,7 @@ package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieMetastoreConfig;
+import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableSupplier;
@@ -61,7 +61,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class FileSystemViewManager {
   private static final Logger LOG = LogManager.getLogger(FileSystemViewManager.class);
 
-  private static final String HOODIE_METASTORE_FILE_SYSTEM_VIEW_CLASS = "org.apache.hudi.common.table.view.HoodieMetastoreFileSystemView";
+  private static final String HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS = "org.apache.hudi.common.table.view.HoodieMetaserverFileSystemView";
 
   private final SerializableConfiguration conf;
   // The View Storage config used to store file-system views
@@ -169,10 +169,10 @@ public class FileSystemViewManager {
       return new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(),
           metadataSupplier.get());
     }
-    if (metaClient.getMetastoreConfig().enableMetastore()) {
-      return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASTORE_FILE_SYSTEM_VIEW_CLASS,
-          new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetastoreConfig.class},
-          metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetastoreConfig());
+    if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
+      return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
+          new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetaserverConfig.class},
+          metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetaserverConfig());
     }
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
   }
@@ -193,10 +193,10 @@ public class FileSystemViewManager {
     if (metadataConfig.enabled()) {
       return new HoodieMetadataFileSystemView(engineContext, metaClient, timeline, metadataConfig);
     }
-    if (metaClient.getMetastoreConfig().enableMetastore()) {
-      return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASTORE_FILE_SYSTEM_VIEW_CLASS,
+    if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
+      return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
           new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetadataConfig.class},
-          metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetastoreConfig());
+          metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetaserverConfig());
     }
     return new HoodieTableFileSystemView(metaClient, timeline);
   }

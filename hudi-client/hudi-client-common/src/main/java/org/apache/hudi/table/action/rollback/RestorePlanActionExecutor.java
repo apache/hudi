@@ -50,16 +50,17 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
   private static final Logger LOG = LogManager.getLogger(RestorePlanActionExecutor.class);
 
   public static final Integer RESTORE_PLAN_VERSION_1 = 1;
-  public static final Integer LATEST_RESTORE_PLAN_VERSION = RESTORE_PLAN_VERSION_1;
-  private final String restoreInstantTime;
+  public static final Integer RESTORE_PLAN_VERSION_2 = 2;
+  public static final Integer LATEST_RESTORE_PLAN_VERSION = RESTORE_PLAN_VERSION_2;
+  private final String savepointToRestoreTimestamp;
 
   public RestorePlanActionExecutor(HoodieEngineContext context,
                                    HoodieWriteConfig config,
                                    HoodieTable<T, I, K, O> table,
                                    String instantTime,
-                                   String restoreInstantTime) {
+                                   String savepointToRestoreTimestamp) {
     super(context, config, table, instantTime);
-    this.restoreInstantTime = restoreInstantTime;
+    this.savepointToRestoreTimestamp = savepointToRestoreTimestamp;
   }
 
   @Override
@@ -72,13 +73,13 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
               // filter only clustering related replacecommits (Not insert_overwrite related commits)
               .filter(instant -> ClusteringUtils.isPendingClusteringInstant(table.getMetaClient(), instant))
               .getReverseOrderedInstants()
-              .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), restoreInstantTime))
+              .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), savepointToRestoreTimestamp))
               .collect(Collectors.toList());
 
       // Get all the commits on the timeline after the provided commit time
       List<HoodieInstant> commitInstantsToRollback = table.getActiveTimeline().getWriteTimeline()
               .getReverseOrderedInstants()
-              .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), restoreInstantTime))
+              .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), savepointToRestoreTimestamp))
               .filter(instant -> !pendingClusteringInstantsToRollback.contains(instant))
               .collect(Collectors.toList());
 
@@ -87,7 +88,7 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
               .map(entry -> new HoodieInstantInfo(entry.getTimestamp(), entry.getAction()))
               .collect(Collectors.toList());
 
-      HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION);
+      HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION, savepointToRestoreTimestamp);
       table.getActiveTimeline().saveToRestoreRequested(restoreInstant, TimelineMetadataUtils.serializeRestorePlan(restorePlan));
       table.getMetaClient().reloadActiveTimeline();
       LOG.info("Requesting Restore with instant time " + restoreInstant);

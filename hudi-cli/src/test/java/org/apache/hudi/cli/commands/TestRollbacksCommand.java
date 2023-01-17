@@ -127,7 +127,7 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // get rollback instants
-    HoodieActiveTimeline activeTimeline = new RollbacksCommand.RollbackTimeline(HoodieCLI.getTableMetaClient());
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     Stream<HoodieInstant> rollback = activeTimeline.getRollbackTimeline().filterCompletedInstants().getInstantsAsStream();
 
     List<Comparable[]> rows = new ArrayList<>();
@@ -168,7 +168,7 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
   @Test
   public void testShowRollback() throws IOException {
     // get instant
-    HoodieActiveTimeline activeTimeline = new RollbacksCommand.RollbackTimeline(HoodieCLI.getTableMetaClient());
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     Stream<HoodieInstant> rollback = activeTimeline.getRollbackTimeline().filterCompletedInstants().getInstantsAsStream();
     HoodieInstant instant = rollback.findFirst().orElse(null);
     assertNotNull(instant, "The instant can not be null.");

@@ -20,6 +20,7 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
@@ -69,6 +70,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
@@ -116,6 +118,16 @@ public class TestHiveSyncTool {
       opts.add(new Object[] {false, mode, "true"});
       opts.add(new Object[] {true, mode, "false"});
       opts.add(new Object[] {false, mode, "false"});
+    }
+    return opts;
+  }
+
+  private static Iterable<Object[]> syncModeAndStrategy() {
+    List<Object[]> opts = new ArrayList<>();
+    for (Object mode : SYNC_MODES) {
+      opts.add(new Object[] {mode, HoodieSyncTableStrategy.ALL});
+      opts.add(new Object[] {mode, HoodieSyncTableStrategy.RO});
+      opts.add(new Object[] {mode, HoodieSyncTableStrategy.RT});
     }
     return opts;
   }
@@ -756,6 +768,51 @@ public class TestHiveSyncTool {
         "The 2 partitions we wrote should be added to hive");
     assertEquals(deltaCommitTime2, hiveClient.getLastCommitTimeSynced(snapshotTableName).get(),
         "The last commit that was synced should be 103");
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncModeAndStrategy")
+  public void testSyncMergeOnReadWithStrategy(String syncMode, HoodieSyncTableStrategy strategy)  throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_TABLE_STRATEGY.key(), strategy.name());
+
+    String instantTime = "100";
+    String deltaCommitTime = "101";
+    HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true, true);
+
+    String snapshotTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
+    String roTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE;
+    reinitHiveSyncClient();
+    assertFalse(hiveClient.tableExists(roTableName),
+            "Table " + roTableName + " should not exist initially");
+    assertFalse(hiveClient.tableExists(snapshotTableName),
+            "Table " + snapshotTableName + " should not exist initially");
+    reSyncHiveTable();
+    switch (strategy) {
+      case RO:
+        assertFalse(hiveClient.tableExists(snapshotTableName),
+                "Table " + snapshotTableName
+                        + " should not exist initially");
+        assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+                "Table " + HiveTestUtil.TABLE_NAME
+                        + " should exist after sync completes");
+        break;
+      case RT:
+        assertFalse(hiveClient.tableExists(roTableName),
+                "Table " + roTableName
+                        + " should not exist initially");
+        assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+                "Table " + HiveTestUtil.TABLE_NAME
+                        + " should exist after sync completes");
+        break;
+      default:
+        assertTrue(hiveClient.tableExists(roTableName),
+                "Table " + roTableName
+                        + " should exist after sync completes");
+        assertTrue(hiveClient.tableExists(snapshotTableName),
+                "Table " + snapshotTableName
+                        + " should exist after sync completes");
+    }
   }
 
   @ParameterizedTest

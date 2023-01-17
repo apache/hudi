@@ -31,6 +31,7 @@ parameters:
       - 'hudi-flink-datasource/hudi-flink1.13.x'
       - 'hudi-flink-datasource/hudi-flink1.14.x'
       - 'hudi-flink-datasource/hudi-flink1.15.x'
+      - 'hudi-flink-datasource/hudi-flink1.16.x'
   - name: job2Modules
     type: object
     default:
@@ -58,6 +59,7 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink1.13.x'
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
+      - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
       - '!hudi-spark-datasource/hudi-spark2'
@@ -78,9 +80,10 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink1.13.x'
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
+      - '!hudi-flink-datasource/hudi-flink1.16.x'
 
 variables:
-  BUILD_PROFILES: '-Dscala-2.11 -Dspark2.4 -Dflink1.14'
+  BUILD_PROFILES: '-Dscala-2.11 -Dspark2.4 -Dflink1.16'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
   MVN_OPTS_INSTALL: '-DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'

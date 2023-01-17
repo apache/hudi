@@ -50,6 +50,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -324,6 +325,29 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(log1Ver1W1, logFiles.get(3).getFileName());
     assertEquals(log1base2W0, logFiles.get(4).getFileName());
     assertEquals(log1base2W1, logFiles.get(5).getFileName());
+  }
+
+  @Test
+  public void testLogFilesComparisonWithCDCFile() {
+    HoodieLogFile log1 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "1", 0, "0-0-1")));
+    HoodieLogFile log2 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "2", 0, "0-0-1")));
+    HoodieLogFile log3 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "2", 1, "0-0-1")));
+    HoodieLogFile log4 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "2", 1, "1-1-1")));
+    HoodieLogFile log5 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "2", 1, "1-1-1") + HoodieCDCUtils.CDC_LOGFILE_SUFFIX));
+
+    TreeSet<HoodieLogFile> logFilesSet = new TreeSet<>(HoodieLogFile.getLogFileComparator());
+    logFilesSet.add(log1);
+    logFilesSet.add(log2);
+    logFilesSet.add(log3);
+    logFilesSet.add(log4);
+    logFilesSet.add(log5);
+
+    List<HoodieLogFile> logFilesList = new ArrayList<>(logFilesSet);
+    assertEquals(log1, logFilesList.get(0));
+    assertEquals(log2, logFilesList.get(1));
+    assertEquals(log3, logFilesList.get(2));
+    assertEquals(log4, logFilesList.get(3));
+    assertEquals(log5, logFilesList.get(4));
   }
 
   public static String makeOldLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version) {
