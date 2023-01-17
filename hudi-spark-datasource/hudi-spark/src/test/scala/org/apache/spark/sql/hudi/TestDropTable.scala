@@ -52,7 +52,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Drop Table if exists") {
+  test("Test Drop Table with non existent table") {
     // drop table if exists
     spark.sql("drop table if exists non_existent_table")
 
