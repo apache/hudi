@@ -111,7 +111,7 @@ public class SparkDeletePartitionCommitActionExecutor<T>
    * 000.replacecommit.inflight (clustering is executed now)
    * 000.replacecommit (clustering completed)
    * For an execution order as shown above, 000.replacecommit and 001.replacecommit will both flag filegroup_1 to be replaced.
-   * This will downstream duplicate key errors when a map is being constructed.
+   * This will cause  downstream duplicate key errors when a map is being constructed.
    */
   private void checkPreconditions() {
     List<String> instantsOfOffendingPendingTableServiceAction = new ArrayList<>();
