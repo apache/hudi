@@ -15,24 +15,17 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.functional;
+package org.apache.hudi.adapter;
 
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.flink.runtime.state.StateInitializationContext;
 
-// Sole purpose of this class is to provide access to otherwise API inaccessible from the tests.
-// While it's certainly not a great pattern, it would require substantial test restructuring to
-// eliminate such access to an internal API, so this is considered acceptable given it's very limited
-// scope (w/in the current package)
-class SparkRDDWriteClientOverride extends org.apache.hudi.client.SparkRDDWriteClient {
+import java.util.OptionalLong;
 
-  public SparkRDDWriteClientOverride(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig);
-  }
-
-  @Override
-  public void rollbackFailedBootstrap() {
-    super.rollbackFailedBootstrap();
+/**
+ * Adapter clazz for {@link StateInitializationContext}.
+ */
+public interface StateInitializationContextAdapter extends StateInitializationContext {
+  default OptionalLong getRestoredCheckpointId() {
+    return OptionalLong.empty();
   }
 }
-

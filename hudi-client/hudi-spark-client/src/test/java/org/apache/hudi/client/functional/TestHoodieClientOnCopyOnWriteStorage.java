@@ -2812,8 +2812,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
 
     @Override
-    protected Option<String> inlineClustering(Option<Map<String, String>> extraMetadata) {
-      throw new HoodieException(CLUSTERING_FAILURE);
+    protected void runTableServicesInline(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
+      if (config.inlineClusteringEnabled()) {
+        throw new HoodieException(CLUSTERING_FAILURE);
+      }
     }
 
   }

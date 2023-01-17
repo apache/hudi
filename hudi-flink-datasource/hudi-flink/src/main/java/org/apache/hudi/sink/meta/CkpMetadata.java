@@ -92,13 +92,14 @@ public class CkpMetadata implements Serializable {
   // -------------------------------------------------------------------------
 
   /**
-   * Initialize the message bus, would clean all the messages
+   * Initialize the message bus, would keep all the messages.
    *
    * <p>This expects to be called by the driver.
    */
   public void bootstrap() throws IOException {
-    fs.delete(path, true);
-    fs.mkdirs(path);
+    if (!fs.exists(path)) {
+      fs.mkdirs(path);
+    }
   }
 
   public void startInstant(String instant) {

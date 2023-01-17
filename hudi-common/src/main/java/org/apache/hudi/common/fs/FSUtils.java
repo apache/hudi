@@ -461,6 +461,15 @@ public class FSUtils {
     return Integer.parseInt(matcher.group(4));
   }
 
+  public static String getSuffixFromLogPath(Path path) {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+    if (!matcher.find()) {
+      throw new InvalidHoodiePathException(path, "LogFile");
+    }
+    String val = matcher.group(10);
+    return val == null ? "" : val;
+  }
+
   public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
       String writeToken) {
     String suffix = (writeToken == null)

@@ -572,6 +572,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
            | hoodie.parquet.max.file.size=${avgSize * avgCount},
            | hoodie.parquet.small.file.limit=0,
            | hoodie.clustering.plan.strategy.target.file.max.bytes=${avgSize * avgCount},
+           | hoodie.clustering.plan.strategy.max.bytes.per.group=${4 * avgSize * avgCount},
            | hoodie.metadata.enable=true,
            | hoodie.metadata.index.column.stats.enable=true
            |")""".stripMargin)
@@ -588,6 +589,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
            | hoodie.parquet.max.file.size=${avgSize * avgCount},
            | hoodie.parquet.small.file.limit=0,
            | hoodie.clustering.plan.strategy.target.file.max.bytes=${avgSize * avgCount},
+           | hoodie.clustering.plan.strategy.max.bytes.per.group=${4 * avgSize * avgCount},
            | hoodie.metadata.enable=true,
            | hoodie.metadata.index.column.stats.enable=true
            |")""".stripMargin)
