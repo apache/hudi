@@ -20,22 +20,23 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.utils.LazyIterableIterator;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieKeyLookupResult;
-import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.broadcast.Broadcast;
 import scala.Tuple2;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -52,7 +53,7 @@ import java.util.stream.Collectors;
  * keys are checked against them.
  */
 public class HoodieFileProbingFunction implements
-    FlatMapFunction<Iterator<Tuple2<String, HoodieBloomFilterKeyLookupResult>>, List<HoodieKeyLookupResult>> {
+    FlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>>, List<HoodieKeyLookupResult>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieFileProbingFunction.class);
 
@@ -67,16 +68,14 @@ public class HoodieFileProbingFunction implements
   }
 
   @Override
-  public Iterator<List<HoodieKeyLookupResult>> call(Iterator<Tuple2<String, HoodieBloomFilterKeyLookupResult>> tuple2Iterator) throws Exception {
+  public Iterator<List<HoodieKeyLookupResult>> call(Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>> tuple2Iterator) throws Exception {
     return new BloomIndexLazyKeyCheckIterator(tuple2Iterator);
   }
 
-  private class BloomIndexLazyKeyCheckIterator extends LazyIterableIterator<Tuple2<String, HoodieBloomFilterKeyLookupResult>, List<HoodieKeyLookupResult>> {
+  private class BloomIndexLazyKeyCheckIterator
+      extends LazyIterableIterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>, List<HoodieKeyLookupResult>> {
 
-    private final TableFileSystemView.BaseFileOnlyView baseFileOnlyView =
-        hoodieTable.getBaseFileOnlyView();
-
-    public BloomIndexLazyKeyCheckIterator(Iterator<Tuple2<String, HoodieBloomFilterKeyLookupResult>> tuple2Iterator) {
+    public BloomIndexLazyKeyCheckIterator(Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>> tuple2Iterator) {
       super(tuple2Iterator);
     }
 
@@ -85,12 +84,11 @@ public class HoodieFileProbingFunction implements
       // Partition path and file name pair to list of keys
       final Map<Pair<String, String>, HoodieBloomFilterKeyLookupResult> fileToLookupResults = new HashMap<>();
       final Map<String, HoodieBaseFile> fileIDBaseFileMap = new HashMap<>();
-      final List<HoodieKeyLookupResult> resultList = new ArrayList<>();
 
       while (inputItr.hasNext()) {
-        Tuple2<String, HoodieBloomFilterKeyLookupResult> entry = inputItr.next();
-        final String partitionPath = entry._2.getPartitionPath();
-        final String fileId = entry._1;
+        Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult> entry = inputItr.next();
+        final String partitionPath = entry._1.getPartitionPath();
+        final String fileId = entry._1.getFileId();
 
         if (!fileIDBaseFileMap.containsKey(fileId)) {
           Option<HoodieBaseFile> baseFile = baseFileOnlyView.getLatestBaseFile(partitionPath, fileId);

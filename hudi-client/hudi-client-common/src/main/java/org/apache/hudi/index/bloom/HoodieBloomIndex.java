@@ -27,6 +27,7 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -126,7 +127,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
 
     // Step 3: Obtain a HoodieData, for each incoming record, that already exists, with the file id,
     // that contains it.
-    HoodiePairData<String, HoodieKey> fileComparisonPairs =
+    HoodiePairData<HoodieFileGroupId, String> fileComparisonPairs =
         explodeRecordsWithFileComparisons(partitionToFileInfo, partitionRecordKeyPairs);
 
     return bloomIndexHelper.findMatchingFilesForRecordKeys(config, context, hoodieTable,
@@ -278,7 +279,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
    * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on
    * recordKey ranges in the index info.
    */
-  HoodiePairData<String, HoodieKey> explodeRecordsWithFileComparisons(
+  HoodiePairData<HoodieFileGroupId, String> explodeRecordsWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       HoodiePairData<String, String> partitionRecordKeyPairs) {
     IndexFileFilter indexFileFilter =
@@ -289,9 +290,11 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
       String recordKey = partitionRecordKeyPair.getRight();
       String partitionPath = partitionRecordKeyPair.getLeft();
 
-      return indexFileFilter.getMatchingFilesAndPartition(partitionPath, recordKey).stream()
-          .map(partitionFileIdPair -> (Pair<String, HoodieKey>) new ImmutablePair<>(partitionFileIdPair.getRight(),
-              new HoodieKey(recordKey, partitionPath)));
+      return indexFileFilter.getMatchingFilesAndPartition(partitionPath, recordKey)
+          .stream()
+          .map(partitionFileIdPair ->
+              new ImmutablePair<>(
+                  new HoodieFileGroupId(partitionFileIdPair.getLeft(), partitionFileIdPair.getRight()), recordKey));
     })
         .flatMapToPair(Stream::iterator);
   }

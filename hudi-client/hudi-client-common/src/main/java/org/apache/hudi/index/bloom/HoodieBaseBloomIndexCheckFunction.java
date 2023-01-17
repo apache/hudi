@@ -19,7 +19,7 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.utils.LazyIterableIterator;
-import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -37,7 +37,7 @@ import java.util.List;
  * Function performing actual checking of list containing (fileId, hoodieKeys) against the actual files.
  */
 public class HoodieBaseBloomIndexCheckFunction
-    implements Function<Iterator<Pair<String, HoodieKey>>, Iterator<List<HoodieKeyLookupResult>>> {
+    implements Function<Iterator<Pair<HoodieFileGroupId, String>>, Iterator<List<HoodieKeyLookupResult>>> {
 
   private final HoodieTable hoodieTable;
 
@@ -49,20 +49,16 @@ public class HoodieBaseBloomIndexCheckFunction
   }
 
   @Override
-  public Iterator<List<HoodieKeyLookupResult>> apply(Iterator<Pair<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
+  public Iterator<List<HoodieKeyLookupResult>> apply(Iterator<Pair<HoodieFileGroupId, String>> filePartitionRecordKeyTripletItr) {
     return new LazyKeyCheckIterator(filePartitionRecordKeyTripletItr);
   }
 
-  class LazyKeyCheckIterator extends LazyIterableIterator<Pair<String, HoodieKey>, List<HoodieKeyLookupResult>> {
+  class LazyKeyCheckIterator extends LazyIterableIterator<Pair<HoodieFileGroupId, String>, List<HoodieKeyLookupResult>> {
 
     private HoodieKeyLookupHandle keyLookupHandle;
 
-    LazyKeyCheckIterator(Iterator<Pair<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
+    LazyKeyCheckIterator(Iterator<Pair<HoodieFileGroupId, String>> filePartitionRecordKeyTripletItr) {
       super(filePartitionRecordKeyTripletItr);
-    }
-
-    @Override
-    protected void start() {
     }
 
     @Override
@@ -71,10 +67,11 @@ public class HoodieBaseBloomIndexCheckFunction
       try {
         // process one file in each go.
         while (inputItr.hasNext()) {
-          Pair<String, HoodieKey> currentTuple = inputItr.next();
-          String fileId = currentTuple.getLeft();
-          String partitionPath = currentTuple.getRight().getPartitionPath();
-          String recordKey = currentTuple.getRight().getRecordKey();
+          Pair<HoodieFileGroupId, String> currentTuple = inputItr.next();
+
+          String fileId = currentTuple.getLeft().getFileId();
+          String partitionPath = currentTuple.getLeft().getPartitionPath();
+          String recordKey = currentTuple.getRight();
           Pair<String, String> partitionPathFilePair = Pair.of(partitionPath, fileId);
 
           // lazily init state
@@ -105,10 +102,6 @@ public class HoodieBaseBloomIndexCheckFunction
         throw new HoodieIndexException("Error checking bloom filter index. ", e);
       }
       return ret;
-    }
-
-    @Override
-    protected void end() {
     }
   }
 }

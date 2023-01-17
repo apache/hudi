@@ -19,7 +19,7 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.utils.LazyIterableIterator;
-import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -40,7 +40,7 @@ import scala.Tuple2;
  * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the actual files.
  */
 public class HoodieBloomIndexCheckFunction
-    implements Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<HoodieKeyLookupResult>>> {
+    implements Function2<Integer, Iterator<Tuple2<HoodieFileGroupId, String>>, Iterator<List<HoodieKeyLookupResult>>> {
 
   private final HoodieTable hoodieTable;
 
@@ -53,15 +53,15 @@ public class HoodieBloomIndexCheckFunction
 
   @Override
   public Iterator<List<HoodieKeyLookupResult>> call(Integer partition,
-                                                    Iterator<Tuple2<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
+                                                    Iterator<Tuple2<HoodieFileGroupId, String>> filePartitionRecordKeyTripletItr) {
     return new LazyKeyCheckIterator(filePartitionRecordKeyTripletItr);
   }
 
-  class LazyKeyCheckIterator extends LazyIterableIterator<Tuple2<String, HoodieKey>, List<HoodieKeyLookupResult>> {
+  class LazyKeyCheckIterator extends LazyIterableIterator<Tuple2<HoodieFileGroupId, String>, List<HoodieKeyLookupResult>> {
 
     private HoodieKeyLookupHandle keyLookupHandle;
 
-    LazyKeyCheckIterator(Iterator<Tuple2<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
+    LazyKeyCheckIterator(Iterator<Tuple2<HoodieFileGroupId, String>> filePartitionRecordKeyTripletItr) {
       super(filePartitionRecordKeyTripletItr);
     }
 
@@ -76,10 +76,11 @@ public class HoodieBloomIndexCheckFunction
       try {
         // process one file in each go.
         while (inputItr.hasNext()) {
-          Tuple2<String, HoodieKey> currentTuple = inputItr.next();
-          String fileId = currentTuple._1;
-          String partitionPath = currentTuple._2.getPartitionPath();
-          String recordKey = currentTuple._2.getRecordKey();
+          Tuple2<HoodieFileGroupId, String> currentTuple = inputItr.next();
+          String fileId = currentTuple._1.getFileId();
+          String partitionPath = currentTuple._1.getPartitionPath();
+          String recordKey = currentTuple._2;
+
           Pair<String, String> partitionPathFilePair = Pair.of(partitionPath, fileId);
 
           // lazily init state

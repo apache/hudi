@@ -22,6 +22,7 @@ import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
@@ -51,7 +52,7 @@ import java.util.function.Function;
  * keys are checked against them.
  */
 public class HoodieMetadataBloomFilterProbingFunction implements
-    PairFlatMapFunction<Iterator<Tuple2<String, HoodieKey>>, String, HoodieBloomFilterKeyLookupResult> {
+    PairFlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, String>>, HoodieFileGroupId, HoodieBloomFilterKeyLookupResult> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMetadataBloomFilterProbingFunction.class);
 
@@ -60,35 +61,34 @@ public class HoodieMetadataBloomFilterProbingFunction implements
   private static final long BLOOM_FILTER_CHECK_MAX_FILE_COUNT_PER_BATCH = 256;
   private final HoodieTable hoodieTable;
 
-
   public HoodieMetadataBloomFilterProbingFunction(HoodieTable hoodieTable) {
     this.hoodieTable = hoodieTable;
   }
 
   @Override
-  public Iterator<Tuple2<String, HoodieBloomFilterKeyLookupResult>> call(Iterator<Tuple2<String, HoodieKey>> tuple2Iterator) throws Exception {
+  public Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>> call(Iterator<Tuple2<HoodieFileGroupId, String>> tuple2Iterator) throws Exception {
     return new FlattenedIterator<>(new BloomIndexLazyKeyCheckIterator(tuple2Iterator), Function.identity());
   }
 
   private class BloomIndexLazyKeyCheckIterator
-      extends LazyIterableIterator<Tuple2<String, HoodieKey>, Iterator<Tuple2<String, HoodieBloomFilterKeyLookupResult>>> {
+      extends LazyIterableIterator<Tuple2<HoodieFileGroupId, String>, Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>>> {
 
     private final TableFileSystemView.BaseFileOnlyView baseFileOnlyView = hoodieTable.getBaseFileOnlyView();
 
-    public BloomIndexLazyKeyCheckIterator(Iterator<Tuple2<String, HoodieKey>> tuple2Iterator) {
+    public BloomIndexLazyKeyCheckIterator(Iterator<Tuple2<HoodieFileGroupId, String>> tuple2Iterator) {
       super(tuple2Iterator);
     }
 
     @Override
-    protected Iterator<Tuple2<String, HoodieBloomFilterKeyLookupResult>> computeNext() {
+    protected Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>> computeNext() {
       // Partition path and file name pair to list of keys
       final Map<Pair<String, String>, List<HoodieKey>> fileToKeysMap = new HashMap<>();
       final Map<String, HoodieBaseFile> fileIDBaseFileMap = new HashMap<>();
 
       while (inputItr.hasNext()) {
-        Tuple2<String, HoodieKey> entry = inputItr.next();
-        final String partitionPath = entry._2.getPartitionPath();
-        final String fileId = entry._1;
+        Tuple2<HoodieFileGroupId, String> entry = inputItr.next();
+        String partitionPath = entry._1.getPartitionPath();
+        String fileId = entry._1.getFileId();
         if (!fileIDBaseFileMap.containsKey(fileId)) {
           Option<HoodieBaseFile> baseFile = baseFileOnlyView.getLatestBaseFile(partitionPath, fileId);
           if (!baseFile.isPresent()) {
@@ -98,7 +98,7 @@ public class HoodieMetadataBloomFilterProbingFunction implements
           fileIDBaseFileMap.put(fileId, baseFile.get());
         }
         fileToKeysMap.computeIfAbsent(Pair.of(partitionPath, fileIDBaseFileMap.get(fileId).getFileName()),
-            k -> new ArrayList<>()).add(entry._2);
+            k -> new ArrayList<>()).add(new HoodieKey(entry._2, partitionPath));
 
         if (fileToKeysMap.size() > BLOOM_FILTER_CHECK_MAX_FILE_COUNT_PER_BATCH) {
           break;
@@ -138,7 +138,7 @@ public class HoodieMetadataBloomFilterProbingFunction implements
             LOG.debug(String.format("Total records (%d), bloom filter candidates (%d)",
                 hoodieKeyList.size(), candidateRecordKeys.size()));
 
-            return Tuple2.apply(fileId, new HoodieBloomFilterKeyLookupResult(fileId, partitionPath, candidateRecordKeys));
+            return Tuple2.apply(new HoodieFileGroupId(partitionPath, fileId), new HoodieBloomFilterKeyLookupResult(candidateRecordKeys));
           })
           .iterator();
     }
