@@ -18,37 +18,33 @@
 
 package org.apache.hudi.index.bloom;
 
-import java.io.Serializable;
+import org.apache.hudi.common.util.rbtree.RedBlackTreeNode;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Represents a node in the {@link KeyRangeLookupTree}. Holds information pertaining to a single index file, viz file
+ * Represents a red-black tree node in the {@link KeyRangeLookupTree}. Holds information pertaining to a single index file, viz file
  * name, min record key and max record key.
  */
-class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
+class KeyRangeNode extends RedBlackTreeNode<RecordKeyRange> {
 
   private final List<String> fileNameList = new ArrayList<>();
-  private final String minRecordKey;
-  private final String maxRecordKey;
   private String rightSubTreeMax = null;
   private String leftSubTreeMax = null;
   private String rightSubTreeMin = null;
   private String leftSubTreeMin = null;
-  private KeyRangeNode left = null;
-  private KeyRangeNode right = null;
 
   /**
    * Instantiates a new {@link KeyRangeNode}.
    *
    * @param minRecordKey min record key of the index file
    * @param maxRecordKey max record key of the index file
-   * @param fileName file name of the index file
+   * @param fileName     file name of the index file
    */
   KeyRangeNode(String minRecordKey, String maxRecordKey, String fileName) {
+    super(new RecordKeyRange(minRecordKey, maxRecordKey));
     this.fileNameList.add(fileName);
-    this.minRecordKey = minRecordKey;
-    this.maxRecordKey = maxRecordKey;
   }
 
   /**
@@ -62,40 +58,24 @@ class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
 
   @Override
   public String toString() {
-    return "KeyRangeNode{minRecordKey='" + minRecordKey + '\'' + ", maxRecordKey='" + maxRecordKey + '\''
-        + ", fileNameList=" + fileNameList + ", rightSubTreeMax='" + rightSubTreeMax + '\'' + ", leftSubTreeMax='"
-        + leftSubTreeMax + '\'' + ", rightSubTreeMin='" + rightSubTreeMin + '\'' + ", leftSubTreeMin='" + leftSubTreeMin
-        + '\'' + '}';
+    final RecordKeyRange key = getKey();
+    String range = key != null ? "minRecordKey='" + key.getMinRecordKey() + '\'' + ", maxRecordKey='"
+        + key.getMaxRecordKey() + "', " : "";
+    return "KeyRangeNode{" + range + "fileNameList=" + fileNameList
+        + ", rightSubTreeMax='" + rightSubTreeMax + '\'' + ", leftSubTreeMax='" + leftSubTreeMax + '\''
+        + ", rightSubTreeMin='" + rightSubTreeMin + '\'' + ", leftSubTreeMin='" + leftSubTreeMin + '\'' + '}';
   }
 
-  /**
-   * Compares the min record key of two nodes, followed by max record key.
-   *
-   * @param that the {@link KeyRangeNode} to be compared with
-   * @return the result of comparison. 0 if both min and max are equal in both. 1 if this {@link KeyRangeNode} is
-   * greater than the {@code that} keyRangeNode. -1 if {@code that} keyRangeNode is greater than this {@link
-   * KeyRangeNode}
-   */
-  @Override
-  public int compareTo(KeyRangeNode that) {
-    int compareValue = minRecordKey.compareTo(that.minRecordKey);
-    if (compareValue == 0) {
-      return maxRecordKey.compareTo(that.maxRecordKey);
-    } else {
-      return compareValue;
-    }
+  public KeyRangeNode getLeft() {
+    return (KeyRangeNode) super.getLeft();
+  }
+
+  public KeyRangeNode getRight() {
+    return (KeyRangeNode) super.getRight();
   }
 
   public List<String> getFileNameList() {
     return fileNameList;
-  }
-
-  public String getMinRecordKey() {
-    return minRecordKey;
-  }
-
-  public String getMaxRecordKey() {
-    return maxRecordKey;
   }
 
   public String getRightSubTreeMin() {
@@ -130,19 +110,11 @@ class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
     this.leftSubTreeMax = leftSubTreeMax;
   }
 
-  public KeyRangeNode getLeft() {
-    return left;
+  public String getMinRecordKey() {
+    return getKey().getMinRecordKey();
   }
 
-  public void setLeft(KeyRangeNode left) {
-    this.left = left;
-  }
-
-  public KeyRangeNode getRight() {
-    return right;
-  }
-
-  public void setRight(KeyRangeNode right) {
-    this.right = right;
+  public String getMaxRecordKey() {
+    return getKey().getMaxRecordKey();
   }
 }

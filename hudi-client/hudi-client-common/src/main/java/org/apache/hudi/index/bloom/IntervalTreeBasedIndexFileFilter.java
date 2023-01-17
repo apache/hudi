@@ -20,7 +20,6 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.util.collection.Pair;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -43,10 +42,6 @@ class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
    */
   IntervalTreeBasedIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
     partitionToFileIndexInfo.forEach((partition, bloomIndexFiles) -> {
-      // Note that the interval tree implementation doesn't have auto-balancing to ensure logN search time.
-      // So, we are shuffling the input here hoping the tree will not have any skewness. If not, the tree could be
-      // skewed which could result in N search time instead of logN.
-      Collections.shuffle(bloomIndexFiles);
       KeyRangeLookupTree lookUpTree = new KeyRangeLookupTree();
       bloomIndexFiles.forEach(indexFileInfo -> {
         if (indexFileInfo.hasKeyRanges()) {
