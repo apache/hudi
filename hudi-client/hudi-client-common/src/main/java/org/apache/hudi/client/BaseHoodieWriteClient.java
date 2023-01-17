@@ -1460,7 +1460,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
   }
 
-  private Option<String> scheduleTableServiceInternal(String instantTime, Option<Map<String, String>> extraMetadata,
+  protected Option<String> scheduleTableServiceInternal(String instantTime, Option<Map<String, String>> extraMetadata,
                                                       TableServiceType tableServiceType) {
     if (!tableServicesEnabled(config)) {
       return Option.empty();
@@ -1604,6 +1604,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     doInitTable(metaClient, instantTime, initialMetadataTableIfNecessary);
     HoodieTable table = createTable(config, hadoopConf, metaClient);
 
+    getTableAndStats(table);
+
     // Validate table properties
     metaClient.validateTableProperties(config.getProps());
 
@@ -1633,6 +1635,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
     return initTable(operationType, instantTime, config.isMetadataTableEnabled());
   }
+
+  protected abstract HoodieTable getTableAndStats(HoodieTable table);
 
   /**
      * Sets write schema from last instant since deletes may not have schema set in the config.

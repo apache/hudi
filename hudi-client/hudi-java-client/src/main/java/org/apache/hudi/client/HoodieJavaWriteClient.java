@@ -235,4 +235,9 @@ public class HoodieJavaWriteClient<T> extends
   public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
     throw new HoodieNotSupportedException("Cluster is not supported in HoodieJavaClient");
   }
+
+  @Override
+  protected HoodieTable getTableAndStats(HoodieTable table) {
+    return null;
+  }
 }

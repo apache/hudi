@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -126,6 +127,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     initBuffer();
     initWriteFunction();
     initMergeClass();
+    initMetrics();
   }
 
   @Override
@@ -175,6 +177,16 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  private void initMetrics() {
+    String actionType;
+    if (this.writeClient.getHoodieTable().getMetaClient().getCommitActionType().equals(HoodieTimeline.COMMIT_ACTION)) {
+      actionType = HoodieTimeline.COMMIT_ACTION;
+    } else {
+      actionType = HoodieTimeline.DELTA_COMMIT_ACTION;
+    }
+    this.writeClient.registerMetricsGroup(actionType, getClass().getSimpleName());
+  }
 
   private void initBuffer() {
     this.buckets = new LinkedHashMap<>();
