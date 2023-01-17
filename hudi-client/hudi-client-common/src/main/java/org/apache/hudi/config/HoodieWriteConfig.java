@@ -1738,6 +1738,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieIndexConfig.BLOOM_INDEX_PARALLELISM);
   }
 
+  public int getBloomIndexMetadataFetchingParallelismFactor() {
+    return getIntOrDefault(HoodieIndexConfig.BLOOM_INDEX_METADATA_FETCHING_PARALLELISM_FACTOR);
+  }
+
   public boolean getBloomIndexPruneByRanges() {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_PRUNE_BY_RANGES);
   }

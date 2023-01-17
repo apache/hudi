@@ -61,10 +61,13 @@ public class HoodieFileProbingFunction implements
   // per batch so that the total fetched bloom filters would not cross 128 MB.
   private static final long BLOOM_FILTER_CHECK_MAX_FILE_COUNT_PER_BATCH = 256;
 
-  private final HoodieTable hoodieTable;
+  private final Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast;
+  private final SerializableConfiguration hadoopConf;
 
-  public HoodieFileProbingFunction(HoodieTable hoodieTable) {
-    this.hoodieTable = hoodieTable;
+  public HoodieFileProbingFunction(Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast,
+                                   SerializableConfiguration hadoopConf) {
+    this.baseFileOnlyViewBroadcast = baseFileOnlyViewBroadcast;
+    this.hadoopConf = hadoopConf;
   }
 
   @Override
@@ -91,7 +94,8 @@ public class HoodieFileProbingFunction implements
         final String fileId = entry._1.getFileId();
 
         if (!fileIDBaseFileMap.containsKey(fileId)) {
-          Option<HoodieBaseFile> baseFile = baseFileOnlyView.getLatestBaseFile(partitionPath, fileId);
+          Option<HoodieBaseFile> baseFile =
+              baseFileOnlyViewBroadcast.getValue().getLatestBaseFile(partitionPath, fileId);
           if (!baseFile.isPresent()) {
             throw new HoodieIndexException("Failed to find the base file for partition: " + partitionPath
                 + ", fileId: " + fileId);
@@ -126,9 +130,8 @@ public class HoodieFileProbingFunction implements
             // TODO add assertion that file is checked only once
 
             final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
-            List<String> matchingKeys =
-                HoodieIndexUtils.filterKeysFromFile(new Path(dataFile.getPath()), candidateRecordKeys,
-                    hoodieTable.getHadoopConf());
+            List<String> matchingKeys = HoodieIndexUtils.filterKeysFromFile(new Path(dataFile.getPath()),
+                candidateRecordKeys, hadoopConf.get());
 
             LOG.debug(
                 String.format("Bloom filter candidates (%d) / false positives (%d), actual matches (%d)",

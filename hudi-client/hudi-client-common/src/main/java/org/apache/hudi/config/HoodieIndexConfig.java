@@ -115,6 +115,20 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "This is the amount of parallelism for index lookup, which involves a shuffle. "
           + "By default, this is auto computed based on input workload characteristics.");
 
+  public static final ConfigProperty<String> BLOOM_INDEX_METADATA_FETCHING_PARALLELISM_FACTOR = ConfigProperty
+      .key("hoodie.bloom.index.metadata.parallelism.factor")
+      .defaultValue("2")
+      .sinceVersion("0.13.0")
+      .withDocumentation("Only applies in when type of the used index is BLOOM and Bloom Filters "
+          + "are fetched from Metadata Table. Metadata Table is most efficient when read using "
+          + "batched requests. To achieve appropriate amount of batching when fetching Bloom Filters "
+          + "from Metadata Table we specify parallelism as a (low) factor of the number of the file "
+          + "groups persisted in the Metadata Table's partition. Please, note that for best possible "
+          + "performance, this value has to be a) an integer, such that parallelism level is a multiple "
+          + "of the # of file-groups in MT (this would allow each task to read no more than just a single "
+          + "file-group) and b) kept low (under 10, default is 2) to make sure requests to MT are "
+          + "clustered in large enough batches");
+
   public static final ConfigProperty<String> BLOOM_INDEX_PRUNE_BY_RANGES = ConfigProperty
       .key("hoodie.bloom.index.prune.by.ranges")
       .defaultValue("true")

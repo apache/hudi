@@ -85,45 +85,72 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     int inputParallelism = HoodieJavaPairRDD.getJavaPairRDD(partitionRecordKeyPairs).partitions().size();
     int configuredBloomIndexParallelism = config.getBloomIndexParallelism();
 
-    int joinParallelism = Math.max(inputParallelism, configuredBloomIndexParallelism);
+    // NOTE: Target parallelism could be overridden by the config
+    int targetParallelism =
+        configuredBloomIndexParallelism > 0 ? configuredBloomIndexParallelism : inputParallelism;
 
-    LOG.info("InputParallelism: ${" + inputParallelism + "}, IndexParallelism: ${"
-        + configuredBloomIndexParallelism + "}");
+    LOG.info(String.format("Input parallelism: %d, Index parallelism: %d", inputParallelism, targetParallelism));
 
+    JavaPairRDD<HoodieFileGroupId, String> fileComparisonsRDD = HoodieJavaRDD.getJavaRDD(fileComparisonPairs);
     JavaRDD<List<HoodieKeyLookupResult>> keyLookupResultRDD;
+
     if (config.getBloomIndexUseMetadata()
         && hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
         .contains(BLOOM_FILTERS.getPartitionPath())) {
+      HoodieTableFileSystemView baseFileOnlyView =
+          getBaseFileOnlyView(hoodieTable, partitionToFileInfo.keySet());
 
-      int targetParallelism = configuredBloomIndexParallelism > 0
-          ? configuredBloomIndexParallelism
-          : inputParallelism;
+      Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast =
+          ((HoodieSparkEngineContext) context).getJavaSparkContext().broadcast(baseFileOnlyView);
 
-      JavaPairRDD<HoodieFileGroupId, String> fileComparisonsRDD =
-          HoodieJavaRDD.getJavaRDD(fileComparisonPairs);
+      // When leveraging MT we're aiming for following goals:
+      //    - (G1) All requests to MT are made in batch (ie we're trying to fetch all the values
+      //      for corresponding keys at once)
+      //    - (G2) Each task reads no more than just _one_ file-group from the MT Bloom Filters
+      //    partition
+      //
+      // Ta achieve G2, following invariant have to be maintained: Spark partitions have to be
+      // affine w/ Metadata Table's file-groups, meaning that each Spark partition holds records
+      // belonging to one and only file-group in MT Bloom Filters partition. To provide for that
+      // we need to make sure
+      //    - Spark's used [[Partitioner]] employs same hashing function as Metadata Table (as well
+      //      as being applied to the same keys as the MT one)
+      //    - Make sure that # of partitions is congruent to the # of file-groups (ie number of Spark
+      //    partitions is a multiple of the # of the file-groups).
+      //
+      //    Last provision is necessary, so that for every key it's the case that
+      //
+      //        (hash(key) % N) % M = hash(key) % M, iff N % M = 0
+      //
+      //    Let's take an example of N = 8 and M = 4 (default # of file-groups in Bloom Filter
+      //    partition). In that case Spark partitions for which `hash(key) % N` will be either 0
+      //    or 4, will map to the same (first) file-group in MT
+      //
+      // To achieve G1, we drastically reduce # of RDD partitions actually reading from MT, by
+      // setting target parallelism as a (low-factor) multiple of the # of the file-groups in MT
+      int targetMetadataParallelism =
+          config.getMetadataConfig().getBloomFilterIndexFileGroupCount() * config.getBloomIndexMetadataFetchingParallelismFactor();
 
-      // TODO fix comments
-
-      // Step 1: Sort by file id
       AffineBloomIndexFileGroupPartitioner partitioner =
-          new AffineBloomIndexFileGroupPartitioner(baseFileOnlyViewBroadcast, targetParallelism);
+          new AffineBloomIndexFileGroupPartitioner(baseFileOnlyViewBroadcast, targetMetadataParallelism);
 
+      // First, we need to repartition and sort records using [[AffineBloomIndexFileGroupPartitioner]]
+      // to make sure every Spark task accesses no more than just a single file-group in MT (allows
+      // us to achieve G2).
+      //
+      // NOTE: Sorting records w/in individual partitions is required to make sure that we cluster
+      //       together keys co-located w/in the MT files (sorted by keys)
       JavaPairRDD<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult> bloomFilterLookupResultRDD =
           fileComparisonsRDD.repartitionAndSortWithinPartitions(partitioner)
-              // TODO to maintain invariant that one task reads just one file-group
-              //    - remap into bloom index key
-              //    - make sure spark partitioning hashing function and MT's one are the same
-              //    - make sure # of tasks is a multiple of the # of file-groups
               .mapPartitionsToPair(new HoodieMetadataBloomFilterProbingFunction(hoodieTable));
 
       // Step 2: Use bloom filter to filter and the actual log file to get the record location
       keyLookupResultRDD = bloomFilterLookupResultRDD.repartition(inputParallelism)
-          .mapPartitions(new HoodieFileProbingFunction(hoodieTable), true);
-
+          .mapPartitions(new HoodieFileProbingFunction(baseFileOnlyViewBroadcast, new SerializableConfiguration(hoodieTable.getHadoopConf())), true);
     } else if (config.useBloomIndexBucketizedChecking()) {
       Map<HoodieFileGroupId, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(
           config, recordsPerPartition, partitionToFileInfo, fileComparisonsRDD, context);
-      Partitioner partitioner = new BucketizedBloomCheckPartitioner(joinParallelism, comparisonsPerFileGroup,
+      Partitioner partitioner = new BucketizedBloomCheckPartitioner(targetParallelism, comparisonsPerFileGroup,
           config.getBloomIndexKeysPerBucket());
 
       keyLookupResultRDD = fileComparisonsRDD.mapToPair(t -> new Tuple2<>(Pair.of(t._1, t._2), t))
@@ -131,7 +158,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
           .map(Tuple2::_2)
           .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true);
     } else {
-      keyLookupResultRDD = fileComparisonsRDD.sortByKey(true, joinParallelism)
+      keyLookupResultRDD = fileComparisonsRDD.sortByKey(true, targetParallelism)
           .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true);
     }
 
@@ -141,6 +168,34 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
             .map(recordKey -> new Tuple2<>(new HoodieKey(recordKey, lookupResult.getPartitionPath()),
                 new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId())))
             .collect(Collectors.toList()).iterator()));
+  }
+
+  /**
+   * Compute the estimated number of bloom filter comparisons to be performed on each file group.
+   */
+  private Map<HoodieFileGroupId, Long> computeComparisonsPerFileGroup(
+      final HoodieWriteConfig config,
+      final Map<String, Long> recordsPerPartition,
+      final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
+      final JavaPairRDD<HoodieFileGroupId, String> fileComparisonsRDD,
+      final HoodieEngineContext context) {
+    Map<HoodieFileGroupId, Long> fileToComparisons;
+    if (config.getBloomIndexPruneByRanges()) {
+      // we will just try exploding the input and then count to determine comparisons
+      // FIX(vc): Only do sampling here and extrapolate?
+      context.setJobStatus(this.getClass().getSimpleName(), "Compute all comparisons needed between records and files: " + config.getTableName());
+      fileToComparisons = fileComparisonsRDD.countByKey();
+    } else {
+      fileToComparisons = new HashMap<>();
+      partitionToFileInfo.forEach((partitionPath, fileInfos) -> {
+        for (BloomIndexFileInfo fileInfo : fileInfos) {
+          // each file needs to be compared against all the records coming into the partition
+          fileToComparisons.put(
+              new HoodieFileGroupId(partitionPath, fileInfo.getFileId()), recordsPerPartition.get(partitionPath));
+        }
+      });
+    }
+    return fileToComparisons;
   }
 
   private static HoodieTableFileSystemView getBaseFileOnlyView(HoodieTable<?, ?, ?, ?> hoodieTable, Collection<String> partitionPaths) {
@@ -199,33 +254,5 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       //       actual file-groups in the Bloom Index in MT
       return mapRecordKeyToFileGroupIndex(bloomIndexEncodedKey, targetPartitions);
     }
-  }
-
-  /**
-   * Compute the estimated number of bloom filter comparisons to be performed on each file group.
-   */
-  private Map<HoodieFileGroupId, Long> computeComparisonsPerFileGroup(
-      final HoodieWriteConfig config,
-      final Map<String, Long> recordsPerPartition,
-      final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
-      final JavaPairRDD<HoodieFileGroupId, String> fileComparisonsRDD,
-      final HoodieEngineContext context) {
-    Map<HoodieFileGroupId, Long> fileToComparisons;
-    if (config.getBloomIndexPruneByRanges()) {
-      // we will just try exploding the input and then count to determine comparisons
-      // FIX(vc): Only do sampling here and extrapolate?
-      context.setJobStatus(this.getClass().getSimpleName(), "Compute all comparisons needed between records and files: " + config.getTableName());
-      fileToComparisons = fileComparisonsRDD.countByKey();
-    } else {
-      fileToComparisons = new HashMap<>();
-      partitionToFileInfo.forEach((partitionPath, fileInfos) -> {
-        for (BloomIndexFileInfo fileInfo : fileInfos) {
-          // each file needs to be compared against all the records coming into the partition
-          fileToComparisons.put(
-              new HoodieFileGroupId(partitionPath, fileInfo.getFileId()), recordsPerPartition.get(partitionPath));
-        }
-      });
-    }
-    return fileToComparisons;
   }
 }
