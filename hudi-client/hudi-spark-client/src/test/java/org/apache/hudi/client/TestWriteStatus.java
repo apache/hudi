@@ -92,7 +92,8 @@ public class TestWriteStatus {
     // test with seconds eventTime
     status = new WriteStatus(false, 1.0);
     status.setStat(new HoodieWriteStat());
-    long minSeconds = 0L, maxSeconds = 0L;
+    long minSeconds = 0L;
+    long maxSeconds = 0L;
     for (int i = 0; i < 1000; i++) {
       Map<String, String> metadata = new HashMap<>();
       long eventTime = System.currentTimeMillis() / 1000;
