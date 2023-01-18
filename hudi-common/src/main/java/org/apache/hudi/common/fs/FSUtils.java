@@ -80,13 +80,7 @@ public class FSUtils {
   // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1_1-0-1
   // Archive log files are of this pattern - .commits_.archive.1_1-0-1
   public static final Pattern LOG_FILE_PATTERN =
-      Pattern.compile("^\\.(.+)_(.*)\\.(log)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
-  public static final String ARCHIVE_STR = "archive";
-  public static final String COMMITS_STR = "commits";
-  public static final String EMPTY_STR = "";
-  public static final String ARCHIVED_LOG_PREFIX = "." + COMMITS_STR + "_." + ARCHIVE_STR;
-  public static final Pattern ARCHIVED_LOG_FILE_PATTERN =
-      Pattern.compile(ARCHIVED_LOG_PREFIX + ".(\\d+)(_((\\d+)-(\\d+)-(\\d+)))");
+      Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
   private static final long MIN_CLEAN_TO_KEEP = 10;
   private static final long MIN_ROLLBACK_TO_KEEP = 10;
@@ -364,13 +358,11 @@ public class FSUtils {
    * Get the file extension from the log file.
    */
   public static String getFileExtensionFromLog(Path logPath) {
-    boolean isArchivedLog = logPath.getName().contains(ARCHIVED_LOG_PREFIX);
-    Matcher matcher =  isArchivedLog ? ARCHIVED_LOG_FILE_PATTERN.matcher(logPath.getName()) :
-        LOG_FILE_PATTERN.matcher(logPath.getName());
+    Matcher matcher =  LOG_FILE_PATTERN.matcher(logPath.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(logPath, "LogFile");
     }
-    return isArchivedLog ? ARCHIVE_STR : matcher.group(3);
+    return matcher.group(3);
   }
 
   /**
@@ -378,13 +370,11 @@ public class FSUtils {
    * the file name.
    */
   public static String getFileIdFromLogPath(Path path) {
-    boolean isArchivedLog = path.getName().contains(ARCHIVED_LOG_PREFIX);
-    Matcher matcher =  isArchivedLog ? ARCHIVED_LOG_FILE_PATTERN.matcher(path.getName())
-        : LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher =  LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
-    return isArchivedLog ? COMMITS_STR : matcher.group(1);
+    return matcher.group(1);
   }
 
   /**
@@ -402,25 +392,22 @@ public class FSUtils {
    * the file name.
    */
   public static String getBaseCommitTimeFromLogPath(Path path) {
-    boolean isArchivedLog = path.getName().contains(ARCHIVED_LOG_PREFIX);
-    Matcher matcher = isArchivedLog ? ARCHIVED_LOG_FILE_PATTERN.matcher(path.getName()) : LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
-    return isArchivedLog ? EMPTY_STR : matcher.group(2);
+    return matcher.group(2);
   }
 
   /**
    * Get TaskPartitionId used in log-path.
    */
   public static Integer getTaskPartitionIdFromLogPath(Path path) {
-    boolean isArchivedLog = path.getName().contains(ARCHIVED_LOG_PREFIX);
-    Matcher matcher = isArchivedLog ? ARCHIVED_LOG_FILE_PATTERN.matcher(path.getName()) :
-        LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
-    String val = isArchivedLog ? matcher.group(4) : matcher.group(7);
+    String val = matcher.group(7);
     return val == null ? null : Integer.parseInt(val);
   }
 
@@ -428,26 +415,22 @@ public class FSUtils {
    * Get Write-Token used in log-path.
    */
   public static String getWriteTokenFromLogPath(Path path) {
-    boolean isArchivedLog = path.getName().contains(ARCHIVED_LOG_PREFIX);
-    Matcher matcher = isArchivedLog ? ARCHIVED_LOG_FILE_PATTERN.matcher(path.getName()) :
-        LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
-    return isArchivedLog ? matcher.group(3) : matcher.group(6);
+    return matcher.group(6);
   }
 
   /**
    * Get StageId used in log-path.
    */
   public static Integer getStageIdFromLogPath(Path path) {
-    boolean isArchivedLog = path.getName().contains(ARCHIVED_LOG_PREFIX);
-    Matcher matcher = isArchivedLog ? ARCHIVED_LOG_FILE_PATTERN.matcher(path.getName()) :
-        LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
-    String val = isArchivedLog ? matcher.group(5) : matcher.group(8);
+    String val = matcher.group(8);
     return val == null ? null : Integer.parseInt(val);
   }
 
@@ -455,13 +438,11 @@ public class FSUtils {
    * Get Task Attempt Id used in log-path.
    */
   public static Integer getTaskAttemptIdFromLogPath(Path path) {
-    boolean isArchivedLog = path.getName().contains(ARCHIVED_LOG_PREFIX);
-    Matcher matcher = isArchivedLog ? ARCHIVED_LOG_FILE_PATTERN.matcher(path.getName()) :
-        LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
-    String val = isArchivedLog ? matcher.group(6) : matcher.group(9);
+    String val = matcher.group(9);
     return val == null ? null : Integer.parseInt(val);
   }
 
@@ -473,13 +454,11 @@ public class FSUtils {
   }
 
   public static int getFileVersionFromLog(String logFileName) {
-    boolean isArchivedLog = logFileName.contains(ARCHIVED_LOG_PREFIX);
-    Matcher matcher = isArchivedLog ? ARCHIVED_LOG_FILE_PATTERN.matcher(logFileName) :
-        LOG_FILE_PATTERN.matcher(logFileName);
+    Matcher matcher = LOG_FILE_PATTERN.matcher(logFileName);
     if (!matcher.find()) {
       throw new HoodieIOException("Invalid log file name: " + logFileName);
     }
-    return Integer.parseInt(isArchivedLog ? matcher.group(1) : matcher.group(4));
+    return Integer.parseInt(matcher.group(4));
   }
 
   public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
@@ -500,7 +479,7 @@ public class FSUtils {
   }
 
   public static boolean isLogFile(String fileName) {
-    Matcher matcher = fileName.contains(ARCHIVED_LOG_PREFIX) ? ARCHIVED_LOG_FILE_PATTERN.matcher(fileName) : LOG_FILE_PATTERN.matcher(fileName);
+    Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
     return matcher.find() && fileName.contains(".log");
   }
 
