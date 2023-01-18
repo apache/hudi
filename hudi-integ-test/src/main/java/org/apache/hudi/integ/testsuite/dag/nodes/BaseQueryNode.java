@@ -40,8 +40,7 @@ public abstract class BaseQueryNode extends DagNode<Boolean> {
       if (!res.next()) {
         log.info("res.next() was False - typically this means the query returned no rows.");
         assert 0 == queryAndResult.getRight();
-      }
-      else {
+      } else {
         Integer result = res.getInt(1);
         if (!queryAndResult.getRight().equals(result)) {
           throw new AssertionError(

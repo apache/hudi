@@ -19,20 +19,18 @@
 package org.apache.hudi.metadata;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -59,26 +57,10 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
                                               String spillableMapBasePath,
                                               ExternalSpillableMap.DiskMapType diskMapType,
                                               boolean isBitCaskDiskMapCompressionEnabled,
-                                              Option<InstantRange> instantRange, boolean allowFullScan) {
+                                              Option<InstantRange> instantRange, boolean allowFullScan, boolean useScanV2) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, true, false, bufferSize,
-        spillableMapBasePath, instantRange, diskMapType, isBitCaskDiskMapCompressionEnabled, false, allowFullScan, Option.of(partitionName), InternalSchema.getEmptyInternalSchema());
-  }
-
-  @Override
-  protected HoodieAvroRecord<?> createHoodieRecord(final IndexedRecord rec, final HoodieTableConfig hoodieTableConfig,
-                                               final String payloadClassFQN, final String preCombineField,
-                                               final boolean withOperationField,
-                                               final Option<Pair<String, String>> simpleKeyGenFields,
-                                               final Option<String> partitionName) {
-    if (hoodieTableConfig.populateMetaFields()) {
-      return super.createHoodieRecord(rec, hoodieTableConfig, payloadClassFQN, preCombineField, withOperationField,
-          simpleKeyGenFields, partitionName);
-    }
-
-    // When meta fields are not available, create the record using the
-    // preset key field and the known partition name
-    return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, payloadClassFQN,
-        preCombineField, simpleKeyGenFields.get(), withOperationField, partitionName);
+        spillableMapBasePath, instantRange, diskMapType, isBitCaskDiskMapCompressionEnabled, false, allowFullScan,
+            Option.of(partitionName), InternalSchema.getEmptyInternalSchema(), useScanV2, HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()));
   }
 
   /**
@@ -106,7 +88,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     // processing log block records as part of scan.
     synchronized (this) {
       records.clear();
-      scanInternal(Option.of(new KeySpec(keyPrefixes, false)));
+      scanInternal(Option.of(new KeySpec(keyPrefixes, false)), false);
       return records.values().stream()
           .filter(Objects::nonNull)
           .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
@@ -129,6 +111,11 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
   }
 
   @Override
+  protected boolean getPopulateMetaFields() {
+    return this.hoodieTableMetaClient.getTableConfig().populateMetaFields() && super.getPopulateMetaFields();
+  }
+
+  @Override
   protected String getKeyField() {
     return HoodieMetadataPayload.KEY_FIELD_NAME;
   }
@@ -137,7 +124,11 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
    * Builder used to build {@code HoodieMetadataMergedLogRecordScanner}.
    */
   public static class Builder extends HoodieMergedLogRecordScanner.Builder {
+
     private boolean allowFullScan = HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.defaultValue();
+
+    // Use scanV2 method.
+    private boolean useScanV2 = false;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -161,6 +152,11 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     public Builder withReaderSchema(Schema schema) {
       this.readerSchema = schema;
       return this;
+    }
+
+    @Override
+    public Builder withInternalSchema(InternalSchema internalSchema) {
+      throw new UnsupportedOperationException();
     }
 
     @Override
@@ -226,10 +222,16 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     }
 
     @Override
+    public Builder withUseScanV2(boolean useScanV2) {
+      this.useScanV2 = useScanV2;
+      return this;
+    }
+
+    @Override
     public HoodieMetadataMergedLogRecordReader build() {
       return new HoodieMetadataMergedLogRecordReader(fs, basePath, partitionName, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, allowFullScan);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, allowFullScan, useScanV2);
     }
   }
 

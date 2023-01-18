@@ -32,6 +32,8 @@ import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,7 +43,7 @@ import java.util.List;
  * to check S3 files activity over time. The hudi table created by this source is consumed by
  * {@link S3EventsHoodieIncrSource} to apply changes to the hudi table corresponding to user data.
  */
-public class S3EventsSource extends RowSource {
+public class S3EventsSource extends RowSource implements Closeable {
 
   private final S3EventsMetaSelector pathSelector;
   private final List<Message> processedMessages = new ArrayList<>();
@@ -77,6 +79,12 @@ public class S3EventsSource extends RowSource {
           Option.of(sparkSession.read().json(eventRecords)),
           selectPathsWithLatestSqsMessage.getRight());
     }
+  }
+
+  @Override
+  public void close() throws IOException {
+    // close resource
+    this.sqs.shutdown();
   }
 
   @Override

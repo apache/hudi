@@ -30,7 +30,7 @@ import java.util.Map;
  */
 public class HadoopConfigurations {
   private static final String HADOOP_PREFIX = "hadoop.";
-  private static final  String PARQUET_PREFIX = "parquet.";
+  private static final String PARQUET_PREFIX = "parquet.";
 
   /**
    * Creates a merged hadoop configuration with given flink configuration and hadoop configuration.

@@ -149,11 +149,6 @@
   </build>
 
   <dependencies>
-    <dependency>
-      <groupId>org.scala-lang</groupId>
-      <artifactId>scala-library</artifactId>
-      <version>${scala12.version}</version>
-    </dependency>
 
     <dependency>
       <groupId>org.apache.spark</groupId>
@@ -215,6 +210,12 @@
     </dependency>
 
     <!-- Hoodie - Test -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-tests-common</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-client-common</artifactId>

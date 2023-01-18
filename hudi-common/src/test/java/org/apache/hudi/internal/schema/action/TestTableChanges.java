@@ -20,33 +20,37 @@ package org.apache.hudi.internal.schema.action;
 
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
-
+import org.apache.hudi.internal.schema.Types.StringType;
+import org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
-import org.junit.jupiter.api.Test;
+
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
+/**
+ * Tests schema changes with {@link TableChanges}.
+ */
 public class TestTableChanges {
 
   @Test
   public void testPrimitiveAdd() {
-    Types.RecordType record = Types.RecordType.get(Arrays.asList(new Types.Field[] {
-        Types.Field.get(0, "col1", Types.BooleanType.get()),
+    Types.RecordType record = Types.RecordType.get(Arrays.asList(Types.Field.get(0, "col1", Types.BooleanType.get()),
         Types.Field.get(1, "col2", Types.IntType.get()),
         Types.Field.get(2, "col3", Types.LongType.get()),
-        Types.Field.get(3, "col4", Types.FloatType.get())}));
+        Types.Field.get(3, "col4", Types.FloatType.get())));
 
-    Types.RecordType checkRecord = Types.RecordType.get(Arrays.asList(new Types.Field[]  {
-        Types.Field.get(0, "col1", Types.BooleanType.get()),
+    Types.RecordType checkRecord = Types.RecordType.get(Arrays.asList(Types.Field.get(0, "col1", Types.BooleanType.get()),
         Types.Field.get(4, true, "c1", Types.BooleanType.get(), "add c1 after col1"),
         Types.Field.get(1, "col2", Types.IntType.get()),
         Types.Field.get(5, true, "c2", Types.IntType.get(), "add c2 before col3"),
         Types.Field.get(2, "col3", Types.LongType.get()),
-        Types.Field.get(3, "col4", Types.FloatType.get())}));
+        Types.Field.get(3, "col4", Types.FloatType.get())));
 
-    InternalSchema oldSchema = new InternalSchema(record.fields());
+    InternalSchema oldSchema = new InternalSchema(record);
     // add c1 after 'col1', and c2 before 'col3'
     TableChanges.ColumnAddChange addChange = TableChanges.ColumnAddChange.get(oldSchema);
     addChange.addColumns("c1", Types.BooleanType.get(), "add c1 after col1");
@@ -61,7 +65,7 @@ public class TestTableChanges {
 
   @Test
   public void testNestAdd() {
-    InternalSchema oldSchema = new InternalSchema(Types.Field.get(0, false, "id", Types.IntType.get()),
+    Types.RecordType recordType = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
         Types.Field.get(2, true, "preferences",
             Types.RecordType.get(Types.Field.get(7, false, "feature1",
@@ -70,9 +74,10 @@ public class TestTableChanges {
             Types.RecordType.get(Types.Field.get(11, false, "lat", Types.FloatType.get()), Types.Field.get(12, false, "long", Types.FloatType.get())), false)),
         Types.Field.get(4, true, "points", Types.ArrayType.get(13, true,
             Types.RecordType.get(Types.Field.get(14, false, "x", Types.LongType.get()), Types.Field.get(15, false, "y", Types.LongType.get())))),
-        Types.Field.get(5, false,"doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
+        Types.Field.get(5, false, "doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
         Types.Field.get(6, true, "properties", Types.MapType.get(17, 18, Types.StringType.get(), Types.StringType.get()))
     );
+    InternalSchema oldSchema = new InternalSchema(recordType);
 
     TableChanges.ColumnAddChange addChange = TableChanges.ColumnAddChange.get(oldSchema);
     // add c1 first
@@ -91,7 +96,7 @@ public class TestTableChanges {
     addChange.addColumns("points.element", "z", Types.BooleanType.get(), "add points.element.z after points.element.y");
     addChange.addPositionChange("points.element.z", "points.element.y", "after");
     InternalSchema newSchema = SchemaChangeUtils.applyTableChanges2Schema(oldSchema, addChange);
-    InternalSchema checkedSchema = new InternalSchema(
+    Types.RecordType expectedRecordType = Types.RecordType.get(
         Types.Field.get(19, true, "c1", Types.StringType.get(), "add c1 first"),
         Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
@@ -107,10 +112,10 @@ public class TestTableChanges {
             Types.RecordType.get(Types.Field.get(14, false, "x", Types.LongType.get()),
                 Types.Field.get(15, false, "y", Types.LongType.get()),
                 Types.Field.get(22, true, "z", Types.BooleanType.get(), "add points.element.z after points.element.y")))),
-        Types.Field.get(5, false,"doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
+        Types.Field.get(5, false, "doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
         Types.Field.get(6, true, "properties", Types.MapType.get(17, 18, Types.StringType.get(), Types.StringType.get()))
     );
-    Assertions.assertEquals(newSchema.getRecord(), checkedSchema.getRecord());
+    Assertions.assertEquals(expectedRecordType, newSchema.getRecord());
   }
 
   @Test
@@ -120,7 +125,7 @@ public class TestTableChanges {
         Types.Field.get(1, "col2", Types.IntType.get()),
         Types.Field.get(2, "col3", Types.LongType.get()),
         Types.Field.get(3, "col4", Types.FloatType.get())}));
-    InternalSchema oldSchema = new InternalSchema(record.fields());
+    InternalSchema oldSchema = new InternalSchema(record);
     TableChanges.ColumnDeleteChange deleteChange = TableChanges.ColumnDeleteChange.get(oldSchema);
     deleteChange.deleteColumn("col1");
     // check repeated delete.
@@ -136,7 +141,7 @@ public class TestTableChanges {
 
   @Test
   public void testNestDelete() {
-    InternalSchema oldSchema = new InternalSchema(Types.Field.get(0, false, "id", Types.IntType.get()),
+    Types.RecordType recordType = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
         Types.Field.get(2, true, "preferences",
             Types.RecordType.get(Types.Field.get(5, false, "feature1",
@@ -146,6 +151,7 @@ public class TestTableChanges {
         Types.Field.get(4, true, "points", Types.ArrayType.get(11, true,
             Types.RecordType.get(Types.Field.get(12, false, "x", Types.LongType.get()), Types.Field.get(13, false, "y", Types.LongType.get()))))
     );
+    InternalSchema oldSchema = new InternalSchema(recordType);
     TableChanges.ColumnDeleteChange deleteChange = TableChanges.ColumnDeleteChange.get(oldSchema);
     deleteChange.deleteColumn("data");
     deleteChange.deleteColumn("preferences.feature2");
@@ -153,7 +159,7 @@ public class TestTableChanges {
     deleteChange.deleteColumn("locations.value.lat");
     deleteChange.deleteColumn("points.element.y");
     InternalSchema newSchema = SchemaChangeUtils.applyTableChanges2Schema(oldSchema, deleteChange);
-    InternalSchema checkedSchema = new InternalSchema(Types.Field.get(0, false, "id", Types.IntType.get()),
+    Types.RecordType checkedRecordType = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(2, true, "preferences",
             Types.RecordType.get(Types.Field.get(5, false, "feature1",
                 Types.BooleanType.get()))),
@@ -162,7 +168,7 @@ public class TestTableChanges {
         Types.Field.get(4, true, "points", Types.ArrayType.get(11, true,
             Types.RecordType.get(Types.Field.get(12, false, "x", Types.LongType.get()))))
     );
-    Assertions.assertEquals(newSchema.getRecord(), checkedSchema.getRecord());
+    Assertions.assertEquals(checkedRecordType, newSchema.getRecord());
   }
 
   @Test
@@ -172,7 +178,7 @@ public class TestTableChanges {
         Types.Field.get(1, "col2", Types.IntType.get()),
         Types.Field.get(2, "col3", Types.LongType.get()),
         Types.Field.get(3, "col4", Types.FloatType.get())}));
-    InternalSchema oldSchema = new InternalSchema(record.fields());
+    InternalSchema oldSchema = new InternalSchema(record);
     TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(oldSchema);
     updateChange.updateColumnType("col2", Types.LongType.get())
         .updateColumnComment("col2", "alter col2 comments")
@@ -188,7 +194,7 @@ public class TestTableChanges {
 
   @Test
   public void testNestUpdate() {
-    InternalSchema oldSchema = new InternalSchema(Types.Field.get(0, false, "id", Types.IntType.get()),
+    Types.RecordType recordType = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
         Types.Field.get(2, true, "preferences",
             Types.RecordType.get(Types.Field.get(5, false, "feature1",
@@ -198,6 +204,7 @@ public class TestTableChanges {
         Types.Field.get(4, true, "points", Types.ArrayType.get(11, true,
             Types.RecordType.get(Types.Field.get(12, false, "x", Types.LongType.get()), Types.Field.get(13, false, "y", Types.LongType.get()))))
     );
+    InternalSchema oldSchema = new InternalSchema(recordType);
     TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(oldSchema);
     updateChange
         .updateColumnNullability("id", true)
@@ -213,7 +220,7 @@ public class TestTableChanges {
     updateChange.renameColumn("points.element.x", "z")
         .addPositionChange("points.element.x", "points.element.y", "after");
     InternalSchema newSchema = SchemaChangeUtils.applyTableChanges2Schema(oldSchema, updateChange);
-    InternalSchema checkSchema = new InternalSchema(Types.Field.get(0, true, "idx", Types.IntType.get()),
+    Types.RecordType expectedRecordType = Types.RecordType.get(Types.Field.get(0, true, "idx", Types.IntType.get()),
         Types.Field.get(2, true, "preferences",
             Types.RecordType.get(Types.Field.get(5, false, "f1",
                 Types.BooleanType.get(), "add feature1 comment"), Types.Field.get(6, true, "feature2", Types.BooleanType.get()))),
@@ -223,7 +230,91 @@ public class TestTableChanges {
             Types.RecordType.get(Types.Field.get(13, false, "y", Types.LongType.get()), Types.Field.get(12, false, "z", Types.LongType.get())))),
         Types.Field.get(1, true, "data", Types.StringType.get())
     );
-    Assertions.assertEquals(newSchema.getRecord(), checkSchema.getRecord());
+    Assertions.assertEquals(expectedRecordType, newSchema.getRecord());
+  }
+
+  @Test
+  public void testChangeApplier() {
+    // We add test here to verify the logic of applyAddChange and applyReOrderColPositionChange
+    Types.RecordType recordType = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, true, "data", StringType.get()),
+        Types.Field.get(2, true, "preferences",
+            Types.RecordType.get(Types.Field.get(7, false, "feature1",
+                Types.BooleanType.get()), Types.Field.get(8, true, "feature2", Types.BooleanType.get()))),
+        Types.Field.get(3, false, "locations", Types.MapType.get(9, 10, StringType.get(),
+            Types.RecordType.get(Types.Field.get(11, false, "lat", Types.FloatType.get()), Types.Field.get(12, false, "long", Types.FloatType.get())), false)),
+        Types.Field.get(4, true, "points", Types.ArrayType.get(13, true,
+            Types.RecordType.get(Types.Field.get(14, false, "x", Types.LongType.get()), Types.Field.get(15, false, "y", Types.LongType.get())))),
+        Types.Field.get(5, false, "doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
+        Types.Field.get(6, true, "properties", Types.MapType.get(17, 18, StringType.get(), StringType.get()))
+    );
+    InternalSchema oldSchema = new InternalSchema(recordType);
+
+    // add c1 first
+    InternalSchema newSchema = addOperationForSchemaChangeApplier(oldSchema, "c1", StringType.get(), "add c1 first",
+        "id", ColumnPositionType.BEFORE);
+    //add preferences.cx before preferences.feature2
+    newSchema = addOperationForSchemaChangeApplier(newSchema, "preferences.cx", Types.BooleanType.get(), "add preferences.cx before preferences.feature2",
+        "preferences.feature2", ColumnPositionType.BEFORE);
+    // check repeated add.
+    InternalSchema currSchema = newSchema;
+    Assertions.assertThrows(HoodieSchemaException.class, () -> addOperationForSchemaChangeApplier(currSchema, "preferences.cx", Types.BooleanType.get(),
+        "add preferences.cx before preferences.feature2"));
+    // add locations.value.lax before locations.value.long
+    newSchema = addOperationForSchemaChangeApplier(newSchema, "locations.value.lax", Types.BooleanType.get(), "add locations.value.lax before locations.value.long");
+    newSchema = reOrderOperationForSchemaChangeApplier(newSchema, "locations.value.lax", "locations.value.long", ColumnPositionType.BEFORE);
+    //
+    // add points.element.z after points.element.y
+    newSchema = addOperationForSchemaChangeApplier(newSchema, "points.element.z", Types.BooleanType.get(), "add points.element.z after points.element.y", "points.element.y", ColumnPositionType.AFTER);
+    Types.RecordType expectedRecordType = Types.RecordType.get(
+        Types.Field.get(19, true, "c1", StringType.get(), "add c1 first"),
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, true, "data", StringType.get()),
+        Types.Field.get(2, true, "preferences",
+            Types.RecordType.get(Types.Field.get(7, false, "feature1", Types.BooleanType.get()),
+                Types.Field.get(20, true, "cx", Types.BooleanType.get(), "add preferences.cx before preferences.feature2"),
+                Types.Field.get(8, true, "feature2", Types.BooleanType.get()))),
+        Types.Field.get(3, false, "locations", Types.MapType.get(9, 10, StringType.get(),
+            Types.RecordType.get(Types.Field.get(11, false, "lat", Types.FloatType.get()),
+                Types.Field.get(21, true, "lax", Types.BooleanType.get(), "add locations.value.lax before locations.value.long"),
+                Types.Field.get(12, false, "long", Types.FloatType.get())), false)),
+        Types.Field.get(4, true, "points", Types.ArrayType.get(13, true,
+            Types.RecordType.get(Types.Field.get(14, false, "x", Types.LongType.get()),
+                Types.Field.get(15, false, "y", Types.LongType.get()),
+                Types.Field.get(22, true, "z", Types.BooleanType.get(), "add points.element.z after points.element.y")))),
+        Types.Field.get(5, false, "doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
+        Types.Field.get(6, true, "properties", Types.MapType.get(17, 18, StringType.get(), StringType.get()))
+    );
+    Assertions.assertEquals(expectedRecordType, newSchema.getRecord());
+  }
+
+  private static InternalSchema addOperationForSchemaChangeApplier(
+      InternalSchema schema,
+      String colName,
+      Type colType,
+      String doc,
+      String position,
+      TableChange.ColumnPositionChange.ColumnPositionType positionType) {
+    InternalSchemaChangeApplier applier = new InternalSchemaChangeApplier(schema);
+    return applier.applyAddChange(colName, colType, doc, position, positionType);
+  }
+
+  private static InternalSchema reOrderOperationForSchemaChangeApplier(
+      InternalSchema schema,
+      String colName,
+      String position,
+      TableChange.ColumnPositionChange.ColumnPositionType positionType) {
+    InternalSchemaChangeApplier applier = new InternalSchemaChangeApplier(schema);
+    return applier.applyReOrderColPositionChange(colName, position, positionType);
+  }
+
+  private static InternalSchema addOperationForSchemaChangeApplier(
+      InternalSchema schema,
+      String colName,
+      Type colType,
+      String doc) {
+    return addOperationForSchemaChangeApplier(schema, colName, colType, doc, "",
+        ColumnPositionType.NO_OPERATION);
   }
 }
 

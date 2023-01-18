@@ -31,11 +31,13 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.ClusteringUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -86,7 +88,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     if (writeClient == null) {
-      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+      this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     }
     this.commitBuffer = new HashMap<>();
     this.table = writeClient.getHoodieTable();
@@ -120,7 +122,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     if (events.stream().anyMatch(ClusteringCommitEvent::isFailed)) {
       try {
         // handle failure case
-        CompactionUtil.rollbackCompaction(table, instant);
+        ClusteringUtil.rollbackClustering(table, writeClient, instant);
       } finally {
         // remove commitBuffer to avoid obsolete metadata commit
         reset(instant);
@@ -164,6 +166,12 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     this.table.getMetaClient().reloadActiveTimeline();
     this.writeClient.completeTableService(
         TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant);
+
+    // whether to clean up the input base parquet files used for clustering
+    if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+      LOG.info("Running inline clean");
+      this.writeClient.clean();
+    }
   }
 
   private void reset(String instant) {

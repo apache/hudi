@@ -20,37 +20,33 @@ package org.apache.hudi.cli;
 
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
-import org.springframework.shell.plugin.support.DefaultPromptProvider;
+import org.springframework.shell.jline.PromptProvider;
 import org.springframework.stereotype.Component;
+
+import org.jline.utils.AttributedString;
 
 /**
  * This class deals with displaying prompt on CLI based on the state.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
-public class HoodiePrompt extends DefaultPromptProvider {
+public class HoodiePrompt implements PromptProvider {
 
   @Override
-  public String getPrompt() {
+  public AttributedString getPrompt() {
     if (HoodieCLI.tableMetadata != null) {
       String tableName = HoodieCLI.tableMetadata.getTableConfig().getTableName();
       switch (HoodieCLI.state) {
         case INIT:
-          return "hudi->";
+          return new AttributedString("hudi->");
         case TABLE:
-          return "hudi:" + tableName + "->";
+          return new AttributedString("hudi:" + tableName + "->");
         case SYNC:
-          return "hudi:" + tableName + " <==> " + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->";
+          return new AttributedString("hudi:" + tableName + " <==> " + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->");
         default:
-          return "hudi:" + tableName + "->";
+          return new AttributedString("hudi:" + tableName + "->");
       }
     }
-    return "hudi->";
+    return new AttributedString("hudi->");
   }
-
-  @Override
-  public String getProviderName() {
-    return "Hoodie provider";
-  }
-
 }

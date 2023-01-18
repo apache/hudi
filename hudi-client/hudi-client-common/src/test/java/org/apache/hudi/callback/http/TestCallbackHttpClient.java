@@ -38,6 +38,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -68,17 +69,24 @@ public class TestCallbackHttpClient {
   @Mock
   StatusLine statusLine;
 
+  private Level initialLogLevel;
+
   @BeforeEach
   void prepareAppender() {
-    when(appender.getName()).thenReturn("MockAppender");
+    when(appender.getName()).thenReturn("MockAppender-" + UUID.randomUUID());
     when(appender.isStarted()).thenReturn(true);
     when(appender.isStopped()).thenReturn(false);
-    ((Logger) LogManager.getLogger(HoodieWriteCommitHttpCallbackClient.class)).addAppender(appender);
+    Logger logger = (Logger) LogManager.getLogger(HoodieWriteCommitHttpCallbackClient.class);
+    initialLogLevel = logger.getLevel();
+    logger.setLevel(Level.DEBUG);
+    logger.addAppender(appender);
   }
 
   @AfterEach
   void resetMocks() {
-    ((Logger) LogManager.getLogger(HoodieWriteCommitHttpCallbackClient.class)).removeAppender(appender);
+    Logger logger = (Logger) LogManager.getLogger(HoodieWriteCommitHttpCallbackClient.class);
+    logger.setLevel(initialLogLevel);
+    logger.removeAppender(appender);
     reset(appender, httpClient, httpResponse, statusLine);
   }
 

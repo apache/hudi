@@ -20,7 +20,7 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -42,7 +42,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -106,7 +106,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     });
   }
 
-  protected List<HoodieRecord> runNextDeltaCommits(SparkRDDWriteClient client, final HoodieReadClient readClient, List<String> deltaInstants,
+  protected List<HoodieRecord> runNextDeltaCommits(SparkRDDWriteClient client, final SparkRDDReadClient readClient, List<String> deltaInstants,
                                                    List<HoodieRecord> records, HoodieWriteConfig cfg, boolean insertFirst, List<String> expPendingCompactionInstants)
       throws Exception {
 
@@ -154,7 +154,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
     HoodieInstant compactionInstant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
     metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(compactionInstant);
-    HoodieInstant instant = metaClient.getActiveTimeline().reload().filterPendingCompactionTimeline().getInstants()
+    HoodieInstant instant = metaClient.getActiveTimeline().reload().filterPendingCompactionTimeline().getInstantsAsStream()
         .filter(in -> in.getTimestamp().equals(compactionInstantTime)).findAny().get();
     assertTrue(instant.isInflight(), "Instant must be marked inflight");
   }
@@ -219,7 +219,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     table = getHoodieTable(HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).setLoadActiveTimelineOnLoad(true).build(), cfg);
     HoodieTimeline timeline = table.getMetaClient().getCommitTimeline().filterCompletedInstants();
     // verify compaction commit is visible in timeline
-    assertTrue(timeline.filterCompletedInstants().getInstants()
+    assertTrue(timeline.filterCompletedInstants().getInstantsAsStream()
         .filter(instant -> compactionInstantTime.equals(instant.getTimestamp())).findFirst().isPresent());
     for (String partition: partitions) {
       table.getSliceView().getLatestFileSlicesBeforeOrOn(partition, compactionInstantTime, true).forEach(fs -> {

@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -52,16 +53,39 @@ public class TimelineUtils {
    * Returns partitions that have new data strictly after commitTime.
    * Does not include internal operations such as clean in the timeline.
    */
-  public static List<String> getPartitionsWritten(HoodieTimeline timeline) {
+  public static List<String> getWrittenPartitions(HoodieTimeline timeline) {
     HoodieTimeline timelineToSync = timeline.getWriteTimeline();
     return getAffectedPartitions(timelineToSync);
+  }
+
+  /**
+   * Returns partitions that have been deleted or marked for deletion in the given timeline.
+   * Does not include internal operations such as clean in the timeline.
+   */
+  public static List<String> getDroppedPartitions(HoodieTimeline timeline) {
+    HoodieTimeline replaceCommitTimeline = timeline.getWriteTimeline().filterCompletedInstants().getCompletedReplaceTimeline();
+
+    return replaceCommitTimeline.getInstantsAsStream().flatMap(instant -> {
+      try {
+        HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
+            replaceCommitTimeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        if (WriteOperationType.DELETE_PARTITION.equals(commitMetadata.getOperationType())) {
+          Map<String, List<String>> partitionToReplaceFileIds = commitMetadata.getPartitionToReplaceFileIds();
+          return partitionToReplaceFileIds.keySet().stream();
+        } else {
+          return Stream.empty();
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to get partitions modified at " + instant, e);
+      }
+    }).distinct().filter(partition -> !partition.isEmpty()).collect(Collectors.toList());
   }
 
   /**
    * Returns partitions that have been modified including internal operations such as clean in the passed timeline.
    */
   public static List<String> getAffectedPartitions(HoodieTimeline timeline) {
-    return timeline.filterCompletedInstants().getInstants().flatMap(s -> {
+    return timeline.filterCompletedInstants().getInstantsAsStream().flatMap(s -> {
       switch (s.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:
         case HoodieTimeline.DELTA_COMMIT_ACTION:
@@ -131,7 +155,6 @@ public class TimelineUtils {
         getMetadataValue(metaClient, extraMetadataKey, instant)).orElse(Option.empty());
   }
 
-
   /**
    * Get extra metadata for specified key from latest commit/deltacommit/replacecommit instant including internal commits
    * such as clustering.
@@ -162,7 +185,7 @@ public class TimelineUtils {
     }
   }
   
-  private static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+  public static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     try {
       if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
         // replacecommit is used for multiple operations: insert_overwrite/cluster etc. 
@@ -171,10 +194,56 @@ public class TimelineUtils {
             metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
         return WriteOperationType.CLUSTER.equals(replaceMetadata.getOperationType());
       }
-      
+
       return false;
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read instant information: " + instant + " for " + metaClient.getBasePath(), e);
+    }
+  }
+
+  public static HoodieDefaultTimeline getTimeline(HoodieTableMetaClient metaClient, boolean includeArchivedTimeline) {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    if (includeArchivedTimeline) {
+      HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+      return archivedTimeline.mergeTimeline(activeTimeline);
+    }
+    return activeTimeline;
+  }
+
+  /**
+   * Returns a Hudi timeline with commits after the given instant time (exclusive).
+   *
+   * @param metaClient                {@link HoodieTableMetaClient} instance.
+   * @param exclusiveStartInstantTime Start instant time (exclusive).
+   * @return Hudi timeline.
+   */
+  public static HoodieTimeline getCommitsTimelineAfter(
+      HoodieTableMetaClient metaClient, String exclusiveStartInstantTime) {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieDefaultTimeline timeline =
+        activeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
+            ? metaClient.getArchivedTimeline(exclusiveStartInstantTime)
+            .mergeTimeline(activeTimeline)
+            : activeTimeline;
+    return timeline.getCommitsTimeline()
+        .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
+  }
+  
+  /**
+   * Returns the commit metadata of the given instant.
+   *
+   * @param instant  The hoodie instant
+   * @param timeline The timeline
+   * @return the commit metadata
+   */
+  public static HoodieCommitMetadata getCommitMetadata(
+      HoodieInstant instant,
+      HoodieTimeline timeline) throws IOException {
+    byte[] data = timeline.getInstantDetails(instant).get();
+    if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      return HoodieReplaceCommitMetadata.fromBytes(data, HoodieReplaceCommitMetadata.class);
+    } else {
+      return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
     }
   }
 }

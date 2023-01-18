@@ -103,6 +103,11 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
   }
 
   @Override
+  public int getNumPartitions() {
+    return rddData.getNumPartitions();
+  }
+
+  @Override
   public <O> HoodieData<O> map(SerializableFunction<T, O> func) {
     return HoodieJavaRDD.of(rddData.map(func::apply));
   }

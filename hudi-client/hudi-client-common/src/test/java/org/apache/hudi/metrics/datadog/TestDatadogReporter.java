@@ -39,6 +39,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -78,7 +79,7 @@ public class TestDatadogReporter {
 
   @Test
   public void stopShouldLogWhenEnclosedClientFailToClose() throws IOException {
-    when(appender.getName()).thenReturn("MockAppender");
+    when(appender.getName()).thenReturn("MockAppender-" + UUID.randomUUID());
     when(appender.isStarted()).thenReturn(true);
     when(appender.isStopped()).thenReturn(false);
     ((Logger) LogManager.getLogger(DatadogReporter.class)).addAppender(appender);

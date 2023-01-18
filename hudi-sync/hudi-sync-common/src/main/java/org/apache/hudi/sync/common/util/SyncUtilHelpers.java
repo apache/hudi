@@ -27,14 +27,17 @@ import org.apache.hudi.sync.common.HoodieSyncTool;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
+import java.util.Collection;
 import java.util.Properties;
 
 /**
  * Helper class for syncing Hudi commit data with external metastores.
  */
 public class SyncUtilHelpers {
-
+  private static final Logger LOG = LogManager.getLogger(SyncUtilHelpers.class);
   /**
    * Create an instance of an implementation of {@link HoodieSyncTool} that will sync all the relevant meta information
    * with an external metastore such as Hive etc. to ensure Hoodie tables can be queried or read via external systems.
@@ -69,6 +72,13 @@ public class SyncUtilHelpers {
     properties.putAll(props);
     properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), targetBasePath);
     properties.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
+    if (properties.containsKey(HoodieSyncConfig.META_SYNC_TABLE_NAME.key())) {
+      String tableName = properties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key());
+      if (!tableName.equals(tableName.toLowerCase())) {
+        LOG.warn(
+            "Table name \"" + tableName + "\" contains capital letters. Your metastore may automatically convert this to lower case and can cause table not found errors during subsequent syncs.");
+      }
+    }
 
     if (ReflectionUtils.hasConstructor(syncToolClassName,
         new Class<?>[] {Properties.class, Configuration.class})) {
@@ -94,5 +104,18 @@ public class SyncUtilHelpers {
       throw new HoodieException("Could not load meta sync class " + syncToolClassName
           + ": no valid constructor found.");
     }
+  }
+
+  public static HoodieException getExceptionFromList(Collection<HoodieException> exceptions) {
+    if (exceptions.size() == 1) {
+      return exceptions.stream().findFirst().get();
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("Multiple exceptions during meta sync:\n");
+    exceptions.forEach(e -> {
+      sb.append(e.getMessage());
+      sb.append("\n");
+    });
+    return new HoodieException(sb.toString());
   }
 }

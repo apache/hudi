@@ -21,7 +21,6 @@ package org.apache.hudi.io;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -40,7 +39,7 @@ import java.util.stream.Stream;
  *
  * @param <T>
  */
-public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T, I, K, O> {
+public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   private final Pair<String, HoodieBaseFile> partitionPathBaseFilePair;
   private final Option<BaseKeyGenerator> keyGeneratorOpt;

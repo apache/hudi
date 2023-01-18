@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi
 class TestDeleteFromTable extends HoodieSparkSqlTestBase {
 
   test("Test deleting from table") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         spark.sql(
@@ -78,6 +78,6 @@ class TestDeleteFromTable extends HoodieSparkSqlTestBase {
           Seq(3, "a3", 30.0, 3000, "2021-01-07")
         )
       }
-    }
+    })
   }
 }

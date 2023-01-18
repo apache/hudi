@@ -29,6 +29,7 @@ import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig
+import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
 import org.apache.hudi.common.util.hash.ColumnIndexID
@@ -469,10 +470,7 @@ object ColumnStatsIndexSupport {
         }
       case BinaryType =>
         value match {
-          case b: ByteBuffer =>
-            val bytes = new Array[Byte](b.remaining)
-            b.get(bytes)
-            bytes
+          case b: ByteBuffer => toBytes(b)
           case other => other
         }
 

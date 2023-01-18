@@ -18,6 +18,10 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
@@ -25,11 +29,10 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.io.DateWritable;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
+import org.apache.hadoop.hive.serde2.io.TimestampWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.HiveDecimalUtils;
 import org.apache.hadoop.io.ArrayWritable;
@@ -41,22 +44,17 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -66,18 +64,6 @@ import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 
 public class HoodieRealtimeRecordReaderUtils {
   private static final Logger LOG = LogManager.getLogger(HoodieRealtimeRecordReaderUtils.class);
-
-  /**
-   * Reads the schema from the base file.
-   */
-  public static Schema readSchema(Configuration conf, Path filePath) {
-    try {
-      HoodieFileReader storageReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
-      return storageReader.getSchema();
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read schema from " + filePath, e);
-    }
-  }
 
   /**
    * get the max compaction memory in bytes from JobConf.
@@ -97,9 +83,10 @@ public class HoodieRealtimeRecordReaderUtils {
     if (writable == null) {
       return "null";
     }
+    Random random = new Random(2);
     StringBuilder builder = new StringBuilder();
     Writable[] values = writable.get();
-    builder.append("\"values_" + Math.random() + "_" + values.length + "\": {");
+    builder.append("\"values_" + random.nextDouble() + "_" + values.length + "\": {");
     int i = 0;
     for (Writable w : values) {
       if (w instanceof ArrayWritable) {
@@ -176,6 +163,9 @@ public class HoodieRealtimeRecordReaderUtils {
         }
         return new IntWritable((Integer) value);
       case LONG:
+        if (schema.getLogicalType() != null && "timestamp-micros".equals(schema.getLogicalType().getName())) {
+          return new TimestampWritable(new Timestamp((Long) value));
+        }
         return new LongWritable((Long) value);
       case FLOAT:
         return new FloatWritable((Float) value);
@@ -195,7 +185,7 @@ public class HoodieRealtimeRecordReaderUtils {
           try {
             fieldValue = record.get(field.name());
           } catch (AvroRuntimeException e) {
-            LOG.debug("Field:" + field.name() + "not found in Schema:" + schema.toString());
+            LOG.debug("Field:" + field.name() + "not found in Schema:" + schema);
           }
           recordValues[recordValueIndex++] = avroToArrayWritable(fieldValue, field.schema());
         }

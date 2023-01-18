@@ -25,20 +25,15 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 import scala.collection.JavaConverters;
 
-@Component
-public class ClusteringCommand implements CommandMarker {
-
-  private static final Logger LOG = LogManager.getLogger(ClusteringCommand.class);
+@ShellComponent
+public class ClusteringCommand {
 
   /**
    * Schedule clustering table service.
@@ -47,14 +42,14 @@ public class ClusteringCommand implements CommandMarker {
    * > connect --path {path to hudi table}
    * > clustering schedule --sparkMaster local --sparkMemory 2g
    */
-  @CliCommand(value = "clustering schedule", help = "Schedule Clustering")
+  @ShellMethod(key = "clustering schedule", value = "Schedule Clustering")
   public String scheduleClustering(
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "1g", help = "Spark executor memory") final String sparkMemory,
-      @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations "
-          + "for hoodie client for clustering", unspecifiedDefaultValue = "") final String propsFilePath,
-      @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can "
-          + "be passed here in the form of an array", unspecifiedDefaultValue = "") final String[] configs) throws Exception {
+      @ShellOption(value = "--sparkMaster", defaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,
+      @ShellOption(value = "--sparkMemory", defaultValue = "1g", help = "Spark executor memory") final String sparkMemory,
+      @ShellOption(value = "--propsFilePath", help = "path to properties file on localfs or dfs with configurations "
+          + "for hoodie client for clustering", defaultValue = "") final String propsFilePath,
+      @ShellOption(value = "--hoodieConfigs", help = "Any configuration that can be set in the properties file can "
+          + "be passed here in the form of an array", defaultValue = "") final String[] configs) throws Exception {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
@@ -86,17 +81,18 @@ public class ClusteringCommand implements CommandMarker {
    * > clustering schedule --sparkMaster local --sparkMemory 2g
    * > clustering run --sparkMaster local --sparkMemory 2g --clusteringInstant  20211124005208
    */
-  @CliCommand(value = "clustering run", help = "Run Clustering")
+  @ShellMethod(key = "clustering run", value = "Run Clustering")
   public String runClustering(
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,
-      @CliOption(key = "sparkMemory", help = "Spark executor memory", unspecifiedDefaultValue = "4g") final String sparkMemory,
-      @CliOption(key = "parallelism", help = "Parallelism for hoodie clustering", unspecifiedDefaultValue = "1") final String parallelism,
-      @CliOption(key = "retry", help = "Number of retries", unspecifiedDefaultValue = "1") final String retry,
-      @CliOption(key = "clusteringInstant", help = "Clustering instant time", mandatory = true) final String clusteringInstantTime,
-      @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for "
-          + "hoodie client for compacting", unspecifiedDefaultValue = "") final String propsFilePath,
-      @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be "
-          + "passed here in the form of an array", unspecifiedDefaultValue = "") final String[] configs) throws Exception {
+      @ShellOption(value = "--sparkMaster", defaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,
+      @ShellOption(value = "--sparkMemory", help = "Spark executor memory", defaultValue = "4g") final String sparkMemory,
+      @ShellOption(value = "--parallelism", help = "Parallelism for hoodie clustering", defaultValue = "1") final String parallelism,
+      @ShellOption(value = "--retry", help = "Number of retries", defaultValue = "1") final String retry,
+      @ShellOption(value = "--clusteringInstant", help = "Clustering instant time",
+          defaultValue = ShellOption.NULL) final String clusteringInstantTime,
+      @ShellOption(value = "--propsFilePath", help = "path to properties file on localfs or dfs with configurations for "
+          + "hoodie client for compacting", defaultValue = "") final String propsFilePath,
+      @ShellOption(value = "--hoodieConfigs", help = "Any configuration that can be set in the properties file can be "
+          + "passed here in the form of an array", defaultValue = "") final String[] configs) throws Exception {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
@@ -124,16 +120,16 @@ public class ClusteringCommand implements CommandMarker {
    * > connect --path {path to hudi table}
    * > clustering scheduleAndExecute --sparkMaster local --sparkMemory 2g
    */
-  @CliCommand(value = "clustering scheduleAndExecute", help = "Run Clustering. Make a cluster plan first and execute that plan immediately")
+  @ShellMethod(key = "clustering scheduleAndExecute", value = "Run Clustering. Make a cluster plan first and execute that plan immediately")
   public String runClustering(
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,
-      @CliOption(key = "sparkMemory", help = "Spark executor memory", unspecifiedDefaultValue = "4g") final String sparkMemory,
-      @CliOption(key = "parallelism", help = "Parallelism for hoodie clustering", unspecifiedDefaultValue = "1") final String parallelism,
-      @CliOption(key = "retry", help = "Number of retries", unspecifiedDefaultValue = "1") final String retry,
-      @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for "
-          + "hoodie client for compacting", unspecifiedDefaultValue = "") final String propsFilePath,
-      @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be "
-          + "passed here in the form of an array", unspecifiedDefaultValue = "") final String[] configs) throws Exception {
+      @ShellOption(value = "--sparkMaster", defaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,
+      @ShellOption(value = "--sparkMemory", help = "Spark executor memory", defaultValue = "4g") final String sparkMemory,
+      @ShellOption(value = "--parallelism", help = "Parallelism for hoodie clustering", defaultValue = "1") final String parallelism,
+      @ShellOption(value = "--retry", help = "Number of retries", defaultValue = "1") final String retry,
+      @ShellOption(value = "--propsFilePath", help = "path to properties file on localfs or dfs with configurations for "
+          + "hoodie client for compacting", defaultValue = "") final String propsFilePath,
+      @ShellOption(value = "--hoodieConfigs", help = "Any configuration that can be set in the properties file can be "
+          + "passed here in the form of an array", defaultValue = "") final String[] configs) throws Exception {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);

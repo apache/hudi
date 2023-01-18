@@ -27,6 +27,10 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 import org.apache.hudi.hadoop.UseRecordReaderFromInputFormat;
@@ -61,7 +65,10 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
     ValidationUtils.checkArgument(split instanceof RealtimeSplit,
         "HoodieRealtimeRecordReader can only work on RealtimeSplit and not with " + split);
     RealtimeSplit realtimeSplit = (RealtimeSplit) split;
-    addProjectionToJobConf(realtimeSplit, jobConf);
+    // add preCombineKey
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(realtimeSplit.getBasePath()).build();
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    addProjectionToJobConf(realtimeSplit, jobConf, metaClient.getTableConfig().getPreCombineField());
     LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
 
@@ -74,7 +81,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
         super.getRecordReader(split, jobConf, reporter));
   }
 
-  void addProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf) {
+  void addProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf, String preCombineKey) {
     // Hive on Spark invokes multiple getRecordReaders from different threads in the same spark task (and hence the
     // same JVM) unlike Hive on MR. Due to this, accesses to JobConf, which is shared across all threads, is at the
     // risk of experiencing race conditions. Hence, we synchronize on the JobConf object here. There is negligible
@@ -94,7 +101,8 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
           // TO fix this, hoodie columns are appended late at the time record-reader gets built instead of construction
           // time.
           if (!realtimeSplit.getDeltaLogPaths().isEmpty()) {
-            HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf, realtimeSplit.getVirtualKeyInfo());
+            HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf, realtimeSplit.getVirtualKeyInfo(),
+                StringUtils.isNullOrEmpty(preCombineKey) ? Option.empty() : Option.of(preCombineKey));
           }
           jobConf.set(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP, "true");
           setConf(jobConf);

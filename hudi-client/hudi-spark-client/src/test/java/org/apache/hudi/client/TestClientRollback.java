@@ -161,7 +161,105 @@ public class TestClientRollback extends HoodieClientTestBase {
       }, "Rolling back to non-existent savepoint should not be allowed");
 
       // rollback to savepoint 002
-      HoodieInstant savepoint = table.getCompletedSavepointTimeline().getInstants().findFirst().get();
+      HoodieInstant savepoint = table.getCompletedSavepointTimeline().getInstantsAsStream().findFirst().get();
+      client.restoreToSavepoint(savepoint.getTimestamp());
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      final BaseFileOnlyView view3 = table.getBaseFileOnlyView();
+      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"))).collect(Collectors.toList());
+      assertEquals(3, dataFiles.size(), "The data files for commit 002 be available");
+
+      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"))).collect(Collectors.toList());
+      assertEquals(0, dataFiles.size(), "The data files for commit 003 should be rolled back");
+
+      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
+      assertEquals(0, dataFiles.size(), "The data files for commit 004 should be rolled back");
+    }
+  }
+
+  /**
+   * Test case for rollback-savepoint with KEEP_LATEST_FILE_VERSIONS policy.
+   */
+  @Test
+  public void testSavepointAndRollbackWithKeepLatestFileVersionPolicy() throws Exception {
+    HoodieWriteConfig cfg = getConfigBuilder().withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build()).build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
+
+      /**
+       * Write 1 (only inserts)
+       */
+      String newCommitTime = "001";
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+      assertNoWriteErrors(statuses);
+
+      /**
+       * Write 2 (updates)
+       */
+      newCommitTime = "002";
+      client.startCommitWithTime(newCommitTime);
+
+      records = dataGen.generateUpdates(newCommitTime, records);
+      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      // Verify there are no errors
+      assertNoWriteErrors(statuses);
+
+      client.savepoint("hoodie-unit-test", "test");
+
+      /**
+       * Write 3 (updates)
+       */
+      newCommitTime = "003";
+      client.startCommitWithTime(newCommitTime);
+
+      records = dataGen.generateUpdates(newCommitTime, records);
+      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      // Verify there are no errors
+      assertNoWriteErrors(statuses);
+      HoodieWriteConfig config = getConfig();
+      List<String> partitionPaths =
+              FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), cfg.getBasePath());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
+
+      List<HoodieBaseFile> dataFiles = partitionPaths.stream().flatMap(s -> {
+        return view1.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"));
+      }).collect(Collectors.toList());
+      assertEquals(3, dataFiles.size(), "The data files for commit 003 should be present");
+
+      dataFiles = partitionPaths.stream().flatMap(s -> {
+        return view1.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"));
+      }).collect(Collectors.toList());
+      assertEquals(3, dataFiles.size(), "The data files for commit 002 should be present");
+
+      /**
+       * Write 4 (updates)
+       */
+      newCommitTime = "004";
+      client.startCommitWithTime(newCommitTime);
+
+      records = dataGen.generateUpdates(newCommitTime, records);
+      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      // Verify there are no errors
+      assertNoWriteErrors(statuses);
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      final BaseFileOnlyView view2 = table.getBaseFileOnlyView();
+
+      dataFiles = partitionPaths.stream().flatMap(s -> view2.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
+      assertEquals(3, dataFiles.size(), "The data files for commit 004 should be present");
+
+      // rollback to savepoint 002
+      HoodieInstant savepoint = table.getCompletedSavepointTimeline().getInstantsAsStream().findFirst().get();
       client.restoreToSavepoint(savepoint.getTimestamp());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -355,7 +453,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       assertTrue(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
 
       metaClient.reloadActiveTimeline();
-      List<HoodieInstant> rollbackInstants = metaClient.getActiveTimeline().getRollbackTimeline().getInstants().collect(Collectors.toList());
+      List<HoodieInstant> rollbackInstants = metaClient.getActiveTimeline().getRollbackTimeline().getInstants();
       assertEquals(rollbackInstants.size(), 1);
       HoodieInstant rollbackInstant = rollbackInstants.get(0);
 
@@ -372,7 +470,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
       // verify there are no extra rollback instants
       metaClient.reloadActiveTimeline();
-      rollbackInstants = metaClient.getActiveTimeline().getRollbackTimeline().getInstants().collect(Collectors.toList());
+      rollbackInstants = metaClient.getActiveTimeline().getRollbackTimeline().getInstants();
       assertEquals(rollbackInstants.size(), 1);
       assertEquals(rollbackInstants.get(0), rollbackInstant);
 
@@ -394,7 +492,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       client.rollback(commitTime4);
 
       metaClient.reloadActiveTimeline();
-      rollbackInstants = metaClient.reloadActiveTimeline().getRollbackTimeline().getInstants().collect(Collectors.toList());
+      rollbackInstants = metaClient.reloadActiveTimeline().getRollbackTimeline().getInstants();
       assertEquals(2, rollbackInstants.size());
     }
   }
@@ -572,7 +670,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       assertTrue(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
 
       metaClient.reloadActiveTimeline();
-      List<HoodieInstant> rollbackInstants = metaClient.getActiveTimeline().getRollbackTimeline().getInstants().collect(Collectors.toList());
+      List<HoodieInstant> rollbackInstants = metaClient.getActiveTimeline().getRollbackTimeline().getInstants();
       // Corrupted requested rollback plan should be deleted before scheduling a new one
       assertEquals(rollbackInstants.size(), 1);
       HoodieInstant rollbackInstant = rollbackInstants.get(0);

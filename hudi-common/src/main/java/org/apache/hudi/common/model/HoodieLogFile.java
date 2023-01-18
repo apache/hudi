@@ -18,11 +18,11 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.fs.FSUtils;
+
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.exception.InvalidHoodiePathException;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -42,6 +42,7 @@ public class HoodieLogFile implements Serializable {
 
   private static final long serialVersionUID = 1L;
   public static final String DELTA_EXTENSION = ".log";
+  public static final String LOG_FILE_PREFIX = ".";
   public static final Integer LOGFILE_BASE_VERSION = 1;
 
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
@@ -133,7 +134,7 @@ public class HoodieLogFile implements Serializable {
   private void initBaseInfo() {
     Matcher matcher = LOG_FILE_PATTERN.matcher(getPath().getName());
     if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
+      throw new RuntimeException("LogFile");
     }
     this.writeToken = matcher.group(6);
     this.logVersion = Integer.parseInt(matcher.group(4));

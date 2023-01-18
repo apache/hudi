@@ -23,7 +23,6 @@ import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -60,7 +59,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * 3. Initialize file groups for the enabled partition types within a transaction.
  * </li>
  */
-public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieIndexPlan>> {
+public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieIndexPlan>> {
 
   private static final Logger LOG = LogManager.getLogger(ScheduleIndexActionExecutor.class);
   private static final Integer INDEX_PLAN_VERSION_1 = 1;
@@ -107,7 +106,7 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
             .orElseThrow(() -> new HoodieIndexException(String.format("Could not get metadata writer to initialize filegroups for indexing for instant: %s", instantTime)));
         if (!finalPartitionsToIndex.get(0).getPartitionPath().equals(MetadataPartitionType.FILES.getPartitionPath())) {
           // initialize metadata partition only if not for FILES partition.
-          metadataWriter.initializeMetadataPartitions(table.getMetaClient(), finalPartitionsToIndex, indexInstant.getTimestamp());
+          metadataWriter.initializeMetadataPartitions(table.getMetaClient(), finalPartitionsToIndex, indexUptoInstant.get().getTimestamp());
         }
 
         // for each partitionToIndex add that time to the plan

@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
@@ -76,7 +77,6 @@ public class HoodieFlinkStreamer {
             .getLogicalType();
 
     long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
-    int parallelism = env.getParallelism();
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
     DataStream<RowData> dataStream = env.addSource(new FlinkKafkaConsumer<>(
@@ -98,12 +98,24 @@ public class HoodieFlinkStreamer {
       }
     }
 
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
-    if (OptionsResolver.needsAsyncCompaction(conf)) {
-      Pipelines.compact(conf, pipeline);
+    OptionsInference.setupSinkTasks(conf, env.getParallelism());
+    DataStream<Object> pipeline;
+    // Append mode
+    if (OptionsResolver.isAppendMode(conf)) {
+      pipeline = Pipelines.append(conf, rowType, dataStream, false);
+      if (OptionsResolver.needsAsyncClustering(conf)) {
+        Pipelines.cluster(conf, rowType, pipeline);
+      } else {
+        Pipelines.dummySink(pipeline);
+      }
     } else {
-      Pipelines.clean(conf, pipeline);
+      DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
+      pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      if (OptionsResolver.needsAsyncCompaction(conf)) {
+        Pipelines.compact(conf, pipeline);
+      } else {
+        Pipelines.clean(conf, pipeline);
+      }
     }
 
     env.execute(cfg.targetTableName);

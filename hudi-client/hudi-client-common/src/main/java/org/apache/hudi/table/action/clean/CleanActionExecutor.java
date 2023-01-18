@@ -18,9 +18,6 @@
 
 package org.apache.hudi.table.action.clean;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -28,7 +25,6 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
@@ -43,6 +39,8 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -56,7 +54,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieCleanMetadata> {
+public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieCleanMetadata> {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(CleanActionExecutor.class);
@@ -167,6 +165,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
                   ? new HoodieInstant(HoodieInstant.State.valueOf(actionInstant.getState()),
                   actionInstant.getAction(), actionInstant.getTimestamp())
                   : null))
+          .withLastCompletedCommitTimestamp(cleanerPlan.getLastCompletedCommitTimestamp())
           .withDeletePathPattern(partitionCleanStat.deletePathPatterns())
           .withSuccessfulDeletes(partitionCleanStat.successDeleteFiles())
           .withFailedDeletes(partitionCleanStat.failedDeleteFiles())
@@ -195,10 +194,9 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     ValidationUtils.checkArgument(cleanInstant.getState().equals(HoodieInstant.State.REQUESTED)
         || cleanInstant.getState().equals(HoodieInstant.State.INFLIGHT));
 
+    HoodieInstant inflightInstant = null;
     try {
-      final HoodieInstant inflightInstant;
-      final HoodieTimer timer = new HoodieTimer();
-      timer.startTimer();
+      final HoodieTimer timer = HoodieTimer.start();
       if (cleanInstant.isRequested()) {
         inflightInstant = table.getActiveTimeline().transitionCleanRequestedToInflight(cleanInstant,
             TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
@@ -218,7 +216,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
           cleanStats
       );
       if (!skipLocking) {
-        this.txnManager.beginTransaction(Option.empty(), Option.empty());
+        this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
       writeTableMetadata(metadata, inflightInstant.getTimestamp());
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
@@ -229,7 +227,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       throw new HoodieIOException("Failed to clean up after commit", e);
     } finally {
       if (!skipLocking) {
-        this.txnManager.endTransaction(Option.empty());
+        this.txnManager.endTransaction(Option.of(inflightInstant));
       }
     }
   }
@@ -239,7 +237,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     List<HoodieCleanMetadata> cleanMetadataList = new ArrayList<>();
     // If there are inflight(failed) or previously requested clean operation, first perform them
     List<HoodieInstant> pendingCleanInstants = table.getCleanTimeline()
-        .filterInflightsAndRequested().getInstants().collect(Collectors.toList());
+        .filterInflightsAndRequested().getInstants();
     if (pendingCleanInstants.size() > 0) {
       // try to clean old history schema.
       try {

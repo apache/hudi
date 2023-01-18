@@ -19,17 +19,24 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.DataSourceReadOptions;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.sources.HoodieIncrSource;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Row;
 
 import java.util.Objects;
+
+import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT;
+import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.MISSING_CHECKPOINT_STRATEGY;
+import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 
 public class IncrSourceHelper {
 
@@ -72,8 +79,22 @@ public class IncrSourceHelper {
         "Make sure the config hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
     HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
 
-    final HoodieTimeline activeCommitTimeline =
-        srcMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+    // Find the earliest incomplete commit, deltacommit, or non-clustering replacecommit,
+    // so that the incremental pulls should be strictly before this instant.
+    // This is to guard around multi-writer scenarios where a commit starting later than
+    // another commit from a concurrent writer can finish earlier, leaving an inflight commit
+    // before a completed commit.
+    final Option<HoodieInstant> firstIncompleteCommit = srcMetaClient.getCommitsTimeline()
+        .filterInflightsAndRequested()
+        .filter(instant ->
+            !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())
+                || !ClusteringUtils.getClusteringPlan(srcMetaClient, instant).isPresent())
+        .firstInstant();
+    final HoodieTimeline completedCommitTimeline =
+        srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
+    final HoodieTimeline activeCommitTimeline = firstIncompleteCommit.map(
+        commit -> completedCommitTimeline.findInstantsBefore(commit.getTimestamp())
+    ).orElse(completedCommitTimeline);
 
     String beginInstantTime = beginInstant.orElseGet(() -> {
       if (missingCheckpointStrategy != null) {
@@ -91,7 +112,7 @@ public class IncrSourceHelper {
 
     if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST || !activeCommitTimeline.isBeforeTimelineStarts(beginInstantTime)) {
       Option<HoodieInstant> nthInstant = Option.fromJavaOptional(activeCommitTimeline
-          .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstants().reduce((x, y) -> y));
+          .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstantsAsStream().reduce((x, y) -> y));
       return Pair.of(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL(), Pair.of(beginInstantTime, nthInstant.map(HoodieInstant::getTimestamp).orElse(beginInstantTime)));
     } else {
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
@@ -117,5 +138,26 @@ public class IncrSourceHelper {
         HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, endInstant),
         "Instant time(_hoodie_commit_time) in row (" + row + ") was : " + instantTime + "but expected to be between "
             + sinceInstant + "(excl) - " + endInstant + "(incl)");
+  }
+
+  /**
+   * Determine the policy to choose if a checkpoint is missing (detected by the absence of a beginInstant),
+   * during a run of a {@link HoodieIncrSource}.
+   * @param props the usual Hudi props object
+   * @return
+   */
+  public static MissingCheckpointStrategy getMissingCheckpointStrategy(TypedProperties props) {
+    boolean readLatestOnMissingCkpt = props.getBoolean(
+            READ_LATEST_INSTANT_ON_MISSING_CKPT, DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT);
+
+    if (readLatestOnMissingCkpt) {
+      return MissingCheckpointStrategy.READ_LATEST;
+    }
+
+    if (props.containsKey(MISSING_CHECKPOINT_STRATEGY)) {
+      return MissingCheckpointStrategy.valueOf(props.getString(MISSING_CHECKPOINT_STRATEGY));
+    }
+
+    return null;
   }
 }

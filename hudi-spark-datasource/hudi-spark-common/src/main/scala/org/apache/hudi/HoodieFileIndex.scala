@@ -19,13 +19,14 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, getConfigProperties}
+import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.metadata.HoodieMetadataPayload
+import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
@@ -83,7 +84,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
   @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
-  override def rootPaths: Seq[Path] = queryPaths.asScala
+  override def rootPaths: Seq[Path] = getQueryPaths.asScala
 
   /**
    * Returns the FileStatus for all the base files (excluding log files). This should be used only for
@@ -94,7 +95,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return List of FileStatus for base files
    */
   def allFiles: Seq[FileStatus] = {
-    cachedAllInputFileSlices.values.asScala.flatMap(_.asScala)
+    getAllInputFileSlices.values.asScala.flatMap(_.asScala)
       .map(fs => fs.getBaseFile.orElse(null))
       .filter(_ != null)
       .map(_.getFileStatus)
@@ -127,28 +128,17 @@ case class HoodieFileIndex(spark: SparkSession,
 
     logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
-    if (queryAsNonePartitionedTable) {
-      // Read as Non-Partitioned table
-      // Filter in candidate files based on the col-stats index lookup
-      val candidateFiles = allFiles.filter(fileStatus =>
-        // NOTE: This predicate is true when {@code Option} is empty
-        candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName))
-      )
+    var totalFileSize = 0
+    var candidateFileSize = 0
 
-      logInfo(s"Total files : ${allFiles.size}; " +
-        s"candidate files after data skipping: ${candidateFiles.size}; " +
-        s"skipping percent ${if (allFiles.nonEmpty) (allFiles.size - candidateFiles.size) / allFiles.size.toDouble else 0}")
-
-      Seq(PartitionDirectory(InternalRow.empty, candidateFiles))
-    } else {
-      // Prune the partition path by the partition filters
-      val prunedPartitions = prunePartition(cachedAllInputFileSlices.keySet.asScala.toSeq, partitionFilters)
-      var totalFileSize = 0
-      var candidateFileSize = 0
-
-      val result = prunedPartitions.map { partition =>
+    // Prune the partition path by the partition filters
+    // NOTE: Non-partitioned tables are assumed to consist from a single partition
+    //       encompassing the whole table
+    val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
+    val listedPartitions = getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map {
+      case (partition, fileSlices) =>
         val baseFileStatuses: Seq[FileStatus] =
-          cachedAllInputFileSlices.get(partition).asScala
+          fileSlices.asScala
             .map(fs => fs.getBaseFile.orElse(null))
             .filter(_ != null)
             .map(_.getFileStatus)
@@ -161,13 +151,21 @@ case class HoodieFileIndex(spark: SparkSession,
         totalFileSize += baseFileStatuses.size
         candidateFileSize += candidateFiles.size
         PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
-      }
+    }
 
-      logInfo(s"Total base files: $totalFileSize; " +
-        s"candidate files after data skipping : $candidateFileSize; " +
-        s"skipping percent ${if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
+    val skippingRatio =
+      if (!areAllFileSlicesCached) -1
+      else if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble
+      else 0
 
-      result
+    logInfo(s"Total base files: $totalFileSize; " +
+      s"candidate files after data skipping: $candidateFileSize; " +
+      s"skipping percentage $skippingRatio")
+
+    if (shouldReadAsPartitionedTable()) {
+      listedPartitions
+    } else {
+      Seq(PartitionDirectory(InternalRow.empty, listedPartitions.flatMap(_.files)))
     }
   }
 
@@ -252,13 +250,13 @@ case class HoodieFileIndex(spark: SparkSession,
   override def inputFiles: Array[String] =
     allFiles.map(_.getPath.toString).toArray
 
-  override def sizeInBytes: Long = cachedFileSize
+  override def sizeInBytes: Long = getTotalCachedFilesSize
 
-  private def isDataSkippingEnabled: Boolean =
-    options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
-      spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
+  private def isDataSkippingEnabled: Boolean = getConfigValue(options, spark.sessionState.conf,
+    DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false").toBoolean
 
   private def isMetadataTableEnabled: Boolean = metadataConfig.enabled()
+
   private def isColumnStatsIndexEnabled: Boolean = metadataConfig.isColumnStatsIndexEnabled
 
   private def validateConfig(): Unit = {
@@ -267,6 +265,7 @@ case class HoodieFileIndex(spark: SparkSession,
         s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled")
     }
   }
+
 }
 
 object HoodieFileIndex extends Logging {
@@ -296,13 +295,15 @@ object HoodieFileIndex extends Logging {
   def getConfigProperties(spark: SparkSession, options: Map[String, String]) = {
     val sqlConf: SQLConf = spark.sessionState.conf
     val properties = new TypedProperties()
+    properties.putAll(options.filter(p => p._2 != null).asJava)
 
     // To support metadata listing via Spark SQL we allow users to pass the config via SQL Conf in spark session. Users
     // would be able to run SET hoodie.metadata.enable=true in the spark sql session to enable metadata listing.
-    properties.setProperty(HoodieMetadataConfig.ENABLE.key(),
-      sqlConf.getConfString(HoodieMetadataConfig.ENABLE.key(),
-        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString))
-    properties.putAll(options.filter(p => p._2 != null).asJava)
+    val isMetadataTableEnabled = getConfigValue(options, sqlConf, HoodieMetadataConfig.ENABLE.key, null)
+    if (isMetadataTableEnabled != null) {
+      properties.setProperty(HoodieMetadataConfig.ENABLE.key(), String.valueOf(isMetadataTableEnabled))
+    }
+
     properties
   }
 
@@ -342,14 +343,20 @@ object HoodieFileIndex extends Logging {
   }
 
   private def getQueryPaths(options: Map[String, String]): Seq[Path] = {
-    options.get("path") match {
-      case Some(p) => Seq(new Path(p))
+    // NOTE: To make sure that globbing is appropriately handled w/in the
+    //       `path`, we need to:
+    //          - First, probe whether requested globbed paths has been resolved (and `glob.paths` was provided
+    //          in options); otherwise
+    //          - Treat `path` as fully-qualified (ie non-globbed) path
+    val paths = options.get("glob.paths") match {
+      case Some(globbed) =>
+        globbed.split(",").toSeq
       case None =>
-        options.getOrElse("glob.paths",
+        val path = options.getOrElse("path",
           throw new IllegalArgumentException("'path' or 'glob paths' option required"))
-          .split(",")
-          .map(new Path(_))
-          .toSeq
+        Seq(path)
     }
+
+    paths.map(new Path(_))
   }
 }

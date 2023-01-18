@@ -18,12 +18,12 @@
 
 package org.apache.hudi.table.format.cow.vector.reader;
 
+import org.apache.hudi.table.data.vector.VectorizedColumnBatch;
 import org.apache.hudi.table.format.cow.vector.HeapArrayVector;
 import org.apache.hudi.table.format.cow.vector.ParquetDecimalVector;
 
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.table.data.TimestampData;
-import org.apache.flink.table.data.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.vector.heap.HeapBooleanVector;
 import org.apache.flink.table.data.vector.heap.HeapByteVector;
 import org.apache.flink.table.data.vector.heap.HeapBytesVector;

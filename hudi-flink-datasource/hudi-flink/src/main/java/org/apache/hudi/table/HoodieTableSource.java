@@ -34,13 +34,17 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
 import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -121,10 +125,10 @@ public class HoodieTableSource implements
   private final String defaultPartName;
   private final Configuration conf;
   private final FileIndex fileIndex;
+  private final InternalSchemaManager internalSchemaManager;
 
   private int[] requiredPos;
   private long limit;
-  private List<ResolvedExpression> filters;
 
   private List<Map<String, String>> requiredPartitions;
 
@@ -134,7 +138,7 @@ public class HoodieTableSource implements
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf) {
-    this(schema, path, partitionKeys, defaultPartName, conf, null, null, null, null);
+    this(schema, path, partitionKeys, defaultPartName, conf, null, null, null, null, null, null);
   }
 
   public HoodieTableSource(
@@ -143,26 +147,32 @@ public class HoodieTableSource implements
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf,
+      @Nullable FileIndex fileIndex,
       @Nullable List<Map<String, String>> requiredPartitions,
       @Nullable int[] requiredPos,
       @Nullable Long limit,
-      @Nullable List<ResolvedExpression> filters) {
+      @Nullable HoodieTableMetaClient metaClient,
+      @Nullable InternalSchemaManager internalSchemaManager) {
     this.schema = schema;
     this.tableRowType = (RowType) schema.toPhysicalRowDataType().notNull().getLogicalType();
     this.path = path;
     this.partitionKeys = partitionKeys;
     this.defaultPartName = defaultPartName;
     this.conf = conf;
+    this.fileIndex = fileIndex == null
+        ? FileIndex.instance(this.path, this.conf, this.tableRowType)
+        : fileIndex;
     this.requiredPartitions = requiredPartitions;
     this.requiredPos = requiredPos == null
         ? IntStream.range(0, this.tableRowType.getFieldCount()).toArray()
         : requiredPos;
     this.limit = limit == null ? NO_LIMIT_CONSTANT : limit;
-    this.filters = filters == null ? Collections.emptyList() : filters;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-    this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
-    this.fileIndex = FileIndex.instance(this.path, this.conf, this.tableRowType);
+    this.metaClient = metaClient == null ? StreamerUtil.metaClientForReader(conf, hadoopConf) : metaClient;
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
+    this.internalSchemaManager = internalSchemaManager == null
+        ? InternalSchemaManager.get(this.conf, this.metaClient)
+        : internalSchemaManager;
   }
 
   @Override
@@ -179,15 +189,18 @@ public class HoodieTableSource implements
         @SuppressWarnings("unchecked")
         TypeInformation<RowData> typeInfo =
             (TypeInformation<RowData>) TypeInfoDataTypeConverter.fromDataTypeToTypeInfo(getProducedDataType());
+        OptionsInference.setupSourceTasks(conf, execEnv.getParallelism());
         if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
           StreamReadMonitoringFunction monitoringFunction = new StreamReadMonitoringFunction(
               conf, FilePathUtils.toFlinkPath(path), tableRowType, maxCompactionMemoryInBytes, getRequiredPartitionPaths());
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
+              .uid(Pipelines.opUID("split_monitor", conf))
               .setParallelism(1)
               .keyBy(MergeOnReadInputSplit::getFileId)
               .transform("split_reader", typeInfo, factory)
+              .uid(Pipelines.opUID("split_reader", conf))
               .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
           return new DataStreamSource<>(source);
         } else {
@@ -209,7 +222,7 @@ public class HoodieTableSource implements
   @Override
   public DynamicTableSource copy() {
     return new HoodieTableSource(schema, path, partitionKeys, defaultPartName,
-        conf, requiredPartitions, requiredPos, limit, filters);
+        conf, fileIndex, requiredPartitions, requiredPos, limit, metaClient, internalSchemaManager);
   }
 
   @Override
@@ -219,8 +232,10 @@ public class HoodieTableSource implements
 
   @Override
   public Result applyFilters(List<ResolvedExpression> filters) {
-    this.filters = filters.stream().filter(ExpressionUtils::isSimpleCallExpression).collect(Collectors.toList());
-    this.fileIndex.setFilters(this.filters);
+    List<ResolvedExpression> callExpressionFilters = filters.stream()
+        .filter(ExpressionUtils::isSimpleCallExpression)
+        .collect(Collectors.toList());
+    this.fileIndex.setFilters(callExpressionFilters);
     // refuse all the filters now
     return SupportsFilterPushDown.Result.of(Collections.emptyList(), new ArrayList<>(filters));
   }
@@ -391,8 +406,12 @@ public class HoodieTableSource implements
     if (FlinkOptions.QUERY_TYPE_SNAPSHOT.equals(queryType)) {
       final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.getString(FlinkOptions.TABLE_TYPE));
       boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
-      return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
-          rowDataType, Collections.emptyList(), emitDelete);
+      if (this.conf.getBoolean(FlinkOptions.CDC_ENABLED)) {
+        return cdcInputFormat(rowType, requiredRowType, tableAvroSchema, rowDataType, Collections.emptyList());
+      } else {
+        return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
+            rowDataType, Collections.emptyList(), emitDelete);
+      }
     }
     String errMsg = String.format("Invalid query type : '%s', options ['%s'] are supported now", queryType,
         FlinkOptions.QUERY_TYPE_SNAPSHOT);
@@ -402,10 +421,35 @@ public class HoodieTableSource implements
   /**
    * Returns whether the hoodie table data exists .
    */
-  private  boolean tableDataExists() {
+  private boolean tableDataExists() {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = activeTimeline.getLastCommitMetadataWithValidData();
     return instantAndCommitMetadata.isPresent();
+  }
+
+  private MergeOnReadInputFormat cdcInputFormat(
+      RowType rowType,
+      RowType requiredRowType,
+      Schema tableAvroSchema,
+      DataType rowDataType,
+      List<MergeOnReadInputSplit> inputSplits) {
+    final MergeOnReadTableState hoodieTableState = new MergeOnReadTableState(
+        rowType,
+        requiredRowType,
+        tableAvroSchema.toString(),
+        AvroSchemaConverter.convertToSchema(requiredRowType).toString(),
+        inputSplits,
+        conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
+    return CdcInputFormat.builder()
+        .config(this.conf)
+        .tableState(hoodieTableState)
+        // use the explicit fields' data type because the AvroSchemaConverter
+        // is not very stable.
+        .fieldTypes(rowDataType.getChildren())
+        .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
+        .limit(this.limit)
+        .emitDelete(false) // the change logs iterator can handle the DELETE records
+        .build();
   }
 
   private MergeOnReadInputFormat mergeOnReadInputFormat(
@@ -431,6 +475,7 @@ public class HoodieTableSource implements
         .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
         .limit(this.limit)
         .emitDelete(emitDelete)
+        .internalSchemaManager(internalSchemaManager)
         .build();
   }
 
@@ -454,7 +499,8 @@ public class HoodieTableSource implements
         this.conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
         getParquetConf(this.conf, this.hadoopConf),
-        this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE)
+        this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
+        this.internalSchemaManager
     );
   }
 
@@ -507,5 +553,10 @@ public class HoodieTableSource implements
       return new FileStatus[0];
     }
     return fileIndex.getFilesInPartitions();
+  }
+
+  @VisibleForTesting
+  FileIndex getFileIndex() {
+    return fileIndex;
   }
 }

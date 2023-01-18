@@ -18,15 +18,14 @@
 package org.apache.hudi
 
 import org.apache.avro.Schema
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-
-import java.util.stream.Collectors
 import org.apache.hadoop.fs.{GlobPattern, Path}
+import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
@@ -41,6 +40,7 @@ import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
+import java.util.stream.Collectors
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 
@@ -48,6 +48,7 @@ import scala.collection.mutable
  * Relation, that implements the Hoodie incremental view.
  *
  * Implemented for Copy_on_write storage.
+ * TODO: rebase w/ HoodieBaseRelation HUDI-5362
  *
  */
 class IncrementalRelation(val sqlContext: SQLContext,
@@ -71,6 +72,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     throw new HoodieException(s"Specify the begin instant time to pull from using " +
       s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME.key}")
   }
+
   if (!metaClient.getTableConfig.populateMetaFields()) {
     throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
   }
@@ -83,14 +85,16 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val commitsTimelineToReturn = commitTimeline.findInstantsInRange(
     optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
     optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp))
-  private val commitsToReturn = commitsTimelineToReturn.getInstants.iterator().toList
+  private val commitsToReturn = commitsTimelineToReturn.getInstantsAsStream.iterator().toList
 
   // use schema from a file produced in the end/latest instant
 
   val (usedSchema, internalSchema) = {
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val iSchema = if (useEndInstantSchema && !commitsToReturn.isEmpty) {
+    val iSchema : InternalSchema = if (!isSchemaEvolutionEnabledOnRead(optParams, sqlContext.sparkSession)) {
+      InternalSchema.getEmptyInternalSchema
+    } else if (useEndInstantSchema && !commitsToReturn.isEmpty) {
       InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.getTimestamp.toLong, metaClient, hoodieTable.getConfig.getInternalSchemaCacheEnable)
     } else {
       schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(null)
@@ -131,7 +135,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
       // create Replaced file group
       val replacedTimeline = commitsTimelineToReturn.getCompletedReplaceTimeline
-      val replacedFile = replacedTimeline.getInstants.collect(Collectors.toList[HoodieInstant]).flatMap { instant =>
+      val replacedFile = replacedTimeline.getInstants.flatMap { instant =>
         val replaceMetadata = HoodieReplaceCommitMetadata.
           fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
         replaceMetadata.getPartitionToReplaceFileIds.entrySet().flatMap { entry =>
@@ -175,11 +179,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
           (regularFileIdToFullPath.values, metaBootstrapFileIdToFullPath.values)
         }
       }
-      // unset the path filter, otherwise if end_instant_time is not the latest instant, path filter set for RO view
-      // will filter out all the files incorrectly.
       // pass internalSchema to hadoopConf, so it can be used in executors.
       val validCommits = metaClient
-        .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstants.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
+        .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath)
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
@@ -187,72 +189,94 @@ class IncrementalRelation(val sqlContext: SQLContext,
         case HoodieFileFormat.PARQUET => HoodieParquetFileFormat.FILE_FORMAT_ID
         case HoodieFileFormat.ORC => "orc"
       }
-      sqlContext.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class")
+
+      // Fallback to full table scan if any of the following conditions matches:
+      //   1. the start commit is archived
+      //   2. the end commit is archived
+      //   3. there are files in metadata be deleted
+      val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key,
+        DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.defaultValue).toBoolean
+
       val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
-      if (filteredRegularFullPaths.isEmpty && filteredMetaBootstrapFullPaths.isEmpty) {
-        sqlContext.sparkContext.emptyRDD[Row]
+
+      val startInstantTime = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
+      val startInstantArchived = commitTimeline.isBeforeTimelineStarts(startInstantTime)
+      val endInstantTime = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp)
+      val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
+
+      val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
+        log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived, endInstantArchived: $endInstantArchived")
+        fullTableScanDataFrame(startInstantTime, endInstantTime)
       } else {
-        log.info("Additional Filters to be applied to incremental source are :" + filters.mkString("Array(", ", ", ")"))
-
-        var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
-
-        val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key,
-          DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.defaultValue).toBoolean
-
-        var doFullTableScan = false
-
-        if (fallbackToFullTableScan) {
-          val fs = basePath.getFileSystem(sqlContext.sparkContext.hadoopConfiguration);
-          val timer = new HoodieTimer().startTimer();
-
-          val allFilesToCheck = filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths
-          val firstNotFoundPath = allFilesToCheck.find(path => !fs.exists(new Path(path)))
-          val timeTaken = timer.endTimer()
-          log.info("Checking if paths exists took " + timeTaken + "ms")
-
-          val optStartTs = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
-          val isInstantArchived = optStartTs.compareTo(commitTimeline.firstInstant().get().getTimestamp) < 0 // True if optStartTs < activeTimeline.first
-
-          if (isInstantArchived || firstNotFoundPath.isDefined) {
-            doFullTableScan = true
-            log.info("Falling back to full table scan")
-          }
-        }
-
-        if (doFullTableScan) {
-          val hudiDF = sqlContext.read
-            .format("hudi_v1")
-            .schema(usedSchema)
-            .load(basePath.toString)
-            .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, //Notice the > in place of >= because we are working with optParam instead of first commit > optParam
-              optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)))
-            .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              commitsToReturn.last.getTimestamp))
-          // schema enforcement does not happen in above spark.read with hudi. hence selecting explicitly w/ right column order
-          val fieldNames : Array[String] = df.schema.fields.map(field => field.name)
-          df = df.union(hudiDF.select(fieldNames.head, fieldNames.tail: _*))
+        if (filteredRegularFullPaths.isEmpty && filteredMetaBootstrapFullPaths.isEmpty) {
+          sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
         } else {
-          if (metaBootstrapFileIdToFullPath.nonEmpty) {
-            df = sqlContext.sparkSession.read
-              .format("hudi_v1")
-              .schema(usedSchema)
-              .option(DataSourceReadOptions.READ_PATHS.key, filteredMetaBootstrapFullPaths.mkString(","))
-              .load()
+          log.info("Additional Filters to be applied to incremental source are :" + filters.mkString("Array(", ", ", ")"))
+
+          var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
+
+          var doFullTableScan = false
+
+          if (fallbackToFullTableScan) {
+            val fs = basePath.getFileSystem(sqlContext.sparkContext.hadoopConfiguration);
+            val timer = HoodieTimer.start
+
+            val allFilesToCheck = filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths
+            val firstNotFoundPath = allFilesToCheck.find(path => !fs.exists(new Path(path)))
+            val timeTaken = timer.endTimer()
+            log.info("Checking if paths exists took " + timeTaken + "ms")
+
+            if (firstNotFoundPath.isDefined) {
+              doFullTableScan = true
+              log.info("Falling back to full table scan as some files cannot be found.")
+            }
           }
 
-          if (regularFileIdToFullPath.nonEmpty) {
-            df = df.union(sqlContext.read.options(sOpts)
-              .schema(usedSchema).format(formatClassName)
-              .load(filteredRegularFullPaths.toList: _*)
-              .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                commitsToReturn.head.getTimestamp))
-              .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                commitsToReturn.last.getTimestamp)))
+          if (doFullTableScan) {
+            fullTableScanDataFrame(startInstantTime, endInstantTime)
+          } else {
+            if (metaBootstrapFileIdToFullPath.nonEmpty) {
+              df = sqlContext.sparkSession.read
+                .format("hudi_v1")
+                .schema(usedSchema)
+                .option(DataSourceReadOptions.READ_PATHS.key, filteredMetaBootstrapFullPaths.mkString(","))
+                // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
+                .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
+                .load()
+            }
+
+            if (regularFileIdToFullPath.nonEmpty) {
+              df = df.union(sqlContext.read.options(sOpts)
+                .schema(usedSchema).format(formatClassName)
+                // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
+                .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
+                .load(filteredRegularFullPaths.toList: _*)
+                .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+                  commitsToReturn.head.getTimestamp))
+                .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+                  commitsToReturn.last.getTimestamp)))
+            }
+            df
           }
         }
-
-        filters.foldLeft(df)((e, f) => e.filter(f)).rdd
       }
+
+      filters.foldLeft(scanDf)((e, f) => e.filter(f)).rdd
     }
+  }
+
+  private def fullTableScanDataFrame(startInstantTime: String, endInstantTime: String): DataFrame = {
+    val hudiDF = sqlContext.read
+      .format("hudi_v1")
+      .schema(usedSchema)
+      .load(basePath.toString)
+      .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, //Notice the > in place of >= because we are working with optParam instead of first commit > optParam
+        startInstantTime))
+      .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+        endInstantTime))
+
+    // schema enforcement does not happen in above spark.read with hudi. hence selecting explicitly w/ right column order
+    val fieldNames = usedSchema.fieldNames
+    hudiDF.select(fieldNames.head, fieldNames.tail: _*)
   }
 }

@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -46,15 +47,16 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.function.Function;
 
-import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieArchivalConfig.ASYNC_ARCHIVE;
 import static org.apache.hudi.config.HoodieCleanConfig.ASYNC_CLEAN;
 import static org.apache.hudi.config.HoodieCleanConfig.AUTO_CLEAN;
 import static org.apache.hudi.config.HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY;
+import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
 import static org.apache.hudi.config.HoodieWriteConfig.TABLE_SERVICES_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieWriteConfig {
@@ -369,6 +371,55 @@ public class TestHoodieWriteConfig {
         }), true, true, true,
         WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
         HoodieFailedWritesCleaningPolicy.LAZY, FileSystemBasedLockProviderTestClass.class.getName());
+  }
+
+  @Test
+  public void testConsistentBucketIndexDefaultClusteringConfig() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET)
+            .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING).build())
+        .build();
+    assertEquals(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY, writeConfig.getClusteringPlanStrategyClass());
+    assertEquals(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY, writeConfig.getClusteringExecutionStrategyClass());
+  }
+
+  @Test
+  public void testConsistentBucketIndexInvalidClusteringConfig() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    TypedProperties consistentBucketIndexProps = HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET)
+        .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING).build().getProps();
+    HoodieWriteConfig.Builder writeConfigBuilder = HoodieWriteConfig.newBuilder().withPath("/tmp");
+
+    assertThrows(IllegalArgumentException.class,
+        () -> writeConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .fromProperties(consistentBucketIndexProps)
+            .withClusteringPlanStrategyClass(HoodieClusteringConfig.JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY).build()));
+    assertThrows(IllegalArgumentException.class,
+        () -> writeConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .fromProperties(consistentBucketIndexProps)
+            .withClusteringExecutionStrategyClass(HoodieClusteringConfig.SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY).build()));
+  }
+
+  @Test
+  public void testSimpleBucketIndexPartitionerConfig() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET)
+            .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE).build())
+        .build();
+    assertEquals(HoodieLayoutConfig.SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME, writeConfig.getString(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME));
+
+    HoodieWriteConfig overwritePartitioner = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET)
+            .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE)
+            .build())
+        .withLayoutConfig(HoodieLayoutConfig.newBuilder().withLayoutPartitioner("org.apache.hudi.table.action.commit.UpsertPartitioner").build())
+        .build();
+    assertEquals("org.apache.hudi.table.action.commit.UpsertPartitioner", overwritePartitioner.getString(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME));
   }
 
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {

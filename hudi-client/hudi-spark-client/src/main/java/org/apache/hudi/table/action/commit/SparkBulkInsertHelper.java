@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -45,7 +44,7 @@ import java.util.List;
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends BaseBulkInsertHelper<T, HoodieData<HoodieRecord<T>>,
+public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieData<HoodieRecord<T>>,
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
 
   private SparkBulkInsertHelper() {
@@ -74,7 +73,7 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Bas
             executor.getCommitActionType(), instantTime), Option.empty(),
         config.shouldAllowMultiWriteOnSameInstant());
 
-    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.orElse(BulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode()));
+    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.orElse(BulkInsertInternalPartitionerFactory.get(table, config));
 
     // write new files
     HoodieData<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false,
@@ -82,6 +81,20 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Bas
     //update index
     ((BaseSparkCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
     return result;
+  }
+
+  /**
+   * Do bulk insert using WriteHandleFactory from the partitioner (i.e., partitioner.getWriteHandleFactory)
+   */
+  public HoodieData<WriteStatus> bulkInsert(HoodieData<HoodieRecord<T>> inputRecords,
+                                            String instantTime,
+                                            HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
+                                            HoodieWriteConfig config,
+                                            boolean performDedupe,
+                                            BulkInsertPartitioner partitioner,
+                                            boolean useWriterSchema,
+                                            int parallelism) {
+    return bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, useWriterSchema, parallelism, null);
   }
 
   @Override

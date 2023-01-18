@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.utils.TestWriteBase;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -425,13 +425,13 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testReuseEmbeddedServer() throws IOException {
     conf.setInteger("hoodie.filesystem.view.remote.timeout.secs", 500);
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
     FileSystemViewStorageConfig viewStorageConfig = writeClient.getConfig().getViewStorageConfig();
 
     assertSame(viewStorageConfig.getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
 
     // get another write client
-    writeClient = StreamerUtil.createWriteClient(conf);
+    writeClient = FlinkWriteClients.createWriteClient(conf);
     assertSame(writeClient.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
     assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient.getConfig().getViewStorageConfig().getRemoteViewServerPort());
     assertEquals(viewStorageConfig.getRemoteTimelineClientTimeoutSecs(), 500);

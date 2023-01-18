@@ -111,7 +111,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     bootstrapIndexIfNeed(partition);
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
     final int bucketNum = BucketIdentifier.getBucketId(hoodieKey, indexKeyFields, this.bucketNum);
-    final String bucketId = partition + bucketNum;
+    final String bucketId = partition + "/" + bucketNum;
 
     if (incBucketIndex.contains(bucketId)) {
       location = new HoodieRecordLocation("I", bucketToFileId.get(bucketNum));

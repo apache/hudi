@@ -54,12 +54,12 @@ public abstract class AbstractCloudObjectsSourceTestBase extends UtilitiesTestBa
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices();
   }
 
   @AfterAll
   public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach

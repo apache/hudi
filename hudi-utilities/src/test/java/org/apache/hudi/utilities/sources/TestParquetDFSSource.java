@@ -36,7 +36,7 @@ public class TestParquetDFSSource extends AbstractDFSSourceTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    this.dfsRoot = dfsBasePath + "/parquetFiles";
+    this.dfsRoot = basePath + "/parquetFiles";
     this.fileSuffix = ".parquet";
   }
 

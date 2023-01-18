@@ -19,13 +19,12 @@
 package org.apache.hudi
 
 import org.apache.avro.Schema.Type
-import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
+import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
@@ -90,8 +89,7 @@ object AvroConversionUtils {
   @Deprecated
   def createConverterToRow(sourceAvroSchema: Schema,
                            targetSqlType: StructType): GenericRecord => Row = {
-    val encoder = RowEncoder.apply(targetSqlType).resolveAndBind()
-    val serde = sparkAdapter.createSparkRowSerDe(encoder)
+    val serde = sparkAdapter.createSparkRowSerDe(targetSqlType)
     val converter = AvroConversionUtils.createAvroToInternalRowConverter(sourceAvroSchema, targetSqlType)
 
     avro => converter.apply(avro).map(serde.deserializeRow).get
@@ -104,8 +102,7 @@ object AvroConversionUtils {
   def createConverterToAvro(sourceSqlType: StructType,
                             structName: String,
                             recordNamespace: String): Row => GenericRecord = {
-    val encoder = RowEncoder.apply(sourceSqlType).resolveAndBind()
-    val serde = sparkAdapter.createSparkRowSerDe(encoder)
+    val serde = sparkAdapter.createSparkRowSerDe(sourceSqlType)
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceSqlType, structName, recordNamespace)
     val (nullable, _) = resolveAvroTypeNullability(avroSchema)
 
@@ -136,12 +133,28 @@ object AvroConversionUtils {
   }
 
   /**
+   * Converts [[StructType]] into Avro's [[Schema]]
    *
-   * Returns avro schema from spark StructType.
+   * @param structType    Catalyst's [[StructType]]
+   * @param qualifiedName Avro's schema qualified name
+   * @return Avro schema corresponding to given struct type.
+   */
+  def convertStructTypeToAvroSchema(structType: DataType,
+                                    qualifiedName: String): Schema = {
+    val (namespace, name) = {
+      val parts = qualifiedName.split('.')
+      (parts.init.mkString("."), parts.last)
+    }
+    convertStructTypeToAvroSchema(structType, name, namespace)
+  }
+
+
+  /**
+   * Converts [[StructType]] into Avro's [[Schema]]
    *
-   * @param structType      Dataframe Struct Type.
-   * @param structName      Avro record name.
-   * @param recordNamespace Avro record namespace.
+   * @param structType      Catalyst's [[StructType]]
+   * @param structName      Avro record name
+   * @param recordNamespace Avro record namespace
    * @return Avro schema corresponding to given struct type.
    */
   def convertStructTypeToAvroSchema(structType: DataType,
@@ -152,6 +165,9 @@ object AvroConversionUtils {
     getAvroSchemaWithDefaults(avroSchema, structType)
   }
 
+  /**
+   * Converts Avro's [[Schema]] to Catalyst's [[StructType]]
+   */
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
     val schemaConverters = sparkAdapter.getAvroSchemaConverters
     schemaConverters.toSqlType(avroSchema) match {
@@ -214,8 +230,13 @@ object AvroConversionUtils {
     }
   }
 
+  /**
+   * Please use [[AvroSchemaUtils.getAvroRecordQualifiedName(String)]]
+   */
+  @Deprecated
   def getAvroRecordNameAndNamespace(tableName: String): (String, String) = {
-    val name = HoodieAvroUtils.sanitizeName(tableName)
-    (s"${name}_record", s"hoodie.${name}")
+    val qualifiedName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
+    val nameParts = qualifiedName.split('.')
+    (nameParts.last, nameParts.init.mkString("."))
   }
 }

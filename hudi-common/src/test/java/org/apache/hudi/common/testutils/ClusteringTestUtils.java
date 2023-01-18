@@ -33,6 +33,9 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 
+/**
+ * Utils for clustering in testing.
+ */
 public class ClusteringTestUtils {
 
   public static HoodieClusteringPlan createClusteringPlan(HoodieTableMetaClient metaClient, String instantTime, String fileId) {
@@ -42,10 +45,10 @@ public class ClusteringTestUtils {
       createBaseFile(basePath, partition, instantTime, fileId, 1);
       FileSlice slice = new FileSlice(partition, instantTime, fileId);
       slice.setBaseFile(new CompactionTestUtils.DummyHoodieBaseFile(Paths.get(basePath, partition,
-              baseFileName(instantTime, fileId)).toString()));
+          baseFileName(instantTime, fileId)).toString()));
       List<FileSlice>[] fileSliceGroups = new List[] {Collections.singletonList(slice)};
       HoodieClusteringPlan clusteringPlan = ClusteringUtils.createClusteringPlan("strategy", new HashMap<>(),
-              fileSliceGroups, Collections.emptyMap());
+          fileSliceGroups, Collections.emptyMap());
       return clusteringPlan;
     } catch (Exception e) {
       throw new HoodieException(e.getMessage(), e);
