@@ -82,7 +82,7 @@ public abstract class HoodieSparkTable<T>
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
       final HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
-          context.getHadoopConf().get(), config, context, actionMetadata, Option.of(triggeringInstantTimestamp));
+          getContext().getHadoopConf().get(), config, getContext(), actionMetadata, Option.of(triggeringInstantTimestamp));
       // even with metadata enabled, some index could have been disabled
       // delete metadata partitions corresponding to such indexes
       deleteMetadataIndexIfNecessary();
