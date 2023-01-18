@@ -49,9 +49,8 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
                                       HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,
                                       HoodieMetadataConfig metadataConfig) {
-    super(metaClient, visibleActiveTimeline);
-    this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true);
+    this(metaClient, visibleActiveTimeline, HoodieTableMetadata.create(engineContext, metadataConfig,
+        metaClient.getBasePath(), FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true));
   }
 
   /**
