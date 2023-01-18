@@ -63,18 +63,6 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
-  public String getRecordKey(Row row) {
-    tryInitRowAccessor(row.schema());
-    return combineCompositeRecordKey(rowAccessor.getRecordKeyParts(row));
-  }
-
-  @Override
-  public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
-    tryInitRowAccessor(schema);
-    return combineCompositeRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
-  }
-
-  @Override
   public String getPartitionPath(Row row) {
     tryInitRowAccessor(row.schema());
     return combinePartitionPath(rowAccessor.getRecordPartitionPathValues(row));

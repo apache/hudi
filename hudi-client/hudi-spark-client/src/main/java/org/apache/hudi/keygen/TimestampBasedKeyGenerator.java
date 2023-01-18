@@ -60,18 +60,6 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   }
 
   @Override
-  public String getRecordKey(Row row) {
-    tryInitRowAccessor(row.schema());
-    return combineRecordKey(getRecordKeyFieldNames(), Arrays.asList(rowAccessor.getRecordKeyParts(row)));
-  }
-
-  @Override
-  public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
-    tryInitRowAccessor(schema);
-    return combineRecordKeyUnsafe(getRecordKeyFieldNames(), Arrays.asList(rowAccessor.getRecordKeyParts(internalRow)));
-  }
-
-  @Override
   public String getPartitionPath(Row row) {
     tryInitRowAccessor(row.schema());
     Object[] partitionPathValues = rowAccessor.getRecordPartitionPathValues(row);
