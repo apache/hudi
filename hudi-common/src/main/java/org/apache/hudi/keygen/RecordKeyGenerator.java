@@ -20,10 +20,12 @@ package org.apache.hudi.keygen;
 
 import org.apache.avro.generic.GenericRecord;
 
+import java.io.Serializable;
+
 /**
  * Interface to fetch record key given a GenericRecord.
  */
-public interface RecordKeyGenerator {
+public interface RecordKeyGenerator extends Serializable {
 
   /**
    * Generate a record Key out of provided generic record.

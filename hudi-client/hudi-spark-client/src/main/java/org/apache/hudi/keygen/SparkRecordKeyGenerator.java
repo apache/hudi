@@ -29,7 +29,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 /**
  * Spark's record key generator interface to assist in generating record key for a given spark row.
  */
-public interface SparkRecordKeyGeneratorInterface {
+public interface SparkRecordKeyGenerator {
 
   /**
    * Extracts record key from Spark's {@link Row}

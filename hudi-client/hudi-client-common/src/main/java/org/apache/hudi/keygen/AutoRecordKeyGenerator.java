@@ -39,8 +39,17 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.keygen.CustomAvroKeyGenerator.SPLIT_REGEX;
 
 /**
- * Auto record key generator. This generator will fetch values from the entire record based on some of the fields and determine the record key.
- * Use-cases where users may not be able to configure record keys, can use this auto record key generator.
+ * Auto record key generator. This class is used to compute a deterministic key for a record based on the contents of the field. Unlike the other KeyGenerators
+ * in Hudi, this class does not take in any field names as args to create a "keyless" experience for insert only workloads. The keys are guaranteed to be
+ * deterministic but not unique, so they can only be used for insert workflows with deduplication disabled. The class attempts to get sufficient uniqueness for
+ * keys to prevent frequent collisions by choosing the fields it uses in order of decreasing likelihood for uniqueness. The ordering is:
+ * <ul>
+ *   <li>timestamp</li>
+ *   <li>numeric values</li>
+ *   <li>string, byte arrays, other types not mentioned</li>
+ *   <li>date, lists, maps, booleans</li>
+ * </ul>
+ * The number of fields is capped to created predictable performance and the generator only uses non-null values to help increase uniqueness for sparse datasets.
  */
 public class AutoRecordKeyGenerator implements RecordKeyGenerator {
 
@@ -54,7 +63,7 @@ public class AutoRecordKeyGenerator implements RecordKeyGenerator {
 
   public AutoRecordKeyGenerator(TypedProperties config, List<String> partitionPathFields) {
     this.config = config;
-    this.numFieldsForKey = config.getInteger(KeyGeneratorOptions.NUM_FIELDS_IN_KEYLESS_GENERATOR.key(), KeyGeneratorOptions.NUM_FIELDS_IN_KEYLESS_GENERATOR.defaultValue());
+    this.numFieldsForKey = config.getInteger(KeyGeneratorOptions.NUM_FIELDS_IN_AUTO_RECORD_KEYS.key(), KeyGeneratorOptions.NUM_FIELDS_IN_AUTO_RECORD_KEYS.defaultValue());
     // cap the number of fields to order in case of large schemas
     this.maxFieldsToConsider = numFieldsForKey * 3;
     this.partitionFieldNames = partitionPathFields.stream().map(field -> field.split(SPLIT_REGEX)[0]).collect(Collectors.toSet());

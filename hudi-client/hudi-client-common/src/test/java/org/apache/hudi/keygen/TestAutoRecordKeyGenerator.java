@@ -19,6 +19,7 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
@@ -29,13 +30,13 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-public class TestKeylessKeyGenerator {
+public class TestAutoRecordKeyGenerator {
   private static final long TIME = 1672265446090L;
   private static final Schema SCHEMA;
 
   static {
     try {
-      SCHEMA = new Schema.Parser().parse(TestKeylessKeyGenerator.class.getClassLoader().getResourceAsStream("keyless_schema.avsc"));
+      SCHEMA = new Schema.Parser().parse(TestAutoRecordKeyGenerator.class.getClassLoader().getResourceAsStream("keyless_schema.avsc"));
     } catch (IOException ex) {
       throw new RuntimeException(ex);
     }
@@ -43,7 +44,7 @@ public class TestKeylessKeyGenerator {
 
   @Test
   public void createKeyWithoutPartitionColumn() {
-    KeylessKeyGenerator keyGenerator = new KeylessKeyGenerator(getKeyGenProperties("", 3));
+    ComplexAvroKeyGenerator keyGenerator = new ComplexAvroKeyGenerator(getKeyGenProperties("", 3));
     GenericRecord record = createRecord("partition1", "value1", 123, 456L, TIME, null);
     String actualForRecord = keyGenerator.getRecordKey(record);
     Assertions.assertEquals("952f0fd4-17b6-3762-b0ea-aa76d36377f1", actualForRecord);
@@ -51,7 +52,7 @@ public class TestKeylessKeyGenerator {
 
   @Test
   public void createKeyWithPartition() {
-    KeylessKeyGenerator keyGenerator = new KeylessKeyGenerator(getKeyGenProperties("integer_field:SIMPLE,partition_field:SIMPLE,nested_struct.doubly_nested:SIMPLE", 3));
+    ComplexAvroKeyGenerator keyGenerator = new ComplexAvroKeyGenerator(getKeyGenProperties("integer_field:SIMPLE,partition_field:SIMPLE,nested_struct.doubly_nested:SIMPLE", 3));
     GenericRecord record = createRecord("partition1", "value1", 123, 456L, TIME, null);
     String actualForRecord = keyGenerator.getRecordKey(record);
     Assertions.assertEquals("5c1f9cac-c45d-3b57-9bf7-f745a4bb35c4", actualForRecord);
@@ -59,7 +60,7 @@ public class TestKeylessKeyGenerator {
 
   @Test
   public void nullFieldsProperlyHandled() {
-    KeylessKeyGenerator keyGenerator = new KeylessKeyGenerator(getKeyGenProperties("", 3));
+    ComplexAvroKeyGenerator keyGenerator = new ComplexAvroKeyGenerator(getKeyGenProperties("", 3));
     GenericRecord record = createRecord("partition1", "value1", null, null, null, null);
     String actualForRecord = keyGenerator.getRecordKey(record);
     Assertions.assertEquals("22dee533-e64f-3694-8242-5ec5f25e6d11", actualForRecord);
@@ -67,7 +68,7 @@ public class TestKeylessKeyGenerator {
 
   @Test
   public void assertOnlySubsetOfFieldsUsed() {
-    KeylessKeyGenerator keyGenerator = new KeylessKeyGenerator(getKeyGenProperties("", 3));
+    ComplexAvroKeyGenerator keyGenerator = new ComplexAvroKeyGenerator(getKeyGenProperties("", 3));
     GenericRecord record1 = createRecord("partition1", "value1", 123, 456L, TIME, null);
     String actualForRecord1 = keyGenerator.getRecordKey(record1);
     GenericRecord record2 = createRecord("partition2", "value2", 123, 456L, TIME, null);
@@ -77,15 +78,15 @@ public class TestKeylessKeyGenerator {
 
   @Test
   public void numFieldsImpactsKeyGen() {
-    KeylessKeyGenerator keyGenerator1 = new KeylessKeyGenerator(getKeyGenProperties("", 3));
-    KeylessKeyGenerator keyGenerator2 = new KeylessKeyGenerator(getKeyGenProperties("", 10));
+    ComplexAvroKeyGenerator keyGenerator1 = new ComplexAvroKeyGenerator(getKeyGenProperties("", 3));
+    ComplexAvroKeyGenerator keyGenerator2 = new ComplexAvroKeyGenerator(getKeyGenProperties("", 10));
     GenericRecord record = createRecord("partition1", "value1", 123, 456L, TIME, null);
     Assertions.assertNotEquals(keyGenerator1.getRecordKey(record), keyGenerator2.getRecordKey(record));
   }
 
   @Test
   public void nestedColumnsUsed() {
-    KeylessKeyGenerator keyGenerator = new KeylessKeyGenerator(getKeyGenProperties("", 10));
+    ComplexAvroKeyGenerator keyGenerator = new  ComplexAvroKeyGenerator(getKeyGenProperties("", 10));
     GenericRecord record = createRecord("partition1", "value1", 123, 456L, TIME, 20.1);
     String actualForRecord = keyGenerator.getRecordKey(record);
     Assertions.assertEquals("6bbd8811-6ea1-3ef1-840c-f7a51d8f378c", actualForRecord);
@@ -112,8 +113,9 @@ public class TestKeylessKeyGenerator {
   protected TypedProperties getKeyGenProperties(String partitionPathField, int numFieldsInKeyGen) {
     TypedProperties properties = new TypedProperties();
     properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
-    properties.put(KeyGeneratorOptions.NUM_FIELDS_IN_KEYLESS_GENERATOR.key(), numFieldsInKeyGen);
+    properties.put(KeyGeneratorOptions.NUM_FIELDS_IN_AUTO_RECORD_KEYS.key(), numFieldsInKeyGen);
     properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "");
+    properties.put(HoodieWriteConfig.AUTO_GENERATE_RECORD_KEYS.key(),"true");
     return properties;
   }
 }

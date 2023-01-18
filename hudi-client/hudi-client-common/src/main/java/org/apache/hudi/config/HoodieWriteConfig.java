@@ -552,7 +552,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> AUTO_GENERATE_RECORD_KEYS = ConfigProperty.key("hoodie.auto.generate.record.keys")
       .defaultValue(false)
       .sinceVersion("0.13.0")
-      .withDocumentation("to be added");
+      .withDocumentation("When enabled, hudi will auto generate a deterministic key for a record based on the contents of the field. "
+          + "The keys are guaranteed to be deterministic but not unique, so they can only be used for insert workflows with deduplication disabled."
+          + "The class attempts to get sufficient uniqueness for keys to prevent frequent collisions by choosing the fields it uses in order of decreasing "
+          + "likelihood for uniqueness.");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;

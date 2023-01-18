@@ -30,7 +30,7 @@ import org.apache.spark.unsafe.types.UTF8String;
  * specifically implement record-key, partition-path generation w/o the need for (expensive)
  * conversion from Spark internal representation (for ex, to Avro)
  */
-public interface SparkKeyGeneratorInterface extends SparkRecordKeyGeneratorInterface {
+public interface SparkKeyGeneratorInterface extends KeyGeneratorInterface, SparkRecordKeyGenerator {
 
   /**
    * Extracts partition-path from {@link Row}
