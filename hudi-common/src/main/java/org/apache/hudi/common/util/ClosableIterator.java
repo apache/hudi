@@ -24,8 +24,29 @@ import java.util.Iterator;
  * An iterator that give a chance to release resources.
  *
  * @param <R> The return type
+ *
+ * TODO move under common.util.collection
  */
 public interface ClosableIterator<R> extends Iterator<R>, AutoCloseable {
   @Override
   void close(); // override to not throw exception
+
+  static <E> ClosableIterator<E> wrap(Iterator<E> iterator) {
+    return new ClosableIterator<E>() {
+      @Override
+      public boolean hasNext() {
+        return iterator.hasNext();
+      }
+
+      @Override
+      public E next() {
+        return iterator.next();
+      }
+
+      @Override
+      public void close() {
+        // no-op
+      }
+    };
+  }
 }
