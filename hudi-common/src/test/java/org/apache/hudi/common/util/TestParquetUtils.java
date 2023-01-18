@@ -120,7 +120,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     Set<String> filtered =
-        parquetUtils.filterRowKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath), filter);
+        parquetUtils.filterRowKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath), Option.empty(), Option.empty(), filter);
 
     assertEquals(filter.size(), filtered.size(), "Filtered count does not match");
 

@@ -58,13 +58,15 @@ public final class SparkHoodieIndexFactory {
       case INMEMORY:
         return new HoodieInMemoryHashIndex(config);
       case BLOOM:
-        return new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+        return new HoodieBloomIndex(
+            config, getKeyGeneratorForIndex(config), SparkHoodieBloomIndexHelper.getInstance());
       case GLOBAL_BLOOM:
-        return new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+        return new HoodieGlobalBloomIndex(
+            config, getKeyGeneratorForIndex(config), SparkHoodieBloomIndexHelper.getInstance());
       case SIMPLE:
-        return new HoodieSimpleIndex(config, getKeyGeneratorForSimpleIndex(config));
+        return new HoodieSimpleIndex(config, getKeyGeneratorForIndex(config));
       case GLOBAL_SIMPLE:
-        return new HoodieGlobalSimpleIndex(config, getKeyGeneratorForSimpleIndex(config));
+        return new HoodieGlobalSimpleIndex(config, getKeyGeneratorForIndex(config));
       case BUCKET:
         switch (config.getBucketIndexEngineType()) {
           case SIMPLE:
@@ -105,8 +107,10 @@ public final class SparkHoodieIndexFactory {
     }
   }
 
-  private static Option<BaseKeyGenerator> getKeyGeneratorForSimpleIndex(HoodieWriteConfig config) {
+  private static Option<BaseKeyGenerator> getKeyGeneratorForIndex(HoodieWriteConfig config) {
     try {
+      // When virtual keys are enabled, i.e., `config.populateMetaFields()` returns false,
+      // a key generator needs to be created for generating record keys on the fly
       return config.populateMetaFields() ? Option.empty()
           : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
     } catch (IOException e) {

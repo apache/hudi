@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -73,7 +74,7 @@ public abstract class BaseFileUtils {
    * @return Set Set of row keys
    */
   public Set<String> readRowKeys(Configuration configuration, Path filePath) {
-    return filterRowKeys(configuration, filePath, new HashSet<>());
+    return filterRowKeys(configuration, filePath, Option.empty(), Option.empty(), new HashSet<>());
   }
 
   /**
@@ -162,12 +163,20 @@ public abstract class BaseFileUtils {
   /**
    * Read the rowKey list matching the given filter, from the given data file.
    * If the filter is empty, then this will return all the row keys.
-   * @param filePath      The data file path
-   * @param configuration configuration to build fs object
-   * @param filter        record keys filter
-   * @return Set Set of row keys matching candidateRecordKeys
+   *
+   * @param filePath        The data file path
+   * @param configuration   configuration to build fs object
+   * @param keyGeneratorOpt Key generator for generating record keys when virtual keys are enabled.
+   * @param schemaOpt       Table schema when virtual keys are enabled.
+   * @param filter          record keys filter
+   * @return Set of row keys matching candidateRecordKeys
    */
-  public abstract Set<String> filterRowKeys(Configuration configuration, Path filePath, Set<String> filter);
+  public abstract Set<String> filterRowKeys(
+      Configuration configuration,
+      Path filePath,
+      Option<BaseKeyGenerator> keyGeneratorOpt,
+      Option<SerializableSchema> schemaOpt,
+      Set<String> filter);
 
   /**
    * Fetch {@link HoodieKey}s from the given data file.

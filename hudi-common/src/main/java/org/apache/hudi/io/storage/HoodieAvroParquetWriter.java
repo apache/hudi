@@ -18,11 +18,12 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -64,19 +65,15 @@ public class HoodieAvroParquetWriter
     if (populateMetaFields) {
       prepRecordWithMetadata(key, avroRecord, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);
-      super.write(avroRecord);
-      writeSupport.add(key.getRecordKey());
-    } else {
-      super.write(avroRecord);
     }
+    super.write(avroRecord);
+    writeSupport.add(key.getRecordKey());
   }
 
   @Override
   public void writeAvro(String key, IndexedRecord object) throws IOException {
     super.write(object);
-    if (populateMetaFields) {
-      writeSupport.add(key);
-    }
+    writeSupport.add(key);
   }
 
   @Override

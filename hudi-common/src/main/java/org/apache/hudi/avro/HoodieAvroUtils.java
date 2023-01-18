@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions;
@@ -283,6 +284,21 @@ public class HoodieAvroUtils {
   }
 
   public static Schema getRecordKeySchema() {
+    return RECORD_KEY_SCHEMA;
+  }
+
+  public static Schema getRecordKeySchema(Option<BaseKeyGenerator> keyGeneratorOpt, Option<SerializableSchema> schemaOpt) {
+    if (keyGeneratorOpt.isPresent()) {
+      List<Schema.Field> schemaFieldList = keyGeneratorOpt.get().getRecordKeyFieldNames().stream()
+          .map(name -> {
+            Schema.Field field = schemaOpt.get().get().getField(name);
+            return new Schema.Field(field.name(), field.schema(), "", field.defaultVal());
+          })
+          .collect(Collectors.toList());
+      Schema recordKeySchema = Schema.createRecord("HoodieRecordKey", "", "", false);
+      recordKeySchema.setFields(schemaFieldList);
+      return recordKeySchema;
+    }
     return RECORD_KEY_SCHEMA;
   }
 

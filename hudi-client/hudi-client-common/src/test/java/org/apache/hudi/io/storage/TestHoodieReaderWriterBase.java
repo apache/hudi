@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 
@@ -241,7 +242,7 @@ public abstract class TestHoodieReaderWriterBase {
         .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toCollection(TreeSet::new));
     List<String> expectedKeys = IntStream.range(40, NUM_RECORDS)
         .mapToObj(i -> "key" + String.format("%02d", i)).sorted().collect(Collectors.toList());
-    assertEquals(expectedKeys, hoodieReader.filterRowKeys(candidateRowKeys)
+    assertEquals(expectedKeys, hoodieReader.filterRowKeys(Option.empty(), Option.empty(), candidateRowKeys)
         .stream().sorted().collect(Collectors.toList()));
   }
 

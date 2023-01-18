@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -44,15 +43,13 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
       String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
-    boolean enableBloomFilter = populateMetaFields;
-    Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
     // Support PARQUET_COMPRESSION_CODEC_NAME is ""
     if (compressionCodecName.isEmpty()) {
       compressionCodecName = null;
     }
     HoodieRowParquetWriteSupport writeSupport = new HoodieRowParquetWriteSupport(conf,
-        HoodieInternalRowUtils.getCachedSchema(schema), filter,
+        HoodieInternalRowUtils.getCachedSchema(schema), Option.of(createBloomFilter(config)),
         HoodieStorageConfig.newBuilder().fromProperties(config.getProps()).build());
     HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
         CompressionCodecName.fromConf(compressionCodecName),
@@ -69,10 +66,8 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
 
   protected HoodieFileWriter newParquetFileWriter(
       FSDataOutputStream outputStream, Configuration conf, HoodieConfig config, Schema schema) throws IOException {
-    boolean enableBloomFilter = false;
-    Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     HoodieRowParquetWriteSupport writeSupport = new HoodieRowParquetWriteSupport(conf,
-        HoodieInternalRowUtils.getCachedSchema(schema), filter,
+        HoodieInternalRowUtils.getCachedSchema(schema), Option.empty(),
         HoodieStorageConfig.newBuilder().fromProperties(config.getProps()).build());
     String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
     // Support PARQUET_COMPRESSION_CODEC_NAME is ""

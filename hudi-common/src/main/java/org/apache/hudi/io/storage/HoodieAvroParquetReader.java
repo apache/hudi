@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -85,8 +87,11 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
   }
 
   @Override
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
-    return parquetUtils.filterRowKeys(conf, path, candidateRowKeys);
+  public Set<String> filterRowKeys(
+      Option<BaseKeyGenerator> keyGeneratorOpt,
+      Option<SerializableSchema> schemaOpt,
+      Set<String> candidateRowKeys) {
+    return parquetUtils.filterRowKeys(conf, path, keyGeneratorOpt, schemaOpt, candidateRowKeys);
   }
 
   @Override

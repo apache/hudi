@@ -19,15 +19,19 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.utils.LazyIterableIterator;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.io.HoodieKeyLookupResult;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.function.Function2;
 
 import java.util.ArrayList;
@@ -43,12 +47,20 @@ public class HoodieBloomIndexCheckFunction
     implements Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<HoodieKeyLookupResult>>> {
 
   private final HoodieTable hoodieTable;
-
   private final HoodieWriteConfig config;
+  private final Option<BaseKeyGenerator> keyGeneratorOpt;
+  private final Option<SerializableSchema> schemaOpt;
 
-  public HoodieBloomIndexCheckFunction(HoodieTable hoodieTable, HoodieWriteConfig config) {
+  public HoodieBloomIndexCheckFunction(
+      HoodieTable hoodieTable,
+      HoodieWriteConfig config,
+      Option<BaseKeyGenerator> keyGeneratorOpt) {
     this.hoodieTable = hoodieTable;
     this.config = config;
+    this.keyGeneratorOpt = keyGeneratorOpt;
+    this.schemaOpt = keyGeneratorOpt.isPresent()
+        ? Option.of(new SerializableSchema(new Schema.Parser().parse(config.getWriteSchema())))
+        : Option.empty();
   }
 
   @Override
@@ -84,7 +96,8 @@ public class HoodieBloomIndexCheckFunction
 
           // lazily init state
           if (keyLookupHandle == null) {
-            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair);
+            keyLookupHandle = new HoodieKeyLookupHandle(
+                config, hoodieTable, keyGeneratorOpt, schemaOpt, partitionPathFilePair);
           }
 
           // if continue on current file
@@ -93,7 +106,8 @@ public class HoodieBloomIndexCheckFunction
           } else {
             // do the actual checking of file & break out
             ret.add(keyLookupHandle.getLookupResult());
-            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair);
+            keyLookupHandle = new HoodieKeyLookupHandle(
+                config, hoodieTable, keyGeneratorOpt, schemaOpt, partitionPathFilePair);
             keyLookupHandle.addKey(recordKey);
             break;
           }

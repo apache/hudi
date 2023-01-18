@@ -18,11 +18,12 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 
@@ -55,19 +56,15 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
     if (populateMetaFields) {
       prepRecordWithMetadata(key, row, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);
-      super.write(row);
-      writeSupport.add(UTF8String.fromString(key.getRecordKey()));
-    } else {
-      super.write(row);
     }
+    super.write(row);
+    writeSupport.add(UTF8String.fromString(key.getRecordKey()));
   }
 
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
     super.write(row);
-    if (populateMetaFields) {
-      writeSupport.add(UTF8String.fromString(recordKey));
-    }
+    writeSupport.add(UTF8String.fromString(recordKey));
   }
 
   @Override

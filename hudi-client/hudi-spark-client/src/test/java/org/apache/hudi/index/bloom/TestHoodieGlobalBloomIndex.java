@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -90,7 +91,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
   public void testLoadInvolvedFiles() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieGlobalBloomIndex index =
-        new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+        new HoodieGlobalBloomIndex(config, Option.empty(), SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
 
@@ -187,7 +188,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieGlobalBloomIndex index =
-        new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+        new HoodieGlobalBloomIndex(config, Option.empty(), SparkHoodieBloomIndexHelper.getInstance());
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
     partitionToFileIndexInfo.put("2017/10/22", Arrays.asList(new BloomIndexFileInfo("f1"),
@@ -233,7 +234,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
             .withBloomIndexUpdatePartitionPath(false)
             .build())
         .build();
-    HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+    HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config, Option.empty(), SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
 
@@ -355,7 +356,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
             .build())
         .build();
     HoodieGlobalBloomIndex index =
-        new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+        new HoodieGlobalBloomIndex(config, Option.empty(), SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
     final String p1 = "2016/01/31";

@@ -24,8 +24,10 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
@@ -42,6 +44,7 @@ public abstract class BaseHoodieBloomIndexHelper implements Serializable {
    * @param config                  Write config.
    * @param context                 {@link HoodieEngineContext} instance to use.
    * @param hoodieTable             {@link HoodieTable} instance to use.
+   * @param keyGeneratorOpt         Key generator for generating record keys when virtual keys are enabled.
    * @param partitionRecordKeyPairs Pairs of partition path and record key.
    * @param fileComparisonPairs     Pairs of filename and record key based on file comparisons.
    * @param partitionToFileInfo     Partition path to {@link BloomIndexFileInfo} map.
@@ -50,6 +53,7 @@ public abstract class BaseHoodieBloomIndexHelper implements Serializable {
    */
   public abstract HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
       HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
+      Option<BaseKeyGenerator> keyGeneratorOpt,
       HoodiePairData<String, String> partitionRecordKeyPairs,
       HoodieData<Pair<String, HoodieKey>> fileComparisonPairs,
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,

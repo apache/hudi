@@ -18,23 +18,27 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieKeyLookupResult;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.function.Function2;
-import scala.Tuple2;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,6 +47,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import scala.Tuple2;
 
 /**
  * Spark Function2 implementation for checking bloom filters for the
@@ -61,9 +67,18 @@ public class HoodieMetadataBloomIndexCheckFunction implements
   // per batch so that the total fetched bloom filters would not cross 128 MB.
   private static final long BLOOM_FILTER_CHECK_MAX_FILE_COUNT_PER_BATCH = 256;
   private final HoodieTable hoodieTable;
+  private final Option<BaseKeyGenerator> keyGeneratorOpt;
+  private final Option<SerializableSchema> schemaOpt;
 
-  public HoodieMetadataBloomIndexCheckFunction(HoodieTable hoodieTable) {
+  public HoodieMetadataBloomIndexCheckFunction(
+      HoodieWriteConfig config,
+      HoodieTable hoodieTable,
+      Option<BaseKeyGenerator> keyGeneratorOpt) {
     this.hoodieTable = hoodieTable;
+    this.keyGeneratorOpt = keyGeneratorOpt;
+    this.schemaOpt = keyGeneratorOpt.isPresent()
+        ? Option.of(new SerializableSchema(new Schema.Parser().parse(config.getWriteSchema())))
+        : Option.empty();
   }
 
   @Override
@@ -135,8 +150,8 @@ public class HoodieMetadataBloomIndexCheckFunction implements
 
         final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
         List<String> matchingKeys =
-            HoodieIndexUtils.filterKeysFromFile(new Path(dataFile.getPath()), candidateRecordKeys,
-                hoodieTable.getHadoopConf());
+            HoodieIndexUtils.filterKeysFromFile(
+                new Path(dataFile.getPath()), keyGeneratorOpt, schemaOpt, candidateRecordKeys, hoodieTable.getHadoopConf());
         LOG.debug(
             String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)",
                 hoodieKeyList.size(), candidateRecordKeys.size(),

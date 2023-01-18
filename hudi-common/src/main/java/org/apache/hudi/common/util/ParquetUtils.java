@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -74,14 +75,16 @@ public class ParquetUtils extends BaseFileUtils {
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
    * return all the rowkeys.
    *
-   * @param filePath      The parquet file path.
-   * @param configuration configuration to build fs object
-   * @param filter        record keys filter
-   * @return Set Set of row keys matching candidateRecordKeys
+   * @param filePath        The parquet file path.
+   * @param configuration   configuration to build fs object
+   * @param keyGeneratorOpt Key generator for generating record keys when virtual keys are enabled.
+   * @param schemaOpt       Table schema when virtual keys are enabled.
+   * @param filter          record keys filter
+   * @return Set of row keys matching candidateRecordKeys
    */
   @Override
-  public Set<String> filterRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
-    return filterParquetRowKeys(configuration, filePath, filter, HoodieAvroUtils.getRecordKeySchema());
+  public Set<String> filterRowKeys(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<SerializableSchema> schemaOpt, Set<String> filter) {
+    return filterParquetRowKeys(configuration, filePath, keyGeneratorOpt, filter, HoodieAvroUtils.getRecordKeySchema(keyGeneratorOpt, schemaOpt));
   }
 
   public static ParquetMetadata readMetadata(Configuration conf, Path parquetFilePath) {
@@ -105,7 +108,9 @@ public class ParquetUtils extends BaseFileUtils {
    * @param readSchema    schema of columns to be read
    * @return Set Set of row keys matching candidateRecordKeys
    */
-  private static Set<String> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter,
+  private static Set<String> filterParquetRowKeys(Configuration configuration, Path filePath,
+                                                  Option<BaseKeyGenerator> keyGeneratorOpt,
+                                                  Set<String> filter,
                                                   Schema readSchema) {
     Option<RecordKeysFilterFunction> filterFunction = Option.empty();
     if (filter != null && !filter.isEmpty()) {
@@ -120,7 +125,9 @@ public class ParquetUtils extends BaseFileUtils {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
-          String recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          String recordKey = keyGeneratorOpt.isPresent()
+              ? keyGeneratorOpt.get().getRecordKey((GenericRecord) obj)
+              : ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
           if (!filterFunction.isPresent() || filterFunction.get().apply(recordKey)) {
             rowKeys.add(recordKey);
           }

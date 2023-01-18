@@ -24,10 +24,12 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieKeyLookupResult;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
@@ -55,6 +57,7 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
   @Override
   public HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
       HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
+      Option<BaseKeyGenerator> keyGeneratorOpt,
       HoodiePairData<String, String> partitionRecordKeyPairs,
       HoodieData<Pair<String, HoodieKey>> fileComparisonPairs,
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo, Map<String, Long> recordsPerPartition) {
@@ -64,7 +67,7 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
 
     List<HoodieKeyLookupResult> keyLookupResults = new ArrayList<>();
     Iterator<List<HoodieKeyLookupResult>> iterator = new HoodieBaseBloomIndexCheckFunction(
-        hoodieTable, config).apply(fileComparisonPairList.iterator());
+        hoodieTable, config, keyGeneratorOpt).apply(fileComparisonPairList.iterator());
     while (iterator.hasNext()) {
       keyLookupResults.addAll(iterator.next());
     }

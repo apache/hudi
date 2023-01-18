@@ -28,9 +28,11 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
@@ -45,9 +47,21 @@ import java.io.Serializable;
 public abstract class HoodieIndex<I, O> implements Serializable {
 
   protected final HoodieWriteConfig config;
+  protected final Option<BaseKeyGenerator> keyGeneratorOpt;
 
   protected HoodieIndex(HoodieWriteConfig config) {
+    this(config, Option.empty());
+  }
+
+  /**
+   * Constructor for {@link HoodieIndex}
+   *
+   * @param config          Hoodie write config.
+   * @param keyGeneratorOpt Key generator for generating record keys when virtual keys are enabled.
+   */
+  protected HoodieIndex(HoodieWriteConfig config, Option<BaseKeyGenerator> keyGeneratorOpt) {
     this.config = config;
+    this.keyGeneratorOpt = keyGeneratorOpt;
   }
 
   /**

@@ -40,7 +40,9 @@ import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieRangeInfoHandle;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -66,8 +68,11 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
 
   private final BaseHoodieBloomIndexHelper bloomIndexHelper;
 
-  public HoodieBloomIndex(HoodieWriteConfig config, BaseHoodieBloomIndexHelper bloomIndexHelper) {
-    super(config);
+  public HoodieBloomIndex(
+      HoodieWriteConfig config,
+      Option<BaseKeyGenerator> keyGeneratorOpt,
+      BaseHoodieBloomIndexHelper bloomIndexHelper) {
+    super(config, keyGeneratorOpt);
     this.bloomIndexHelper = bloomIndexHelper;
   }
 
@@ -131,7 +136,8 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         explodeRecordsWithFileComparisons(partitionToFileInfo, partitionRecordKeyPairs);
 
     return bloomIndexHelper.findMatchingFilesForRecordKeys(config, context, hoodieTable,
-        partitionRecordKeyPairs, fileComparisonPairs, partitionToFileInfo, recordsPerPartition);
+        keyGeneratorOpt, partitionRecordKeyPairs, fileComparisonPairs, partitionToFileInfo,
+        recordsPerPartition);
   }
 
   private List<Pair<String, BloomIndexFileInfo>> getBloomIndexFileInfoForPartitions(HoodieEngineContext context,

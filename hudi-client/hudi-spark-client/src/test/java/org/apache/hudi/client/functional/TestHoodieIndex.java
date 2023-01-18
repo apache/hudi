@@ -20,6 +20,7 @@ package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -38,7 +39,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
@@ -94,8 +94,10 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     Object[][] data = new Object[][] {
         {IndexType.BLOOM, true, true},
         {IndexType.BLOOM, true, false},
+        {IndexType.BLOOM, false, false},
         {IndexType.GLOBAL_BLOOM, true, true},
         {IndexType.GLOBAL_BLOOM, true, false},
+        {IndexType.GLOBAL_BLOOM, false, false},
         {IndexType.SIMPLE, true, true},
         {IndexType.SIMPLE, true, false},
         {IndexType.SIMPLE, false, true},
@@ -129,7 +131,9 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         : getPropertiesForKeyGen());
     HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(indexType)
         .fromProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
-        .withIndexType(indexType);
+        .withIndexType(indexType)
+        .bloomIndexUseMetadata(enableMetadataIndex)
+        .bloomIndexParallelism(2);
     if (indexType == IndexType.BUCKET) {
       indexBuilder.withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE);
     }
@@ -321,7 +325,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     // Insert 200 records
-    JavaRDD<WriteStatus> writeStatusesRDD = writeClient.upsert(writeRecords, newCommitTime);
+    JavaRDD<WriteStatus> writeStatusesRDD = writeClient.bulkInsert(writeRecords, newCommitTime);
     // NOTE: This will trigger an actual write
     List<WriteStatus> writeStatuses = writeStatusesRDD.collect();
     Assertions.assertNoWriteErrors(writeStatuses);

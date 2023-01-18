@@ -51,9 +51,9 @@ public final class FlinkHoodieIndexFactory {
       case INMEMORY:
         return new FlinkInMemoryStateIndex(context, config);
       case BLOOM:
-        return new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
+        return new HoodieBloomIndex(config, Option.empty(), ListBasedHoodieBloomIndexHelper.getInstance());
       case GLOBAL_BLOOM:
-        return new HoodieGlobalBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
+        return new HoodieGlobalBloomIndex(config, Option.empty(), ListBasedHoodieBloomIndexHelper.getInstance());
       case SIMPLE:
         return new HoodieSimpleIndex(config, Option.empty());
       case GLOBAL_SIMPLE:
