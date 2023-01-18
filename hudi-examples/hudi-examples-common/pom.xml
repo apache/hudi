@@ -95,6 +95,12 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Kryo -->
+        <dependency>
+            <groupId>com.esotericsoftware</groupId>
+            <artifactId>kryo-shaded</artifactId>
+        </dependency>
+
         <!-- Avro -->
         <dependency>
             <groupId>org.apache.avro</groupId>
