@@ -140,6 +140,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
    * @param keys to be looked up
    */
   public void scanByFullKeys(List<String> keys) {
+    // We can skip scanning in case reader is in full-scan mode, in which case all blocks
+    // are processed upfront (no additional scanning is necessary)
     if (forceFullScan) {
       return; // no-op
     }
@@ -164,11 +166,21 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
    * @param keyPrefixes to be looked up
    */
   public void scanByKeyPrefixes(List<String> keyPrefixes) {
-    if (forceFullScan || scannedPrefixes.containsAll(keyPrefixes)) {
-      // We can skip scanning in following 2 cases
-      //    - Reader is in full-scan mode, in which case all blocks are processed
-      //    upfront (no additional scanning is necessary)
-      //    - When same prefixes had already been handled
+    // We can skip scanning in case reader is in full-scan mode, in which case all blocks
+    // are processed upfront (no additional scanning is necessary)
+    if (forceFullScan) {
+      return;
+    }
+
+    List<String> missingKeyPrefixes = keyPrefixes.stream()
+        .filter(keyPrefix ->
+            // NOTE: We can skip scanning the prefixes that have already
+            //       been covered by the previous scans
+            scannedPrefixes.stream().noneMatch(keyPrefix::startsWith))
+        .collect(Collectors.toList());
+
+    if (missingKeyPrefixes.isEmpty()) {
+      // All the required records are already fetched, no-op
       return;
     }
 
@@ -176,8 +188,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     //       and will have to scan every time as we can't know (based on just
     //       the records cached) whether particular prefix was scanned or just records
     //       matching the prefix looked up (by [[scanByFullKeys]] API)
-    scanInternal(Option.of(KeySpec.prefixKeySpec(keyPrefixes)), false);
-    scannedPrefixes.addAll(keyPrefixes);
+    scanInternal(Option.of(KeySpec.prefixKeySpec(missingKeyPrefixes)), false);
+    scannedPrefixes.addAll(missingKeyPrefixes);
   }
 
   private void performScan() {
