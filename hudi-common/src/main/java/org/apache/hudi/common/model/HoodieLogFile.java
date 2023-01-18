@@ -28,9 +28,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.Objects;
-import java.util.regex.Matcher;
-
-import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
 
 /**
  * Abstracts a single log file. Contains methods to extract metadata like the fileId, version and extension from the log
@@ -52,44 +49,39 @@ public class HoodieLogFile implements Serializable {
   private final String pathStr;
   private long fileLen;
   private transient Path path;
-  private String fileId;
-  private String baseTime;
-  private int logVersion = Integer.MIN_VALUE;
-  private String writeToken;
+  private transient String fileId;
+  private transient String baseTime;
+  private transient int logVersion = Integer.MIN_VALUE;
+  private transient String writeToken;
 
   public HoodieLogFile(HoodieLogFile logFile) {
     this.fileStatus = logFile.fileStatus;
     this.pathStr = logFile.pathStr;
     this.fileLen = logFile.fileLen;
-    initBaseInfo();
   }
 
   public HoodieLogFile(FileStatus fileStatus) {
     this.fileStatus = fileStatus;
     this.pathStr = fileStatus.getPath().toString();
     this.fileLen = fileStatus.getLen();
-    initBaseInfo();
   }
 
   public HoodieLogFile(Path logPath) {
     this.fileStatus = null;
     this.pathStr = logPath.toString();
     this.fileLen = -1;
-    initBaseInfo();
   }
 
   public HoodieLogFile(Path logPath, Long fileLen) {
     this.fileStatus = null;
     this.pathStr = logPath.toString();
     this.fileLen = fileLen;
-    initBaseInfo();
   }
 
   public HoodieLogFile(String logPathStr) {
     this.fileStatus = null;
     this.pathStr = logPathStr;
     this.fileLen = -1;
-    initBaseInfo();
   }
 
   public String getFileId() {
@@ -129,17 +121,6 @@ public class HoodieLogFile implements Serializable {
       this.path = new Path(pathStr);
     }
     return this.path;
-  }
-
-  private void initBaseInfo() {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(getPath().getName());
-    if (!matcher.find()) {
-      throw new RuntimeException("LogFile");
-    }
-    this.writeToken = matcher.group(6);
-    this.logVersion = Integer.parseInt(matcher.group(4));
-    this.baseTime = matcher.group(2);
-    this.fileId = matcher.group(1);
   }
 
   public String getFileName() {
