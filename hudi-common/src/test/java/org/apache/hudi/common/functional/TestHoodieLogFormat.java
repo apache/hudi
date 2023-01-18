@@ -817,7 +817,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           ((HoodieAvroRecord) record).getData().getInsertValue(schema).get());
     }
 
-    //assertEquals(sort(sampledRecords), sort(scannedAvroRecords));
+    assertEquals(sort(sampledRecords), sort(scannedAvroRecords));
 
     //
     // Step 2: Scan by the same list of keys (no new scanning should be performed,

@@ -63,9 +63,11 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.genPseudo
  */
 public final class SchemaTestUtil {
 
-  private static final Random RANDOM = new Random(0xDEED);
-
   private static final String RESOURCE_SAMPLE_DATA = "/sample.data";
+
+  private final Random random = new Random(0xDEED);
+
+  private SchemaTestUtil() {}
 
   public static Schema getSimpleSchema() throws IOException {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));
@@ -136,11 +138,12 @@ public final class SchemaTestUtil {
 
   public static List<IndexedRecord> generateHoodieTestRecords(int from, int limit)
       throws IOException, URISyntaxException {
+    SchemaTestUtil testUtil = new SchemaTestUtil();
     List<IndexedRecord> records = generateTestRecords(from, limit);
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, hoodieFieldsSchema)).map(p -> {
-      p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, genRandomUUID());
+      p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, testUtil.genRandomUUID());
       p.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
       p.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
       return p;
@@ -150,9 +153,10 @@ public final class SchemaTestUtil {
 
   public static List<HoodieRecord> generateHoodieTestRecords(int from, int limit, Schema schema)
       throws IOException, URISyntaxException {
+    SchemaTestUtil testUtil = new SchemaTestUtil();
     List<IndexedRecord> records = generateTestRecords(from, limit);
     return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema))
-        .map(p -> convertToHoodieRecords(p, genRandomUUID(), "000/00/00")).collect(Collectors.toList());
+        .map(p -> convertToHoodieRecords(p, testUtil.genRandomUUID(), "000/00/00")).collect(Collectors.toList());
   }
 
   private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
@@ -174,9 +178,9 @@ public final class SchemaTestUtil {
 
   public static List<HoodieRecord> generateHoodieTestRecordsWithoutHoodieMetadata(int from, int limit)
       throws IOException, URISyntaxException {
-
+    SchemaTestUtil testUtil = new SchemaTestUtil();
     List<IndexedRecord> iRecords = generateTestRecords(from, limit);
-    return iRecords.stream().map(r -> new HoodieAvroRecord<>(new HoodieKey(genRandomUUID(), "0000/00/00"),
+    return iRecords.stream().map(r -> new HoodieAvroRecord<>(new HoodieKey(testUtil.genRandomUUID(), "0000/00/00"),
         new HoodieAvroPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
   }
 
@@ -362,7 +366,7 @@ public final class SchemaTestUtil {
     }
   }
 
-  private static String genRandomUUID() {
-    return genPseudoRandomUUID(RANDOM).toString();
+  private String genRandomUUID() {
+    return genPseudoRandomUUID(random).toString();
   }
 }
