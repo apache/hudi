@@ -24,15 +24,17 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
+import org.apache.spark.broadcast.Broadcast;
 import scala.Tuple2;
 
 import java.util.ArrayList;
@@ -44,15 +46,12 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * Spark Function2 implementation for checking bloom filters for the
- * requested keys from the metadata table index. The bloom filter
- * checking for keys and the actual file verification for the
- * candidate keys is done in an iterative fashion. In each iteration,
- * bloom filters are requested for a batch of partition files and the
- * keys are checked against them.
+ * Implementation of the function that probing Bloom Filters of individual files verifying
+ * whether particular record key could be stored in the latest file-slice of the file-group
+ * identified by the {@link HoodieFileGroupId}
  */
 public class HoodieMetadataBloomFilterProbingFunction implements
-    PairFlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, String>>, HoodieFileGroupId, HoodieBloomFilterKeyLookupResult> {
+    PairFlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, String>>, HoodieFileGroupId, HoodieBloomFilterProbingResult> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMetadataBloomFilterProbingFunction.class);
 
@@ -61,26 +60,36 @@ public class HoodieMetadataBloomFilterProbingFunction implements
   private static final long BLOOM_FILTER_CHECK_MAX_FILE_COUNT_PER_BATCH = 256;
   private final HoodieTable hoodieTable;
 
-  public HoodieMetadataBloomFilterProbingFunction(HoodieTable hoodieTable) {
+  private final Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast;
+
+  /**
+   * NOTE: It's critical for this ctor to accept {@link HoodieTable} to make sure that it uses
+   *       broadcast-ed instance of {@link HoodieBackedTableMetadata} internally, instead of
+   *       one being serialized and deserialized for _every_ task individually
+   *
+   * NOTE: We pass in broadcasted {@link HoodieTableFileSystemView} to make sure it's materialized
+   *       on executor once
+   */
+  public HoodieMetadataBloomFilterProbingFunction(Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast,
+                                                  HoodieTable hoodieTable) {
+    this.baseFileOnlyViewBroadcast = baseFileOnlyViewBroadcast;
     this.hoodieTable = hoodieTable;
   }
 
   @Override
-  public Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>> call(Iterator<Tuple2<HoodieFileGroupId, String>> tuple2Iterator) throws Exception {
+  public Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>> call(Iterator<Tuple2<HoodieFileGroupId, String>> tuple2Iterator) throws Exception {
     return new FlattenedIterator<>(new BloomIndexLazyKeyCheckIterator(tuple2Iterator), Function.identity());
   }
 
   private class BloomIndexLazyKeyCheckIterator
-      extends LazyIterableIterator<Tuple2<HoodieFileGroupId, String>, Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>>> {
-
-    private final TableFileSystemView.BaseFileOnlyView baseFileOnlyView = hoodieTable.getBaseFileOnlyView();
+      extends LazyIterableIterator<Tuple2<HoodieFileGroupId, String>, Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>>> {
 
     public BloomIndexLazyKeyCheckIterator(Iterator<Tuple2<HoodieFileGroupId, String>> tuple2Iterator) {
       super(tuple2Iterator);
     }
 
     @Override
-    protected Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>> computeNext() {
+    protected Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>> computeNext() {
       // Partition path and file name pair to list of keys
       final Map<Pair<String, String>, List<HoodieKey>> fileToKeysMap = new HashMap<>();
       final Map<String, HoodieBaseFile> fileIDBaseFileMap = new HashMap<>();
@@ -89,14 +98,16 @@ public class HoodieMetadataBloomFilterProbingFunction implements
         Tuple2<HoodieFileGroupId, String> entry = inputItr.next();
         String partitionPath = entry._1.getPartitionPath();
         String fileId = entry._1.getFileId();
+
         if (!fileIDBaseFileMap.containsKey(fileId)) {
-          Option<HoodieBaseFile> baseFile = baseFileOnlyView.getLatestBaseFile(partitionPath, fileId);
+          Option<HoodieBaseFile> baseFile = baseFileOnlyViewBroadcast.getValue().getLatestBaseFile(partitionPath, fileId);
           if (!baseFile.isPresent()) {
             throw new HoodieIndexException("Failed to find the base file for partition: " + partitionPath
                 + ", fileId: " + fileId);
           }
           fileIDBaseFileMap.put(fileId, baseFile.get());
         }
+
         fileToKeysMap.computeIfAbsent(Pair.of(partitionPath, fileIDBaseFileMap.get(fileId).getFileName()),
             k -> new ArrayList<>()).add(new HoodieKey(entry._2, partitionPath));
 
@@ -138,7 +149,7 @@ public class HoodieMetadataBloomFilterProbingFunction implements
             LOG.debug(String.format("Total records (%d), bloom filter candidates (%d)",
                 hoodieKeyList.size(), candidateRecordKeys.size()));
 
-            return Tuple2.apply(new HoodieFileGroupId(partitionPath, fileId), new HoodieBloomFilterKeyLookupResult(candidateRecordKeys));
+            return Tuple2.apply(new HoodieFileGroupId(partitionPath, fileId), new HoodieBloomFilterProbingResult(candidateRecordKeys));
           })
           .iterator();
     }

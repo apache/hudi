@@ -99,6 +99,8 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     if (config.getBloomIndexUseMetadata()
         && hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
         .contains(BLOOM_FILTERS.getPartitionPath())) {
+      SerializableConfiguration hadoopConf = new SerializableConfiguration(hoodieTable.getHadoopConf());
+
       HoodieTableFileSystemView baseFileOnlyView =
           getBaseFileOnlyView(hoodieTable, partitionToFileInfo.keySet());
 
@@ -136,19 +138,22 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       AffineBloomIndexFileGroupPartitioner partitioner =
           new AffineBloomIndexFileGroupPartitioner(baseFileOnlyViewBroadcast, targetMetadataParallelism);
 
-      // First, we need to repartition and sort records using [[AffineBloomIndexFileGroupPartitioner]]
-      // to make sure every Spark task accesses no more than just a single file-group in MT (allows
-      // us to achieve G2).
-      //
-      // NOTE: Sorting records w/in individual partitions is required to make sure that we cluster
-      //       together keys co-located w/in the MT files (sorted by keys)
-      JavaPairRDD<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult> bloomFilterLookupResultRDD =
+      keyLookupResultRDD =
+          // First, we need to repartition and sort records using [[AffineBloomIndexFileGroupPartitioner]]
+          // to make sure every Spark task accesses no more than just a single file-group in MT (allows
+          // us to achieve G2).
+          //
+          // NOTE: Sorting records w/in individual partitions is required to make sure that we cluster
+          //       together keys co-located w/in the MT files (sorted by keys)
           fileComparisonsRDD.repartitionAndSortWithinPartitions(partitioner)
-              .mapPartitionsToPair(new HoodieMetadataBloomFilterProbingFunction(hoodieTable));
-
-      // Step 2: Use bloom filter to filter and the actual log file to get the record location
-      keyLookupResultRDD = bloomFilterLookupResultRDD.repartition(inputParallelism)
-          .mapPartitions(new HoodieFileProbingFunction(baseFileOnlyViewBroadcast, new SerializableConfiguration(hoodieTable.getHadoopConf())), true);
+              .mapPartitionsToPair(new HoodieMetadataBloomFilterProbingFunction(baseFileOnlyViewBroadcast, hoodieTable))
+              // Second, we use [[HoodieFileProbingFunction]] to open actual file and check whether it
+              // contains the records with candidate keys that were filtered in by the Bloom Filter.
+              //
+              // Here we repartition the RDD back to the desired target parallelism to make sure
+              // individual file-probing is not constrained
+              .repartition(targetParallelism)
+              .mapPartitions(new HoodieFileProbingFunction(baseFileOnlyViewBroadcast, hadoopConf), true);
 
     } else if (config.useBloomIndexBucketizedChecking()) {
       Map<HoodieFileGroupId, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(

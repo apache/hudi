@@ -21,22 +21,15 @@ package org.apache.hudi.index.bloom;
 
 import java.util.List;
 
-public class HoodieBloomFilterKeyLookupResult {
-
-  private final String partitionPath;
+class HoodieBloomFilterProbingResult {
 
   private final List<String> candidateKeys;
 
-  HoodieBloomFilterKeyLookupResult(String fileId, String partitionPath, List<String> candidateKeys) {
-    this.partitionPath = partitionPath;
+  HoodieBloomFilterProbingResult(List<String> candidateKeys) {
     this.candidateKeys = candidateKeys;
   }
 
   public List<String> getCandidateKeys() {
     return candidateKeys;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
   }
 }

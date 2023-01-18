@@ -45,15 +45,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Spark Function2 implementation for checking bloom filters for the
- * requested keys from the metadata table index. The bloom filter
- * checking for keys and the actual file verification for the
- * candidate keys is done in an iterative fashion. In each iteration,
- * bloom filters are requested for a batch of partition files and the
- * keys are checked against them.
+ * Implementation of the function probing filtered in candidate keys provided in
+ * {@link HoodieBloomFilterProbingResult} w/in corresponding files identified by {@link HoodieFileGroupId}
+ * to validate whether the record w/ the provided key is indeed persisted in it
  */
 public class HoodieFileProbingFunction implements
-    FlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>>, List<HoodieKeyLookupResult>> {
+    FlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>>, List<HoodieKeyLookupResult>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieFileProbingFunction.class);
 
@@ -71,25 +68,25 @@ public class HoodieFileProbingFunction implements
   }
 
   @Override
-  public Iterator<List<HoodieKeyLookupResult>> call(Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>> tuple2Iterator) throws Exception {
+  public Iterator<List<HoodieKeyLookupResult>> call(Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>> tuple2Iterator) throws Exception {
     return new BloomIndexLazyKeyCheckIterator(tuple2Iterator);
   }
 
   private class BloomIndexLazyKeyCheckIterator
-      extends LazyIterableIterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>, List<HoodieKeyLookupResult>> {
+      extends LazyIterableIterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>, List<HoodieKeyLookupResult>> {
 
-    public BloomIndexLazyKeyCheckIterator(Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult>> tuple2Iterator) {
+    public BloomIndexLazyKeyCheckIterator(Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>> tuple2Iterator) {
       super(tuple2Iterator);
     }
 
     @Override
     protected List<HoodieKeyLookupResult> computeNext() {
       // Partition path and file name pair to list of keys
-      final Map<Pair<String, String>, HoodieBloomFilterKeyLookupResult> fileToLookupResults = new HashMap<>();
+      final Map<Pair<String, String>, HoodieBloomFilterProbingResult> fileToLookupResults = new HashMap<>();
       final Map<String, HoodieBaseFile> fileIDBaseFileMap = new HashMap<>();
 
       while (inputItr.hasNext()) {
-        Tuple2<HoodieFileGroupId, HoodieBloomFilterKeyLookupResult> entry = inputItr.next();
+        Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult> entry = inputItr.next();
         final String partitionPath = entry._1.getPartitionPath();
         final String fileId = entry._1.getFileId();
 
@@ -118,7 +115,7 @@ public class HoodieFileProbingFunction implements
       return fileToLookupResults.entrySet().stream()
           .map(entry -> {
             Pair<String, String> partitionPathFileNamePair = entry.getKey();
-            HoodieBloomFilterKeyLookupResult bloomFilterKeyLookupResult = entry.getValue();
+            HoodieBloomFilterProbingResult bloomFilterKeyLookupResult = entry.getValue();
 
             final String partitionPath = partitionPathFileNamePair.getLeft();
             final String fileName = partitionPathFileNamePair.getRight();
