@@ -128,7 +128,7 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   @Override
-  public <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterator<W>> func) {
+  public <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterable<W>> func) {
     return HoodieJavaPairRDD.of(pairRDDData.flatMapValues(func::apply));
   }
 
