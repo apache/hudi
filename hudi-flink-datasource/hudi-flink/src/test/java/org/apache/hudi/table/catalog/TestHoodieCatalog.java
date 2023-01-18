@@ -35,6 +35,7 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.catalog.CatalogBaseTable;
@@ -150,6 +151,8 @@ public class TestHoodieCatalog {
     File testDb = new File(tempFile, TEST_DEFAULT_DATABASE);
     testDb.mkdir();
     Map<String, String> catalogOptions = new HashMap<>();
+    assertThrows(ValidationException.class,
+        () -> catalog = new HoodieCatalog("hudi", Configuration.fromMap(catalogOptions)));
     catalogPathStr = tempFile.getAbsolutePath();
     catalogOptions.put(CATALOG_PATH.key(), catalogPathStr);
     catalogOptions.put(DEFAULT_DATABASE.key(), TEST_DEFAULT_DATABASE);
