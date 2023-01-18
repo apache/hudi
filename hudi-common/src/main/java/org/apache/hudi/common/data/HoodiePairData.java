@@ -107,7 +107,7 @@ public interface HoodiePairData<K, V> extends Serializable {
    * {@code W}, subsequently flattening returned {@link Iterable} into a new
    * {@link HoodiePairData} container
    */
-  <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterable<W>> func);
+  <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterator<W>> func);
 
   /**
    * @param mapToPairFunc serializable map function to generate another pair.

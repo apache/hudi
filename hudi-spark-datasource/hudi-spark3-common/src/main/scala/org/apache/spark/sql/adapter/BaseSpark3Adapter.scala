@@ -22,6 +22,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieBaseRelation, Spark3RowSerDe}
+import org.apache.spark.{HoodieRDDUtils, HoodieSpark3RDDUtils}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -46,6 +47,8 @@ import scala.util.control.NonFatal
  * Base implementation of [[SparkAdapter]] for Spark 3.x branch
  */
 abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
+
+  def getRDDUtils: HoodieRDDUtils = HoodieSpark3RDDUtils
 
   def getCatalogUtils: HoodieSpark3CatalogUtils
 
