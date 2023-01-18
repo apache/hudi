@@ -114,4 +114,12 @@ public abstract class HoodieFlinkTable<T>
       config.setInternalSchemaString(SerDeHelper.toJson(internalSchema.get()));
     }
   }
+
+  /**
+   * Flink writer need to skip check the compatibility of Schema#name.
+   */
+  @Override
+  public boolean isNeedCheckSchemaNames() {
+    return false;
+  }
 }

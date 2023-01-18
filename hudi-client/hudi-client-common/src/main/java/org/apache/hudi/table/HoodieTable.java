@@ -802,7 +802,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(getMetaClient());
       writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
       tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaResolver.getTableAvroSchemaWithoutMetadataFields());
-      isValid = isSchemaCompatible(tableSchema, writerSchema);
+      isValid = isSchemaCompatible(tableSchema, writerSchema, isNeedCheckSchemaNames());
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
     }
@@ -827,6 +827,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     } catch (HoodieException e) {
       throw new HoodieInsertException("Failed insert schema compatibility check", e);
     }
+  }
+
+  /**
+   * Whether writer need to check the compatibility of Schema#Name.
+   */
+  public boolean isNeedCheckSchemaNames() {
+    return true;
   }
 
   public HoodieFileFormat getBaseFileFormat() {
