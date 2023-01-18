@@ -56,7 +56,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   }
 
   @Override
-  protected <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception {
+  public  <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception {
     // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
     //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
     //       it since these records will be put into queue of BoundedInMemoryExecutor.
