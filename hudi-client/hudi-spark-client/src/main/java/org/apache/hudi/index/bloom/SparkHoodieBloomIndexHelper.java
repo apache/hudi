@@ -43,6 +43,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
 import scala.Tuple2;
 
@@ -50,6 +51,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -147,6 +149,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       // Step 2: Use bloom filter to filter and the actual log file to get the record location
       keyLookupResultRDD = bloomFilterLookupResultRDD.repartition(inputParallelism)
           .mapPartitions(new HoodieFileProbingFunction(baseFileOnlyViewBroadcast, new SerializableConfiguration(hoodieTable.getHadoopConf())), true);
+
     } else if (config.useBloomIndexBucketizedChecking()) {
       Map<HoodieFileGroupId, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(
           config, recordsPerPartition, partitionToFileInfo, fileComparisonsRDD, context);
@@ -156,10 +159,10 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       keyLookupResultRDD = fileComparisonsRDD.mapToPair(t -> new Tuple2<>(Pair.of(t._1, t._2), t))
           .repartitionAndSortWithinPartitions(partitioner)
           .map(Tuple2::_2)
-          .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true);
+          .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
     } else {
       keyLookupResultRDD = fileComparisonsRDD.sortByKey(true, targetParallelism)
-          .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true);
+          .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
     }
 
     return HoodieJavaPairRDD.of(keyLookupResultRDD.flatMap(List::iterator)
@@ -253,6 +256,20 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       // NOTE: It's crucial that [[targetPartitions]] be congruent w/ the number of
       //       actual file-groups in the Bloom Index in MT
       return mapRecordKeyToFileGroupIndex(bloomIndexEncodedKey, targetPartitions);
+    }
+  }
+
+  static class HoodieSparkBloomIndexCheckFunction extends HoodieBloomIndexCheckFunction<Tuple2<HoodieFileGroupId, String>>
+      implements FlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, String>>, List<HoodieKeyLookupResult>> {
+
+    public HoodieSparkBloomIndexCheckFunction(HoodieTable hoodieTable,
+                                              HoodieWriteConfig config) {
+      super(hoodieTable, config, t -> t._1, t -> t._2);
+    }
+
+    @Override
+    public Iterator<List<HoodieKeyLookupResult>> call(Iterator<Tuple2<HoodieFileGroupId, String>> fileGroupIdRecordKeyPairIterator) {
+      return new LazyKeyCheckIterator(fileGroupIdRecordKeyPairIterator);
     }
   }
 }

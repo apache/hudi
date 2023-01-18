@@ -28,50 +28,65 @@ import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.function.Function;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 
 /**
- * Function performing actual checking of list containing (fileId, hoodieKeys) against the actual files.
+ * Function accepting a tuple of {@link HoodieFileGroupId} and a record key and producing
+ * a list of {@link HoodieKeyLookupResult} for every file identified by the file-group ids
+ *
+ * @param <I> type of the tuple of {@code (HoodieFileGroupId, <record-key>)}. Note that this is
+ *           parameterized as generic such that this code could be reused for Spark as well
  */
-public class HoodieBaseBloomIndexCheckFunction
-    implements Function<Iterator<Pair<HoodieFileGroupId, String>>, Iterator<List<HoodieKeyLookupResult>>> {
+public class HoodieBloomIndexCheckFunction<I> implements Function<Iterator<I>, Iterator<List<HoodieKeyLookupResult>>> {
 
   private final HoodieTable hoodieTable;
 
   private final HoodieWriteConfig config;
 
-  public HoodieBaseBloomIndexCheckFunction(HoodieTable hoodieTable, HoodieWriteConfig config) {
+  private final Function<I, HoodieFileGroupId> fileGroupIdExtractor;
+  private final Function<I, String> recordKeyExtractor;
+
+  public HoodieBloomIndexCheckFunction(HoodieTable hoodieTable,
+                                       HoodieWriteConfig config,
+                                       Function<I, HoodieFileGroupId> fileGroupIdExtractor,
+                                       Function<I, String> recordKeyExtractor) {
     this.hoodieTable = hoodieTable;
     this.config = config;
+    this.fileGroupIdExtractor = fileGroupIdExtractor;
+    this.recordKeyExtractor = recordKeyExtractor;
   }
 
   @Override
-  public Iterator<List<HoodieKeyLookupResult>> apply(Iterator<Pair<HoodieFileGroupId, String>> filePartitionRecordKeyTripletItr) {
-    return new LazyKeyCheckIterator(filePartitionRecordKeyTripletItr);
+  public Iterator<List<HoodieKeyLookupResult>> apply(Iterator<I> fileGroupIdRecordKeyPairIterator) {
+    return new LazyKeyCheckIterator(fileGroupIdRecordKeyPairIterator);
   }
 
-  class LazyKeyCheckIterator extends LazyIterableIterator<Pair<HoodieFileGroupId, String>, List<HoodieKeyLookupResult>> {
+  protected class LazyKeyCheckIterator extends LazyIterableIterator<I, List<HoodieKeyLookupResult>> {
 
     private HoodieKeyLookupHandle keyLookupHandle;
 
-    LazyKeyCheckIterator(Iterator<Pair<HoodieFileGroupId, String>> filePartitionRecordKeyTripletItr) {
+    LazyKeyCheckIterator(Iterator<I> filePartitionRecordKeyTripletItr) {
       super(filePartitionRecordKeyTripletItr);
     }
 
     @Override
     protected List<HoodieKeyLookupResult> computeNext() {
+
       List<HoodieKeyLookupResult> ret = new ArrayList<>();
       try {
         // process one file in each go.
         while (inputItr.hasNext()) {
-          Pair<HoodieFileGroupId, String> currentTuple = inputItr.next();
+          I tuple = inputItr.next();
 
-          String fileId = currentTuple.getLeft().getFileId();
-          String partitionPath = currentTuple.getLeft().getPartitionPath();
-          String recordKey = currentTuple.getRight();
+          HoodieFileGroupId fileGroupId = fileGroupIdExtractor.apply(tuple);
+          String recordKey = recordKeyExtractor.apply(tuple);
+
+          String fileId = fileGroupId.getFileId();
+          String partitionPath = fileGroupId.getPartitionPath();
+
           Pair<String, String> partitionPathFilePair = Pair.of(partitionPath, fileId);
 
           // lazily init state
@@ -97,10 +112,12 @@ public class HoodieBaseBloomIndexCheckFunction
         }
       } catch (Throwable e) {
         if (e instanceof HoodieException) {
-          throw e;
+          throw (HoodieException) e;
         }
+
         throw new HoodieIndexException("Error checking bloom filter index. ", e);
       }
+
       return ret;
     }
   }
