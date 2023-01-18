@@ -235,20 +235,6 @@
       <artifactId>kryo-shaded</artifactId>
     </dependency>
 
-    <!-- TODO delete -->
-
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-aws</artifactId>
-      <version>3.3.1</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-bundle</artifactId>
-      <version>1.11.901</version>
-    </dependency>
-
     <dependency>
       <groupId>com.github.stefanbirkner</groupId>
       <artifactId>system-rules</artifactId>
