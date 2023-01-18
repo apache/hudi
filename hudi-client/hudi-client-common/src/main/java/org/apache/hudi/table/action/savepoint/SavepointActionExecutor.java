@@ -84,15 +84,32 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           "Could not savepoint commit " + instantTime + " as this is beyond the lookup window " + lastCommitRetained);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime + " " + table.getConfig().getTableName());
-      List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
-      Map<String, List<String>> latestFilesMap = context.mapToPair(partitions, partitionPath -> {
-        // Scan all partitions files with this commit time
-        LOG.info("Collecting latest files in partition path " + partitionPath);
-        TableFileSystemView.BaseFileOnlyView view = table.getBaseFileOnlyView();
-        List<String> latestFiles = view.getLatestBaseFilesBeforeOrOn(partitionPath, instantTime)
-            .map(HoodieBaseFile::getFileName).collect(Collectors.toList());
-        return new ImmutablePair<>(partitionPath, latestFiles);
-      }, null);
+      TableFileSystemView.BaseFileOnlyView view = table.getBaseFileOnlyView();
+
+      Map<String, List<String>> latestFilesMap;
+      // NOTE: for performance, we have to use different logic here for listing the latest files
+      // before or on the given instant:
+      // (1) using metadata-table-based file listing: instead of parallelizing the partition
+      // listing which incurs unnecessary metadata table reads, we directly read the metadata
+      // table once in a batch manner through the timeline server;
+      // (2) using direct file system listing:  we parallelize the partition listing so that
+      // each partition can be listed on the file system concurrently through Spark.
+      if (config.getMetadataConfig().enabled()) {
+        latestFilesMap = view.getAllLatestBaseFilesBeforeOrOn(instantTime).entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> entry.getValue().map(HoodieBaseFile::getFileName).collect(Collectors.toList())));
+      } else {
+        List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
+        latestFilesMap = context.mapToPair(partitions, partitionPath -> {
+          // Scan all partitions files with this commit time
+          LOG.info("Collecting latest files in partition path " + partitionPath);
+          List<String> latestFiles = view.getLatestBaseFilesBeforeOrOn(partitionPath, instantTime)
+              .map(HoodieBaseFile::getFileName).collect(Collectors.toList());
+          return new ImmutablePair<>(partitionPath, latestFiles);
+        }, null);
+      }
+
       HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
       // Nothing to save in the savepoint
       table.getActiveTimeline().createNewInstant(
