@@ -62,13 +62,13 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getRecordKey(Row row) {
     tryInitRowAccessor(row.schema());
-    return combineCompositeRecordKey(rowAccessor.getRecordKeyParts(row));
+    return sparkRecordKeyGenerator.getRecordKey(row);
   }
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
     tryInitRowAccessor(schema);
-    return combineCompositeRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
+    return sparkRecordKeyGenerator.getRecordKey(internalRow, schema);
   }
 
   @Override

@@ -61,13 +61,13 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getRecordKey(Row row) {
     tryInitRowAccessor(row.schema());
-    return combineRecordKey(getRecordKeyFieldNames(), Arrays.asList(rowAccessor.getRecordKeyParts(row)));
+    return sparkRecordKeyGenerator.getRecordKey(row);
   }
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
     tryInitRowAccessor(schema);
-    return combineRecordKeyUnsafe(getRecordKeyFieldNames(), Arrays.asList(rowAccessor.getRecordKeyParts(internalRow)));
+    return sparkRecordKeyGenerator.getRecordKey(internalRow, schema);
   }
 
   @Override

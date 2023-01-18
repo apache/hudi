@@ -22,8 +22,8 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.function.Supplier;
 
-import static org.apache.hudi.keygen.BuiltinKeyGenerator.toUTF8String;
 import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
+import static org.apache.hudi.keygen.SparkRowUtils.toUTF8String;
 
 /**
  * @inheritDoc

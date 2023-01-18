@@ -70,31 +70,13 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getRecordKey(Row row) {
     tryInitRowAccessor(row.schema());
-
-    Object[] recordKeys = rowAccessor.getRecordKeyParts(row);
-    // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
-    //       record-key field
-    if (recordKeys[0] == null) {
-      return handleNullRecordKey(null);
-    } else {
-      return requireNonNullNonEmptyKey(recordKeys[0].toString());
-    }
+    return sparkRecordKeyGenerator.getRecordKey(row);
   }
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
     tryInitRowAccessor(schema);
-
-    Object[] recordKeyValues = rowAccessor.getRecordKeyParts(internalRow);
-    // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
-    //       record-key field
-    if (recordKeyValues[0] == null) {
-      return handleNullRecordKey(null);
-    } else if (recordKeyValues[0] instanceof UTF8String) {
-      return requireNonNullNonEmptyKey((UTF8String) recordKeyValues[0]);
-    } else {
-      return requireNonNullNonEmptyKey(UTF8String.fromString(recordKeyValues[0].toString()));
-    }
+    return sparkRecordKeyGenerator.getRecordKey(internalRow, schema);
   }
 
   @Override
