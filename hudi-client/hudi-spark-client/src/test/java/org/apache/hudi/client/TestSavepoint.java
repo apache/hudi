@@ -107,10 +107,7 @@ public class TestSavepoint extends HoodieClientTestBase {
         String partition = entry.getKey();
         assertTrue(savepointPartitionMetadataMap.containsKey(partition));
         assertEquals(
-            entry.getValue().stream().map(path -> {
-                  String[] parts = path.getPath().split("/");
-                  return parts[parts.length - 1];
-                })
+            entry.getValue().stream().map(path -> getFileNameFromPath(path.getPath()))
                 .sorted().collect(Collectors.toList()),
             savepointPartitionMetadataMap.get(partition).getSavepointDataFile()
                 .stream().sorted().collect(Collectors.toList())
@@ -146,5 +143,10 @@ public class TestSavepoint extends HoodieClientTestBase {
         .withMetadataConfig(
             HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
         .build();
+  }
+
+  private String getFileNameFromPath(String path) {
+    String[] parts = path.split("/");
+    return parts[parts.length - 1];
   }
 }
