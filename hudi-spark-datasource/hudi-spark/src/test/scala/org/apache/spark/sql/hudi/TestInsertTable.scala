@@ -231,7 +231,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
    withRecordType(Map(HoodieRecordType.SPARK ->
      // SparkMerger should use "HoodieSparkValidateDuplicateKeyRecordMerger"
      // with "hoodie.sql.insert.mode=strict"
-     Map(HoodieWriteConfig.MERGER_IMPLS.key ->
+     Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key ->
        classOf[HoodieSparkValidateDuplicateKeyRecordMerger].getName)))(withTempDir { tmp =>
      val tableName = generateTableName
      spark.sql(s"set hoodie.sql.insert.mode=strict")
