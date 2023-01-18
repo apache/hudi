@@ -93,6 +93,10 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     }
   }
 
+  /**
+   * Fetches records identified by the provided list of keys in case these are present in
+   * the delta-log blocks
+   */
   @SuppressWarnings("unchecked")
   public List<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys) {
     if (keys.isEmpty()) {
