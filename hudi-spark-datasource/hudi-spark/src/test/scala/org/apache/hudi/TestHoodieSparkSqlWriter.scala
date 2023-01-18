@@ -32,9 +32,8 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
-import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
-import org.apache.hudi.testutils.DataSourceTestUtils
+import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{expr, lit}
@@ -95,20 +94,17 @@ class TestHoodieSparkSqlWriter {
 
   /**
    * Utility method for initializing the spark context.
+   *
+   * TODO rebase this onto existing base class to avoid duplication
    */
   def initSparkContext(): Unit = {
-    val sparkConf = new SparkConf()
-    if (HoodieSparkUtils.gteqSpark3_2) {
-      sparkConf.set("spark.sql.catalog.spark_catalog",
-        "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
-    }
+    val sparkConf = getSparkConfForTest(getClass.getSimpleName)
+
     spark = SparkSession.builder()
-      .appName(hoodieFooTableName)
-      .master("local[2]")
       .withExtensions(new HoodieSparkSessionExtension)
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config(sparkConf)
       .getOrCreate()
+
     sc = spark.sparkContext
     sc.setLogLevel("ERROR")
     sqlContext = spark.sqlContext
