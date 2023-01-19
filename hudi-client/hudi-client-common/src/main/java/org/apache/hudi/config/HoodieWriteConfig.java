@@ -574,7 +574,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_ENABLE = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.detection.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.13.0")
       .withDocumentation("Whether to enable early conflict detection based on markers. "
           + "It eagerly detects writing conflict before create markers and fails fast if a "
