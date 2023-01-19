@@ -24,10 +24,12 @@ import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.log4j.Level
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.checkMessageContains
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
@@ -144,8 +146,11 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       spark.sql(sql)
     } catch {
-      case e: Throwable if e.getMessage.trim.contains(errorMsg.trim) => hasException = true
-      case f: Throwable => fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
+      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(getRootCause(e), errorMsg) =>
+        hasException = true
+
+      case f: Throwable =>
+        fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
     }
     assertResult(true)(hasException)
   }
@@ -218,4 +223,11 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       HoodieRecordType.AVRO
     }
   }
+}
+
+object HoodieSparkSqlTestBase {
+
+  private def checkMessageContains(e: Throwable, text: String): Boolean =
+    e.getMessage.trim.contains(text.trim)
+
 }
