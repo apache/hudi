@@ -19,6 +19,7 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.utils.LazyIterableIterator;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -28,6 +29,7 @@ import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -40,19 +42,20 @@ import java.util.function.Function;
  * @param <I> type of the tuple of {@code (HoodieFileGroupId, <record-key>)}. Note that this is
  *           parameterized as generic such that this code could be reused for Spark as well
  */
-public class HoodieBloomIndexCheckFunction<I> implements Function<Iterator<I>, Iterator<List<HoodieKeyLookupResult>>> {
+public class HoodieBloomIndexCheckFunction<I> 
+    implements Function<Iterator<I>, Iterator<List<HoodieKeyLookupResult>>>, Serializable {
 
   private final HoodieTable hoodieTable;
 
   private final HoodieWriteConfig config;
 
-  private final Function<I, HoodieFileGroupId> fileGroupIdExtractor;
-  private final Function<I, String> recordKeyExtractor;
+  private final SerializableFunction<I, HoodieFileGroupId> fileGroupIdExtractor;
+  private final SerializableFunction<I, String> recordKeyExtractor;
 
   public HoodieBloomIndexCheckFunction(HoodieTable hoodieTable,
                                        HoodieWriteConfig config,
-                                       Function<I, HoodieFileGroupId> fileGroupIdExtractor,
-                                       Function<I, String> recordKeyExtractor) {
+                                       SerializableFunction<I, HoodieFileGroupId> fileGroupIdExtractor,
+                                       SerializableFunction<I, String> recordKeyExtractor) {
     this.hoodieTable = hoodieTable;
     this.config = config;
     this.fileGroupIdExtractor = fileGroupIdExtractor;
