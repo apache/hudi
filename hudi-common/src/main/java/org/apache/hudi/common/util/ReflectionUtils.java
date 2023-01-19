@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 /**
@@ -46,6 +47,7 @@ public class ReflectionUtils {
   private static final Logger LOG = LogManager.getLogger(ReflectionUtils.class);
 
   private static final Map<String, Class<?>> CLAZZ_CACHE = new HashMap<>();
+  private static final Map<String, Method> METHOD_CACHE = new ConcurrentHashMap<>();
 
   public static Class<?> getClass(String clazzName) {
     synchronized (CLAZZ_CACHE) {
@@ -104,6 +106,28 @@ public class ReflectionUtils {
   public static Object loadClass(String clazz, Object... constructorArgs) {
     Class<?>[] constructorArgTypes = Arrays.stream(constructorArgs).map(Object::getClass).toArray(Class<?>[]::new);
     return loadClass(clazz, constructorArgTypes, constructorArgs);
+  }
+
+  /**
+   * Invoke static function.
+   */
+  public static Object invokeStaticFunction(String className,
+                                            String functionName,
+                                            List<Class<?>> argsClazzs,
+                                            Object... args) {
+    Class<?> clazz = getClass(className);
+    try {
+      String argsClassNames = argsClazzs.stream()
+          .map(Object::toString).reduce((v1, v2) -> v1 + "." + v2).orElse("");
+      String fullFunctionName = className + "." + functionName + "." + argsClassNames;
+      if (!METHOD_CACHE.containsKey(fullFunctionName)) {
+        Method method = clazz.getMethod(functionName, argsClazzs.toArray(new Class[0]));
+        METHOD_CACHE.put(fullFunctionName, method);
+      }
+      return METHOD_CACHE.get(fullFunctionName).invoke(null, args);
+    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   /**

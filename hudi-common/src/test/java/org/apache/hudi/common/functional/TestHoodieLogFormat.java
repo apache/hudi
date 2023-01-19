@@ -372,7 +372,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), HoodieRecordType.AVRO);
     assertTrue(reader.hasNext(), "We wrote a block, we should be able to read it");
     HoodieLogBlock nextBlock = reader.next();
     assertEquals(DEFAULT_DATA_BLOCK_TYPE, nextBlock.getBlockType(), "The next block should be a data block");
@@ -413,7 +413,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(),
-        true, true);
+        true, true, HoodieRecordType.AVRO);
     assertTrue(reader.hasNext(), "We wrote a block, we should be able to read it");
     HoodieLogBlock nextBlock = reader.next();
     assertEquals(DEFAULT_DATA_BLOCK_TYPE, nextBlock.getBlockType(), "The next block should be a data block");
@@ -499,7 +499,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), HoodieRecordType.AVRO);
     assertTrue(reader.hasNext(), "First block should be available");
     HoodieLogBlock nextBlock = reader.next();
     HoodieDataBlock dataBlockRead = (HoodieDataBlock) nextBlock;
@@ -582,7 +582,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), cdcSchema);
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), cdcSchema, HoodieRecordType.AVRO);
     assertTrue(reader.hasNext());
     HoodieLogBlock block = reader.next();
     HoodieDataBlock dataBlockRead = (HoodieDataBlock) block;
@@ -867,7 +867,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     logFile = addValidBlock("test-fileId1", "100", 10);
 
     // First round of reads - we should be able to read the first block and then EOF
-    Reader reader = HoodieLogFormat.newReader(fs, logFile, SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), HoodieRecordType.AVRO);
     assertTrue(reader.hasNext(), "First block should be available");
     reader.next();
     assertTrue(reader.hasNext(), "We should have corrupted block next");
@@ -898,7 +898,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     logFile = addValidBlock("test-fileId1", "100", 100);
 
     // Second round of reads - we should be able to read the first and last block
-    reader = HoodieLogFormat.newReader(fs, logFile, SchemaTestUtil.getSimpleSchema());
+    reader = HoodieLogFormat.newReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), HoodieRecordType.AVRO);
     assertTrue(reader.hasNext(), "First block should be available");
     reader.next();
     assertTrue(reader.hasNext(), "We should get the 1st corrupted block next");
@@ -929,7 +929,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     logFile = addValidBlock("test-fileId1", "100", 10);
 
     // First round of reads - we should be able to read the first block and then EOF
-    Reader reader = HoodieLogFormat.newReader(fs, logFile, SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), HoodieRecordType.AVRO);
     assertTrue(reader.hasNext(), "First block should be available");
     reader.next();
     assertTrue(reader.hasNext(), "We should have corrupted block next");
@@ -998,7 +998,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     // Read data and corrupt block
-    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), HoodieRecordType.AVRO);
     assertTrue(reader.hasNext(), "First block should be available");
     reader.next();
     assertTrue(reader.hasNext(), "We should have corrupted block next");
@@ -2289,7 +2289,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
     HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), fs.getFileStatus(writer.getLogFile().getPath()).getLen());
-    try (HoodieLogFileReader reader = new HoodieLogFileReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), BUFFER_SIZE, readBlocksLazily, true)) {
+    try (HoodieLogFileReader reader = new HoodieLogFileReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), BUFFER_SIZE, readBlocksLazily, true, HoodieRecordType.AVRO)) {
 
       assertTrue(reader.hasPrev(), "Last block should be available");
       HoodieLogBlock prevBlock = reader.prev();
@@ -2371,7 +2371,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), fs.getFileStatus(writer.getLogFile().getPath()).getLen());
 
     try (HoodieLogFileReader reader =
-        new HoodieLogFileReader(fs, logFile, schema, BUFFER_SIZE, readBlocksLazily, true)) {
+        new HoodieLogFileReader(fs, logFile, schema, BUFFER_SIZE, readBlocksLazily, true, HoodieRecordType.AVRO)) {
 
       assertTrue(reader.hasPrev(), "Last block should be available");
       HoodieLogBlock block = reader.prev();
@@ -2423,7 +2423,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), fs.getFileStatus(writer.getLogFile().getPath()).getLen());
     try (HoodieLogFileReader reader =
-             new HoodieLogFileReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), BUFFER_SIZE, readBlocksLazily, true)) {
+             new HoodieLogFileReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), BUFFER_SIZE, readBlocksLazily, true, HoodieRecordType.AVRO)) {
 
       assertTrue(reader.hasPrev(), "Third block should be available");
       reader.moveToPrev();
@@ -2459,7 +2459,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     byte[] content = dataBlock.getBytes(schema);
     assertTrue(content.length > 0);
 
-    HoodieLogBlock logBlock = HoodieAvroDataBlock.getBlock(content, schema);
+    HoodieLogBlock logBlock = HoodieAvroDataBlock.getBlock(content, schema, HoodieRecordType.AVRO);
     assertEquals(HoodieLogBlockType.AVRO_DATA_BLOCK, logBlock.getBlockType());
     List<IndexedRecord> readRecords = getRecords((HoodieAvroDataBlock) logBlock);
     assertEquals(readRecords.size(), recordsCopy.size());
@@ -2468,7 +2468,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     }
 
     // Reader schema is optional if it is same as write schema
-    logBlock = HoodieAvroDataBlock.getBlock(content, null);
+    logBlock = HoodieAvroDataBlock.getBlock(content, null, HoodieRecordType.AVRO);
     assertEquals(HoodieLogBlockType.AVRO_DATA_BLOCK, logBlock.getBlockType());
     readRecords = getRecords((HoodieAvroDataBlock) logBlock);
     assertEquals(readRecords.size(), recordsCopy.size());
@@ -2513,7 +2513,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     List<GenericRecord> projectedRecords = HoodieAvroUtils.rewriteRecords(records, projectedSchema);
 
-    try (Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), projectedSchema, true, false)) {
+    try (Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), projectedSchema, true, false, HoodieRecordType.AVRO)) {
       assertTrue(reader.hasNext(), "First block should be available");
 
       HoodieLogBlock nextBlock = reader.next();

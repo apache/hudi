@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.SchemeAwareFSDataInputStream;
 import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -79,6 +80,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private final Schema readerSchema;
   private InternalSchema internalSchema;
   private final String keyField;
+  private final HoodieRecordType recordType;
   private boolean readBlockLazily;
   private long reverseLogFilePosition;
   private long lastReverseLogFilePosition;
@@ -88,25 +90,25 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private transient Thread shutdownThread = null;
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
-                             boolean readBlockLazily) throws IOException {
-    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, false);
+                             boolean readBlockLazily, HoodieRecordType recordType) throws IOException {
+    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, false, recordType);
   }
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
-                             boolean readBlockLazily, boolean reverseReader) throws IOException {
+                             boolean readBlockLazily, boolean reverseReader, HoodieRecordType recordType) throws IOException {
     this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, false,
-        HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        HoodieRecord.RECORD_KEY_METADATA_FIELD, recordType);
   }
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader, boolean enableRecordLookups,
-                             String keyField) throws IOException {
-    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, enableRecordLookups, keyField, InternalSchema.getEmptyInternalSchema());
+                             String keyField, HoodieRecordType recordType) throws IOException {
+    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, enableRecordLookups, keyField, InternalSchema.getEmptyInternalSchema(), recordType);
   }
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader, boolean enableRecordLookups,
-                             String keyField, InternalSchema internalSchema) throws IOException {
+                             String keyField, InternalSchema internalSchema, HoodieRecordType recordType) throws IOException {
     this.hadoopConf = fs.getConf();
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
@@ -116,6 +118,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;
     this.reverseReader = reverseReader;
+    this.recordType = recordType;
     this.enableRecordLookups = enableRecordLookups;
     this.keyField = keyField;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
@@ -209,7 +212,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     switch (Objects.requireNonNull(blockType)) {
       case AVRO_DATA_BLOCK:
         if (nextBlockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
-          return HoodieAvroDataBlock.getBlock(content.get(), readerSchema, internalSchema);
+          return HoodieAvroDataBlock.getBlock(content.get(), readerSchema, internalSchema, this.recordType);
         } else {
           return new HoodieAvroDataBlock(inputStream, content, readBlockLazily, logBlockContentLoc,
               getTargetReaderSchemaForBlock(), header, footer, keyField);

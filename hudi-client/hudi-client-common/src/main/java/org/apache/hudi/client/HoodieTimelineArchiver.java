@@ -342,7 +342,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       for (FileStatus fs : compactCandidate) {
         // Read the archived file
         try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
-            new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
+            new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema(), HoodieRecordType.AVRO)) {
           // Read the avro blocks
           while (reader.hasNext()) {
             HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();

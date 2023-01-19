@@ -97,7 +97,15 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     )
 
   @ParameterizedTest
-  @CsvSource(Array("AVRO, AVRO, avro", "AVRO, SPARK, parquet", "SPARK, AVRO, parquet", "SPARK, SPARK, parquet"))
+  @CsvSource(Array(
+    "AVRO, AVRO, avro",
+    "AVRO, SPARK, avro",
+    "SPARK, AVRO, avro",
+    "SPARK, SPARK, avro",
+    "AVRO, AVRO, parquet",
+    "AVRO, SPARK, parquet",
+    "SPARK, AVRO, parquet",
+    "SPARK, SPARK, parquet"))
   def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String) {
     var (_, readOpts) = getWriterReaderOpts(readType)
     var (writeOpts, _) = getWriterReaderOpts(writeType)

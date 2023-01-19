@@ -24,12 +24,14 @@ import org.apache.hudi.HoodieConversionUtils._
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord, HoodieRecordMerger, HoodieRecordPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCInferCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator
+import org.apache.hudi.common.util.HoodieRecordUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -458,7 +460,9 @@ class HoodieCDCRDD(
             val cdcLogFiles = currentChangeFile.getCdcFiles.asScala.map { cdcFile =>
               new HoodieLogFile(fs.getFileStatus(new Path(basePath, cdcFile)))
             }.toArray
-            cdcLogRecordIterator = new HoodieCDCLogRecordIterator(fs, cdcLogFiles, cdcAvroSchema)
+            val recordMerger = HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK,
+              tableState.recordMergerImpls.asJava, tableState.recordMergerStrategy)
+            cdcLogRecordIterator = new HoodieCDCLogRecordIterator(fs, cdcLogFiles, cdcAvroSchema, recordMerger.getRecordType)
           case REPLACE_COMMIT =>
             if (currentChangeFile.getBeforeFileSlice.isPresent) {
               loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)

@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
@@ -340,7 +341,8 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           throw new HoodieIOException("Fail to call getFileStatus", e);
         }
       }).toArray(HoodieLogFile[]::new);
-      this.cdcItr = new HoodieCDCLogRecordIterator(fs, cdcLogFiles, cdcSchema);
+      // TODO support HoodieRecordType.FLINK
+      this.cdcItr = new HoodieCDCLogRecordIterator(fs, cdcLogFiles, cdcSchema, HoodieRecord.HoodieRecordType.AVRO);
     }
 
     private int[] getRequiredPos(String tableSchema, Schema required) {

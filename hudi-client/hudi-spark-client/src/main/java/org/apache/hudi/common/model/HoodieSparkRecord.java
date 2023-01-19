@@ -301,7 +301,12 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
 
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties prop) throws IOException {
-    throw new UnsupportedOperationException();
+    // Used in HoodieAvroDataBlock
+    if (isDelete(recordSchema, prop)) {
+      return Option.empty();
+    } else {
+      return Option.of(new HoodieAvroIndexedRecord(HoodieSparkRecordUtils.sparkRecord2Avro(recordSchema, this)));
+    }
   }
 
   @Override

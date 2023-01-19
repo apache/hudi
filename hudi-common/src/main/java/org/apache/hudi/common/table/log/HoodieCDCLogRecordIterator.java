@@ -45,16 +45,22 @@ public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecor
 
   private final Iterator<HoodieLogFile> cdcLogFileIter;
 
+  private final HoodieRecordType recordType;
+
   private HoodieLogFormat.Reader reader;
 
   private ClosableIterator<IndexedRecord> itr;
 
   private IndexedRecord record;
 
-  public HoodieCDCLogRecordIterator(FileSystem fs, HoodieLogFile[] cdcLogFiles, Schema cdcSchema) {
+  public HoodieCDCLogRecordIterator(FileSystem fs,
+                                    HoodieLogFile[] cdcLogFiles,
+                                    Schema cdcSchema,
+                                    HoodieRecordType recordType) {
     this.fs = fs;
     this.cdcSchema = cdcSchema;
     this.cdcLogFileIter = Arrays.stream(cdcLogFiles).iterator();
+    this.recordType = recordType;
   }
 
   @Override
@@ -83,7 +89,7 @@ public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecor
       closeReader();
       if (cdcLogFileIter.hasNext()) {
         reader = new HoodieLogFileReader(fs, cdcLogFileIter.next(), cdcSchema,
-            HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false);
+            HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false, recordType);
         return reader.hasNext();
       }
       return false;
