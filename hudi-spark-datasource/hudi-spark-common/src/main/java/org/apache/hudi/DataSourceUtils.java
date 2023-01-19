@@ -177,7 +177,7 @@ public class DataSourceUtils {
       builder = builder.withSchema(schemaStr);
     }
 
-    return builder.forTable(tblName)
+    HoodieWriteConfig writeConfig = builder.forTable(tblName)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(inlineCompact).build())
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
@@ -186,6 +186,9 @@ public class DataSourceUtils {
             .build())
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();
+    LOG.info("$$$ IndexType " + writeConfig.getIndexType());
+    LOG.info("$$$ BucketIndexEngineType " + writeConfig.getBucketIndexEngineType());
+    return writeConfig;
   }
 
   public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
