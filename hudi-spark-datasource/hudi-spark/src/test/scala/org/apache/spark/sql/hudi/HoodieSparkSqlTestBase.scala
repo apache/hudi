@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
+import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 import org.apache.log4j.Level
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
@@ -54,27 +55,15 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   DateTimeZone.setDefault(DateTimeZone.UTC)
   TimeZone.setDefault(DateTimeUtils.getTimeZone("UTC"))
   protected lazy val spark: SparkSession = SparkSession.builder()
-    .master("local[1]")
-    .appName("hoodie sql test")
-    .withExtensions(new HoodieSparkSessionExtension)
-    .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-    .config("hoodie.insert.shuffle.parallelism", "4")
-    .config("hoodie.upsert.shuffle.parallelism", "4")
-    .config("hoodie.delete.shuffle.parallelism", "4")
+    .config(sparkConf())
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
     .config("spark.sql.session.timeZone", "UTC")
-    .config(sparkConf())
     .getOrCreate()
 
   private var tableId = 0
 
   def sparkConf(): SparkConf = {
-    val sparkConf = new SparkConf()
-    if (HoodieSparkUtils.gteqSpark3_2) {
-      sparkConf.set("spark.sql.catalog.spark_catalog",
-        "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
-    }
-    sparkConf
+    getSparkConfForTest("Hoodie SQL Test")
   }
 
   protected def withTempDir(f: File => Unit): Unit = {
