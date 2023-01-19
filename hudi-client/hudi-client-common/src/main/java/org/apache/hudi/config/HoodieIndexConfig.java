@@ -250,7 +250,7 @@ public class HoodieIndexConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> BUCKET_INDEX_ENGINE_TYPE = ConfigProperty
       .key("hoodie.index.bucket.engine")
-      .defaultValue("SIMPLE")
+      .defaultValue("CONSISTENT_HASHING")
       .sinceVersion("0.11.0")
       .withDocumentation("Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket."
           + "Possible options are [SIMPLE | CONSISTENT_HASHING]."
@@ -659,7 +659,7 @@ public class HoodieIndexConfig extends HoodieConfig {
     private String getDefaultIndexType(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return HoodieIndex.IndexType.SIMPLE.name();
+          return BUCKET.name();
         case FLINK:
         case JAVA:
           return HoodieIndex.IndexType.INMEMORY.name();
