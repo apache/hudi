@@ -591,11 +591,11 @@ public class HoodieMetadataTableValidator implements Serializable {
     if (!baseDataFilesForCleaning.isEmpty()) {
       List<FileSlice> fileSlicesFromMeta = metadataTableBasedContext
           .getSortedAllFileGroupList(partitionPath).stream()
-          .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
+          .flatMap(HoodieFileGroup::getAllCommittedFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
       List<FileSlice> fileSlicesFromFS = fsBasedContext
           .getSortedAllFileGroupList(partitionPath).stream()
-          .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
+          .flatMap(HoodieFileGroup::getAllCommittedFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
 
       allFileSlicesFromMeta = filterFileSliceBasedOnInflightCleaning(fileSlicesFromMeta, baseDataFilesForCleaning);
@@ -603,11 +603,11 @@ public class HoodieMetadataTableValidator implements Serializable {
     } else {
       allFileSlicesFromMeta = metadataTableBasedContext
           .getSortedAllFileGroupList(partitionPath).stream()
-          .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
+          .flatMap(HoodieFileGroup::getAllCommittedFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
       allFileSlicesFromFS = fsBasedContext
           .getSortedAllFileGroupList(partitionPath).stream()
-          .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
+          .flatMap(HoodieFileGroup::getAllCommittedFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
     }
 

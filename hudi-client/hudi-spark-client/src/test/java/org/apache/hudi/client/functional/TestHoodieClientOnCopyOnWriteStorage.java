@@ -31,6 +31,7 @@ import org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecuti
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -1168,7 +1169,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // 2. generate clustering plan for fileGroupIds1 file groups
     String commitTime2 = "002";
     List<List<FileSlice>> firstInsertFileSlicesList = table.getFileSystemView().getAllFileGroups(testPartitionPath)
-        .map(fileGroup -> fileGroup.getAllFileSlices().collect(Collectors.toList())).collect(Collectors.toList());
+        .map(fileGroup -> fileGroup.getAllCommittedFileSlices().collect(Collectors.toList())).collect(Collectors.toList());
     List<FileSlice>[] fileSlices = (List<FileSlice>[])firstInsertFileSlicesList.toArray(new List[firstInsertFileSlicesList.size()]);
     createRequestedReplaceInstant(this.metaClient, commitTime2, fileSlices);
 
@@ -2819,4 +2820,21 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   public static  String CLUSTERING_FAILURE = "CLUSTERING FAILURE";
+
+  @Test
+  public void testFailedFirstCommit() {
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
+    HoodieWriteConfig cfg = cfgBuilder.build();
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    String firstInstantTime = "0000";
+    client.startCommitWithTime(firstInstantTime);
+    int numRecords = 200;
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(dataGen.generateInserts(firstInstantTime, numRecords), 1);
+    JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, firstInstantTime);
+    assertTrue(client.commit(firstInstantTime, result), "Commit should succeed");
+    assertTrue(testTable.commitExists(firstInstantTime),
+        "After explicit commit, commit file should be created");
+    Path path = testTable.getCommitFilePath(firstInstantTime);
+    System.out.println(path);
+  }
 }

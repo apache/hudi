@@ -283,7 +283,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
 
     // Ensure same number of log-files before and after renaming per fileId
     Map<String, Long> fileIdToCountsAfterRenaming =
-        newFsView.getAllFileGroups(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0]).flatMap(HoodieFileGroup::getAllFileSlices)
+        newFsView.getAllFileGroups(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0]).flatMap(HoodieFileGroup::getAllCommittedFileSlices)
             .filter(fs -> fs.getBaseInstantTime().equals(ingestionInstant))
             .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().count()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
@@ -345,7 +345,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
 
     // Ensure same number of log-files before and after renaming per fileId
     Map<String, Long> fileIdToCountsAfterRenaming =
-        newFsView.getAllFileGroups(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0]).flatMap(HoodieFileGroup::getAllFileSlices)
+        newFsView.getAllFileGroups(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0]).flatMap(HoodieFileGroup::getAllCommittedFileSlices)
             .filter(fs -> fs.getBaseInstantTime().equals(ingestionInstant))
             .filter(fs -> fs.getFileId().equals(op.getFileId()))
             .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().count()))

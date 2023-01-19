@@ -386,7 +386,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public boolean containsOrBeforeTimelineStarts(String instant) {
-    return getInstantsAsStream().anyMatch(s -> s.getTimestamp().equals(instant)) || isBeforeTimelineStarts(instant);
+    if (containsInstant(instant)) {
+      return true;
+    } else if (filterInflightsAndRequested().containsInstant(instant)) {
+      return false;
+    } else {
+      return isBeforeTimelineStarts(instant);
+    }
   }
 
   @Override

@@ -44,16 +44,16 @@ public class TestHoodieFileGroup {
     Stream<String> inflight = Arrays.asList("002").stream();
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(completed, inflight);
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data",
-        activeTimeline.getCommitsTimeline().filterCompletedInstants());
+        activeTimeline.getCommitsTimeline().filterCompletedInstants(), activeTimeline.getWriteTimeline());
     for (int i = 0; i < 3; i++) {
       HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i);
       fileGroup.addBaseFile(baseFile);
     }
-    assertEquals(2, fileGroup.getAllFileSlices().count());
-    assertTrue(!fileGroup.getAllFileSlices().anyMatch(s -> s.getBaseInstantTime().equals("002")));
+    assertEquals(2, fileGroup.getAllCommittedFileSlices().count());
+    assertTrue(!fileGroup.getAllCommittedFileSlices().anyMatch(s -> s.getBaseInstantTime().equals("002")));
     assertEquals(3, fileGroup.getAllFileSlicesIncludingInflight().count());
-    assertTrue(fileGroup.getLatestFileSlice().get().getBaseInstantTime().equals("001"));
-    assertTrue((new HoodieFileGroup(fileGroup)).getLatestFileSlice().get().getBaseInstantTime().equals("001"));
+    assertTrue(fileGroup.getLatestCommittedFileSlice().get().getBaseInstantTime().equals("001"));
+    assertTrue((new HoodieFileGroup(fileGroup)).getLatestCommittedFileSlice().get().getBaseInstantTime().equals("001"));
   }
 
   @Test
@@ -65,15 +65,15 @@ public class TestHoodieFileGroup {
         new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
         new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05") // this can be DELTA_COMMIT/REPLACE_COMMIT as well
     ).collect(Collectors.toList()));
-    HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
+    HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants(), activeTimeline.getWriteTimeline());
     for (int i = 0; i < 7; i++) {
       HoodieBaseFile baseFile = new HoodieBaseFile("data_1_0" + i);
       fileGroup.addBaseFile(baseFile);
     }
-    List<FileSlice> allFileSlices = fileGroup.getAllFileSlices().collect(Collectors.toList());
+    List<FileSlice> allFileSlices = fileGroup.getAllCommittedFileSlices().collect(Collectors.toList());
     assertEquals(6, allFileSlices.size());
     assertTrue(!allFileSlices.stream().anyMatch(s -> s.getBaseInstantTime().equals("06")));
     assertEquals(7, fileGroup.getAllFileSlicesIncludingInflight().count());
-    assertTrue(fileGroup.getLatestFileSlice().get().getBaseInstantTime().equals("05"));
+    assertTrue(fileGroup.getLatestCommittedFileSlice().get().getBaseInstantTime().equals("05"));
   }
 }

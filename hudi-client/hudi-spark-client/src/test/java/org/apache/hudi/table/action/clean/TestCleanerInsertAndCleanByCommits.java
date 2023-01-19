@@ -242,7 +242,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
       List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
       for (HoodieFileGroup fileGroup : fileGroups) {
         Set<String> commitTimes = new HashSet<>();
-        fileGroup.getAllBaseFiles().forEach(value -> {
+        fileGroup.getAllCommittedBaseFiles().forEach(value -> {
           LOG.debug("Data File - " + value);
           commitTimes.add(value.getCommitTime());
         });
