@@ -1,0 +1,204 @@
+package org.apache.hudi.client.common;
+
+import org.apache.hudi.client.HoodieJavaWriteClient;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
+import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieLockConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
+
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.stream.IntStream;
+
+import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP_KEY;
+
+public class TestMultipleHoodieJavaWriteClient {
+  private static final Logger LOGGER =
+      LoggerFactory.getLogger(TestMultipleHoodieJavaWriteClient.class.getName());
+
+  @TempDir
+  protected java.nio.file.Path tablePath;
+
+  @Test
+  void testOccWithMultipleWriters() throws IOException {
+
+    Configuration hadoopConf = new Configuration();
+    final String tableType = HoodieTableType.COPY_ON_WRITE.name();
+    final String tableName = "hudiTestTable";
+
+    HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(tableType)
+        .setTableName(tableName)
+        .setPayloadClassName(HoodieAvroPayload.class.getName())
+        .setRecordKeyFields("ph")
+        .setPartitionFields("id,name")
+        .setKeyGeneratorClassProp(HoodieWriteConfig.KEYGENERATOR_TYPE.key())
+        .initTable(hadoopConf, tablePath.toAbsolutePath().toString());
+
+    final Schema schema =
+        SchemaBuilder.record("user")
+            .doc("user")
+            .namespace("example.avro")
+            .fields()
+            .name("id")
+            .doc("Unique identifier")
+            .type()
+            .intType()
+            .noDefault()
+            .name("name")
+            .doc("Nome")
+            .type()
+            .nullable()
+            .stringType()
+            .stringDefault("Unknown")
+            .name("favorite_number")
+            .doc("number")
+            .type()
+            .nullable()
+            .intType()
+            .intDefault(0)
+            .name("favorite_color")
+            .doc("color")
+            .type()
+            .nullable()
+            .stringType()
+            .stringDefault("Unknown")
+            .name("ph")
+            .doc("mobile")
+            .type()
+            .nullable()
+            .intType()
+            .noDefault()
+            .name("entryTs")
+            .doc("tiebreaker on duplicates")
+            .type()
+            .nullable()
+            .longType()
+            .noDefault()
+            .endRecord();
+
+    // The below means we create 1000 records with keys ranging from integer values 0-99 to
+    // mimic contention. i.e: Each key will be repeated 10 times.
+    int recordCountToProduce = 20;
+    int range = 10;
+
+    ConcurrentLinkedQueue<HoodieAvroRecord<HoodieAvroPayload>> hoodieAvroRecords = new ConcurrentLinkedQueue<>();
+    IntStream intStream = IntStream.range(0, recordCountToProduce);
+    intStream
+        .parallel()
+        .forEach(
+            i -> {
+              try {
+                final GenericRecord user = new GenericData.Record(schema);
+                user.put("id", i % range);
+                user.put("name", "test");
+                HoodieAvroPayload record = new HoodieAvroPayload(user, 0);
+                final HoodieAvroRecord<HoodieAvroPayload> hoodieAvroRecord =
+                    new HoodieAvroRecord<>(
+                        new HoodieKey(user.get("id").toString(), createPartitionPath(user)),
+                        record);
+                hoodieAvroRecords.add(hoodieAvroRecord);
+              } catch (Exception e) {
+                throw new RuntimeException(e);
+              }
+            });
+
+
+    Properties properties = new Properties();
+    properties.setProperty(ZK_CONNECT_URL_PROP_KEY, "localhost");
+
+    HoodieWriteConfig cfg =
+        HoodieWriteConfig.newBuilder()
+            .withEngineType(EngineType.JAVA)
+            .withPath(tablePath.toAbsolutePath().toString())
+            .withSchema(schema.toString())
+            .forTable(tableName)
+            .withIndexConfig(
+                HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+            .withAutoCommit(false)
+            .withLockConfig(
+                HoodieLockConfig.newBuilder()
+                    .withLockProvider(FileSystemBasedLockProvider.class)
+                    .withClientNumRetries(10000)
+                    .withClientRetryWaitTimeInMillis(10000L)
+                    .withNumRetries(10000)
+                    .withClientRetryWaitTimeInMillis(10000L)
+                    .build())
+            .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+            .withCleanConfig(HoodieCleanConfig.newBuilder()
+                .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+                .build())
+            .build();
+
+    BlockingQueue<HoodieJavaWriteClient> writerQueue = new LinkedBlockingQueue<>();
+
+    // Number of writers to mock a distributed setup
+    int numHudiWriteClients = 3;
+    IntStream.range(0, numHudiWriteClients).forEach(i -> {
+      HoodieJavaWriteClient writer =
+          new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(hadoopConf), cfg);
+      try {
+        writerQueue.put(writer);
+      } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    });
+
+    hoodieAvroRecords.stream()
+        .parallel()
+        .forEach(
+            record -> {
+              LOGGER.info("Inserting record = {}", record);
+              HoodieJavaWriteClient writer;
+              LOGGER.info("Entering while loop");
+              try {
+                writer = writerQueue.take();
+              } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+              }
+              String startCommitTime = writer.startCommit();
+              List<WriteStatus> s = writer.upsert(Collections.singletonList(record), startCommitTime);
+
+              writer.commit(startCommitTime, s);
+              LOGGER.info("Completed commit");
+              synchronized (writerQueue) {
+                try {
+                  writerQueue.put(writer);
+                } catch (InterruptedException e) {
+                  throw new RuntimeException(e);
+                }
+              }
+            }
+      );
+  }
+
+  private String createPartitionPath(final GenericRecord user1) {
+    return user1.get("id").toString() + "/" + user1.get("name");
+  }
+}
