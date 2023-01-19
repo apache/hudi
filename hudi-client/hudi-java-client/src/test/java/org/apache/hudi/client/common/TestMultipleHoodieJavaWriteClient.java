@@ -30,13 +30,10 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.IntStream;
-
-import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP_KEY;
 
 public class TestMultipleHoodieJavaWriteClient {
   private static final Logger LOGGER =
@@ -103,8 +100,8 @@ public class TestMultipleHoodieJavaWriteClient {
             .noDefault()
             .endRecord();
 
-    // The below means we create 1000 records with keys ranging from integer values 0-99 to
-    // mimic contention. i.e: Each key will be repeated 10 times.
+    // The below means we create 20 records with keys ranging from integer values 0-10 to
+    // mimic contention. i.e: Each key will be repeated 2 times.
     int recordCountToProduce = 20;
     int range = 10;
 
@@ -129,9 +126,6 @@ public class TestMultipleHoodieJavaWriteClient {
               }
             });
 
-
-    Properties properties = new Properties();
-    properties.setProperty(ZK_CONNECT_URL_PROP_KEY, "localhost");
 
     HoodieWriteConfig cfg =
         HoodieWriteConfig.newBuilder()
