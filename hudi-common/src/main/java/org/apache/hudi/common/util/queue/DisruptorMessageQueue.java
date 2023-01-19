@@ -43,7 +43,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   private final RingBuffer<HoodieDisruptorEvent> ringBuffer;
 
   private boolean isShutdown = false;
-  private boolean isStart = false;
+  private boolean isStarted = false;
 
   public DisruptorMessageQueue(Option<Integer> bufferSize, Function<I, O> transformFunction, Option<String> waitStrategyName, int totalProducers, Runnable preExecuteRunnable) {
     WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyName);
@@ -61,7 +61,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
   @Override
   public void insertRecord(I value) throws Exception {
-    if (!isStart) {
+    if (!isStarted) {
       throw new HoodieException("Can't insert into the queue since the queue is not started yet");
     }
 
@@ -97,7 +97,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     synchronized (this) {
       if (!isShutdown) {
         isShutdown = true;
-        isStart = false;
+        isStarted = false;
         queue.shutdown();
       }
     }
@@ -111,9 +111,9 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
   protected void start() {
     synchronized (this) {
-      if (!isStart) {
+      if (!isStarted) {
         queue.start();
-        isStart = true;
+        isStarted = true;
       }
     }
   }
