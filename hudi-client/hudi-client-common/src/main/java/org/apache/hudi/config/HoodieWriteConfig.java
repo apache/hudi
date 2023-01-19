@@ -1838,7 +1838,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
-    return Option.ofNullable(getStringOrDefault(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT))
+    return Option.ofNullable(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT))
         .map(HoodieLogBlock.HoodieLogBlockType::fromId);
   }
 

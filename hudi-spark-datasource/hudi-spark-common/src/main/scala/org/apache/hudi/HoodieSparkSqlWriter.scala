@@ -47,6 +47,7 @@ import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
+import org.apache.hudi.io.HoodieAppendHandle
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{SparkKeyGeneratorInterface, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metrics.Metrics
@@ -329,7 +330,8 @@ object HoodieSparkSqlWriter {
               DataSourceUtils.createHoodieClient(jsc, dataFileSchemaStr, path, tblName, mapAsJavaMap(finalOpts))
             }.asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
             val writeConfig = client.getConfig
-            if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == HoodieTableType.MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
+            if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == HoodieTableType.MERGE_ON_READ
+              && HoodieAppendHandle.pickLogDataBlockFormat(writeConfig, HoodieFileFormat.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT))) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
               throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
             }
             // Convert to RDD[HoodieRecord]
