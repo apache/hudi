@@ -57,6 +57,9 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   protected lazy val spark: SparkSession = SparkSession.builder()
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
     .config("spark.sql.session.timeZone", "UTC")
+    .config("hoodie.insert.shuffle.parallelism", "4")
+    .config("hoodie.upsert.shuffle.parallelism", "4")
+    .config("hoodie.delete.shuffle.parallelism", "4")
     .config(sparkConf())
     .getOrCreate()
 
