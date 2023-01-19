@@ -358,7 +358,7 @@ public class FSUtils {
    * Get the file extension from the log file.
    */
   public static String getFileExtensionFromLog(Path logPath) {
-    Matcher matcher =  LOG_FILE_PATTERN.matcher(logPath.getName());
+    Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(logPath, "LogFile");
     }
