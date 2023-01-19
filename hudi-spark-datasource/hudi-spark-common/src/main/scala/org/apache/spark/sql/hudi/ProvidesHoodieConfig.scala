@@ -123,8 +123,7 @@ trait ProvidesHoodieConfig extends Logging {
       .getOrElse(classOf[ComplexKeyGenerator].getCanonicalName)
 
     val enableBulkInsert = combinedOpts.getOrElse(DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key,
-      DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.defaultValue()).toBoolean ||
-      combinedOpts.get(DataSourceWriteOptions.OPERATION.key).exists(_.equalsIgnoreCase(WriteOperationType.BULK_INSERT.value))
+      DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.defaultValue()).toBoolean
     val dropDuplicate = sparkSession.conf
       .getOption(INSERT_DROP_DUPS.key).getOrElse(INSERT_DROP_DUPS.defaultValue).toBoolean
 
@@ -133,7 +132,11 @@ trait ProvidesHoodieConfig extends Logging {
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
     val hasPrecombineColumn = hoodieCatalogTable.preCombineKey.nonEmpty
-    val operation =
+
+    // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
+    //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
+    val operationOverride = combinedOpts.get(DataSourceWriteOptions.OPERATION.key)
+    val operation = operationOverride.getOrElse {
       (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
         case (true, _, _, _, false, _) =>
           throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
@@ -155,6 +158,7 @@ trait ProvidesHoodieConfig extends Logging {
         // for the rest case, use the insert operation
         case _ => INSERT_OPERATION_OPT_VAL
       }
+    }
 
     val payloadClassName = if (operation == UPSERT_OPERATION_OPT_VAL &&
       tableType == COW_TABLE_TYPE_OPT_VAL && insertMode == InsertMode.STRICT) {
@@ -184,7 +188,6 @@ trait ProvidesHoodieConfig extends Logging {
         PRECOMBINE_FIELD.key -> preCombineField,
         PARTITIONPATH_FIELD.key -> partitionFieldsStr,
         PAYLOAD_CLASS_NAME.key -> payloadClassName,
-        ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
         HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFieldsStr,
         HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
