@@ -93,10 +93,7 @@ case class CreateHoodieTableAsSelectCommand(
       hoodieCatalogTable.initHoodieTable()
 
       val tableProperties = hoodieCatalogTable.catalogProperties
-      // NOTE: Users might be specifying write-configuration (inadvertently) as options or table properties
-      //       in CTAS, therefore we need to make sure that these are appropriately propagated to the
-      //       write operation
-      val options = tableProperties ++ Map(
+      val options = Map(
         HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE.key -> (table.tableType == CatalogTableType.MANAGED).toString,
         HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES.key -> ConfigUtils.configToString(tableProperties.asJava),
         HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES.key -> ConfigUtils.configToString(updatedTable.properties.asJava),
