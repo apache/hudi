@@ -51,7 +51,7 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
 
       // NOTE: We should only push-down the predicates [[HoodieFileIndex]], which we didn't
       //       prune on before
-      if (partitionPruningFilters.nonEmpty && !fileIndex.prunedFor(partitionPruningFilters)) {
+      if (!fileIndex.listedFor(partitionPruningFilters)) {
         // [[HudiFileIndex]] is a caching one, therefore we don't need to reconstruct new relation,
         // instead we simply just refresh the index and update the stats
         fileIndex.listFiles(partitionPruningFilters, Seq())
