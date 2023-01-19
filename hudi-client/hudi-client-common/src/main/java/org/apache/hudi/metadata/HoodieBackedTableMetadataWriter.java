@@ -235,10 +235,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param writeConfig {@code HoodieWriteConfig} of the main dataset writer
    */
   private HoodieWriteConfig createMetadataWriteConfig(HoodieWriteConfig writeConfig) {
-    int parallelism = writeConfig.getMetadataInsertParallelism();
-
-    int minCommitsToKeep = Math.max(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMinCommitsToKeep());
-    int maxCommitsToKeep = Math.max(writeConfig.getMetadataMaxCommitsToKeep(), writeConfig.getMaxCommitsToKeep());
+    int parallelism = HoodieMetadataConfig.INSERT_PARALLELISM_VALUE.defaultValue();
 
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
@@ -262,16 +259,16 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .forTable(tableName)
         // we will trigger cleaning manually, to control the instant times
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withAsyncClean(writeConfig.isMetadataAsyncClean())
+            .withAsyncClean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE.defaultValue())
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-            .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
+            .retainCommits(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED.defaultValue())
             .build())
         // we will trigger archive manually, to ensure only regular writer invokes it
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
-            .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep)
+            .archiveCommitsWith(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP.defaultValue(), HoodieMetadataConfig.MAX_COMMITS_TO_KEEP.defaultValue())
             .withAutoArchive(false)
             .build())
         // we will trigger compaction manually, to control the instant times
@@ -289,7 +286,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withFinalizeWriteParallelism(parallelism)
         .withAllowMultiWriteOnSameInstant(true)
         .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-        .withPopulateMetaFields(dataWriteConfig.getMetadataConfig().populateMetaFields());
+        .withPopulateMetaFields(HoodieMetadataConfig.POPULATE_META_FIELDS.defaultValue());
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();

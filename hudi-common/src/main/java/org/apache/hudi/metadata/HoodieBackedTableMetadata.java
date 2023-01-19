@@ -539,7 +539,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private boolean isFullScanAllowedForPartition(String partitionName) {
     switch (partitionName) {
       case PARTITION_NAME_FILES:
-        return metadataConfig.allowFullScan();
+        return HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.defaultValue();
 
       case PARTITION_NAME_COLUMN_STATS:
       case PARTITION_NAME_BLOOM_FILTERS:
