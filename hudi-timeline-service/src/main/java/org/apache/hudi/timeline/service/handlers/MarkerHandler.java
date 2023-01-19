@@ -199,16 +199,24 @@ public class MarkerHandler extends Handler {
 
         earlyConflictDetectionStrategy.detectAndResolveConflictIfNecessary();
 
-      } catch (HoodieEarlyConflictDetectionException e) {
-        LOG.warn("Detect write conflict, failed to create marker with early conflict detection enable", e);
+      } catch (HoodieEarlyConflictDetectionException he) {
+        LOG.warn("Detected the write conflict due to a concurrent writer, "
+            + "failing the marker creation as the early conflict detection is enabled", he);
         return finishCreateMarkerFuture(context, markerDir, markerName);
-      } catch (Exception ex) {
-        LOG.warn("Catch exception during detect and resolve write conflict.");
-        return finishCreateMarkerFuture(context, markerDir, markerName);
+      } catch (Exception e) {
+        LOG.warn("Failed to execute early conflict detection." + e.getMessage());
+        // When early conflict detection fails to execute, we still allow the marker creation
+        // to continue
+        return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName);
       }
     }
 
     // Step 2 create marker
+    return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName);
+  }
+
+  private MarkerCreationFuture addMarkerCreationRequestForAsyncProcessing(
+      Context context, String markerDir, String markerName) {
     LOG.info("Request: create marker " + markerDir + " " + markerName);
     MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
     // Add the future to the list

@@ -63,18 +63,14 @@ public abstract class WriteMarkers implements Serializable {
    * Creates a marker without checking if the marker already exists.
    *
    * @param partitionPath partition path in the table
-   * @param dataFileName data file name
-   * @param type  write IO type
+   * @param dataFileName  data file name
+   * @param type          write IO type
    * @return the marker path
    */
-  public Option<Path> create(String partitionPath, String dataFileName, IOType type, Option<HoodieWriteConfig> writeConfig,
-                             Option<String> fileId, Option<HoodieTableMetaClient> metaClient) {
-    if (writeConfig.isPresent() && fileId.isPresent() && metaClient.isPresent()
-        && writeConfig.get().getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
-        && writeConfig.get().isEarlyConflictDetectionEnable()) {
-
-      HoodieActiveTimeline activeTimeline = metaClient.get().getActiveTimeline();
-
+  public Option<Path> create(String partitionPath, String dataFileName, IOType type, HoodieWriteConfig writeConfig,
+                             String fileId, HoodieActiveTimeline activeTimeline) {
+    if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
+        && writeConfig.isEarlyConflictDetectionEnable()) {
       HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
       HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceTimeline();
       // TODO If current is compact or clustering then create marker directly without early conflict detection.
@@ -83,7 +79,7 @@ public abstract class WriteMarkers implements Serializable {
         return create(partitionPath, dataFileName, type, false);
       }
 
-      return createWithEarlyConflictDetection(partitionPath, dataFileName, type, false, writeConfig.get(), fileId.get(), activeTimeline);
+      return createWithEarlyConflictDetection(partitionPath, dataFileName, type, false, writeConfig, fileId, activeTimeline);
     } else {
       return create(partitionPath, dataFileName, type, false);
     }
