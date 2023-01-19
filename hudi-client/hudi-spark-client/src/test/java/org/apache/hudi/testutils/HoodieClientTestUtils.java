@@ -96,6 +96,7 @@ public class HoodieClientTestUtils {
         .setMaster("local[4]")
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+        .set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
         .set("spark.sql.shuffle.partitions", "4")
         .set("spark.default.parallelism", "4");
 

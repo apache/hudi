@@ -55,9 +55,9 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   DateTimeZone.setDefault(DateTimeZone.UTC)
   TimeZone.setDefault(DateTimeUtils.getTimeZone("UTC"))
   protected lazy val spark: SparkSession = SparkSession.builder()
-    .config(sparkConf())
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
     .config("spark.sql.session.timeZone", "UTC")
+    .config(sparkConf())
     .getOrCreate()
 
   private var tableId = 0
