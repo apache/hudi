@@ -109,8 +109,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Similar to " + MIN_COMMITS_TO_KEEP.key() + ", this config controls "
           + "the maximum number of instants to retain in the active timeline.");
 
-   // Cleaner commits retained
-   // NOTE: This is an internal config and setting this will not overwrite the value actually used
+  // Cleaner commits retained
+  // NOTE: This is an internal config and setting this will not overwrite the value actually used
   public static final ConfigProperty<Integer> CLEANER_COMMITS_RETAINED = ConfigProperty
       .key(METADATA_PREFIX + ".cleaner.commits.retained")
       .defaultValue(3)
