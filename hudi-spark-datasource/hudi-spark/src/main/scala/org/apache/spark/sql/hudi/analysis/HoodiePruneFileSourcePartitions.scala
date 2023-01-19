@@ -41,7 +41,7 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan transformDown {
     case op @ PhysicalOperation(projects, filters, lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _))
-      if sparkAdapter.isHoodieTable(lr, spark) && filters.nonEmpty && fileIndex.partitionSchema.nonEmpty =>
+      if sparkAdapter.isHoodieTable(lr, spark) && fileIndex.partitionSchema.nonEmpty =>
 
       val deterministicFilters = filters.filter(f => f.deterministic && !SubqueryExpression.hasSubquery(f))
       val normalizedFilters = exprUtils.normalizeExprs(deterministicFilters, lr.output)
@@ -56,25 +56,29 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
         // instead we simply just refresh the index and update the stats
         fileIndex.listFiles(partitionPruningFilters, Seq())
 
-        // Change table stats based on the sizeInBytes of pruned files
-        val filteredStats = FilterEstimation(Filter(partitionPruningFilters.reduce(And), lr)).estimate
-        val colStats = filteredStats.map {
-          _.attributeStats.map { case (attr, colStat) =>
-            (attr.name, colStat.toCatalogColumnStat(attr.name, attr.dataType))
+        if (partitionPruningFilters.nonEmpty) {
+          // Change table stats based on the sizeInBytes of pruned files
+          val filteredStats = FilterEstimation(Filter(partitionPruningFilters.reduce(And), lr)).estimate
+          val colStats = filteredStats.map {
+            _.attributeStats.map { case (attr, colStat) =>
+              (attr.name, colStat.toCatalogColumnStat(attr.name, attr.dataType))
+            }
           }
+
+          val tableWithStats = lr.catalogTable.map(_.copy(
+            stats = Some(
+              CatalogStatistics(
+                sizeInBytes = BigInt(fileIndex.sizeInBytes),
+                rowCount = filteredStats.flatMap(_.rowCount),
+                colStats = colStats.getOrElse(Map.empty)))
+          ))
+
+          val prunedLogicalRelation = lr.copy(catalogTable = tableWithStats)
+          // Keep partition-pruning predicates so that they are visible in physical planning
+          rebuildPhysicalOperation(projects, filters, prunedLogicalRelation)
+        } else {
+          op
         }
-
-        val tableWithStats = lr.catalogTable.map(_.copy(
-          stats = Some(
-            CatalogStatistics(
-              sizeInBytes = BigInt(fileIndex.sizeInBytes),
-              rowCount = filteredStats.flatMap(_.rowCount),
-              colStats = colStats.getOrElse(Map.empty)))
-        ))
-
-        val prunedLogicalRelation = lr.copy(catalogTable = tableWithStats)
-        // Keep partition-pruning predicates so that they are visible in physical planning
-        rebuildPhysicalOperation(projects, filters, prunedLogicalRelation)
       } else {
         op
       }
