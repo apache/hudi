@@ -55,12 +55,12 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   DateTimeZone.setDefault(DateTimeZone.UTC)
   TimeZone.setDefault(DateTimeUtils.getTimeZone("UTC"))
   protected lazy val spark: SparkSession = SparkSession.builder()
+    .config(sparkConf())
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
     .config("spark.sql.session.timeZone", "UTC")
     .config("hoodie.insert.shuffle.parallelism", "4")
     .config("hoodie.upsert.shuffle.parallelism", "4")
     .config("hoodie.delete.shuffle.parallelism", "4")
-    .config(sparkConf())
     .getOrCreate()
 
   private var tableId = 0
