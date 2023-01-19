@@ -39,7 +39,7 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
-import org.apache.hudi.metadata.HoodieMetadataMergedLogRecordReader;
+import org.apache.hudi.metadata.HoodieMetadataLogRecordReader;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -379,7 +379,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
    */
   private void verifyMetadataMergedRecords(HoodieTableMetaClient metadataMetaClient, List<String> logFilePaths, String latestCommitTimestamp) {
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
-    HoodieMetadataMergedLogRecordReader logRecordReader = HoodieMetadataMergedLogRecordReader.newBuilder()
+    HoodieMetadataLogRecordReader logRecordReader = HoodieMetadataLogRecordReader.newBuilder()
         .withFileSystem(metadataMetaClient.getFs())
         .withBasePath(metadataMetaClient.getBasePath())
         .withLogFilePaths(logFilePaths)
@@ -392,14 +392,9 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
         .withDiskMapType(ExternalSpillableMap.DiskMapType.BITCASK)
         .build();
 
-    assertDoesNotThrow(() -> {
-      logRecordReader.scan();
-    }, "Metadata log records materialization failed");
-
-    for (Map.Entry<String, HoodieRecord> entry : logRecordReader.getRecords().entrySet()) {
-      assertFalse(entry.getKey().isEmpty());
-      assertFalse(entry.getValue().getRecordKey().isEmpty());
-      assertEquals(entry.getKey(), entry.getValue().getRecordKey());
+    for (HoodieRecord<?> entry : logRecordReader.getRecords()) {
+      assertFalse(entry.getRecordKey().isEmpty());
+      assertEquals(entry.getKey().getRecordKey(), entry.getRecordKey());
     }
   }
 

@@ -151,7 +151,9 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
               .getTime()).max().orElse(lastCheckpointStr.map(Long::parseLong).orElse(0L));
 
       for (Map<String, Object> eventRecord : eventRecords) {
-        filteredEventRecords.add(new ObjectMapper().writeValueAsString(eventRecord).replace("%3D", "="));
+        filteredEventRecords.add(new ObjectMapper().writeValueAsString(eventRecord).replace("%3D", "=")
+            .replace("%24", "$").replace("%A3", "£").replace("%23", "#").replace("%26", "&").replace("%3F", "?")
+            .replace("%7E", "~").replace("%25", "%").replace("%2B", "+"));
       }
       // Return the old checkpoint if no messages to consume from queue.
       String newCheckpoint = newCheckpointTime == 0 ? lastCheckpointStr.orElse(null) : String.valueOf(newCheckpointTime);

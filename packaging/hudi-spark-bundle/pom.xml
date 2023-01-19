@@ -441,5 +441,35 @@
         <spark.bundle.hive.shade.prefix>org.apache.hudi.</spark.bundle.hive.shade.prefix>
       </properties>
     </profile>
+    <profile>
+      <id>hudi-platform-service</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>hudi-metaserver-client</artifactId>
+          <version>${project.version}</version>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>${maven-shade-plugin.version}</version>
+            <executions>
+              <execution>
+                <configuration>
+                  <artifactSet>
+                    <includes combine.children="append">
+                      <include>org.apache.hudi:hudi-metaserver-client</include>
+                    </includes>
+                  </artifactSet>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 </project>

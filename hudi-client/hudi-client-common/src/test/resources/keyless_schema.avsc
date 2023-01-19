@@ -1,0 +1,44 @@
+{
+  "namespace": "keyless",
+  "type": "record",
+  "name": "message",
+  "fields": [
+    {
+      "name": "partition_field",
+      "type": "string"
+    },
+    {
+      "name": "string_field",
+      "type": "string"
+    },
+    {
+      "name": "integer_field",
+      "type": ["null", "int"],
+      "default": null
+    },
+    {
+      "name": "long_field",
+      "type": ["null", "long"],
+      "default": null
+    },
+    {
+      "name": "timestamp_field",
+      "type": ["null", {"type":"long","logicalType":"timestamp-millis"}],
+      "default": null
+    },
+    {
+      "name": "nested_struct",
+      "type": ["null", {
+        "type": "record",
+        "name": "nested",
+        "fields": [
+          {
+            "name": "doubly_nested",
+            "type": "double"
+          }
+        ]
+      }],
+      "default": null
+    }
+  ]
+}

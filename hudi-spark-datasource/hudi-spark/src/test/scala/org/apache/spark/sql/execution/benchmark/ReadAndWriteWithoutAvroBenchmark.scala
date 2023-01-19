@@ -82,7 +82,7 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
     if (spark.catalog.tableExists(tableName)) {
       spark.sql(s"drop table if exists $tableName")
     }
-    spark.sql(s"set ${HoodieWriteConfig.MERGER_IMPLS.key} = $mergerImpl")
+    spark.sql(s"set ${HoodieWriteConfig.RECORD_MERGER_IMPLS.key} = $mergerImpl")
     spark.sql(
       s"""
          |create table $tableName(
@@ -157,7 +157,7 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
         prepareHoodieTable(sparkTable, new Path(sparkPath.getCanonicalPath, sparkTable).toUri.toString, "mor", sparkMergerImpl, df)
         Seq(avroMergerImpl, sparkMergerImpl).zip(Seq(avroTable, sparkTable)).foreach {
           case (mergerImpl, tableName) => upsertBenchmark.addCase(mergerImpl) { _ =>
-            spark.sql(s"set ${HoodieWriteConfig.MERGER_IMPLS.key} = $mergerImpl")
+            spark.sql(s"set ${HoodieWriteConfig.RECORD_MERGER_IMPLS.key} = $mergerImpl")
             spark.sql(s"update $tableName set s1 = 's1_new_1' where id > 0")
           }
         }
@@ -166,7 +166,7 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
         val readBenchmark = new HoodieBenchmark("pref read", 10000, 3)
         Seq(avroMergerImpl, sparkMergerImpl).zip(Seq(avroTable, sparkTable)).foreach {
           case (mergerImpl, tableName) => readBenchmark.addCase(mergerImpl) { _ =>
-            spark.sql(s"set ${HoodieWriteConfig.MERGER_IMPLS.key} = $mergerImpl")
+            spark.sql(s"set ${HoodieWriteConfig.RECORD_MERGER_IMPLS.key} = $mergerImpl")
             spark.sql(s"select * from $tableName").collect()
           }
         }

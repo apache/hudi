@@ -21,6 +21,7 @@ package org.apache.hudi.table.catalog;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.StringUtils;
@@ -383,12 +384,22 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         String path = hiveTable.getSd().getLocation();
         parameters.put(PATH.key(), path);
         if (!parameters.containsKey(FlinkOptions.HIVE_STYLE_PARTITIONING.key())) {
-          Path hoodieTablePath = new Path(path);
-          boolean hiveStyle = Arrays.stream(FSUtils.getFs(hoodieTablePath, hiveConf).listStatus(hoodieTablePath))
-              .map(fileStatus -> fileStatus.getPath().getName())
-              .filter(f -> !f.equals(".hoodie") && !f.equals("default"))
-              .anyMatch(FilePathUtils::isHiveStylePartitioning);
-          parameters.put(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), String.valueOf(hiveStyle));
+          // read the table config first
+          final boolean hiveStyle;
+          HoodieTableConfig tableConfig = StreamerUtil.getTableConfig(path, hiveConf);
+          if (tableConfig != null && tableConfig.contains(FlinkOptions.HIVE_STYLE_PARTITIONING.key())) {
+            hiveStyle = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
+          } else {
+            // fallback to the partition path pattern
+            Path hoodieTablePath = new Path(path);
+            hiveStyle = Arrays.stream(FSUtils.getFs(hoodieTablePath, hiveConf).listStatus(hoodieTablePath))
+                .map(fileStatus -> fileStatus.getPath().getName())
+                .filter(f -> !f.equals(".hoodie") && !f.equals("default"))
+                .anyMatch(FilePathUtils::isHiveStylePartitioning);
+          }
+          if (hiveStyle) {
+            parameters.put(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), "true");
+          }
         }
         client.alter_table(tablePath.getDatabaseName(), tablePath.getObjectName(), hiveTable);
       } catch (Exception e) {

@@ -59,6 +59,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.time.ZoneId;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -71,7 +72,11 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.utils.TestConfigurations.catalog;
 import static org.apache.hudi.utils.TestConfigurations.sql;
+import static org.apache.hudi.utils.TestData.array;
+import static org.apache.hudi.utils.TestData.assertRowsEqualsUnordered;
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
+import static org.apache.hudi.utils.TestData.map;
+import static org.apache.hudi.utils.TestData.row;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1345,11 +1350,11 @@ public class ITTestHoodieDataSource {
 
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
-    final String expected = "["
-        + "+I[1, [abc1, def1], {abc1=1, def1=3}, +I[1, abc1]], "
-        + "+I[2, [abc2, def2], {def2=3, abc2=1}, +I[2, abc2]], "
-        + "+I[3, [abc3, def3], {def3=3, abc3=1}, +I[3, abc3]]]";
-    assertRowsEquals(result, expected);
+    List<Row> expected = Arrays.asList(
+        row(1, array("abc1", "def1"), map("abc1", 1, "def1", 3), row(1, "abc1")),
+        row(2, array("abc2", "def2"), map("abc2", 1, "def2", 3), row(2, "abc2")),
+        row(3, array("abc3", "def3"), map("abc3", 1, "def3", 3), row(3, "abc3")));
+    assertRowsEqualsUnordered(result, expected);
   }
 
   @ParameterizedTest
@@ -1374,11 +1379,11 @@ public class ITTestHoodieDataSource {
 
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
-    final String expected = "["
-        + "+I[1, [abc1, def1], [1, 1], {abc1=1, def1=3}, +I[[abc1, def1], +I[1, abc1]]], "
-        + "+I[2, [abc2, def2], [2, 2], {def2=3, abc2=1}, +I[[abc2, def2], +I[2, abc2]]], "
-        + "+I[3, [abc3, def3], [3, 3], {def3=3, abc3=1}, +I[[abc3, def3], +I[3, abc3]]]]";
-    assertRowsEquals(result, expected);
+    List<Row> expected = Arrays.asList(
+        row(1, array("abc1", "def1"), array(1, 1),  map("abc1", 1, "def1", 3), row(array("abc1", "def1"), row(1, "abc1"))),
+        row(2, array("abc2", "def2"), array(2, 2),  map("abc2", 1, "def2", 3), row(array("abc2", "def2"), row(2, "abc2"))),
+        row(3, array("abc3", "def3"), array(3, 3),  map("abc3", 1, "def3", 3), row(array("abc3", "def3"), row(3, "abc3"))));
+    assertRowsEqualsUnordered(result, expected);
   }
 
   @ParameterizedTest

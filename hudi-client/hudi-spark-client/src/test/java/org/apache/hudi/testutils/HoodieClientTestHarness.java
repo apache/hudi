@@ -228,11 +228,11 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
       LOG.info("Clearing sql context cache of spark-session used in previous test-case");
       sqlContext.clearCache();
       sqlContext = null;
+      sparkSession = null;
     }
 
     if (jsc != null) {
       LOG.info("Closing spark context used in previous test-case");
-      jsc.close();
       jsc.stop();
       jsc = null;
     }

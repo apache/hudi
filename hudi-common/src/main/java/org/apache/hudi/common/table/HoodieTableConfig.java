@@ -173,10 +173,10 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
-  public static final ConfigProperty<String> MERGER_STRATEGY = ConfigProperty
-      .key("hoodie.compaction.merger.strategy")
+  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
+      .key("hoodie.compaction.record.merger.strategy")
       .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
-      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.merger.impls which has the same merger strategy id");
+      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
       .key("hoodie.archivelog.folder")
@@ -265,7 +265,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
-  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String mergerStrategyId) {
+  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String recordMergerStrategyId) {
     super();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
@@ -277,9 +277,9 @@ public class HoodieTableConfig extends HoodieConfig {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
         needStore = true;
       }
-      if (contains(MERGER_STRATEGY) && payloadClassName != null
-          && !getString(MERGER_STRATEGY).equals(mergerStrategyId)) {
-        setValue(MERGER_STRATEGY, mergerStrategyId);
+      if (contains(RECORD_MERGER_STRATEGY) && payloadClassName != null
+          && !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId)) {
+        setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
         needStore = true;
       }
       if (needStore) {
@@ -449,7 +449,7 @@ public class HoodieTableConfig extends HoodieConfig {
       hoodieConfig.setDefaultValue(TYPE);
       if (hoodieConfig.getString(TYPE).equals(HoodieTableType.MERGE_ON_READ.name())) {
         hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME);
-        hoodieConfig.setDefaultValue(MERGER_STRATEGY);
+        hoodieConfig.setDefaultValue(RECORD_MERGER_STRATEGY);
       }
       hoodieConfig.setDefaultValue(ARCHIVELOG_FOLDER);
       if (!hoodieConfig.contains(TIMELINE_LAYOUT_VERSION)) {
@@ -522,8 +522,8 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
-  public String getMergerStrategy() {
-    return getStringOrDefault(MERGER_STRATEGY);
+  public String getRecordMergerStrategy() {
+    return getStringOrDefault(RECORD_MERGER_STRATEGY);
   }
 
   public String getPreCombineField() {

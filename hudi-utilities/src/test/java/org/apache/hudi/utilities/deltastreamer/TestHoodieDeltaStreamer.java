@@ -272,7 +272,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     static void addRecordMerger(HoodieRecordType type, List<String> hoodieConfig) {
       if (type == HoodieRecordType.SPARK) {
-        hoodieConfig.add(String.format("%s=%s", HoodieWriteConfig.MERGER_IMPLS.key(), HoodieSparkRecordMerger.class.getName()));
+        hoodieConfig.add(String.format("%s=%s", HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), HoodieSparkRecordMerger.class.getName()));
         hoodieConfig.add(String.format("%s=%s", HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(),"parquet"));
       }
     }

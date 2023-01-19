@@ -69,6 +69,12 @@ public class KeyGeneratorOptions extends HoodieConfig {
           + "`2016-12-29 09:54:00.0` in row-writer path, while it will be written as long value `1483023240000000` in non row-writer path. "
           + "If enabled, then the timestamp value will be written in both the cases.");
 
+  public static final ConfigProperty<Integer> NUM_FIELDS_IN_KEYLESS_GENERATOR = ConfigProperty
+      .key("hoodie.datasource.write.recordkey.keyless.field.count")
+      .defaultValue(5)
+      .withDocumentation("When using the KeylessKeyGenerator, this sets the number of fields to use when computing the UUID for the record. "
+          + "Increasing the value will increase the randomness of the generated key but can impact performance.");
+
   /**
    * @deprecated Use {@link #URL_ENCODE_PARTITIONING} and its methods.
    */

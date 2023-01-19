@@ -293,7 +293,7 @@
           </sourceDirectories>
           <!-- NOTE: This property is only available in Maven >= 3.3.1 -->
           <propertyExpansion>basedir=${maven.multiModuleProjectDirectory}</propertyExpansion>
-          <excludes>**\/generated-sources\/</excludes>
+          <excludes>**\/generated-sources\/,org/apache/hudi/metaserver/thrift/*</excludes>
         </configuration>
         <executions>
           <execution>
@@ -2323,6 +2323,14 @@
           <name>skipShadeSources</name>
         </property>
       </activation>
+    </profile>
+
+    <profile>
+      <id>hudi-platform-service</id>
+      <modules>
+        <module>hudi-platform-service</module>
+        <module>packaging/hudi-metaserver-server-bundle</module>
+      </modules>
     </profile>
   </profiles>
 

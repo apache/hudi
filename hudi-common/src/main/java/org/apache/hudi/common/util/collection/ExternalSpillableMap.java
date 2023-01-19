@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -51,6 +52,7 @@ import java.util.stream.Stream;
  * map may occupy more memory than is available, resulting in OOM. However, if the spill threshold is too low, we spill
  * frequently and incur unnecessary disk writes.
  */
+@NotThreadSafe
 public class ExternalSpillableMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Serializable {
 
   // Find the actual estimated payload size after inserting N records

@@ -344,12 +344,12 @@ object DataSourceWriteOptions {
    * HoodieMerger will replace the payload to process the merge of data
    * and provide the same capabilities as the payload
    */
-  val MERGER_IMPLS = HoodieWriteConfig.MERGER_IMPLS
+  val RECORD_MERGER_IMPLS = HoodieWriteConfig.RECORD_MERGER_IMPLS
 
   /**
    * Id of merger strategy
    */
-  val MERGER_STRATEGY = HoodieWriteConfig.MERGER_STRATEGY
+  val RECORD_MERGER_STRATEGY = HoodieWriteConfig.RECORD_MERGER_STRATEGY
 
   /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value

@@ -78,8 +78,8 @@ case class HoodieTableState(tablePath: String,
                             usesVirtualKeys: Boolean,
                             recordPayloadClassName: String,
                             metadataConfig: HoodieMetadataConfig,
-                            mergerImpls: List[String],
-                            mergerStrategy: String)
+                            recordMergerImpls: List[String],
+                            recordMergerStrategy: String)
 
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]].
@@ -460,10 +460,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   protected def getTableState: HoodieTableState = {
-    val mergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.MERGER_IMPLS)).asScala.toList
+    val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList
 
-    val mergerStrategy = getConfigValue(HoodieWriteConfig.MERGER_STRATEGY,
-      Option(metaClient.getTableConfig.getMergerStrategy))
+    val recordMergerStrategy = getConfigValue(HoodieWriteConfig.RECORD_MERGER_STRATEGY,
+      Option(metaClient.getTableConfig.getRecordMergerStrategy))
 
     // Subset of the state of table's configuration as of at the time of the query
     HoodieTableState(
@@ -474,8 +474,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = fileIndex.metadataConfig,
-      mergerImpls = mergerImpls,
-      mergerStrategy = mergerStrategy
+      recordMergerImpls = recordMergerImpls,
+      recordMergerStrategy = recordMergerStrategy
     )
   }
 

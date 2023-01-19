@@ -28,8 +28,9 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieMetastoreConfig;
+import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -133,17 +134,17 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. "
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
 
-  public static final ConfigProperty<String> MERGER_IMPLS = ConfigProperty
-      .key("hoodie.datasource.write.merger.impls")
+  public static final ConfigProperty<String> RECORD_MERGER_IMPLS = ConfigProperty
+      .key("hoodie.datasource.write.record.merger.impls")
       .defaultValue("org.apache.hudi.common.model.HoodieAvroRecordMerger,org.apache.hudi.HoodieSparkRecordMerger")
       .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
-          + "These merger impls will filter by hoodie.datasource.write.merger.strategy "
+          + "These merger impls will filter by hoodie.datasource.write.record.merger.strategy "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
 
-  public static final ConfigProperty<String> MERGER_STRATEGY = ConfigProperty
-      .key("hoodie.datasource.write.merger.strategy")
+  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
+      .key("hoodie.datasource.write.record.merger.strategy")
       .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
-      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.merger.impls which has the same merger strategy id");
+      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
 
   public static final ConfigProperty<String> KEYGENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.class")
@@ -557,7 +558,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   private FileSystemViewStorageConfig viewStorageConfig;
   private HoodiePayloadConfig hoodiePayloadConfig;
   private HoodieMetadataConfig metadataConfig;
-  private HoodieMetastoreConfig metastoreConfig;
+  private HoodieMetaserverConfig metastoreConfig;
+  private HoodieTableServiceManagerConfig tableServiceManagerConfig;
   private HoodieCommonConfig commonConfig;
   private HoodieStorageConfig storageConfig;
   private EngineType engineType;
@@ -950,7 +952,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
     this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
     this.metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(props).build();
-    this.metastoreConfig = HoodieMetastoreConfig.newBuilder().fromProperties(props).build();
+    this.metastoreConfig = HoodieMetaserverConfig.newBuilder().fromProperties(props).build();
+    this.tableServiceManagerConfig = HoodieTableServiceManagerConfig.newBuilder().fromProperties(props).build();
     this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
     this.storageConfig = HoodieStorageConfig.newBuilder().fromProperties(props).build();
   }
@@ -967,12 +970,12 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieRecordMerger getRecordMerger() {
-    List<String> mergers = getSplitStringsOrDefault(MERGER_IMPLS).stream()
+    List<String> mergers = getSplitStringsOrDefault(RECORD_MERGER_IMPLS).stream()
         .map(String::trim)
         .distinct()
         .collect(Collectors.toList());
-    String mergerStrategy = getString(MERGER_STRATEGY);
-    return HoodieRecordUtils.createRecordMerger(getString(BASE_PATH), engineType, mergers, mergerStrategy);
+    String recordMergerStrategy = getString(RECORD_MERGER_STRATEGY);
+    return HoodieRecordUtils.createRecordMerger(getString(BASE_PATH), engineType, mergers, recordMergerStrategy);
   }
 
   public String getSchema() {
@@ -983,8 +986,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     setValue(AVRO_SCHEMA_STRING, schemaStr);
   }
 
-  public void setMergerClass(String mergerStrategy) {
-    setValue(MERGER_STRATEGY, mergerStrategy);
+  public void setRecordMergerClass(String recordMergerStrategy) {
+    setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
   }
 
   /**
@@ -1930,6 +1933,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public String getDatadogApiKey() {
     if (props.containsKey(HoodieMetricsDatadogConfig.API_KEY.key())) {
       return getString(HoodieMetricsDatadogConfig.API_KEY);
+      
     } else {
       Supplier<String> apiKeySupplier = ReflectionUtils.loadClass(
           getString(HoodieMetricsDatadogConfig.API_KEY_SUPPLIER));
@@ -2059,6 +2063,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public HoodieMetadataConfig getMetadataConfig() {
     return metadataConfig;
+  }
+
+  public HoodieTableServiceManagerConfig getTableServiceManagerConfig() {
+    return tableServiceManagerConfig;
   }
 
   public HoodieCommonConfig getCommonConfig() {
@@ -2273,8 +2281,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * Metastore configs.
    */
-  public boolean isMetastoreEnabled() {
-    return metastoreConfig.enableMetastore();
+  public boolean isMetaserverEnabled() {
+    return metastoreConfig.isMetaserverEnabled();
   }
 
   /**
@@ -2283,6 +2291,13 @@ public class HoodieWriteConfig extends HoodieConfig {
   public HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode() {
     return HoodieCDCSupplementalLoggingMode.parse(
         getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE));
+  }
+
+  /**
+   * Table Service Manager configs.
+   */
+  public boolean isTableServiceManagerEnabled() {
+    return tableServiceManagerConfig.isTableServiceManagerEnabled();
   }
 
   public static class Builder {
@@ -2376,13 +2391,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withMergerImpls(String mergerImpls) {
-      writeConfig.setValue(MERGER_IMPLS, mergerImpls);
+    public Builder withRecordMergerImpls(String recordMergerImpls) {
+      writeConfig.setValue(RECORD_MERGER_IMPLS, recordMergerImpls);
       return this;
     }
 
-    public Builder withMergerStrategy(String mergerStrategy) {
-      writeConfig.setValue(MERGER_STRATEGY, mergerStrategy);
+    public Builder withRecordMergerStrategy(String recordMergerStrategy) {
+      writeConfig.setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
       return this;
     }
 

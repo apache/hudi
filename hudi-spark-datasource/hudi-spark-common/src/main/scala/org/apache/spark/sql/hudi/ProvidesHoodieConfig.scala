@@ -66,7 +66,7 @@ trait ProvidesHoodieConfig extends Logging {
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         PRECOMBINE_FIELD.key -> preCombineField,
-        MERGER_IMPLS.key -> hoodieProps.getString(HoodieWriteConfig.MERGER_IMPLS.key, HoodieWriteConfig.MERGER_IMPLS.defaultValue),
+        RECORD_MERGER_IMPLS.key -> hoodieProps.getString(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue),
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
@@ -95,7 +95,8 @@ trait ProvidesHoodieConfig extends Logging {
    */
   def buildHoodieInsertConfig(hoodieCatalogTable: HoodieCatalogTable,
                               sparkSession: SparkSession,
-                              isOverwrite: Boolean,
+                              isOverwritePartition: Boolean,
+                              isOverwriteTable: Boolean,
                               insertPartitions: Map[String, Option[String]] = Map.empty,
                               extraOptions: Map[String, String]): Map[String, String] = {
 
@@ -139,24 +140,24 @@ trait ProvidesHoodieConfig extends Logging {
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
     val hasPrecombineColumn = hoodieCatalogTable.preCombineKey.nonEmpty
     val operation =
-      (enableBulkInsert, isOverwrite, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
-        case (true, _, _, false, _) =>
+      (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
+        case (true, _, _, _, false, _) =>
           throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
-        case (true, true, _, _, true) =>
+        case (true, true, _, _, _, true) =>
           throw new IllegalArgumentException(s"Insert Overwrite Partition can not use bulk insert.")
-        case (true, _, true, _, _) =>
+        case (true, _, _, true, _, _) =>
           throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
             s" Please disable $INSERT_DROP_DUPS and try again.")
         // if enableBulkInsert is true, use bulk insert for the insert overwrite non-partitioned table.
-        case (true, true, _, _, false) => BULK_INSERT_OPERATION_OPT_VAL
+        case (true, false, true, _, _, false) => BULK_INSERT_OPERATION_OPT_VAL
         // insert overwrite table
-        case (false, true, _, _, false) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
+        case (false, false, true, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
         // insert overwrite partition
-        case (_, true, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
+        case (_, true, false, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
         // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
-        case (false, false, false, false, _) if hasPrecombineColumn => UPSERT_OPERATION_OPT_VAL
+        case (false, false, false, false, false, _) if hasPrecombineColumn => UPSERT_OPERATION_OPT_VAL
         // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
-        case (true, _, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
+        case (true, _, _, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
         // for the rest case, use the insert operation
         case _ => INSERT_OPERATION_OPT_VAL
       }
@@ -192,7 +193,7 @@ trait ProvidesHoodieConfig extends Logging {
         PRECOMBINE_FIELD.key -> preCombineField,
         PARTITIONPATH_FIELD.key -> partitionFieldsStr,
         PAYLOAD_CLASS_NAME.key -> payloadClassName,
-        MERGER_IMPLS.key -> hoodieProps.getString(HoodieWriteConfig.MERGER_IMPLS.key, HoodieWriteConfig.MERGER_IMPLS.defaultValue),
+        RECORD_MERGER_IMPLS.key -> hoodieProps.getString(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue),
         ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
         HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFieldsStr,
