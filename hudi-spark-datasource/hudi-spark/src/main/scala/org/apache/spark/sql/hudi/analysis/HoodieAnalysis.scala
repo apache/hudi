@@ -115,7 +115,8 @@ object HoodieAnalysis {
         }
 
       val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
-      optimizerRules += (_ => nestedSchemaPruningRule)
+      // TODO(HUDI-5443) re-enable
+      //optimizerRules += (_ => nestedSchemaPruningRule)
     }
 
     // NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's
