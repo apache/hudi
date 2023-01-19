@@ -85,7 +85,7 @@ case class HoodieFileIndex(spark: SparkSession,
   )
     with FileIndex {
 
-  @transient private lazy val pushedDownPartitionPredicates = mutable.HashSet[Expression]()
+  @transient private var hasPushedDownPartitionPredicates: Boolean = false
 
   /**
    * NOTE: [[ColumnStatsIndexSupport]] is a transient state, since it's only relevant while logical plan
@@ -171,7 +171,7 @@ case class HoodieFileIndex(spark: SparkSession,
       s"candidate files after data skipping: $candidateFileSize; " +
       s"skipping percentage $skippingRatio")
 
-    pushedDownPartitionPredicates ++= partitionFilters
+    hasPushedDownPartitionPredicates = true
 
     if (shouldReadAsPartitionedTable()) {
       listedPartitions
@@ -256,7 +256,7 @@ case class HoodieFileIndex(spark: SparkSession,
   override def refresh(): Unit = {
     super.refresh()
     columnStatsIndex.invalidateCaches()
-    pushedDownPartitionPredicates.clear()
+    hasPushedDownPartitionPredicates = false
   }
 
   override def inputFiles: Array[String] =
@@ -264,19 +264,8 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def sizeInBytes: Long = getTotalCachedFilesSize
 
-  def listedFor(filters: Seq[Expression]): Boolean = {
-    // NOTE: We need to handle two following cases when determining whether file-index
-    //       had been already listed for provided filters
-    //          - In case the sequence is empty, table would have to be listed in full, therefore
-    //            we check whether the file-index had already been listed
-    //          - In case sequence is non-empty, we simply check whether all of the provided
-    //            expressions had already been handled by the file-index
-    if (filters.nonEmpty) {
-      filters.forall(expr => pushedDownPartitionPredicates.contains(expr))
-    } else {
-      areAllFileSlicesCached
-    }
-  }
+  def hasPredicatesPushedDown: Boolean =
+    hasPushedDownPartitionPredicates
 
   private def isDataSkippingEnabled: Boolean = getConfigValue(options, spark.sessionState.conf,
     DataSourceReadOptions.ENABLE_DATA_SKIPPING.key, DataSourceReadOptions.ENABLE_DATA_SKIPPING.defaultValue.toString).toBoolean
