@@ -264,7 +264,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     }
   }
 
-  static class HoodieSparkBloomIndexCheckFunction extends HoodieBloomIndexCheckFunction<Tuple2<HoodieFileGroupId, String>>
+  public static class HoodieSparkBloomIndexCheckFunction extends HoodieBloomIndexCheckFunction<Tuple2<HoodieFileGroupId, String>>
       implements FlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, String>>, List<HoodieKeyLookupResult>> {
 
     public HoodieSparkBloomIndexCheckFunction(HoodieTable hoodieTable,

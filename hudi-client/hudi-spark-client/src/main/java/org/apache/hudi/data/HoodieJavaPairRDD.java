@@ -19,7 +19,6 @@
 
 package org.apache.hudi.data;
 
-import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableBiFunction;
@@ -32,7 +31,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.storage.StorageLevel;
 
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -126,14 +124,6 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   @Override
   public <W> HoodiePairData<K, W> mapValues(SerializableFunction<V, W> func) {
     return HoodieJavaPairRDD.of(pairRDDData.mapValues(func::apply));
-  }
-
-  @Override
-  public <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterator<W>> func) {
-    return HoodieJavaPairRDD.of(
-        SparkAdapterSupport$.MODULE$.sparkAdapter()
-            .getRDDUtils()
-            .flatMapValues(pairRDDData, func::apply));
   }
 
   @Override

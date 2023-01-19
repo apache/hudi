@@ -40,7 +40,6 @@ import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.{HoodieRDDUtils, HoodieSpark2RDDUtils}
 
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.mutable.ArrayBuffer
@@ -55,8 +54,6 @@ class Spark2Adapter extends SparkAdapter {
     //       for vectorized reads
     r.isInstanceOf[MutableColumnarRow]
   }
-
-  def getRDDUtils: HoodieRDDUtils = HoodieSpark2RDDUtils
 
   override def getCatalogUtils: HoodieCatalogUtils = {
     throw new UnsupportedOperationException("Catalog utilities are not supported in Spark 2.x");

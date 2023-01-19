@@ -48,8 +48,6 @@ import scala.util.control.NonFatal
  */
 abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
-  def getRDDUtils: HoodieRDDUtils = HoodieSpark3RDDUtils
-
   def getCatalogUtils: HoodieSpark3CatalogUtils
 
   override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
