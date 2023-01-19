@@ -24,7 +24,9 @@ import org.apache.parquet.hadoop.api.ReadSupport;
 import org.apache.parquet.io.InputFile;
 
 /**
- * Not support withDataModel.
+ * See org.apache.parquet.avro.AvroParquetReader.Builder.
+ * We use HoodieAvroParquetReaderBuilder to support reading avro from non-legacy map/list in parquet file.
+ * Not supported AvroParquetReader.Builder#withDataModel and this api is not used by hudi currently.
  */
 public class HoodieAvroParquetReaderBuilder<T> extends ParquetReader.Builder<T> {
 
@@ -38,6 +40,8 @@ public class HoodieAvroParquetReaderBuilder<T> extends ParquetReader.Builder<T> 
 
   @Override
   protected ReadSupport<T> getReadSupport() {
+    // see org.apache.parquet.avro.AvroParquetReader.Builder#getReadSupport
+    // AVRO_COMPATIBILITY default set to false
     conf.setBoolean(AvroReadSupport.AVRO_COMPATIBILITY, false);
     return new HoodieAvroReadSupport<>();
   }

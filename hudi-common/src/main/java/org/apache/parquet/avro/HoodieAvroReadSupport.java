@@ -28,6 +28,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Support to avro-record read parquet-log which written by spark-record.
+ * See the examples in TestMORDataSource#testRecordTypeCompatibilityWithParquetLog.
+ * Exception throw when schema end with map or list.
+ */
 public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
 
   public HoodieAvroReadSupport() {
@@ -36,11 +41,14 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
   @Override
   public ReadContext init(Configuration configuration, Map<String, String> keyValueMetaData, MessageType fileSchema) {
     boolean legacyMode = checkLegacyMode(fileSchema.getFields());
-    if (!legacyMode) {
-      configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false");
+    // support non-legacy list
+    if (!legacyMode && configuration.get(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE) == null) {
+      configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
+          "false", "support reading avro from non-legacy map/list in parquet file");
     }
     ReadContext readContext = super.init(configuration, keyValueMetaData, fileSchema);
     MessageType requestedSchema = readContext.getRequestedSchema();
+    // support non-legacy map
     if (!legacyMode) {
       requestedSchema = new MessageType(requestedSchema.getName(), convertLegacyMap(requestedSchema.getFields()));
     }
@@ -49,17 +57,30 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
 
   /**
    * Check whether write map/list with legacy mode.
-   * list:
-   * optional group obj_ids (LIST) {
-   *   repeated binary array (UTF8);
-   * }
-   * map:
-   * optional group obj_ids (MAP) {
-   *   repeated group map (MAP_KEY_VALUE) {
-   *      required binary key (UTF8);
-   *      required binary value (UTF8);
-   *   }
-   * }
+   * legacy:
+   *  list:
+   *    optional group obj_ids (LIST) {
+   *      repeated binary array (UTF8);
+   *    }
+   *  map:
+   *    optional group obj_ids (MAP) {
+   *      repeated group map (MAP_KEY_VALUE) {
+   *          required binary key (UTF8);
+   *          required binary value (UTF8);
+   *      }
+   *    }
+   * non-legacy:
+   *    optional group obj_ids (LIST) {
+   *      repeated group list {
+   *        optional binary element (UTF8);
+   *      }
+   *    }
+   *    optional group obj_maps (MAP) {
+   *      repeated group key_value {
+   *        required binary key (UTF8);
+   *        optional binary value (UTF8);
+   *      }
+   *    }
    */
   private boolean checkLegacyMode(List<Type> parquetFields) {
     for (Type type : parquetFields) {
@@ -82,6 +103,9 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
     return true;
   }
 
+  /**
+   * Convert non-legacy map to legacy map.
+   */
   private List<Type> convertLegacyMap(List<Type> oldTypes) {
     List<Type> newTypes = new ArrayList<>(oldTypes.size());
     for (Type type : oldTypes) {
