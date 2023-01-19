@@ -60,6 +60,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -1840,6 +1841,26 @@ public class HoodieWriteConfig extends HoodieConfig {
   public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
     return Option.ofNullable(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT))
         .map(HoodieLogBlock.HoodieLogBlockType::fromId);
+  }
+
+  public HoodieLogBlock.HoodieLogBlockType pickLogDataBlockFormat(HoodieFileFormat format) {
+    Option<HoodieLogBlock.HoodieLogBlockType> logBlockTypeOpt = getLogDataBlockFormat();
+    if (logBlockTypeOpt.isPresent()) {
+      return logBlockTypeOpt.get();
+    }
+
+    // Fallback to deduce data-block type based on the base file format
+    switch (format) {
+      case PARQUET:
+        return HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK;
+      case ORC:
+        return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+      case HFILE:
+        return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
+      default:
+        throw new HoodieException("Base file format " + format
+            + " does not have associated log block type");
+    }
   }
 
   public long getLogFileMaxSize() {

@@ -30,7 +30,6 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -450,7 +449,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getBlock(config, pickLogDataBlockFormat(config, hoodieTable.getBaseFileFormat()), recordList, header, keyField));
+        blocks.add(getBlock(config,config.pickLogDataBlockFormat(hoodieTable.getBaseFileFormat()), recordList, header, keyField));
       }
 
       if (appendDeleteBlocks && recordsToDelete.size() > 0) {
@@ -597,26 +596,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       appendDataAndDeleteBlocks(header, appendDeleteBlocks);
       estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
       numberOfRecords = 0;
-    }
-  }
-
-  public static HoodieLogBlock.HoodieLogBlockType pickLogDataBlockFormat(HoodieWriteConfig cfg, HoodieFileFormat format) {
-    Option<HoodieLogBlock.HoodieLogBlockType> logBlockTypeOpt = cfg.getLogDataBlockFormat();
-    if (logBlockTypeOpt.isPresent()) {
-      return logBlockTypeOpt.get();
-    }
-
-    // Fallback to deduce data-block type based on the base file format
-    switch (format) {
-      case PARQUET:
-        return HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK;
-      case ORC:
-        return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
-      case HFILE:
-        return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
-      default:
-        throw new HoodieException("Base file format " + format
-            + " does not have associated log block type");
     }
   }
 
