@@ -22,11 +22,13 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 
 import java.io.File
 
@@ -725,13 +727,20 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           spark.sql("set hoodie.sql.bulk.insert.enable = true")
           spark.sql(s"insert into $tableName values(1, 'a1', 10, '2021-07-18')")
 
+          assertResult(WriteOperationType.BULK_INSERT) {
+            getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName").getOperationType
+          }
           checkAnswer(s"select id, name, price, dt from $tableName")(
             Seq(1, "a1", 10.0, "2021-07-18")
           )
+
           // Disable the bulk insert
           spark.sql("set hoodie.sql.bulk.insert.enable = false")
           spark.sql(s"insert into $tableName values(2, 'a2', 10, '2021-07-18')")
 
+          assertResult(WriteOperationType.INSERT) {
+            getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName").getOperationType
+          }
           checkAnswer(s"select id, name, price, dt from $tableName order by id")(
             Seq(1, "a1", 10.0, "2021-07-18"),
             Seq(2, "a2", 10.0, "2021-07-18")

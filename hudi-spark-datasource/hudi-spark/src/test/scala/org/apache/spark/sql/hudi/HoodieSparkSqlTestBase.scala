@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
@@ -226,6 +227,15 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 }
 
 object HoodieSparkSqlTestBase {
+
+  def getLastCommitMetadata(spark: SparkSession, tablePath: String) = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(spark.sparkContext.hadoopConfiguration)
+      .setBasePath(tablePath)
+      .build()
+
+    metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getRight
+  }
 
   private def checkMessageContains(e: Throwable, text: String): Boolean =
     e.getMessage.trim.contains(text.trim)
