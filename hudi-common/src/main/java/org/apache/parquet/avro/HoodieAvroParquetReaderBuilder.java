@@ -18,18 +18,25 @@
 
 package org.apache.parquet.avro;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.specific.SpecificData;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.api.ReadSupport;
 import org.apache.parquet.io.InputFile;
 
 /**
- * See org.apache.parquet.avro.AvroParquetReader.Builder.
- * We use HoodieAvroParquetReaderBuilder to support reading avro from non-legacy map/list in parquet file.
- * Not supported AvroParquetReader.Builder#withDataModel and this api is not used by hudi currently.
+ * Copy from org.apache.parquet.avro.AvroParquetReader.Builder.
+ * We use HoodieAvroParquetReaderBuilder to build HoodieAvroReadSupport
+ * that can support reading avro from non-legacy map/list in parquet file.
  */
 public class HoodieAvroParquetReaderBuilder<T> extends ParquetReader.Builder<T> {
 
+  private GenericData model = null;
+  private boolean enableCompatibility = true;
+  private boolean isReflect = true;
+
+  @Deprecated
   public HoodieAvroParquetReaderBuilder(Path path) {
     super(path);
   }
@@ -38,11 +45,35 @@ public class HoodieAvroParquetReaderBuilder<T> extends ParquetReader.Builder<T> 
     super(file);
   }
 
+  public HoodieAvroParquetReaderBuilder<T> withDataModel(GenericData model) {
+    this.model = model;
+
+    // only generic and specific are supported by AvroIndexedRecordConverter
+    if (model.getClass() != GenericData.class
+        && model.getClass() != SpecificData.class) {
+      isReflect = true;
+    }
+
+    return this;
+  }
+
+  public HoodieAvroParquetReaderBuilder<T> disableCompatibility() {
+    this.enableCompatibility = false;
+    return this;
+  }
+
+  public HoodieAvroParquetReaderBuilder<T> withCompatibility(boolean enableCompatibility) {
+    this.enableCompatibility = enableCompatibility;
+    return this;
+  }
+
   @Override
   protected ReadSupport<T> getReadSupport() {
-    // see org.apache.parquet.avro.AvroParquetReader.Builder#getReadSupport
-    // AVRO_COMPATIBILITY default set to false
-    conf.setBoolean(AvroReadSupport.AVRO_COMPATIBILITY, false);
-    return new HoodieAvroReadSupport<>();
+    if (isReflect) {
+      conf.setBoolean(AvroReadSupport.AVRO_COMPATIBILITY, false);
+    } else {
+      conf.setBoolean(AvroReadSupport.AVRO_COMPATIBILITY, enableCompatibility);
+    }
+    return new HoodieAvroReadSupport<>(model);
   }
 }

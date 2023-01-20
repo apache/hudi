@@ -18,6 +18,7 @@
 
 package org.apache.parquet.avro;
 
+import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
@@ -34,6 +35,10 @@ import java.util.Map;
  * Exception throw when schema end with map or list.
  */
 public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
+
+  public HoodieAvroReadSupport(GenericData model) {
+    super(model);
+  }
 
   public HoodieAvroReadSupport() {
   }
