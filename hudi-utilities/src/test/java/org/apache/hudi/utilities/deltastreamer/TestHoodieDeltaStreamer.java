@@ -383,7 +383,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         boolean ret = false;
         while (!ret && !dsFuture.isDone()) {
           try {
-            Thread.sleep(3000);
+            Thread.sleep(1000);
             ret = condition.apply(true);
           } catch (Throwable error) {
             LOG.warn("Got error :", error);

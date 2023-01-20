@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.sources.TestDataSource;
@@ -82,6 +83,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     tableBasePath = basePath + "/testtable_" + tableType;
     prepareInitialConfigs(fs(), basePath, "foo");
     TypedProperties props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
+    props.setProperty(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0");
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
@@ -93,6 +95,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     prepJobConfig.continuousMode = true;
     prepJobConfig.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     prepJobConfig.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    prepJobConfig.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
     HoodieDeltaStreamer prepJob = new HoodieDeltaStreamer(prepJobConfig, jsc());
 
     // Prepare base dataset with some commits
@@ -113,6 +116,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     cfgIngestionJob.continuousMode = true;
     cfgIngestionJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgIngestionJob.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    cfgIngestionJob.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
 
     // create a backfill job
     HoodieDeltaStreamer.Config cfgBackfillJob = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.UPSERT,
@@ -125,6 +129,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     cfgBackfillJob.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgBackfillJob.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    cfgBackfillJob.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
     HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, jsc());
 
     // re-init ingestion job to start sync service
@@ -144,6 +149,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     tableBasePath = basePath + "/testtable_" + tableType;
     prepareInitialConfigs(fs(), basePath, "foo");
     TypedProperties props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
+    props.setProperty(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0");
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
@@ -155,6 +161,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     prepJobConfig.continuousMode = true;
     prepJobConfig.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     prepJobConfig.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    prepJobConfig.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
     HoodieDeltaStreamer prepJob = new HoodieDeltaStreamer(prepJobConfig, jsc());
 
     // Prepare base dataset with some commits
@@ -186,12 +193,14 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     cfgBackfillJob2.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob2.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgBackfillJob2.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    cfgBackfillJob2.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
 
     HoodieDeltaStreamer.Config cfgIngestionJob2 = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.UPSERT,
         propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TestIdentityTransformer.class.getName()));
     cfgIngestionJob2.continuousMode = true;
     cfgIngestionJob2.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgIngestionJob2.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    cfgIngestionJob2.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
     // re-init ingestion job
     HoodieDeltaStreamer ingestionJob3 = new HoodieDeltaStreamer(cfgIngestionJob2, jsc());
     // re-init backfill job
@@ -214,6 +223,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     TypedProperties props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
+    props.setProperty(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
@@ -223,6 +233,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     prepJobConfig.continuousMode = true;
     prepJobConfig.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     prepJobConfig.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    prepJobConfig.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
     HoodieDeltaStreamer prepJob = new HoodieDeltaStreamer(prepJobConfig, jsc());
 
     // Prepare base dataset with some commits
@@ -252,6 +263,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
+    cfgBackfillJob.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
 
     // get current checkpoint after preparing base dataset with some commits
@@ -261,6 +273,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     cfgBackfillJob.checkpoint = commitMetadataForLastInstant.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgBackfillJob.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    cfgBackfillJob.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
     HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, jsc());
     backfillJob.sync();
 
