@@ -60,7 +60,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Enable publishing of metrics around metadata table.");
 
   // Parallelism for inserts
-  // NOTE: This is an internal config and setting this will not overwrite the value actually used
   public static final ConfigProperty<Integer> INSERT_PARALLELISM_VALUE = ConfigProperty
       .key(METADATA_PREFIX + ".insert.parallelism")
       .defaultValue(1)
@@ -68,12 +67,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Parallelism to use when inserting to the metadata table");
 
   // Async clean
-  // NOTE: This is an internal config and setting this will not overwrite the value actually used
   public static final ConfigProperty<Boolean> ASYNC_CLEAN_ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".clean.async")
       .defaultValue(false)
       .sinceVersion("0.7.0")
-      .withDocumentation("Enable asynchronous cleaning for metadata table");
+      .withDocumentation("Enable asynchronous cleaning for metadata table. This is an internal config and setting this will not overwrite the value actually used.");
 
   // Async index
   public static final ConfigProperty<Boolean> ASYNC_INDEX_ENABLE = ConfigProperty
@@ -90,8 +88,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Controls how often the metadata table is compacted.");
 
   // Archival settings
-
-  // NOTE: This is an internal config and setting this will not overwrite the value actually used
   public static final ConfigProperty<Integer> MIN_COMMITS_TO_KEEP = ConfigProperty
       .key(METADATA_PREFIX + ".keep.min.commits")
       .defaultValue(20)
@@ -99,23 +95,24 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Archiving service moves older entries from metadata table’s timeline "
           + "into an archived log after each write, to keep the overhead constant, even as the "
           + "metadata table size grows.  This config controls the minimum number of instants "
-          + "to retain in the active timeline.");
+          + "to retain in the active timeline. This is an internal config and setting this "
+          + "will not overwrite the value actually used.");
 
-  // NOTE: This is an internal config and setting this will not overwrite the value actually used
   public static final ConfigProperty<Integer> MAX_COMMITS_TO_KEEP = ConfigProperty
       .key(METADATA_PREFIX + ".keep.max.commits")
       .defaultValue(30)
       .sinceVersion("0.7.0")
       .withDocumentation("Similar to " + MIN_COMMITS_TO_KEEP.key() + ", this config controls "
-          + "the maximum number of instants to retain in the active timeline.");
+          + "the maximum number of instants to retain in the active timeline. This is an "
+          + "internal config and setting this will not overwrite the value actually used.");
 
   // Cleaner commits retained
-  // NOTE: This is an internal config and setting this will not overwrite the value actually used
   public static final ConfigProperty<Integer> CLEANER_COMMITS_RETAINED = ConfigProperty
       .key(METADATA_PREFIX + ".cleaner.commits.retained")
       .defaultValue(3)
       .sinceVersion("0.7.0")
-      .withDocumentation("Number of commits to retain, without cleaning, on metadata table.");
+      .withDocumentation("Number of commits to retain, without cleaning, on metadata table. "
+          + "This is an internal config and setting this will not overwrite the value actually used.");
 
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
@@ -137,12 +134,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Parallelism to use, when listing the table on lake storage.");
 
-  // NOTE: This is an internal config and setting this will not overwrite the value actually used
   public static final ConfigProperty<Boolean> ENABLE_FULL_SCAN_LOG_FILES = ConfigProperty
       .key(METADATA_PREFIX + ".enable.full.scan.log.files")
       .defaultValue(true)
       .sinceVersion("0.10.0")
-      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries.");
+      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries. "
+          + "This is an internal config and setting this will not overwrite the value actually used.");
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_BLOOM_FILTER = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.enable")
@@ -227,12 +224,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("After the async indexer has finished indexing upto the base instant, it will ensure that all inflight writers "
           + "reliably write index updates as well. If this timeout expires, then the indexer will abort itself safely.");
 
-  // NOTE: This is an internal config and setting this will not overwrite the value actually used
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key(METADATA_PREFIX + ".populate.meta.fields")
       .defaultValue(false)
       .sinceVersion("0.10.0")
-      .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated.");
+      .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated. "
+          + "This is an internal config and setting this will not overwrite the value actually used.");
 
   public static final ConfigProperty<Boolean> IGNORE_SPURIOUS_DELETES = ConfigProperty
       .key("_" + METADATA_PREFIX + ".ignore.spurious.deletes")

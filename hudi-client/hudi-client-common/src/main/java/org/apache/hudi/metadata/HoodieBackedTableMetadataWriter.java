@@ -235,7 +235,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param writeConfig {@code HoodieWriteConfig} of the main dataset writer
    */
   private HoodieWriteConfig createMetadataWriteConfig(HoodieWriteConfig writeConfig) {
-    int parallelism = HoodieMetadataConfig.INSERT_PARALLELISM_VALUE.defaultValue();
+    int parallelism = writeConfig.getMetadataInsertParallelism();
 
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
