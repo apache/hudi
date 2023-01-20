@@ -559,7 +559,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .noDefaultValue()
       .sinceVersion("0.13.0")
       .withInferFunction(cfg -> {
-        MarkerType markerType = MarkerType.valueOf(cfg.getString(MARKERS_TYPE).toUpperCase());
+        MarkerType markerType = MarkerType.valueOf(cfg.getStringOrDefault(MARKERS_TYPE).toUpperCase());
         switch (markerType) {
           case DIRECT:
             return Option.of(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName());
