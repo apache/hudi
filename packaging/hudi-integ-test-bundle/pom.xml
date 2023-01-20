@@ -482,6 +482,14 @@
       <version>${project.version}</version>
     </dependency>
 
+    <!-- Kryo -->
+    <dependency>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
+      <version>${kryo.shaded.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
     <!-- Hoodie - Tests -->
 
     <dependency>
