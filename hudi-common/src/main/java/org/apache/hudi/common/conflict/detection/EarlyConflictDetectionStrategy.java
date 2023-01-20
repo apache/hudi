@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.conflict.detection;
 
+import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
+
 /**
  * Interface for pluggable strategy of early conflict detection for multiple writers.
  */
@@ -25,7 +27,7 @@ interface EarlyConflictDetectionStrategy {
   /**
    * Detects and resolves the write conflict if necessary.
    */
-  void detectAndResolveConflictIfNecessary();
+  void detectAndResolveConflictIfNecessary() throws HoodieEarlyConflictDetectionException;
 
   /**
    * @return whether there's a write conflict based on markers.

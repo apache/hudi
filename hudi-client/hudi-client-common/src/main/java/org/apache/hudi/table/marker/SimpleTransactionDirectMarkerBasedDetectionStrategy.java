@@ -22,6 +22,7 @@ import org.apache.hudi.client.transaction.DirectMarkerTransactionManager;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -44,7 +45,7 @@ public class SimpleTransactionDirectMarkerBasedDetectionStrategy
   }
 
   @Override
-  public void detectAndResolveConflictIfNecessary() {
+  public void detectAndResolveConflictIfNecessary() throws HoodieEarlyConflictDetectionException {
     DirectMarkerTransactionManager txnManager =
         new DirectMarkerTransactionManager((HoodieWriteConfig) config, fs, partitionPath, fileId);
     try {
