@@ -17,8 +17,10 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.HoodieConversionUtils.toProperties
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
 import org.apache.hudi.common.model.{OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
@@ -28,12 +30,13 @@ import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeys
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
-import org.apache.hudi.{DataSourceWriteOptions, HoodieWriterUtils}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hive.HiveExternalCatalog
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isUsingHiveCatalog, withSparkConf}
+import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isHoodieConfigKey, isUsingHiveCatalog}
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, withCombinedOptions}
 import org.apache.spark.sql.hudi.command.{SqlKeyGenerator, ValidateDuplicateKeyPayload}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
@@ -45,7 +48,6 @@ trait ProvidesHoodieConfig extends Logging {
 
   def buildHoodieConfig(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
     val sparkSession: SparkSession = hoodieCatalogTable.spark
-    val catalogProperties = hoodieCatalogTable.catalogProperties
     val tableConfig = hoodieCatalogTable.tableConfig
 
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
@@ -56,17 +58,14 @@ trait ProvidesHoodieConfig extends Logging {
     require(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
 
-    val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
+    val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
-    val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
-
-    withSparkConf(sparkSession, catalogProperties) {
+    withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
       Map.apply(
         "path" -> hoodieCatalogTable.tableLocation,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         PRECOMBINE_FIELD.key -> preCombineField,
-        RECORD_MERGER_IMPLS.key -> hoodieProps.getString(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue),
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
@@ -81,10 +80,8 @@ trait ProvidesHoodieConfig extends Logging {
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> tableConfig.getPartitionFieldProp,
         HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
         HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
-        HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "200"),
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
       )
-        .filter { case(_, v) => v != null }
     }
   }
 
@@ -109,12 +106,9 @@ trait ProvidesHoodieConfig extends Logging {
     val path = hoodieCatalogTable.tableLocation
     val tableType = hoodieCatalogTable.tableTypeName
     val tableConfig = hoodieCatalogTable.tableConfig
-    val catalogProperties = hoodieCatalogTable.catalogProperties
 
-    val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf, extraOptions)
-    val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
-
-    val parameters = withSparkConf(sparkSession, catalogProperties)()
+    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf, extraOptions)
+    val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig, extraOptions)
 
     val partitionFieldsStr = hoodieCatalogTable.partitionFields.mkString(",")
 
@@ -128,18 +122,21 @@ trait ProvidesHoodieConfig extends Logging {
     val keyGeneratorClassName = Option(tableConfig.getKeyGeneratorClassName)
       .getOrElse(classOf[ComplexKeyGenerator].getCanonicalName)
 
-    val enableBulkInsert = parameters.getOrElse(DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key,
-      DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.defaultValue()).toBoolean ||
-      parameters.get(DataSourceWriteOptions.OPERATION.key).exists(_.equalsIgnoreCase(WriteOperationType.BULK_INSERT.value))
+    val enableBulkInsert = combinedOpts.getOrElse(DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key,
+      DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.defaultValue()).toBoolean
     val dropDuplicate = sparkSession.conf
       .getOption(INSERT_DROP_DUPS.key).getOrElse(INSERT_DROP_DUPS.defaultValue).toBoolean
 
-    val insertMode = InsertMode.of(parameters.getOrElse(DataSourceWriteOptions.SQL_INSERT_MODE.key,
+    val insertMode = InsertMode.of(combinedOpts.getOrElse(DataSourceWriteOptions.SQL_INSERT_MODE.key,
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
     val hasPrecombineColumn = hoodieCatalogTable.preCombineKey.nonEmpty
-    val operation =
+
+    // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
+    //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
+    val operationOverride = combinedOpts.get(DataSourceWriteOptions.OPERATION.key)
+    val operation = operationOverride.getOrElse {
       (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
         case (true, _, _, _, false, _) =>
           throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
@@ -161,6 +158,7 @@ trait ProvidesHoodieConfig extends Logging {
         // for the rest case, use the insert operation
         case _ => INSERT_OPERATION_OPT_VAL
       }
+    }
 
     val payloadClassName = if (operation == UPSERT_OPERATION_OPT_VAL &&
       tableType == COW_TABLE_TYPE_OPT_VAL && insertMode == InsertMode.STRICT) {
@@ -176,10 +174,7 @@ trait ProvidesHoodieConfig extends Logging {
       classOf[OverwriteWithLatestAvroPayload].getCanonicalName
     }
 
-
-    logInfo(s"Insert statement use write operation type: $operation, payloadClass: $payloadClassName")
-
-    withSparkConf(sparkSession, catalogProperties) {
+    withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
       Map(
         "path" -> path,
         TABLE_TYPE.key -> tableType,
@@ -193,8 +188,6 @@ trait ProvidesHoodieConfig extends Logging {
         PRECOMBINE_FIELD.key -> preCombineField,
         PARTITIONPATH_FIELD.key -> partitionFieldsStr,
         PAYLOAD_CLASS_NAME.key -> payloadClassName,
-        RECORD_MERGER_IMPLS.key -> hoodieProps.getString(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue),
-        ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
         HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFieldsStr,
         HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
@@ -204,26 +197,20 @@ trait ProvidesHoodieConfig extends Logging {
         HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME),
         HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
         HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
-        HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "200"),
-        HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "200"),
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
       )
-        .filter { case (_, v) => v != null }
     }
   }
 
-  def buildHoodieDropPartitionsConfig(
-                                 sparkSession: SparkSession,
-                                 hoodieCatalogTable: HoodieCatalogTable,
-                                 partitionsToDrop: String): Map[String, String] = {
+  def buildHoodieDropPartitionsConfig(sparkSession: SparkSession,
+                                      hoodieCatalogTable: HoodieCatalogTable,
+                                      partitionsToDrop: String): Map[String, String] = {
     val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
-    val catalogProperties = hoodieCatalogTable.catalogProperties
     val tableConfig = hoodieCatalogTable.tableConfig
 
-    val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
-    val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
+    val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
-    withSparkConf(sparkSession, catalogProperties) {
+    withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
       Map(
         "path" -> hoodieCatalogTable.tableLocation,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
@@ -242,14 +229,12 @@ trait ProvidesHoodieConfig extends Logging {
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFields,
         HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
       )
-        .filter { case (_, v) => v != null }
     }
   }
 
   def buildHoodieDeleteTableConfig(hoodieCatalogTable: HoodieCatalogTable,
                                    sparkSession: SparkSession): Map[String, String] = {
     val path = hoodieCatalogTable.tableLocation
-    val catalogProperties = hoodieCatalogTable.catalogProperties
     val tableConfig = hoodieCatalogTable.tableConfig
     val tableSchema = hoodieCatalogTable.tableSchema
     val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase(Locale.ROOT))
@@ -258,14 +243,9 @@ trait ProvidesHoodieConfig extends Logging {
     assert(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key defined in table ${hoodieCatalogTable.table.identifier}, cannot execute delete operation")
 
-    val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
-    val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
+    val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
-    val options = hoodieCatalogTable.catalogProperties
-    val enableHive = isUsingHiveCatalog(sparkSession)
-    val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
-
-    withSparkConf(sparkSession, options) {
+    withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
       Map(
         "path" -> path,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
@@ -282,24 +262,20 @@ trait ProvidesHoodieConfig extends Logging {
         HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_DATABASE_NAME),
         HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME),
         HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
-        HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFields,
+        HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> hoodieCatalogTable.partitionFields.mkString(","),
         HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
-        HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key, "200"),
         SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
       )
     }
   }
 
-  def getHoodieProps(catalogProperties: Map[String, String], tableConfig: HoodieTableConfig, conf: SQLConf, extraOptions: Map[String, String] = Map.empty): TypedProperties = {
-    val options: Map[String, String] = catalogProperties ++ tableConfig.getProps.asScala.toMap ++ conf.getAllConfs ++ extraOptions
-    val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(options)
-    hoodieConfig.getProps
-  }
+  def buildHiveSyncConfig(sparkSession: SparkSession,
+                          hoodieCatalogTable: HoodieCatalogTable,
+                          tableConfig: HoodieTableConfig,
+                          extraOptions: Map[String, String] = Map.empty): HiveSyncConfig = {
+    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf, extraOptions)
+    val props = new TypedProperties(toProperties(combinedOpts))
 
-  def buildHiveSyncConfig(
-     props: TypedProperties,
-     hoodieCatalogTable: HoodieCatalogTable,
-     sparkSession: SparkSession = SparkSession.active): HiveSyncConfig = {
     // Enable the hive sync by default if spark have enable the hive metastore.
     val enableHive = isUsingHiveCatalog(sparkSession)
     val hiveSyncConfig: HiveSyncConfig = new HiveSyncConfig(props)
@@ -324,4 +300,40 @@ trait ProvidesHoodieConfig extends Logging {
         props.getString(HiveExternalCatalog.CREATED_SPARK_VERSION))
     hiveSyncConfig
   }
+}
+
+object ProvidesHoodieConfig {
+
+  def filterNullValues(opts: Map[String, String]): Map[String, String] =
+    opts.filter { case (_, v) => v != null }
+
+  def withCombinedOptions(catalogTable: HoodieCatalogTable,
+                          tableConfig: HoodieTableConfig,
+                          sqlConf: SQLConf)(optionOverrides: Map[String, String] = Map.empty): Map[String, String] = {
+    combineOptions(catalogTable, tableConfig, sqlConf, optionOverrides)
+  }
+
+  private def combineOptions(catalogTable: HoodieCatalogTable,
+                             tableConfig: HoodieTableConfig,
+                             sqlConf: SQLConf,
+                             optionOverrides: Map[String, String] = Map.empty): Map[String, String] = {
+    // NOTE: Properties are merged in the following order of priority (first has the highest priority, last has the
+    //       lowest, which is inverse to the ordering in the code):
+    //          1. (Extra) Option overrides
+    //          2. Spark SQL configs
+    //          3. Persisted Hudi's Table configs
+    //          4. Table's properties in Spark Catalog
+    //          5. Global DFS properties
+    DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++
+      // NOTE: Catalog table provided t/h `TBLPROPERTIES` clause might contain Spark SQL specific
+      //       properties that need to be mapped into Hudi's conventional ones
+      mapSqlOptionsToDataSourceWriteConfigs(catalogTable.catalogProperties) ++
+      tableConfig.getProps.asScala.toMap ++
+      filterHoodieConfigs(sqlConf.getAllConfs) ++
+      filterNullValues(optionOverrides)
+  }
+
+  private def filterHoodieConfigs(opts: Map[String, String]): Map[String, String] =
+    opts.filterKeys(isHoodieConfigKey)
+
 }

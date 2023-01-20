@@ -163,18 +163,6 @@ object HoodieOptionConfig {
   }
 
   /**
-   * Get the primary key from the table options.
-   * @param options
-   * @return
-   */
-  def getPrimaryColumns(options: Map[String, String]): Array[String] = {
-    val params = mapSqlOptionsToDataSourceWriteConfigs(options)
-    params.get(DataSourceWriteOptions.RECORDKEY_FIELD.key)
-      .map(_.split(",").filter(_.nonEmpty))
-      .getOrElse(Array.empty)
-  }
-
-  /**
    * Get the table type from the table options.
    * @param options
    * @return
