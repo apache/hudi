@@ -48,7 +48,9 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
     }
     ReadContext readContext = super.init(configuration, keyValueMetaData, fileSchema);
     MessageType requestedSchema = readContext.getRequestedSchema();
-    // support non-legacy map
+    // support non-legacy map. Convert non-legacy map to legacy map
+    // Because there is no AvroWriteSupport.WRITE_OLD_MAP_STRUCTURE
+    // according to AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE
     if (!legacyMode) {
       requestedSchema = new MessageType(requestedSchema.getName(), convertLegacyMap(requestedSchema.getFields()));
     }
