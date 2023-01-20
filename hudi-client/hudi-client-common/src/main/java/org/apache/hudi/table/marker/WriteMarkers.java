@@ -78,11 +78,9 @@ public abstract class WriteMarkers implements Serializable {
       if (pendingCompactionTimeline.containsInstant(instantTime) || pendingReplaceTimeline.containsInstant(instantTime)) {
         return create(partitionPath, dataFileName, type, false);
       }
-
       return createWithEarlyConflictDetection(partitionPath, dataFileName, type, false, writeConfig, fileId, activeTimeline);
-    } else {
-      return create(partitionPath, dataFileName, type, false);
     }
+    return create(partitionPath, dataFileName, type, false);
   }
 
   /**

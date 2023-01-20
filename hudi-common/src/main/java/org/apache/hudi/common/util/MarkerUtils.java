@@ -220,10 +220,11 @@ public class MarkerUtils {
       fsDataInputStream = fs.open(markersFilePath);
       markers = new HashSet<>(FileIOUtils.readAsUTFStringLines(fsDataInputStream));
     } catch (IOException e) {
+      String errorMessage = "Failed to read MARKERS file " + markersFilePath;
       if (ignoreException) {
-        LOG.warn("IOException occurs during read MARKERS file, ", e);
+        LOG.warn(errorMessage + ". Ignoring the exception and continue.", e);
       } else {
-        throw new HoodieIOException("Failed to read MARKERS file " + markersFilePath, e);
+        throw new HoodieIOException(errorMessage, e);
       }
     } finally {
       closeQuietly(fsDataInputStream);
