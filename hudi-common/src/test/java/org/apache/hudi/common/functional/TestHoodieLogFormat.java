@@ -345,7 +345,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     for (int i = 0; i < 2; i++) {
       Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
-          .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive").overBaseCommit("")
+          .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits").overBaseCommit("")
           .withFs(localFs).build();
       writer.appendBlock(dataBlock);
       writer.close();
