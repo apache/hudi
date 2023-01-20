@@ -686,8 +686,8 @@ public class HoodieTableMetaClient implements Serializable {
         : new HoodieMetaserverConfig.Builder().fromProperties(props).build();
     return metaserverConfig.isMetaserverEnabled()
         ? (HoodieTableMetaClient) ReflectionUtils.loadClass("org.apache.hudi.common.table.HoodieTableMetaserverClient",
-        new Class<?>[] {Configuration.class, ConsistencyGuardConfig.class, String.class, FileSystemRetryConfig.class, String.class, String.class, HoodieMetaserverConfig.class},
-        conf, consistencyGuardConfig, recordMergerStrategy, fileSystemRetryConfig,
+        new Class<?>[] {Configuration.class, String.class, ConsistencyGuardConfig.class, String.class, FileSystemRetryConfig.class,
+            String.class, String.class, HoodieMetaserverConfig.class}, conf, basePath, consistencyGuardConfig, recordMergerStrategy, fileSystemRetryConfig,
         props.getProperty(HoodieTableConfig.DATABASE_NAME.key()), props.getProperty(HoodieTableConfig.NAME.key()), metaserverConfig)
         : new HoodieTableMetaClient(conf, basePath,
         loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, recordMergerStrategy, fileSystemRetryConfig);
@@ -706,7 +706,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String basePath;
     private boolean loadActiveTimelineOnLoad = false;
     private String payloadClassName = null;
-    private String recordMergerStrategy = null;
+    private String mergerStrategy = null;
     private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
     private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
     private Option<TimelineLayoutVersion> layoutVersion = Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION);
@@ -753,6 +753,13 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     public Builder setProperties(Properties properties) {
+      this.props = properties;
+      return this;
+    }
+
+    public Builder setProperties(Map<String, String> map) {
+      Properties properties = new Properties();
+      properties.putAll(map);
       this.props = properties;
       return this;
     }

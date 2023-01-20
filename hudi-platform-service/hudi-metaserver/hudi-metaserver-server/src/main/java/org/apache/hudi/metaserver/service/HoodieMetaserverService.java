@@ -18,11 +18,14 @@
 
 package org.apache.hudi.metaserver.service;
 
+import org.apache.hudi.metaserver.thrift.AlreadyExistException;
 import org.apache.hudi.metaserver.thrift.HoodieInstantChangeResult;
+import org.apache.hudi.metaserver.thrift.MetaserverException;
+import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
+import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.Table;
 import org.apache.hudi.metaserver.thrift.ThriftHoodieMetaserver;
-import org.apache.thrift.TException;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
@@ -41,47 +44,47 @@ public class HoodieMetaserverService implements ThriftHoodieMetaserver.Iface, Se
   }
 
   @Override
-  public void createDatabase(String db) throws TException {
+  public void createDatabase(String db) throws AlreadyExistException, MetaserverStorageException, MetaserverException {
     tableService.createDatabase(db);
   }
 
   @Override
-  public void createTable(Table table) throws TException {
+  public void createTable(Table table) throws MetaserverStorageException, NoSuchObjectException, AlreadyExistException, MetaserverException {
     tableService.createTable(table);
   }
 
   @Override
-  public Table getTable(String db, String tb) throws TException {
+  public Table getTable(String db, String tb) throws NoSuchObjectException, MetaserverStorageException {
     return tableService.getTable(db, tb);
   }
 
   @Override
-  public List<THoodieInstant> listInstants(String db, String tb, int num) throws TException {
+  public List<THoodieInstant> listInstants(String db, String tb, int num) throws MetaserverStorageException, NoSuchObjectException  {
     return timelineService.listInstants(db, tb, num);
   }
 
   @Override
-  public ByteBuffer getInstantMetadata(String db, String tb, THoodieInstant instant) throws TException {
+  public ByteBuffer getInstantMetadata(String db, String tb, THoodieInstant instant) throws MetaserverStorageException, NoSuchObjectException {
     return timelineService.getInstantMetadata(db, tb, instant);
   }
 
   @Override
-  public String createNewInstantTime(String db, String tb) throws TException {
+  public String createNewInstantTime(String db, String tb) throws MetaserverStorageException, NoSuchObjectException {
     return timelineService.createNewInstantTime(db, tb);
   }
 
   @Override
-  public HoodieInstantChangeResult createNewInstantWithTime(String db, String tb, THoodieInstant instant, ByteBuffer content) throws TException {
+  public HoodieInstantChangeResult createNewInstantWithTime(String db, String tb, THoodieInstant instant, ByteBuffer content) throws MetaserverStorageException, NoSuchObjectException {
     return timelineService.createNewInstantWithTime(db, tb, instant, content);
   }
 
   @Override
-  public HoodieInstantChangeResult transitionInstantState(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata) throws TException {
+  public HoodieInstantChangeResult transitionInstantState(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata) throws MetaserverStorageException, NoSuchObjectException, MetaserverException {
     return timelineService.transitionInstantState(db, tb, fromInstant, toInstant, metadata);
   }
 
   @Override
-  public HoodieInstantChangeResult deleteInstant(String db, String tb, THoodieInstant instant) throws TException {
+  public HoodieInstantChangeResult deleteInstant(String db, String tb, THoodieInstant instant) throws MetaserverStorageException, NoSuchObjectException {
     return timelineService.deleteInstant(db, tb, instant);
   }
 }
