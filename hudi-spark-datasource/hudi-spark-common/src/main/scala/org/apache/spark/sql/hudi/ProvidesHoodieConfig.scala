@@ -179,7 +179,7 @@ trait ProvidesHoodieConfig extends Logging {
 
     logInfo(s"Insert statement use write operation type: $operation, payloadClass: $payloadClassName")
 
-    withSparkConf(sparkSession, catalogProperties) {
+    withSparkConf(sparkSession, catalogProperties ++ extraOptions) {
       Map(
         "path" -> path,
         TABLE_TYPE.key -> tableType,
