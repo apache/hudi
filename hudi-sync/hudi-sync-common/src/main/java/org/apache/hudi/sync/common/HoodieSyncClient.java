@@ -240,4 +240,11 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     }
     return paths;
   }
+
+  /**
+   * Update the Storage Descriptor in hive metastore.
+   */
+  public void updateStorageDescriptor(String tableName, Map<String, String> serdeProperties, String inputFormatClassName) {
+
+  }
 }
