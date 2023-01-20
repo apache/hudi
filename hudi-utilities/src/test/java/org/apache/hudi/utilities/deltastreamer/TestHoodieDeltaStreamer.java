@@ -109,8 +109,10 @@ import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -434,6 +436,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
+  }
+
+  @BeforeEach
+  public void printTestMethodName(TestInfo testInfo) {
+    LOG.warn(">>>>>> running " + testInfo.getTestMethod().get().getName() + " - " + testInfo.getDisplayName());
   }
 
   @Test
