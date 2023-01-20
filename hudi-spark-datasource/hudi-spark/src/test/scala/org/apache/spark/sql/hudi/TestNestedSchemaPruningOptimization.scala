@@ -37,6 +37,8 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
   private def executePlan(plan: LogicalPlan): SparkPlan =
     spark.sessionState.executePlan(plan).executedPlan
 
+  // TODO(HUDI-5443) re-enable
+  /*
   test("Test NestedSchemaPruning optimization (COW/MOR)") {
     withTempDir { tmp =>
       // NOTE: This tests are only relevant for Spark >= 3.1
@@ -117,5 +119,6 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
       }
     }
   }
+  */
 
 }

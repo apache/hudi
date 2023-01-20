@@ -44,25 +44,6 @@ import scala.collection.mutable.ListBuffer
 object HoodieAnalysis {
   type RuleBuilder = SparkSession => Rule[LogicalPlan]
 
-  def customOptimizerRules: Seq[RuleBuilder] = {
-    if (HoodieSparkUtils.gteqSpark3_1) {
-      val nestedSchemaPruningClass =
-        if (HoodieSparkUtils.gteqSpark3_3) {
-          "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
-        } else if (HoodieSparkUtils.gteqSpark3_2) {
-          "org.apache.spark.sql.execution.datasources.Spark32NestedSchemaPruning"
-        } else {
-          // spark 3.1
-          "org.apache.spark.sql.execution.datasources.Spark31NestedSchemaPruning"
-        }
-
-      val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
-      Seq(_ => nestedSchemaPruningRule)
-    } else {
-      Seq.empty
-    }
-  }
-
   def customResolutionRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // Default rules
@@ -120,6 +101,42 @@ object HoodieAnalysis {
     rules
   }
 
+  def customOptimizerRules: Seq[RuleBuilder] = {
+    val optimizerRules = ListBuffer[RuleBuilder]()
+    if (HoodieSparkUtils.gteqSpark3_1) {
+      val nestedSchemaPruningClass =
+        if (HoodieSparkUtils.gteqSpark3_3) {
+          "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
+        } else if (HoodieSparkUtils.gteqSpark3_2) {
+          "org.apache.spark.sql.execution.datasources.Spark32NestedSchemaPruning"
+        } else {
+          // spark 3.1
+          "org.apache.spark.sql.execution.datasources.Spark31NestedSchemaPruning"
+        }
+
+      val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
+      // TODO(HUDI-5443) re-enable
+      //optimizerRules += (_ => nestedSchemaPruningRule)
+    }
+
+    // NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's
+    //       [[PruneFileSourcePartitions]] and as such should be executed at the same stage.
+    //       However, currently Spark doesn't allow [[SparkSessionExtensions]] to inject into
+    //       [[BaseSessionStateBuilder.customEarlyScanPushDownRules]] even though it could directly
+    //       inject into the Spark's [[Optimizer]]
+    //
+    //       To work this around, we injecting this as the rule that trails pre-CBO, ie it's
+    //          - Triggered before CBO, therefore have access to the same stats as CBO
+    //          - Precedes actual [[customEarlyScanPushDownRules]] invocation
+    optimizerRules += (spark => HoodiePruneFileSourcePartitions(spark))
+
+    optimizerRules
+  }
+
+  /*
+  // CBO is only supported in Spark >= 3.1.x
+  def customPreCBORules: Seq[RuleBuilder] = Seq()
+  */
 }
 
 /**

@@ -237,7 +237,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * this variable itself is _lazy_ (and have to stay that way) which guarantees that it's not initialized, until
    * it's actually accessed
    */
-  protected lazy val fileIndex: HoodieFileIndex =
+  lazy val fileIndex: HoodieFileIndex =
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
       FileStatusCache.getOrCreate(sparkSession))
 
@@ -288,6 +288,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       // NOTE: Some relations might be disabling sophisticated schema pruning techniques (for ex, nested schema pruning)
       // TODO(HUDI-XXX) internal schema doesn't support nested schema pruning currently
       !hasSchemaOnRead
+
+  override def sizeInBytes: Long = fileIndex.sizeInBytes
 
   override def schema: StructType = {
     // NOTE: Optimizer could prune the schema (applying for ex, [[NestedSchemaPruning]] rule) setting new updated
