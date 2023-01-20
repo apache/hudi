@@ -954,7 +954,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ValueSource(booleans = {true, false})
   public void testCleanerDeleteReplacedDataWithArchive(Boolean asyncClean) throws Exception {
     String tableBasePath = dfsBasePath + "/cleanerDeleteReplacedDataWithArchive" + asyncClean;
-
     int totalRecords = 3000;
 
     // Step 1 : Prepare and insert data without archival and cleaner.
