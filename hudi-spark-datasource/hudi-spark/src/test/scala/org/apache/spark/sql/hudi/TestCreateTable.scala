@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
@@ -27,6 +27,7 @@ import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertFalse
 
@@ -298,6 +299,10 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | AS
              | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
        """.stripMargin)
+
+        assertResult(WriteOperationType.BULK_INSERT) {
+          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName1").getOperationType
+        }
         checkAnswer(s"select id, name, price, ts from $tableName1")(
           Seq(1, "a1", 10.0, 1000)
         )
@@ -317,6 +322,10 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt
          """.stripMargin
         )
+
+        assertResult(WriteOperationType.BULK_INSERT) {
+          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName2").getOperationType
+        }
         checkAnswer(s"select id, name, price, dt from $tableName2")(
           Seq(1, "a1", 10, "2021-04-01")
         )
@@ -355,9 +364,14 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | price
          """.stripMargin
         )
+
+        assertResult(WriteOperationType.BULK_INSERT) {
+          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName3").getOperationType
+        }
         checkAnswer(s"select id, name, price, cast(dt as string) from $tableName3")(
           Seq(1, "a1", 10, "2021-05-06 00:00:00")
         )
+
         // Create table with date type partition
         val tableName4 = generateTableName
         spark.sql(
@@ -374,6 +388,10 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | price
          """.stripMargin
         )
+
+        assertResult(WriteOperationType.BULK_INSERT) {
+          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName4").getOperationType
+        }
         checkAnswer(s"select id, name, price, cast(dt as string) from $tableName4")(
           Seq(1, "a1", 10, "2021-05-06")
         )
