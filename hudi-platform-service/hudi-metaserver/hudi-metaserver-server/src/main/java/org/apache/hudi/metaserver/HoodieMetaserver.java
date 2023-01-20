@@ -28,8 +28,8 @@ import org.apache.hudi.metaserver.store.MetaserverStorage;
 import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.hudi.metaserver.thrift.ThriftHoodieMetaserver;
 import org.apache.hudi.metaserver.util.TServerSocketWrapper;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+//import org.apache.log4j.LogManager;
+//import org.apache.log4j.Logger;
 import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TThreadPoolServer;
 import org.apache.thrift.transport.TServerTransport;
@@ -44,7 +44,7 @@ import java.lang.reflect.Proxy;
  */
 public class HoodieMetaserver {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMetaserver.class);
+//  private static final Logger LOG = LogManager.getLogger(HoodieMetaserver.class);
 
   private static TServer server;
   private static Thread serverThread;
@@ -61,6 +61,11 @@ public class HoodieMetaserver {
         return;
       }
       metaserverStorage = new RelationalDBBasedStorage();
+      try {
+        metaserverStorage.initStorage();
+      } catch (MetaserverStorageException e) {
+        throw new HoodieException("Fail to init the Metaserver's storage." + e);
+      }
       // service
       TableService tableService = new TableService(metaserverStorage);
       TimelineService timelineService = new TimelineService(metaserverStorage);
@@ -74,11 +79,13 @@ public class HoodieMetaserver {
       ThriftHoodieMetaserver.Processor processor = new ThriftHoodieMetaserver.Processor(proxy);
       TServerTransport serverTransport = new TServerSocketWrapper(9090);
       server = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport).processor(processor));
-      LOG.info("Starting the server");
+//      LOG.info("Starting the server");
+      System.out.println("Starting the server");
       serverThread = new Thread(() -> server.serve());
       serverThread.start();
     } catch (Exception e) {
-      LOG.error("Failed to start Metaserver.", e);
+      System.out.println("Failed to start Metaserver." + e.getMessage());
+//      LOG.error("Failed to start Metaserver.", e);
       System.exit(1);
     }
   }
@@ -110,7 +117,7 @@ public class HoodieMetaserver {
 
   public static void stopServer() {
     if (server != null) {
-      LOG.info("Stop the server...");
+//      LOG.info("Stop the server...");
       server.stop();
       serverThread.interrupt();
       server = null;
