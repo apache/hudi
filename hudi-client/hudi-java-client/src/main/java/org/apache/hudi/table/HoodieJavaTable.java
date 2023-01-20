@@ -59,8 +59,12 @@ public abstract class HoodieJavaTable<T>
   }
 
   @Override
-  public void close() throws Exception {
-    metadata.get().close();
+  public void close() {
+    try {
+      metadata.get().close();
+    } catch (Exception e) {
+      throw new HoodieException(e);
+    }
   }
 
   public static <T> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {

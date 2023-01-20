@@ -109,9 +109,13 @@ public abstract class HoodieSparkTable<T>
   }
 
   @Override
-  public void close() throws Exception {
-    metadataBroadcast.getValue().close();
-    metadataBroadcast.destroy();
+  public void close() {
+    try {
+      metadataBroadcast.getValue().close();
+      metadataBroadcast.destroy();
+    } catch (Exception e) {
+      throw new HoodieException(e);
+    }
   }
 
   public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {

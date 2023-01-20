@@ -1005,7 +1005,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
   }
 
   @Override
-  public abstract void close() throws Exception;
+  public abstract void close();
 
   protected static HoodieTableMetadata createMetadataTable(HoodieEngineContext context, HoodieWriteConfig config) {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()

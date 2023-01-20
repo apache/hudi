@@ -86,8 +86,12 @@ public abstract class HoodieFlinkTable<T>
   }
 
   @Override
-  public void close() throws Exception {
-    metadata.get().close();
+  public void close() {
+    try {
+      metadata.get().close();
+    } catch (Exception e) {
+      throw new HoodieException(e);
+    }
   }
 
   public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
