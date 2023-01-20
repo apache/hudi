@@ -103,7 +103,7 @@ public class HoodieCDCExtractor {
   }
 
   private void init() {
-    initInstantAndCommitMetadatas();
+    initInstantAndCommitMetadata();
   }
 
   /**
@@ -209,7 +209,7 @@ public class HoodieCDCExtractor {
    *
    *  And, we need to recognize which is a 'replacecommit', that help to find the list of file group replaced.
    */
-  private void initInstantAndCommitMetadatas() {
+  private void initInstantAndCommitMetadata() {
     try {
       Set<String> requiredActions = new HashSet<>(Arrays.asList(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION));
       HoodieActiveTimeline activeTimeLine = metaClient.getActiveTimeline();
