@@ -370,7 +370,7 @@ public class FSUtils {
    * the file name.
    */
   public static String getFileIdFromLogPath(Path path) {
-    Matcher matcher =  LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
