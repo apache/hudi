@@ -160,7 +160,6 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       this.executor.close();
     }
     if (null != this.writeClient) {
-      this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
       this.writeClient = null;
     }

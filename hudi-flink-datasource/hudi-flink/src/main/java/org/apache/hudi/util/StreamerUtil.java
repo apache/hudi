@@ -276,7 +276,7 @@ public class StreamerUtil {
     Path metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     try {
       if (fs.exists(metaPath)) {
-        return new HoodieTableConfig(fs, metaPath.toString(), null, null);
+        return new HoodieTableConfig(fs, metaPath.toString(), null);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Get table config error", e);
