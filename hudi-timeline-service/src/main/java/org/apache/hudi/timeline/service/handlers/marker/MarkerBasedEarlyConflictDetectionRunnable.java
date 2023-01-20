@@ -49,19 +49,19 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
   private FileSystem fs;
   private AtomicBoolean hasConflict;
   private long maxAllowableHeartbeatIntervalInMs;
-  private Set<HoodieInstant> oldInstants;
+  private Set<HoodieInstant> completedCommits;
   private final boolean checkCommitConflict;
 
   public MarkerBasedEarlyConflictDetectionRunnable(AtomicBoolean hasConflict, MarkerHandler markerHandler, String markerDir,
                                                    String basePath, FileSystem fileSystem, long maxAllowableHeartbeatIntervalInMs,
-                                                   Set<HoodieInstant> oldInstants, boolean checkCommitConflict) {
+                                                   Set<HoodieInstant> completedCommits, boolean checkCommitConflict) {
     this.markerHandler = markerHandler;
     this.markerDir = markerDir;
     this.basePath = basePath;
     this.fs = fileSystem;
     this.hasConflict = hasConflict;
     this.maxAllowableHeartbeatIntervalInMs = maxAllowableHeartbeatIntervalInMs;
-    this.oldInstants = oldInstants;
+    this.completedCommits = completedCommits;
     this.checkCommitConflict = checkCommitConflict;
   }
 
@@ -96,7 +96,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
       currentFileIDs.retainAll(tableFilesIDs);
       if (!currentFileIDs.isEmpty()
           || (checkCommitConflict && MarkerUtils.hasCommitConflict(activeTimeline,
-          currentInstantAllMarkers.stream().map(MarkerUtils::makerToPartitionAndFileID).collect(Collectors.toSet()), oldInstants))) {
+          currentInstantAllMarkers.stream().map(MarkerUtils::makerToPartitionAndFileID).collect(Collectors.toSet()), completedCommits))) {
         LOG.warn("Conflict writing detected based on markers!\n"
             + "Conflict markers: " + currentInstantAllMarkers + "\n"
             + "Table markers: " + tableMarkers);

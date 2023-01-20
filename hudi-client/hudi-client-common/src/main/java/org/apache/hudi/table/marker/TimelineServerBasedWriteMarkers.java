@@ -137,7 +137,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     HoodieTimer timer = HoodieTimer.start();
     String markerFileName = getMarkerFileName(dataFileName, type);
 
-    Map<String, String> paramsMap = initConfigMap(partitionPath, markerFileName, false);
+    Map<String, String> paramsMap = getConfigMap(partitionPath, markerFileName, false);
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
     LOG.info("[timeline-server-based] Created marker file " + partitionPath + "/" + markerFileName
         + " in " + timer.endTimer() + " ms");
@@ -153,7 +153,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
                                                        HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
     HoodieTimer timer = new HoodieTimer().startTimer();
     String markerFileName = getMarkerFileName(dataFileName, type);
-    Map<String, String> paramsMap = initConfigMap(partitionPath, markerFileName, true);
+    Map<String, String> paramsMap = getConfigMap(partitionPath, markerFileName, true);
 
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
 
@@ -169,11 +169,12 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   }
 
   /**
-   * execute create marker request with specific parasMap
-   * @param paramsMap
-   * @param partitionPath
-   * @param markerFileName
-   * @return
+   * Executes marker creation request with specific parameters.
+   *
+   * @param paramsMap      Parameters to be included in the marker request.
+   * @param partitionPath  Relative partition path.
+   * @param markerFileName Marker file name.
+   * @return {@code true} if successful; {@code false} otherwise.
    */
   private boolean executeCreateMarkerRequest(Map<String, String> paramsMap, String partitionPath, String markerFileName) {
     boolean success;
@@ -188,15 +189,14 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   }
 
   /**
-   * init create marker related config maps.
+   * Gets parameter map for marker creation request.
    *
-   * @param partitionPath
-   * @param markerFileName
-   * @return
+   * @param partitionPath  Relative partition path.
+   * @param markerFileName Marker file name.
+   * @return parameter map.
    */
-  private Map<String, String> initConfigMap(
+  private Map<String, String> getConfigMap(
       String partitionPath, String markerFileName, boolean initEarlyConflictDetectionConfigs) {
-
     Map<String, String> paramsMap = new HashMap<>();
     paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     if (StringUtils.isNullOrEmpty(partitionPath)) {

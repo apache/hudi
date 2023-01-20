@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.marker;
 
-import org.apache.hudi.common.conflict.detection.HoodieDirectMarkerBasedEarlyConflictDetectionStrategy;
+import org.apache.hudi.common.conflict.detection.DirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -38,18 +39,19 @@ import java.util.stream.Stream;
 
 /**
  * This strategy is used for direct marker writers, trying to do early conflict detection.
- * It will use fileSystem api like list and exist directly to check if there is any marker file conflict.
+ * It will use fileSystem api like list and exist directly to check if there is any marker file
+ * conflict, without any locking.
  */
-public class SimpleDirectMarkerBasedEarlyConflictDetectionStrategy extends HoodieDirectMarkerBasedEarlyConflictDetectionStrategy {
+public class SimpleDirectMarkerBasedDetectionStrategy extends DirectMarkerBasedDetectionStrategy {
 
-  private static final Logger LOG = LogManager.getLogger(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class);
+  private static final Logger LOG = LogManager.getLogger(SimpleDirectMarkerBasedDetectionStrategy.class);
   private final String basePath;
   private final boolean checkCommitConflict;
   private final Set<HoodieInstant> completedCommitInstants;
   private final long maxAllowableHeartbeatIntervalInMs;
 
-  public SimpleDirectMarkerBasedEarlyConflictDetectionStrategy(HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                               HoodieActiveTimeline activeTimeline, HoodieWriteConfig config) {
+  public SimpleDirectMarkerBasedDetectionStrategy(HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
+                                                  HoodieActiveTimeline activeTimeline, HoodieWriteConfig config) {
     super(fs, partitionPath, fileId, instantTime, activeTimeline, config);
     this.basePath = config.getBasePath();
     this.checkCommitConflict = config.earlyConflictDetectionCheckCommitConflict();

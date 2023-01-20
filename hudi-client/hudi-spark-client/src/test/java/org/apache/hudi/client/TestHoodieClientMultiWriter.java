@@ -45,10 +45,10 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.marker.SimpleDirectMarkerBasedEarlyConflictDetectionStrategy;
-import org.apache.hudi.table.marker.SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy;
+import org.apache.hudi.table.marker.SimpleDirectMarkerBasedDetectionStrategy;
+import org.apache.hudi.table.marker.SimpleTransactionDirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.testutils.HoodieClientTestBase;
-import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy;
+import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerDetectionStrategy;
 
 import org.apache.curator.test.TestingServer;
 import org.apache.hadoop.fs.Path;
@@ -175,7 +175,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     HoodieWriteConfig writeConfig;
     TestingServer server = null;
-    if (earlyConflictDetectionStrategy.equalsIgnoreCase(SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName())) {
+    if (earlyConflictDetectionStrategy.equalsIgnoreCase(SimpleTransactionDirectMarkerBasedDetectionStrategy.class.getName())) {
       // need to setup zk related env there. Bcz SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy is only support zk lock for now.
       server = new TestingServer();
       Properties properties = new Properties();
@@ -786,11 +786,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   public static Stream<Arguments> configParams() {
     Object[][] data =
         new Object[][] {
-            {"COPY_ON_WRITE", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName()},
-            {"MERGE_ON_READ", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName()},
-            {"MERGE_ON_READ", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
-            {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()},
-            {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName()}
+            {"COPY_ON_WRITE", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineMarkerDetectionStrategy.class.getName()},
+            {"MERGE_ON_READ", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineMarkerDetectionStrategy.class.getName()},
+            {"MERGE_ON_READ", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedDetectionStrategy.class.getName()},
+            {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedDetectionStrategy.class.getName()},
+            {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedDetectionStrategy.class.getName()}
         };
     return Stream.of(data).map(Arguments::of);
   }

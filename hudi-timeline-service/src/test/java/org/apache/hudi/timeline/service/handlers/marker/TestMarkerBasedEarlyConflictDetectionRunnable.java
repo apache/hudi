@@ -49,6 +49,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests {@link MarkerBasedEarlyConflictDetectionRunnable}.
+ */
 public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(TestMarkerBasedEarlyConflictDetectionRunnable.class);

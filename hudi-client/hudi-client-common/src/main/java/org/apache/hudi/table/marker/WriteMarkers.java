@@ -55,17 +55,29 @@ public abstract class WriteMarkers implements Serializable {
     this.instantTime = instantTime;
   }
 
+  /**
+   * Creates a marker without checking if the marker already exists.
+   *
+   * @param partitionPath partition path in the table.
+   * @param dataFileName  data file name.
+   * @param type          write IO type.
+   * @return the marker path.
+   */
   public Option<Path> create(String partitionPath, String dataFileName, IOType type) {
     return create(partitionPath, dataFileName, type, false);
   }
 
   /**
    * Creates a marker without checking if the marker already exists.
+   * This can invoke marker-based early conflict detection when enabled for multi-writers.
    *
-   * @param partitionPath partition path in the table
-   * @param dataFileName  data file name
-   * @param type          write IO type
-   * @return the marker path
+   * @param partitionPath  partition path in the table
+   * @param dataFileName   data file name
+   * @param type           write IO type
+   * @param writeConfig    Hudi write configs.
+   * @param fileId         File ID.
+   * @param activeTimeline Active timeline for the write operation.
+   * @return the marker path.
    */
   public Option<Path> create(String partitionPath, String dataFileName, IOType type, HoodieWriteConfig writeConfig,
                              String fileId, HoodieActiveTimeline activeTimeline) {
@@ -186,13 +198,17 @@ public abstract class WriteMarkers implements Serializable {
   abstract Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists);
 
   /**
-   * Creates a marker.
+   * Creates a marker with early conflict detection for multi-writers. If conflict is detected,
+   * an exception is thrown to fail the write operation.
    *
-   * @param partitionPath  partition path in the table
-   * @param dataFileName  data file name
-   * @param type write IO type
-   * @param checkIfExists whether to check if the marker already exists
-   * @return the marker path or empty option if already exists and {@code checkIfExists} is true
+   * @param partitionPath  partition path in the table.
+   * @param dataFileName   data file name.
+   * @param type           write IO type.
+   * @param checkIfExists  whether to check if the marker already exists.
+   * @param config         Hudi write configs.
+   * @param fileId         File ID.
+   * @param activeTimeline Active timeline for the write operation.
+   * @return the marker path or empty option if already exists and {@code checkIfExists} is true.
    */
   public abstract Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
                                                                 HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline);

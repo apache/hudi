@@ -32,6 +32,12 @@ import org.apache.hadoop.fs.FileSystem;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
+/**
+ * This class allows clients to start and end transactions for creating direct marker, used by
+ * `SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy`, when early conflict
+ * detection is enabled.  Anything done between a start and end transaction is guaranteed to be
+ * atomic.
+ */
 public class DirectMarkerTransactionManager extends TransactionManager {
   private final String filePath;
 
@@ -64,7 +70,12 @@ public class DirectMarkerTransactionManager extends TransactionManager {
   }
 
   /**
-   * Rebuild lock related configs, only support ZK related lock for now.
+   * Rebuilds lock related configs. Only support ZK related lock for now.
+   *
+   * @param writeConfig   Hudi write configs.
+   * @param partitionPath Relative partition path.
+   * @param fileId        File ID.
+   * @return Updated lock related configs.
    */
   private static TypedProperties createUpdatedLockProps(
       HoodieWriteConfig writeConfig, String partitionPath, String fileId) {

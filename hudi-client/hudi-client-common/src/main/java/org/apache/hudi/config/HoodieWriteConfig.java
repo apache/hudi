@@ -73,9 +73,9 @@ import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
-import org.apache.hudi.table.marker.SimpleDirectMarkerBasedEarlyConflictDetectionStrategy;
+import org.apache.hudi.table.marker.SimpleDirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
-import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy;
+import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerDetectionStrategy;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.log4j.LogManager;
@@ -553,7 +553,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When table is upgraded from pre 0.12 to 0.12, we check for \"default\" partition and fail if found one. "
           + "Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation");
 
-  // Pluggable strategies to use when early conflict detection
   public static final ConfigProperty<String> EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.detection.strategy")
       .noDefaultValue()
@@ -562,10 +561,10 @@ public class HoodieWriteConfig extends HoodieConfig {
         MarkerType markerType = MarkerType.valueOf(cfg.getStringOrDefault(MARKERS_TYPE).toUpperCase());
         switch (markerType) {
           case DIRECT:
-            return Option.of(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName());
+            return Option.of(SimpleDirectMarkerBasedDetectionStrategy.class.getName());
           case TIMELINE_SERVER_BASED:
           default:
-            return Option.of(AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName());
+            return Option.of(AsyncTimelineMarkerDetectionStrategy.class.getName());
         }
       })
       .withDocumentation("The class name of the early conflict detection strategy to use. "

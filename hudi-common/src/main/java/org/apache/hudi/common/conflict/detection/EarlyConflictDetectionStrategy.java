@@ -19,13 +19,25 @@
 package org.apache.hudi.common.conflict.detection;
 
 /**
- *
+ * Interface for pluggable strategy of early conflict detection for multiple writers.
  */
-interface HoodieEarlyConflictDetectionStrategy {
-
+interface EarlyConflictDetectionStrategy {
+  /**
+   * Detects and resolves the write conflict if necessary.
+   */
   void detectAndResolveConflictIfNecessary();
 
+  /**
+   * @return whether there's a write conflict based on markers.
+   */
   boolean hasMarkerConflict();
 
+  /**
+   * Resolves a write conflict.
+   *
+   * @param basePath      Base path of the table.
+   * @param partitionPath Relative partition path.
+   * @param dataFileName  Data file name.
+   */
   void resolveMarkerConflict(String basePath, String partitionPath, String dataFileName);
 }
