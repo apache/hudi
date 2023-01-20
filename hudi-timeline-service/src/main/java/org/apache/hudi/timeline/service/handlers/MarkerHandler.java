@@ -18,7 +18,7 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
-import org.apache.hudi.common.conflict.detection.HoodieTimelineServerBasedEarlyConflictDetectionStrategy;
+import org.apache.hudi.common.conflict.detection.TimelineServerBasedDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.IOType;
@@ -98,7 +98,7 @@ public class MarkerHandler extends Handler {
   private ScheduledFuture<?> dispatchingThreadFuture;
   private boolean firstCreationRequestSeen;
   private String currentMarkerDir = null;
-  private HoodieTimelineServerBasedEarlyConflictDetectionStrategy earlyConflictDetectionStrategy;
+  private TimelineServerBasedDetectionStrategy earlyConflictDetectionStrategy;
 
   public MarkerHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
                        HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
@@ -173,7 +173,7 @@ public class MarkerHandler extends Handler {
       try {
         synchronized (earlyConflictDetectionLock) {
           if (earlyConflictDetectionStrategy == null) {
-            earlyConflictDetectionStrategy = (HoodieTimelineServerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(timelineServiceConfig.earlyConflictDetectionStrategy,
+            earlyConflictDetectionStrategy = (TimelineServerBasedDetectionStrategy) ReflectionUtils.loadClass(timelineServiceConfig.earlyConflictDetectionStrategy,
                 basePath, markerDir, markerName, timelineServiceConfig.checkCommitConflict);
           }
 
@@ -184,16 +184,18 @@ public class MarkerHandler extends Handler {
           if (!markerDir.equalsIgnoreCase(currentMarkerDir)) {
             this.currentMarkerDir = markerDir;
             Set<String> actions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);
-            Set<HoodieInstant> oldInstants = new HashSet<>(
+            Set<HoodieInstant> completedCommits = new HashSet<>(
                 viewManager.getFileSystemView(basePath)
                     .getTimeline()
                     .filterCompletedInstants()
                     .filter(instant -> actions.contains(instant.getAction()))
                     .getInstants());
 
-            earlyConflictDetectionStrategy.fresh(timelineServiceConfig.asyncConflictDetectorBatchIntervalMs,
-                timelineServiceConfig.asyncConflictDetectorBatchPeriodMs, markerDir, basePath, timelineServiceConfig.maxAllowableHeartbeatIntervalInMs, fileSystem,
-                this, oldInstants);
+            earlyConflictDetectionStrategy.startAsyncDetection(
+                timelineServiceConfig.asyncConflictDetectorBatchIntervalMs,
+                timelineServiceConfig.asyncConflictDetectorBatchPeriodMs,
+                markerDir, basePath, timelineServiceConfig.maxAllowableHeartbeatIntervalInMs,
+                fileSystem, this, completedCommits);
           }
         }
 

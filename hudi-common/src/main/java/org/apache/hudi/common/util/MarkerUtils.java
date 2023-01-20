@@ -211,6 +211,14 @@ public class MarkerUtils {
     return readMarkersFromFile(markersFilePath, conf, false);
   }
 
+  /**
+   * Reads the markers stored in the underlying file.
+   *
+   * @param markersFilePath File path for the markers.
+   * @param conf            Serializable config.
+   * @param ignoreException Whether to ignore IOException.
+   * @return Markers in a {@code Set} of String.
+   */
   public static Set<String> readMarkersFromFile(Path markersFilePath, SerializableConfiguration conf, boolean ignoreException) {
     FSDataInputStream fsDataInputStream = null;
     Set<String> markers = new HashSet<>();
@@ -232,10 +240,26 @@ public class MarkerUtils {
     return markers;
   }
 
+  /**
+   * Gets all marker directories.
+   *
+   * @param tempPath Temporary folder under .hoodie.
+   * @param fs       File system to use.
+   * @return All marker directories.
+   * @throws IOException upon error.
+   */
   public static List<Path> getAllMarkerDir(Path tempPath, FileSystem fs) throws IOException {
     return Arrays.stream(fs.listStatus(tempPath)).map(FileStatus::getPath).collect(Collectors.toList());
   }
 
+  /**
+   * Whether there is write conflict with completed commit among multiple writers.
+   *
+   * @param activeTimeline          Active timeline.
+   * @param currentFileIDs          Current set of file IDs.
+   * @param completedCommitInstants Completed commits.
+   * @return {@code true} if the conflict is detected; {@code false} otherwise.
+   */
   public static boolean hasCommitConflict(HoodieActiveTimeline activeTimeline, Set<String> currentFileIDs, Set<HoodieInstant> completedCommitInstants) {
 
     Set<HoodieInstant> currentInstants = new HashSet<>(

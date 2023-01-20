@@ -18,9 +18,6 @@
 
 package org.apache.hudi.common.conflict.detection;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -28,6 +25,10 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -37,9 +38,12 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy implements HoodieEarlyConflictDetectionStrategy {
+/**
+ * This abstract strategy is used for direct marker writers, trying to do early conflict detection.
+ */
+public abstract class DirectMarkerBasedDetectionStrategy implements EarlyConflictDetectionStrategy {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieDirectMarkerBasedEarlyConflictDetectionStrategy.class);
+  private static final Logger LOG = LogManager.getLogger(DirectMarkerBasedDetectionStrategy.class);
 
   protected final FileSystem fs;
   protected final String partitionPath;
@@ -48,8 +52,8 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
   protected final HoodieActiveTimeline activeTimeline;
   protected final HoodieConfig config;
 
-  public HoodieDirectMarkerBasedEarlyConflictDetectionStrategy(HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                               HoodieActiveTimeline activeTimeline, HoodieConfig config) {
+  public DirectMarkerBasedDetectionStrategy(HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
+                                            HoodieActiveTimeline activeTimeline, HoodieConfig config) {
     this.fs = fs;
     this.partitionPath = partitionPath;
     this.fileId = fileId;
@@ -60,12 +64,14 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
 
   /**
    * We need to do list operation here.
-   * In order to reduce the list pressure as much as possible, first we build path prefix in advance:  '$base_path/.temp/instant_time/partition_path',
-   * and only list these specific partition_paths we need instead of list all the '$base_path/.temp/'
-   * @param basePath
-   * @param maxAllowableHeartbeatIntervalInMs
+   * In order to reduce the list pressure as much as possible, first we build path prefix in advance:
+   * '$base_path/.temp/instant_time/partition_path', and only list these specific partition_paths
+   * we need instead of list all the '$base_path/.temp/'
+   *
+   * @param basePath                          Base path of the table.
+   * @param maxAllowableHeartbeatIntervalInMs Heartbeat timeout.
    * @return true if current fileID is already existed under .temp/instant_time/partition_path/..
-   * @throws IOException
+   * @throws IOException upon errors.
    */
   public boolean checkMarkerConflict(String basePath, long maxAllowableHeartbeatIntervalInMs) throws IOException {
     String tempFolderPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME;

@@ -35,12 +35,12 @@ public class HoodieHeartbeatUtils {
   private static final Logger LOG = LogManager.getLogger(HoodieHeartbeatUtils.class);
 
   /**
-   * Use modification time as last heart beat time
+   * Use modification time as last heart beat time.
    *
-   * @param fs
-   * @param basePath
-   * @param instantTime
-   * @return
+   * @param fs          {@link FileSystem} instance.
+   * @param basePath    Base path of the table.
+   * @param instantTime Instant time.
+   * @return Last heartbeat timestamp.
    * @throws IOException
    */
   public static Long getLastHeartbeatTime(FileSystem fs, String basePath, String instantTime) throws IOException {
@@ -53,6 +53,16 @@ public class HoodieHeartbeatUtils {
     }
   }
 
+  /**
+   * Whether a heartbeat is expired.
+   *
+   * @param instantTime                       Instant time.
+   * @param maxAllowableHeartbeatIntervalInMs Heartbeat timeout in milliseconds.
+   * @param fs                                {@link FileSystem} instance.
+   * @param basePath                          Base path of the table.
+   * @return {@code true} if expired; {@code false} otherwise.
+   * @throws IOException upon errors.
+   */
   public static boolean isHeartbeatExpired(String instantTime, long maxAllowableHeartbeatIntervalInMs, FileSystem fs, String basePath) throws IOException {
     Long currentTime = System.currentTimeMillis();
     Long lastHeartbeatTime = getLastHeartbeatTime(fs, basePath, instantTime);

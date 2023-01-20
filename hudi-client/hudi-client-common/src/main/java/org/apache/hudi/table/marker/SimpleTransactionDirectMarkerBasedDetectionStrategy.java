@@ -28,14 +28,18 @@ import org.apache.log4j.Logger;
 
 /**
  * This strategy is used for direct marker writers, trying to do early conflict detection.
- * It will use fileSystem api like list and exist directly to check if there is any marker file conflict.
+ * It will use fileSystem api like list and exist directly to check if there is any marker file
+ * conflict, with transaction locks using {@link DirectMarkerTransactionManager}.
  */
-public class SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy extends SimpleDirectMarkerBasedEarlyConflictDetectionStrategy {
+public class SimpleTransactionDirectMarkerBasedDetectionStrategy
+    extends SimpleDirectMarkerBasedDetectionStrategy {
 
-  private static final Logger LOG = LogManager.getLogger(SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class);
+  private static final Logger LOG = LogManager.getLogger(
+      SimpleTransactionDirectMarkerBasedDetectionStrategy.class);
 
-  public SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy(HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
-                                                                          HoodieActiveTimeline activeTimeline, HoodieWriteConfig config) {
+  public SimpleTransactionDirectMarkerBasedDetectionStrategy(
+      HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
+      HoodieActiveTimeline activeTimeline, HoodieWriteConfig config) {
     super(fs, partitionPath, fileId, instantTime, activeTimeline, config);
   }
 

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.timeline.service.handlers.marker;
 
-import org.apache.hudi.common.conflict.detection.HoodieTimelineServerBasedEarlyConflictDetectionStrategy;
+import org.apache.hudi.common.conflict.detection.TimelineServerBasedDetectionStrategy;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
@@ -34,14 +34,19 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class AsyncTimelineMarkerEarlyConflictDetectionStrategy extends HoodieTimelineServerBasedEarlyConflictDetectionStrategy {
+/**
+ * This abstract strategy is used for writers using timeline-server-based markers,
+ * trying to do early conflict detection by asynchronously and periodically checking
+ * write conflict among multiple writers based on the timeline-server-based markers.
+ */
+public class AsyncTimelineMarkerDetectionStrategy extends TimelineServerBasedDetectionStrategy {
 
-  private static final Logger LOG = LogManager.getLogger(AsyncTimelineMarkerEarlyConflictDetectionStrategy.class);
+  private static final Logger LOG = LogManager.getLogger(AsyncTimelineMarkerDetectionStrategy.class);
 
   private AtomicBoolean hasConflict = new AtomicBoolean(false);
   private ScheduledExecutorService asyncDetectorExecutor;
 
-  public AsyncTimelineMarkerEarlyConflictDetectionStrategy(String basePath, String markerDir, String markerName, Boolean checkCommitConflict) {
+  public AsyncTimelineMarkerDetectionStrategy(String basePath, String markerDir, String markerName, Boolean checkCommitConflict) {
     super(basePath, markerDir, markerName, checkCommitConflict);
   }
 
@@ -55,16 +60,21 @@ public class AsyncTimelineMarkerEarlyConflictDetectionStrategy extends HoodieTim
     throw new HoodieEarlyConflictDetectionException(new ConcurrentModificationException("Early conflict detected but cannot resolve conflicts for overlapping writes"));
   }
 
-  public void fresh(Long batchInterval, Long period, String markerDir, String basePath,
-                    Long maxAllowableHeartbeatIntervalInMs, FileSystem fileSystem, Object markerHandler, Set<HoodieInstant> oldInstants) {
+  @Override
+  public void startAsyncDetection(Long batchIntervalMs, Long periodMs, String markerDir,
+                                  String basePath, Long maxAllowableHeartbeatIntervalInMs,
+                                  FileSystem fileSystem, Object markerHandler,
+                                  Set<HoodieInstant> completedCommits) {
     if (asyncDetectorExecutor != null) {
       asyncDetectorExecutor.shutdown();
     }
     hasConflict.set(false);
     asyncDetectorExecutor = Executors.newSingleThreadScheduledExecutor();
-    asyncDetectorExecutor.scheduleAtFixedRate(new MarkerBasedEarlyConflictDetectionRunnable(hasConflict, (MarkerHandler) markerHandler, markerDir, basePath,
-            fileSystem, maxAllowableHeartbeatIntervalInMs, oldInstants, checkCommitConflict),
-        batchInterval, period, TimeUnit.MILLISECONDS);
+    asyncDetectorExecutor.scheduleAtFixedRate(
+        new MarkerBasedEarlyConflictDetectionRunnable(
+            hasConflict, (MarkerHandler) markerHandler, markerDir, basePath,
+            fileSystem, maxAllowableHeartbeatIntervalInMs, completedCommits, checkCommitConflict),
+        batchIntervalMs, periodMs, TimeUnit.MILLISECONDS);
   }
 
   @Override

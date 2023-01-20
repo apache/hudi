@@ -19,7 +19,7 @@
 package org.apache.hudi.table.marker;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.conflict.detection.HoodieDirectMarkerBasedEarlyConflictDetectionStrategy;
+import org.apache.hudi.common.conflict.detection.DirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
@@ -163,9 +163,9 @@ public class DirectWriteMarkers extends WriteMarkers {
   public Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
                                                        HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
 
-    HoodieDirectMarkerBasedEarlyConflictDetectionStrategy strategy =
-        (HoodieDirectMarkerBasedEarlyConflictDetectionStrategy) ReflectionUtils.loadClass(config.getEarlyConflictDetectionStrategyClassName(),
-        fs, partitionPath, fileId, instantTime, activeTimeline, config);
+    DirectMarkerBasedDetectionStrategy strategy =
+        (DirectMarkerBasedDetectionStrategy) ReflectionUtils.loadClass(config.getEarlyConflictDetectionStrategyClassName(),
+            fs, partitionPath, fileId, instantTime, activeTimeline, config);
 
     strategy.detectAndResolveConflictIfNecessary();
     return create(getMarkerPath(partitionPath, dataFileName, type), checkIfExists);
