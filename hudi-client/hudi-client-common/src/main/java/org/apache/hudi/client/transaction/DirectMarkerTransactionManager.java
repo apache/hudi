@@ -34,7 +34,7 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * This class allows clients to start and end transactions for creating direct marker, used by
- * `SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy`, when early conflict
+ * `SimpleTransactionDirectMarkerBasedDetectionStrategy`, when early conflict
  * detection is enabled.  Anything done between a start and end transaction is guaranteed to be
  * atomic.
  */
