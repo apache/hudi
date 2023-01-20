@@ -830,6 +830,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
               .withAutoArchive(false).build())
           .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
           .withMarkersType(MarkerType.TIMELINE_SERVER_BASED.name())
+          // Set the batch processing interval for marker requests to be larger than
+          // the running interval of the async conflict detector so that the conflict can
+          // be detected before the marker requests are processed at the timeline server
+          // in the test.
+          .withMarkersTimelineServerBasedBatchIntervalMs(1000)
           .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(lockProvider).build())
           .withEarlyConflictDetectionEnable(true)
           .withEarlyConflictDetectionStrategy(earlyConflictDetectionStrategy)

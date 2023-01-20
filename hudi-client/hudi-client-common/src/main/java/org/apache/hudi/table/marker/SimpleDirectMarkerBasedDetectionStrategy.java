@@ -77,8 +77,7 @@ public class SimpleDirectMarkerBasedDetectionStrategy extends DirectMarkerBasedD
   }
 
   @Override
-  public void detectAndResolveConflictIfNecessary() {
-
+  public void detectAndResolveConflictIfNecessary() throws HoodieEarlyConflictDetectionException {
     if (hasMarkerConflict()) {
       resolveMarkerConflict(basePath, partitionPath, fileId);
     }

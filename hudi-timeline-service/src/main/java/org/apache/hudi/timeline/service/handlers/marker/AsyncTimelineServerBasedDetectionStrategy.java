@@ -78,7 +78,7 @@ public class AsyncTimelineServerBasedDetectionStrategy extends TimelineServerBas
   }
 
   @Override
-  public void detectAndResolveConflictIfNecessary() {
+  public void detectAndResolveConflictIfNecessary() throws HoodieEarlyConflictDetectionException {
     if (hasMarkerConflict()) {
       resolveMarkerConflict(basePath, markerDir, markerName);
     }

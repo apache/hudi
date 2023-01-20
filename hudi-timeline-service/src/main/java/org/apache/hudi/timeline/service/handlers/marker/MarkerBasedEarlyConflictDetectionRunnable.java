@@ -35,6 +35,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -67,13 +68,25 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
 
   @Override
   public void run() {
+    // If a conflict among multiple writers is already detected,
+    // there is no need to run the detection again.
+    if (hasConflict.get()) {
+      return;
+    }
+
     try {
-      if (!fs.exists(new Path(markerDir))) {
+      Set<String> pendingMarkers = markerHandler.getPendingMarkersToProcess(markerDir);
+
+      if (!fs.exists(new Path(markerDir)) && pendingMarkers.isEmpty()) {
         return;
       }
 
       HoodieTimer timer = HoodieTimer.start();
-      Set<String> currentInstantAllMarkers = markerHandler.getAllMarkers(markerDir);
+      Set<String> currentInstantAllMarkers = new HashSet<>();
+      // We need to check both the markers already written to the storage
+      // and the markers from the requests pending processing.
+      currentInstantAllMarkers.addAll(markerHandler.getAllMarkers(markerDir));
+      currentInstantAllMarkers.addAll(pendingMarkers);
       Path tempPath = new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
 
       List<Path> instants = MarkerUtils.getAllMarkerDir(tempPath, fs);

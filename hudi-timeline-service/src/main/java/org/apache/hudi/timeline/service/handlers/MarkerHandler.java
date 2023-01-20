@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieException;
@@ -42,6 +43,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -135,6 +137,19 @@ public class MarkerHandler extends Handler {
   public Set<String> getAllMarkers(String markerDir) {
     MarkerDirState markerDirState = getMarkerDirState(markerDir);
     return markerDirState.getAllMarkers();
+  }
+
+  /**
+   * @param markerDir marker directory path.
+   * @return Pending markers from the requests to process.
+   */
+  public Set<String> getPendingMarkersToProcess(String markerDir) {
+    if (markerDirStateMap.containsKey(markerDir)) {
+      MarkerDirState markerDirState = getMarkerDirState(markerDir);
+      return markerDirState.getPendingMarkerCreationRequests(false).stream()
+          .map(MarkerCreationFuture::getMarkerName).collect(Collectors.toSet());
+    }
+    return Collections.emptySet();
   }
 
   /**
@@ -265,8 +280,13 @@ public class MarkerHandler extends Handler {
     if (markerDirState == null) {
       synchronized (markerDirStateMap) {
         if (markerDirStateMap.get(markerDir) == null) {
-          markerDirState = new MarkerDirState(markerDir, timelineServiceConfig.markerBatchNumThreads,
-              fileSystem, metricsRegistry, hoodieEngineContext, parallelism);
+          Option<TimelineServerBasedDetectionStrategy> strategy =
+              timelineServiceConfig.earlyConflictDetectionEnable
+                  && earlyConflictDetectionStrategy != null
+                  ? Option.of(earlyConflictDetectionStrategy) : Option.empty();
+          markerDirState = new MarkerDirState(
+              markerDir, timelineServiceConfig.markerBatchNumThreads,
+              strategy, fileSystem, metricsRegistry, hoodieEngineContext, parallelism);
           markerDirStateMap.put(markerDir, markerDirState);
         } else {
           markerDirState = markerDirStateMap.get(markerDir);
