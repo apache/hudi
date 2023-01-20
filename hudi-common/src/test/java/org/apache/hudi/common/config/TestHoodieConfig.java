@@ -34,30 +34,37 @@ public class TestHoodieConfig {
     assertEquals("1", config1.getFakeString());
     assertEquals(0, config1.getFakeInteger());
     assertEquals("value3", config1.getFakeStringNoDefaultWithInfer());
+    assertEquals(null, config1.getFakeStringNoDefaultWithInferEmpty());
 
-    // Case 2: FAKE_STRING_CONFIG is set.  FAKE_INTEGER_CONFIG and
-    // FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER are inferred
+    // Case 2: FAKE_STRING_CONFIG is set.  FAKE_INTEGER_CONFIG,
+    // FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER, and
+    // FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER_EMPTY are inferred
     HoodieTestFakeConfig config2 = HoodieTestFakeConfig.newBuilder()
         .withFakeString("value1").build();
     assertEquals("value1", config2.getFakeString());
     assertEquals(0, config2.getFakeInteger());
     assertEquals("value2", config2.getFakeStringNoDefaultWithInfer());
+    assertEquals("value10", config2.getFakeStringNoDefaultWithInferEmpty());
 
-    // Case 3: FAKE_STRING_CONFIG is set to a different value.  FAKE_INTEGER_CONFIG and
-    // FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER are inferred
+    // Case 3: FAKE_STRING_CONFIG is set to a different value.  FAKE_INTEGER_CONFIG,
+    // FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER, and
+    // FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER_EMPTY are inferred
     HoodieTestFakeConfig config3 = HoodieTestFakeConfig.newBuilder()
         .withFakeString("5").build();
     assertEquals("5", config3.getFakeString());
     assertEquals(100, config3.getFakeInteger());
     assertEquals("value3", config3.getFakeStringNoDefaultWithInfer());
+    assertEquals(null, config3.getFakeStringNoDefaultWithInferEmpty());
 
     // Case 4: all configs are set.  No default or infer function should be used
     HoodieTestFakeConfig config4 = HoodieTestFakeConfig.newBuilder()
         .withFakeString("5")
         .withFakeInteger(200)
-        .withFakeStringNoDefaultWithInfer("xyz").build();
+        .withFakeStringNoDefaultWithInfer("xyz")
+        .withFakeStringNoDefaultWithInferEmpty("uvw").build();
     assertEquals("5", config4.getFakeString());
     assertEquals(200, config4.getFakeInteger());
     assertEquals("xyz", config4.getFakeStringNoDefaultWithInfer());
+    assertEquals("uvw", config4.getFakeStringNoDefaultWithInferEmpty());
   }
 }

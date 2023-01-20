@@ -30,6 +30,8 @@ public class HoodieTestFakeConfig extends HoodieConfig {
   public static ConfigProperty<Integer> FAKE_INTEGER_CONFIG = TestConfigProperty.FAKE_INTEGER_CONFIG;
   public static ConfigProperty<String> FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER
       = TestConfigProperty.FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER;
+  public static ConfigProperty<String> FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER_EMPTY
+      = TestConfigProperty.FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER_EMPTY;
 
   private HoodieTestFakeConfig() {
     super();
@@ -51,6 +53,10 @@ public class HoodieTestFakeConfig extends HoodieConfig {
     return getString(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER);
   }
 
+  public String getFakeStringNoDefaultWithInferEmpty() {
+    return getString(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER_EMPTY);
+  }
+
   public static HoodieTestFakeConfig.Builder newBuilder() {
     return new Builder();
   }
@@ -70,6 +76,11 @@ public class HoodieTestFakeConfig extends HoodieConfig {
 
     public Builder withFakeStringNoDefaultWithInfer(String value) {
       config.setValue(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER, value);
+      return this;
+    }
+
+    public Builder withFakeStringNoDefaultWithInferEmpty(String value) {
+      config.setValue(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER_EMPTY, value);
       return this;
     }
 
