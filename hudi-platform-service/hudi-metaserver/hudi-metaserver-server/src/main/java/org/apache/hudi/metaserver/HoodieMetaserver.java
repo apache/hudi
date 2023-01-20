@@ -61,11 +61,6 @@ public class HoodieMetaserver {
         return;
       }
       metaserverStorage = new RelationalDBBasedStorage();
-      try {
-        metaserverStorage.initStorage();
-      } catch (MetaserverStorageException e) {
-        throw new HoodieException("Fail to init the Metaserver's storage." + e);
-      }
       // service
       TableService tableService = new TableService(metaserverStorage);
       TimelineService timelineService = new TimelineService(metaserverStorage);

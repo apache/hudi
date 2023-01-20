@@ -13,6 +13,7 @@
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
+        <h2.version>1.4.200</h2.version>
     </properties>
 
     <dependencies>
@@ -20,6 +21,50 @@
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-metaserver-server</artifactId>
             <version>${project.version}</version>
+            <scope>compile</scope>
+        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>com.h2database</groupId>-->
+<!--            <artifactId>h2</artifactId>-->
+<!--            <version>${h2.version}</version>-->
+<!--            <scope>compile</scope>-->
+<!--        </dependency>-->
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>${log4j2.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j2.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-1.2-api</artifactId>
+            <version>${log4j2.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>${log4j2.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jul-to-slf4j</artifactId>
+            <version>${slf4j.version}</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 
@@ -39,13 +84,18 @@
                             <artifactSet>
                                 <includes>
                                     <include>org.apache.hudi:hudi-common</include>
+                                    <include>org.apache.hudi:hudi-metaserver-server</include>
                                     <include>org.apache.thrift:libthrift</include>
+                                    <include>org.apache.logging.log4j:log4j-api</include>
+                                    <include>org.apache.logging.log4j:log4j-core</include>
                                     <include>org.apache.logging.log4j:log4j-1.2-api</include>
+                                    <include>org.apache.logging.log4j:log4j-slf4j-impl</include>
                                     <include>org.slf4j:slf4j-api</include>
                                     <include>org.slf4j:jul-to-slf4j</include>
                                     <include>org.mybatis:mybatis</include>
                                     <include>com.zaxxer:HikariCP</include>
                                     <include>mysql:mysql-connector-java</include>
+<!--                                    <include>com.h2database:h2</include>-->
                                 </includes>
                             </artifactSet>
                             <createSourcesJar>${shadeSources}</createSourcesJar>

@@ -20,6 +20,7 @@ package org.apache.hudi.metaserver.store.bean;
 
 import org.apache.hudi.metaserver.thrift.Table;
 
+import java.math.BigInteger;
 import java.sql.Timestamp;
 
 /**
@@ -39,6 +40,16 @@ public class TableBean {
     this.location = table.location;
   }
 
+  public TableBean(String dbName, BigInteger tblId, String tableName, Timestamp createTime, String owner, String location) {
+    this.dbName = dbName;
+    this.tblId = tblId.longValue();
+    this.tableName = tableName;
+    this.createTime = createTime.getTime();
+    this.owner = owner;
+    this.location = location;
+  }
+
+  // for test with h2
   public TableBean(String dbName, Long tblId, String tableName, Timestamp createTime, String owner, String location) {
     this.dbName = dbName;
     this.tblId = tblId;
