@@ -127,8 +127,8 @@ public class TimelineService {
     @Parameter(names = {"--early-conflict-detection-strategy"}, description =
         "The class name of the early conflict detection strategy to use. "
             + "This should be subclass of "
-            + "`org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy`")
-    public String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy";
+            + "`org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy`")
+    public String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
 
     @Parameter(names = {"--early-conflict-detection-check-commit-conflict"}, description =
         "Whether to enable commit conflict checking or not during early "
@@ -143,19 +143,19 @@ public class TimelineService {
 
     @Parameter(names = {"--async-conflict-detector-batch-interval-ms"}, description =
         "Used for timeline-server-based markers with "
-            + "`AsyncTimelineMarkerConflictResolutionStrategy`. "
+            + "`AsyncTimelineServerBasedDetectionStrategy`. "
             + "The time in milliseconds to delay first async marker conflict detection.")
     public Long asyncConflictDetectorBatchIntervalMs = 30000L;
 
     @Parameter(names = {"--async-conflict-detector-batch-period-ms"}, description =
         "Used for timeline-server-based markers with "
-            + "`AsyncTimelineMarkerConflictResolutionStrategy`. "
+            + "`AsyncTimelineServerBasedDetectionStrategy`. "
             + "The period in milliseconds between consecutive runs of async marker conflict detection.")
     public Long asyncConflictDetectorBatchPeriodMs = 30000L;
 
     @Parameter(names = {"--early-conflict-detection-max-heartbeat-interval-ms"}, description =
         "Used for timeline-server-based markers with "
-            + "`AsyncTimelineMarkerConflictResolutionStrategy`. "
+            + "`AsyncTimelineServerBasedDetectionStrategy`. "
             + "Instants whose heartbeat is greater than the current value will not be used in early conflict detection.")
     public Long maxAllowableHeartbeatIntervalInMs = 60000L;
 
@@ -183,7 +183,7 @@ public class TimelineService {
       private int markerBatchNumThreads = 20;
       private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
-      private String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy";
+      private String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
       private Boolean checkCommitConflict = false;
       private Boolean earlyConflictDetectionEnable = false;
       private Long asyncConflictDetectorBatchIntervalMs = 30000L;

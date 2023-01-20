@@ -75,7 +75,7 @@ import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.marker.SimpleDirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
-import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerDetectionStrategy;
+import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.log4j.LogManager;
@@ -564,12 +564,12 @@ public class HoodieWriteConfig extends HoodieConfig {
             return Option.of(SimpleDirectMarkerBasedDetectionStrategy.class.getName());
           case TIMELINE_SERVER_BASED:
           default:
-            return Option.of(AsyncTimelineMarkerDetectionStrategy.class.getName());
+            return Option.of(AsyncTimelineServerBasedDetectionStrategy.class.getName());
         }
       })
       .withDocumentation("The class name of the early conflict detection strategy to use. "
           + "This should be a subclass of "
-          + "`org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy`.");
+          + "`org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy`.");
 
   public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_ENABLE = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.detection.enable")
@@ -584,7 +584,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(30000L)
       .sinceVersion("0.13.0")
       .withDocumentation("Used for timeline-server-based markers with "
-          + "`AsyncTimelineMarkerConflictResolutionStrategy`. "
+          + "`AsyncTimelineServerBasedDetectionStrategy`. "
           + "The time in milliseconds to delay first async marker conflict detection.");
 
   public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_PERIOD_MS = ConfigProperty
@@ -592,7 +592,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(30000L)
       .sinceVersion("0.13.0")
       .withDocumentation("Used for timeline-server-based markers with "
-          + "`AsyncTimelineMarkerConflictResolutionStrategy`. "
+          + "`AsyncTimelineServerBasedDetectionStrategy`. "
           + "The period in milliseconds between consecutive runs of async marker conflict detection.");
 
   public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT = ConfigProperty

@@ -39,14 +39,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * trying to do early conflict detection by asynchronously and periodically checking
  * write conflict among multiple writers based on the timeline-server-based markers.
  */
-public class AsyncTimelineMarkerDetectionStrategy extends TimelineServerBasedDetectionStrategy {
+public class AsyncTimelineServerBasedDetectionStrategy extends TimelineServerBasedDetectionStrategy {
 
-  private static final Logger LOG = LogManager.getLogger(AsyncTimelineMarkerDetectionStrategy.class);
+  private static final Logger LOG = LogManager.getLogger(AsyncTimelineServerBasedDetectionStrategy.class);
 
   private AtomicBoolean hasConflict = new AtomicBoolean(false);
   private ScheduledExecutorService asyncDetectorExecutor;
 
-  public AsyncTimelineMarkerDetectionStrategy(String basePath, String markerDir, String markerName, Boolean checkCommitConflict) {
+  public AsyncTimelineServerBasedDetectionStrategy(String basePath, String markerDir, String markerName, Boolean checkCommitConflict) {
     super(basePath, markerDir, markerName, checkCommitConflict);
   }
 
