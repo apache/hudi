@@ -200,7 +200,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES) -Dtest=org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl hudi-utilities -Dtest=org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
