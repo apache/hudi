@@ -51,6 +51,9 @@ import java.util.List;
  */
 public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     implements OneInputStreamOperator<CompactionPlanEvent, CompactionCommitEvent> {
+
+  private static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LoggerFactory.getLogger(CompactOperator.class);
 
   /**

@@ -48,6 +48,8 @@ import org.slf4j.LoggerFactory;
  */
 public class ClusteringPlanSourceFunction extends AbstractRichFunction implements SourceFunction<ClusteringPlanEvent> {
 
+  private static final long serialVersionUID = 1L;
+
   protected static final Logger LOG = LoggerFactory.getLogger(ClusteringPlanSourceFunction.class);
 
   /**

@@ -71,6 +71,8 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     extends KeyedProcessFunction<K, I, O>
     implements CheckpointedFunction, CheckpointListener {
 
+  private static final long serialVersionUID = 1L;
+
   /**
    * Index cache(speed-up) state for the underneath file based(BloomFilter) indices.
    * When a record came in, we do these check:

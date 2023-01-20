@@ -42,6 +42,8 @@ import java.util.Set;
 public class BatchBootstrapOperator<I, O extends HoodieRecord<?>>
     extends BootstrapOperator<I, O> {
 
+  private static final long serialVersionUID = 1L;
+
   private Set<String> partitionPathSet;
   private boolean haveSuccessfulCommits;
 

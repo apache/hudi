@@ -61,6 +61,8 @@ import java.util.concurrent.LinkedBlockingDeque;
 public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     implements OneInputStreamOperator<MergeOnReadInputSplit, RowData> {
 
+  private static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LoggerFactory.getLogger(StreamReadOperator.class);
 
   private static final int MINI_BATCH_SIZE = 2048;

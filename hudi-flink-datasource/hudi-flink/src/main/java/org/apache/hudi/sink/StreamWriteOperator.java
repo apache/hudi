@@ -31,6 +31,8 @@ import org.apache.flink.streaming.api.operators.StreamSink;
  */
 public class StreamWriteOperator<I> extends AbstractWriteOperator<I> {
 
+  private static final long serialVersionUID = 1L;
+
   public StreamWriteOperator(Configuration conf) {
     super(new StreamWriteFunction<>(conf));
   }

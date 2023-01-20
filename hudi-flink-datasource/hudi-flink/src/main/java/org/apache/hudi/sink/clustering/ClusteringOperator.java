@@ -100,6 +100,9 @@ import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
  */
 public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEvent> implements
     OneInputStreamOperator<ClusteringPlanEvent, ClusteringCommitEvent>, BoundedOneInput {
+
+  private static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LoggerFactory.getLogger(ClusteringOperator.class);
 
   private final Configuration conf;

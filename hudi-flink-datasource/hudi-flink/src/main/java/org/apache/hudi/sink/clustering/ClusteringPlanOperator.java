@@ -46,6 +46,8 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPlanEvent>
     implements OneInputStreamOperator<Object, ClusteringPlanEvent> {
 
+  private static final long serialVersionUID = 1L;
+
   /**
    * Config options.
    */

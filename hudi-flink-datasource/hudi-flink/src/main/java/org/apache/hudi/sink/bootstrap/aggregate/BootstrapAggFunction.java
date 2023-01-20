@@ -25,6 +25,9 @@ import org.apache.flink.api.common.functions.AggregateFunction;
  * function {@link org.apache.hudi.sink.bootstrap.BootstrapOperator}.
  */
 public class BootstrapAggFunction implements AggregateFunction<Integer, BootstrapAccumulator, Integer> {
+
+  private static final long serialVersionUID = 1L;
+
   public static final String NAME = BootstrapAggFunction.class.getSimpleName();
 
   @Override

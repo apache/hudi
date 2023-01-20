@@ -50,6 +50,8 @@ import static java.util.stream.Collectors.toList;
 public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPlanEvent>
     implements OneInputStreamOperator<Object, CompactionPlanEvent>, BoundedOneInput {
 
+  private static final long serialVersionUID = 1L;
+
   /**
    * Config options.
    */

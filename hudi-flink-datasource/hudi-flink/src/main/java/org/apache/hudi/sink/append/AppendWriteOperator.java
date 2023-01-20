@@ -31,6 +31,8 @@ import org.apache.flink.table.types.logical.RowType;
  */
 public class AppendWriteOperator<I> extends AbstractWriteOperator<I> {
 
+  private static final long serialVersionUID = 1L;
+
   public AppendWriteOperator(Configuration conf, RowType rowType) {
     super(new AppendWriteFunction<>(conf, rowType));
   }

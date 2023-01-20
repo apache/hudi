@@ -31,6 +31,9 @@ import org.apache.flink.table.types.logical.RowType;
  */
 public class RowDataToHoodieFunctionWithRateLimit<I extends RowData, O extends HoodieRecord>
     extends RowDataToHoodieFunction<I, O> {
+
+  private static final long serialVersionUID = 1L;
+
   /**
    * Total rate limit per second for this job.
    */

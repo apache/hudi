@@ -32,6 +32,9 @@ import org.apache.flink.streaming.api.operators.ProcessOperator;
 public abstract class AbstractWriteOperator<I>
     extends ProcessOperator<I, Object>
     implements OperatorEventHandler, BoundedOneInput {
+
+  private static final long serialVersionUID = 1L;
+
   private final AbstractWriteFunction<I> function;
 
   public AbstractWriteOperator(AbstractWriteFunction<I> function) {

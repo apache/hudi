@@ -46,6 +46,8 @@ import org.slf4j.LoggerFactory;
 public class SortOperator extends TableStreamOperator<RowData>
     implements OneInputStreamOperator<RowData, RowData>, BoundedOneInput {
 
+  private static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LoggerFactory.getLogger(SortOperator.class);
 
   private GeneratedNormalizedKeyComputer gComputer;

@@ -64,6 +64,9 @@ import java.util.stream.Collectors;
  * the SQL API does not allow multiple sinks in one table sink provider.
  */
 public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
+
+  private static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LoggerFactory.getLogger(ClusteringCommitSink.class);
 
   /**

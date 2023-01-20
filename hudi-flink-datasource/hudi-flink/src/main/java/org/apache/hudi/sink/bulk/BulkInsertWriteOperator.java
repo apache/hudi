@@ -35,6 +35,8 @@ public class BulkInsertWriteOperator<I>
     extends AbstractWriteOperator<I>
     implements BoundedOneInput {
 
+  private static final long serialVersionUID = 1L;
+
   public BulkInsertWriteOperator(Configuration conf, RowType rowType) {
     super(new BulkInsertWriteFunction<>(conf, rowType));
   }

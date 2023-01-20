@@ -58,6 +58,8 @@ public abstract class AbstractStreamWriteFunction<I>
     extends AbstractWriteFunction<I>
     implements CheckpointedFunction {
 
+  private static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LoggerFactory.getLogger(AbstractStreamWriteFunction.class);
 
   /**

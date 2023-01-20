@@ -30,6 +30,8 @@ import org.apache.flink.configuration.Configuration;
  */
 public class BucketStreamWriteOperator<I> extends AbstractWriteOperator<I> {
 
+  private static final long serialVersionUID = 1L;
+
   public BucketStreamWriteOperator(Configuration conf) {
     super(new BucketStreamWriteFunction<>(conf));
   }

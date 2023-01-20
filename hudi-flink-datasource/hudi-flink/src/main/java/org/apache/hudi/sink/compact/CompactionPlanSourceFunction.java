@@ -50,6 +50,8 @@ import java.util.stream.Collectors;
  */
 public class CompactionPlanSourceFunction extends AbstractRichFunction implements SourceFunction<CompactionPlanEvent> {
 
+  private static final long serialVersionUID = 1L;
+
   protected static final Logger LOG = LoggerFactory.getLogger(CompactionPlanSourceFunction.class);
 
   /**

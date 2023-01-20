@@ -45,6 +45,9 @@ import static org.apache.hudi.util.StreamerUtil.flinkConf2TypedProperties;
  */
 public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord>
     extends RichMapFunction<I, O> {
+
+  private static final long serialVersionUID = 1L;
+
   /**
    * Row type of the input.
    */

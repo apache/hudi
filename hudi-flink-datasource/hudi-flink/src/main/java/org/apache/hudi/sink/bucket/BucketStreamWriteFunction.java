@@ -50,6 +50,8 @@ import java.util.Set;
  */
 public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
+  private static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LoggerFactory.getLogger(BucketStreamWriteFunction.class);
 
   private int parallelism;

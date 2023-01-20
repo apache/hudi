@@ -81,6 +81,8 @@ import static org.apache.hudi.util.StreamerUtil.isValidFile;
 public class BootstrapOperator<I, O extends HoodieRecord<?>>
     extends AbstractStreamOperator<O> implements OneInputStreamOperator<I, O> {
 
+  private static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LoggerFactory.getLogger(BootstrapOperator.class);
 
   protected HoodieTable<?, ?, ?, ?> hoodieTable;

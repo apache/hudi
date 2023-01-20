@@ -29,6 +29,9 @@ import org.apache.flink.streaming.api.operators.BoundedOneInput;
  * @param <I> the input type
  */
 public abstract class AbstractWriteFunction<I> extends ProcessFunction<I, Object> implements BoundedOneInput {
+  
+  private static final long serialVersionUID = 1L;
+
   /**
    * Sets up the event gateway.
    */

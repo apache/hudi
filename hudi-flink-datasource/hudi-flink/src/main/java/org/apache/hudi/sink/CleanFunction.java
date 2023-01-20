@@ -43,6 +43,9 @@ import org.slf4j.LoggerFactory;
  */
 public class CleanFunction<T> extends AbstractRichFunction
     implements SinkFunction<T>, CheckpointedFunction, CheckpointListener {
+
+  private static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LoggerFactory.getLogger(CleanFunction.class);
 
   private final Configuration conf;
