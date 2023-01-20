@@ -16,34 +16,13 @@
  * limitations under the License.
  */
 
-import org.apache.hudi.QuickstartUtils._
-import scala.collection.JavaConversions._
-import org.apache.spark.sql.SaveMode._
-import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.config.HoodieWriteConfig._
-import org.apache.hudi.common.model.HoodieRecord
-
-val expected = 10
-val database = "default"
 val tableName = "trips"
 val basePath = "file:///tmp/hudi-bundles/tests/" + tableName
-val dataGen = new DataGenerator
-val inserts = convertToStringList(dataGen.generateInserts(expected))
-val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
-df.write.format("hudi").
-  options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
-  option("hoodie.database.name", database).
-  option("hoodie.datasource.meta.sync.enable", "false").
-  option("hoodie.datasource.hive_sync.enable", "false").
+spark.read.format("hudi").
+  option("hoodie.table.name", tableName).
+  option("hoodie.database.name", "default").
   option("hoodie.metadata.enabled", "false").
   option("hoodie.metaserver.enabled", "true").
   option("hoodie.metaserver.uris", "thrift://localhost:9090").
-  mode(Overwrite).
-  save(basePath)
-
+  load(basePath).coalesce(1).write.csv("/tmp/sparksql/trips/results")
 System.exit(0)

@@ -23,12 +23,12 @@
             <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
-<!--        <dependency>-->
-<!--            <groupId>com.h2database</groupId>-->
-<!--            <artifactId>h2</artifactId>-->
-<!--            <version>${h2.version}</version>-->
-<!--            <scope>compile</scope>-->
-<!--        </dependency>-->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>${h2.version}</version>
+            <scope>compile</scope>
+        </dependency>
         <!-- Logging -->
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
@@ -95,7 +95,7 @@
                                     <include>org.mybatis:mybatis</include>
                                     <include>com.zaxxer:HikariCP</include>
                                     <include>mysql:mysql-connector-java</include>
-<!--                                    <include>com.h2database:h2</include>-->
+                                    <include>com.h2database:h2</include>
                                 </includes>
                             </artifactSet>
                             <createSourcesJar>${shadeSources}</createSourcesJar>

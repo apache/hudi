@@ -81,6 +81,7 @@ cp ${GITHUB_WORKSPACE}/packaging/hudi-kafka-connect-bundle/target/hudi-*-$HUDI_V
 cp ${GITHUB_WORKSPACE}/packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
 cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
 cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-slim-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+cp ${GITHUB_WORKSPACE}/packaging/hudi-metaserver-server-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
 echo 'Validating jars below:'
 ls -l $TMP_JARS_DIR
 
