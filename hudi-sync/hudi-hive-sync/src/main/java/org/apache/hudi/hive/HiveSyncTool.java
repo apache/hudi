@@ -296,14 +296,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     if (!tableExists) {
       LOG.info("Hive table " + tableName + " is not found. Creating it");
       HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
-      String inputFormatClassName = HoodieInputFormatUtils.getInputFormatClassName(baseFileFormat, useRealTimeInputFormat);
-
-      if (baseFileFormat.equals(HoodieFileFormat.PARQUET) && config.getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT)) {
-        // Parquet input format had an InputFormat class visible under the old naming scheme.
-        inputFormatClassName = useRealTimeInputFormat
-            ? com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat.class.getName()
-            : com.uber.hoodie.hadoop.HoodieInputFormat.class.getName();
-      }
+      String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealTimeInputFormat);
 
       String outputFormatClassName = HoodieInputFormatUtils.getOutputFormatClassName(baseFileFormat);
       String serDeFormatClassName = HoodieInputFormatUtils.getSerDeClassName(baseFileFormat);
@@ -325,12 +318,18 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         // Sync the table properties if the schema has changed
         if (config.getString(HIVE_TABLE_PROPERTIES) != null || config.getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE)) {
           syncClient.updateTableProperties(tableName, tableProperties);
-          syncClient.updateSerdeProperties(tableName, serdeProperties);
+          syncClient.updateStorageDescriptor(tableName, serdeProperties, null);
           LOG.info("Sync table properties for " + tableName + ", table properties is: " + tableProperties);
         }
         schemaChanged = true;
       } else {
         LOG.info("No Schema difference for " + tableName);
+      }
+
+      if (hiveSyncTableStrategy != null && !hiveSyncTableStrategy.equalsIgnoreCase(HoodieSyncTableStrategy.ALL.name())) {
+        HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
+        String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealTimeInputFormat);
+        syncClient.updateStorageDescriptor(tableName, serdeProperties, inputFormatClassName);
       }
     }
 
@@ -340,6 +339,18 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       syncClient.updateTableComments(tableName, fromMetastore, fromStorage);
     }
     return schemaChanged;
+  }
+
+  private String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean useRealTimeInputFormat) {
+    String inputFormatClassName = HoodieInputFormatUtils.getInputFormatClassName(baseFileFormat, useRealTimeInputFormat);
+
+    if (baseFileFormat.equals(HoodieFileFormat.PARQUET) && config.getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT)) {
+      // Parquet input format had an InputFormat class visible under the old naming scheme.
+      inputFormatClassName = useRealTimeInputFormat
+              ? com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat.class.getName()
+              : com.uber.hoodie.hadoop.HoodieInputFormat.class.getName();
+    }
+    return inputFormatClassName;
   }
 
   /**

@@ -138,7 +138,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateSerdeProperties(String tableName, Map<String, String> serdeProperties) {
+  public void updateStorageDescriptor(String tableName, Map<String, String> serdeProperties, String inputFormatClassName) {
     if (MapUtils.isNullOrEmpty(serdeProperties)) {
       return;
     }
@@ -147,23 +147,39 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       Table table = client.getTable(databaseName, tableName);
       StorageDescriptor storageDescriptor = table.getSd();
       SerDeInfo serdeInfo = storageDescriptor.getSerdeInfo();
+      boolean hasDiff = false;
       if (serdeInfo != null && serdeInfo.getParametersSize() == serdeProperties.size()) {
         Map<String, String> parameters = serdeInfo.getParameters();
-        boolean different = serdeProperties.entrySet().stream().anyMatch(e ->
+        hasDiff = serdeProperties.entrySet().stream().anyMatch(e ->
             !parameters.containsKey(e.getKey()) || !parameters.get(e.getKey()).equals(e.getValue()));
-        if (!different) {
-          LOG.debug("Table " + tableName + " serdeProperties already up to date, skip update serde properties.");
-          return;
-        }
+      }
+      if (inputFormatClassName != null && !storageDescriptor.getInputFormat().equalsIgnoreCase(inputFormatClassName)) {
+        storageDescriptor.setInputFormat(inputFormatClassName);
+        hasDiff = true;
+      }
+      if (!hasDiff) {
+        LOG.debug("Table " + tableName + " serdeProperties and formatClass already up to date, skip update.");
+        return;
       }
 
       HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
+      String outputFormatClassName = HoodieInputFormatUtils.getOutputFormatClassName(baseFileFormat);
       String serDeClassName = HoodieInputFormatUtils.getSerDeClassName(baseFileFormat);
+      storageDescriptor.setOutputFormat(outputFormatClassName);
       storageDescriptor.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
       client.alter_table(databaseName, tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to update table serde info for table: "
           + tableName, e);
+    }
+  }
+
+  public StorageDescriptor getMetastoreStorageDescriptor(String tableName) {
+    try {
+      Table table = client.getTable(databaseName, tableName);
+      return table.getSd();
+    } catch (TException e) {
+      throw new RuntimeException(e);
     }
   }
 
