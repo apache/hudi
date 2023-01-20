@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.exception.InvalidHoodiePathException;
+import org.apache.hudi.hadoop.CachingPath;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -52,7 +53,7 @@ public class HoodieLogFile implements Serializable {
   private transient FileStatus fileStatus;
   private final String pathStr;
   private long fileLen;
-  private transient Path path;
+  private transient CachingPath path;
   private transient String fileId;
   private transient String baseTime;
   private transient int logVersion = Integer.MIN_VALUE;
@@ -115,7 +116,7 @@ public class HoodieLogFile implements Serializable {
 
   public Path getPath() {
     if (path == null) {
-      this.path = new Path(pathStr);
+      this.path = new CachingPath(pathStr);
     }
     return this.path;
   }
