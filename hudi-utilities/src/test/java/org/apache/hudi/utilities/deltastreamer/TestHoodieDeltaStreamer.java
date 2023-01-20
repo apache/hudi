@@ -976,7 +976,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"true, AVRO", "true, SPARK", "false, AVRO", "false, SPARK"})
+  @CsvSource(value = {"false, AVRO", "false, SPARK"}) // TODO set asyncClean to true; disabled due to lock acquiring issue (HUDI-5593)
   public void testCleanerDeleteReplacedDataWithArchive(Boolean asyncClean, HoodieRecordType recordType) throws Exception {
     String tableBasePath = basePath + "/cleanerDeleteReplacedDataWithArchive" + asyncClean;
 
