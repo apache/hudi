@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -33,20 +34,27 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
 
-public abstract class BaseWriteHelper<T, I, K, O, R> {
+public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I> {
+
+  protected BaseWriteHelper(SerializableFunctionUnchecked<I, Integer> partitionNumberExtractor) {
+    super(partitionNumberExtractor);
+  }
 
   public HoodieWriteMetadata<O> write(String instantTime,
                                       I inputRecords,
                                       HoodieEngineContext context,
                                       HoodieTable<T, I, K, O> table,
                                       boolean shouldCombine,
-                                      int shuffleParallelism,
+                                      int configuredShuffleParallelism,
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       WriteOperationType operationType) {
     try {
+      int targetParallelism =
+          deduceShuffleParallelism(inputRecords, configuredShuffleParallelism);
+
       // De-dupe/merge if needed
       I dedupedRecords =
-          combineOnCondition(shouldCombine, inputRecords, shuffleParallelism, table);
+          combineOnCondition(shouldCombine, inputRecords, targetParallelism, table);
 
       Instant lookupBegin = Instant.now();
       I taggedRecords = dedupedRecords;
