@@ -175,7 +175,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     Stream<HoodieFileGroup> fileGroups = partitionedFsView.getAllFileGroups(partitionPath);
 
     List<Comparable[]> rows = new ArrayList<>();
-    fileGroups.forEach(fg -> fg.getAllCommittedFileSlices().forEach(fs -> {
+    fileGroups.forEach(fg -> fg.getAllFileSlices().forEach(fs -> {
       int idx = 0;
       // For base file only Views, do not display any delta-file related columns
       Comparable[] row = new Comparable[8];
@@ -223,7 +223,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     Stream<HoodieFileGroup> fileGroups = partitionedFsView.getAllFileGroups(partitionPath);
 
     // Only get instant 1, since maxInstant was specified 2
-    fileGroups.forEach(fg -> fg.getAllCommittedFileSlices().filter(fs -> fs.getBaseInstantTime().equals("1")).forEach(fs -> {
+    fileGroups.forEach(fg -> fg.getAllFileSlices().filter(fs -> fs.getBaseInstantTime().equals("1")).forEach(fs -> {
       int idx = 0;
       // For base file only Views, do not display any delta-file related columns.
       Comparable[] row = new Comparable[5];

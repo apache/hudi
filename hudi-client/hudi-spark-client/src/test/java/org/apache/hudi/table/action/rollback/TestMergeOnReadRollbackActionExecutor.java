@@ -131,7 +131,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     // assert the first partition data and log file size
     List<HoodieFileGroup> firstPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, firstPartitionRollBack1FileGroups.size());
-    List<FileSlice> firstPartitionRollBack1FileSlices = firstPartitionRollBack1FileGroups.get(0).getAllCommittedFileSlices().collect(Collectors.toList());
+    List<FileSlice> firstPartitionRollBack1FileSlices = firstPartitionRollBack1FileGroups.get(0).getAllFileSlices().collect(Collectors.toList());
     assertEquals(1, firstPartitionRollBack1FileSlices.size());
     FileSlice firstPartitionRollBack1FileSlice = firstPartitionRollBack1FileSlices.get(0);
     List<HoodieLogFile> firstPartitionRollBackLogFiles = firstPartitionRollBack1FileSlice.getLogFiles().collect(Collectors.toList());
@@ -143,7 +143,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     // assert the second partition data and log file size
     List<HoodieFileGroup> secondPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, secondPartitionRollBack1FileGroups.size());
-    List<FileSlice> secondPartitionRollBack1FileSlices = secondPartitionRollBack1FileGroups.get(0).getAllCommittedFileSlices().collect(Collectors.toList());
+    List<FileSlice> secondPartitionRollBack1FileSlices = secondPartitionRollBack1FileGroups.get(0).getAllFileSlices().collect(Collectors.toList());
     assertEquals(1, secondPartitionRollBack1FileSlices.size());
     FileSlice secondPartitionRollBack1FileSlice = secondPartitionRollBack1FileSlices.get(0);
     List<HoodieLogFile> secondPartitionRollBackLogFiles = secondPartitionRollBack1FileSlice.getLogFiles().collect(Collectors.toList());
@@ -190,9 +190,9 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
     List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, firstPartitionCommit2FileGroups.size());
-    assertEquals(1, (int) firstPartitionCommit2FileGroups.get(0).getAllCommittedFileSlices().count());
-    assertFalse(firstPartitionCommit2FileGroups.get(0).getAllCommittedFileSlices().findFirst().get().getBaseFile().isPresent());
-    assertEquals(1, firstPartitionCommit2FileGroups.get(0).getAllCommittedFileSlices().findFirst().get().getLogFiles().count());
+    assertEquals(1, (int) firstPartitionCommit2FileGroups.get(0).getAllFileSlices().count());
+    assertFalse(firstPartitionCommit2FileGroups.get(0).getAllFileSlices().findFirst().get().getBaseFile().isPresent());
+    assertEquals(1, firstPartitionCommit2FileGroups.get(0).getAllFileSlices().findFirst().get().getLogFiles().count());
     String generatedFileID = firstPartitionCommit2FileGroups.get(0).getFileGroupId().getFileId();
 
     // check hoodieCommitMeta

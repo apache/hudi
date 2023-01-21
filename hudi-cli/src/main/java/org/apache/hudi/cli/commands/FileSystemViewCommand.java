@@ -82,7 +82,7 @@ public class FileSystemViewCommand {
     HoodieTableFileSystemView fsView = buildFileSystemView(globRegex, maxInstant, baseFileOnly, includeMaxInstant,
         includeInflight, excludeCompaction);
     List<Comparable[]> rows = new ArrayList<>();
-    fsView.getAllFileGroups().forEach(fg -> fg.getAllCommittedFileSlices().forEach(fs -> {
+    fsView.getAllFileGroups().forEach(fg -> fg.getAllFileSlices().forEach(fs -> {
       int idx = 0;
       // For base file only Views, do not display any delta-file related columns
       Comparable[] row = new Comparable[baseFileOnly ? 5 : 8];

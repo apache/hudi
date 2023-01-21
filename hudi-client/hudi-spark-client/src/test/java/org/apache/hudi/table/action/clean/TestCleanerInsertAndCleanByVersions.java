@@ -150,7 +150,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
       for (String partitionPath : dataGen.getPartitionPaths()) {
         TableFileSystemView fsView = table.getFileSystemView();
         Option<Boolean> added = Option.fromJavaOptional(fsView.getAllFileGroups(partitionPath).findFirst().map(fg -> {
-          fg.getLatestCommittedFileSlice().map(fs -> compactionFileIdToLatestFileSlice.put(fg.getFileGroupId(), fs));
+          fg.getLatestFileSlice().map(fs -> compactionFileIdToLatestFileSlice.put(fg.getFileGroupId(), fs));
           return true;
         }));
         if (added.isPresent()) {
@@ -208,7 +208,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
             if (compactionFileIdToLatestFileSlice.containsKey(fileGroup.getFileGroupId())) {
               // Ensure latest file-slice selected for compaction is retained
               Option<HoodieBaseFile> dataFileForCompactionPresent =
-                  Option.fromJavaOptional(fileGroup.getAllCommittedBaseFiles().filter(df -> {
+                  Option.fromJavaOptional(fileGroup.getAllBaseFiles().filter(df -> {
                     return compactionFileIdToLatestFileSlice.get(fileGroup.getFileGroupId()).getBaseInstantTime()
                         .equals(df.getCommitTime());
                   }).findAny());
@@ -217,7 +217,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
             } else {
               // file has no more than max versions
               String fileId = fileGroup.getFileGroupId().getFileId();
-              List<HoodieBaseFile> dataFiles = fileGroup.getAllCommittedBaseFiles().collect(Collectors.toList());
+              List<HoodieBaseFile> dataFiles = fileGroup.getAllBaseFiles().collect(Collectors.toList());
 
               assertTrue(dataFiles.size() <= maxVersions,
                   "fileId " + fileId + " has more than " + maxVersions + " versions");

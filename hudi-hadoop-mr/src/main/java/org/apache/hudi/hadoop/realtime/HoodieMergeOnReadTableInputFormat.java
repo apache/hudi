@@ -240,14 +240,14 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     List<FileStatus> result = new ArrayList<>();
     fileGroups.stream().forEach(f -> {
       try {
-        List<FileSlice> baseFiles = f.getAllCommittedFileSlices().filter(slice -> slice.getBaseFile().isPresent()).collect(Collectors.toList());
+        List<FileSlice> baseFiles = f.getAllFileSlices().filter(slice -> slice.getBaseFile().isPresent()).collect(Collectors.toList());
         if (!baseFiles.isEmpty()) {
           FileStatus baseFileStatus = HoodieInputFormatUtils.getFileStatus(baseFiles.get(0).getBaseFile().get());
           String baseFilePath = baseFileStatus.getPath().toUri().toString();
           if (!candidateFileStatus.containsKey(baseFilePath)) {
             throw new HoodieException("Error obtaining fileStatus for file: " + baseFilePath);
           }
-          List<HoodieLogFile> deltaLogFiles = f.getLatestCommittedFileSlice().get().getLogFiles().collect(Collectors.toList());
+          List<HoodieLogFile> deltaLogFiles = f.getLatestFileSlice().get().getLogFiles().collect(Collectors.toList());
           // We cannot use baseFileStatus.getPath() here, since baseFileStatus.getPath() missing file size information.
           // So we use candidateFileStatus.get(baseFileStatus.getPath()) to get a correct path.
           RealtimeFileStatus fileStatus = new RealtimeFileStatus(candidateFileStatus.get(baseFilePath),
@@ -259,8 +259,8 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
           result.add(fileStatus);
         }
         // add file group which has only logs.
-        if (f.getLatestCommittedFileSlice().isPresent() && baseFiles.isEmpty()) {
-          List<FileStatus> logFileStatus = f.getLatestCommittedFileSlice().get().getLogFiles().map(logFile -> logFile.getFileStatus()).collect(Collectors.toList());
+        if (f.getLatestFileSlice().isPresent() && baseFiles.isEmpty()) {
+          List<FileStatus> logFileStatus = f.getLatestFileSlice().get().getLogFiles().map(logFile -> logFile.getFileStatus()).collect(Collectors.toList());
           if (logFileStatus.size() > 0) {
             List<HoodieLogFile> deltaLogFiles = logFileStatus.stream().map(l -> new HoodieLogFile(l.getPath(), l.getLen())).collect(Collectors.toList());
             RealtimeFileStatus fileStatus = new RealtimeFileStatus(logFileStatus.get(0), basePath,

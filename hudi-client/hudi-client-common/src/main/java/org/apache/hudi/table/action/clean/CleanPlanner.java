@@ -247,7 +247,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       int keepVersions = config.getCleanerFileVersionsRetained();
       // do not cleanup slice required for pending compaction
       Iterator<FileSlice> fileSliceIterator =
-          fileGroup.getAllCommittedFileSlices()
+          fileGroup.getAllFileSlices()
               .filter(fs -> !isFileSliceNeededForPendingMajorOrMinorCompaction(fs))
               .iterator();
       if (isFileGroupInPendingMajorOrMinorCompaction(fileGroup)) {
@@ -318,7 +318,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       // add active files
       List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
       for (HoodieFileGroup fileGroup : fileGroups) {
-        List<FileSlice> fileSliceList = fileGroup.getAllCommittedFileSlices().collect(Collectors.toList());
+        List<FileSlice> fileSliceList = fileGroup.getAllFileSlices().collect(Collectors.toList());
 
         if (fileSliceList.isEmpty()) {
           continue;
@@ -404,7 +404,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     } else {
       replacedGroups = fileSystemView.getAllReplacedFileGroups(partitionPath);
     }
-    return replacedGroups.flatMap(HoodieFileGroup::getAllCommittedFileSlices)
+    return replacedGroups.flatMap(HoodieFileGroup::getAllFileSlices)
         // do not delete savepointed files  (archival will make sure corresponding replacecommit file is not deleted)
         .filter(slice -> !slice.getBaseFile().isPresent() || !savepointedFiles.contains(slice.getBaseFile().get().getFileName()))
         .flatMap(slice -> getCleanFileInfoForSlice(slice).stream())

@@ -965,7 +965,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     for (HoodieFileGroup fileGroup : fileGroups) {
       String fileId = fileGroup.getFileGroupId().getFileId();
       Set<String> filenames = new HashSet<>();
-      fileGroup.getAllCommittedBaseFiles().forEach(dataFile -> {
+      fileGroup.getAllBaseFiles().forEach(dataFile -> {
         assertEquals(fileId, dataFile.getFileId(), "All same fileId should be grouped");
         filenames.add(dataFile.getFileName());
       });
@@ -1182,7 +1182,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     assertEquals(3, fileGroups.size());
     for (HoodieFileGroup fileGroup : fileGroups) {
-      List<FileSlice> slices = fileGroup.getAllCommittedFileSlices().collect(Collectors.toList());
+      List<FileSlice> slices = fileGroup.getAllFileSlices().collect(Collectors.toList());
       String fileId = fileGroup.getFileGroupId().getFileId();
       if (fileId.equals(fileId1)) {
         assertEquals(isLatestFileSliceOnly ? 1 : 2, slices.size());

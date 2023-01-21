@@ -127,7 +127,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
   private def showAllFileSlices(fsView: HoodieTableFileSystemView): java.util.List[Row] = {
     val rows: java.util.List[Row] = new java.util.ArrayList[Row]
     fsView.getAllFileGroups.iterator().asScala.foreach(fg => {
-      fg.getAllCommittedFileSlices.iterator().asScala.foreach(fs => {
+      fg.getAllFileSlices.iterator().asScala.foreach(fs => {
         val fileId = fg.getFileGroupId.getFileId
         var baseFilePath = ""
         var baseFileSize = 0L

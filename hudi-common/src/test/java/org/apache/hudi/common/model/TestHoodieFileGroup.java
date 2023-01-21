@@ -49,11 +49,11 @@ public class TestHoodieFileGroup {
       HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i);
       fileGroup.addBaseFile(baseFile);
     }
-    assertEquals(2, fileGroup.getAllCommittedFileSlices().count());
-    assertTrue(!fileGroup.getAllCommittedFileSlices().anyMatch(s -> s.getBaseInstantTime().equals("002")));
+    assertEquals(2, fileGroup.getAllFileSlices().count());
+    assertTrue(!fileGroup.getAllFileSlices().anyMatch(s -> s.getBaseInstantTime().equals("002")));
     assertEquals(3, fileGroup.getAllFileSlicesIncludingInflight().count());
-    assertTrue(fileGroup.getLatestCommittedFileSlice().get().getBaseInstantTime().equals("001"));
-    assertTrue((new HoodieFileGroup(fileGroup)).getLatestCommittedFileSlice().get().getBaseInstantTime().equals("001"));
+    assertTrue(fileGroup.getLatestFileSlice().get().getBaseInstantTime().equals("001"));
+    assertTrue((new HoodieFileGroup(fileGroup)).getLatestFileSlice().get().getBaseInstantTime().equals("001"));
   }
 
   @Test
@@ -70,10 +70,10 @@ public class TestHoodieFileGroup {
       HoodieBaseFile baseFile = new HoodieBaseFile("data_1_0" + i);
       fileGroup.addBaseFile(baseFile);
     }
-    List<FileSlice> allFileSlices = fileGroup.getAllCommittedFileSlices().collect(Collectors.toList());
+    List<FileSlice> allFileSlices = fileGroup.getAllFileSlices().collect(Collectors.toList());
     assertEquals(6, allFileSlices.size());
     assertTrue(!allFileSlices.stream().anyMatch(s -> s.getBaseInstantTime().equals("06")));
     assertEquals(7, fileGroup.getAllFileSlicesIncludingInflight().count());
-    assertTrue(fileGroup.getLatestCommittedFileSlice().get().getBaseInstantTime().equals("05"));
+    assertTrue(fileGroup.getLatestFileSlice().get().getBaseInstantTime().equals("05"));
   }
 }

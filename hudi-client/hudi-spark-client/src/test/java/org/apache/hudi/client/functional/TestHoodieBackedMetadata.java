@@ -2479,11 +2479,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         fileGroups.addAll(tableView.getAllReplacedFileGroups(partition).collect(Collectors.toList()));
 
         fileGroups.forEach(g -> LogManager.getLogger(TestHoodieBackedMetadata.class).info(g));
-        fileGroups.forEach(g -> g.getAllCommittedBaseFiles().forEach(b -> LogManager.getLogger(TestHoodieBackedMetadata.class).info(b)));
-        fileGroups.forEach(g -> g.getAllCommittedFileSlices().forEach(s -> LogManager.getLogger(TestHoodieBackedMetadata.class).info(s)));
+        fileGroups.forEach(g -> g.getAllBaseFiles().forEach(b -> LogManager.getLogger(TestHoodieBackedMetadata.class).info(b)));
+        fileGroups.forEach(g -> g.getAllFileSlices().forEach(s -> LogManager.getLogger(TestHoodieBackedMetadata.class).info(s)));
 
         long numFiles = fileGroups.stream()
-            .mapToLong(g -> g.getAllCommittedBaseFiles().count() + g.getAllCommittedFileSlices().mapToLong(s -> s.getLogFiles().count()).sum())
+            .mapToLong(g -> g.getAllBaseFiles().count() + g.getAllFileSlices().mapToLong(s -> s.getLogFiles().count()).sum())
             .sum();
         assertEquals(metadataFilenames.size(), numFiles);
       } catch (IOException e) {

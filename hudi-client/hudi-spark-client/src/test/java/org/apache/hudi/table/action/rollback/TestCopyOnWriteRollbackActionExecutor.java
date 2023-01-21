@@ -259,7 +259,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // assert the first partition file group and file slice
     List<HoodieFileGroup> firstPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, firstPartitionRollBack1FileGroups.size());
-    List<FileSlice> firstPartitionRollBack1FileSlices = firstPartitionRollBack1FileGroups.get(0).getAllCommittedFileSlices().collect(Collectors.toList());
+    List<FileSlice> firstPartitionRollBack1FileSlices = firstPartitionRollBack1FileGroups.get(0).getAllFileSlices().collect(Collectors.toList());
     assertEquals(1, firstPartitionRollBack1FileSlices.size());
 
     firstPartitionCommit2FileSlices.removeAll(firstPartitionRollBack1FileSlices);
@@ -271,7 +271,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // assert the second partition file group and file slice
     List<HoodieFileGroup> secondPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, secondPartitionRollBack1FileGroups.size());
-    List<FileSlice> secondPartitionRollBack1FileSlices = secondPartitionRollBack1FileGroups.get(0).getAllCommittedFileSlices().collect(Collectors.toList());
+    List<FileSlice> secondPartitionRollBack1FileSlices = secondPartitionRollBack1FileGroups.get(0).getAllFileSlices().collect(Collectors.toList());
     assertEquals(1, secondPartitionRollBack1FileSlices.size());
 
     // assert the second partition rollback file is equals rollBack1SecondPartitionStat

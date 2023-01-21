@@ -84,11 +84,11 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
     List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, firstPartitionCommit2FileGroups.size());
-    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllCommittedFileSlices().collect(Collectors.toList()));
+    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
     //3. assert file group and get the second partition file slice
     List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, secondPartitionCommit2FileGroups.size());
-    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllCommittedFileSlices().collect(Collectors.toList()));
+    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
 
     //4. assert file slice
     HoodieTableType tableType = this.getTableType();
@@ -125,10 +125,10 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
     List<HoodieFileGroup> firstPartitionCommit1FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, firstPartitionCommit1FileGroups.size());
-    Set<String> partition1Commit1FileIds = firstPartitionCommit1FileGroups.get(0).getAllCommittedFileSlices().map(FileSlice::getFileId).collect(Collectors.toSet());
+    Set<String> partition1Commit1FileIds = firstPartitionCommit1FileGroups.get(0).getAllFileSlices().map(FileSlice::getFileId).collect(Collectors.toSet());
     List<HoodieFileGroup> secondPartitionCommit1FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, secondPartitionCommit1FileGroups.size());
-    Set<String> partition2Commit1FileIds = secondPartitionCommit1FileGroups.get(0).getAllCommittedFileSlices().map(FileSlice::getFileId).collect(Collectors.toSet());
+    Set<String> partition2Commit1FileIds = secondPartitionCommit1FileGroups.get(0).getAllFileSlices().map(FileSlice::getFileId).collect(Collectors.toSet());
 
     /**
      * Write 2 (one insert_overwrite)
@@ -149,10 +149,10 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     fsView = getFileSystemViewWithUnCommittedSlices(metaClient);
     List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH)
         .filter(fg -> !partition1Commit1FileIds.contains(fg.getFileGroupId().getFileId())).collect(Collectors.toList());
-    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllCommittedFileSlices().collect(Collectors.toList()));
+    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
     List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH)
         .filter(fg -> !partition2Commit1FileIds.contains(fg.getFileGroupId().getFileId())).collect(Collectors.toList());
-    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllCommittedFileSlices().collect(Collectors.toList()));
+    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
 
     assertEquals(1, firstPartitionCommit2FileSlices.size());
     assertEquals(1, secondPartitionCommit2FileSlices.size());
