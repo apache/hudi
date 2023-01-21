@@ -121,7 +121,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
 
     val filteredTimeline = new HoodieDefaultTimeline(
       new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
-    new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new Array[FileStatus](0)))
+    new HoodieTableFileSystemView(metaClient, filteredTimeline, filteredTimeline, statuses.toArray(new Array[FileStatus](0)))
   }
 
   private def showAllFileSlices(fsView: HoodieTableFileSystemView): java.util.List[Row] = {

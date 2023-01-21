@@ -92,7 +92,7 @@ public class ManifestFileWriter {
         Configuration hadoopConf = metaClient.getHadoopConf();
         HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
         HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
-            metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
+            metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getActiveTimeline().getCommitsTimeline(),
             HoodieMetadataConfig.newBuilder().enable(useFileListingFromMetadata).withAssumeDatePartitioning(assumeDatePartitioning).build());
         return fsView.getLatestBaseFiles(p).map(HoodieBaseFile::getFileName);
       });

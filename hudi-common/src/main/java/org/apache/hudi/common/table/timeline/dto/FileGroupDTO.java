@@ -50,13 +50,13 @@ public class FileGroupDTO {
     dto.partition = fileGroup.getPartitionPath();
     dto.id = fileGroup.getFileGroupId().getFileId();
     dto.slices = fileGroup.getAllRawFileSlices().map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
-    dto.timeline = TimelineDTO.fromTimeline(fileGroup.getTimeline());
+    dto.timeline = TimelineDTO.fromTimeline(fileGroup.getCompletedTimeline());
     return dto;
   }
 
   public static HoodieFileGroup toFileGroup(FileGroupDTO dto, HoodieTableMetaClient metaClient) {
     HoodieFileGroup fileGroup =
-        new HoodieFileGroup(dto.partition, dto.id, TimelineDTO.toTimeline(dto.timeline, metaClient));
+        new HoodieFileGroup(dto.partition, dto.id, TimelineDTO.toTimeline(dto.timeline, metaClient), metaClient.getActiveTimeline().getWriteTimeline());
     dto.slices.stream().map(FileSliceDTO::toFileSlice).forEach(fileSlice -> fileGroup.addFileSlice(fileSlice));
     return fileGroup;
   }

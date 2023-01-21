@@ -45,6 +45,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
@@ -172,22 +173,22 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
                                                           List<Path> inputPaths,
                                                           String incrementalTable) throws IOException {
     Job jobContext = Job.getInstance(job);
-    Option<HoodieTimeline> timeline = HoodieInputFormatUtils.getFilteredCommitsTimeline(jobContext, tableMetaClient);
-    if (!timeline.isPresent()) {
+    Pair<Option<HoodieTimeline>, Option<HoodieTimeline>> timelines = HoodieInputFormatUtils.getFilteredCommitsTimeline(jobContext, tableMetaClient);
+    if (!timelines.getLeft().isPresent()) {
       return null;
     }
-    Option<List<HoodieInstant>> commitsToCheck = HoodieInputFormatUtils.getCommitsForIncrementalQuery(jobContext, incrementalTable, timeline.get());
+    Option<List<HoodieInstant>> commitsToCheck = HoodieInputFormatUtils.getCommitsForIncrementalQuery(jobContext, incrementalTable, timelines.getLeft().get());
     if (!commitsToCheck.isPresent()) {
       return null;
     }
-    Option<String> incrementalInputPaths = HoodieInputFormatUtils.getAffectedPartitions(commitsToCheck.get(), tableMetaClient, timeline.get(), inputPaths);
+    Option<String> incrementalInputPaths = HoodieInputFormatUtils.getAffectedPartitions(commitsToCheck.get(), tableMetaClient, timelines.getKey().get(), inputPaths);
     // Mutate the JobConf to set the input paths to only partitions touched by incremental pull.
     if (!incrementalInputPaths.isPresent()) {
       return null;
     }
     setInputPaths(job, incrementalInputPaths.get());
     FileStatus[] fileStatuses = doListStatus(job);
-    return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timeline.get(), fileStatuses, commitsToCheck.get());
+    return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timelines.getLeft().get(), timelines.getRight().get(), fileStatuses, commitsToCheck.get());
   }
 
   protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, HiveHoodieTableFileIndex fileIndex, Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {

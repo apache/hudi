@@ -438,12 +438,12 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     return metaClient;
   }
 
-  public HoodieTableFileSystemView getHoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-                                                                FileStatus[] fileStatuses) {
+  public HoodieTableFileSystemView getHoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleCompletedWriteTimeline,
+                                                                HoodieTimeline visibleWriteTimeline, FileStatus[] fileStatuses) {
     if (tableView == null) {
-      tableView = new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, fileStatuses);
+      tableView = new HoodieTableFileSystemView(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline, fileStatuses);
     } else {
-      tableView.init(metaClient, visibleActiveTimeline, fileStatuses);
+      tableView.init(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline, fileStatuses);
     }
     return tableView;
   }
@@ -657,7 +657,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     // Metadata table should automatically compact and clean
     // versions are +1 as autoClean / compaction happens end of commits
     int numFileVersions = metadataWriteConfig.getCleanerFileVersionsRetained() + 1;
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline());
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline(), metadataMetaClient.getActiveTimeline());
     metadataTablePartitions.forEach(partition -> {
       MetadataPartitionType partitionType = partitionTypeMap.get(partition);
 

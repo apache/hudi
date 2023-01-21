@@ -251,12 +251,15 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   val mandatoryFields: Seq[String]
 
-  protected def timeline: HoodieTimeline =
+  protected def completedTimeline: HoodieTimeline =
   // NOTE: We're including compaction here since it's not considering a "commit" operation
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
+  protected def writeTimeline: HoodieTimeline =
+  // NOTE: We're including compaction here since it's not considering a "commit" operation
+    metaClient.getCommitsAndCompactionTimeline
 
   protected def latestInstant: Option[HoodieInstant] =
-    toScalaOption(timeline.lastInstant())
+    toScalaOption(completedTimeline.lastInstant())
 
   protected def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(latestInstant.map(_.getTimestamp))
@@ -402,7 +405,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   protected def listLatestBaseFiles(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[Path, Seq[FileStatus]] = {
     val partitionDirs = listPartitionDirectories(globPaths, partitionFilters, dataFilters)
-    val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+    val fsView = new HoodieTableFileSystemView(metaClient, completedTimeline, writeTimeline, partitionDirs.flatMap(_.files).toArray)
 
     val latestBaseFiles = fsView.getLatestBaseFiles.iterator().asScala.toList.map(_.getFileStatus)
 
@@ -416,7 +419,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def listLatestFileSlices(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
     latestInstant.map { _ =>
       val partitionDirs = listPartitionDirectories(globPaths, partitionFilters, dataFilters)
-      val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+      val fsView = new HoodieTableFileSystemView(metaClient, completedTimeline, writeTimeline, partitionDirs.flatMap(_.files).toArray)
 
       val queryTimestamp = this.queryTimestamp.get
       fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
@@ -613,7 +616,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val internalSchema = internalSchemaOpt.getOrElse(InternalSchema.getEmptyInternalSchema)
     val querySchemaString = SerDeHelper.toJson(internalSchema)
     if (!isNullOrEmpty(querySchemaString)) {
-      val validCommits = timeline.getInstants.iterator.asScala.map(_.getFileName).mkString(",")
+      val validCommits = completedTimeline.getInstants.iterator.asScala.map(_.getFileName).mkString(",")
 
       conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
       conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath)

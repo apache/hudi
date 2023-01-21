@@ -244,16 +244,19 @@ public class FileSystemViewCommand {
     Stream<HoodieInstant> instantsStream;
 
     HoodieTimeline timeline;
+    HoodieTimeline writeTimeline;
     if (basefileOnly) {
-      timeline = metaClient.getActiveTimeline().getCommitTimeline();
+      writeTimeline = metaClient.getActiveTimeline().getCommitTimeline();
     } else if (excludeCompaction) {
-      timeline = metaClient.getActiveTimeline().getCommitsTimeline();
+      writeTimeline = metaClient.getActiveTimeline().getCommitsTimeline();
     } else {
-      timeline = metaClient.getActiveTimeline().getWriteTimeline();
+      writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
     }
 
     if (!includeInflight) {
-      timeline = timeline.filterCompletedInstants();
+      timeline = writeTimeline.filterCompletedInstants();
+    } else {
+      timeline = writeTimeline;
     }
 
     instantsStream = timeline.getInstantsAsStream();
@@ -270,6 +273,6 @@ public class FileSystemViewCommand {
 
     HoodieTimeline filteredTimeline = new HoodieDefaultTimeline(instantsStream,
         (Function<HoodieInstant, Option<byte[]>> & Serializable) metaClient.getActiveTimeline()::getInstantDetails);
-    return new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new FileStatus[0]));
+    return new HoodieTableFileSystemView(metaClient, filteredTimeline, writeTimeline, statuses.toArray(new FileStatus[0]));
   }
 }

@@ -547,7 +547,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
   private def getFileCountInPartitionPath(partitionPath: String): Int = {
     metaClient.reloadActiveTimeline()
     val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
-    val fileSystemView = new HoodieTableFileSystemView(metaClient, activeInstants)
+    val fileSystemView = new HoodieTableFileSystemView(metaClient, activeInstants, metaClient.getActiveTimeline.getCommitsTimeline)
     fileSystemView.getAllBaseFiles(partitionPath).iterator().asScala.toSeq.length
   }
 

@@ -296,7 +296,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Get the view of the file system for this table.
    */
   public TableFileSystemView getFileSystemView() {
-    return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
+    return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline(), metaClient.getCommitsTimeline());
   }
 
   /**

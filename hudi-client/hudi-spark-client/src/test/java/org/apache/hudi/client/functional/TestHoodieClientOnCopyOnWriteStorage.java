@@ -28,9 +28,11 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkSingleFileSortPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -59,7 +61,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.ClusteringTestUtils;
 import org.apache.hudi.common.testutils.FileCreateUtils;
@@ -2697,6 +2701,48 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     int totalRecords = 2 * numRecords;
     assertEquals(totalRecords, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
         "Must contain " + totalRecords + " records");
+  }
+
+  @Test
+  public void testFailedFirstCommit() throws IOException {
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
+    HoodieWriteConfig cfg = cfgBuilder.withAutoCommit(false)
+        .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withAutoClean(false).withAsyncClean(true).build())
+        .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    String firstInstantTime = "10000";
+    client.startCommitWithTime(firstInstantTime);
+    int numRecords = 100;
+    // do not commit first commit
+    JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(dataGen.generateInserts(firstInstantTime, numRecords), 1);
+    JavaRDD<WriteStatus> result1 = client.bulkInsert(writeRecords1, firstInstantTime);
+    assertTrue(client.commit(firstInstantTime, result1), "Commit should succeed");
+    // remove complete meta file to mimic partial failure.
+    metaClient.getFs().delete(new Path(basePath + "/.hoodie/" + firstInstantTime + ".commit"));
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    client = getHoodieWriteClient(cfg);
+    // lets add 2nd commit which succeeds.
+    String secondInstantTime = "20000";
+    client.startCommitWithTime(secondInstantTime);
+    // do not commit first commit
+    JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(dataGen.generateInserts(secondInstantTime, numRecords), 1);
+    JavaRDD<WriteStatus> result2 = client.bulkInsert(writeRecords2, secondInstantTime);
+    assertTrue(client.commit(secondInstantTime, result2), "Commit should succeed");
+
+    // File listing using fs based listing.
+    HoodieSparkEngineContext context = new HoodieSparkEngineContext(jsc);
+    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(context, basePath, false, true);
+
+    HoodieTableFileSystemView fileSystemView = FileSystemViewManager.createInMemoryFileSystemView(context,
+        metaClient, HoodieMetadataConfig.newBuilder().enable(false).build());
+
+    for (String partitionPath: allPartitionPathsFromFS) {
+      List<HoodieBaseFile> baseFiles = fileSystemView.getLatestBaseFiles(partitionPath).collect(Collectors.toList());
+      boolean invalidFilesPresent = baseFiles.stream().anyMatch(baseFile -> baseFile.getCommitTime().equals(firstInstantTime));
+      assertFalse(invalidFilesPresent); // no data files from firstCommit should be returned.
+    }
   }
 
   /**

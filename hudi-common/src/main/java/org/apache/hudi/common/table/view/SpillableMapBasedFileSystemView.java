@@ -59,8 +59,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   private final ExternalSpillableMap.DiskMapType diskMapType;
   private final boolean isBitCaskDiskMapCompressionEnabled;
 
-  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      FileSystemViewStorageConfig config, HoodieCommonConfig commonConfig) {
+  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleCompletedWriteTimeline,
+                                         HoodieTimeline visibleWriteTimeline, FileSystemViewStorageConfig config, HoodieCommonConfig commonConfig) {
     super(config.isIncrementalTimelineSyncEnabled());
     this.maxMemoryForFileGroupMap = config.getMaxMemoryForFileGroupMap();
     this.maxMemoryForPendingCompaction = config.getMaxMemoryForPendingCompaction();
@@ -71,12 +71,13 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     this.baseStoreDir = config.getSpillableDir();
     diskMapType = commonConfig.getSpillableDiskMapType();
     isBitCaskDiskMapCompressionEnabled = commonConfig.isBitCaskDiskMapCompressionEnabled();
-    init(metaClient, visibleActiveTimeline);
+    init(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline);
   }
 
-  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      FileStatus[] fileStatuses, FileSystemViewStorageConfig config, HoodieCommonConfig commonConfig) {
-    this(metaClient, visibleActiveTimeline, config, commonConfig);
+  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleCompletedWriteTimeline,
+                                         HoodieTimeline visibleWriteTimeline, FileStatus[] fileStatuses, FileSystemViewStorageConfig config,
+                                         HoodieCommonConfig commonConfig) {
+    this(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline, config, commonConfig);
     addFilesToView(fileStatuses);
   }
 

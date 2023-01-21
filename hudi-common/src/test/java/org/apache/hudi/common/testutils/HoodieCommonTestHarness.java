@@ -109,7 +109,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline, boolean enableIncrementalTimelineSync) {
-    return new HoodieTableFileSystemView(metaClient, timeline, enableIncrementalTimelineSync);
+    return new HoodieTableFileSystemView(metaClient, timeline, timeline, enableIncrementalTimelineSync);
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) throws IOException {
@@ -124,7 +124,7 @@ public class HoodieCommonTestHarness {
   protected SyncableFileSystemView getFileSystemViewWithUnCommittedSlices(HoodieTableMetaClient metaClient) {
     try {
       return new HoodieTableFileSystemView(metaClient,
-          metaClient.getActiveTimeline(),
+          metaClient.getActiveTimeline(), metaClient.getActiveTimeline(),
           HoodieTestTable.of(metaClient).listAllBaseAndLogFiles()
       );
     } catch (IOException ioe) {

@@ -229,6 +229,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
       // get fs and check number of latest files
       val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants,
+        metaClient.getActiveTimeline.getCommitTimeline,
         metaClient.getFs.listStatus(new Path(duplicatedPartitionPath)))
       val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getPath).toList
       // there should be 3 files
@@ -289,7 +290,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
       // get fs and check number of latest files
       val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants,
-        metaClient.getFs.listStatus(new Path(duplicatedPartitionPathWithUpdates)))
+        metaClient.getActiveTimeline.getCommitTimeline, metaClient.getFs.listStatus(new Path(duplicatedPartitionPathWithUpdates)))
       val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getPath).toList
       // there should be 2 files
       assertResult(2) {
@@ -350,7 +351,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
       // get fs and check number of latest files
       val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants,
-        metaClient.getFs.listStatus(new Path(duplicatedPartitionPathWithUpserts)))
+        metaClient.getActiveTimeline.getCommitTimeline, metaClient.getFs.listStatus(new Path(duplicatedPartitionPathWithUpserts)))
       val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getPath).toList
       // there should be 3 files
       assertResult(3) {
@@ -411,7 +412,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
       // get fs and check number of latest files
       val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants,
-        metaClient.getFs.listStatus(new Path(duplicatedPartitionPath)))
+        metaClient.getActiveTimeline.getCommitTimeline, metaClient.getFs.listStatus(new Path(duplicatedPartitionPath)))
       val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getPath).toList
       // there should be 3 files
       assertResult(3) {

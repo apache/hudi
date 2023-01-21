@@ -53,11 +53,11 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
   }
 
-  override protected def timeline: HoodieTimeline = {
+  override protected def completedTimeline: HoodieTimeline = {
     if (fullTableScan) {
-      super.timeline
+      super.completedTimeline
     } else {
-      super.timeline.findInstantsInRange(startTimestamp, endTimestamp)
+      super.completedTimeline.findInstantsInRange(startTimestamp, endTimestamp)
     }
   }
 
@@ -95,7 +95,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       } else {
         val latestCommit = includedCommits.last.getTimestamp
 
-        val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
+        val fsView = new HoodieTableFileSystemView(metaClient, completedTimeline, writeTimeline, affectedFilesInCommits)
 
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
@@ -130,10 +130,10 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   validate()
 
   protected def startTimestamp: String = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
-  protected def endTimestamp: String = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, super.timeline.lastInstant().get.getTimestamp)
+  protected def endTimestamp: String = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, super.completedTimeline.lastInstant().get.getTimestamp)
 
-  protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(startTimestamp)
-  protected def endInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(endTimestamp)
+  protected def startInstantArchived: Boolean = super.completedTimeline.isBeforeTimelineStarts(startTimestamp)
+  protected def endInstantArchived: Boolean = super.completedTimeline.isBeforeTimelineStarts(endTimestamp)
 
   // Fallback to full table scan if any of the following conditions matches:
   //   1. the start commit is archived
@@ -150,13 +150,13 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     if (!startInstantArchived || !endInstantArchived) {
       // If endTimestamp commit is not archived, will filter instants
       // before endTimestamp.
-      super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.asScala.toList
+      super.completedTimeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.asScala.toList
     } else {
-      super.timeline.getInstants.asScala.toList
+      super.completedTimeline.getInstants.asScala.toList
     }
   }
 
-  protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
+  protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.completedTimeline)).asJava
 
   protected lazy val affectedFilesInCommits: Array[FileStatus] = {
     listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
@@ -183,7 +183,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   }
 
   protected def validate(): Unit = {
-    if (super.timeline.empty()) {
+    if (super.completedTimeline.empty()) {
       throw new HoodieException("No instants to incrementally pull")
     }
 

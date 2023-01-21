@@ -137,8 +137,8 @@ public class FileSystemViewManager {
    */
   private static RocksDbBasedFileSystemView createRocksDBBasedFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, HoodieTableMetaClient metaClient) {
-    HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    return new RocksDbBasedFileSystemView(metaClient, timeline, viewConf);
+    return new RocksDbBasedFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(),
+        metaClient.getActiveTimeline().getWriteTimeline(), viewConf);
   }
 
   /**
@@ -152,8 +152,8 @@ public class FileSystemViewManager {
   private static SpillableMapBasedFileSystemView createSpillableMapBasedFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, HoodieTableMetaClient metaClient, HoodieCommonConfig commonConfig) {
     LOG.info("Creating SpillableMap based view for basePath " + metaClient.getBasePath());
-    HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    return new SpillableMapBasedFileSystemView(metaClient, timeline, viewConf, commonConfig);
+    return new SpillableMapBasedFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(),
+        metaClient.getActiveTimeline().getWriteTimeline(), viewConf, commonConfig);
   }
 
   /**
@@ -166,7 +166,7 @@ public class FileSystemViewManager {
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     if (metadataConfig.enabled()) {
       ValidationUtils.checkArgument(metadataSupplier != null, "Metadata supplier is null. Cannot instantiate metadata file system view");
-      return new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(),
+      return new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), metaClient.getActiveTimeline().getWriteTimeline(),
           metadataSupplier.get());
     }
     if (metaClient.getMetastoreConfig().enableMetastore()) {
@@ -174,31 +174,31 @@ public class FileSystemViewManager {
           new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetastoreConfig.class},
           metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetastoreConfig());
     }
-    return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
+    return new HoodieTableFileSystemView(metaClient, timeline, metaClient.getActiveTimeline().getWriteTimeline(), viewConf.isIncrementalTimelineSyncEnabled());
   }
 
   public static HoodieTableFileSystemView createInMemoryFileSystemView(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient,
                                                                        HoodieMetadataConfig metadataConfig) {
     
     return createInMemoryFileSystemViewWithTimeline(engineContext, metaClient, metadataConfig,
-        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
-    
+        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getActiveTimeline().getCommitsTimeline());
   }
   
   public static HoodieTableFileSystemView createInMemoryFileSystemViewWithTimeline(HoodieEngineContext engineContext,
                                                                                    HoodieTableMetaClient metaClient,
                                                                                    HoodieMetadataConfig metadataConfig,
-                                                                                   HoodieTimeline timeline) {
+                                                                                   HoodieTimeline completedWriteTimeline,
+                                                                                   HoodieTimeline writeTimeline) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
     if (metadataConfig.enabled()) {
-      return new HoodieMetadataFileSystemView(engineContext, metaClient, timeline, metadataConfig);
+      return new HoodieMetadataFileSystemView(engineContext, metaClient, completedWriteTimeline, writeTimeline, metadataConfig);
     }
     if (metaClient.getMetastoreConfig().enableMetastore()) {
       return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASTORE_FILE_SYSTEM_VIEW_CLASS,
           new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetadataConfig.class},
           metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetastoreConfig());
     }
-    return new HoodieTableFileSystemView(metaClient, timeline);
+    return new HoodieTableFileSystemView(metaClient, completedWriteTimeline, writeTimeline);
   }
 
   /**

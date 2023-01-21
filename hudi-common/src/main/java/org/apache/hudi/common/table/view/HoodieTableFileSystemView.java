@@ -94,28 +94,28 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   /**
    * Create a file system view, as of the given timeline.
    */
-  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
-    this(metaClient, visibleActiveTimeline, false);
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleCompletedWriteTimeline, HoodieTimeline visibleWriteTimeline) {
+    this(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline, false);
   }
 
   /**
    * Create a file system view, as of the given timeline.
    */
-  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleCompletedWriteTimeline, HoodieTimeline visibleWriteTimeline,
       boolean enableIncrementalTimelineSync) {
     super(enableIncrementalTimelineSync);
-    init(metaClient, visibleActiveTimeline);
+    init(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline);
   }
 
   @Override
-  public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+  public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleCompletedWriteTimeline, HoodieTimeline visibleWriteTimeline) {
     this.partitionToFileGroupsMap = createPartitionToFileGroups();
-    super.init(metaClient, visibleActiveTimeline);
+    super.init(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline);
   }
 
-  public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleCompletedWriteTimeline, HoodieTimeline visibleWriteTimeline,
       FileStatus[] fileStatuses) {
-    init(metaClient, visibleActiveTimeline);
+    init(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline);
     addFilesToView(fileStatuses);
   }
 
@@ -171,9 +171,9 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   /**
    * Create a file system view, as of the given timeline, with the provided file statuses.
    */
-  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleCompletedTimeline, HoodieTimeline visibleTimeline,
       FileStatus[] fileStatuses) {
-    this(metaClient, visibleActiveTimeline);
+    this(metaClient, visibleCompletedTimeline, visibleTimeline);
     addFilesToView(fileStatuses);
   }
 

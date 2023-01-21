@@ -34,7 +34,7 @@ public interface HoodieMetaClientProvider {
   HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException;
 
   default HoodieTableFileSystemView getHoodieTableFileSystemView(
-      HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, FileStatus[] fileStatuses) {
-    return new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, fileStatuses);
+      HoodieTableMetaClient metaClient, HoodieTimeline visibleCompletedTimeline, HoodieTimeline visibleWriteTimeline, FileStatus[] fileStatuses) {
+    return new HoodieTableFileSystemView(metaClient, visibleCompletedTimeline, visibleWriteTimeline, fileStatuses);
   }
 }

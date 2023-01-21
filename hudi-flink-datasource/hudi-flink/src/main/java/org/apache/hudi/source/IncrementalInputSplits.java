@@ -134,8 +134,9 @@ public class IncrementalInputSplits implements Serializable {
   public Result inputSplits(
       HoodieTableMetaClient metaClient,
       org.apache.hadoop.conf.Configuration hadoopConf) {
-    HoodieTimeline commitTimeline = getReadTimeline(metaClient);
-    if (commitTimeline.empty()) {
+    HoodieTimeline completedReadTimeline = getCompletedReadTimeline(metaClient);
+    HoodieTimeline readTimeline = getReadTimeline(metaClient);
+    if (completedReadTimeline.empty()) {
       LOG.warn("No splits found for the table under path " + path);
       return Result.EMPTY;
     }
@@ -143,8 +144,8 @@ public class IncrementalInputSplits implements Serializable {
     final String startCommit = this.conf.getString(FlinkOptions.READ_START_COMMIT);
     final String endCommit = this.conf.getString(FlinkOptions.READ_END_COMMIT);
     final boolean startFromEarliest = FlinkOptions.START_COMMIT_EARLIEST.equalsIgnoreCase(startCommit);
-    final boolean startOutOfRange = startCommit != null && commitTimeline.isBeforeTimelineStarts(startCommit);
-    final boolean endOutOfRange = endCommit != null && commitTimeline.isBeforeTimelineStarts(endCommit);
+    final boolean startOutOfRange = startCommit != null && completedReadTimeline.isBeforeTimelineStarts(startCommit);
+    final boolean endOutOfRange = endCommit != null && completedReadTimeline.isBeforeTimelineStarts(endCommit);
     boolean fullTableScan = startFromEarliest || startOutOfRange || endOutOfRange;
 
     // Step1: find out the files to read, tries to read the files from the commit metadata first,
@@ -155,7 +156,7 @@ public class IncrementalInputSplits implements Serializable {
     //   4. the end commit is archived
     Set<String> readPartitions;
     final FileStatus[] fileStatuses;
-    List<HoodieInstant> instants = filterInstantsWithRange(commitTimeline, null);
+    List<HoodieInstant> instants = filterInstantsWithRange(completedReadTimeline, null);
     if (fullTableScan) {
       // scans the partitions and files directly.
       FileIndex fileIndex = getFileIndex();
@@ -172,7 +173,7 @@ public class IncrementalInputSplits implements Serializable {
       }
       String tableName = conf.getString(FlinkOptions.TABLE_NAME);
       List<HoodieCommitMetadata> metadataList = instants.stream()
-          .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
+          .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, completedReadTimeline)).collect(Collectors.toList());
       readPartitions = getReadPartitions(metadataList);
       if (readPartitions.size() == 0) {
         LOG.warn("No partitions found for reading in user provided path.");
@@ -223,10 +224,10 @@ public class IncrementalInputSplits implements Serializable {
 
     // Step3: decides the read end commit
     final String endInstant = fullTableScan
-        ? commitTimeline.lastInstant().get().getTimestamp()
+        ? completedReadTimeline.lastInstant().get().getTimestamp()
         : instants.get(instants.size() - 1).getTimestamp();
 
-    List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
+    List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, completedReadTimeline, readTimeline,
         fileStatuses, readPartitions, endInstant, instantRange, false);
 
     return Result.instance(inputSplits, endInstant);
@@ -246,12 +247,13 @@ public class IncrementalInputSplits implements Serializable {
       String issuedInstant,
       boolean cdcEnabled) {
     metaClient.reloadActiveTimeline();
-    HoodieTimeline commitTimeline = getReadTimeline(metaClient);
-    if (commitTimeline.empty()) {
+    HoodieTimeline completedReadTimeline = getCompletedReadTimeline(metaClient);
+    HoodieTimeline readTimeline = getReadTimeline(metaClient);
+    if (completedReadTimeline.empty()) {
       LOG.warn("No splits found for the table under path " + path);
       return Result.EMPTY;
     }
-    List<HoodieInstant> instants = filterInstantsWithRange(commitTimeline, issuedInstant);
+    List<HoodieInstant> instants = filterInstantsWithRange(completedReadTimeline, issuedInstant);
     // get the latest instant that satisfies condition
     final HoodieInstant instantToIssue = instants.size() == 0 ? null : instants.get(instants.size() - 1);
     final InstantRange instantRange;
@@ -283,7 +285,7 @@ public class IncrementalInputSplits implements Serializable {
       }
 
       final String endInstant = instantToIssue.getTimestamp();
-      List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
+      List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, completedReadTimeline, readTimeline,
           fileStatuses, readPartitions, endInstant, null, false);
 
       return Result.instance(inputSplits, endInstant);
@@ -311,8 +313,8 @@ public class IncrementalInputSplits implements Serializable {
         // case2: normal streaming read
         String tableName = conf.getString(FlinkOptions.TABLE_NAME);
         List<HoodieCommitMetadata> activeMetadataList = instants.stream()
-            .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
-        List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, commitTimeline, tableName);
+            .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, completedReadTimeline)).collect(Collectors.toList());
+        List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, completedReadTimeline, tableName);
         if (archivedMetadataList.size() > 0) {
           LOG.warn("\n"
               + "--------------------------------------------------------------------------------\n"
@@ -338,7 +340,7 @@ public class IncrementalInputSplits implements Serializable {
         }
 
         final String endInstant = instantToIssue.getTimestamp();
-        List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
+        List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, completedReadTimeline,
             fileStatuses, readPartitions, endInstant, instantRange, skipCompaction);
 
         return Result.instance(inputSplits, endInstant);
@@ -370,12 +372,13 @@ public class IncrementalInputSplits implements Serializable {
   private List<MergeOnReadInputSplit> getInputSplits(
       HoodieTableMetaClient metaClient,
       HoodieTimeline commitTimeline,
+      HoodieTimeline writeTimeline,
       FileStatus[] fileStatuses,
       Set<String> readPartitions,
       String endInstant,
       InstantRange instantRange,
       boolean skipBaseFiles) {
-    final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
+    final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, writeTimeline, fileStatuses);
     final AtomicInteger cnt = new AtomicInteger(0);
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     return readPartitions.stream()
@@ -457,8 +460,13 @@ public class IncrementalInputSplits implements Serializable {
     return Collections.emptyList();
   }
 
-  private HoodieTimeline getReadTimeline(HoodieTableMetaClient metaClient) {
+  private HoodieTimeline getCompletedReadTimeline(HoodieTableMetaClient metaClient) {
     HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
+    return filterInstantsByCondition(timeline);
+  }
+
+  private HoodieTimeline getReadTimeline(HoodieTableMetaClient metaClient) {
+    HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline();
     return filterInstantsByCondition(timeline);
   }
 

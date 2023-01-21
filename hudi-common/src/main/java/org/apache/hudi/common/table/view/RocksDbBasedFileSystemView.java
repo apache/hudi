@@ -71,25 +71,25 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   private boolean closed = false;
 
-  public RocksDbBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public RocksDbBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleCompletedWriteTimeline, HoodieTimeline visibleWriteTimeline,
       FileSystemViewStorageConfig config) {
     super(config.isIncrementalTimelineSyncEnabled());
     this.config = config;
     this.schemaHelper = new RocksDBSchemaHelper(metaClient);
     this.rocksDB = new RocksDBDAO(metaClient.getBasePath(), config.getRocksdbBasePath());
-    init(metaClient, visibleActiveTimeline);
+    init(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline);
   }
 
-  public RocksDbBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public RocksDbBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleCompletedWriteTimeline, HoodieTimeline visibleWriteTimeline,
       FileStatus[] fileStatuses, FileSystemViewStorageConfig config) {
-    this(metaClient, visibleActiveTimeline, config);
+    this(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline, config);
     addFilesToView(fileStatuses);
   }
 
   @Override
-  protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+  protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleCompletedWriteTimeline, HoodieTimeline visibleWriteTimeline) {
     schemaHelper.getAllColumnFamilies().forEach(rocksDB::addColumnFamily);
-    super.init(metaClient, visibleActiveTimeline);
+    super.init(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline);
     LOG.info("Created ROCKSDB based file-system view at " + config.getRocksdbBasePath());
   }
 
@@ -547,7 +547,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     return sliceStream.map(s -> Pair.of(Pair.of(s.getPartitionPath(), s.getFileId()), s))
         .collect(Collectors.groupingBy(Pair::getKey)).entrySet().stream().map(slicePair -> {
           HoodieFileGroup fg = new HoodieFileGroup(slicePair.getKey().getKey(), slicePair.getKey().getValue(),
-              getVisibleCommitsAndCompactionTimeline());
+              getVisibleCompletedWriteTimeline(), getWriteTimeline());
           slicePair.getValue().forEach(e -> fg.addFileSlice(e.getValue()));
           return fg;
         });

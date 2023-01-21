@@ -235,7 +235,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       // FILENAME_METADATA_FIELD payload (entailing that corresponding metadata is in-sync with
       // the state of the table
       HoodieTableFileSystemView tableView =
-          getHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), HoodieTestTable.of(metaClient).listAllBaseFiles());
+          getHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), metaClient.getActiveTimeline(), HoodieTestTable.of(metaClient).listAllBaseFiles());
 
       Set<String> latestBaseFileNames = tableView.getLatestBaseFiles()
           .map(BaseFile::getFileName)

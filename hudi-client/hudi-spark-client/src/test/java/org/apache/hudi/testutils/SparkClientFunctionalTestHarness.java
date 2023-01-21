@@ -265,11 +265,11 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
     FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
     TableFileSystemView.BaseFileOnlyView roView =
-        getHoodieTableFileSystemView(reloadedMetaClient, reloadedMetaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
+        getHoodieTableFileSystemView(reloadedMetaClient, reloadedMetaClient.getCommitTimeline().filterCompletedInstants(), reloadedMetaClient.getCommitsTimeline(), allFiles);
     Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
     assertTrue(!dataFilesToRead.findAny().isPresent());
 
-    roView = getHoodieTableFileSystemView(reloadedMetaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
+    roView = getHoodieTableFileSystemView(reloadedMetaClient, hoodieTable.getCompletedCommitsTimeline(), reloadedMetaClient.getCommitsTimeline(), allFiles);
     dataFilesToRead = roView.getLatestBaseFiles();
     return dataFilesToRead;
   }

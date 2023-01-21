@@ -39,17 +39,19 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   private final HoodieTableMetadata tableMetadata;
 
   public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient,
-                                      HoodieTimeline visibleActiveTimeline,
+                                      HoodieTimeline visibleCompletedWriteTimeline,
+                                      HoodieTimeline visibleWriteTimeline,
                                       HoodieTableMetadata tableMetadata) {
-    super(metaClient, visibleActiveTimeline);
+    super(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline);
     this.tableMetadata = tableMetadata;
   }
 
   public HoodieMetadataFileSystemView(HoodieEngineContext engineContext,
                                       HoodieTableMetaClient metaClient,
-                                      HoodieTimeline visibleActiveTimeline,
+                                      HoodieTimeline visibleCompletedWriteTimeline,
+                                      HoodieTimeline visibleWriteTimeline,
                                       HoodieMetadataConfig metadataConfig) {
-    super(metaClient, visibleActiveTimeline);
+    super(metaClient, visibleCompletedWriteTimeline, visibleWriteTimeline);
     this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath(),
         FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true);
   }

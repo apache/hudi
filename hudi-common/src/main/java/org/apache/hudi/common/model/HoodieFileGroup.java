@@ -54,7 +54,12 @@ public class HoodieFileGroup implements Serializable {
   /**
    * Timeline, based on which all getter work.
    */
-  private final HoodieTimeline timeline;
+  private final HoodieTimeline completedTimeline;
+
+  /**
+   * Timeline, based on which all getter work.
+   */
+  private final HoodieTimeline writeTimeline;
 
   /**
    * The last completed instant, that acts as a high watermark for all getters.
@@ -62,21 +67,23 @@ public class HoodieFileGroup implements Serializable {
   private final Option<HoodieInstant> lastInstant;
 
   public HoodieFileGroup(HoodieFileGroup fileGroup) {
-    this.timeline = fileGroup.timeline;
+    this.completedTimeline = fileGroup.completedTimeline;
+    this.writeTimeline = fileGroup.writeTimeline;
     this.fileGroupId = fileGroup.fileGroupId;
     this.fileSlices = new TreeMap<>(fileGroup.fileSlices);
     this.lastInstant = fileGroup.lastInstant;
   }
 
-  public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline) {
-    this(new HoodieFileGroupId(partitionPath, id), timeline);
+  public HoodieFileGroup(String partitionPath, String id, HoodieTimeline completedTimeline, HoodieTimeline writeTimeline) {
+    this(new HoodieFileGroupId(partitionPath, id), completedTimeline, writeTimeline);
   }
 
-  public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline timeline) {
+  public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline completedTimeline, HoodieTimeline writeTimeline) {
     this.fileGroupId = fileGroupId;
     this.fileSlices = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
-    this.timeline = timeline;
-    this.lastInstant = timeline.lastInstant();
+    this.completedTimeline = completedTimeline;
+    this.writeTimeline = writeTimeline;
+    this.lastInstant = completedTimeline.lastInstant();
   }
 
   /**
@@ -125,8 +132,16 @@ public class HoodieFileGroup implements Serializable {
     if (!compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, lastInstant.get().getTimestamp())) {
       return false;
     }
-
-    return timeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime());
+    // if its part of completed timeline, return true.
+    if (completedTimeline.containsInstant(slice.getBaseInstantTime())) {
+      return true;
+    }
+    // if its part of inflight, return false
+    if (writeTimeline.filterInflightsAndRequested().containsInstant(slice.getBaseInstantTime())) {
+      return false;
+    }
+    // else, if its part of archived, return true
+    return completedTimeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime());
   }
 
   /**
@@ -147,7 +162,7 @@ public class HoodieFileGroup implements Serializable {
    * Provides a stream of committed file slices, sorted reverse base commit time.
    */
   public Stream<FileSlice> getAllFileSlices() {
-    if (!timeline.empty()) {
+    if (!completedTimeline.empty()) {
       return fileSlices.values().stream().filter(this::isFileSliceCommitted);
     }
     return Stream.empty();
@@ -223,7 +238,11 @@ public class HoodieFileGroup implements Serializable {
     return fileSlices.values().stream();
   }
 
-  public HoodieTimeline getTimeline() {
-    return timeline;
+  public HoodieTimeline getCompletedTimeline() {
+    return completedTimeline;
+  }
+
+  public HoodieTimeline getWriteTimeline() {
+    return writeTimeline;
   }
 }
