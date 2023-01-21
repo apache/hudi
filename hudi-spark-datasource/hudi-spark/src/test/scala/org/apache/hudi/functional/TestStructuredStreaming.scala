@@ -87,7 +87,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
         .option("checkpointLocation", basePath + "/checkpoint")
         .outputMode(OutputMode.Append)
         .start(destPath)
-        .awaitTermination(10000)
+        .awaitTermination(30000)
       println("streaming ends")
     }
   }
@@ -195,7 +195,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       assertEquals(1, countsPerCommit.length)
       assertEquals(commitInstantTime2, countsPerCommit(0).get(0))
     }
-    Await.result(Future.sequence(Seq(f1, f2)), Duration.Inf)
+
+    Await.result(Future.sequence(Seq(f1, f2)), Duration("120s"))
   }
 
   @ParameterizedTest
@@ -370,7 +371,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       val commitInstantTime2 = latestInstant(fs, destPath, HoodieTimeline.COMMIT_ACTION)
       assertEquals(commitInstantTime2, countsPerCommit.maxBy(row => row.getAs[String](0)).get(0))
     }
-    Await.result(Future.sequence(Seq(f1, f2)), Duration.Inf)
+    Await.result(Future.sequence(Seq(f1, f2)), Duration("120s"))
   }
 
   private def getLatestFileGroupsFileId(partition: String):Array[String] = {
