@@ -20,7 +20,7 @@
  // table related
  struct Table {
    1: string tableName,
-   2: string dbName,
+   2: string databaseName,
    3: string owner,
    4: i64 createTime,
    5: string location,

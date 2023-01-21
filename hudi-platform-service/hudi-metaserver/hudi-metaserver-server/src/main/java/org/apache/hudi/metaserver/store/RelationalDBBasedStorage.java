@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metaserver.store;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metaserver.store.bean.InstantBean;
 import org.apache.hudi.metaserver.store.bean.TableBean;
 import org.apache.hudi.metaserver.store.jdbc.WrapperDao;
@@ -105,8 +106,7 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
 
   @Override
   public String createNewTimestamp(long tableId) throws MetaserverStorageException {
-    // todo: support SSS
-    SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
+    SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss:SSS");
     String oldTimestamp;
     String newTimestamp;
     boolean success;
@@ -219,10 +219,10 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
   }
 
   @Override
-  public byte[] getInstantMetadata(long tableId, THoodieInstant instant) throws MetaserverStorageException {
+  public Option<byte[]> getInstantMetadata(long tableId, THoodieInstant instant) throws MetaserverStorageException {
     InstantBean instantBean = new InstantBean(tableId, instant);
     Map<String, Object> result = timelineDao.queryForObjectBySql("selectInstantMetadata", instantBean);
-    return result == null ? null : (byte[]) result.get("data");
+    return result == null ? Option.empty() : Option.of((byte[]) result.get("data"));
   }
 
   @Override

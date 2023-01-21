@@ -34,9 +34,9 @@ import java.util.Arrays;
 public class HoodieMetaserverProxyHandler implements InvocationHandler {
   private static final Logger LOG = LogManager.getLogger(HoodieMetaserverProxyHandler.class);
 
-  private final HoodieMetaserverService metaserverService;
+  private final HoodieMetaserverGateway metaserverService;
 
-  public HoodieMetaserverProxyHandler(HoodieMetaserverService metaserverService) {
+  public HoodieMetaserverProxyHandler(HoodieMetaserverGateway metaserverService) {
     this.metaserverService = metaserverService;
   }
 

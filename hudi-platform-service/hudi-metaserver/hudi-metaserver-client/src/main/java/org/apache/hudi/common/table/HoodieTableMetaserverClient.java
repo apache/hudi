@@ -56,7 +56,7 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   private final String databaseName;
   private final String tableName;
   private final Table table;
-  private transient final HoodieMetaserverClient metaserverClient;
+  private final transient HoodieMetaserverClient metaserverClient;
 
   public HoodieTableMetaserverClient(Configuration conf, String basePath, ConsistencyGuardConfig consistencyGuardConfig,
                                      String mergerStrategy, FileSystemRetryConfig fileSystemRetryConfig,
@@ -90,7 +90,7 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
         }
         LOG.info(String.format("Table %s.%s doesn't exist, will create it.", db, tb));
         table = new Table();
-        table.setDbName(db);
+        table.setDatabaseName(db);
         table.setTableName(tb);
         table.setLocation(config.getString(HoodieWriteConfig.BASE_PATH));
         table.setOwner(user);

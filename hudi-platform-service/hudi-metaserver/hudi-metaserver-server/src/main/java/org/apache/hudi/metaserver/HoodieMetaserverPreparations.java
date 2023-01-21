@@ -16,6 +16,9 @@
  * limitations under the License.
  */
 
+/**
+ *  Metaserver storage Initialization that create tables defined in the DDLMappper.
+ */
 package org.apache.hudi.metaserver;
 
 import org.apache.hudi.exception.HoodieException;

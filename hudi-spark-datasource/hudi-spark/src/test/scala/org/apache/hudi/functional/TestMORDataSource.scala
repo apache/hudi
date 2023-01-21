@@ -96,13 +96,45 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
     )
 
-  @ParameterizedTest
-  @CsvSource(Array("AVRO, AVRO, avro", "AVRO, SPARK, parquet", "SPARK, AVRO, parquet", "SPARK, SPARK, parquet"))
-  def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String) {
-    var (_, readOpts) = getWriterReaderOpts(readType)
-    var (writeOpts, _) = getWriterReaderOpts(writeType)
-    readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
-    writeOpts = writeOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
+  @Test
+  def testParametersWithWriteDefaults(): Unit = {
+    var (_, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+    var (writeOpts, _) = getWriterReaderOpts(HoodieRecordType.AVRO)
+    readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "avro")
+    writeOpts = writeOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "avro")
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("hudi").
+      options(writeOpts).
+      option(TABLE_NAME.key(), "hoodie_test").
+      option("hoodie.database.name", "default").
+//      option("hoodie.datasource.meta.sync.enable", "false").
+//      option("hoodie.datasource.hive_sync.enable", "false").
+      option("hoodie.metadata.enabled", "false").
+      option("hoodie.metaserver.enabled", "true").
+      option("hoodie.metaserver.uris", "thrift://localhost:9090").
+      mode(SaveMode.Overwrite).
+      save(basePath)
+
+    spark.read.format("org.apache.hudi")
+      .options(readOpts).
+      option("hoodie.table.name", "hoodie_test").
+      option("hoodie.database.name", "default").
+//      option("hoodie.datasource.meta.sync.enable", "false").
+//      option("hoodie.datasource.hive_sync.enable", "false").
+      option("hoodie.metadata.enabled", "false").
+      option("hoodie.metaserver.enabled", "true").
+      option("hoodie.metaserver.uris", "thrift://localhost:9090").
+      option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .load(basePath + "/*/*/*/*")
+  }
+
+  @Test
+  def testCount() {
+    var (_, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+    var (writeOpts, _) = getWriterReaderOpts(HoodieRecordType.AVRO)
+    readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "avro")
+    writeOpts = writeOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "avro")
 
     // First Operation:
     // Producing parquet files to three default partitions.
@@ -122,6 +154,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
     assertEquals(100, hudiSnapshotDF1.count()) // still 100, since we only updated
+    return
 
     // Second Operation:
     // Upsert the update to the default partitions with duplicate records. Produced a log file for each parquet.

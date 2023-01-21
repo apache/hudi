@@ -34,11 +34,11 @@ import java.util.List;
 /**
  * A proxy for meta server, accepts all thrift calls and routes them to the corresponding service.
  */
-public class HoodieMetaserverService implements ThriftHoodieMetaserver.Iface, Serializable {
+public class HoodieMetaserverGateway implements ThriftHoodieMetaserver.Iface, Serializable {
   private final TableService tableService;
   private final TimelineService timelineService;
 
-  public HoodieMetaserverService(TableService tableService, TimelineService timelineService) {
+  public HoodieMetaserverGateway(TableService tableService, TimelineService timelineService) {
     this.tableService = tableService;
     this.timelineService = timelineService;
   }
@@ -79,7 +79,8 @@ public class HoodieMetaserverService implements ThriftHoodieMetaserver.Iface, Se
   }
 
   @Override
-  public HoodieInstantChangeResult transitionInstantState(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata) throws MetaserverStorageException, NoSuchObjectException, MetaserverException {
+  public HoodieInstantChangeResult transitionInstantState(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata)
+      throws MetaserverStorageException, NoSuchObjectException, MetaserverException {
     return timelineService.transitionInstantState(db, tb, fromInstant, toInstant, metadata);
   }
 

@@ -33,7 +33,7 @@ import java.lang.reflect.UndeclaredThrowableException;
  */
 public class HoodieMetaserverClientProxy implements InvocationHandler, Serializable {
 
-  private transient final HoodieMetaserverClient client;
+  private final transient HoodieMetaserverClient client;
   private final int retryLimit;
   private final long retryDelayMs;
 

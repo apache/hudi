@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.commit;
+package org.apache.hudi.internal;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -97,8 +97,7 @@ public class TestCopy extends HoodieClientTestBase {
   private Map<String, String> initMetastoreConfig() {
     Map<String, String> props = new HashMap<>();
     props.put(HoodieMetaserverConfig.METASERVER_ENABLE.key(), "true");
-//    props.put(HoodieMetaserverConfig.METASERVER_URLS.key(), "");
-     props.put(HoodieMetaserverConfig.METASERVER_URLS.key(), "thrift://localhost:9090");
+    props.put(HoodieMetaserverConfig.METASERVER_URLS.key(), "");
     // metadata table
     props.put(HoodieMetadataConfig.ENABLE.key(), "false");
     return props;
@@ -111,4 +110,3 @@ public class TestCopy extends HoodieClientTestBase {
     return props;
   }
 }
-
