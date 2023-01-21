@@ -150,7 +150,7 @@ class HoodieCDCRDD(
         .build()
       HoodieTableState(
         pathToString(basePath),
-        split.changes.last.getInstant,
+        Some(split.changes.last.getInstant),
         recordKeyField,
         preCombineFieldOpt,
         usesVirtualKeys = false,
