@@ -43,7 +43,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateLazyProjection
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.types.StructType
@@ -177,7 +177,7 @@ class HoodieCDCRDD(
     private lazy val serializer = sparkAdapter.createAvroSerializer(originTableSchema.structTypeSchema,
       avroSchema, nullable = false)
 
-    private lazy val avroProjection = AvroProjection.createLazy(avroSchema)
+    private lazy val avroProjection = AvroProjection.create(avroSchema)
 
     private lazy val cdcAvroSchema: Schema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
       cdcSupplementalLoggingMode,
@@ -193,7 +193,7 @@ class HoodieCDCRDD(
       sparkAdapter.createAvroDeserializer(cdcAvroSchema, cdcSparkSchema)
     }
 
-    private lazy val projection: Projection = generateLazyProjection(cdcSchema, requiredCdcSchema)
+    private lazy val projection: Projection = generateUnsafeProjection(cdcSchema, requiredCdcSchema)
 
     // Iterator on cdc file
     private val cdcFileIter = split.changes.iterator

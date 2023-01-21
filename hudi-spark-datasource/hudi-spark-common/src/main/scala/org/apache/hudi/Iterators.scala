@@ -42,7 +42,7 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.util.CachingIterator
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateLazyProjection
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Projection
@@ -82,8 +82,8 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
   protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
   protected val logFileReaderStructType: StructType = tableSchema.structTypeSchema
 
-  private val requiredSchemaAvroProjection: AvroProjection = AvroProjection.createLazy(avroSchema)
-  private val requiredSchemaRowProjection: Projection = generateLazyProjection(logFileReaderStructType, structTypeSchema)
+  private val requiredSchemaAvroProjection: AvroProjection = AvroProjection.create(avroSchema)
+  private val requiredSchemaRowProjection: Projection = generateUnsafeProjection(logFileReaderStructType, structTypeSchema)
 
   private val logRecords = {
     val internalSchema = tableSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
@@ -143,7 +143,7 @@ private class SkipMergeIterator(split: HoodieMergeOnReadFileSplit,
                                 config: Configuration)
   extends LogFileIterator(split, dataSchema, requiredSchema, tableState, config) {
 
-  private val requiredSchemaProjection = generateLazyProjection(baseFileReader.schema, structTypeSchema)
+  private val requiredSchemaProjection = generateUnsafeProjection(baseFileReader.schema, structTypeSchema)
 
   private val baseFileIterator = baseFileReader(split.dataFile.get)
 
@@ -182,8 +182,8 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
 
   private val recordKeyOrdinal = baseFileReader.schema.fieldIndex(tableState.recordKeyField)
 
-  private val requiredSchemaProjection = generateLazyProjection(baseFileReader.schema, structTypeSchema)
-  private val requiredSchemaAvroProjection = AvroProjection.createLazy(avroSchema)
+  private val requiredSchemaProjection = generateUnsafeProjection(baseFileReader.schema, structTypeSchema)
+  private val requiredSchemaAvroProjection = AvroProjection.create(avroSchema)
 
   private val baseFileIterator = baseFileReader(split.dataFile.get)
 

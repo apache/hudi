@@ -21,7 +21,7 @@ import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, AttributeSet, CreateStruct, Expression, GetStructField, Like, Literal, Projection, SubqueryExpression, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, AttributeSet, CreateStruct, Expression, GetStructField, Like, Literal, Projection, SubqueryExpression, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
@@ -95,23 +95,17 @@ object HoodieCatalystExpressionUtils {
    * B is a subset of A
    */
   def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
-    val attrs = from.toAttributes
-    val attrsMap = attrs.map(attr => (attr.name, attr)).toMap
-    val targetExprs = to.fields.map(f => attrsMap(f.name))
-
-    UnsafeProjection.create(targetExprs, attrs)
-  }
-
-  // TODO scala-docs
-  def generateLazyProjection(from: StructType, to: StructType): Projection =
-    if (from != to) {
-      generateUnsafeProjection(from, to)
-    } else {
-      // NOTE: Have to use explicit [[Projection]] instantiation to stay compatible w/ Scala 2.11
-      new Projection {
-        override def apply(r: InternalRow): InternalRow = r
-      }
+    val projection = generateUnsafeProjectionInternal(from, to)
+    val identical = from == to
+    // NOTE: Have to use explicit [[Projection]] instantiation to stay compatible w/ Scala 2.11
+    new UnsafeProjection {
+      override def apply(row: InternalRow): UnsafeRow =
+        row match {
+          case ur: UnsafeRow if identical => ur
+          case _ => projection(row)
+        }
     }
+  }
 
   /**
    * Split the given predicates into two sequence predicates:
@@ -260,6 +254,14 @@ object HoodieCatalystExpressionUtils {
         case _ => null
       }
     )
+  }
+
+  private def generateUnsafeProjectionInternal(from: StructType, to: StructType): UnsafeProjection = {
+    val attrs = from.toAttributes
+    val attrsMap = attrs.map(attr => (attr.name, attr)).toMap
+    val targetExprs = to.fields.map(f => attrsMap(f.name))
+
+    UnsafeProjection.create(targetExprs, attrs)
   }
 
   private def hasUnresolvedRefs(resolvedExpr: Expression): Boolean =
