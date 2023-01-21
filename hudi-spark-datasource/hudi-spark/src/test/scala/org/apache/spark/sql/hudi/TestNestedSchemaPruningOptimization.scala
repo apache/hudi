@@ -134,7 +134,10 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
           val expectedSchema = StructType(Seq(
             StructField("id", IntegerType),
-            StructField("item", StructType(Seq(StructField("name", StringType), StructField("price", IntegerType))))
+            StructField("item",
+              StructType(Seq(
+                StructField("name", StringType, nullable = false),
+                StructField("price", IntegerType, nullable = false))))
           ))
 
           val expectedReadSchemaClause = "ReadSchema: struct<id:int,item:struct<name:string,price:int>>"
