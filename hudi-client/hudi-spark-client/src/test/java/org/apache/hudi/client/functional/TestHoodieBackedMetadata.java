@@ -906,6 +906,65 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
+  @Test
+  public void testMetadataRollbackWithCompaction() throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    init(tableType, false);
+    writeConfig = getWriteConfigBuilder(false, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withPopulateMetaFields(true)
+            .build())
+        .build();
+
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      // Write 1 (Bulk insert)
+      String newCommitTime1 = "0000001";
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime1, 100);
+      client.startCommitWithTime(newCommitTime1);
+      JavaRDD writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime1);
+      client.commit(newCommitTime1, writeStatuses);
+
+      String newCommitTime2 = "0000002";
+      records = dataGen.generateUniqueUpdates(newCommitTime2, 20);
+      client.startCommitWithTime(newCommitTime2);
+      writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime2);
+      client.commit(newCommitTime2, writeStatuses);
+
+      String newCommitTime3 = "0000003";
+      records = dataGen.generateUniqueUpdates(newCommitTime3, 20);
+      client.startCommitWithTime(newCommitTime3);
+      writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime3);
+      client.commit(newCommitTime3, writeStatuses);
+
+      // rollback "3" so that there is no "3" in data table timeline, but there exists a DC "3" in metadata timeline.
+      client.rollback(newCommitTime3);
+
+      // mimicing crash or making an inflight in metadata table.
+      Path toDelete = new Path(metaClient.getMetaPath() + "/metadata/.hoodie/" + newCommitTime2 + "." + HoodieTimeline.DELTA_COMMIT_ACTION);
+      metaClient.getFs().delete(toDelete);
+
+      // re-ingest w/ same commit time.
+      records = dataGen.generateUniqueUpdates(newCommitTime3, 20);
+      client.startCommitWithTime(newCommitTime3);
+      writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime3);
+      client.commit(newCommitTime3, writeStatuses);
+
+      // collect all commit meta files from metadata table.
+      FileStatus[] metaFiles = metaClient.getFs().listStatus(new Path(metaClient.getMetaPath() + "/metadata/.hoodie"));
+      List<FileStatus> commit3Files = Arrays.stream(metaFiles).filter(fileStatus ->
+          fileStatus.getPath().getName().equals(newCommitTime3 + "." + HoodieTimeline.DELTA_COMMIT_ACTION)).collect(Collectors.toList());
+      List<FileStatus> rollbackFiles = Arrays.stream(metaFiles).filter(fileStatus ->
+          fileStatus.getPath().getName().endsWith("." + HoodieTimeline.ROLLBACK_ACTION)).collect(Collectors.toList());
+
+      // ensure commit2's delta commit in MDT has last mod time > the actual rollback for previous failed commit i.e. commit2.
+      // if rollback wasn't eager, rollback's last mod time will be lower than the commit3'd delta commit last mod time.
+      assertTrue(commit3Files.get(0).getModificationTime() > rollbackFiles.get(0).getModificationTime());
+    }
+  }
+
   /**
    * Test arguments - Table type, populate meta fields, exclude key from payload.
    */
@@ -1592,6 +1651,54 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         }
       });
     }
+  }
+
+  @Test
+  public void testEagerRollbackinMDT() throws IOException {
+    tableType = MERGE_ON_READ;
+    initPath();
+    init(tableType);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig);
+    // Write 1 (Bulk insert)
+    String commit1 = HoodieActiveTimeline.createNewInstantTime();
+    List<HoodieRecord> records = dataGen.generateInserts(commit1, 20);
+    client.startCommitWithTime(commit1);
+    List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), commit1).collect();
+    assertNoWriteErrors(writeStatuses);
+
+    // Write 2 (inserts)
+    String commit2 = HoodieActiveTimeline.createNewInstantTime();
+    client.startCommitWithTime(commit2);
+    records = dataGen.generateInserts(commit2, 20);
+    writeStatuses = client.insert(jsc.parallelize(records, 1), commit2).collect();
+    assertNoWriteErrors(writeStatuses);
+    // remove latest completed delta commit from MDT.
+    Path toDelete = new Path(metaClient.getMetaPath() + "/metadata/.hoodie/" + commit2 + "." + HoodieTimeline.DELTA_COMMIT_ACTION);
+    metaClient.getFs().delete(toDelete);
+
+    // Write 3 (updates)
+    client = new SparkRDDWriteClient(engineContext, writeConfig);
+    String commit3 = HoodieActiveTimeline.createNewInstantTime();
+    client.startCommitWithTime(commit3);
+    records = dataGen.generateUniqueUpdates(commit3, 10);
+    writeStatuses = client.upsert(jsc.parallelize(records, 1), commit3).collect();
+    assertNoWriteErrors(writeStatuses);
+
+    // ensure that 000003 is after rollback of the partially failed 2nd commit.
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setBasePath(metaClient.getMetaPath() + "/metadata/").setConf(metaClient.getHadoopConf()).build();
+    HoodieInstant rollbackInstant = metadataMetaClient.getActiveTimeline().getRollbackTimeline().getInstants().get(0);
+
+    // collect all commit meta files from metadata table.
+    FileStatus[] metaFiles = metaClient.getFs().listStatus(new Path(metaClient.getMetaPath() + "/metadata/.hoodie"));
+    List<FileStatus> commit3Files = Arrays.stream(metaFiles).filter(fileStatus ->
+        fileStatus.getPath().getName().equals(commit3 + "." + HoodieTimeline.DELTA_COMMIT_ACTION)).collect(Collectors.toList());
+    List<FileStatus> rollbackFiles = Arrays.stream(metaFiles).filter(fileStatus ->
+        fileStatus.getPath().getName().equals(rollbackInstant.getTimestamp() + "." + HoodieTimeline.ROLLBACK_ACTION)).collect(Collectors.toList());
+
+    // ensure commit3's delta commit in MDT has last mod time > the actual rollback for previous failed commit i.e. commit2.
+    // if rollback wasn't eager, rollback's last mod time will be lower than the commit3'd delta commit last mod time.
+    assertTrue(commit3Files.get(0).getModificationTime() > rollbackFiles.get(0).getModificationTime());
   }
 
   /**
