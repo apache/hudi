@@ -85,9 +85,13 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    return getRecordKeyFieldNames().size() == 1
-        ? new SimpleKeyGenerator(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()), null).getRecordKey(row)
-        : new ComplexKeyGenerator(config).getRecordKey(row);
+    if (autoGenerateRecordKeys) {
+      return super.getRecordKey(row);
+    } else {
+      return getRecordKeyFieldNames().size() == 1
+          ? new SimpleKeyGenerator(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()), null).getRecordKey(row)
+          : new ComplexKeyGenerator(config).getRecordKey(row);
+    }
   }
 
   @Override

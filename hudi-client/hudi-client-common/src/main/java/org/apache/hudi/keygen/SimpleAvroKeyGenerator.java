@@ -43,11 +43,16 @@ public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
         ? Collections.emptyList()
         : Collections.singletonList(recordKeyField);
     this.partitionPathFields = Collections.singletonList(partitionPathField);
+    instantiateAutoRecordKeyGenerator();
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames().get(0), isConsistentLogicalTimestampEnabled());
+    if (autoGenerateRecordKeys) {
+      return autoRecordKeyGenerator.getRecordKey(record);
+    } else {
+      return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames().get(0), isConsistentLogicalTimestampEnabled());
+    }
   }
 
   @Override

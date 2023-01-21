@@ -65,6 +65,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   private final DateTimeZone outputDateTimeZone;
 
   protected final boolean encodePartitionPath;
+  private AutoRecordKeyGenerator autoRecordKeyGenerator;
 
   public TimestampBasedAvroKeyGenerator(TypedProperties config) throws IOException {
     this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),

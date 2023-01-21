@@ -36,11 +36,17 @@ public class GlobalAvroDeleteKeyGenerator extends BaseKeyGenerator {
   public GlobalAvroDeleteKeyGenerator(TypedProperties config) {
     super(config);
     this.recordKeyFields = Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","));
+    this.partitionPathFields = new ArrayList<>();
+    instantiateAutoRecordKeyGenerator();
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
+    if (autoGenerateRecordKeys) {
+      return autoRecordKeyGenerator.getRecordKey(record);
+    } else {
+      return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
+    }
   }
 
   @Override
@@ -50,7 +56,7 @@ public class GlobalAvroDeleteKeyGenerator extends BaseKeyGenerator {
 
   @Override
   public List<String> getPartitionPathFields() {
-    return new ArrayList<>();
+    return partitionPathFields;
   }
 
   public String getEmptyPartition() {
