@@ -21,8 +21,7 @@ package org.apache.hudi
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
-import org.apache.hudi.HoodieMergeOnReadRDD.whitelistedPayloadClasses
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
+import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.spark.rdd.RDD
@@ -127,7 +126,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       Here we assume that iff queried table does use one of the standard (and whitelisted)
     //       Record Payload classes then we can avoid reading and parsing the records w/ _full_ schema,
     //       and instead only rely on projected one, nevertheless being able to perform merging correctly
-    if (whitelistedPayloadClasses.contains(tableState.recordPayloadClassName)) {
+    if (isProjectionCompatible(tableState)) {
       fileReaders.requiredSchemaReader
     } else {
       fileReaders.fullSchemaReader
@@ -143,10 +142,3 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   }
 }
 
-object HoodieMergeOnReadRDD {
-
-  private val whitelistedPayloadClasses: Set[String] = Seq(
-    classOf[OverwriteWithLatestAvroPayload]
-  ).map(_.getName).toSet
-
-}

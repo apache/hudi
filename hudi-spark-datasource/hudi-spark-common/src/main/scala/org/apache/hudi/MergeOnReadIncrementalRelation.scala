@@ -77,7 +77,6 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
-    val hoodieTableState = getTableState
     // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
     //                 filtered, since file-reader might not be capable to perform filtering
     new HoodieMergeOnReadRDD(
@@ -86,7 +85,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       fileReaders = readers,
       tableSchema = tableSchema,
       requiredSchema = requiredSchema,
-      tableState = hoodieTableState,
+      tableState = tableState,
       mergeType = mergeType,
       fileSplits = fileSplits)
   }

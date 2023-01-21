@@ -233,6 +233,25 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
       FileStatusCache.getOrCreate(sparkSession))
 
+  lazy val tableState: HoodieTableState = {
+    val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList
+    val recordMergerStrategy = getConfigValue(HoodieWriteConfig.RECORD_MERGER_STRATEGY,
+      Option(metaClient.getTableConfig.getRecordMergerStrategy))
+
+    // Subset of the state of table's configuration as of at the time of the query
+    HoodieTableState(
+      tablePath = basePath.toString,
+      latestCommitTimestamp = queryTimestamp.get,
+      recordKeyField = recordKeyField,
+      preCombineFieldOpt = preCombineFieldOpt,
+      usesVirtualKeys = !tableConfig.populateMetaFields(),
+      recordPayloadClassName = tableConfig.getPayloadClass,
+      metadataConfig = fileIndex.metadataConfig,
+      recordMergerImpls = recordMergerImpls,
+      recordMergerStrategy = recordMergerStrategy
+    )
+  }
+
   /**
    * Columns that relation has to read from the storage to properly execute on its semantic: for ex,
    * for Merge-on-Read tables key fields as well and pre-combine field comprise mandatory set of columns,
@@ -307,13 +326,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   override final def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     // NOTE: PLEASE READ CAREFULLY BEFORE MAKING CHANGES
-    //
-    //       In case list of requested columns doesn't contain the primary key, we
-    //       have to add it explicitly so that
-    //          - Merging could be performed correctly
-    //          - In case 0 columns are to be fetched (for ex, when doing [[count]] on Spark's [[Dataset]],
-    //            Spark still fetches all the rows to execute the query correctly
-    //
     //       *Appending* additional columns to the ones requested by the caller is not a problem, as those
     //       will be eliminated by the caller's projection;
     //   (!) Please note, however, that it's critical to avoid _reordering_ of the requested columns as this
@@ -426,26 +438,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val missing = mandatoryFields.map(col => HoodieAvroUtils.getRootLevelFieldName(col))
       .filter(rootField => !requestedColumns.contains(rootField))
     requestedColumns ++ missing
-  }
-
-  protected def getTableState: HoodieTableState = {
-    val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList
-
-    val recordMergerStrategy = getConfigValue(HoodieWriteConfig.RECORD_MERGER_STRATEGY,
-      Option(metaClient.getTableConfig.getRecordMergerStrategy))
-
-    // Subset of the state of table's configuration as of at the time of the query
-    HoodieTableState(
-      tablePath = basePath.toString,
-      latestCommitTimestamp = queryTimestamp.get,
-      recordKeyField = recordKeyField,
-      preCombineFieldOpt = preCombineFieldOpt,
-      usesVirtualKeys = !tableConfig.populateMetaFields(),
-      recordPayloadClassName = tableConfig.getPayloadClass,
-      metadataConfig = fileIndex.metadataConfig,
-      recordMergerImpls = recordMergerImpls,
-      recordMergerStrategy = recordMergerStrategy
-    )
   }
 
   def imbueConfigs(sqlContext: SQLContext): Unit = {
