@@ -1175,9 +1175,10 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   }
 
   /**
-   * Rollback all failed writes.
+   * Rollback failed writes if any.
+   * @return true if rollback happened. false otherwise.
    */
-  protected Boolean rollbackFailedWrites() {
+  public Boolean rollbackFailedWrites() {
     return rollbackFailedWrites(false);
   }
 
@@ -1191,7 +1192,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
     instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
     rollbackFailedWrites(pendingRollbacks, skipLocking);
-    return true;
+    return !pendingRollbacks.isEmpty();
   }
 
   protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback, boolean skipLocking) {
