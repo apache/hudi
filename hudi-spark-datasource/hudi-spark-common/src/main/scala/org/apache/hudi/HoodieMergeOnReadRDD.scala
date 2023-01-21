@@ -136,9 +136,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   override protected def getPartitions: Array[Partition] =
     fileSplits.zipWithIndex.map(file => HoodieMergeOnReadPartition(file._2, file._1)).toArray
 
-  private def getHadoopConf: Configuration = {
-    val conf = hadoopConfBroadcast.value.value
-    new Configuration(conf)
-  }
+  private def getHadoopConf: Configuration =
+    hadoopConfBroadcast.value.value
 }
 
