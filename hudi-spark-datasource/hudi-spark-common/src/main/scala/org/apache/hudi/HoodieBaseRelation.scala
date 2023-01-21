@@ -69,7 +69,7 @@ trait HoodieFileSplit {}
 case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String, internalSchema: Option[InternalSchema] = None)
 
 case class HoodieTableState(tablePath: String,
-                            latestCommitTimestamp: String,
+                            latestCommitTimestamp: Option[String],
                             recordKeyField: String,
                             preCombineFieldOpt: Option[String],
                             usesVirtualKeys: Boolean,
@@ -241,7 +241,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     // Subset of the state of table's configuration as of at the time of the query
     HoodieTableState(
       tablePath = basePath.toString,
-      latestCommitTimestamp = queryTimestamp.get,
+      latestCommitTimestamp = queryTimestamp,
       recordKeyField = recordKeyField,
       preCombineFieldOpt = preCombineFieldOpt,
       usesVirtualKeys = !tableConfig.populateMetaFields(),

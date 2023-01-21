@@ -292,7 +292,9 @@ object LogFileIterator {
         .withBasePath(tablePath)
         .withLogFilePaths(logFiles.map(logFile => logFile.getPath.toString).asJava)
         .withReaderSchema(logSchema)
-        .withLatestInstantTime(tableState.latestCommitTimestamp)
+        // NOTE: This part shall only be reached when at least one log is present in the file-group
+        //       entailing that table has to have at least one commit
+        .withLatestInstantTime(tableState.latestCommitTimestamp.get)
         .withReadBlocksLazily(
           Try(hadoopConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
             HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED).toBoolean)

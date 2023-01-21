@@ -95,7 +95,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
             new SkipMergeIterator(split, reader, tableSchema, requiredSchema, tableState, getHadoopConf)
 
           case DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL =>
-            val reader = pickBaseFileReader
+            val reader = pickBaseFileReader()
             new RecordMergingFileIterator(split, reader, tableSchema, requiredSchema, tableState, getHadoopConf)
 
           case _ => throw new UnsupportedOperationException(s"Not supported merge type ($mergeType)")
@@ -118,7 +118,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     iter
   }
 
-  private def pickBaseFileReader: BaseFileReader = {
+  private def pickBaseFileReader(): BaseFileReader = {
     // NOTE: This is an optimization making sure that even for MOR tables we fetch absolute minimum
     //       of the stored data possible, while still properly executing corresponding relation's semantic
     //       and meet the query's requirements.
