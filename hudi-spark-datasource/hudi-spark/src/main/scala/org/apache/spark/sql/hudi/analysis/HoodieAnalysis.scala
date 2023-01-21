@@ -116,8 +116,7 @@ object HoodieAnalysis {
         }
 
       val nestedSchemaPruningRule = instantiateKlass(nestedSchemaPruningClass)
-      // TODO(HUDI-5443) re-enable
-      //optimizerRules += (_ => nestedSchemaPruningRule)
+      optimizerRules += (_ => nestedSchemaPruningRule)
     }
 
     // NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's
