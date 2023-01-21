@@ -175,7 +175,7 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
   //        - Full table's schema
   //        - Projected schema
   //       As such, no particular schema could be assumed, and therefore we rely on the caller
-  //       to correspondingly set the scheme of the expected output of base-file reader
+  //       to correspondingly set the schema of the expected output of base-file reader
   private val baseFileReaderAvroSchema = sparkAdapter.getAvroSchemaConverters.toAvroType(baseFileReader.schema, nullable = false, "record")
 
   private val serializer = sparkAdapter.createAvroSerializer(baseFileReader.schema, baseFileReaderAvroSchema, nullable = false)

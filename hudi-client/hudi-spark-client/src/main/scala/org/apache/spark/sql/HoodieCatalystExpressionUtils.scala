@@ -94,39 +94,12 @@ object HoodieCatalystExpressionUtils {
    * NOTE: Projection of the row from [[StructType]] A to [[StructType]] B is only possible, if
    * B is a subset of A
    */
-  def generateUnsafeProjection(sourceStructType: StructType, targetStructType: StructType): UnsafeProjection = {
-    val resolver = SQLConf.get.resolver
-    val attrs = sourceStructType.toAttributes
-    val targetExprs = targetStructType.fields.map { targetField =>
-      val attrRef = attrs.find(attr => resolver(attr.name, targetField.name))
-        .getOrElse(throw new AnalysisException(s"Wasn't able to match target field `${targetField.name}` to any of the source attributes ($attrs)"))
-
-      genProjectingExpression(attrRef, targetField.dataType)
-    }
+  def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
+    val attrs = from.toAttributes
+    val attrsMap = attrs.map(attr => (attr.name, attr)).toMap
+    val targetExprs = to.fields.map(f => attrsMap(f.name))
 
     UnsafeProjection.create(targetExprs, attrs)
-  }
-
-  private def genProjectingExpression(sourceExpr: Expression,
-                                      targetDataType: DataType): Expression = {
-    checkState(sourceExpr.resolved)
-
-    // TODO support array, map
-    (sourceExpr.dataType, targetDataType) match {
-      case (sdt, tdt) if sdt == tdt =>
-        sourceExpr
-
-      case (sourceType: StructType, targetType: StructType) =>
-        val fieldValueExprs = targetType.fields.map { tf =>
-          val ord = sourceType.fieldIndex(tf.name)
-          val fieldValExpr = genProjectingExpression(GetStructField(sourceExpr, ord, Some(tf.name)), tf.dataType)
-          Alias(fieldValExpr, tf.name)()
-        }
-
-        CreateStruct(fieldValueExprs)
-
-      case _ => throw new UnsupportedOperationException(s"(${sourceExpr.dataType}, $targetDataType)")
-    }
   }
 
   // TODO scala-docs
