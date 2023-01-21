@@ -63,9 +63,6 @@
     <module>packaging/hudi-kafka-connect-bundle</module>
     <module>packaging/hudi-cli-bundle</module>
     <module>hudi-tests-common</module>
-    <module>hudi-platform-service</module>
-<!--    <module>hudi-platform-service/hudi-metaserver/hudi-metaserver-server</module>-->
-    <module>packaging/hudi-metaserver-server-bundle</module>
   </modules>
 
   <licenses>
