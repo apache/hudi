@@ -22,6 +22,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -48,7 +49,9 @@ import java.util.HashMap;
 @SuppressWarnings("checkstyle:LineLength")
 public class HoodieDeleteHelper<T, R> extends
     BaseDeleteHelper<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
+
   private HoodieDeleteHelper() {
+    super(HoodieData::getNumPartitions);
   }
 
   private static class DeleteHelperHolder {
@@ -77,24 +80,18 @@ public class HoodieDeleteHelper<T, R> extends
                                                               HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
                                                               BaseCommitActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> deleteExecutor) {
     try {
-      HoodieData<HoodieKey> dedupedKeys = keys;
-      final int parallelism = config.getDeleteShuffleParallelism();
+      int targetParallelism =
+          deduceShuffleParallelism((HoodieData) keys, config.getDeleteShuffleParallelism());
+
+      HoodieData<HoodieKey> dedupedKeys;
       if (config.shouldCombineBeforeDelete()) {
-        // De-dupe/merge if needed
-        dedupedKeys = deduplicateKeys(keys, table, parallelism);
-      } else if (!keys.isEmpty()) {
-        dedupedKeys = keys.repartition(parallelism);
+        dedupedKeys = deduplicateKeys(keys, table, targetParallelism);
+      } else {
+        dedupedKeys = keys.repartition(targetParallelism);
       }
 
-      HoodieData dedupedRecords;
-      HoodieRecordType recordType = config.getRecordMerger().getRecordType();
-      if (recordType == HoodieRecordType.AVRO) {
-        // For BWC, will remove when HoodieRecordPayload removed
-        dedupedRecords =
-            dedupedKeys.map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
-      } else {
-        dedupedRecords = dedupedKeys.map(key -> new HoodieEmptyRecord<>(key, recordType));
-      }
+      HoodieData dedupedRecords = createPhonyRecords(config, dedupedKeys);
+
       Instant beginTag = Instant.now();
       // perform index loop up to get existing location of records
       HoodieData<HoodieRecord<T>> taggedRecords = table.getIndex().tagLocation(dedupedRecords, context, table);
@@ -119,6 +116,15 @@ public class HoodieDeleteHelper<T, R> extends
         throw (HoodieUpsertException) e;
       }
       throw new HoodieUpsertException("Failed to delete for commit time " + instantTime, e);
+    }
+  }
+
+  private static HoodieData createPhonyRecords(HoodieWriteConfig config, HoodieData<HoodieKey> keys) {
+    HoodieRecordType recordType = config.getRecordMerger().getRecordType();
+    if (recordType == HoodieRecordType.AVRO) {
+      return keys.map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
+    } else {
+      return keys.map(key -> new HoodieEmptyRecord<>(key, recordType));
     }
   }
 
