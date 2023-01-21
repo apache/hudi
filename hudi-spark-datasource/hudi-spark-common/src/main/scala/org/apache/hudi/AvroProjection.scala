@@ -27,15 +27,12 @@ abstract class AvroProjection extends (GenericRecord => GenericRecord)
 
 object AvroProjection {
 
-  def create(schema: Schema): AvroProjection =
-    // NOTE: Have to use explicit [[Projection]] instantiation to stay compatible w/ Scala 2.11
-    new AvroProjection {
-      override def apply(record: GenericRecord): GenericRecord =
-        rewriteRecordWithNewSchema(record, schema)
-    }
-
-  def createLazy(schema: Schema): AvroProjection = {
-    val projection = create(schema)
+  /**
+   * Creates projection into provided [[Schema]] allowing to convert [[GenericRecord]] into
+   * new schema
+   */
+  def create(schema: Schema): AvroProjection = {
+    val projection = (record: GenericRecord) => rewriteRecordWithNewSchema(record, schema)
     // NOTE: Have to use explicit [[Projection]] instantiation to stay compatible w/ Scala 2.11
     new AvroProjection {
       override def apply(record: GenericRecord): GenericRecord =
