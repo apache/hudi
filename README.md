@@ -1,3 +1,4 @@
+
 <!--
   Licensed to the Apache Software Foundation (ASF) under one or more
   contributor license agreements.  See the NOTICE file distributed with
@@ -67,7 +68,8 @@ mvn clean package -DskipTests
 # Start command
 spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
   --jars `ls packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar` \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 
 To build for integration tests that include `hudi-integ-test-bundle`, use `-Dintegration-tests`.

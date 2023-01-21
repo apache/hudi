@@ -19,11 +19,12 @@
 package org.apache.spark
 
 import com.esotericsoftware.kryo.Kryo
+import com.esotericsoftware.kryo.serializers.JavaSerializer
 import org.apache.hudi.client.model.HoodieInternalRow
-import org.apache.hudi.common.model.{HoodieKey, HoodieSparkRecord}
-import org.apache.hudi.common.util.HoodieCommonKryoProvider
+import org.apache.hudi.common.config.SerializableConfiguration
+import org.apache.hudi.common.model.HoodieSparkRecord
+import org.apache.hudi.common.util.HoodieCommonKryoRegistrar
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.spark.internal.config.ConfigBuilder
 import org.apache.spark.serializer.KryoRegistrator
 
 /**
@@ -42,22 +43,31 @@ import org.apache.spark.serializer.KryoRegistrator
  *   or renamed (w/o correspondingly updating such usages)</li>
  * </ol>
  */
-class HoodieSparkKryoProvider extends HoodieCommonKryoProvider {
-  override def registerClasses(): Array[Class[_]] = {
+class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegistrator {
+  override def registerClasses(kryo: Kryo): Unit = {
     ///////////////////////////////////////////////////////////////////////////
     // NOTE: DO NOT REORDER REGISTRATIONS
     ///////////////////////////////////////////////////////////////////////////
-    val classes = super[HoodieCommonKryoProvider].registerClasses()
-    classes ++ Array(
-      classOf[HoodieWriteConfig],
-      classOf[HoodieSparkRecord],
-      classOf[HoodieInternalRow]
-    )
+    super[HoodieCommonKryoRegistrar].registerClasses(kryo)
+
+    kryo.register(classOf[HoodieWriteConfig])
+
+    kryo.register(classOf[HoodieSparkRecord])
+    kryo.register(classOf[HoodieInternalRow])
+
+    // NOTE: Hadoop's configuration is not a serializable object by itself, and hence
+    //       we're relying on [[SerializableConfiguration]] wrapper to work it around
+    kryo.register(classOf[SerializableConfiguration], new JavaSerializer())
   }
 }
 
-object HoodieSparkKryoProvider {
+object HoodieSparkKryoRegistrar {
+
+  // NOTE: We're copying definition of the config introduced in Spark 3.0
+  //       (to stay compatible w/ Spark 2.4)
+  private val KRYO_USER_REGISTRATORS = "spark.kryo.registrator"
+
   def register(conf: SparkConf): SparkConf = {
-    conf.registerKryoClasses(new HoodieSparkKryoProvider().registerClasses())
+    conf.set(KRYO_USER_REGISTRATORS, Seq(classOf[HoodieSparkKryoRegistrar].getName).mkString(","))
   }
 }
