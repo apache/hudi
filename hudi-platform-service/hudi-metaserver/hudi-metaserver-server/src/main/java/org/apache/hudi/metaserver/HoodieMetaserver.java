@@ -49,7 +49,7 @@ public class HoodieMetaserver {
   private static TServer server;
   private static Thread serverThread;
   private static volatile MetaserverStorage metaserverStorage;
-  private static HoodieMetaserverGateway metaserverService;
+  private static HoodieMetaserverGateway metaserverGateway;
 
   public static void main(String[] args) {
     startServer();
@@ -101,11 +101,11 @@ public class HoodieMetaserver {
           }
           TableService tableService = new TableService(metaserverStorage);
           TimelineService timelineService = new TimelineService(metaserverStorage);
-          metaserverService = new HoodieMetaserverGateway(tableService, timelineService);
+          metaserverGateway = new HoodieMetaserverGateway(tableService, timelineService);
         }
       }
     }
-    return metaserverService;
+    return metaserverGateway;
   }
 
   // only for test

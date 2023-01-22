@@ -34,17 +34,17 @@ import java.util.Arrays;
 public class HoodieMetaserverProxyHandler implements InvocationHandler {
   private static final Logger LOG = LogManager.getLogger(HoodieMetaserverProxyHandler.class);
 
-  private final HoodieMetaserverGateway metaserverService;
+  private final HoodieMetaserverGateway metaserverGateway;
 
-  public HoodieMetaserverProxyHandler(HoodieMetaserverGateway metaserverService) {
-    this.metaserverService = metaserverService;
+  public HoodieMetaserverProxyHandler(HoodieMetaserverGateway metaserverGateway) {
+    this.metaserverGateway = metaserverGateway;
   }
 
   @Override
   public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
     Throwable err;
     try {
-      return method.invoke(metaserverService, args);
+      return method.invoke(metaserverGateway, args);
     } catch (IllegalAccessException | InvocationTargetException e) {
       err = e.getCause();
     } catch (Throwable e) {
