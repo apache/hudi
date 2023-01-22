@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -39,7 +40,7 @@ import java.util.regex.Pattern;
 
 /**
  * Obtains latest schema from the Confluent/Kafka schema-registry.
- *
+ * <p>
  * https://github.com/confluentinc/schema-registry
  */
 public class SchemaRegistryProvider extends SchemaProvider {
@@ -52,6 +53,26 @@ public class SchemaRegistryProvider extends SchemaProvider {
     public static final String SRC_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
     public static final String TARGET_SCHEMA_REGISTRY_URL_PROP =
         "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
+    public static final String SCHEMA_CONVERTER_PROP = "hoodie.deltastreamer.schemaprovider.registry.schemaconverter";
+  }
+
+  @FunctionalInterface
+  public interface SchemaConverter {
+    /**
+     * Convert original schema string to avro schema string.
+     *
+     * @param schema original schema string (e.g., JSON)
+     * @return avro schema string
+     */
+    String convert(String schema) throws IOException;
+  }
+
+  public Schema parseSchemaFromRegistry(String registryUrl) throws IOException {
+    String schema = fetchSchemaFromRegistry(registryUrl);
+    SchemaConverter converter = config.contains(Config.SCHEMA_CONVERTER_PROP)
+        ? ReflectionUtils.loadClass(config.getString(Config.SCHEMA_CONVERTER_PROP))
+        : s -> s;
+    return new Schema.Parser().parse(converter.convert(schema));
   }
 
   /**
@@ -59,6 +80,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
    * If the caller provides userInfo credentials in the url (e.g "https://foo:bar@schemaregistry.org") then the credentials
    * are extracted the url using the Matcher and the extracted credentials are set on the request as an Authorization
    * header.
+   *
    * @param registryUrl
    * @return the Schema in String form.
    * @throws IOException
@@ -96,15 +118,11 @@ public class SchemaRegistryProvider extends SchemaProvider {
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL_PROP));
   }
 
-  private Schema getSchema(String registryUrl) throws IOException {
-    return new Schema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
-  }
-
   @Override
   public Schema getSourceSchema() {
     String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
     try {
-      return getSchema(registryUrl);
+      return parseSchemaFromRegistry(registryUrl);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading source schema from registry :" + registryUrl, ioe);
     }
@@ -115,7 +133,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
     String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
     String targetRegistryUrl = config.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, registryUrl);
     try {
-      return getSchema(targetRegistryUrl);
+      return parseSchemaFromRegistry(targetRegistryUrl);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading target schema from registry :" + registryUrl, ioe);
     }
