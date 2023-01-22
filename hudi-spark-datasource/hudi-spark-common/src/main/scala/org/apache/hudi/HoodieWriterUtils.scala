@@ -22,13 +22,16 @@ import org.apache.hudi.DataSourceWriteOptions.{RECORD_MERGER_IMPLS, _}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.{HoodieException, HoodieKeyGeneratorException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
+
 import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
@@ -185,7 +188,8 @@ object HoodieWriterUtils {
   /**
    * Detects conflicts between datasourceKeyGen and existing table configuration keyGen
    */
-  def validateKeyGeneratorConfig(datasourceKeyGen: String, tableConfig: HoodieConfig): Unit = {
+  def validateKeyGeneratorConfigs(datasourceKeyGen: String, hoodieConfig: HoodieConfig, tableConfig: HoodieConfig)
+                                        : Unit = {
     val diffConfigs = StringBuilder.newBuilder
 
     if (null != tableConfig) {
@@ -202,6 +206,34 @@ object HoodieWriterUtils {
     if (diffConfigs.nonEmpty) {
       diffConfigs.insert(0, "\nConfig conflict(key\tcurrent value\texisting value):\n")
       throw new HoodieException(diffConfigs.toString.trim)
+    }
+
+    if (hoodieConfig.getBoolean(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS)) {
+      val autoGenerateRecordKey = KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key()
+      if (hoodieConfig.getBoolean(HoodieWriteConfig.COMBINE_BEFORE_INSERT)) {
+        throw new HoodieKeyGeneratorException(s"Config $autoGenerateRecordKey can not be used when " +
+          s"${HoodieWriteConfig.COMBINE_BEFORE_INSERT.key()} is enabled")
+      }
+      if (!hoodieConfig.getBoolean(HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE)) {
+        throw new HoodieKeyGeneratorException(s"Config ${HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key()} " +
+          s"should be enabled when $autoGenerateRecordKey is used")
+      }
+      if (hoodieConfig.getString(DataSourceWriteOptions.TABLE_TYPE) == MOR_TABLE_TYPE_OPT_VAL) {
+        throw new HoodieKeyGeneratorException(s"Config ${DataSourceWriteOptions.TABLE_TYPE.key()} should be set to " +
+          s"COW_TABLE_TYPE_OPT_VAL when $autoGenerateRecordKey is used")
+      }
+      if (hoodieConfig.getString(OPERATION) == UPSERT_OPERATION_OPT_VAL) {
+        throw new HoodieKeyGeneratorException(s"Config ${OPERATION.key()} should not be set to $UPSERT_OPERATION_OPT_VAL" +
+          s" when $autoGenerateRecordKey is used")
+      }
+      if (hoodieConfig.getString(DataSourceWriteOptions.PRECOMBINE_FIELD) != DataSourceWriteOptions.PRECOMBINE_FIELD.defaultValue()) {
+        throw new HoodieKeyGeneratorException(s"Config ${DataSourceWriteOptions.PRECOMBINE_FIELD.key()} should not be set" +
+          s" when $autoGenerateRecordKey is used")
+      }
+      if (hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD) != null) {
+        throw new HoodieKeyGeneratorException(s"Config ${DataSourceWriteOptions.RECORDKEY_FIELD.key()} should not be set " +
+          s"when $autoGenerateRecordKey is used")
+      }
     }
   }
 

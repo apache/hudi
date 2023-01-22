@@ -376,7 +376,7 @@ object DataSourceWriteOptions {
     * Key generator class, that implements will extract the key out of incoming record.
     */
   val keyGeneratorInferFunc = JFunction.toJavaFunction((config: HoodieConfig) => {
-    Option.of(DataSourceOptionsHelper.inferKeyGenClazz(config.getProps))
+    Option.ofNullable(DataSourceOptionsHelper.inferKeyGenClazz(config.getProps))
   })
 
   val KEYGENERATOR_CLASS_NAME: ConfigProperty[String] = ConfigProperty
@@ -862,6 +862,9 @@ object DataSourceOptionsHelper {
   def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
     if (!StringUtils.isNullOrEmpty(partitionFields)) {
       val numPartFields = partitionFields.split(",").length
+      if (StringUtils.isNullOrEmpty(recordsKeyFields)) {
+        return null
+      }
       val numRecordKeyFields = recordsKeyFields.split(",").length
       if (numPartFields == 1 && numRecordKeyFields == 1) {
         classOf[SimpleKeyGenerator].getName

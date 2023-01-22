@@ -29,10 +29,12 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, HoodieKeyGeneratorException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
@@ -52,9 +54,6 @@ import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
 import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
-import java.io.IOException
-import java.time.Instant
-import java.util.{Collections, Date, UUID}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters
 
@@ -1175,6 +1174,102 @@ class TestHoodieSparkSqlWriter {
     )
     val kg2 = HoodieWriterUtils.getOriginKeyGenerator(m2)
     assertTrue(kg2 == classOf[SimpleKeyGenerator].getName)
+  }
+
+  @Test
+  def testAutoGenerationOfRecordKeysFailsWithIncompatibleConfigs(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+
+    val initialOpts = Map(
+      HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key() -> "true",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key() -> "false",
+      HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key() -> "true",
+      DataSourceWriteOptions.OPERATION.key() -> INSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key -> COW_TABLE_TYPE_OPT_VAL
+    )
+
+    val incompatibleConfigList = List(
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key() -> "true",
+      // PRECOMBINE_FIELD should not be set
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      // RECORDKEY_FIELD should not be set
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key() -> "false",
+      // Only insert and bulk_insert op is supported
+      DataSourceWriteOptions.OPERATION.key() -> UPSERT_OPERATION_OPT_VAL,
+      // Only COW table is supported
+      DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL
+    )
+
+    for (incompatibleOpt <- incompatibleConfigList) {
+      val opts = initialOpts + incompatibleOpt
+      try {
+        // verify exception is thrown when HoodieWriteConfig.COMBINE_BEFORE_INSERT is enabled
+        val tmpDF = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+        tmpDF.write.format("org.apache.hudi")
+          .options(opts)
+          .mode(SaveMode.Append)
+          .save(tempBasePath)
+        throw new Exception("Should fail")
+      } catch {
+        case e: HoodieException => e.isInstanceOf[HoodieKeyGeneratorException]
+        case _ => throw new Exception("Should fail")
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("bulk_insert", "insert"))
+  def testAutoGenerationOfRecordKeys(opType : String): Unit = {
+
+    val dataGen = new HoodieTestDataGenerator()
+    val initialOpts = Map(
+      HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      DataSourceWriteOptions.TABLE_TYPE.key -> COW_TABLE_TYPE_OPT_VAL,
+      KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key() -> "true",
+      DataSourceWriteOptions.OPERATION.key() -> opType,
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
+      HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key() -> "true")
+
+    var totalRecs = 0
+    for (_ <- 1 to 2) {
+      val opts = initialOpts
+      for (x <- 1 to 5) {
+        val instantTime = "00" + x
+        val genRecsList = if (x == 1) {
+          totalRecs += 100 * 2
+          val inserts = dataGen.generateInserts(instantTime, 100)
+          // Adds duplicate inserts by doubling the inserts added
+          // In the second iteration of outer loop, MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE comes into play. Since the
+          // incoming inserts would be merged with existing records if the config is disabled.
+          inserts.addAll(inserts)
+          inserts
+        } else {
+          totalRecs += 10
+          dataGen.generateUniqueUpdates(instantTime, 10)
+        }
+        val records = recordsToStrings(genRecsList).toList
+        val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+        inputDF.write.format("org.apache.hudi")
+          .options(opts)
+          .mode(SaveMode.Append)
+          .save(tempBasePath)
+
+        val snapshotDF = spark.read.format("org.apache.hudi")
+          .load(tempBasePath)
+        assertEquals(totalRecs, snapshotDF.count())
+      }
+    }
+
+    val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(tempBasePath).build()
+    assertEquals(metaClient.getTableConfig.getTableType, HoodieTableType.COPY_ON_WRITE)
   }
 
   /**

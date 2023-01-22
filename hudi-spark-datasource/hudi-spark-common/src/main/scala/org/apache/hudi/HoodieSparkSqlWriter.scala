@@ -105,7 +105,7 @@ object HoodieSparkSqlWriter {
       originKeyGeneratorClassName, parameters)
 
     // Validate datasource and tableconfig keygen are the same
-    validateKeyGeneratorConfig(originKeyGeneratorClassName, tableConfig);
+    validateKeyGeneratorConfigs(originKeyGeneratorClassName, hoodieConfig, tableConfig);
     validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite);
 
     val databaseName = hoodieConfig.getStringOrDefault(HoodieTableConfig.DATABASE_NAME, "")
