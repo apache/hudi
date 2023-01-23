@@ -60,14 +60,15 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     // NOTE: We have to strip partition-path configuration, since it could only be interpreted by
     //       this key-gen
     super(stripPartitionPathConfig(props));
-    this.recordKeyFields =
-        Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
+    String recordKeyField = props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
+    this.recordKeyFields = recordKeyField == null ? Collections.emptyList() :
+        Arrays.stream(recordKeyField.split(","))
             .map(String::trim)
             .collect(Collectors.toList());
-    String partitionPathFields = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
-    this.partitionPathFields = partitionPathFields == null
+    String partitionPathField = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+    this.partitionPathFields = partitionPathField == null
         ? Collections.emptyList()
-        : Arrays.stream(partitionPathFields.split(",")).map(String::trim).collect(Collectors.toList());
+        : Arrays.stream(partitionPathField.split(",")).map(String::trim).collect(Collectors.toList());
     this.customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
 
     validateRecordKeyFields();

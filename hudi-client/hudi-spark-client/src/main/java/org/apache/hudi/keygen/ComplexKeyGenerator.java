@@ -47,10 +47,11 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList()) : Collections.EMPTY_LIST;
-    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(FIELDS_SEP))
+    this.partitionPathFields = props.containsKey(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()))
+        ? Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(FIELDS_SEP))
         .map(String::trim)
         .filter(s -> !s.isEmpty())
-        .collect(Collectors.toList());
+        .collect(Collectors.toList()) : Collections.EMPTY_LIST;
     this.complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
   }
 
