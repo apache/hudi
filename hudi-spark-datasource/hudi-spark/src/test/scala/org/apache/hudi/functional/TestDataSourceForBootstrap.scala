@@ -21,14 +21,16 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort}
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{col, lit}
-import org.apache.spark.sql.{SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -119,10 +121,11 @@ class TestDataSourceForBootstrap {
 
     // Read bootstrapped table and verify count using glob path
     val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
-    assertEquals(numRecords, hoodieROViewDF1.count())
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
+
     // Read bootstrapped table and verify count using Hudi file index
     val hoodieROViewDF2 = spark.read.format("hudi").load(basePath)
-    assertEquals(numRecords, hoodieROViewDF2.count())
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF2)).collectAsList())
 
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
@@ -169,24 +172,35 @@ class TestDataSourceForBootstrap {
       .mode(SaveMode.Overwrite)
       .save(srcPath)
 
+    val readOpts = commonOpts ++ Map(
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr",
+        DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+        HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.key -> bootstrapMode
+    )
+
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
       DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
-      commonOpts.updated(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr") ++
-        Map(
-          DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
-          HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.key -> bootstrapMode),
+      readOpts,
       classOf[SimpleKeyGenerator].getName)
 
     // check marked directory clean up
     assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
 
+    val expectedDF = bootstrapMode match {
+      case "METADATA_ONLY" =>
+        sort(sourceDF).withColumn("datestr", lit(null))
+      case "FULL_RECORD" =>
+        sort(sourceDF)
+    }
+
     // Read bootstrapped table and verify count
-    val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
-    assertEquals(numRecords, hoodieROViewDF1.count())
+    val hoodieROViewDF1 = spark.read.options(readOpts).format("hudi").load(basePath + "/*")
+    assertEquals(expectedDF.collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
+
     // Read bootstrapped table and verify count using Hudi file index
-    val hoodieROViewDF2 = spark.read.format("hudi").load(basePath)
-    assertEquals(numRecords, hoodieROViewDF2.count())
+    val hoodieROViewDF2 = spark.read.options(readOpts).format("hudi").load(basePath)
+    assertEquals(expectedDF.collectAsList(), sort(dropMetaCols(hoodieROViewDF2)).collectAsList())
 
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
@@ -245,10 +259,11 @@ class TestDataSourceForBootstrap {
 
     // Read bootstrapped table and verify count using glob path
     val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
-    assertEquals(numRecords, hoodieROViewDF1.count())
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
+
     // Read with base path using Hudi file index
     val hoodieROViewWithBasePathDF1 = spark.read.format("hudi").load(basePath)
-    assertEquals(numRecords, hoodieROViewWithBasePathDF1.count())
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewWithBasePathDF1)).collectAsList())
 
     // Perform upsert based on the written bootstrap table
     val updateDf1 = hoodieROViewDF1.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
@@ -392,13 +407,16 @@ class TestDataSourceForBootstrap {
                             .option(DataSourceReadOptions.QUERY_TYPE.key,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
                             .load(basePath + "/*")
-    assertEquals(numRecords, hoodieROViewDF1.count())
+
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
+
     // Read bootstrapped table without "*"
     val hoodieROViewDFWithBasePath = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key,
         DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(basePath)
-    assertEquals(numRecords, hoodieROViewDFWithBasePath.count())
+
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDFWithBasePath)).collectAsList())
 
     // Perform upsert based on the written bootstrap table
     val updateDf1 = hoodieROViewDF1.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
@@ -484,10 +502,10 @@ class TestDataSourceForBootstrap {
 
     // Read bootstrapped table and verify count
     val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
-    assertEquals(numRecords, hoodieROViewDF1.count())
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
 
     val hoodieROViewDFWithBasePath = spark.read.format("hudi").load(basePath)
-    assertEquals(numRecords, hoodieROViewDFWithBasePath.count())
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDFWithBasePath)).collectAsList())
 
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
@@ -577,4 +595,13 @@ class TestDataSourceForBootstrap {
         hoodieIncViewDF3.count())
     }
   }
+}
+
+object TestDataSourceForBootstrap {
+
+  def sort(df: DataFrame) = df.sort("_row_key")
+
+  def dropMetaCols(df: DataFrame) =
+    df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
+
 }
