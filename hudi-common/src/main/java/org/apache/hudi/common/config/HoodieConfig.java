@@ -70,7 +70,13 @@ public class HoodieConfig implements Serializable {
       if (configProperty.getInferFunc().isPresent()) {
         inferValue = configProperty.getInferFunc().get().apply(this);
       }
-      props.setProperty(configProperty.key(), inferValue.isPresent() ? inferValue.get().toString() : configProperty.defaultValue().toString());
+      if (inferValue.isPresent() || configProperty.hasDefaultValue()) {
+        props.setProperty(
+            configProperty.key(),
+            inferValue.isPresent()
+                ? inferValue.get().toString()
+                : configProperty.defaultValue().toString());
+      }
     }
   }
 
@@ -114,7 +120,7 @@ public class HoodieConfig implements Serializable {
         .forEach(f -> {
           try {
             ConfigProperty<?> cfgProp = (ConfigProperty<?>) f.get("null");
-            if (cfgProp.hasDefaultValue()) {
+            if (cfgProp.hasDefaultValue() || cfgProp.getInferFunc().isPresent()) {
               setDefaultValue(cfgProp);
             }
           } catch (IllegalAccessException e) {

@@ -6,6 +6,15 @@ on:
       - master
       - 'release-*'
   pull_request:
+    paths-ignore:
+      - '**.bmp'
+      - '**.gif'
+      - '**.jpg'
+      - '**.jpeg'
+      - '**.md'
+      - '**.pdf'
+      - '**.png'
+      - '**.svg'
     branches:
       - master
       - 'release-*'
@@ -128,4 +137,3 @@ jobs:
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
-

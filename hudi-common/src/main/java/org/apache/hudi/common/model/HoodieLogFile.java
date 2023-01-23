@@ -99,6 +99,10 @@ public class HoodieLogFile implements Serializable {
     return FSUtils.getFileExtensionFromLog(getPath());
   }
 
+  public String getSuffix() {
+    return FSUtils.getSuffixFromLogPath(getPath());
+  }
+
   public Path getPath() {
     return new Path(pathStr);
   }
@@ -165,8 +169,16 @@ public class HoodieLogFile implements Serializable {
       if (baseInstantTime1.equals(baseInstantTime2)) {
 
         if (o1.getLogVersion() == o2.getLogVersion()) {
+
+          int compareWriteToken = getWriteTokenComparator().compare(o1.getLogWriteToken(), o2.getLogWriteToken());
+          if (compareWriteToken == 0) {
+
+            // Compare by suffix when write token is same
+            return o1.getSuffix().compareTo(o2.getSuffix());
+          }
+
           // Compare by write token when base-commit and log-version is same
-          return getWriteTokenComparator().compare(o1.getLogWriteToken(), o2.getLogWriteToken());
+          return compareWriteToken;
         }
 
         // compare by log-version when base-commit is same

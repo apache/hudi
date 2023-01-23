@@ -69,10 +69,10 @@ object HoodieOptionConfig {
     .defaultValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue())
     .build()
 
-  val SQL_MERGER_STRATEGY: HoodieSQLOption[String] = buildConf()
-    .withSqlKey("mergerStrategy")
-    .withHoodieKey(DataSourceWriteOptions.MERGER_STRATEGY.key)
-    .withTableConfigKey(HoodieTableConfig.MERGER_STRATEGY.key)
+  val SQL_RECORD_MERGER_STRATEGY: HoodieSQLOption[String] = buildConf()
+    .withSqlKey("recordMergerStrategy")
+    .withHoodieKey(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key)
+    .withTableConfigKey(HoodieTableConfig.RECORD_MERGER_STRATEGY.key)
     .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
     .build()
 
@@ -163,18 +163,6 @@ object HoodieOptionConfig {
   }
 
   /**
-   * Get the primary key from the table options.
-   * @param options
-   * @return
-   */
-  def getPrimaryColumns(options: Map[String, String]): Array[String] = {
-    val params = mapSqlOptionsToDataSourceWriteConfigs(options)
-    params.get(DataSourceWriteOptions.RECORDKEY_FIELD.key)
-      .map(_.split(",").filter(_.nonEmpty))
-      .getOrElse(Array.empty)
-  }
-
-  /**
    * Get the table type from the table options.
    * @param options
    * @return
@@ -197,7 +185,7 @@ object HoodieOptionConfig {
   // extract primaryKey, preCombineField, type options
   def extractSqlOptions(options: Map[String, String]): Map[String, String] = {
     val sqlOptions = mapTableConfigsToSqlOptions(options)
-    val targetOptions = sqlOptionKeyToWriteConfigKey.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName) -- Set(SQL_MERGER_STRATEGY.sqlKeyName)
+    val targetOptions = sqlOptionKeyToWriteConfigKey.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName) -- Set(SQL_RECORD_MERGER_STRATEGY.sqlKeyName)
     sqlOptions.filterKeys(targetOptions.contains)
   }
 

@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{col, lit}
@@ -65,12 +66,14 @@ class TestDataSourceForBootstrap {
   val originalVerificationVal: String = "driver_0"
   val updatedVerificationVal: String = "driver_update"
 
-  @BeforeEach def initialize(@TempDir tempDir: java.nio.file.Path) {
-    spark = SparkSession.builder
-      .appName("Hoodie Datasource test")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .getOrCreate
+  /**
+   * TODO rebase onto existing test base-class to avoid duplication
+   */
+  @BeforeEach
+  def initialize(@TempDir tempDir: java.nio.file.Path) {
+    val sparkConf = HoodieClientTestUtils.getSparkConfForTest(getClass.getSimpleName)
+
+    spark = SparkSession.builder.config(sparkConf).getOrCreate
     basePath = tempDir.toAbsolutePath.toString + "/base"
     srcPath = tempDir.toAbsolutePath.toString + "/src"
     fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)

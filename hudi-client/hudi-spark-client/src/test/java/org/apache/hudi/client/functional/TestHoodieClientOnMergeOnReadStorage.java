@@ -191,7 +191,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test logcompaction before any compaction is scheduled. Here base file is not yet created.
+   * Test log-compaction before any compaction is scheduled. Here base file is not yet created.
    */
   @Test
   public void testLogCompactionOnMORTableWithoutBaseFile() throws Exception {
@@ -234,7 +234,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test scheduling logcompaction right after scheduling compaction. This should fail.
+   * Test scheduling log-compaction right after scheduling compaction. This should fail.
    */
   @Test
   public void testSchedulingLogCompactionAfterSchedulingCompaction() throws Exception {
@@ -263,13 +263,13 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     Option<String> compactionTimeStamp = client.scheduleCompaction(Option.empty());
     assertTrue(compactionTimeStamp.isPresent());
 
-    // Try scheduing log compaction, it wont succeed
+    // Try scheduling log compaction, it won't succeed. 
     Option<String> logCompactionTimeStamp = client.scheduleLogCompaction(Option.empty());
     assertFalse(logCompactionTimeStamp.isPresent());
   }
 
   /**
-   * Test scheduling compaction right after scheduling logcompaction. This should fail.
+   * Test scheduling compaction right after scheduling log-compaction. This should fail.
    */
   @Test
   public void testSchedulingCompactionAfterSchedulingLogCompaction() throws Exception {
@@ -308,7 +308,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     Option<String> logCompactionTimeStamp = client.scheduleLogCompaction(Option.empty());
     assertTrue(logCompactionTimeStamp.isPresent());
 
-    // Try scheduling compaction, it wont succeed
+    // Try scheduling compaction, it won't succeed
     Option<String> compactionTimeStamp = client.scheduleCompaction(Option.empty());
     assertTrue(compactionTimeStamp.isPresent());
     client.compact(compactionTimeStamp.get());
@@ -326,7 +326,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
-    // First insert. Here First file slice gets added to file group.
+    // First insert. Here first file slice gets added to file group.
     String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
     insertBatch(config, client, newCommitTime, "000", 100,
         SparkRDDWriteClient::insert, false, false, 10, 100,
@@ -395,7 +395,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         false, false, 10, 10, 4, config.populateMetaFields());
     prevCommitTime = newCommitTime;
 
-    // Schedule and execute logcompaction but do not commit.
+    // Schedule and execute log-compaction but do not commit.
     Option<String> logCompactionTimeStamp = lcClient.scheduleLogCompaction(Option.empty());
     assertTrue(logCompactionTimeStamp.isPresent());
     lcClient.logCompact(logCompactionTimeStamp.get());
@@ -421,7 +421,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         false, false, 10, 10, 4, config.populateMetaFields());
     prevCommitTime = newCommitTime;
 
-    // Complete logcompaction now.
+    // Complete log-compaction now.
     logCompactionTimeStamp = lcClient.scheduleLogCompaction(Option.empty());
     assertTrue(logCompactionTimeStamp.isPresent());
     HoodieWriteMetadata metadata = lcClient.logCompact(logCompactionTimeStamp.get());
@@ -447,7 +447,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
             .withUseScanV2(true)
             .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
             .build();
-        scanner.scanInternal(Option.empty(), true);
+        scanner.scan(true);
         List<String> prevInstants = scanner.getValidBlockInstants();
         HoodieUnMergedLogRecordScanner scanner2 = HoodieUnMergedLogRecordScanner.newBuilder()
             .withFileSystem(metaClient.getFs())
@@ -461,7 +461,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
             .withUseScanV2(true)
             .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
             .build();
-        scanner2.scanInternal(Option.empty(), true);
+        scanner2.scan(true);
         List<String> currentInstants = scanner2.getValidBlockInstants();
         assertEquals(prevInstants, currentInstants);
       });

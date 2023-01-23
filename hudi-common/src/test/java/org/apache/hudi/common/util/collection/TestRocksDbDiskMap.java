@@ -104,7 +104,8 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
   @Test
   public void testSimpleInsertWithoutHoodieMetadata() throws IOException, URISyntaxException {
     RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath);
-    List<HoodieRecord> hoodieRecords = SchemaTestUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 1000);
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    List<HoodieRecord> hoodieRecords = testUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 1000);
     Set<String> recordKeys = new HashSet<>();
     // insert generated records into the map
     hoodieRecords.forEach(r -> {
@@ -128,14 +129,15 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
 
     RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath);
-    List<IndexedRecord> insertedRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    List<IndexedRecord> insertedRecords = testUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(insertedRecords, rocksDBBasedMap);
     String oldCommitTime =
         ((GenericRecord) insertedRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
 
     // generate updates from inserts for first 50 keys / subset of keys
     List<IndexedRecord> updatedRecords = SchemaTestUtil.updateHoodieTestRecords(recordKeys.subList(0, 50),
-        SchemaTestUtil.generateHoodieTestRecords(0, 50), HoodieActiveTimeline.createNewInstantTime());
+        testUtil.generateHoodieTestRecords(0, 50), HoodieActiveTimeline.createNewInstantTime());
     String newCommitTime =
         ((GenericRecord) updatedRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
 
@@ -161,7 +163,8 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
   @Test
   public void testPutAll() throws IOException, URISyntaxException {
     RocksDbDiskMap<String, HoodieRecord> rocksDBBasedMap = new RocksDbDiskMap<>(basePath);
-    List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
     Map<String, HoodieRecord> recordMap = new HashMap<>();
     iRecords.forEach(r -> {
       String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
@@ -193,7 +196,8 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
   }
 
   private  List<String> setupMapWithRecords(RocksDbDiskMap rocksDBBasedMap, int numRecords) throws IOException, URISyntaxException {
-    List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, numRecords);
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, numRecords);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, rocksDBBasedMap);
     // Ensure the number of records is correct
     assertEquals(rocksDBBasedMap.size(), recordKeys.size());

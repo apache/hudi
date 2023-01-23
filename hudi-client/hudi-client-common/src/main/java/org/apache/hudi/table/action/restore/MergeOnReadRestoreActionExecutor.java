@@ -31,8 +31,8 @@ import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 public class MergeOnReadRestoreActionExecutor<T, I, K, O>
     extends BaseRestoreActionExecutor<T, I, K, O> {
   public MergeOnReadRestoreActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table,
-                                          String instantTime, String restoreInstantTime) {
-    super(context, config, table, instantTime, restoreInstantTime);
+                                          String instantTime, String savepointToRestoreTimestamp) {
+    super(context, config, table, instantTime, savepointToRestoreTimestamp);
   }
 
   @Override

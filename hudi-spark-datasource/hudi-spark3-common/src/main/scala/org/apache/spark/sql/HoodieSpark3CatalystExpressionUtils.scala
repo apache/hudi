@@ -15,24 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.functional;
+package org.apache.spark.sql
 
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, Predicate, PredicateHelper}
+import org.apache.spark.sql.execution.datasources.DataSourceStrategy
 
-// Sole purpose of this class is to provide access to otherwise API inaccessible from the tests.
-// While it's certainly not a great pattern, it would require substantial test restructuring to
-// eliminate such access to an internal API, so this is considered acceptable given it's very limited
-// scope (w/in the current package)
-class SparkRDDWriteClientOverride extends org.apache.hudi.client.SparkRDDWriteClient {
+trait HoodieSpark3CatalystExpressionUtils extends HoodieCatalystExpressionUtils
+  with PredicateHelper {
 
-  public SparkRDDWriteClientOverride(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig);
-  }
+  override def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression] =
+    DataSourceStrategy.normalizeExprs(exprs, attributes)
 
-  @Override
-  public void rollbackFailedBootstrap() {
-    super.rollbackFailedBootstrap();
-  }
+  override def extractPredicatesWithinOutputSet(condition: Expression,
+                                                outputSet: AttributeSet): Option[Expression] =
+    super[PredicateHelper].extractPredicatesWithinOutputSet(condition, outputSet)
 }
-

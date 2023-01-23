@@ -34,6 +34,7 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.watermark.Watermark;
+import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.table.runtime.operators.TableStreamOperator;
 import org.apache.flink.table.runtime.util.StreamRecordCollector;
@@ -103,6 +104,11 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   }
 
   @Override
+  public void processLatencyMarker(LatencyMarker latencyMarker) {
+    // no need to propagate the latencyMarker
+  }
+
+  @Override
   public void processElement(StreamRecord<CompactionPlanEvent> record) throws Exception {
     final CompactionPlanEvent event = record.getValue();
     final String instantTime = event.getCompactionInstantTime();
@@ -157,7 +163,6 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       this.executor.close();
     }
     if (null != this.writeClient) {
-      this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
       this.writeClient = null;
     }

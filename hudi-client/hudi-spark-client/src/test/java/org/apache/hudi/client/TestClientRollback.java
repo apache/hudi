@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieInstantInfo;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -54,6 +55,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -63,6 +66,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.table.action.restore.RestoreUtils.getRestorePlan;
+import static org.apache.hudi.table.action.restore.RestoreUtils.getSavepointToRestoreTimestampV1Schema;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -75,11 +80,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestClientRollback extends HoodieClientTestBase {
 
+  private static Stream<Arguments> testSavepointAndRollbackParams() {
+    return Arrays.stream(new Boolean[][] {
+        {false, false}, {true, true}, {true, false},
+    }).map(Arguments::of);
+  }
+
   /**
    * Test case for rollback-savepoint interaction.
    */
-  @Test
-  public void testSavepointAndRollback() throws Exception {
+  @ParameterizedTest
+  @MethodSource("testSavepointAndRollbackParams")
+  public void testSavepointAndRollback(Boolean testFailedRestore, Boolean failedRestoreInflight) throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder().withCleanConfig(HoodieCleanConfig.newBuilder()
         .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build()).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
@@ -175,9 +187,84 @@ public class TestClientRollback extends HoodieClientTestBase {
 
       dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
       assertEquals(0, dataFiles.size(), "The data files for commit 004 should be rolled back");
+
+      if (testFailedRestore) {
+        //test to make sure that restore commit is reused when the restore fails and is re-ran
+        HoodieInstant inst =  table.getActiveTimeline().getRestoreTimeline().getInstants().get(0);
+        String restoreFileName = table.getMetaClient().getBasePathV2().toString() + "/.hoodie/" +  inst.getFileName();
+
+        //delete restore commit file
+        assertTrue((new File(restoreFileName)).delete());
+
+        if (!failedRestoreInflight) {
+          //delete restore inflight file
+          assertTrue((new File(restoreFileName + ".inflight")).delete());
+        }
+        try (SparkRDDWriteClient newClient = getHoodieWriteClient(cfg)) {
+          //restore again
+          newClient.restoreToSavepoint(savepoint.getTimestamp());
+
+          //verify that we resuse the existing restore commit
+          metaClient = HoodieTableMetaClient.reload(metaClient);
+          table = HoodieSparkTable.create(getConfig(), context, metaClient);
+          List<HoodieInstant> restoreInstants = table.getActiveTimeline().getRestoreTimeline().getInstants();
+          assertEquals(1, restoreInstants.size());
+          assertEquals(HoodieInstant.State.COMPLETED, restoreInstants.get(0).getState());
+          assertEquals(inst.getTimestamp(), restoreInstants.get(0).getTimestamp());
+        }
+      }
     }
   }
 
+  private List<HoodieRecord> updateRecords(SparkRDDWriteClient client, List<HoodieRecord> records, String newCommitTime) throws IOException {
+    client.startCommitWithTime(newCommitTime);
+    List<HoodieRecord> recs = dataGen.generateUpdates(newCommitTime, records);
+    List<WriteStatus> statuses = client.upsert(jsc.parallelize(recs, 1), newCommitTime).collect();
+    assertNoWriteErrors(statuses);
+    return recs;
+  }
+
+  @Test
+  public void testGetSavepointOldSchema() throws Exception {
+    HoodieWriteConfig cfg = getConfigBuilder().withCleanConfig(HoodieCleanConfig.newBuilder()
+        .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build()).build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
+
+      /**
+       * Write 1 (only inserts)
+       */
+      String newCommitTime = "001";
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+      assertNoWriteErrors(statuses);
+
+      records = updateRecords(client, records, "002");
+
+      client.savepoint("hoodie-unit-test", "test");
+
+
+      records = updateRecords(client, records, "003");
+      updateRecords(client, records, "004");
+
+      // rollback to savepoint 002
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      HoodieInstant savepoint = table.getCompletedSavepointTimeline().lastInstant().get();
+      client.restoreToSavepoint(savepoint.getTimestamp());
+
+      //verify that getSavepointToRestoreTimestampV1Schema is correct
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      HoodieRestorePlan plan = getRestorePlan(metaClient, table.getActiveTimeline().getRestoreTimeline().lastInstant().get());
+      assertEquals("002", getSavepointToRestoreTimestampV1Schema(table, plan));
+    }
+  }
+  
   /**
    * Test case for rollback-savepoint with KEEP_LATEST_FILE_VERSIONS policy.
    */
@@ -486,7 +573,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
       // the compaction instants should be excluded
       metaClient.reloadActiveTimeline();
-      assertEquals(0, client.getPendingRollbackInfos(metaClient).size());
+      assertEquals(0, client.getTableServiceClient().getPendingRollbackInfos(metaClient).size());
 
       // verify there is no extra rollback instants
       client.rollback(commitTime4);
@@ -740,4 +827,5 @@ public class TestClientRollback extends HoodieClientTestBase {
       assertTrue(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
     }
   }
+
 }

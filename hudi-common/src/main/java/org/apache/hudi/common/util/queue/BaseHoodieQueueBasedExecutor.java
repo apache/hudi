@@ -93,6 +93,8 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
 
   protected abstract void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer);
 
+  protected void setUp() {}
+
   /**
    * Start producing
    */
@@ -165,6 +167,7 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
   public E execute() {
     try {
       checkState(this.consumer.isPresent());
+      setUp();
       // Start consuming/producing asynchronously
       CompletableFuture<Void> consuming = startConsumingAsync();
       CompletableFuture<Void> producing = startProducingAsync();

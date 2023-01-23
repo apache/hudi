@@ -26,6 +26,7 @@ import org.apache.log4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -166,6 +167,27 @@ public class ReflectionUtils {
    */
   public static boolean isSameClass(Comparable<?> v, Comparable<?> o) {
     return v.getClass() == o.getClass();
+  }
+
+  /**
+   * Invoke a static method of a class.
+   * @param clazz
+   * @param methodName
+   * @param args
+   * @param parametersType
+   * @return the return value of the method
+   */
+  public static Object invokeStaticMethod(String clazz, String methodName, Object[] args, Class<?>... parametersType) {
+    try {
+      Method method = Class.forName(clazz).getMethod(methodName, parametersType);
+      return method.invoke(null, args);
+    } catch (ClassNotFoundException e) {
+      throw new HoodieException("Unable to find the class " + clazz, e);
+    } catch (NoSuchMethodException e) {
+      throw new HoodieException(String.format("Unable to find the method %s of the class %s ",  methodName, clazz), e);
+    } catch (InvocationTargetException | IllegalAccessException e) {
+      throw new HoodieException(String.format("Unable to invoke the methond %s of the class %s ",  methodName, clazz), e);
+    }
   }
 
   /**
