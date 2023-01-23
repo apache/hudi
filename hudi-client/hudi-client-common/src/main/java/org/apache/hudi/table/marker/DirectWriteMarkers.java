@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.MarkerUtils;
@@ -47,6 +48,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
 /**
  * Marker operations of directly accessing the file system to create and delete
@@ -162,9 +165,14 @@ public class DirectWriteMarkers extends WriteMarkers {
   @Override
   public Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
                                                        HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
-
+    String strategyClassName = config.getEarlyConflictDetectionStrategyClassName();
+    if (!ReflectionUtils.isSubClass(strategyClassName, DirectMarkerBasedDetectionStrategy.class)) {
+      LOG.warn("Cannot use " + strategyClassName + " for direct markers.");
+      strategyClassName = getDefaultEarlyConflictDetectionStrategy(MarkerType.DIRECT);
+      LOG.warn("Falling back to " + strategyClassName);
+    }
     DirectMarkerBasedDetectionStrategy strategy =
-        (DirectMarkerBasedDetectionStrategy) ReflectionUtils.loadClass(config.getEarlyConflictDetectionStrategyClassName(),
+        (DirectMarkerBasedDetectionStrategy) ReflectionUtils.loadClass(strategyClassName,
             fs, partitionPath, fileId, instantTime, activeTimeline, config);
 
     strategy.detectAndResolveConflictIfNecessary();

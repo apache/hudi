@@ -73,9 +73,7 @@ import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
-import org.apache.hudi.table.marker.SimpleDirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
-import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.log4j.LogManager;
@@ -101,6 +99,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.queue.ExecutorType.BOUNDED_IN_MEMORY;
 import static org.apache.hudi.common.util.queue.ExecutorType.DISRUPTOR;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
+import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
 /**
  * Class storing configs for the HoodieWriteClient.
@@ -559,13 +558,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withInferFunction(cfg -> {
         MarkerType markerType = MarkerType.valueOf(cfg.getStringOrDefault(MARKERS_TYPE).toUpperCase());
-        switch (markerType) {
-          case DIRECT:
-            return Option.of(SimpleDirectMarkerBasedDetectionStrategy.class.getName());
-          case TIMELINE_SERVER_BASED:
-          default:
-            return Option.of(AsyncTimelineServerBasedDetectionStrategy.class.getName());
-        }
+        return Option.of(getDefaultEarlyConflictDetectionStrategy(markerType));
       })
       .withDocumentation("The class name of the early conflict detection strategy to use. "
           + "This should be a subclass of "
