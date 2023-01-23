@@ -100,6 +100,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.queue.ExecutorType.BOUNDED_IN_MEMORY;
 import static org.apache.hudi.common.util.queue.ExecutorType.DISRUPTOR;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
+import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
 /**
  * Class storing configs for the HoodieWriteClient.
@@ -117,6 +118,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   // This is a constant as is should never be changed via config (will invalidate previous commits)
   // It is here so that both the client and deltastreamer use the same reference
   public static final String DELTASTREAMER_CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
+
+  public static final String CONCURRENCY_PREFIX = "hoodie.write.concurrency.";
 
   public static final ConfigProperty<String> TBL_NAME = ConfigProperty
       .key(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)
@@ -549,6 +552,50 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.12.0")
       .withDocumentation("When table is upgraded from pre 0.12 to 0.12, we check for \"default\" partition and fail if found one. "
           + "Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation");
+
+  public static final ConfigProperty<String> EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "early.conflict.detection.strategy")
+      .noDefaultValue()
+      .sinceVersion("0.13.0")
+      .withInferFunction(cfg -> {
+        MarkerType markerType = MarkerType.valueOf(cfg.getStringOrDefault(MARKERS_TYPE).toUpperCase());
+        return Option.of(getDefaultEarlyConflictDetectionStrategy(markerType));
+      })
+      .withDocumentation("The class name of the early conflict detection strategy to use. "
+          + "This should be a subclass of "
+          + "`org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy`.");
+
+  public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_ENABLE = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "early.conflict.detection.enable")
+      .defaultValue(false)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Whether to enable early conflict detection based on markers. "
+          + "It eagerly detects writing conflict before create markers and fails fast if a "
+          + "conflict is detected, to release cluster compute resources as soon as possible.");
+
+  public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_BATCH_INTERVAL_MS = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "early.conflict.async.detector.batch.interval_ms")
+      .defaultValue(30000L)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Used for timeline-server-based markers with "
+          + "`AsyncTimelineServerBasedDetectionStrategy`. "
+          + "The time in milliseconds to delay first async marker conflict detection.");
+
+  public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_PERIOD_MS = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "early.conflict.async.detector.period_ms")
+      .defaultValue(30000L)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Used for timeline-server-based markers with "
+          + "`AsyncTimelineServerBasedDetectionStrategy`. "
+          + "The period in milliseconds between consecutive runs of async marker conflict detection.");
+
+  public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "early.conflict.check.commit.conflict")
+      .defaultValue(false)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Whether to enable commit conflict checking or not during early "
+          + "conflict detection.");
+
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -2196,12 +2243,32 @@ public class HoodieWriteConfig extends HoodieConfig {
     return ReflectionUtils.loadClass(getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME));
   }
 
+  public Long getAsyncConflictDetectorBatchIntervalMs() {
+    return getLong(ASYNC_CONFLICT_DETECTOR_BATCH_INTERVAL_MS);
+  }
+
+  public Long getAsyncConflictDetectorPeriodMs() {
+    return getLong(ASYNC_CONFLICT_DETECTOR_PERIOD_MS);
+  }
+
   public Long getLockAcquireWaitTimeoutInMs() {
     return getLong(HoodieLockConfig.LOCK_ACQUIRE_WAIT_TIMEOUT_MS);
   }
 
   public WriteConcurrencyMode getWriteConcurrencyMode() {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
+  }
+
+  public boolean isEarlyConflictDetectionEnable() {
+    return getBoolean(EARLY_CONFLICT_DETECTION_ENABLE);
+  }
+
+  public String getEarlyConflictDetectionStrategyClassName() {
+    return getString(EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME);
+  }
+
+  public boolean earlyConflictDetectionCheckCommitConflict() {
+    return getBoolean(EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT);
   }
 
   // misc configs
@@ -2735,6 +2802,31 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder doSkipDefaultPartitionValidation(boolean skipDefaultPartitionValidation) {
       writeConfig.setValue(SKIP_DEFAULT_PARTITION_VALIDATION, String.valueOf(skipDefaultPartitionValidation));
+      return this;
+    }
+
+    public Builder withEarlyConflictDetectionEnable(boolean enable) {
+      writeConfig.setValue(EARLY_CONFLICT_DETECTION_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withAsyncConflictDetectorBatchIntervalMs(long intervalMs) {
+      writeConfig.setValue(ASYNC_CONFLICT_DETECTOR_BATCH_INTERVAL_MS, String.valueOf(intervalMs));
+      return this;
+    }
+
+    public Builder withAsyncConflictDetectorPeriodMs(long periodMs) {
+      writeConfig.setValue(ASYNC_CONFLICT_DETECTOR_PERIOD_MS, String.valueOf(periodMs));
+      return this;
+    }
+
+    public Builder withEarlyConflictDetectionCheckCommitConflict(boolean enable) {
+      writeConfig.setValue(EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withEarlyConflictDetectionStrategy(String className) {
+      writeConfig.setValue(EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME, className);
       return this;
     }
 

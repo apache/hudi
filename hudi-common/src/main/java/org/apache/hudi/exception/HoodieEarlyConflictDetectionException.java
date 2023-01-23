@@ -16,28 +16,28 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.exception;
 
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieTable;
+/**
+ * <p>
+ * Exception thrown for Hoodie failures. The root of the exception hierarchy.
+ * </p>
+ * <p>
+ * Hoodie Write clients will throw this exception if early conflict detected. This is a runtime (unchecked)
+ * exception.
+ * </p>
+ */
+public class HoodieEarlyConflictDetectionException extends HoodieException {
 
-import org.apache.hadoop.fs.FileSystem;
-
-public abstract class HoodieIOHandle<T, I, K, O> {
-
-  protected final String instantTime;
-  protected final HoodieWriteConfig config;
-  protected final FileSystem fs;
-  protected final HoodieTable<T, I, K, O> hoodieTable;
-
-  HoodieIOHandle(HoodieWriteConfig config, Option<String> instantTime, HoodieTable<T, I, K, O> hoodieTable) {
-    this.instantTime = instantTime.orElse(StringUtils.EMPTY_STRING);
-    this.config = config;
-    this.hoodieTable = hoodieTable;
-    this.fs = getFileSystem();
+  public HoodieEarlyConflictDetectionException(String msg) {
+    super(msg);
   }
 
-  public abstract FileSystem getFileSystem();
+  public HoodieEarlyConflictDetectionException(Throwable e) {
+    super(e);
+  }
+
+  public HoodieEarlyConflictDetectionException(String msg, Throwable e) {
+    super(msg, e);
+  }
 }
