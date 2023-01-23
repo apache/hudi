@@ -2244,6 +2244,9 @@
     <profile>
       <id>flink1.15</id>
       <properties>
+        <flink.version>${flink1.15.version}</flink.version>
+        <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
+        <flink.bundle.version>1.15</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
       </properties>
       <activation>
