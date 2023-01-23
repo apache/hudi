@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 
 /**
  * Tests spillable map based file system view {@link SpillableMapBasedFileSystemView}.
@@ -28,7 +29,7 @@ public class TestSpillableMapBasedFileSystemView extends TestHoodieTableFileSyst
 
   @Override
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
-    return new SpillableMapBasedFileSystemView(metaClient, timeline, FileSystemViewStorageConfig.newBuilder()
+    return new SpillableMapBasedFileSystemView(metaClient, timeline, TimelineUtils.getFirstNotCompleted(timeline.getWriteTimeline()), FileSystemViewStorageConfig.newBuilder()
         // pure disk base View
         .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).withMaxMemoryForView(0L).build(),
         HoodieCommonConfig.newBuilder().build());

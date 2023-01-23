@@ -295,4 +295,9 @@ public class TimelineUtils {
       return Option.empty();
     }
   }
+
+  public static Option<String> getFirstNotCompleted(HoodieTimeline timeline) {
+    Option<HoodieInstant> firstInstant = timeline.filterInflightsAndRequested().firstInstant();
+    return firstInstant.isPresent() ? Option.of(firstInstant.get().getTimestamp()) : Option.empty();
+  }
 }

@@ -24,7 +24,7 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable}
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
@@ -379,7 +379,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   }
 
   private def getLatestFileGroupsFileId(partition: String):Array[String] = {
-    getHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline,
+    getHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline, TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline),
       HoodieTestTable.of(metaClient).listAllBaseFiles())
     tableView.getLatestFileSlices(partition)
       .toArray().map(slice => slice.asInstanceOf[FileSlice].getFileGroupId.getFileId)

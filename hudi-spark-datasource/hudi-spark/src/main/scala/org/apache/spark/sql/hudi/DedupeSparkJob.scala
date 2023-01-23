@@ -21,6 +21,7 @@ import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
 import org.apache.log4j.Logger
@@ -74,7 +75,8 @@ class DedupeSparkJob(basePath: String,
     val metadata = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(basePath).build()
 
     val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"$basePath/$duplicatedPartitionPath"))
-    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
+    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(),
+      TimelineUtils.getFirstNotCompleted(metadata.getActiveTimeline.getCommitTimeline), allFiles)
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
     val filteredStatuses = latestFiles.map(f => f.getPath)
     LOG.info(s" List of files under partition: ${} =>  ${filteredStatuses.mkString(" ")}")
@@ -183,7 +185,9 @@ class DedupeSparkJob(basePath: String,
     val metadata = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(basePath).build()
 
     val allFiles = fs.listStatus(new Path(s"$basePath/$duplicatedPartitionPath"))
-    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
+    val fsView = new HoodieTableFileSystemView(metadata,
+      metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(),
+      TimelineUtils.getFirstNotCompleted(metadata.getActiveTimeline.getCommitTimeline), allFiles)
 
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
 

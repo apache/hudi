@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -277,7 +278,8 @@ public class HoodieSnapshotExporter {
         .setBasePath(cfg.sourceBasePath)
         .build();
     return new HoodieTableFileSystemView(tableMetadata, tableMetadata
-        .getActiveTimeline().getWriteTimeline().filterCompletedInstants());
+        .getActiveTimeline().getWriteTimeline().filterCompletedInstants(),
+        TimelineUtils.getFirstNotCompleted(tableMetadata.getActiveTimeline().getWriteTimeline()));
   }
 
   public static void main(String[] args) throws IOException {

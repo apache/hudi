@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
@@ -116,7 +117,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     // Reload meta client and create fsView
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    nonpartitionedFsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), true);
+    nonpartitionedFsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline()), true);
   }
 
   private void createPartitionedTable() throws IOException {
@@ -159,7 +160,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     // Reload meta client and create fsView
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    partitionedFsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), true);
+    partitionedFsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline()),true);
   }
 
   /**

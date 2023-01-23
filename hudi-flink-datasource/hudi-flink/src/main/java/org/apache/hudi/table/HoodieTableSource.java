@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -318,7 +319,8 @@ public class HoodieTableSource implements
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         // file-slice after pending compaction-requested instant-time is also considered valid
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), fileStatuses);
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(),
+        TimelineUtils.getFirstNotCompleted(metaClient.getCommitsAndCompactionTimeline()), fileStatuses);
     String latestCommit = fsView.getLastInstant().get().getTimestamp();
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     final AtomicInteger cnt = new AtomicInteger(0);
@@ -494,7 +496,8 @@ public class HoodieTableSource implements
     }
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(), fileStatuses);
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(),
+        TimelineUtils.getFirstNotCompleted(metaClient.getCommitsAndCompactionTimeline()), fileStatuses);
     Path[] paths = fsView.getLatestBaseFiles()
         .map(HoodieBaseFile::getFileStatus)
         .map(FileStatus::getPath).toArray(Path[]::new);

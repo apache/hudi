@@ -71,25 +71,25 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   private boolean closed = false;
 
-  public RocksDbBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public RocksDbBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, Option<String> firstNotCompleted,
       FileSystemViewStorageConfig config) {
     super(config.isIncrementalTimelineSyncEnabled());
     this.config = config;
     this.schemaHelper = new RocksDBSchemaHelper(metaClient);
     this.rocksDB = new RocksDBDAO(metaClient.getBasePath(), config.getRocksdbBasePath());
-    init(metaClient, visibleActiveTimeline);
+    init(metaClient, visibleActiveTimeline, firstNotCompleted);
   }
 
-  public RocksDbBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public RocksDbBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, Option<String> firstNotCompleted,
       FileStatus[] fileStatuses, FileSystemViewStorageConfig config) {
-    this(metaClient, visibleActiveTimeline, config);
+    this(metaClient, visibleActiveTimeline, firstNotCompleted, config);
     addFilesToView(fileStatuses);
   }
 
   @Override
-  protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+  protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, Option<String> firstNotCompleted) {
     schemaHelper.getAllColumnFamilies().forEach(rocksDB::addColumnFamily);
-    super.init(metaClient, visibleActiveTimeline);
+    super.init(metaClient, visibleActiveTimeline, firstNotCompleted);
     LOG.info("Created ROCKSDB based file-system view at " + config.getRocksdbBasePath());
   }
 
@@ -547,7 +547,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     return sliceStream.map(s -> Pair.of(Pair.of(s.getPartitionPath(), s.getFileId()), s))
         .collect(Collectors.groupingBy(Pair::getKey)).entrySet().stream().map(slicePair -> {
           HoodieFileGroup fg = new HoodieFileGroup(slicePair.getKey().getKey(), slicePair.getKey().getValue(),
-              getVisibleCommitsAndCompactionTimeline());
+              getVisibleCommitsAndCompactionTimeline(), getFirstNotCompleted());
           slicePair.getValue().forEach(e -> fg.addFileSlice(e.getValue()));
           return fg;
         });

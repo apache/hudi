@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
@@ -148,11 +149,11 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     Job jobContext = Job.getInstance(job);
 
     // step1
-    Option<HoodieTimeline> timeline = HoodieInputFormatUtils.getFilteredCommitsTimeline(jobContext, tableMetaClient);
-    if (!timeline.isPresent()) {
+    Pair<Option<HoodieTimeline>, Option<String>> timeline = HoodieInputFormatUtils.getFilteredCommitsTimeline(jobContext, tableMetaClient);
+    if (!timeline.getLeft().isPresent()) {
       return result;
     }
-    HoodieTimeline commitsTimelineToReturn = HoodieInputFormatUtils.getHoodieTimelineForIncrementalQuery(jobContext, incrementalTableName, timeline.get());
+    HoodieTimeline commitsTimelineToReturn = HoodieInputFormatUtils.getHoodieTimelineForIncrementalQuery(jobContext, incrementalTableName, timeline.getLeft().get());
     Option<List<HoodieInstant>> commitsToCheck = Option.of(commitsTimelineToReturn.getInstants());
     if (!commitsToCheck.isPresent()) {
       return result;
@@ -172,7 +173,8 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     List<FileStatus> affectedFileStatus = Arrays.asList(HoodieInputFormatUtils
         .listAffectedFilesForCommits(job, new Path(tableMetaClient.getBasePath()), metadataList));
     // step3
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(tableMetaClient, commitsTimelineToReturn, affectedFileStatus.toArray(new FileStatus[0]));
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(tableMetaClient, commitsTimelineToReturn, TimelineUtils.getFirstNotCompleted(commitsTimelineToReturn),
+        affectedFileStatus.toArray(new FileStatus[0]));
     // build fileGroup from fsView
     Path basePath = new Path(tableMetaClient.getBasePath());
     // filter affectedPartition by inputPaths

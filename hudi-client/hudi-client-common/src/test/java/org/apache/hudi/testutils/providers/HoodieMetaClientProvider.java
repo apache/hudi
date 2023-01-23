@@ -22,6 +22,7 @@ package org.apache.hudi.testutils.providers;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -34,7 +35,7 @@ public interface HoodieMetaClientProvider {
   HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException;
 
   default HoodieTableFileSystemView getHoodieTableFileSystemView(
-      HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, FileStatus[] fileStatuses) {
-    return new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, fileStatuses);
+      HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, Option<String> firstNotCompleted, FileStatus[] fileStatuses) {
+    return new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, firstNotCompleted, fileStatuses);
   }
 }

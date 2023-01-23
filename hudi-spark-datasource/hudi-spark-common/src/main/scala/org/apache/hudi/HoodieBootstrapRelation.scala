@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodieBaseFile
+import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
@@ -168,7 +169,7 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
     }
 
     val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitsTimeline
-      .filterCompletedInstants, fileStatuses.toArray)
+      .filterCompletedInstants, TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline.getCommitsTimeline), fileStatuses.toArray)
     val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
 
     if (log.isDebugEnabled) {

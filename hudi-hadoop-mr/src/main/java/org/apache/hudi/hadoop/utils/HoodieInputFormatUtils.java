@@ -41,10 +41,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
@@ -264,7 +266,7 @@ public class HoodieInputFormatUtils {
    * @param tableMetaClient
    * @return
    */
-  public static Option<HoodieTimeline> getFilteredCommitsTimeline(JobContext job, HoodieTableMetaClient tableMetaClient) {
+  public static Pair<Option<HoodieTimeline>, Option<String>> getFilteredCommitsTimeline(JobContext job, HoodieTableMetaClient tableMetaClient) {
     String tableName = tableMetaClient.getTableConfig().getTableName();
     HoodieDefaultTimeline baseTimeline;
     if (HoodieHiveUtils.stopAtCompaction(job, tableName)) {
@@ -272,7 +274,7 @@ public class HoodieInputFormatUtils {
     } else {
       baseTimeline = tableMetaClient.getActiveTimeline();
     }
-    return Option.of(baseTimeline.getCommitsTimeline().filterCompletedInstants());
+    return Pair.of(Option.of(baseTimeline.getCommitsTimeline().filterCompletedInstants()), TimelineUtils.getFirstNotCompleted(baseTimeline.getCommitsTimeline()));
   }
 
   /**
@@ -370,8 +372,8 @@ public class HoodieInputFormatUtils {
    * @return
    */
   public static List<FileStatus> filterIncrementalFileStatus(Job job, HoodieTableMetaClient tableMetaClient,
-      HoodieTimeline timeline, FileStatus[] fileStatuses, List<HoodieInstant> commitsToCheck) throws IOException {
-    TableFileSystemView.BaseFileOnlyView roView = new HoodieTableFileSystemView(tableMetaClient, timeline, fileStatuses);
+      HoodieTimeline timeline, Option<String> firstNotCompleted, FileStatus[] fileStatuses, List<HoodieInstant> commitsToCheck) throws IOException {
+    TableFileSystemView.BaseFileOnlyView roView = new HoodieTableFileSystemView(tableMetaClient, timeline, firstNotCompleted, fileStatuses);
     List<String> commitsList = commitsToCheck.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
     List<FileStatus> returns = new ArrayList<>();

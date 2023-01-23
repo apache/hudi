@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.Option;
@@ -85,7 +86,8 @@ public class HoodieSnapshotCopier implements Serializable {
     final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
     final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir).build();
     final BaseFileOnlyView fsView = new HoodieTableFileSystemView(tableMetadata,
-        tableMetadata.getActiveTimeline().getWriteTimeline().filterCompletedInstants());
+        tableMetadata.getActiveTimeline().getWriteTimeline().filterCompletedInstants(),
+        TimelineUtils.getFirstNotCompleted(tableMetadata.getActiveTimeline().getWriteTimeline()));
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     // Get the latest commit
     Option<HoodieInstant> latestCommit =

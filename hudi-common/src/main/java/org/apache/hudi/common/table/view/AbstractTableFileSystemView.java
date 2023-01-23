@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -85,6 +86,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   // This is the commits timeline that will be visible for all views extending this view
   // This is nothing but the write timeline, which contains both ingestion and compaction(major and minor) writers.
   private HoodieTimeline visibleCommitsAndCompactionTimeline;
+  private Option<String> firstNotCompleted;
 
   // Used to concurrently load and populate partition views
   private final ConcurrentHashMap<String, Boolean> addedPartitions = new ConcurrentHashMap<>(4096);
@@ -104,9 +106,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Initialize the view.
    */
-  protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+  protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,Option<String> firstNotCompleted) {
     this.metaClient = metaClient;
-    refreshTimeline(visibleActiveTimeline);
+    refreshTimeline(visibleActiveTimeline, firstNotCompleted);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
     // Load Pending Compaction Operations
@@ -123,10 +125,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Refresh commits timeline.
    * 
-   * @param visibleActiveTimeline Visible Active Timeline
+   * @param visibleActiveTimeline Visible Active completed Timeline.
+   * @param firstNotCompleted first instant in the timeline that is not completed
    */
-  protected void refreshTimeline(HoodieTimeline visibleActiveTimeline) {
+  protected void refreshTimeline(HoodieTimeline visibleActiveTimeline, Option<String> firstNotCompleted) {
     this.visibleCommitsAndCompactionTimeline = visibleActiveTimeline.getWriteTimeline();
+    this.firstNotCompleted = firstNotCompleted;
   }
 
   /**
@@ -134,7 +138,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   public List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
     HoodieTimer timer = HoodieTimer.start();
-    List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleCommitsAndCompactionTimeline, true);
+    List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleCommitsAndCompactionTimeline, firstNotCompleted, true);
     long fgBuildTimeTakenMs = timer.endTimer();
     timer.startTimer();
     // Group by partition for efficient updates for both InMemory and DiskBased structures.
@@ -163,14 +167,14 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Build FileGroups from passed in file-status.
    */
-  protected List<HoodieFileGroup> buildFileGroups(FileStatus[] statuses, HoodieTimeline timeline,
+  protected List<HoodieFileGroup> buildFileGroups(FileStatus[] statuses, HoodieTimeline timeline, Option<String> firstNotCompleted,
       boolean addPendingCompactionFileSlice) {
-    return buildFileGroups(convertFileStatusesToBaseFiles(statuses), convertFileStatusesToLogFiles(statuses), timeline,
+    return buildFileGroups(convertFileStatusesToBaseFiles(statuses), convertFileStatusesToLogFiles(statuses), timeline, firstNotCompleted,
         addPendingCompactionFileSlice);
   }
 
   protected List<HoodieFileGroup> buildFileGroups(Stream<HoodieBaseFile> baseFileStream,
-      Stream<HoodieLogFile> logFileStream, HoodieTimeline timeline, boolean addPendingCompactionFileSlice) {
+      Stream<HoodieLogFile> logFileStream, HoodieTimeline timeline, Option<String> firstNotCompleted, boolean addPendingCompactionFileSlice) {
     Map<Pair<String, String>, List<HoodieBaseFile>> baseFiles =
         baseFileStream.collect(Collectors.groupingBy(baseFile -> {
           String partitionPathStr = getPartitionPathFor(baseFile);
@@ -190,7 +194,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     fileIdSet.forEach(pair -> {
       String fileId = pair.getValue();
       String partitionPath = pair.getKey();
-      HoodieFileGroup group = new HoodieFileGroup(partitionPath, fileId, timeline);
+      HoodieFileGroup group = new HoodieFileGroup(partitionPath, fileId, timeline, firstNotCompleted);
       if (baseFiles.containsKey(pair)) {
         baseFiles.get(pair).forEach(group::addBaseFile);
       }
@@ -269,7 +273,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       writeLock.lock();
       clear();
       // Initialize with new Hoodie timeline.
-      init(metaClient, getTimeline());
+      init(metaClient, getTimeline(), getFirstNotCompleted());
     } finally {
       writeLock.unlock();
     }
@@ -1254,13 +1258,24 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     return visibleCommitsAndCompactionTimeline;
   }
 
+  public Option<String> getFirstNotCompleted() {
+    return firstNotCompleted;
+  }
+
   @Override
   public void sync() {
-    HoodieTimeline oldTimeline = getTimeline();
-    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
+    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().getWriteTimeline();
+
+    //Get first not completed instant
+    Option<String> oldFirstNotCompleted = getFirstNotCompleted();
+    Option<String> newFirstNotCompleted = TimelineUtils.getFirstNotCompleted(newTimeline);
+
+    //Get completed timeline
+    HoodieTimeline oldCompletedTimeline = getTimeline();
+    HoodieTimeline newCompletedTimeline = newTimeline.filterCompletedOrMajorOrMinorCompactionInstants();
     try {
       writeLock.lock();
-      runSync(oldTimeline, newTimeline);
+      runSync(oldCompletedTimeline, newCompletedTimeline, oldFirstNotCompleted, newFirstNotCompleted);
     } finally {
       writeLock.unlock();
     }
@@ -1273,11 +1288,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param oldTimeline Old Hoodie Timeline
    * @param newTimeline New Hoodie Timeline
    */
-  protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
-    refreshTimeline(newTimeline);
+  protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline,
+                         Option<String> oldFirstNotCompleted, Option<String> newFirstNotCompleted) {
+    refreshTimeline(newTimeline, newFirstNotCompleted);
     clear();
     // Initialize with new Hoodie timeline.
-    init(metaClient, newTimeline);
+    init(metaClient, newTimeline, newFirstNotCompleted);
   }
 
   /**

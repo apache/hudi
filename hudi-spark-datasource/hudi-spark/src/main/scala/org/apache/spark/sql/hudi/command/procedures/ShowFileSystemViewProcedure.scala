@@ -21,7 +21,7 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util
 import org.apache.spark.sql.Row
@@ -121,7 +121,8 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
 
     val filteredTimeline = new HoodieDefaultTimeline(
       new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
-    new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new Array[FileStatus](0)))
+    new HoodieTableFileSystemView(metaClient, filteredTimeline, TimelineUtils.getFirstNotCompleted(filteredTimeline),
+      statuses.toArray(new Array[FileStatus](0)))
   }
 
   private def showAllFileSlices(fsView: HoodieTableFileSystemView): java.util.List[Row] = {

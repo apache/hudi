@@ -21,6 +21,7 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.exception.HoodieIOException;
@@ -109,7 +110,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline, boolean enableIncrementalTimelineSync) {
-    return new HoodieTableFileSystemView(metaClient, timeline, enableIncrementalTimelineSync);
+    return new HoodieTableFileSystemView(metaClient, timeline, TimelineUtils.getFirstNotCompleted(timeline), enableIncrementalTimelineSync);
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) throws IOException {
@@ -124,7 +125,7 @@ public class HoodieCommonTestHarness {
   protected SyncableFileSystemView getFileSystemViewWithUnCommittedSlices(HoodieTableMetaClient metaClient) {
     try {
       return new HoodieTableFileSystemView(metaClient,
-          metaClient.getActiveTimeline(),
+          metaClient.getActiveTimeline(), TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline()),
           HoodieTestTable.of(metaClient).listAllBaseAndLogFiles()
       );
     } catch (IOException ioe) {

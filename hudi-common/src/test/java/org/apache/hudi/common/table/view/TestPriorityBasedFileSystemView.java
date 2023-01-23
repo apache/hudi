@@ -512,7 +512,7 @@ public class TestPriorityBasedFileSystemView {
     String partitionPath = "/table2";
     Stream<HoodieFileGroup> expected = Collections.singleton(
         new HoodieFileGroup(partitionPath, "id1",
-            new MockHoodieTimeline(Stream.empty(), Stream.empty()))).stream();
+            new MockHoodieTimeline(Stream.empty(), Stream.empty()), Option.empty())).stream();
 
     when(primary.getAllFileGroups(partitionPath)).thenReturn(expected);
     actual = fsView.getAllFileGroups(partitionPath);

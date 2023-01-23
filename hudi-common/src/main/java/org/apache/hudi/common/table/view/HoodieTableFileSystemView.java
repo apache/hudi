@@ -94,28 +94,28 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   /**
    * Create a file system view, as of the given timeline.
    */
-  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
-    this(metaClient, visibleActiveTimeline, false);
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, Option<String> firstNotCompleted) {
+    this(metaClient, visibleActiveTimeline, firstNotCompleted, false);
   }
 
   /**
    * Create a file system view, as of the given timeline.
    */
-  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, Option<String> firstNotCompleted,
       boolean enableIncrementalTimelineSync) {
     super(enableIncrementalTimelineSync);
-    init(metaClient, visibleActiveTimeline);
+    init(metaClient, visibleActiveTimeline, firstNotCompleted);
   }
 
   @Override
-  public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+  public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, Option<String>  firstNotCompleted) {
     this.partitionToFileGroupsMap = createPartitionToFileGroups();
-    super.init(metaClient, visibleActiveTimeline);
+    super.init(metaClient, visibleActiveTimeline, firstNotCompleted);
   }
 
-  public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, Option<String>  firstNotCompleted,
       FileStatus[] fileStatuses) {
-    init(metaClient, visibleActiveTimeline);
+    init(metaClient, visibleActiveTimeline, firstNotCompleted);
     addFilesToView(fileStatuses);
   }
 
@@ -171,9 +171,9 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   /**
    * Create a file system view, as of the given timeline, with the provided file statuses.
    */
-  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, Option<String> firstNotCompleted,
       FileStatus[] fileStatuses) {
-    this(metaClient, visibleActiveTimeline);
+    this(metaClient, visibleActiveTimeline, firstNotCompleted);
     addFilesToView(fileStatuses);
   }
 

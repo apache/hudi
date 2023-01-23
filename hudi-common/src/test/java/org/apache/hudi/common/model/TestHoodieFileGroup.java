@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 
 import org.junit.jupiter.api.Test;
@@ -44,7 +45,8 @@ public class TestHoodieFileGroup {
     Stream<String> inflight = Arrays.asList("002").stream();
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(completed, inflight);
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data",
-        activeTimeline.getCommitsTimeline().filterCompletedInstants());
+        activeTimeline.getCommitsTimeline().filterCompletedInstants(),
+        TimelineUtils.getFirstNotCompleted(activeTimeline.getCommitsTimeline()));
     for (int i = 0; i < 3; i++) {
       HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i);
       fileGroup.addBaseFile(baseFile);
@@ -65,7 +67,8 @@ public class TestHoodieFileGroup {
         new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
         new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05") // this can be DELTA_COMMIT/REPLACE_COMMIT as well
     ).collect(Collectors.toList()));
-    HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
+    HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants(),
+        TimelineUtils.getFirstNotCompleted(activeTimeline.getWriteTimeline()));
     for (int i = 0; i < 7; i++) {
       HoodieBaseFile baseFile = new HoodieBaseFile("data_1_0" + i);
       fileGroup.addBaseFile(baseFile);

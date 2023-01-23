@@ -22,7 +22,7 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.getCommitMetadata
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
@@ -99,7 +99,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       } else {
         val latestCommit = includedCommits.last.getTimestamp
 
-        val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
+        val fsView = new HoodieTableFileSystemView(metaClient, timeline, super.firstNotCompleted , affectedFilesInCommits)
 
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 

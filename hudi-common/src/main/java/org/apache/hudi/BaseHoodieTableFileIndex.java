@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -251,7 +252,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
 
     HoodieTableFileSystemView fileSystemView =
-        new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
+        new HoodieTableFileSystemView(metaClient, activeTimeline,
+            TimelineUtils.getFirstNotCompleted(metaClient.getCommitsAndCompactionTimeline()), allFiles);
 
     Option<String> queryInstant = specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
 

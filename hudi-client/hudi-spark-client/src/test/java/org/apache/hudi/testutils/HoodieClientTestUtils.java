@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -211,7 +212,8 @@ public class HoodieClientTestUtils {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
       for (String path : paths) {
         BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
-            metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new Path(path)));
+            metaClient.getCommitsTimeline().filterCompletedInstants(),
+            TimelineUtils.getFirstNotCompleted(metaClient.getCommitsTimeline()), fs.globStatus(new Path(path)));
         latestFiles.addAll(fileSystemView.getLatestBaseFiles().collect(Collectors.toList()));
       }
     } catch (Exception e) {
