@@ -1264,7 +1264,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public void sync() {
-    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().getWriteTimeline();
+    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline();
 
     //Get first not completed instant
     Option<String> oldFirstNotCompleted = getFirstNotCompleted();
