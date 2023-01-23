@@ -34,6 +34,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogDatabase;
@@ -99,6 +100,8 @@ public class HoodieCatalog extends AbstractCatalog {
 
   public HoodieCatalog(String name, Configuration options) {
     super(name, options.get(DEFAULT_DATABASE));
+    options.getOptional(CATALOG_PATH).orElseThrow(() ->
+        new ValidationException("Option [catalog.path] should not be empty."));
     this.catalogPathStr = options.get(CATALOG_PATH);
     this.hadoopConf = HadoopConfigurations.getHadoopConf(options);
     this.tableCommonOptions = CatalogOptions.tableCommonOptions(options);

@@ -78,8 +78,8 @@ case class HoodieTableState(tablePath: String,
                             usesVirtualKeys: Boolean,
                             recordPayloadClassName: String,
                             metadataConfig: HoodieMetadataConfig,
-                            mergerImpls: List[String],
-                            mergerStrategy: String)
+                            recordMergerImpls: List[String],
+                            recordMergerStrategy: String)
 
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]].
@@ -237,7 +237,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * this variable itself is _lazy_ (and have to stay that way) which guarantees that it's not initialized, until
    * it's actually accessed
    */
-  protected lazy val fileIndex: HoodieFileIndex =
+  lazy val fileIndex: HoodieFileIndex =
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
       FileStatusCache.getOrCreate(sparkSession))
 
@@ -288,6 +288,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       // NOTE: Some relations might be disabling sophisticated schema pruning techniques (for ex, nested schema pruning)
       // TODO(HUDI-XXX) internal schema doesn't support nested schema pruning currently
       !hasSchemaOnRead
+
+  override def sizeInBytes: Long = fileIndex.sizeInBytes
 
   override def schema: StructType = {
     // NOTE: Optimizer could prune the schema (applying for ex, [[NestedSchemaPruning]] rule) setting new updated
@@ -460,10 +462,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   protected def getTableState: HoodieTableState = {
-    val mergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.MERGER_IMPLS)).asScala.toList
+    val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList
 
-    val mergerStrategy = getConfigValue(HoodieWriteConfig.MERGER_STRATEGY,
-      Option(metaClient.getTableConfig.getMergerStrategy))
+    val recordMergerStrategy = getConfigValue(HoodieWriteConfig.RECORD_MERGER_STRATEGY,
+      Option(metaClient.getTableConfig.getRecordMergerStrategy))
 
     // Subset of the state of table's configuration as of at the time of the query
     HoodieTableState(
@@ -474,8 +476,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = fileIndex.metadataConfig,
-      mergerImpls = mergerImpls,
-      mergerStrategy = mergerStrategy
+      recordMergerImpls = recordMergerImpls,
+      recordMergerStrategy = recordMergerStrategy
     )
   }
 

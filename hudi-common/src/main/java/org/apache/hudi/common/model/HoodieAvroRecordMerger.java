@@ -98,7 +98,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
     }
 
     public static ConfigProperty<String> LEGACY_OPERATING_MODE =
-        ConfigProperty.key("hoodie.datasource.write.merger.legacy.operation")
+        ConfigProperty.key("hoodie.datasource.write.record.merger.legacy.operation")
             .defaultValue(LegacyOperationMode.COMBINING.name())
             .withDocumentation("Controls the mode of the merging operation performed by `HoodieAvroRecordMerger`. "
                 + "This is required to maintain backward-compatibility w/ the existing semantic of `HoodieRecordPayload` "

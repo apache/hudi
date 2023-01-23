@@ -91,6 +91,8 @@ class TestHoodieSparkUtils {
       .appName("Hoodie Datasource test")
       .master("local[2]")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+      .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
       .getOrCreate
 
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -127,6 +129,8 @@ class TestHoodieSparkUtils {
       .appName("Hoodie Datasource test")
       .master("local[2]")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+      .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
       .getOrCreate
 
     val innerStruct1 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)

@@ -23,11 +23,15 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
+import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 import org.apache.log4j.Level
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.checkMessageContains
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
@@ -51,27 +55,18 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   DateTimeZone.setDefault(DateTimeZone.UTC)
   TimeZone.setDefault(DateTimeUtils.getTimeZone("UTC"))
   protected lazy val spark: SparkSession = SparkSession.builder()
-    .master("local[1]")
-    .appName("hoodie sql test")
-    .withExtensions(new HoodieSparkSessionExtension)
-    .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
+    .config("spark.sql.session.timeZone", "UTC")
     .config("hoodie.insert.shuffle.parallelism", "4")
     .config("hoodie.upsert.shuffle.parallelism", "4")
     .config("hoodie.delete.shuffle.parallelism", "4")
-    .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
-    .config("spark.sql.session.timeZone", "UTC")
     .config(sparkConf())
     .getOrCreate()
 
   private var tableId = 0
 
   def sparkConf(): SparkConf = {
-    val sparkConf = new SparkConf()
-    if (HoodieSparkUtils.gteqSpark3_2) {
-      sparkConf.set("spark.sql.catalog.spark_catalog",
-        "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
-    }
-    sparkConf
+    getSparkConfForTest("Hoodie SQL Test")
   }
 
   protected def withTempDir(f: File => Unit): Unit = {
@@ -144,8 +139,11 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       spark.sql(sql)
     } catch {
-      case e: Throwable if e.getMessage.trim.contains(errorMsg.trim) => hasException = true
-      case f: Throwable => fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
+      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(getRootCause(e), errorMsg) =>
+        hasException = true
+
+      case f: Throwable =>
+        fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
     }
     assertResult(true)(hasException)
   }
@@ -200,7 +198,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         case _ => (classOf[HoodieAvroRecordMerger].getName, "avro")
       }
       val config = Map(
-        HoodieWriteConfig.MERGER_IMPLS.key -> merger,
+        HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> merger,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> format) ++ recordConfig.getOrElse(recordType, Map.empty)
       withSQLConf(config.toList:_*) {
         f
@@ -211,11 +209,27 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def getRecordType(): HoodieRecordType = {
-    val merger = spark.sessionState.conf.getConfString(HoodieWriteConfig.MERGER_IMPLS.key, HoodieWriteConfig.MERGER_IMPLS.defaultValue())
+    val merger = spark.sessionState.conf.getConfString(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue())
     if (merger.equals(classOf[HoodieSparkRecordMerger].getName)) {
       HoodieRecordType.SPARK
     } else {
       HoodieRecordType.AVRO
     }
   }
+}
+
+object HoodieSparkSqlTestBase {
+
+  def getLastCommitMetadata(spark: SparkSession, tablePath: String) = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(spark.sparkContext.hadoopConfiguration)
+      .setBasePath(tablePath)
+      .build()
+
+    metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getRight
+  }
+
+  private def checkMessageContains(e: Throwable, text: String): Boolean =
+    e.getMessage.trim.contains(text.trim)
+
 }

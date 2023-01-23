@@ -89,6 +89,15 @@ public class EmbeddedTimelineService {
           .markerParallelism(writeConfig.getMarkersDeleteParallelism());
     }
 
+    if (writeConfig.isEarlyConflictDetectionEnable()) {
+      timelineServiceConfBuilder.earlyConflictDetectionEnable(true)
+          .earlyConflictDetectionStrategy(writeConfig.getEarlyConflictDetectionStrategyClassName())
+          .earlyConflictDetectionCheckCommitConflict(writeConfig.earlyConflictDetectionCheckCommitConflict())
+          .asyncConflictDetectorBatchIntervalMs(writeConfig.getAsyncConflictDetectorBatchIntervalMs())
+          .asyncConflictDetectorBatchPeriodMs(writeConfig.getAsyncConflictDetectorPeriodMs())
+          .earlyConflictDetectionMaxAllowableHeartbeatIntervalInMs(writeConfig.getHoodieClientHeartbeatIntervalInMs());
+    }
+
     server = new TimelineService(context, hadoopConf.newCopy(), timelineServiceConfBuilder.build(),
         FSUtils.getFs(basePath, hadoopConf.newCopy()), viewManager);
     serverPort = server.startService();

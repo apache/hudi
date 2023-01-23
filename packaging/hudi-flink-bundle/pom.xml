@@ -86,6 +86,11 @@
                   <include>org.apache.hudi:hudi-timeline-service</include>
                   <include>org.apache.hudi:hudi-aws</include>
 
+                  <!-- Kryo -->
+                  <include>com.esotericsoftware:kryo-shaded</include>
+                  <include>com.esotericsoftware:minlog</include>
+                  <include>org.objenesis:objenesis</include>
+
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>com.beust:jcommander</include>
                   <include>io.javalin:javalin</include>
@@ -162,6 +167,24 @@
                 </includes>
               </artifactSet>
               <relocations combine.children="append">
+                <!-- Kryo -->
+                <relocation>
+                  <pattern>com.esotericsoftware.kryo.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.esotericsoftware.reflectasm.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.reflectasm.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.esotericsoftware.minlog.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.objenesis.</pattern>
+                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+                </relocation>
+
                 <relocation>
                   <pattern>javax.servlet.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}javax.servlet.</shadedPattern>
@@ -406,6 +429,15 @@
         </exclusion>
       </exclusions>
     </dependency>
+
+    <!-- Kryo -->
+    <dependency>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
+      <version>${kryo.shaded.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
     <dependency>
       <groupId>javax.servlet</groupId>
       <artifactId>javax.servlet-api</artifactId>

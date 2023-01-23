@@ -1264,6 +1264,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
+   * Rollback failed writes if any.
+   * @return true if rollback happened. false otherwise.
+   */
+  public boolean rollbackFailedWrites() {
+    return tableServiceClient.rollbackFailedWrites();
+  }
+
+  /**
    * add columns to table.
    *
    * @param colName col name to be added. if we want to add col to a nested filed, the fullName should be specify

@@ -51,6 +51,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -342,7 +343,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             .collect(Collectors.toMap(Pair::getKey, p -> p.getRight().get()));
 
     Set<Path> missingPartitionPaths =
-        CollectionUtils.diff(partitionPaths, cachedPartitionPaths.keySet());
+        CollectionUtils.diffSet(new HashSet<>(partitionPaths), cachedPartitionPaths.keySet());
 
     // NOTE: We're constructing a mapping of absolute form of the partition-path into
     //       its relative one, such that we don't need to reconstruct these again later on

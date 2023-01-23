@@ -92,6 +92,7 @@
     <maven-docker-plugin.version>0.37.0</maven-docker-plugin.version>
 
     <java.version>1.8</java.version>
+    <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.version>2.6.7</fasterxml.version>
     <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
     <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
@@ -440,10 +441,6 @@
           <!-- common to all bundles -->
           <artifactSet>
             <includes>
-              <!-- com.esotericsoftware:kryo-shaded -->
-              <include>com.esotericsoftware:kryo-shaded</include>
-              <include>com.esotericsoftware:minlog</include>
-              <include>org.objenesis:objenesis</include>
               <!-- org.apache.httpcomponents -->
               <include>org.apache.httpcomponents:httpclient</include>
               <include>org.apache.httpcomponents:httpcore</include>
@@ -451,23 +448,6 @@
             </includes>
           </artifactSet>
           <relocations>
-            <!-- com.esotericsoftware:kryo-shaded -->
-            <relocation>
-              <pattern>com.esotericsoftware.kryo.</pattern>
-              <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>com.esotericsoftware.reflectasm.</pattern>
-              <shadedPattern>org.apache.hudi.com.esotericsoftware.reflectasm.</shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>com.esotericsoftware.minlog.</pattern>
-              <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.objenesis.</pattern>
-              <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
-            </relocation>
             <!-- org.apache.httpcomponents -->
             <relocation>
               <pattern>org.apache.http.</pattern>
@@ -1524,6 +1504,14 @@
         <scope>test</scope>
       </dependency>
 
+      <!-- Kryo -->
+      <dependency>
+        <groupId>com.esotericsoftware</groupId>
+        <artifactId>kryo-shaded</artifactId>
+        <version>${kryo.shaded.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
       <dependency>
         <!--Used to test execution in task executor after de-serializing-->
         <groupId>com.esotericsoftware</groupId>
@@ -2256,6 +2244,9 @@
     <profile>
       <id>flink1.15</id>
       <properties>
+        <flink.version>${flink1.15.version}</flink.version>
+        <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
+        <flink.bundle.version>1.15</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
       </properties>
       <activation>
