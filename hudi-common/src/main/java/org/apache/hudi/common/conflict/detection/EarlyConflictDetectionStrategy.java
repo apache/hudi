@@ -18,12 +18,15 @@
 
 package org.apache.hudi.common.conflict.detection;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 
 /**
  * Interface for pluggable strategy of early conflict detection for multiple writers.
  */
-interface EarlyConflictDetectionStrategy {
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
+public interface EarlyConflictDetectionStrategy {
   /**
    * Detects and resolves the write conflict if necessary.
    */

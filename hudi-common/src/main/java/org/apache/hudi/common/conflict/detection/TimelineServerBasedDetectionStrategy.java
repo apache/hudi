@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.conflict.detection;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -28,6 +30,7 @@ import java.util.Set;
  * This abstract strategy is used for writers using timeline-server-based markers,
  * trying to do early conflict detection.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class TimelineServerBasedDetectionStrategy implements EarlyConflictDetectionStrategy {
 
   protected final String basePath;

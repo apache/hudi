@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.conflict.detection;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -41,6 +43,7 @@ import java.util.stream.Stream;
 /**
  * This abstract strategy is used for direct marker writers, trying to do early conflict detection.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class DirectMarkerBasedDetectionStrategy implements EarlyConflictDetectionStrategy {
 
   private static final Logger LOG = LogManager.getLogger(DirectMarkerBasedDetectionStrategy.class);

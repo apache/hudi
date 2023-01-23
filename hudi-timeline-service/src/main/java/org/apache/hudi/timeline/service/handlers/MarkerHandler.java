@@ -188,8 +188,16 @@ public class MarkerHandler extends Handler {
       try {
         synchronized (earlyConflictDetectionLock) {
           if (earlyConflictDetectionStrategy == null) {
-            earlyConflictDetectionStrategy = (TimelineServerBasedDetectionStrategy) ReflectionUtils.loadClass(timelineServiceConfig.earlyConflictDetectionStrategy,
-                basePath, markerDir, markerName, timelineServiceConfig.checkCommitConflict);
+            String strategyClassName = timelineServiceConfig.earlyConflictDetectionStrategy;
+            if (!ReflectionUtils.isSubClass(strategyClassName, TimelineServerBasedDetectionStrategy.class)) {
+              LOG.warn("Cannot use " + strategyClassName + " for timeline-server-based markers.");
+              strategyClassName = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
+              LOG.warn("Falling back to " + strategyClassName);
+            }
+
+            earlyConflictDetectionStrategy =
+                (TimelineServerBasedDetectionStrategy) ReflectionUtils.loadClass(
+                    strategyClassName, basePath, markerDir, markerName, timelineServiceConfig.checkCommitConflict);
           }
 
           // markerDir => $base_path/.hoodie/.temp/$instant_time

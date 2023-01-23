@@ -167,4 +167,16 @@ public class ReflectionUtils {
   public static boolean isSameClass(Comparable<?> v, Comparable<?> o) {
     return v.getClass() == o.getClass();
   }
+
+  /**
+   * Checks if the given class with the name is a subclass of another class.
+   *
+   * @param aClazzName Class name.
+   * @param superClazz Super class to check.
+   * @return {@code true} if {@code aClazzName} is a subclass of {@code superClazz};
+   * {@code false} otherwise.
+   */
+  public static boolean isSubClass(String aClazzName, Class<?> superClazz) {
+    return superClazz.isAssignableFrom(getClass(aClazzName));
+  }
 }
