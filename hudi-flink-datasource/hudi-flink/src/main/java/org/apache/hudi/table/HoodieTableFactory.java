@@ -316,8 +316,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * Sets up the read options from the table definition.
    */
   private static void setupReadOptions(Configuration conf) {
-    if (!conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
-        && (conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent() || conf.getOptional(FlinkOptions.READ_END_COMMIT).isPresent())) {
+    if (OptionsResolver.isIncrementalQuery(conf)) {
       conf.setString(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
     }
   }

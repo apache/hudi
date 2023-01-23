@@ -68,6 +68,12 @@
                 <includes combine.children="append">
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
+
+                  <!-- Kryo -->
+                  <include>com.esotericsoftware:kryo-shaded</include>
+                  <include>com.esotericsoftware:minlog</include>
+                  <include>org.objenesis:objenesis</include>
+
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
                   <include>org.apache.hbase:hbase-common</include>
@@ -90,6 +96,24 @@
                 </includes>
               </artifactSet>
               <relocations combine.children="append">
+                <!-- Kryo -->
+                <relocation>
+                  <pattern>com.esotericsoftware.kryo.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.esotericsoftware.reflectasm.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.reflectasm.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.esotericsoftware.minlog.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.objenesis.</pattern>
+                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+                </relocation>
+
                 <relocation>
                   <pattern>com.yammer.metrics.</pattern>
                   <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
@@ -239,6 +263,14 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hadoop-mr</artifactId>
       <version>${project.version}</version>
+    </dependency>
+
+    <!-- Kryo -->
+    <dependency>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
+      <version>${kryo.shaded.version}</version>
+      <scope>compile</scope>
     </dependency>
 
     <!-- Parquet -->

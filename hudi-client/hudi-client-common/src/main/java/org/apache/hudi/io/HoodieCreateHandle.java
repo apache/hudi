@@ -54,7 +54,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   private static final Logger LOG = LogManager.getLogger(HoodieCreateHandle.class);
 
-  protected final HoodieFileWriter fileWriter;
+  protected HoodieFileWriter fileWriter;
   protected final Path path;
   protected long recordsWritten = 0;
   protected long insertRecordsWritten = 0;
@@ -203,7 +203,10 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
 
-      fileWriter.close();
+      if (fileWriter != null) {
+        fileWriter.close();
+        fileWriter = null;
+      }
 
       setupWriteStatus();
 

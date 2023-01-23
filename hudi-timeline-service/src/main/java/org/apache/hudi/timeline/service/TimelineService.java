@@ -18,8 +18,6 @@
 
 package org.apache.hudi.timeline.service;
 
-import io.javalin.core.JavalinConfig;
-import io.javalin.jetty.JettyServer;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -33,6 +31,8 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
+import io.javalin.core.JavalinConfig;
+import io.javalin.jetty.JettyServer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -124,6 +124,41 @@ public class TimelineService {
     @Parameter(names = {"--marker-parallelism", "-mdp"}, description = "Parallelism to use for reading and deleting marker files")
     public int markerParallelism = 100;
 
+    @Parameter(names = {"--early-conflict-detection-strategy"}, description =
+        "The class name of the early conflict detection strategy to use. "
+            + "This should be subclass of "
+            + "`org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy`")
+    public String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
+
+    @Parameter(names = {"--early-conflict-detection-check-commit-conflict"}, description =
+        "Whether to enable commit conflict checking or not during early "
+            + "conflict detection.")
+    public Boolean checkCommitConflict = false;
+
+    @Parameter(names = {"--early-conflict-detection-enable"}, description =
+        "Whether to enable early conflict detection based on markers. "
+            + "It eagerly detects writing conflict before create markers and fails fast if a "
+            + "conflict is detected, to release cluster compute resources as soon as possible.")
+    public Boolean earlyConflictDetectionEnable = false;
+
+    @Parameter(names = {"--async-conflict-detector-batch-interval-ms"}, description =
+        "Used for timeline-server-based markers with "
+            + "`AsyncTimelineServerBasedDetectionStrategy`. "
+            + "The time in milliseconds to delay first async marker conflict detection.")
+    public Long asyncConflictDetectorBatchIntervalMs = 30000L;
+
+    @Parameter(names = {"--async-conflict-detector-batch-period-ms"}, description =
+        "Used for timeline-server-based markers with "
+            + "`AsyncTimelineServerBasedDetectionStrategy`. "
+            + "The period in milliseconds between consecutive runs of async marker conflict detection.")
+    public Long asyncConflictDetectorBatchPeriodMs = 30000L;
+
+    @Parameter(names = {"--early-conflict-detection-max-heartbeat-interval-ms"}, description =
+        "Used for timeline-server-based markers with "
+            + "`AsyncTimelineServerBasedDetectionStrategy`. "
+            + "Instants whose heartbeat is greater than the current value will not be used in early conflict detection.")
+    public Long maxAllowableHeartbeatIntervalInMs = 60000L;
+
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
 
@@ -148,6 +183,12 @@ public class TimelineService {
       private int markerBatchNumThreads = 20;
       private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
+      private String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
+      private Boolean checkCommitConflict = false;
+      private Boolean earlyConflictDetectionEnable = false;
+      private Long asyncConflictDetectorBatchIntervalMs = 30000L;
+      private Long asyncConflictDetectorBatchPeriodMs = 30000L;
+      private Long maxAllowableHeartbeatIntervalInMs = 60000L;
 
       public Builder() {
       }
@@ -217,6 +258,36 @@ public class TimelineService {
         return this;
       }
 
+      public Builder earlyConflictDetectionStrategy(String earlyConflictDetectionStrategy) {
+        this.earlyConflictDetectionStrategy = earlyConflictDetectionStrategy;
+        return this;
+      }
+
+      public Builder earlyConflictDetectionCheckCommitConflict(Boolean checkCommitConflict) {
+        this.checkCommitConflict = checkCommitConflict;
+        return this;
+      }
+
+      public Builder earlyConflictDetectionEnable(Boolean earlyConflictDetectionEnable) {
+        this.earlyConflictDetectionEnable = earlyConflictDetectionEnable;
+        return this;
+      }
+
+      public Builder asyncConflictDetectorBatchIntervalMs(Long asyncConflictDetectorBatchIntervalMs) {
+        this.asyncConflictDetectorBatchIntervalMs = asyncConflictDetectorBatchIntervalMs;
+        return this;
+      }
+
+      public Builder asyncConflictDetectorBatchPeriodMs(Long asyncConflictDetectorBatchPeriodMs) {
+        this.asyncConflictDetectorBatchPeriodMs = asyncConflictDetectorBatchPeriodMs;
+        return this;
+      }
+
+      public Builder earlyConflictDetectionMaxAllowableHeartbeatIntervalInMs(Long maxAllowableHeartbeatIntervalInMs) {
+        this.maxAllowableHeartbeatIntervalInMs = maxAllowableHeartbeatIntervalInMs;
+        return this;
+      }
+
       public Config build() {
         Config config = new Config();
         config.serverPort = this.serverPort;
@@ -232,6 +303,12 @@ public class TimelineService {
         config.markerBatchNumThreads = this.markerBatchNumThreads;
         config.markerBatchIntervalMs = this.markerBatchIntervalMs;
         config.markerParallelism = this.markerParallelism;
+        config.earlyConflictDetectionStrategy = this.earlyConflictDetectionStrategy;
+        config.checkCommitConflict = this.checkCommitConflict;
+        config.earlyConflictDetectionEnable = this.earlyConflictDetectionEnable;
+        config.asyncConflictDetectorBatchIntervalMs = this.asyncConflictDetectorBatchIntervalMs;
+        config.asyncConflictDetectorBatchPeriodMs = this.asyncConflictDetectorBatchPeriodMs;
+        config.maxAllowableHeartbeatIntervalInMs = this.maxAllowableHeartbeatIntervalInMs;
         return config;
       }
     }

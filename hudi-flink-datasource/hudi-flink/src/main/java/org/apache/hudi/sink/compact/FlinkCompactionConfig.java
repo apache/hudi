@@ -53,55 +53,51 @@ public class FlinkCompactionConfig extends Configuration {
           + "'time_elapsed': trigger compaction when time elapsed > N seconds since last compaction;\n"
           + "'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied;\n"
           + "'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied.\n"
-          + "Default is 'num_commits'",
-      required = false)
+          + "Default is 'num_commits'")
   public String compactionTriggerStrategy = NUM_COMMITS;
 
-  @Parameter(names = {"--compaction-delta-commits"}, description = "Max delta commits needed to trigger compaction, default 5 commits", required = false)
+  @Parameter(names = {"--compaction-delta-commits"}, description = "Max delta commits needed to trigger compaction, default 1 commit")
   public Integer compactionDeltaCommits = 1;
 
-  @Parameter(names = {"--compaction-delta-seconds"}, description = "Max delta seconds time needed to trigger compaction, default 1 hour", required = false)
+  @Parameter(names = {"--compaction-delta-seconds"}, description = "Max delta seconds time needed to trigger compaction, default 1 hour")
   public Integer compactionDeltaSeconds = 3600;
 
-  @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, enabled by default", required = false)
+  @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, enabled by default")
   public Boolean cleanAsyncEnable = false;
 
   @Parameter(names = {"--clean-retain-commits"},
       description = "Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
-          + "This also directly translates into how much you can incrementally pull on this table, default 10",
-      required = false)
+          + "This also directly translates into how much you can incrementally pull on this table, default 10")
   public Integer cleanRetainCommits = 10;
 
   @Parameter(names = {"--archive-min-commits"},
-      description = "Min number of commits to keep before archiving older commits into a sequential log, default 20.",
-      required = false)
+      description = "Min number of commits to keep before archiving older commits into a sequential log, default 20.")
   public Integer archiveMinCommits = 20;
 
   @Parameter(names = {"--archive-max-commits"},
-      description = "Max number of commits to keep before archiving older commits into a sequential log, default 30.",
-      required = false)
+      description = "Max number of commits to keep before archiving older commits into a sequential log, default 30.")
   public Integer archiveMaxCommits = 30;
 
-  @Parameter(names = {"--compaction-max-memory"}, description = "Max memory in MB for compaction spillable map, default 100MB.", required = false)
+  @Parameter(names = {"--compaction-max-memory"}, description = "Max memory in MB for compaction spillable map, default 100MB.")
   public Integer compactionMaxMemory = 100;
 
-  @Parameter(names = {"--compaction-target-io"}, description = "Target IO per compaction (both read and write) for batching compaction, default 512000M.", required = false)
+  @Parameter(names = {"--compaction-target-io"}, description = "Target IO per compaction (both read and write) for batching compaction, default 512000M.")
   public Long compactionTargetIo = 512000L;
 
-  @Parameter(names = {"--compaction-tasks"}, description = "Parallelism of tasks that do actual compaction, default is -1", required = false)
+  @Parameter(names = {"--compaction-tasks"}, description = "Parallelism of tasks that do actual compaction, default is -1")
   public Integer compactionTasks = -1;
 
   @Parameter(names = {"--schedule", "-sc"}, description = "Not recommended. Schedule the compaction plan in this job.\n"
       + "There is a risk of losing data when scheduling compaction outside the writer job.\n"
       + "Scheduling compaction in the writer job and only let this job do the compaction execution is recommended.\n"
-      + "Default is false", required = false)
+      + "Default is false")
   public Boolean schedule = false;
 
   public static final String SEQ_FIFO = "FIFO";
   public static final String SEQ_LIFO = "LIFO";
   @Parameter(names = {"--seq"}, description = "Compaction plan execution sequence, two options are supported:\n"
       + "1). FIFO: execute the oldest plan first;\n"
-      + "2). LIFO: execute the latest plan first, by default LIFO", required = false)
+      + "2). LIFO: execute the latest plan first, by default LIFO")
   public String compactionSeq = SEQ_FIFO;
 
   @Parameter(names = {"--service"}, description = "Flink Compaction runs in service mode, disable by default")
@@ -126,7 +122,7 @@ public class FlinkCompactionConfig extends Configuration {
       + "It's only effective for 'instants' plan selection strategy.")
   public String compactionPlanInstant;
 
-  @Parameter(names = {"--spillable_map_path"}, description = "Default file path prefix for spillable map.", required = false)
+  @Parameter(names = {"--spillable_map_path"}, description = "Default file path prefix for spillable map.")
   public String spillableMapPath = HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue();
 
   /**

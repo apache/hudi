@@ -281,7 +281,7 @@ public class DeltaSync implements Serializable, Closeable {
             .setConf(new Configuration(fs.getConf()))
             .setBasePath(cfg.targetBasePath)
             .setPayloadClassName(cfg.payloadClassName)
-            .setMergerStrategy(props.getProperty(HoodieWriteConfig.MERGER_STRATEGY.key(), HoodieWriteConfig.MERGER_STRATEGY.defaultValue()))
+            .setRecordMergerStrategy(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue()))
             .build();
         switch (meta.getTableType()) {
           case COPY_ON_WRITE:
@@ -386,7 +386,7 @@ public class DeltaSync implements Serializable, Closeable {
       if (cfg.retryLastPendingInlineClusteringJob && getHoodieClientConfig(this.schemaProvider).inlineClusteringEnabled()) {
         Option<String> pendingClusteringInstant = getLastPendingClusteringInstant(allCommitsTimelineOpt);
         if (pendingClusteringInstant.isPresent()) {
-          writeClient.cluster(pendingClusteringInstant.get(), true);
+          writeClient.cluster(pendingClusteringInstant.get());
         }
       }
 
@@ -474,8 +474,8 @@ public class DeltaSync implements Serializable, Closeable {
 
   private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchFromSource(Option<String> resumeCheckpointStr) {
     HoodieRecordType recordType = HoodieRecordUtils.createRecordMerger(null, EngineType.SPARK,
-        ConfigUtils.split2List(props.getProperty(HoodieWriteConfig.MERGER_IMPLS.key(), HoodieWriteConfig.MERGER_IMPLS.defaultValue())),
-        props.getProperty(HoodieWriteConfig.MERGER_STRATEGY.key(), HoodieWriteConfig.MERGER_STRATEGY.defaultValue())).getRecordType();
+        ConfigUtils.split2List(props.getProperty(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue())),
+        props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue())).getRecordType();
     if (recordType == HoodieRecordType.SPARK && HoodieTableType.valueOf(cfg.tableType) == HoodieTableType.MERGE_ON_READ
         && HoodieLogBlockType.fromId(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "avro"))
         != HoodieLogBlockType.PARQUET_DATA_BLOCK) {

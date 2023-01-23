@@ -136,7 +136,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   private boolean closed = false;
 
-  private RetryHelper<Response> retryHelper;
+  private RetryHelper<Response, IOException> retryHelper;
 
   private enum RequestMethod {
     GET, POST

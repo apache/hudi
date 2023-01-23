@@ -147,6 +147,7 @@ test_flink_bundle() {
     export HADOOP_CLASSPATH=$($HADOOP_HOME/bin/hadoop classpath)
     $FLINK_HOME/bin/start-cluster.sh
     $FLINK_HOME/bin/sql-client.sh -j $JARS_DIR/flink.jar -f $WORKDIR/flink/insert.sql
+    sleep 10 # for test stability
     $WORKDIR/flink/compact.sh $JARS_DIR/flink.jar
     local EXIT_CODE=$?
     $FLINK_HOME/bin/stop-cluster.sh

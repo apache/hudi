@@ -6,6 +6,15 @@ on:
       - master
       - 'release-*'
   pull_request:
+    paths-ignore:
+      - '**.bmp'
+      - '**.gif'
+      - '**.jpg'
+      - '**.jpeg'
+      - '**.md'
+      - '**.pdf'
+      - '**.png'
+      - '**.svg'
     branches:
       - master
       - 'release-*'
@@ -69,6 +78,7 @@ jobs:
           - flinkProfile: "flink1.13"
           - flinkProfile: "flink1.14"
           - flinkProfile: "flink1.15"
+          - flinkProfile: "flink1.16"
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -95,6 +105,8 @@ jobs:
     strategy:
       matrix:
         include:
+          - flinkProfile: 'flink1.16'
+            sparkProfile: 'spark3.3'
           - flinkProfile: 'flink1.15'
             sparkProfile: 'spark3.3'
           - flinkProfile: 'flink1.14'
@@ -125,4 +137,3 @@ jobs:
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
-

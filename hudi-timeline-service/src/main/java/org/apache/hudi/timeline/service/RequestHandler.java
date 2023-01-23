@@ -459,7 +459,8 @@ public class RequestHandler {
       ctx.future(markerHandler.createMarker(
           ctx,
           ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault(""),
-          ctx.queryParamAsClass(MarkerOperation.MARKER_NAME_PARAM, String.class).getOrDefault("")));
+          ctx.queryParamAsClass(MarkerOperation.MARKER_NAME_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(MarkerOperation.MARKER_BASEPATH_PARAM, String.class).getOrDefault("")));
     }, false));
 
     app.post(MarkerOperation.DELETE_MARKER_DIR_URL, new ViewHandler(ctx -> {

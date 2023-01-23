@@ -52,6 +52,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 
 public class HoodieJavaGenerateApp {
   @Parameter(names = {"--table-path", "-p"}, description = "Path for Hoodie sample table")
@@ -109,9 +110,10 @@ public class HoodieJavaGenerateApp {
   }
 
   private SparkSession getOrCreateSparkSession() {
-    // Spark session setup..
-    SparkSession spark = SparkSession.builder().appName("Hoodie Spark APP")
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
+    SparkSession spark = SparkSession.builder()
+        .config(getSparkConfForTest("Hoodie Spark APP"))
+        .getOrCreate();
+
     spark.sparkContext().setLogLevel("WARN");
     return spark;
   }

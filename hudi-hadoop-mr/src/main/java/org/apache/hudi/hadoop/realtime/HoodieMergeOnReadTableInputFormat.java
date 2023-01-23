@@ -23,22 +23,27 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.HiveHoodieTableFileIndex;
 import org.apache.hudi.hadoop.HoodieCopyOnWriteTableInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.RealtimeFileStatus;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -86,19 +91,19 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   }
 
   @Override
-  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice,
-                                                 Option<HoodieInstant> latestCompletedInstantOpt,
-                                                 String tableBasePath,
-                                                 Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
+  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, HiveHoodieTableFileIndex fileIndex, HoodieTableMetaClient metaClient) {
     Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
     Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
     Stream<HoodieLogFile> logFiles = fileSlice.getLogFiles();
 
+    Option<HoodieInstant> latestCompletedInstantOpt = fileIndex.getLatestCompletedInstant();
+    String tableBasePath = fileIndex.getBasePath().toString();
+
     // Check if we're reading a MOR table
     if (baseFileOpt.isPresent()) {
-      return createRealtimeFileStatusUnchecked(baseFileOpt.get(), logFiles, tableBasePath, latestCompletedInstantOpt, virtualKeyInfoOpt);
+      return createRealtimeFileStatusUnchecked(baseFileOpt.get(), logFiles, tableBasePath, latestCompletedInstantOpt, getHoodieVirtualKeyInfo(metaClient));
     } else if (latestLogFileOpt.isPresent()) {
-      return createRealtimeFileStatusUnchecked(latestLogFileOpt.get(), logFiles, tableBasePath, latestCompletedInstantOpt, virtualKeyInfoOpt);
+      return createRealtimeFileStatusUnchecked(latestLogFileOpt.get(), logFiles, tableBasePath, latestCompletedInstantOpt, getHoodieVirtualKeyInfo(metaClient));
     } else {
       throw new IllegalStateException("Invalid state: either base-file or log-file has to be present");
     }
@@ -384,5 +389,24 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
       throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
     }
   }
-}
 
+  private static Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo(HoodieTableMetaClient metaClient) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (tableConfig.populateMetaFields()) {
+      return Option.empty();
+    }
+    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
+    try {
+      Schema schema = tableSchemaResolver.getTableAvroSchema();
+      boolean isNonPartitionedKeyGen = StringUtils.isNullOrEmpty(tableConfig.getPartitionFieldProp());
+      return Option.of(
+          new HoodieVirtualKeyInfo(
+              tableConfig.getRecordKeyFieldProp(),
+              isNonPartitionedKeyGen ? Option.empty() : Option.of(tableConfig.getPartitionFieldProp()),
+              schema.getField(tableConfig.getRecordKeyFieldProp()).pos(),
+              isNonPartitionedKeyGen ? Option.empty() : Option.of(schema.getField(tableConfig.getPartitionFieldProp()).pos())));
+    } catch (Exception exception) {
+      throw new HoodieException("Fetching table schema failed with exception ", exception);
+    }
+  }
+}

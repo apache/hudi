@@ -163,7 +163,7 @@ public class UtilitiesTestBase {
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanUpUtilitiesTestServices() {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
       hdfsTestService = null;
