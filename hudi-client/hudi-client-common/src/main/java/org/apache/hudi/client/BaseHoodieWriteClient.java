@@ -231,8 +231,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
       commit(table, commitActionType, instantTime, metadata, stats);
-      // already within lock, and so no lock requried for archival
-      postCommit(table, metadata, instantTime, extraMetadata, false);
       LOG.info("Committed " + instantTime);
       releaseResources();
     } catch (IOException e) {
@@ -244,6 +242,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // We don't want to fail the commit if hoodie.fail.writes.on.inline.table.service.exception is false. We catch warn if false
     try {
       // do this outside of lock since compaction, clustering can be time taking and we don't need a lock for the entire execution period
+      postCommit(table, metadata, instantTime, extraMetadata, false);
       runTableServicesInline(table, metadata, extraMetadata);
     } catch (Exception e) {
       if (config.isFailOnInlineTableServiceExceptionEnabled()) {

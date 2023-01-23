@@ -74,7 +74,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient implements RunsTableService {
 
-  private static final Logger LOG = LogManager.getLogger(BaseHoodieWriteClient.class);
+  private static final Logger LOG = LogManager.getLogger(BaseHoodieTableServiceClient.class);
 
   protected transient Timer.Context compactionTimer;
   protected transient Timer.Context clusteringTimer;
@@ -277,7 +277,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     throw new UnsupportedOperationException("Log compaction is not supported yet.");
   }
 
-
   /**
    * Schedules a new compaction instant with passed-in instant time.
    *
@@ -306,26 +305,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    */
   public boolean scheduleClusteringAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
     return scheduleTableService(instantTime, extraMetadata, TableServiceType.CLUSTER).isPresent();
-  }
-
-  /**
-   * Schedules a new cleaning instant.
-   *
-   * @param extraMetadata Extra Metadata to be stored
-   */
-  protected Option<String> scheduleCleaning(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    return scheduleCleaningAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
-  }
-
-  /**
-   * Schedules a new cleaning instant with passed-in instant time.
-   *
-   * @param instantTime   cleaning Instant Time
-   * @param extraMetadata Extra Metadata to be stored
-   */
-  protected boolean scheduleCleaningAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    return scheduleTableService(instantTime, extraMetadata, TableServiceType.CLEAN).isPresent();
   }
 
   /**
