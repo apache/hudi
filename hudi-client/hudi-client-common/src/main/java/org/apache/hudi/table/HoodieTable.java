@@ -32,7 +32,6 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -124,7 +123,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
   protected final HoodieIndex<?, ?> index;
   protected final TaskContextSupplier taskContextSupplier;
 
-  private final SerializableConfiguration hadoopConfiguration;
   private final HoodieStorageLayout storageLayout;
 
   // NOTE: These are managed by {@code TransientLazy} to implement transient semantic,
@@ -136,11 +134,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
-    this.hadoopConfiguration = context.getHadoopConf();
     // NOTE: We keep context as [[Transient]] to make sure we can pass on [[HoodieTable]] object
     //       from the driver to the executors: we can't propagate whole context to the executor,
     //       and therefore instead we re-create it as [[HoodieLocalEngineContext]]
-    this.context = Transient.eager(context, () -> new HoodieLocalEngineContext(hadoopConfiguration.get()));
+    this.context = Transient.eager(context, () -> new HoodieLocalEngineContext(metaClient.getHadoopConf()));
 
     this.viewManager = Transient.lazy(() ->
         // NOTE: It's critical we use {@code getContext()} here since {@code context} is
