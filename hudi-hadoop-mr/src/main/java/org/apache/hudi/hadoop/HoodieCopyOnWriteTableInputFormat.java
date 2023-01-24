@@ -169,7 +169,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
                                                           List<Path> inputPaths,
                                                           String incrementalTable) throws IOException {
     Job jobContext = Job.getInstance(job);
-    Pair<Option<HoodieTimeline>, Option<String>> timeline = HoodieInputFormatUtils.getFilteredCommitsTimeline(jobContext, tableMetaClient);
+    Pair<Option<HoodieTimeline>, Option<HoodieInstant>> timeline = HoodieInputFormatUtils.getFilteredCommitsTimeline(jobContext, tableMetaClient);
     if (!timeline.getLeft().isPresent()) {
       return null;
     }

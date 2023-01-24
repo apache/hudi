@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -41,18 +42,18 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
 
   public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,
-                                      Option<String> firstNotCompleted,
+                                      Option<HoodieInstant> firstActiveInstant,
                                       HoodieTableMetadata tableMetadata) {
-    super(metaClient, visibleActiveTimeline, firstNotCompleted);
+    super(metaClient, visibleActiveTimeline, firstActiveInstant);
     this.tableMetadata = tableMetadata;
   }
 
   public HoodieMetadataFileSystemView(HoodieEngineContext engineContext,
                                       HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,
-                                      Option<String> firstNotCompleted,
+                                      Option<HoodieInstant> firstActiveInstant,
                                       HoodieMetadataConfig metadataConfig) {
-    super(metaClient, visibleActiveTimeline, firstNotCompleted);
+    super(metaClient, visibleActiveTimeline, firstActiveInstant);
     this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath(),
         FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true);
   }

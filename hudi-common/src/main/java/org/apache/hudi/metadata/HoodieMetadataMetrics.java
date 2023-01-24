@@ -22,7 +22,6 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -73,7 +72,7 @@ public class HoodieMetadataMetrics implements Serializable {
     try {
       metaClient.reloadActiveTimeline();
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(),
-          TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline()));
+          metaClient.getActiveTimeline().firstInstant());
       return getStats(fsView, detailed, metadata);
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to get metadata stats.", ioe);

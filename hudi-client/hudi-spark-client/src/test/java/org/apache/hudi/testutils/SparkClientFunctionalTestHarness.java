@@ -34,7 +34,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -267,12 +266,12 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
     TableFileSystemView.BaseFileOnlyView roView =
         getHoodieTableFileSystemView(reloadedMetaClient, reloadedMetaClient.getCommitTimeline().filterCompletedInstants(),
-            TimelineUtils.getFirstNotCompleted(reloadedMetaClient.getCommitsTimeline()), allFiles);
+            reloadedMetaClient.getCommitsTimeline().firstInstant(), allFiles);
     Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
     assertTrue(!dataFilesToRead.findAny().isPresent());
 
     roView = getHoodieTableFileSystemView(reloadedMetaClient, hoodieTable.getCompletedCommitsTimeline(),
-        TimelineUtils.getFirstNotCompleted(reloadedMetaClient.getCommitsTimeline()), allFiles);
+        reloadedMetaClient.getCommitsTimeline().firstInstant(), allFiles);
     dataFilesToRead = roView.getLatestBaseFiles();
     return dataFilesToRead;
   }

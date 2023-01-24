@@ -40,7 +40,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -445,11 +444,11 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
   }
 
   public HoodieTableFileSystemView getHoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-                                                                Option<String> firstNotCompleted, FileStatus[] fileStatuses) {
+                                                                Option<HoodieInstant> firstActiveInstant, FileStatus[] fileStatuses) {
     if (tableView == null) {
-      tableView = new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, firstNotCompleted, fileStatuses);
+      tableView = new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, firstActiveInstant, fileStatuses);
     } else {
-      tableView.init(metaClient, visibleActiveTimeline, firstNotCompleted, fileStatuses);
+      tableView.init(metaClient, visibleActiveTimeline, firstActiveInstant, fileStatuses);
     }
     return tableView;
   }
@@ -664,7 +663,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     // versions are +1 as autoClean / compaction happens end of commits
     int numFileVersions = metadataWriteConfig.getCleanerFileVersionsRetained() + 1;
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline(),
-        TimelineUtils.getFirstNotCompleted(metadataMetaClient.getActiveTimeline()));
+        metadataMetaClient.getActiveTimeline().firstInstant());
     metadataTablePartitions.forEach(partition -> {
       MetadataPartitionType partitionType = partitionTypeMap.get(partition);
 

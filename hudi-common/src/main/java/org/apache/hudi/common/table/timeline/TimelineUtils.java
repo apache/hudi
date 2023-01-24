@@ -47,7 +47,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACT
 
 /**
  * TimelineUtils provides a common way to query incremental meta-data changes for a hoodie table.
- *
+ * <p>
  * This is useful in multiple places including:
  * 1) HiveSync - this can be used to query partitions that changed since previous sync.
  * 2) Incremental reads - InputFormats can use this API to query
@@ -181,7 +181,7 @@ public class TimelineUtils {
 
   private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
     try {
-      LOG.info("reading checkpoint info for:"  + instant + " key: " + extraMetadataKey);
+      LOG.info("reading checkpoint info for:" + instant + " key: " + extraMetadataKey);
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
           metaClient.getCommitsTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
 
@@ -234,7 +234,7 @@ public class TimelineUtils {
     return timeline.getCommitsTimeline()
         .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
   }
-  
+
   /**
    * Returns the commit metadata of the given instant.
    *
@@ -294,10 +294,5 @@ public class TimelineUtils {
     } else {
       return Option.empty();
     }
-  }
-
-  public static Option<String> getFirstNotCompleted(HoodieTimeline timeline) {
-    Option<HoodieInstant> firstInstant = timeline.filterInflightsAndRequested().firstInstant();
-    return firstInstant.isPresent() ? Option.of(firstInstant.get().getTimestamp()) : Option.empty();
   }
 }

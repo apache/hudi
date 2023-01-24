@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -34,7 +33,7 @@ public class TestRocksDBBasedIncrementalFSViewSync extends TestIncrementalFSView
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline)
       throws IOException {
     String subdirPath = Files.createTempDirectory(tempDir, null).toAbsolutePath().toString();
-    return new RocksDbBasedFileSystemView(metaClient, timeline, TimelineUtils.getFirstNotCompleted(timeline.getWriteTimeline()), FileSystemViewStorageConfig.newBuilder()
+    return new RocksDbBasedFileSystemView(metaClient, timeline, timeline.getWriteTimeline().firstInstant(), FileSystemViewStorageConfig.newBuilder()
         .withRocksDBPath(subdirPath).withIncrementalTimelineSync(true).build());
   }
 }

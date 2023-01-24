@@ -45,7 +45,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -1047,7 +1046,7 @@ public class HoodieTableMetadataUtil {
           HoodieActiveTimeline.createNewInstantTime());
       timeline = new HoodieDefaultTimeline(Stream.of(instant), metaClient.getActiveTimeline()::getInstantDetails);
     }
-    return new HoodieTableFileSystemView(metaClient, timeline, TimelineUtils.getFirstNotCompleted(timeline));
+    return new HoodieTableFileSystemView(metaClient, timeline, timeline.firstInstant());
   }
 
   /**

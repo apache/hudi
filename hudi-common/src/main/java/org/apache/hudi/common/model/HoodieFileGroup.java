@@ -58,9 +58,9 @@ public class HoodieFileGroup implements Serializable {
   private final HoodieTimeline timeline;
 
   /**
-   * Option of the timestamp of the first instant in the timeline that is requested or inflight
+   * Option of the timestamp of the first instant in the timeline.
    */
-  private final Option<String> firstNotCompleted;
+  private final Option<HoodieInstant> firstActiveInstant;
 
   /**
    * The last completed instant, that acts as a high watermark for all getters.
@@ -69,21 +69,21 @@ public class HoodieFileGroup implements Serializable {
 
   public HoodieFileGroup(HoodieFileGroup fileGroup) {
     this.timeline = fileGroup.timeline;
-    this.firstNotCompleted = fileGroup.firstNotCompleted;
+    this.firstActiveInstant = fileGroup.firstActiveInstant;
     this.fileGroupId = fileGroup.fileGroupId;
     this.fileSlices = new TreeMap<>(fileGroup.fileSlices);
     this.lastInstant = fileGroup.lastInstant;
   }
 
-  public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline, Option<String> firstNotCompleted) {
-    this(new HoodieFileGroupId(partitionPath, id), timeline, firstNotCompleted);
+  public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline, Option<HoodieInstant> firstActiveInstant) {
+    this(new HoodieFileGroupId(partitionPath, id), timeline, firstActiveInstant);
   }
 
-  public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline timeline, Option<String> firstNotCompleted) {
+  public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline timeline, Option<HoodieInstant> firstActiveInstant) {
     this.fileGroupId = fileGroupId;
     this.fileSlices = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
     this.timeline = timeline;
-    this.firstNotCompleted = firstNotCompleted;
+    this.firstActiveInstant = firstActiveInstant;
     this.lastInstant = timeline.lastInstant();
   }
 
@@ -138,11 +138,11 @@ public class HoodieFileGroup implements Serializable {
       return true;
     }
 
-    if (firstNotCompleted.isPresent() && compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, firstNotCompleted.get())) {
+    if (firstActiveInstant.isPresent() && compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, firstActiveInstant.get().getTimestamp())) {
       // To get here:
       // 1. the timestamp must be <= the last commit
       // 2. not in the completed timeline
-      // 3. the timestamp must be >= the first non-committed instance
+      // 3. the timestamp must be >= the first active instant
       // This means that it is not archived
       return false;
     }
@@ -231,6 +231,7 @@ public class HoodieFileGroup implements Serializable {
     final StringBuilder sb = new StringBuilder("HoodieFileGroup {");
     sb.append("id=").append(fileGroupId);
     sb.append(", fileSlices='").append(fileSlices).append('\'');
+    sb.append(", firstActiveInstant='").append(firstActiveInstant.isPresent() ? firstActiveInstant.get().getTimestamp() : "").append('\'');
     sb.append(", lastInstant='").append(lastInstant).append('\'');
     sb.append('}');
     return sb.toString();
@@ -248,7 +249,7 @@ public class HoodieFileGroup implements Serializable {
     return timeline;
   }
 
-  public Option<String> getFirstNotCompleted() {
-    return firstNotCompleted;
+  public Option<HoodieInstant> getFirstActiveInstant() {
+    return firstActiveInstant;
   }
 }

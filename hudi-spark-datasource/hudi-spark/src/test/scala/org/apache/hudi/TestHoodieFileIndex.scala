@@ -29,7 +29,6 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
-import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
@@ -681,7 +680,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
     metaClient.reloadActiveTimeline()
     val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     val fileSystemView = new HoodieTableFileSystemView(metaClient, activeInstants,
-      TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline.getCommitsTimeline))
+      metaClient.getActiveTimeline.getCommitsTimeline.firstInstant())
     fileSystemView.getAllBaseFiles(partitionPath).iterator().asScala.toSeq.length
   }
 

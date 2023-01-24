@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -236,7 +235,7 @@ public class IncrementalInputSplits implements Serializable {
       return Result.EMPTY;
     }
 
-    List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline, getFirstNotCompleted(metaClient),
+    List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline, getFirstActiveInstant(metaClient),
         fileStatuses, readPartitions, endInstant, instantRange, false);
 
     return Result.instance(inputSplits, endInstant);
@@ -295,7 +294,7 @@ public class IncrementalInputSplits implements Serializable {
       }
 
       final String endInstant = instantToIssue.getTimestamp();
-      List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline, getFirstNotCompleted(metaClient),
+      List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline, getFirstActiveInstant(metaClient),
           fileStatuses, readPartitions, endInstant, null, false);
 
       return Result.instance(inputSplits, endInstant);
@@ -337,7 +336,7 @@ public class IncrementalInputSplits implements Serializable {
       }
 
       final String endInstant = instantToIssue.getTimestamp();
-      List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline, getFirstNotCompleted(metaClient),
+      List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline, getFirstActiveInstant(metaClient),
           fileStatuses, readPartitions, endInstant, instantRange, skipCompaction);
 
       return Result.instance(inputSplits, endInstant);
@@ -368,13 +367,13 @@ public class IncrementalInputSplits implements Serializable {
   private List<MergeOnReadInputSplit> getInputSplits(
       HoodieTableMetaClient metaClient,
       HoodieTimeline commitTimeline,
-      Option<String> firstNotCompleted,
+      Option<HoodieInstant> firstActiveInstant,
       FileStatus[] fileStatuses,
       Set<String> readPartitions,
       String endInstant,
       InstantRange instantRange,
       boolean skipBaseFiles) {
-    final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, firstNotCompleted, fileStatuses);
+    final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, firstActiveInstant, fileStatuses);
     final AtomicInteger cnt = new AtomicInteger(0);
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     return readPartitions.stream()
@@ -481,8 +480,8 @@ public class IncrementalInputSplits implements Serializable {
     return filterInstantsByCondition(timeline);
   }
 
-  private Option<String> getFirstNotCompleted(HoodieTableMetaClient metaClient) {
-    return TimelineUtils.getFirstNotCompleted(filterInstantsByCondition(metaClient.getCommitsAndCompactionTimeline()));
+  private Option<HoodieInstant> getFirstActiveInstant(HoodieTableMetaClient metaClient) {
+    return filterInstantsByCondition(metaClient.getCommitsAndCompactionTimeline()).firstInstant();
   }
 
   private HoodieTimeline getArchivedReadTimeline(HoodieTableMetaClient metaClient, String startInstant) {

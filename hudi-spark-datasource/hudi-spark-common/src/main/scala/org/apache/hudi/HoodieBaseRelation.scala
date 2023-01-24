@@ -31,7 +31,7 @@ import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, Seri
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
-import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineUtils}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
@@ -52,6 +52,7 @@ import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormat, ParquetFileFormat}
+import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -265,9 +266,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def timeline: HoodieTimeline =
   // NOTE: We're including compaction here since it's not considering a "commit" operation
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
-  protected def firstNotCompleted: org.apache.hudi.common.util.Option[String] =
-    TimelineUtils.getFirstNotCompleted(metaClient.getCommitsAndCompactionTimeline)
-
+  protected def firstActiveInstant: org.apache.hudi.common.util.Option[HoodieInstant] = metaClient.getCommitsAndCompactionTimeline.getWriteTimeline.firstInstant()
 
   private def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
@@ -399,7 +398,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
           inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
         }
 
-        val fsView = new HoodieTableFileSystemView(metaClient, timeline, firstNotCompleted, partitionDirs.flatMap(_.files).toArray)
+        val fsView = new HoodieTableFileSystemView(metaClient, timeline, firstActiveInstant, partitionDirs.flatMap(_.files).toArray)
 
         fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
           val relativePath = getRelativePartitionPath(basePath, partitionPath)

@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -241,7 +240,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
 
     Set<HoodieLogFile> gotLogFilesToBeRenamed = renameFiles.stream().map(Pair::getLeft).collect(Collectors.toSet());
     final HoodieTableFileSystemView fsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline().getWriteTimeline()));
+        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), metaClient.getActiveTimeline().getWriteTimeline().firstInstant());
     Set<HoodieLogFile> expLogFilesToBeRenamed = fsView.getLatestFileSlices(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0])
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant)).flatMap(FileSlice::getLogFiles)
         .collect(Collectors.toSet());
@@ -273,7 +272,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
 
     metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     final HoodieTableFileSystemView newFsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline().getWriteTimeline()));
+        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), metaClient.getActiveTimeline().getWriteTimeline().firstInstant());
     // Expect each file-slice whose base-commit is same as compaction commit to contain no new Log files
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))
@@ -313,7 +312,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
 
     Set<HoodieLogFile> gotLogFilesToBeRenamed = renameFiles.stream().map(Pair::getLeft).collect(Collectors.toSet());
     final HoodieTableFileSystemView fsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline().getWriteTimeline()));
+        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), metaClient.getActiveTimeline().getWriteTimeline().firstInstant());
     Set<HoodieLogFile> expLogFilesToBeRenamed = fsView.getLatestFileSlices(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0])
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))
         .filter(fs -> fs.getFileId().equals(op.getFileId())).flatMap(FileSlice::getLogFiles)
@@ -334,7 +333,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
 
     metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     final HoodieTableFileSystemView newFsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline().getWriteTimeline()));
+        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), metaClient.getActiveTimeline().getWriteTimeline().firstInstant());
     // Expect all file-slice whose base-commit is same as compaction commit to contain no new Log files
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))

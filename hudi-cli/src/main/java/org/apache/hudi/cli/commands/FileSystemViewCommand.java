@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
@@ -274,6 +273,6 @@ public class FileSystemViewCommand {
 
     HoodieTimeline filteredTimeline = new HoodieDefaultTimeline(instantsStream,
         (Function<HoodieInstant, Option<byte[]>> & Serializable) metaClient.getActiveTimeline()::getInstantDetails);
-    return new HoodieTableFileSystemView(metaClient, filteredTimeline, TimelineUtils.getFirstNotCompleted(writeTimeline), statuses.toArray(new FileStatus[0]));
+    return new HoodieTableFileSystemView(metaClient, filteredTimeline, writeTimeline.firstInstant(), statuses.toArray(new FileStatus[0]));
   }
 }

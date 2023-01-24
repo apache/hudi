@@ -60,7 +60,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   private final boolean isBitCaskDiskMapCompressionEnabled;
 
   public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-                                         Option<String> firstNotCompleted, FileSystemViewStorageConfig config, HoodieCommonConfig commonConfig) {
+                                         Option<HoodieInstant> firstActiveInstant, FileSystemViewStorageConfig config, HoodieCommonConfig commonConfig) {
     super(config.isIncrementalTimelineSyncEnabled());
     this.maxMemoryForFileGroupMap = config.getMaxMemoryForFileGroupMap();
     this.maxMemoryForPendingCompaction = config.getMaxMemoryForPendingCompaction();
@@ -71,12 +71,12 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     this.baseStoreDir = config.getSpillableDir();
     diskMapType = commonConfig.getSpillableDiskMapType();
     isBitCaskDiskMapCompressionEnabled = commonConfig.isBitCaskDiskMapCompressionEnabled();
-    init(metaClient, visibleActiveTimeline, firstNotCompleted);
+    init(metaClient, visibleActiveTimeline, firstActiveInstant);
   }
 
-  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, Option<String> firstNotCompleted,
+  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, Option<HoodieInstant> firstActiveInstant,
                                          FileStatus[] fileStatuses, FileSystemViewStorageConfig config, HoodieCommonConfig commonConfig) {
-    this(metaClient, visibleActiveTimeline, firstNotCompleted, config, commonConfig);
+    this(metaClient, visibleActiveTimeline, firstActiveInstant, config, commonConfig);
     addFilesToView(fileStatuses);
   }
 

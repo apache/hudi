@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -260,14 +259,14 @@ public class CompactionTestBase extends HoodieClientTestBase {
     FileStatus[] allBaseFiles = HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles();
     HoodieTableFileSystemView view =
         getHoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(),
-            TimelineUtils.getFirstNotCompleted(table.getMetaClient().getActiveTimeline().getWriteTimeline()), allBaseFiles);
+            table.getMetaClient().getActiveTimeline().getWriteTimeline().firstInstant(), allBaseFiles);
     return view.getLatestBaseFiles().collect(Collectors.toList());
   }
 
   protected List<FileSlice> getCurrentLatestFileSlices(HoodieTable table) {
     HoodieTableFileSystemView view = new HoodieTableFileSystemView(table.getMetaClient(),
         table.getMetaClient().getActiveTimeline().reload().getWriteTimeline(),
-        TimelineUtils.getFirstNotCompleted(table.getMetaClient().getActiveTimeline().reload().getWriteTimeline()));
+        table.getMetaClient().getActiveTimeline().reload().getWriteTimeline().firstInstant());
     return Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS)
         .flatMap(view::getLatestFileSlices).collect(Collectors.toList());
   }

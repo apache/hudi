@@ -2736,7 +2736,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // lets add 2nd commit which succeeds.
     String secondInstantTime = "20000";
     client.startCommitWithTime(secondInstantTime);
-    // do not commit first commit
     JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(dataGen.generateInserts(secondInstantTime, numRecords), 1);
     JavaRDD<WriteStatus> result2 = client.bulkInsert(writeRecords2, secondInstantTime);
     assertTrue(client.commit(secondInstantTime, result2), "Commit should succeed");

@@ -35,7 +35,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.Transformations;
@@ -161,13 +160,13 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
       BaseFileOnlyView roView = getHoodieTableFileSystemView(metaClient,
           metaClient.getCommitsTimeline().filterCompletedInstants(),
-          TimelineUtils.getFirstNotCompleted(metaClient.getCommitsTimeline()), allFiles);
+          metaClient.getCommitsTimeline().firstInstant(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
       Map<String, Long> fileIdToSize =
           dataFilesToRead.collect(Collectors.toMap(HoodieBaseFile::getFileId, HoodieBaseFile::getFileSize));
 
       roView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
-          TimelineUtils.getFirstNotCompleted(metaClient.getCommitsTimeline()), allFiles);
+          metaClient.getCommitsTimeline().firstInstant(), allFiles);
       dataFilesToRead = roView.getLatestBaseFiles();
       List<HoodieBaseFile> dataFilesList = dataFilesToRead.collect(Collectors.toList());
       assertTrue(dataFilesList.size() > 0,
@@ -197,7 +196,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       allFiles = listAllBaseFilesInPath(hoodieTable);
       roView = getHoodieTableFileSystemView(metaClient,
           hoodieTable.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants(),
-          TimelineUtils.getFirstNotCompleted(hoodieTable.getActiveTimeline().reload().getCommitsTimeline()), allFiles);
+          hoodieTable.getActiveTimeline().reload().getCommitsTimeline().firstInstant(), allFiles);
       dataFilesToRead = roView.getLatestBaseFiles();
       List<HoodieBaseFile> newDataFilesList = dataFilesToRead.collect(Collectors.toList());
       Map<String, Long> fileIdToNewSize =
@@ -640,12 +639,12 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
       BaseFileOnlyView roView =
           getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(),
-              TimelineUtils.getFirstNotCompleted(metaClient.getCommitsTimeline()), allFiles);
+              metaClient.getCommitsTimeline().firstInstant(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
       assertFalse(dataFilesToRead.findAny().isPresent());
 
       roView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
-          TimelineUtils.getFirstNotCompleted(metaClient.getCommitsTimeline()), allFiles);
+          metaClient.getCommitsTimeline().firstInstant(), allFiles);
       dataFilesToRead = roView.getLatestBaseFiles();
       assertTrue(dataFilesToRead.findAny().isPresent(),
           "should list the base files we wrote in the delta commit");

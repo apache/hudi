@@ -51,7 +51,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -297,7 +296,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Get the view of the file system for this table.
    */
   public TableFileSystemView getFileSystemView() {
-    return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline(), TimelineUtils.getFirstNotCompleted(metaClient.getCommitsTimeline()));
+    return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline(), metaClient.getCommitsTimeline().firstInstant());
   }
 
   /**

@@ -60,7 +60,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -712,7 +711,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
       metadataWriter.getEnabledPartitionTypes().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline(),
-          TimelineUtils.getFirstNotCompleted(metadataMetaClient.getActiveTimeline()));
+          metadataMetaClient.getActiveTimeline().firstInstant());
       metadataTablePartitions.forEach(partition -> {
         List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
         if (COLUMN_STATS.getPartitionPath().equals(partition)) {
@@ -2668,7 +2667,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // versions are +1 as autoclean / compaction happens end of commits
     int numFileVersions = metadataWriteConfig.getCleanerFileVersionsRetained() + 1;
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline(),
-        TimelineUtils.getFirstNotCompleted(metadataMetaClient.getActiveTimeline()));
+        metadataMetaClient.getActiveTimeline().firstInstant());
     metadataTablePartitions.forEach(partition -> {
       List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
       assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).count()

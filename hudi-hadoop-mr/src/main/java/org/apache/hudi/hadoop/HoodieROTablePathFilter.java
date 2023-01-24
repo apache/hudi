@@ -24,7 +24,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
@@ -193,7 +192,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext,
                 metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()),
                 metaClient.getActiveTimeline().filterCompletedInstants().findInstantsBeforeOrEquals(getConf().get(TIMESTAMP_AS_OF.key())),
-                TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline().findInstantsBeforeOrEquals(getConf().get(TIMESTAMP_AS_OF.key()))));
+                metaClient.getActiveTimeline().findInstantsBeforeOrEquals(getConf().get(TIMESTAMP_AS_OF.key())).firstInstant());
           } else {
             fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
                 metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));

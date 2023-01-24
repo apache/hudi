@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -237,7 +236,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       // the state of the table
       HoodieTableFileSystemView tableView =
           getHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(),
-              TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline()), HoodieTestTable.of(metaClient).listAllBaseFiles());
+              metaClient.getActiveTimeline().firstInstant(), HoodieTestTable.of(metaClient).listAllBaseFiles());
 
       Set<String> latestBaseFileNames = tableView.getLatestBaseFiles()
           .map(BaseFile::getFileName)

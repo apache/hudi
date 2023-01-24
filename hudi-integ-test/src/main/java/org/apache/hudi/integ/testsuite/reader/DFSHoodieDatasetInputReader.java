@@ -36,7 +36,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -110,7 +109,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   private JavaPairRDD<String, Iterator<FileSlice>> getPartitionToFileSlice(HoodieTableMetaClient metaClient,
       List<String> partitionPaths) {
     TableFileSystemView.SliceView fileSystemView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(), TimelineUtils.getFirstNotCompleted(metaClient.getActiveTimeline()));
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(), metaClient.getActiveTimeline().firstInstant());
     // pass num partitions to another method
     JavaPairRDD<String, Iterator<FileSlice>> partitionToFileSliceList = jsc.parallelize(partitionPaths).mapToPair(p -> {
       return new Tuple2<>(p, fileSystemView.getLatestFileSlices(p).iterator());
