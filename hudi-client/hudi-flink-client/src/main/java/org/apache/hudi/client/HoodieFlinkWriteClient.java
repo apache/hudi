@@ -375,16 +375,19 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   protected void postCommit(HoodieTable table,
                             HoodieCommitMetadata metadata,
                             String instantTime,
-                            Option<Map<String, String>> extraMetadata,
-                            boolean acquireLockForArchival) {
+                            Option<Map<String, String>> extraMetadata) {
     try {
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), createTable(config, hadoopConf), instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-      autoArchiveOnCommit(table, acquireLockForArchival);
     } finally {
       this.heartbeatClient.stop(instantTime);
     }
+  }
+
+  @Override
+  protected void mayBeCleanAndArchive(HoodieTable table) {
+    autoArchiveOnCommit(table);
   }
 
   @Override

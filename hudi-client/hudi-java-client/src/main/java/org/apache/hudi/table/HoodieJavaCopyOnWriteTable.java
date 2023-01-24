@@ -217,7 +217,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
 
   @Override
   public HoodieCleanMetadata clean(HoodieEngineContext context,
-                                   String cleanInstantTime, boolean skipLocking) {
+                                   String cleanInstantTime) {
     return new CleanActionExecutor(context, config, this, cleanInstantTime).execute();
   }
 
