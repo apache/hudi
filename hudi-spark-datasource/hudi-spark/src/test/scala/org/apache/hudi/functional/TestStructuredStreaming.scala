@@ -30,7 +30,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
-import org.apache.spark.sql.streaming.{OutputMode, Trigger}
+import org.apache.spark.sql.streaming.{DataStreamWriter, OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -47,7 +47,9 @@ import scala.concurrent.{Await, Future}
  */
 class TestStructuredStreaming extends HoodieClientTestBase {
   private val log = LogManager.getLogger(getClass)
-  var spark: SparkSession = null
+
+  var spark: SparkSession = _
+
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -58,41 +60,29 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   )
 
   @BeforeEach override def setUp() {
-    initPath()
-    initSparkContexts()
+    super.setUp()
     spark = sqlContext.sparkSession
-    initTestDataGenerator()
-    initFileSystem()
-    initTimelineService()
+    // We set stop to timeout after 30s to avoid blocking things indefinitely
+    spark.conf.set("spark.sql.streaming.stopTimeout", 30000)
   }
 
-  @AfterEach override def tearDown() = {
-    cleanupTimelineService()
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-  }
-
-  def initStreamingWriteFuture(schema: StructType, sourcePath: String, destPath: String, hudiOptions: Map[String, String]): Future[Unit] = {
-    // define the source of streaming
+  def initWritingStreamingQuery(schema: StructType,
+                                sourcePath: String,
+                                destPath: String,
+                                hudiOptions: Map[String, String]): StreamingQuery = {
     val streamingInput =
       spark.readStream
         .schema(schema)
         .json(sourcePath)
-    Future {
-      println("streaming starting")
-      //'writeStream' can be called only on streaming Dataset/DataFrame
-      streamingInput
-        .writeStream
-        .format("org.apache.hudi")
-        .options(hudiOptions)
-        .trigger(Trigger.ProcessingTime(100))
-        .option("checkpointLocation", basePath + "/checkpoint")
-        .outputMode(OutputMode.Append)
-        .start(destPath)
-        .awaitTermination(10000)
-      println("streaming ends")
-    }
+
+    streamingInput
+      .writeStream
+      .format("org.apache.hudi")
+      .options(hudiOptions)
+      .trigger(Trigger.ProcessingTime(1000))
+      .option("checkpointLocation", basePath + "/checkpoint")
+      .outputMode(OutputMode.Append)
+      .start(destPath)
   }
 
   def initStreamingSourceAndDestPath(sourceDirName: String, destDirName: String): (String, String) = {
@@ -142,7 +132,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     } else {
       getOptsWithTableType(tableType)
     }
-    val f1 = initStreamingWriteFuture(inputDF1.schema, sourcePath, destPath, hudiOptions)
+
+    val streamingQuery = initWritingStreamingQuery(inputDF1.schema, sourcePath, destPath, hudiOptions)
 
     val f2 = Future {
       inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
@@ -197,8 +188,11 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       countsPerCommit = hoodieIncViewDF2.groupBy("_hoodie_commit_time").count().collect()
       assertEquals(1, countsPerCommit.length)
       assertEquals(commitInstantTime2, countsPerCommit(0).get(0))
+
+      streamingQuery.stop()
     }
-    Await.result(Future.sequence(Seq(f1, f2)), Duration.Inf)
+
+    Await.result(f2, Duration("120s"))
   }
 
   @ParameterizedTest
@@ -254,7 +248,9 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testStructuredStreamingWithCompaction(isAsyncCompaction: Boolean): Unit = {
-    structuredStreamingTestRunner(HoodieTableType.MERGE_ON_READ, true, isAsyncCompaction)
+    structuredStreamingTestRunner(HoodieTableType.MERGE_ON_READ, addCompactionConfigs = true, isAsyncCompaction)
+    structuredStreamingTestRunner(
+      HoodieTableType.MERGE_ON_READ, addCompactionConfigs = true, isAsyncCompaction = isAsyncCompaction)
   }
 
   def structuredStreamingForTestClusteringRunner(sourcePath: String, destPath: String, tableType: HoodieTableType,
@@ -270,7 +266,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
 
     val hudiOptions = getClusteringOpts(
       tableType, isInlineClustering.toString, isAsyncClustering.toString, "2", 100)
-    val f1 = initStreamingWriteFuture(inputDF1.schema, sourcePath, destPath, hudiOptions)
+
+    val streamingQuery = initWritingStreamingQuery(inputDF1.schema, sourcePath, destPath, hudiOptions)
 
     val f2 = Future {
       inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
@@ -299,8 +296,11 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       assertEquals(2, countsPerCommit.length)
       val commitInstantTime2 = latestInstant(fs, destPath, HoodieTimeline.COMMIT_ACTION)
       assertEquals(commitInstantTime2, countsPerCommit.maxBy(row => row.getAs[String](0)).get(0))
+
+      streamingQuery.stop()
     }
-    Await.result(Future.sequence(Seq(f1, f2)), Duration.Inf)
+
+    Await.result(f2, Duration("120s"))
   }
 
   private def getLatestFileGroupsFileId(partition: String):Array[String] = {
