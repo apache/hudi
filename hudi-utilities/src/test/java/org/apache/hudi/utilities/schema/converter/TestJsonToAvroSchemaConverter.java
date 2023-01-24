@@ -32,6 +32,7 @@ class TestJsonToAvroSchemaConverter {
 
   @ParameterizedTest
   @ValueSource(strings = {
+      "enum-properties",
       "example-address",
       "example-calendar",
       "example-card",
@@ -44,7 +45,6 @@ class TestJsonToAvroSchemaConverter {
     String jsonSchema = loadJsonSchema(inputCase);
     String avroSchema = new JsonToAvroSchemaConverter().convert(jsonSchema);
     Schema schema = new Schema.Parser().parse(avroSchema);
-    System.out.println(schema.toString(true));
     Schema expected = new Schema.Parser().parse(loadAvroSchema(inputCase));
     assertEquals(expected, schema);
   }
