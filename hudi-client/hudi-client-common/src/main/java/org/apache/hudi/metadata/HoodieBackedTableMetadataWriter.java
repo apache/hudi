@@ -95,6 +95,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -1041,6 +1042,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
+    if (latestDeltaCommitTimeInMetadataTable.length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH
+        && latestDeltaCommitTimeInMetadataTable.endsWith(METADATA_TABLE_INIT_TIME_SUFFIX)) {
+      latestDeltaCommitTimeInMetadataTable = latestDeltaCommitTimeInMetadataTable.substring(0, MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH);
+    } else {
+      throw new HoodieMetadataException("Unexpected deltacommit timestamp: " + latestDeltaCommitTimeInMetadataTable);
+    }
     final String compactionInstantTime = latestDeltaCommitTimeInMetadataTable + METADATA_TABLE_COMPACTION_TIME_SUFFIX;
     // we need to avoid checking compaction w/ same instant again.
     // lets say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
