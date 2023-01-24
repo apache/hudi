@@ -295,14 +295,16 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
     @Override
     public List<String> getIndexedPartitionPaths() {
-      HFileScanner scanner = partitionIndexReader().getScanner(true, false);
-      return getAllKeys(scanner, HFileBootstrapIndex::getPartitionFromKey);
+      try (HFileScanner scanner = partitionIndexReader().getScanner(true, false)) {
+        return getAllKeys(scanner, HFileBootstrapIndex::getPartitionFromKey);
+      }
     }
 
     @Override
     public List<HoodieFileGroupId> getIndexedFileGroupIds() {
-      HFileScanner scanner = fileIdIndexReader().getScanner(true, false);
-      return getAllKeys(scanner, HFileBootstrapIndex::getFileGroupFromKey);
+      try (HFileScanner scanner = fileIdIndexReader().getScanner(true, false)) {
+        return getAllKeys(scanner, HFileBootstrapIndex::getFileGroupFromKey);
+      }
     }
 
     private <T> List<T> getAllKeys(HFileScanner scanner, Function<String, T> converter) {
