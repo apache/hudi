@@ -77,7 +77,8 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testNullRecordKeyFields() {
-    Assertions.assertThrows(IllegalArgumentException.class, () -> new ComplexKeyGenerator(getPropertiesWithoutRecordKeyProp()));
+    ComplexKeyGenerator keyGenerator = new ComplexKeyGenerator(getPropertiesWithoutRecordKeyProp());
+    Assertions.assertThrows(IllegalArgumentException.class, () -> keyGenerator.getRecordKey(getRecord()));
   }
 
   @Test

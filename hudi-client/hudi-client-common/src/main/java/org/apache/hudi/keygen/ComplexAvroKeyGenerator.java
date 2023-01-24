@@ -17,13 +17,16 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.generic.GenericRecord;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Avro complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -50,6 +53,7 @@ public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
     if (autoGenerateRecordKeys) {
       return autoRecordKeyGenerator.getRecordKey(record);
     } else {
+      checkArgument(getRecordKeyFieldNames().size() > 0, "Record key fields cannot be empty");
       return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
     }
   }

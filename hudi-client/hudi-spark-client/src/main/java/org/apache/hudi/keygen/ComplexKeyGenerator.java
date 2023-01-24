@@ -47,7 +47,7 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList()) : Collections.EMPTY_LIST;
-    this.partitionPathFields = props.containsKey(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()))
+    this.partitionPathFields = props.containsKey(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
         ? Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(FIELDS_SEP))
         .map(String::trim)
         .filter(s -> !s.isEmpty())
