@@ -99,7 +99,6 @@ import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.M
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_CLEAN_TIME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_COMPACTION_TIME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_INIT_TIME_SUFFIX;
@@ -578,7 +577,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   private boolean anyPendingDataInstant(HoodieTableMetaClient dataMetaClient, Option<String> inflightInstantTimestamp) {
-    checkState(enabled, "Metadata table cannot be initialized as it is not enabled");
+    ValidationUtils.checkState(enabled, "Metadata table cannot be initialized as it is not enabled");
 
     // We can only initialize if there are no pending operations on the dataset
     List<HoodieInstant> pendingDataInstant = dataMetaClient.getActiveTimeline()
@@ -1043,11 +1042,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    if (latestDeltaCommitTimeInMetadataTable.length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
-      checkState(latestDeltaCommitTimeInMetadataTable.endsWith(METADATA_TABLE_INIT_TIME_SUFFIX),
-          String.format("the deltacommit should only be meant for partition init with suffix %s but got %s",
-              METADATA_TABLE_INIT_TIME_SUFFIX, latestDeltaCommitTimeInMetadataTable));
-      latestDeltaCommitTimeInMetadataTable = latestDeltaCommitTimeInMetadataTable.substring(0, MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH);
+    if (latestDeltaCommitTimeInMetadataTable.length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH
+        && latestDeltaCommitTimeInMetadataTable.endsWith(METADATA_TABLE_INIT_TIME_SUFFIX)) {
+      // a new MDT partition was init'ed, there should be a following deltacommit corresponding to the latest data table's commit
+      LOG.info(String.format("Skip compaction for partition init deltacommit: %s", latestDeltaCommitTimeInMetadataTable));
+      return;
     }
     final String compactionInstantTime = latestDeltaCommitTimeInMetadataTable + METADATA_TABLE_COMPACTION_TIME_SUFFIX;
     // we need to avoid checking compaction w/ same instant again.
@@ -1110,7 +1109,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // Record which saves the list of all partitions
       HoodieRecord allPartitionRecord = HoodieMetadataPayload.createPartitionListRecord(partitions);
       HoodieData<HoodieRecord> filesPartitionRecords = getFilesPartitionRecords(createInstantTime, partitionInfoList, allPartitionRecord);
-      checkState(filesPartitionRecords.count() == (partitions.size() + 1));
+      ValidationUtils.checkState(filesPartitionRecords.count() == (partitions.size() + 1));
       partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecords);
     }
 
