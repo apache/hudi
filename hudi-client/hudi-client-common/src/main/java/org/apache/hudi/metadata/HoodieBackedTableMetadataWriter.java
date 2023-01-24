@@ -98,9 +98,9 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTE
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
-import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_CLEAN_TIME_SUFFIX;
-import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_COMPACTION_TIME_SUFFIX;
-import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_INIT_TIME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_CLEAN_TIME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_COMPACTION_TIME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_INIT_TIME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
@@ -1041,7 +1041,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    final String compactionInstantTime = latestDeltaCommitTimeInMetadataTable + METADATA_COMPACTION_TIME_SUFFIX;
+    final String compactionInstantTime = latestDeltaCommitTimeInMetadataTable + METADATA_TABLE_COMPACTION_TIME_SUFFIX;
     // we need to avoid checking compaction w/ same instant again.
     // lets say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
     // and again w/ C6, we will re-attempt compaction at which point latest delta commit is C4 in MDT.
@@ -1069,7 +1069,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Trigger cleaning with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    writeClient.clean(instantTime + METADATA_CLEAN_TIME_SUFFIX);
+    writeClient.clean(instantTime + METADATA_TABLE_CLEAN_TIME_SUFFIX);
   }
 
   /**
@@ -1120,7 +1120,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
 
-    commit(createInstantTime.equals(SOLO_COMMIT_TIMESTAMP) ? createInstantTime : createInstantTime + METADATA_INIT_TIME_SUFFIX,
+    commit(createInstantTime.equals(SOLO_COMMIT_TIMESTAMP) ? createInstantTime : createInstantTime + METADATA_TABLE_INIT_TIME_SUFFIX,
         partitionToRecordsMap, false);
   }
 

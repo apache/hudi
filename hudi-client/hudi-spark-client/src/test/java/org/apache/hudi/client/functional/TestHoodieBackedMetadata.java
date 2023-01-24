@@ -153,7 +153,7 @@ import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_COMPACTION_TIME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_COMPACTION_TIME_SUFFIX;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
@@ -815,7 +815,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // is getting applied to MDT.
     doWriteOperation(testTable, "0000008", INSERT);
     // verify compaction kicked in now
-    String metadataCompactionInstant = "0000007" + METADATA_COMPACTION_TIME_SUFFIX;
+    String metadataCompactionInstant = "0000007" + METADATA_TABLE_COMPACTION_TIME_SUFFIX;
     tableMetadata = metadata(writeConfig, context);
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
     assertEquals(tableMetadata.getLatestCompactionTime().get(), metadataCompactionInstant);
@@ -848,7 +848,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, "0000003", INSERT);
 
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
-    String metadataCompactionInstant = commitInstant + METADATA_COMPACTION_TIME_SUFFIX;
+    String metadataCompactionInstant = commitInstant + METADATA_TABLE_COMPACTION_TIME_SUFFIX;
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
     assertEquals(tableMetadata.getLatestCompactionTime().get(), metadataCompactionInstant);
 
