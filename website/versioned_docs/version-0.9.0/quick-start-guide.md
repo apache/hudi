@@ -27,18 +27,18 @@ values={[
 <TabItem value="scala">
 From the extracted directory run spark-shell with Hudi as:
 
-```scala
-// spark-shell for spark 3
+```shell
+# spark-shell for spark 3
 spark-shell \
   --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.9.0,org.apache.spark:spark-avro_2.12:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
   
-// spark-shell for spark 2 with scala 2.12
+# spark-shell for spark 2 with scala 2.12
 spark-shell \
   --packages org.apache.hudi:hudi-spark-bundle_2.12:0.9.0,org.apache.spark:spark-avro_2.12:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
   
-// spark-shell for spark 2 with scala 2.11
+# spark-shell for spark 2 with scala 2.11
 spark-shell \
   --packages org.apache.hudi:hudi-spark-bundle_2.11:0.9.0,org.apache.spark:spark-avro_2.11:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
@@ -71,23 +71,23 @@ spark-sql \
 <TabItem value="python">
 From the extracted directory run pyspark with Hudi as:
 
-```python
+```shell
 # pyspark
 export PYSPARK_PYTHON=$(which python3)
 
 # for spark3
-pyspark
---packages org.apache.hudi:hudi-spark3-bundle_2.12:0.9.0,org.apache.spark:spark-avro_2.12:3.0.1
+pyspark \
+--packages org.apache.hudi:hudi-spark3-bundle_2.12:0.9.0,org.apache.spark:spark-avro_2.12:3.0.1 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
 # for spark2 with scala 2.12
-pyspark
---packages org.apache.hudi:hudi-spark-bundle_2.12:0.9.0,org.apache.spark:spark-avro_2.12:2.4.4
+pyspark \
+--packages org.apache.hudi:hudi-spark-bundle_2.12:0.9.0,org.apache.spark:spark-avro_2.12:2.4.4 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
 # for spark2 with scala 2.11
-pyspark
---packages org.apache.hudi:hudi-spark-bundle_2.11:0.9.0,org.apache.spark:spark-avro_2.11:2.4.4
+pyspark \
+--packages org.apache.hudi:hudi-spark-bundle_2.11:0.9.0,org.apache.spark:spark-avro_2.11:2.4.4 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
