@@ -63,7 +63,10 @@ object HoodieWriterUtils {
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
-    hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
+    val autoRecordConfig = KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS
+    if (!parameters.getOrElse(autoRecordConfig.key(), autoRecordConfig.defaultValue()).toBoolean) {
+      hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
+    }
     hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     hoodieConfig.setDefaultValue(ENABLE)
