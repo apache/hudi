@@ -862,6 +862,7 @@ object DataSourceOptionsHelper {
   def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
     if (!StringUtils.isNullOrEmpty(partitionFields)) {
       val numPartFields = partitionFields.split(",").length
+      // Inference may not work when auto generation of record keys are enabled.
       if (StringUtils.isNullOrEmpty(recordsKeyFields)) {
         return null
       }

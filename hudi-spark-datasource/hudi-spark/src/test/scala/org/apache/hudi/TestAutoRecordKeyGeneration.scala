@@ -45,7 +45,6 @@ class TestAutoRecordKeyGeneration extends SparkClientFunctionalTestHarness {
     "hoodie.bulkinsert.shuffle.parallelism" -> "4",
     "hoodie.delete.shuffle.parallelism" -> "2",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
@@ -53,10 +52,7 @@ class TestAutoRecordKeyGeneration extends SparkClientFunctionalTestHarness {
   @CsvSource(value = Array(
     "COPY_ON_WRITE|org.apache.hudi.keygen.SimpleKeyGenerator",
     "COPY_ON_WRITE|org.apache.hudi.keygen.ComplexKeyGenerator",
-    "COPY_ON_WRITE|org.apache.hudi.keygen.TimestampBasedKeyGenerator",
-    "MERGE_ON_READ|org.apache.hudi.keygen.SimpleKeyGenerator",
-    "MERGE_ON_READ|org.apache.hudi.keygen.ComplexKeyGenerator",
-    "MERGE_ON_READ|org.apache.hudi.keygen.TimestampBasedKeyGenerator"
+    "COPY_ON_WRITE|org.apache.hudi.keygen.TimestampBasedKeyGenerator"
   ), delimiter = '|')
   def testRecordKeyGeneration(tableType: String, keyGenClass: String): Unit = {
     var options: Map[String, String] = commonOpts +

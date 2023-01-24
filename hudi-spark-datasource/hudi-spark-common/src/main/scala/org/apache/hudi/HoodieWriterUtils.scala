@@ -63,8 +63,8 @@ object HoodieWriterUtils {
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
-    val autoRecordConfig = KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS
-    if (!parameters.getOrElse(autoRecordConfig.key(), autoRecordConfig.defaultValue()).toBoolean) {
+    //when auto generation of record keys is not enabled, do not set preCombine field. This might also result in setting default value from code.
+    if (!parameters.getOrElse(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key(), KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.defaultValue()).toBoolean) {
       hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
     }
     hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
@@ -218,38 +218,45 @@ object HoodieWriterUtils {
     }
 
     val parameters = mutable.Map() ++ inputParams
+    // auto generation of record keys needs some special handling on setting configs.
+
     if (hoodieConfig.getBoolean(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS)) {
-      val autoGenerateRecordKey = KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key()
+      val autoGenerateRecordKeyConfigKey = KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key()
+      // of user explicitly sets combine before insert, we fail. de-dup is not supported with auto generation of record keys.
       if (hoodieConfig.getBoolean(HoodieWriteConfig.COMBINE_BEFORE_INSERT)) {
-        throw new HoodieKeyGeneratorException(s"Config $autoGenerateRecordKey can not be used when " +
+        throw new HoodieKeyGeneratorException(s"Config $autoGenerateRecordKeyConfigKey can not be used when " +
           s"${HoodieWriteConfig.COMBINE_BEFORE_INSERT.key()} is enabled")
       }
+      // enables concat handle to ensure duplicate records are not de-duped.
       if (!hoodieConfig.getBoolean(HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE)) {
         hoodieConfig.setValue(HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE, "true")
         parameters += (HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key() -> "true")
-        log.warn(s"Enabling config {${HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key()}} when $autoGenerateRecordKey is used")
+        log.warn(s"Enabling config {${HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key()}} when $autoGenerateRecordKeyConfigKey is used")
       }
+      // MOR table type is not supported when auto generation of record keys are enabled since auto generation is meant only for immutable workloads.
       if (hoodieConfig.getString(DataSourceWriteOptions.TABLE_TYPE) == MOR_TABLE_TYPE_OPT_VAL) {
         throw new HoodieKeyGeneratorException(s"Config ${DataSourceWriteOptions.TABLE_TYPE.key()} should be set to " +
-          s"COW_TABLE_TYPE_OPT_VAL when $autoGenerateRecordKey is used")
+          s"COW_TABLE_TYPE_OPT_VAL when $autoGenerateRecordKeyConfigKey is used")
       }
       // If OPERATION is explicitly set as UPSERT by the user, throw an exception. If user is using default value then
       // operation is overridden to INSERT_OPERATION_OPT_VAL
       if (parameters.getOrElse(OPERATION.key(), StringUtils.EMPTY_STRING) == UPSERT_OPERATION_OPT_VAL) {
         throw new HoodieKeyGeneratorException(s"Config ${OPERATION.key()} should not be set to $UPSERT_OPERATION_OPT_VAL" +
-          s" when $autoGenerateRecordKey is used")
+          s" when $autoGenerateRecordKeyConfigKey is used")
       } else if (hoodieConfig.getString(OPERATION) == UPSERT_OPERATION_OPT_VAL) {
         hoodieConfig.setValue(OPERATION.key(), INSERT_OPERATION_OPT_VAL)
         parameters += (OPERATION.key() -> INSERT_OPERATION_OPT_VAL)
-        log.warn(s"Setting config ${OPERATION.key()} to $INSERT_OPERATION_OPT_VAL when $autoGenerateRecordKey is used")
+        log.warn(s"Setting config ${OPERATION.key()} to $INSERT_OPERATION_OPT_VAL when $autoGenerateRecordKeyConfigKey is used")
       }
+      // preCombine does not make sense when auto generation of record keys are enabled.
       if (!StringUtils.isNullOrEmpty(hoodieConfig.getString(DataSourceWriteOptions.PRECOMBINE_FIELD))) {
         throw new HoodieKeyGeneratorException(s"Config ${DataSourceWriteOptions.PRECOMBINE_FIELD.key()} should not be set" +
-          s" when $autoGenerateRecordKey is used")
+          s" when $autoGenerateRecordKeyConfigKey is used")
       }
+      // record key field config should not be set when auto generation of record keys are used.
       if (!StringUtils.isNullOrEmpty(hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD))) {
         throw new HoodieKeyGeneratorException(s"Config ${DataSourceWriteOptions.RECORDKEY_FIELD.key()} should not be set " +
-          s"when $autoGenerateRecordKey is used")
+          s"when $autoGenerateRecordKeyConfigKey is used")
       }
     }
 

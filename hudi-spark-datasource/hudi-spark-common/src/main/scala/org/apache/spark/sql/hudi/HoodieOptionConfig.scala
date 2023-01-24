@@ -194,6 +194,7 @@ object HoodieOptionConfig {
   def validateTable(spark: SparkSession, schema: StructType, sqlOptions: Map[String, String]): Unit = {
     val resolver = spark.sessionState.conf.resolver
 
+    // validate primary keys only when auto generation of record keys is not enabled.
     if (!sqlOptions.getOrElse(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key(),
             KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.defaultValue()).toBoolean) {
       // validate primary key

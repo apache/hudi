@@ -26,6 +26,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, TBL_NAME}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.MatchCast
@@ -500,13 +501,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // default value ("ts")
     // TODO(HUDI-3456) clean up
     val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
+    val autoGenerateRecordKeys = sparkSession.conf
+      .getOption(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key).getOrElse(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.defaultValue).toBoolean
 
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
     withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
-      Map(
+      val opts = Map(
         "path" -> path,
-        RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
         PRECOMBINE_FIELD.key -> preCombineField,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
@@ -534,6 +536,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         RECONCILE_SCHEMA.key -> "false",
         "hoodie.datasource.write.schema.canonicalize" -> "false"
       )
+      if (autoGenerateRecordKeys) {
+        opts
+      } else {
+        (opts ++ Map(RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp))
+      }
     }
   }
 }

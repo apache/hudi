@@ -1037,7 +1037,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     spark.sql(s"drop table $tableName")
   }
 
-  test("Test Auto Generation Of Record Keys") {
+  test("Test Auto Generation Of Record Keys with CTAS") {
     withTempDir { tmp =>
       Seq("cow").foreach { tableType =>
         // Create Non-Partitioned table

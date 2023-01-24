@@ -111,7 +111,8 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   /**
    * Record Field List(Primary Key List)
    */
-  lazy val primaryKeys: Array[String] = tableConfig.getRecordKeyFields(false).orElse(Array.empty)
+    // FIX ME?
+  lazy val primaryKeys: Array[String] = tableConfig.getRecordKeyFields(null).orElse(Array.empty)
 
   /**
    * PreCombine Field

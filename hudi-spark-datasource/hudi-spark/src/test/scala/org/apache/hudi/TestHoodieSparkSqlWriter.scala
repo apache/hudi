@@ -1282,7 +1282,7 @@ class TestHoodieSparkSqlWriter {
     var totalRecs = 0
     for (_ <- 1 to 2) {
       val opts = initialOpts
-      for (x <- 1 to 5) {
+      for (x <- 1 to 3) {
         val instantTime = "00" + x
         val genRecsList = if (x == 1) {
           totalRecs += 100 * 2

@@ -141,7 +141,7 @@ class HoodieCDCRDD(
     private lazy val recordKeyField: String = if (populateMetaFields) {
       HoodieRecord.RECORD_KEY_METADATA_FIELD
     } else {
-      val keyFields = metaClient.getTableConfig.getRecordKeyFields(true).get()
+      val keyFields = metaClient.getTableConfig.getRecordKeyFields().get()
       checkState(keyFields.length == 1)
       keyFields.head
     }

@@ -28,6 +28,7 @@ import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.keygen.ComplexKeyGenerator
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.spark.internal.Logging
@@ -54,6 +55,8 @@ trait ProvidesHoodieConfig extends Logging {
     // default value ("ts")
     // TODO(HUDI-3456) clean up
     val preCombineField = Option(tableConfig.getPreCombineField).getOrElse("")
+    val autoGenerateRecordKeys = sparkSession.conf
+      .getOption(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key).getOrElse(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.defaultValue).toBoolean
 
     require(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
@@ -61,9 +64,8 @@ trait ProvidesHoodieConfig extends Logging {
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
     withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
-      Map.apply(
+      val opts = Map.apply(
         "path" -> hoodieCatalogTable.tableLocation,
-        RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         PRECOMBINE_FIELD.key -> preCombineField,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
@@ -82,6 +84,15 @@ trait ProvidesHoodieConfig extends Logging {
         HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
       )
+      handleAutoGenerateRecordKeys(hoodieCatalogTable, opts, autoGenerateRecordKeys)
+    }
+  }
+
+  def handleAutoGenerateRecordKeys(hoodieCatalogTable: HoodieCatalogTable, opts: Map[String, String], autoGenerateRecordKeys: Boolean): Map[String, String] = {
+    if (autoGenerateRecordKeys) {
+      opts
+    } else {
+      (opts ++ Map(RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(",")))
     }
   }
 
@@ -122,6 +133,8 @@ trait ProvidesHoodieConfig extends Logging {
     val keyGeneratorClassName = Option(tableConfig.getKeyGeneratorClassName)
       .getOrElse(classOf[ComplexKeyGenerator].getCanonicalName)
 
+    val autoGenerateRecordKeys = sparkSession.conf
+      .getOption(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key).getOrElse(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.defaultValue).toBoolean
     val enableBulkInsert = combinedOpts.getOrElse(DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key,
       DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.defaultValue()).toBoolean
     val dropDuplicate = sparkSession.conf
@@ -175,7 +188,7 @@ trait ProvidesHoodieConfig extends Logging {
     }
 
     withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
-      Map(
+      val opts = Map(
         "path" -> path,
         TABLE_TYPE.key -> tableType,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
@@ -184,7 +197,6 @@ trait ProvidesHoodieConfig extends Logging {
         URL_ENCODE_PARTITIONING.key -> urlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
         SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> keyGeneratorClassName,
-        RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         PRECOMBINE_FIELD.key -> preCombineField,
         PARTITIONPATH_FIELD.key -> partitionFieldsStr,
         PAYLOAD_CLASS_NAME.key -> payloadClassName,
@@ -199,6 +211,7 @@ trait ProvidesHoodieConfig extends Logging {
         HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
       )
+      handleAutoGenerateRecordKeys(hoodieCatalogTable, opts, autoGenerateRecordKeys)
     }
   }
 
@@ -209,15 +222,16 @@ trait ProvidesHoodieConfig extends Logging {
     val tableConfig = hoodieCatalogTable.tableConfig
 
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
+    val autoGenerateRecordKeys = sparkSession.conf
+      .getOption(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key).getOrElse(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.defaultValue).toBoolean
 
     withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
-      Map(
+      val opts = Map(
         "path" -> hoodieCatalogTable.tableLocation,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         TABLE_TYPE.key -> hoodieCatalogTable.tableTypeName,
         OPERATION.key -> DataSourceWriteOptions.DELETE_PARTITION_OPERATION_OPT_VAL,
         PARTITIONS_TO_DELETE.key -> partitionsToDrop,
-        RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(""),
         PARTITIONPATH_FIELD.key -> partitionFields,
         HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
@@ -229,6 +243,7 @@ trait ProvidesHoodieConfig extends Logging {
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFields,
         HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
       )
+      handleAutoGenerateRecordKeys(hoodieCatalogTable, opts, autoGenerateRecordKeys)
     }
   }
 
@@ -244,11 +259,12 @@ trait ProvidesHoodieConfig extends Logging {
       s"There are no primary key defined in table ${hoodieCatalogTable.table.identifier}, cannot execute delete operation")
 
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
+    val autoGenerateRecordKeys = sparkSession.conf
+      .getOption(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key).getOrElse(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.defaultValue).toBoolean
 
     withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
-      Map(
+      val opts = Map(
         "path" -> path,
-        RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         TBL_NAME.key -> tableConfig.getTableName,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
@@ -266,6 +282,7 @@ trait ProvidesHoodieConfig extends Logging {
         HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
         SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
       )
+      handleAutoGenerateRecordKeys(hoodieCatalogTable, opts, autoGenerateRecordKeys)
     }
   }
 

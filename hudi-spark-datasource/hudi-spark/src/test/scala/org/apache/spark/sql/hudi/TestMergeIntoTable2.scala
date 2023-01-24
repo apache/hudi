@@ -157,7 +157,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         .setConf(spark.sessionState.newHadoopConf())
         .build()
       // check record key in hoodie.properties
-      assertResult("id")(metaClient.getTableConfig.getRecordKeyFields(true).get().mkString(","))
+      assertResult("id")(metaClient.getTableConfig.getRecordKeyFields().get().mkString(","))
 
       spark.sql(
         s"""
