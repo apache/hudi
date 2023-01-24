@@ -36,6 +36,7 @@ import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -46,6 +47,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE;
@@ -89,6 +92,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   public HiveSyncTool(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
+    String metastoreUris = props.getProperty(METASTORE_URIS.key());
+    // Give precedence to HiveConf.ConfVars.METASTOREURIS if it is set.
+    // Else if user has provided HiveSyncConfigHolder.METASTORE_URIS, then set that in hadoop conf.
+    if (isNullOrEmpty(hadoopConf.get(HiveConf.ConfVars.METASTOREURIS.varname)) && nonEmpty(metastoreUris)) {
+      LOG.info(String.format("Setting %s = %s", HiveConf.ConfVars.METASTOREURIS.varname, metastoreUris));
+      hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, metastoreUris);
+    }
     HiveSyncConfig config = new HiveSyncConfig(props, hadoopConf);
     this.config = config;
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
@@ -135,7 +145,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     try {
       if (syncClient != null) {
         LOG.info("Syncing target hoodie table with hive table("
-            + tableId(databaseName, tableName) + "). Hive metastore URL :"
+            + tableId(databaseName, tableName) + "). Hive metastore URL from HiveConf:"
+            + config.getHiveConf().get(HiveConf.ConfVars.METASTOREURIS.varname) + "). Hive metastore URL from HiveSyncConfig:"
             + config.getString(METASTORE_URIS) + ", basePath :"
             + config.getString(META_SYNC_BASE_PATH));
 
