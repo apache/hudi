@@ -247,7 +247,7 @@ object HoodieWriterUtils {
         throw new HoodieKeyGeneratorException(s"Config ${DataSourceWriteOptions.PRECOMBINE_FIELD.key()} should not be set" +
           s" when $autoGenerateRecordKey is used")
       }
-      if (hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD) != null) {
+      if (!StringUtils.isNullOrEmpty(hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD))) {
         throw new HoodieKeyGeneratorException(s"Config ${DataSourceWriteOptions.RECORDKEY_FIELD.key()} should not be set " +
           s"when $autoGenerateRecordKey is used")
       }

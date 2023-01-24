@@ -530,10 +530,18 @@ public class HoodieTableConfig extends HoodieConfig {
     return getString(PRECOMBINE_FIELD);
   }
 
-  public Option<String[]> getRecordKeyFields() {
-    String keyFieldsValue = getStringOrDefault(RECORDKEY_FIELDS, HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    return Option.of(Arrays.stream(keyFieldsValue.split(","))
-        .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
+  public Option<String[]> getRecordKeyFields(boolean useRecordKeyMetadataField) {
+    String keyFieldsValue = getString(RECORDKEY_FIELDS);
+    if (useRecordKeyMetadataField && keyFieldsValue == null) {
+      keyFieldsValue = HoodieRecord.RECORD_KEY_METADATA_FIELD;
+    }
+
+    if (keyFieldsValue != null) {
+      return Option.of(Arrays.stream(keyFieldsValue.split(","))
+          .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
+    } else {
+      return Option.empty();
+    }
   }
 
   public Option<String[]> getPartitionFields() {

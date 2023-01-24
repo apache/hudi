@@ -23,6 +23,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.utils.SparkRowSerDe;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.log4j.LogManager;
@@ -480,6 +481,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     private HoodieUnsafeRowUtils.NestedFieldPath[] resolveNestedFieldPaths(List<String> fieldPaths, StructType schema, boolean returnNull) {
       try {
         return fieldPaths.stream()
+            .filter(fieldPath -> !StringUtils.isNullOrEmpty(fieldPath))
             .map(fieldPath -> HoodieUnsafeRowUtils$.MODULE$.composeNestedFieldPath(schema, fieldPath))
             .toArray(HoodieUnsafeRowUtils.NestedFieldPath[]::new);
       } catch (Exception e) {

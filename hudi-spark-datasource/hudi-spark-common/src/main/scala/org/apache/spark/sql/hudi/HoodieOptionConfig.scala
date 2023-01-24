@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils.getRootLevelFieldName
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.StructType
 
@@ -193,13 +194,16 @@ object HoodieOptionConfig {
   def validateTable(spark: SparkSession, schema: StructType, sqlOptions: Map[String, String]): Unit = {
     val resolver = spark.sessionState.conf.resolver
 
-    // validate primary key
-    val primaryKeys = sqlOptions.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName)
-      .map(_.split(",").filter(_.length > 0))
-    ValidationUtils.checkArgument(primaryKeys.nonEmpty, "No `primaryKey` is specified.")
-    primaryKeys.get.foreach { primaryKey =>
-      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, getRootLevelFieldName(primaryKey))),
-        s"Can't find primaryKey `$primaryKey` in ${schema.treeString}.")
+    if (!sqlOptions.getOrElse(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key(),
+            KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.defaultValue()).toBoolean) {
+      // validate primary key
+      val primaryKeys = sqlOptions.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName)
+        .map(_.split(",").filter(_.length > 0))
+      ValidationUtils.checkArgument(primaryKeys.nonEmpty, "No `primaryKey` is specified.")
+      primaryKeys.get.foreach { primaryKey =>
+        ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, getRootLevelFieldName(primaryKey))),
+          s"Can't find primaryKey `$primaryKey` in ${schema.treeString}.")
+      }
     }
 
     // validate preCombine key

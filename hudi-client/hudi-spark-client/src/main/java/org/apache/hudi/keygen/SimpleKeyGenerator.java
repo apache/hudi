@@ -50,7 +50,7 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   SimpleKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
     super(props);
     // Make sure key-generator is configured properly
-    validateRecordKey(recordKeyField);
+    validateRecordKey(recordKeyField, autoGenerateRecordKeys);
     validatePartitionPath(partitionPathField);
 
     this.recordKeyFields = recordKeyField == null ? Collections.emptyList() : Collections.singletonList(recordKeyField);
@@ -126,8 +126,8 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
         String.format("Single partition-path field is expected; provided (%s)", partitionPathField));
   }
 
-  private static void validateRecordKey(String recordKeyField) {
-    checkArgument(recordKeyField == null || !recordKeyField.isEmpty(),
+  private static void validateRecordKey(String recordKeyField, boolean isAutoGenerateRecordKeyEnabled) {
+    checkArgument(recordKeyField == null || !recordKeyField.isEmpty() || isAutoGenerateRecordKeyEnabled,
         "Record key field has to be non-empty!");
     checkArgument(recordKeyField == null || !recordKeyField.contains(FIELDS_SEP),
         String.format("Single record-key field is expected; provided (%s)", recordKeyField));

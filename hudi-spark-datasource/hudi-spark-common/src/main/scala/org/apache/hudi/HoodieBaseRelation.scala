@@ -117,7 +117,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     if (tableConfig.populateMetaFields()) {
       HoodieRecord.RECORD_KEY_METADATA_FIELD
     } else {
-      val keyFields = tableConfig.getRecordKeyFields.get()
+      val keyFields = tableConfig.getRecordKeyFields(true).get()
       checkState(keyFields.length == 1)
       keyFields.head
     }
