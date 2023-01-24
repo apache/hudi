@@ -94,7 +94,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private HoodieTableMetaClient metadataMetaClient;
   private HoodieTableConfig metadataTableConfig;
 
-  private Transient<HoodieTableFileSystemView> metadataFileSystemView;
+  private HoodieTableFileSystemView metadataFileSystemView;
 
   // Readers for the latest file slice corresponding to file groups in the metadata partition
   private final Transient<Map<Pair<String, String>, Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader>>> partitionReaders =
@@ -117,7 +117,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     } else if (this.metadataMetaClient == null) {
       try {
         this.metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataBasePath).build();
-        this.metadataFileSystemView = Transient.lazy(() -> getFileSystemView(metadataMetaClient));
+        this.metadataFileSystemView = getFileSystemView(metadataMetaClient);
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
         this.isBloomFilterIndexEnabled = metadataConfig.isBloomFilterIndexEnabled();
         this.isColumnStatsIndexEnabled = metadataConfig.isColumnStatsIndexEnabled();
@@ -163,7 +163,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     //       records matching the key-prefix
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
-            metadataMetaClient, metadataFileSystemView.get(), partitionName);
+            metadataMetaClient, metadataFileSystemView, partitionName);
 
     return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
         engineContext.parallelize(partitionFileSlices))
@@ -380,7 +380,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Metadata is in sync till the latest completed instant on the dataset
     List<FileSlice> latestFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
-            metadataMetaClient, metadataFileSystemView.get(), partitionName);
+            metadataMetaClient, metadataFileSystemView, partitionName);
 
     Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = new HashMap<>();
     for (String key : keys) {
@@ -645,7 +645,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     dataMetaClient.reloadActiveTimeline();
     if (metadataMetaClient != null) {
       metadataMetaClient.reloadActiveTimeline();
-      metadataFileSystemView.reset();
+      metadataFileSystemView = getFileSystemView(metadataMetaClient);
     }
     // the cached reader has max instant time restriction, they should be cleared
     // because the metadata timeline may have changed.
