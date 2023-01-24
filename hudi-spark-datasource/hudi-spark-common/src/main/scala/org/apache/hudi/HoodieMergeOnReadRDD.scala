@@ -21,6 +21,7 @@ package org.apache.hudi
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
+import org.apache.hudi.HoodieMergeOnReadRDD.CONFIG_INSTANTIATION_LOCK
 import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
@@ -136,7 +137,16 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   override protected def getPartitions: Array[Partition] =
     fileSplits.zipWithIndex.map(file => HoodieMergeOnReadPartition(file._2, file._1)).toArray
 
-  private def getHadoopConf: Configuration =
-    hadoopConfBroadcast.value.value
+  private def getHadoopConf: Configuration = {
+    val conf = hadoopConfBroadcast.value.value
+    // TODO clean up, this lock is unnecessary
+    CONFIG_INSTANTIATION_LOCK.synchronized {
+      new Configuration(conf)
+    }
+  }
+}
+
+object HoodieMergeOnReadRDD {
+  val CONFIG_INSTANTIATION_LOCK = new Object()
 }
 
