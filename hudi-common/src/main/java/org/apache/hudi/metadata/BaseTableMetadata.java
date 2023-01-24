@@ -230,7 +230,11 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         if (bloomFilterMetadata.isPresent()) {
           if (!bloomFilterMetadata.get().getIsDeleted()) {
             ValidationUtils.checkState(fileToKeyMap.containsKey(entry.getLeft()));
-            final ByteBuffer bloomFilterByteBuffer = bloomFilterMetadata.get().getBloomFilter();
+            // NOTE: We have to duplicate the [[ByteBuffer]] object here since:
+            //        - Reading out [[ByteBuffer]] mutates its state
+            //        - [[BloomFilterMetadata]] could be re-used, and hence have to stay immutable
+            final ByteBuffer bloomFilterByteBuffer =
+                bloomFilterMetadata.get().getBloomFilter().duplicate();
             final String bloomFilterType = bloomFilterMetadata.get().getType();
             final BloomFilter bloomFilter = BloomFilterFactory.fromString(
                 StandardCharsets.UTF_8.decode(bloomFilterByteBuffer).toString(), bloomFilterType);
