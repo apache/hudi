@@ -29,13 +29,16 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-public class TestKeylessKeyGenerator {
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class TestAutoRecordKeyGenerator {
   private static final long TIME = 1672265446090L;
   private static final Schema SCHEMA;
+  private static final String PARTITION_PATH_STR = "partition1";
 
   static {
     try {
-      SCHEMA = new Schema.Parser().parse(TestKeylessKeyGenerator.class.getClassLoader().getResourceAsStream("keyless_schema.avsc"));
+      SCHEMA = new Schema.Parser().parse(TestAutoRecordKeyGenerator.class.getClassLoader().getResourceAsStream("keyless_schema.avsc"));
     } catch (IOException ex) {
       throw new RuntimeException(ex);
     }
@@ -43,52 +46,59 @@ public class TestKeylessKeyGenerator {
 
   @Test
   public void createKeyWithoutPartitionColumn() {
-    KeylessKeyGenerator keyGenerator = new KeylessKeyGenerator(getKeyGenProperties("", 3));
-    GenericRecord record = createRecord("partition1", "value1", 123, 456L, TIME, null);
+    ComplexAvroKeyGenerator keyGenerator = new ComplexAvroKeyGenerator(getKeyGenProperties("partition_field", 3));
+    GenericRecord record = createRecord(PARTITION_PATH_STR, "value1", 123, 456L, TIME, null);
     String actualForRecord = keyGenerator.getRecordKey(record);
-    Assertions.assertEquals("952f0fd4-17b6-3762-b0ea-aa76d36377f1", actualForRecord);
+    assertEquals("952f0fd4-17b6-3762-b0ea-aa76d36377f1", actualForRecord);
+    assertEquals(PARTITION_PATH_STR, keyGenerator.getPartitionPath(record));
   }
 
   @Test
   public void createKeyWithPartition() {
-    KeylessKeyGenerator keyGenerator = new KeylessKeyGenerator(getKeyGenProperties("integer_field:SIMPLE,partition_field:SIMPLE,nested_struct.doubly_nested:SIMPLE", 3));
-    GenericRecord record = createRecord("partition1", "value1", 123, 456L, TIME, null);
+    ComplexAvroKeyGenerator keyGenerator = new ComplexAvroKeyGenerator(getKeyGenProperties("integer_field,partition_field,nested_struct.doubly_nested", 3));
+    GenericRecord record = createRecord(PARTITION_PATH_STR, "value1", 123, 456L, TIME, null);
     String actualForRecord = keyGenerator.getRecordKey(record);
-    Assertions.assertEquals("5c1f9cac-c45d-3b57-9bf7-f745a4bb35c4", actualForRecord);
+    assertEquals("5c1f9cac-c45d-3b57-9bf7-f745a4bb35c4", actualForRecord);
+    assertEquals("123/partition1/__HIVE_DEFAULT_PARTITION__", keyGenerator.getPartitionPath(record));
   }
 
   @Test
   public void nullFieldsProperlyHandled() {
-    KeylessKeyGenerator keyGenerator = new KeylessKeyGenerator(getKeyGenProperties("", 3));
-    GenericRecord record = createRecord("partition1", "value1", null, null, null, null);
+    ComplexAvroKeyGenerator keyGenerator = new ComplexAvroKeyGenerator(getKeyGenProperties("partition_field", 3));
+    GenericRecord record = createRecord(PARTITION_PATH_STR, "value1", null, null, null, null);
     String actualForRecord = keyGenerator.getRecordKey(record);
-    Assertions.assertEquals("22dee533-e64f-3694-8242-5ec5f25e6d11", actualForRecord);
+    assertEquals("a107710e-4d3b-33a4-bbbf-d891c7147034", actualForRecord);
+    assertEquals(PARTITION_PATH_STR, keyGenerator.getPartitionPath(record));
   }
 
   @Test
   public void assertOnlySubsetOfFieldsUsed() {
-    KeylessKeyGenerator keyGenerator = new KeylessKeyGenerator(getKeyGenProperties("", 3));
-    GenericRecord record1 = createRecord("partition1", "value1", 123, 456L, TIME, null);
+    ComplexAvroKeyGenerator keyGenerator = new ComplexAvroKeyGenerator(getKeyGenProperties("partition_field", 3));
+    GenericRecord record1 = createRecord(PARTITION_PATH_STR, "value1", 123, 456L, TIME, null);
     String actualForRecord1 = keyGenerator.getRecordKey(record1);
     GenericRecord record2 = createRecord("partition2", "value2", 123, 456L, TIME, null);
     String actualForRecord2 = keyGenerator.getRecordKey(record2);
-    Assertions.assertEquals(actualForRecord2, actualForRecord1);
+    assertEquals(actualForRecord2, actualForRecord1);
+    assertEquals("partition2", keyGenerator.getPartitionPath(record2));
   }
 
   @Test
   public void numFieldsImpactsKeyGen() {
-    KeylessKeyGenerator keyGenerator1 = new KeylessKeyGenerator(getKeyGenProperties("", 3));
-    KeylessKeyGenerator keyGenerator2 = new KeylessKeyGenerator(getKeyGenProperties("", 10));
-    GenericRecord record = createRecord("partition1", "value1", 123, 456L, TIME, null);
+    ComplexAvroKeyGenerator keyGenerator1 = new ComplexAvroKeyGenerator(getKeyGenProperties("partition_field", 3));
+    ComplexAvroKeyGenerator keyGenerator2 = new ComplexAvroKeyGenerator(getKeyGenProperties("partition_field", 10));
+    GenericRecord record = createRecord(PARTITION_PATH_STR, "value1", 123, 456L, TIME, null);
     Assertions.assertNotEquals(keyGenerator1.getRecordKey(record), keyGenerator2.getRecordKey(record));
+    assertEquals(PARTITION_PATH_STR, keyGenerator1.getPartitionPath(record));
+    assertEquals(PARTITION_PATH_STR, keyGenerator2.getPartitionPath(record));
   }
 
   @Test
   public void nestedColumnsUsed() {
-    KeylessKeyGenerator keyGenerator = new KeylessKeyGenerator(getKeyGenProperties("", 10));
+    ComplexAvroKeyGenerator keyGenerator = new  ComplexAvroKeyGenerator(getKeyGenProperties("partition_field", 10));
     GenericRecord record = createRecord("partition1", "value1", 123, 456L, TIME, 20.1);
     String actualForRecord = keyGenerator.getRecordKey(record);
-    Assertions.assertEquals("6bbd8811-6ea1-3ef1-840c-f7a51d8f378c", actualForRecord);
+    assertEquals("569de5d6-55b8-38bf-9256-efc0f6e2ae84", actualForRecord);
+    assertEquals(PARTITION_PATH_STR, keyGenerator.getPartitionPath(record));
   }
 
   protected GenericRecord createRecord(String partitionField, String stringValue, Integer integerValue, Long longValue, Long timestampValue, Double nestedDouble) {
@@ -112,8 +122,9 @@ public class TestKeylessKeyGenerator {
   protected TypedProperties getKeyGenProperties(String partitionPathField, int numFieldsInKeyGen) {
     TypedProperties properties = new TypedProperties();
     properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
-    properties.put(KeyGeneratorOptions.NUM_FIELDS_IN_KEYLESS_GENERATOR.key(), numFieldsInKeyGen);
+    properties.put(KeyGeneratorOptions.NUM_FIELDS_IN_AUTO_RECORDKEY_GENERATION.key(), numFieldsInKeyGen);
     properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "");
+    properties.put(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key(),"true");
     return properties;
   }
 }

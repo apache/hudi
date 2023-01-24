@@ -2259,6 +2259,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
   }
 
+  public Boolean doAutoGenerateRecordKeys() {
+    return getBooleanOrDefault(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS);
+  }
+
   public boolean isEarlyConflictDetectionEnable() {
     return getBoolean(EARLY_CONFLICT_DETECTION_ENABLE);
   }
@@ -2802,6 +2806,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder doSkipDefaultPartitionValidation(boolean skipDefaultPartitionValidation) {
       writeConfig.setValue(SKIP_DEFAULT_PARTITION_VALIDATION, String.valueOf(skipDefaultPartitionValidation));
+      return this;
+    }
+
+    public Builder withAutoGenerateRecordKeys(boolean autoGenerateRecordKeys) {
+      writeConfig.setValue(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS, String.valueOf(autoGenerateRecordKeys));
       return this;
     }
 

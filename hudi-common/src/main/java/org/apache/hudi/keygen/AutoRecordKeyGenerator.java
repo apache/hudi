@@ -7,13 +7,14 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.keygen;
@@ -25,6 +26,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
+import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -37,18 +39,10 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * This class is used to compute a deterministic key for a record based on the contents of the field. Unlike the other KeyGenerators in Hudi, this class does not take in any field names as args to
- * create a "keyless" experience for insert only workloads. The keys are guaranteed to be deterministic but not unique, so they can only be used for insert workflows with deduplication disabled.
- * The class attempts to get sufficient uniqueness for keys to prevent frequent collisions by choosing the fields it uses in order of decreasing likelihood for uniqueness. The ordering is:
- * <ul>
- *   <li>timestamp</li>
- *   <li>numeric values</li>
- *   <li>string, byte arrays, other types not mentioned</li>
- *   <li>date, lists, maps, booleans</li>
- * </ul>
- * The number of fields is capped to created predictable performance and the generator only uses non-null values to help increase uniqueness for sparse datasets.
+ * Class to assist in generation auto record keys for hudi records.
  */
-public class KeylessKeyGenerator extends CustomAvroKeyGenerator {
+public class AutoRecordKeyGenerator implements Serializable {
+
   private static final String HOODIE_PREFIX = "_hoodie";
   private static final String DOT = ".";
   private final int maxFieldsToConsider;
@@ -56,15 +50,20 @@ public class KeylessKeyGenerator extends CustomAvroKeyGenerator {
   private final Set<String> partitionFieldNames;
   private int[][] fieldOrdering;
 
-  public KeylessKeyGenerator(TypedProperties props) {
-    super(props);
-    this.numFieldsForKey = props.getInteger(KeyGeneratorOptions.NUM_FIELDS_IN_KEYLESS_GENERATOR.key(), KeyGeneratorOptions.NUM_FIELDS_IN_KEYLESS_GENERATOR.defaultValue());
+  public AutoRecordKeyGenerator(TypedProperties config, List<String> partitionPathFields) {
+    this.numFieldsForKey = config.getInteger(KeyGeneratorOptions.NUM_FIELDS_IN_AUTO_RECORDKEY_GENERATION.key(),
+        KeyGeneratorOptions.NUM_FIELDS_IN_AUTO_RECORDKEY_GENERATION.defaultValue());
     // cap the number of fields to order in case of large schemas
     this.maxFieldsToConsider = numFieldsForKey * 3;
-    this.partitionFieldNames = this.getPartitionPathFields().stream().map(field -> field.split(SPLIT_REGEX)[0]).collect(Collectors.toSet());
+    this.partitionFieldNames = partitionPathFields.stream().map(field ->  {
+      if (field.contains(BaseKeyGenerator.SPLIT_REGEX)) {
+        return field.split(BaseKeyGenerator.SPLIT_REGEX)[0];
+      } else {
+        return field;
+      }
+    }).collect(Collectors.toSet());
   }
 
-  @Override
   public String getRecordKey(GenericRecord record) {
     return buildKey(getFieldOrdering(record), record);
   }

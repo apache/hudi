@@ -18,9 +18,10 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
@@ -38,7 +39,7 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;
 
   public SimpleKeyGenerator(TypedProperties props) {
-    this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
+    this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null),
         props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 
@@ -69,31 +70,40 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    tryInitRowAccessor(row.schema());
-
-    Object[] recordKeys = rowAccessor.getRecordKeyParts(row);
-    // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
-    //       record-key field
-    if (recordKeys[0] == null) {
-      return handleNullRecordKey(null);
+    if (autoGenerateRecordKeys) {
+      return super.getRecordKey(row);
     } else {
-      return requireNonNullNonEmptyKey(recordKeys[0].toString());
+      tryInitRowAccessor(row.schema());
+
+      Object[] recordKeys = rowAccessor.getRecordKeyParts(row);
+      // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
+      //       record-key field
+      checkArgument(recordKeys != null && recordKeys.length > 0, "Record keys cannot be null or empty");
+      if (recordKeys[0] == null) {
+        return handleNullRecordKey(null);
+      } else {
+        return requireNonNullNonEmptyKey(recordKeys[0].toString());
+      }
     }
   }
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
-    tryInitRowAccessor(schema);
-
-    Object[] recordKeyValues = rowAccessor.getRecordKeyParts(internalRow);
-    // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
-    //       record-key field
-    if (recordKeyValues[0] == null) {
-      return handleNullRecordKey(null);
-    } else if (recordKeyValues[0] instanceof UTF8String) {
-      return requireNonNullNonEmptyKey((UTF8String) recordKeyValues[0]);
+    if (autoGenerateRecordKeys) {
+      return super.getRecordKey(internalRow, schema);
     } else {
-      return requireNonNullNonEmptyKey(UTF8String.fromString(recordKeyValues[0].toString()));
+      tryInitRowAccessor(schema);
+
+      Object[] recordKeyValues = rowAccessor.getRecordKeyParts(internalRow);
+      // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
+      //       record-key field
+      if (recordKeyValues[0] == null) {
+        return handleNullRecordKey(null);
+      } else if (recordKeyValues[0] instanceof UTF8String) {
+        return requireNonNullNonEmptyKey((UTF8String) recordKeyValues[0]);
+      } else {
+        return requireNonNullNonEmptyKey(UTF8String.fromString(recordKeyValues[0].toString()));
+      }
     }
   }
 
