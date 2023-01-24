@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions.{RECORD_MERGER_IMPLS, _}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, HoodieKeyGeneratorException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
@@ -29,12 +30,14 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
+import org.apache.log4j.Logger
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 
 import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 /**
  * WriterUtils to assist in write path in Datasource and tests.
@@ -188,8 +191,9 @@ object HoodieWriterUtils {
   /**
    * Detects conflicts between datasourceKeyGen and existing table configuration keyGen
    */
-  def validateKeyGeneratorConfigs(datasourceKeyGen: String, hoodieConfig: HoodieConfig, tableConfig: HoodieConfig)
-                                        : Unit = {
+  def validateAndSetKeyGeneratorConfigs(datasourceKeyGen: String, log: Logger, hoodieConfig: HoodieConfig,
+                                        inputParams: Map[String, String], tableConfig: HoodieConfig)
+  : Map[String, String] = {
     val diffConfigs = StringBuilder.newBuilder
 
     if (null != tableConfig) {
@@ -208,6 +212,7 @@ object HoodieWriterUtils {
       throw new HoodieException(diffConfigs.toString.trim)
     }
 
+    val parameters = mutable.Map() ++ inputParams
     if (hoodieConfig.getBoolean(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS)) {
       val autoGenerateRecordKey = KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key()
       if (hoodieConfig.getBoolean(HoodieWriteConfig.COMBINE_BEFORE_INSERT)) {
@@ -215,16 +220,23 @@ object HoodieWriterUtils {
           s"${HoodieWriteConfig.COMBINE_BEFORE_INSERT.key()} is enabled")
       }
       if (!hoodieConfig.getBoolean(HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE)) {
-        throw new HoodieKeyGeneratorException(s"Config ${HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key()} " +
-          s"should be enabled when $autoGenerateRecordKey is used")
+        hoodieConfig.setValue(HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE, "true")
+        parameters += (HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key() -> "true")
+        log.warn(s"Enabling config {${HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key()}} when $autoGenerateRecordKey is used")
       }
       if (hoodieConfig.getString(DataSourceWriteOptions.TABLE_TYPE) == MOR_TABLE_TYPE_OPT_VAL) {
         throw new HoodieKeyGeneratorException(s"Config ${DataSourceWriteOptions.TABLE_TYPE.key()} should be set to " +
           s"COW_TABLE_TYPE_OPT_VAL when $autoGenerateRecordKey is used")
       }
-      if (hoodieConfig.getString(OPERATION) == UPSERT_OPERATION_OPT_VAL) {
+      // If OPERATION is explicitly set as UPSERT by the user, throw an exception. If user is using default value then
+      // operation is overridden to INSERT_OPERATION_OPT_VAL
+      if (parameters.getOrElse(OPERATION.key(), StringUtils.EMPTY_STRING) == UPSERT_OPERATION_OPT_VAL) {
         throw new HoodieKeyGeneratorException(s"Config ${OPERATION.key()} should not be set to $UPSERT_OPERATION_OPT_VAL" +
           s" when $autoGenerateRecordKey is used")
+      } else if (hoodieConfig.getString(OPERATION) == UPSERT_OPERATION_OPT_VAL) {
+        hoodieConfig.setValue(OPERATION.key(), INSERT_OPERATION_OPT_VAL)
+        parameters += (OPERATION.key() -> INSERT_OPERATION_OPT_VAL)
+        log.warn(s"Setting config ${OPERATION.key()} to $INSERT_OPERATION_OPT_VAL when $autoGenerateRecordKey is used")
       }
       if (hoodieConfig.getString(DataSourceWriteOptions.PRECOMBINE_FIELD) != DataSourceWriteOptions.PRECOMBINE_FIELD.defaultValue()) {
         throw new HoodieKeyGeneratorException(s"Config ${DataSourceWriteOptions.PRECOMBINE_FIELD.key()} should not be set" +
@@ -235,6 +247,8 @@ object HoodieWriterUtils {
           s"when $autoGenerateRecordKey is used")
       }
     }
+
+    parameters.toMap
   }
 
   private def getStringFromTableConfigWithAlternatives(tableConfig: HoodieConfig, key: String): String = {

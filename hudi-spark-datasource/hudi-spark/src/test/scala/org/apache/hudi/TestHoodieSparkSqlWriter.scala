@@ -44,7 +44,7 @@ import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.{SparkConf, SparkContext}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
@@ -1199,11 +1199,10 @@ class TestHoodieSparkSqlWriter {
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
       // RECORDKEY_FIELD should not be set
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-      HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key() -> "false",
-      // Only insert and bulk_insert op is supported
-      DataSourceWriteOptions.OPERATION.key() -> UPSERT_OPERATION_OPT_VAL,
       // Only COW table is supported
-      DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL
+      DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      // Explicitly set Upsert operation is not supported
+      DataSourceWriteOptions.OPERATION.key() -> UPSERT_OPERATION_OPT_VAL
     )
 
     for (incompatibleOpt <- incompatibleConfigList) {
@@ -1215,10 +1214,51 @@ class TestHoodieSparkSqlWriter {
           .options(opts)
           .mode(SaveMode.Append)
           .save(tempBasePath)
-        throw new Exception("Should fail")
+        throw new Exception("Should fail for " + incompatibleOpt)
       } catch {
-        case e: HoodieException => e.isInstanceOf[HoodieKeyGeneratorException]
-        case _ => throw new Exception("Should fail")
+        case e: HoodieException => assertTrue(e.isInstanceOf[HoodieKeyGeneratorException],
+          "e is not instance of HoodieKeyGeneratorException " + e.printStackTrace())
+        case other => throw other
+      }
+    }
+  }
+
+  @Test
+  def testAutoGenerationOfRecordKeysOverridesConfigs(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+
+    val initialOpts = Map(
+      HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key() -> "true",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key() -> "false",
+      HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key() -> "true",
+      DataSourceWriteOptions.OPERATION.key() -> INSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key -> COW_TABLE_TYPE_OPT_VAL
+    )
+
+    val overrideConfigList = List(
+      // override to true
+      HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key() -> "false",
+      // Default hoodie.datasource.write.operation type upsert is overridden to INSERT_OPERATION_OPT_VAL
+      ("" -> "")
+    )
+
+    for (overrideConfig <- overrideConfigList) {
+      val opts = initialOpts + overrideConfig
+      // verify exception is thrown when HoodieWriteConfig.COMBINE_BEFORE_INSERT is enabled
+      val tmpDF = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+      tmpDF.write.format("org.apache.hudi")
+        .options(opts)
+        .mode(SaveMode.Append)
+        .save(tempBasePath)
+
+      val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(tempBasePath).build()
+      if (metaClient.getTableConfig.contains(overrideConfig._1)) {
+        assertNotEquals(overrideConfig._2, metaClient.getTableConfig.getString(overrideConfig._1))
       }
     }
   }
