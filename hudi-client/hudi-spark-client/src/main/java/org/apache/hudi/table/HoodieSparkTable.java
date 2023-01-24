@@ -38,6 +38,7 @@ import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.util.Transient;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 import org.apache.spark.broadcast.Broadcast;
@@ -47,21 +48,24 @@ import java.io.IOException;
 public abstract class HoodieSparkTable<T>
     extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
-  // TODO elaborate
-  private final Broadcast<HoodieTableMetadata> metadataBroadcast;
+  // TODO move back to HoodieTable
+  private Transient<HoodieTableMetadata> metadataTable;
 
   private volatile boolean isMetadataTableExists = false;
 
   protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
 
-    this.metadataBroadcast = ((HoodieSparkEngineContext) context).getJavaSparkContext()
-        .broadcast(createMetadataTable(context, config));
+    // TODO elaborate
+    Broadcast<HoodieTableMetadata> metadataBroadcast =
+        ((HoodieSparkEngineContext) context).getJavaSparkContext().broadcast(createMetadataTable(context, config));
+
+    this.metadataTable = Transient.lazy(metadataBroadcast::getValue);
   }
 
   @Override
   public HoodieTableMetadata getMetadataTable() {
-    return metadataBroadcast.getValue();
+    return metadataTable.get();
   }
 
   @Override
@@ -111,8 +115,8 @@ public abstract class HoodieSparkTable<T>
   @Override
   public void close() {
     try {
-      metadataBroadcast.getValue().close();
-      metadataBroadcast.destroy();
+      metadataTable.destroy(AutoCloseable::close);
+      metadataTable = null;
     } catch (Exception e) {
       throw new HoodieException(e);
     }
