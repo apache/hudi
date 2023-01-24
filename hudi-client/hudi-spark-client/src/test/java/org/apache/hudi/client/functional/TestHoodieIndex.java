@@ -94,6 +94,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     Object[][] data = new Object[][] {
         {IndexType.BLOOM, true, true},
         {IndexType.BLOOM, true, false},
+        {IndexType.BLOOM, false, true},
         {IndexType.BLOOM, false, false},
         {IndexType.GLOBAL_BLOOM, true, true},
         {IndexType.GLOBAL_BLOOM, true, false},
@@ -325,7 +326,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     // Insert 200 records
-    JavaRDD<WriteStatus> writeStatusesRDD = writeClient.bulkInsert(writeRecords, newCommitTime);
+    JavaRDD<WriteStatus> writeStatusesRDD = writeClient.upsert(writeRecords, newCommitTime);
     // NOTE: This will trigger an actual write
     List<WriteStatus> writeStatuses = writeStatusesRDD.collect();
     Assertions.assertNoWriteErrors(writeStatuses);

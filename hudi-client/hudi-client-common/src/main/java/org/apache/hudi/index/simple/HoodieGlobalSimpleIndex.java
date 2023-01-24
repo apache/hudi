@@ -36,7 +36,6 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.Arrays;
@@ -50,8 +49,8 @@ import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPar
  * joins with incoming records to find the tagged location.
  */
 public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
-  public HoodieGlobalSimpleIndex(HoodieWriteConfig config, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, keyGeneratorOpt);
+  public HoodieGlobalSimpleIndex(HoodieWriteConfig config) {
+    super(config);
   }
 
   @Override

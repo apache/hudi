@@ -99,7 +99,6 @@ import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -668,9 +667,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
       try {
         HoodieMergeHandle handle = new HoodieMergeHandle(cfg, instantTime, table, new HashMap<>(),
-            partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier(),
-            config.populateMetaFields() ? Option.empty() :
-                Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
+            partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier());
         WriteStatus writeStatus = new WriteStatus(false, 0.0);
         writeStatus.setStat(new HoodieWriteStat());
         writeStatus.getStat().setNumWrites(0);
@@ -684,9 +681,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         cfg.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
         HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(cfg.getProps()).build();
         HoodieMergeHandle handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
-            partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier(),
-            config.populateMetaFields() ? Option.empty() :
-                Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
+            partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier());
         WriteStatus writeStatus = new WriteStatus(false, 0.0);
         writeStatus.setStat(new HoodieWriteStat());
         writeStatus.getStat().setNumWrites(0);
@@ -1233,7 +1228,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
     String file1 = statuses.get(0).getFileId();
     assertEquals(100,
-        fileUtils.readRowKeys(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath()))
+        fileUtils.readRowKeys(hadoopConf, Option.empty(), Option.empty(),
+                new Path(basePath, statuses.get(0).getStat().getPath()))
             .size(), "file should contain 100 records");
 
     // Update + Inserts such that they just expand file1
@@ -1253,7 +1249,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(file1, statuses.get(0).getFileId(), "Existing file should be expanded");
     assertEquals(commitTime1, statuses.get(0).getStat().getPrevCommit(), "Existing file should be expanded");
     Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
-    assertEquals(140, fileUtils.readRowKeys(hadoopConf, newFile).size(),
+    assertEquals(140,
+        fileUtils.readRowKeys(hadoopConf, Option.empty(), Option.empty(), newFile).size(),
         "file should contain 140 records");
 
     List<GenericRecord> records = fileUtils.readAvroRecords(hadoopConf, newFile);
@@ -1344,7 +1341,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
     String file1 = statuses.get(0).getFileId();
     assertEquals(100,
-        fileUtils.readRowKeys(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath()))
+        fileUtils.readRowKeys(hadoopConf, Option.empty(), Option.empty(),
+                new Path(basePath, statuses.get(0).getStat().getPath()))
             .size(), "file should contain 100 records");
 
     // Second, set of Inserts should just expand file1
@@ -1360,7 +1358,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(commitTime1, statuses.get(0).getStat().getPrevCommit(), "Existing file should be expanded");
 
     Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
-    assertEquals(140, fileUtils.readRowKeys(hadoopConf, newFile).size(),
+    assertEquals(140,
+        fileUtils.readRowKeys(hadoopConf, Option.empty(), Option.empty(), newFile).size(),
         "file should contain 140 records");
     List<GenericRecord> records = fileUtils.readAvroRecords(hadoopConf, newFile);
     for (GenericRecord record : records) {
@@ -1381,8 +1380,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertNoWriteErrors(statuses);
     assertEquals(2, statuses.size(), "2 files needs to be committed.");
     assertEquals(340,
-        fileUtils.readRowKeys(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath())).size()
-            + fileUtils.readRowKeys(hadoopConf, new Path(basePath, statuses.get(1).getStat().getPath())).size(),
+        fileUtils.readRowKeys(hadoopConf, Option.empty(), Option.empty(),
+            new Path(basePath, statuses.get(0).getStat().getPath())).size()
+            + fileUtils.readRowKeys(hadoopConf, Option.empty(), Option.empty(),
+            new Path(basePath, statuses.get(1).getStat().getPath())).size(),
         "file should contain 340 records");
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
@@ -1428,7 +1429,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
     String file1 = statuses.get(0).getFileId();
     assertEquals(100,
-        BaseFileUtils.getInstance(metaClient).readRowKeys(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath()))
+        BaseFileUtils.getInstance(metaClient).readRowKeys(hadoopConf, Option.empty(), Option.empty(),
+                new Path(basePath, statuses.get(0).getStat().getPath()))
             .size(), "file should contain 100 records");
 
     // Delete 20 among 100 inserted
@@ -2186,7 +2188,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
     assertEquals(expectedRecords,
-        BaseFileUtils.getInstance(metaClient).readRowKeys(hadoopConf, newFile).size(),
+        BaseFileUtils.getInstance(metaClient)
+            .readRowKeys(hadoopConf, Option.empty(), Option.empty(), newFile).size(),
         "file should contain 110 records");
 
     List<GenericRecord> records = BaseFileUtils.getInstance(metaClient).readAvroRecords(hadoopConf, newFile);

@@ -34,6 +34,7 @@ import org.apache.hudi.index.FlinkHoodieIndexFactory;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -85,6 +86,11 @@ public abstract class HoodieFlinkTable<T>
   public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
       HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
     return metadata.clone(metadata.getWriteStatuses().collectAsList());
+  }
+
+  @Override
+  protected Option<BaseKeyGenerator> createVirtualKeyGenerator(HoodieWriteConfig config) {
+    return Option.empty();
   }
 
   @Override

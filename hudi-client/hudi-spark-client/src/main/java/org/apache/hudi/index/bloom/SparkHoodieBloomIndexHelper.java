@@ -24,13 +24,11 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.io.HoodieKeyLookupResult;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.log4j.LogManager;
@@ -67,7 +65,6 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
   @Override
   public HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
       HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
-      Option<BaseKeyGenerator> keyGeneratorOpt,
       HoodiePairData<String, String> partitionRecordKeyPairs,
       HoodieData<Pair<String, HoodieKey>> fileComparisonPairs,
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
@@ -91,7 +88,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
       // Step 2: Use bloom filter to filter and the actual log file to get the record location
       keyLookupResultRDD = sortedFileIdAndKeyPairs.mapPartitionsWithIndex(
-          new HoodieMetadataBloomIndexCheckFunction(config, hoodieTable, keyGeneratorOpt), true);
+          new HoodieMetadataBloomIndexCheckFunction(config, hoodieTable), true);
     } else if (config.useBloomIndexBucketizedChecking()) {
       Map<String, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(
           config, recordsPerPartition, partitionToFileInfo, fileComparisonsRDD, context);
@@ -101,12 +98,10 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       keyLookupResultRDD = fileComparisonsRDD.mapToPair(t -> new Tuple2<>(Pair.of(t._1, t._2.getRecordKey()), t))
           .repartitionAndSortWithinPartitions(partitioner)
           .map(Tuple2::_2)
-          .mapPartitionsWithIndex(
-              new HoodieBloomIndexCheckFunction(hoodieTable, config, keyGeneratorOpt), true);
+          .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true);
     } else {
       keyLookupResultRDD = fileComparisonsRDD.sortBy(Tuple2::_1, true, joinParallelism)
-          .mapPartitionsWithIndex(
-              new HoodieBloomIndexCheckFunction(hoodieTable, config, keyGeneratorOpt), true);
+          .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true);
     }
 
     return HoodieJavaPairRDD.of(keyLookupResultRDD.flatMap(List::iterator)

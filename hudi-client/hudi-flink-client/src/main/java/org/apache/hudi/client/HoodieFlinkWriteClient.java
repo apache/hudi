@@ -40,6 +40,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FlinkWriteHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.MiniBatchHandle;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -87,6 +88,11 @@ public class HoodieFlinkWriteClient<T> extends
     super(context, writeConfig, FlinkUpgradeDowngradeHelper.getInstance());
     this.bucketToHandles = new HashMap<>();
     this.tableServiceClient = new HoodieFlinkTableServiceClient<>(context, writeConfig);
+  }
+
+  @Override
+  protected Option<BaseKeyGenerator> createVirtualKeyGenerator(HoodieWriteConfig config) {
+    return Option.empty();
   }
 
   /**

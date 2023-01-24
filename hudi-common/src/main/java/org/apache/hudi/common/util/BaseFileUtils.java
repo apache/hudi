@@ -69,12 +69,16 @@ public abstract class BaseFileUtils {
 
   /**
    * Read the rowKey list from the given data file.
-   * @param filePath      The data file path
-   * @param configuration configuration to build fs object
+   *
+   * @param filePath        The data file path
+   * @param keyGeneratorOpt Key generator for generating record keys when virtual keys are enabled.
+   * @param schemaOpt       Table schema when virtual keys are enabled.
+   * @param configuration   configuration to build fs object
    * @return Set Set of row keys
    */
-  public Set<String> readRowKeys(Configuration configuration, Path filePath) {
-    return filterRowKeys(configuration, filePath, Option.empty(), Option.empty(), new HashSet<>());
+  public Set<String> readRowKeys(Configuration configuration, Option<BaseKeyGenerator> keyGeneratorOpt,
+                                 Option<SerializableSchema> schemaOpt, Path filePath) {
+    return filterRowKeys(configuration, filePath, keyGeneratorOpt, schemaOpt, new HashSet<>());
   }
 
   /**

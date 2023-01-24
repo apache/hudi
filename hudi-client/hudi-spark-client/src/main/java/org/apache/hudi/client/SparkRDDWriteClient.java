@@ -38,6 +38,8 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
@@ -83,6 +85,11 @@ public class SparkRDDWriteClient<T> extends
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
     this.tableServiceClient = new SparkRDDTableServiceClient<>(context, writeConfig);
+  }
+
+  @Override
+  protected Option<BaseKeyGenerator> createVirtualKeyGenerator(HoodieWriteConfig config) {
+    return HoodieSparkKeyGeneratorFactory.createVirtualKeyGenerator(config);
   }
 
   @Override

@@ -31,6 +31,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
@@ -76,6 +78,11 @@ public abstract class HoodieSparkTable<T>
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
     return hoodieSparkTable;
+  }
+
+  @Override
+  protected Option<BaseKeyGenerator> createVirtualKeyGenerator(HoodieWriteConfig config) {
+    return HoodieSparkKeyGeneratorFactory.createVirtualKeyGenerator(config);
   }
 
   @Override

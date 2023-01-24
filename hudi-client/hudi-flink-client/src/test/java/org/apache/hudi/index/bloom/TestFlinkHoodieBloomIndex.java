@@ -104,8 +104,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
   @MethodSource("configParams")
   public void testLoadInvolvedFiles(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
-    HoodieBloomIndex index = new HoodieBloomIndex(
-        config, Option.empty(), ListBasedHoodieBloomIndexHelper.getInstance());
+    HoodieBloomIndex index = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
     HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
@@ -170,8 +169,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
   @MethodSource("configParams")
   public void testRangePruning(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
-    HoodieBloomIndex index = new HoodieBloomIndex(
-        config, Option.empty(), ListBasedHoodieBloomIndexHelper.getInstance());
+    HoodieBloomIndex index = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
     partitionToFileIndexInfo.put("2017/10/22",
@@ -268,8 +266,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     HoodieFlinkTable table = HoodieFlinkTable.create(config, context, metaClient);
 
     // Let's tag
-    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(
-        config, Option.empty(), ListBasedHoodieBloomIndexHelper.getInstance());
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
 
     assertDoesNotThrow(() -> {
       tagLocation(bloomIndex, records, table);
@@ -308,8 +305,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Let's tag
-    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(
-        config, Option.empty(), ListBasedHoodieBloomIndexHelper.getInstance());
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
     List<HoodieRecord> taggedRecords = tagLocation(bloomIndex, records, hoodieTable);
 
     // Should not find any files
@@ -376,8 +372,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Let's tag
-    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(
-        config, Option.empty(), ListBasedHoodieBloomIndexHelper.getInstance());
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
     List<HoodieRecord> toTagRecords = new ArrayList<>();
     toTagRecords.add(new HoodieAvroRecord(record4.getKey(), null));
     List<HoodieRecord> taggedRecords = tagLocation(bloomIndex, toTagRecords, hoodieTable);
@@ -459,8 +454,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieFlinkTable.create(config, context, metaClient);
 
-    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(
-        config, Option.empty(), ListBasedHoodieBloomIndexHelper.getInstance());
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
     List<HoodieRecord> taggedRecords = tagLocation(bloomIndex, records, table);
 
     // Check results

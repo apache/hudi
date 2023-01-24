@@ -19,7 +19,6 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -51,13 +50,13 @@ public final class FlinkHoodieIndexFactory {
       case INMEMORY:
         return new FlinkInMemoryStateIndex(context, config);
       case BLOOM:
-        return new HoodieBloomIndex(config, Option.empty(), ListBasedHoodieBloomIndexHelper.getInstance());
+        return new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
       case GLOBAL_BLOOM:
-        return new HoodieGlobalBloomIndex(config, Option.empty(), ListBasedHoodieBloomIndexHelper.getInstance());
+        return new HoodieGlobalBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
       case SIMPLE:
-        return new HoodieSimpleIndex(config, Option.empty());
+        return new HoodieSimpleIndex(config);
       case GLOBAL_SIMPLE:
-        return new HoodieGlobalSimpleIndex(config, Option.empty());
+        return new HoodieGlobalSimpleIndex(config);
       case BUCKET:
         return new HoodieSimpleBucketIndex(config);
       default:

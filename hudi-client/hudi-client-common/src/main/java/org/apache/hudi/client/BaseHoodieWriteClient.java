@@ -73,6 +73,7 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -121,6 +122,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(BaseHoodieWriteClient.class);
 
+  protected final Option<BaseKeyGenerator> virtualKeyGeneratorOpt;
   private final transient HoodieIndex<?, ?> index;
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
   private transient WriteOperationType operationType;
@@ -159,9 +161,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                                Option<EmbeddedTimelineService> timelineService,
                                SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     super(context, writeConfig, timelineService);
+    this.virtualKeyGeneratorOpt = createVirtualKeyGenerator(config);
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }
+
+  protected abstract Option<BaseKeyGenerator> createVirtualKeyGenerator(HoodieWriteConfig config);
 
   protected abstract HoodieIndex<?, ?> createIndex(HoodieWriteConfig writeConfig);
 

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -29,11 +30,9 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -107,8 +106,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
     BaseKeyGenerator keyGenerator = (BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getPropertiesForKeyGen()));
 
     for (Tuple2<String, HoodieBaseFile> entry : partitionPathFileIdPairs) {
-      HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2),
-          populateMetaFields ? Option.empty() : Option.of(keyGenerator));
+      HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2));
       Iterator<Pair<HoodieKey, HoodieRecordLocation>> result = fetcherHandle.locations().iterator();
       List<Tuple2<HoodieKey, HoodieRecordLocation>> actualList = new ArrayList<>();
       result.forEachRemaining(x -> actualList.add(new Tuple2<>(x.getLeft(), x.getRight())));

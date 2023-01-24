@@ -35,7 +35,6 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.Arrays;
@@ -49,11 +48,8 @@ import java.util.stream.Collectors;
  * with .hoodie_partition_metadata file in it.
  */
 public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
-  public HoodieGlobalBloomIndex(
-      HoodieWriteConfig config,
-      Option<BaseKeyGenerator> keyGeneratorOpt,
-      BaseHoodieBloomIndexHelper bloomIndexHelper) {
-    super(config, keyGeneratorOpt, bloomIndexHelper);
+  public HoodieGlobalBloomIndex(HoodieWriteConfig config, BaseHoodieBloomIndexHelper bloomIndexHelper) {
+    super(config, bloomIndexHelper);
   }
 
   /**

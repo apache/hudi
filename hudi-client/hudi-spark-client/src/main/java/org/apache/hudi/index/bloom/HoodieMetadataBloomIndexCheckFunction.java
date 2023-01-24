@@ -31,7 +31,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieKeyLookupResult;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -67,16 +66,13 @@ public class HoodieMetadataBloomIndexCheckFunction implements
   // per batch so that the total fetched bloom filters would not cross 128 MB.
   private static final long BLOOM_FILTER_CHECK_MAX_FILE_COUNT_PER_BATCH = 256;
   private final HoodieTable hoodieTable;
-  private final Option<BaseKeyGenerator> keyGeneratorOpt;
   private final Option<SerializableSchema> schemaOpt;
 
   public HoodieMetadataBloomIndexCheckFunction(
       HoodieWriteConfig config,
-      HoodieTable hoodieTable,
-      Option<BaseKeyGenerator> keyGeneratorOpt) {
+      HoodieTable hoodieTable) {
     this.hoodieTable = hoodieTable;
-    this.keyGeneratorOpt = keyGeneratorOpt;
-    this.schemaOpt = keyGeneratorOpt.isPresent()
+    this.schemaOpt = hoodieTable.getVirtualKeyGeneratorOpt().isPresent()
         ? Option.of(new SerializableSchema(new Schema.Parser().parse(config.getWriteSchema())))
         : Option.empty();
   }
@@ -151,7 +147,8 @@ public class HoodieMetadataBloomIndexCheckFunction implements
         final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
         List<String> matchingKeys =
             HoodieIndexUtils.filterKeysFromFile(
-                new Path(dataFile.getPath()), keyGeneratorOpt, schemaOpt, candidateRecordKeys, hoodieTable.getHadoopConf());
+                new Path(dataFile.getPath()), hoodieTable.getVirtualKeyGeneratorOpt(),
+                schemaOpt, candidateRecordKeys, hoodieTable.getHadoopConf());
         LOG.debug(
             String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)",
                 hoodieKeyList.size(), candidateRecordKeys.size(),

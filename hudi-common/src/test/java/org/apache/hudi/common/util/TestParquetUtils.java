@@ -90,7 +90,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     List<String> rowKeysInFile = new ArrayList<>(
-        parquetUtils.readRowKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath)));
+        parquetUtils.readRowKeys(HoodieTestUtils.getDefaultHadoopConf(), Option.empty(), Option.empty(), new Path(filePath)));
     Collections.sort(rowKeysInFile);
     Collections.sort(rowKeys);
 
