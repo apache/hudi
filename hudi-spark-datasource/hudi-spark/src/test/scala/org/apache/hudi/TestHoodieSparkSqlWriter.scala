@@ -30,6 +30,7 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, HoodieKeyGeneratorException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
@@ -1312,6 +1313,8 @@ class TestHoodieSparkSqlWriter {
 
     val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(tempBasePath).build()
     assertEquals(metaClient.getTableConfig.getTableType, HoodieTableType.COPY_ON_WRITE)
+    assertTrue(StringUtils.isNullOrEmpty(metaClient.getTableConfig.getPreCombineField),
+      metaClient.getTableConfig.getPreCombineField + " should be empty or null")
   }
 
   /**
