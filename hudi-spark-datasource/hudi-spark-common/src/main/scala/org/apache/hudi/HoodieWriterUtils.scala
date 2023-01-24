@@ -30,7 +30,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
-import org.apache.log4j.Logger
+import org.apache.log4j.{LogManager}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 
@@ -43,6 +43,8 @@ import scala.collection.mutable
  * WriterUtils to assist in write path in Datasource and tests.
  */
 object HoodieWriterUtils {
+
+  private val log = LogManager.getLogger(getClass)
 
   def javaParametersWithWriteDefaults(parameters: java.util.Map[String, String]): java.util.Map[String, String] = {
     mapAsJavaMap(parametersWithWriteDefaults(parameters.asScala.toMap))
@@ -191,9 +193,9 @@ object HoodieWriterUtils {
   /**
    * Detects conflicts between datasourceKeyGen and existing table configuration keyGen
    */
-  def validateAndSetKeyGeneratorConfigs(datasourceKeyGen: String, log: Logger, hoodieConfig: HoodieConfig,
+  def validateAndSetKeyGeneratorConfigs(datasourceKeyGen: String, hoodieConfig: HoodieConfig,
                                         inputParams: Map[String, String], tableConfig: HoodieConfig)
-  : Map[String, String] = {
+                                        : Map[String, String] = {
     val diffConfigs = StringBuilder.newBuilder
 
     if (null != tableConfig) {
@@ -238,7 +240,7 @@ object HoodieWriterUtils {
         parameters += (OPERATION.key() -> INSERT_OPERATION_OPT_VAL)
         log.warn(s"Setting config ${OPERATION.key()} to $INSERT_OPERATION_OPT_VAL when $autoGenerateRecordKey is used")
       }
-      if (hoodieConfig.getString(DataSourceWriteOptions.PRECOMBINE_FIELD) != DataSourceWriteOptions.PRECOMBINE_FIELD.defaultValue()) {
+      if (!StringUtils.isNullOrEmpty(hoodieConfig.getString(DataSourceWriteOptions.PRECOMBINE_FIELD))) {
         throw new HoodieKeyGeneratorException(s"Config ${DataSourceWriteOptions.PRECOMBINE_FIELD.key()} should not be set" +
           s" when $autoGenerateRecordKey is used")
       }

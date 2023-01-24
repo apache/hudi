@@ -1233,6 +1233,7 @@ class TestHoodieSparkSqlWriter {
       "hoodie.insert.shuffle.parallelism" -> "1",
       "hoodie.upsert.shuffle.parallelism" -> "1",
       KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key() -> "true",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
       HoodieWriteConfig.COMBINE_BEFORE_INSERT.key() -> "false",
       HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key() -> "true",
@@ -1244,7 +1245,7 @@ class TestHoodieSparkSqlWriter {
       // override to true
       HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key() -> "false",
       // Default hoodie.datasource.write.operation type upsert is overridden to INSERT_OPERATION_OPT_VAL
-      ("" -> "")
+      "" -> ""
     )
 
     for (overrideConfig <- overrideConfigList) {
@@ -1274,6 +1275,7 @@ class TestHoodieSparkSqlWriter {
       "hoodie.upsert.shuffle.parallelism" -> "1",
       DataSourceWriteOptions.TABLE_TYPE.key -> COW_TABLE_TYPE_OPT_VAL,
       KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key() -> "true",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "",
       DataSourceWriteOptions.OPERATION.key() -> opType,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
       HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key() -> "true")
