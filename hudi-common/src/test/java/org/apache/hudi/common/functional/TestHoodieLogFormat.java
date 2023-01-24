@@ -925,10 +925,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(HoodieLogBlockType.CORRUPT_BLOCK, block.getBlockType(), "The read block should be a corrupt block");
     reader1.close();
 
-    // mock case: we want to verify that isBlockCorrupted() check is skipped for transactional write fs
-    // so here created a corrupted block for a transactional write fs(which would never happen) to verify the skip logic
-    // a better way to verify it is to mock the private method isBlockCorrupted(), but it is not available in current Mockito framework
-    // and the attempt to onboard powermock with private method mocking capability has failed
+    // as we can't mock a private method or directly test it, we are going this route.
+    // So adding a corrupted block which ideally should have been skipped for write transactional system. and hence when we call next() on log block reader, it will fail.
     Reader reader2 = createCorruptedFile("test-fileid2");
     assertTrue(reader2.hasNext(), "We should have corrupted block next");
 
