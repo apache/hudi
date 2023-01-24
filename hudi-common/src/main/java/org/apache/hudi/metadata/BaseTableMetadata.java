@@ -19,12 +19,12 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -79,7 +79,6 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected static final int BUFFER_SIZE = 10 * 1024; // 10Kb
 
   protected final transient HoodieEngineContext engineContext;
-  protected final SerializableConfiguration hadoopConf;
   protected final SerializablePath dataBasePath;
   protected final HoodieTableMetaClient dataMetaClient;
   protected final Option<HoodieMetadataMetrics> metrics;
@@ -94,9 +93,11 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                               String dataBasePath, String spillableMapDirectory) {
     this.engineContext = engineContext;
-    this.hadoopConf = new SerializableConfiguration(engineContext.getHadoopConf());
     this.dataBasePath = new SerializablePath(new CachingPath(dataBasePath));
-    this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(dataBasePath).build();
+    this.dataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(engineContext.getHadoopConf().get())
+        .setBasePath(dataBasePath)
+        .build();
     this.spillableMapDirectory = spillableMapDirectory;
     this.metadataConfig = metadataConfig;
 
@@ -125,8 +126,10 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         throw new HoodieMetadataException("Failed to retrieve list of partition from metadata", e);
       }
     }
-    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath.toString(),
-        metadataConfig.shouldAssumeDatePartitioning()).getAllPartitionPaths();
+
+    FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
+        createFileSystemBackedTableMetadata();
+    return fileSystemBackedTableMetadata.getAllPartitionPaths();
   }
 
   /**
@@ -150,8 +153,9 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       }
     }
 
-    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath.toString(), metadataConfig.shouldAssumeDatePartitioning())
-        .getAllFilesInPartition(partitionPath);
+    FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
+        createFileSystemBackedTableMetadata();
+    return fileSystemBackedTableMetadata.getAllFilesInPartition(partitionPath);
   }
 
   @Override
@@ -170,8 +174,9 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       }
     }
 
-    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath.toString(), metadataConfig.shouldAssumeDatePartitioning())
-        .getAllFilesInPartitions(partitions);
+    FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
+        createFileSystemBackedTableMetadata();
+    return fileSystemBackedTableMetadata.getAllFilesInPartitions(partitions);
   }
 
   @Override
@@ -339,7 +344,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       HoodieMetadataPayload metadataPayload = record.getData();
       checkForSpuriousDeletes(metadataPayload, recordKey);
       try {
-        return metadataPayload.getFileStatuses(hadoopConf.get(), partitionPath);
+        return metadataPayload.getFileStatuses(getHadoopConf(), partitionPath);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to extract file-statuses from the payload", e);
       }
@@ -365,7 +370,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         getRecordsByKeys(new ArrayList<>(partitionIdToPathMap.keySet()), MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
-    FileSystem fs = partitionPaths.get(0).getFileSystem(hadoopConf.get());
+    FileSystem fs = partitionPaths.get(0).getFileSystem(getHadoopConf());
 
     Map<String, FileStatus[]> partitionPathToFilesMap = partitionIdRecordPairs.parallelStream()
         .map(pair -> {
@@ -406,16 +411,25 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
   }
 
+  private FileSystemBackedTableMetadata createFileSystemBackedTableMetadata() {
+    return new FileSystemBackedTableMetadata(getEngineContext(), dataMetaClient.getSerializableHadoopConf(), dataBasePath.toString(),
+        metadataConfig.shouldAssumeDatePartitioning());
+  }
+
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
   public abstract List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> key, String partitionName);
 
   protected HoodieEngineContext getEngineContext() {
-    return engineContext != null ? engineContext : new HoodieLocalEngineContext(hadoopConf.get());
+    return engineContext != null ? engineContext : new HoodieLocalEngineContext(getHadoopConf());
   }
 
   public HoodieMetadataConfig getMetadataConfig() {
     return metadataConfig;
+  }
+
+  protected Configuration getHadoopConf() {
+    return dataMetaClient.getHadoopConf();
   }
 
   protected String getLatestDataInstantTime() {
