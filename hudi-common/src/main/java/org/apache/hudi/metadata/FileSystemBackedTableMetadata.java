@@ -81,23 +81,23 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
       return FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, datasetBasePath);
     }
 
-    return getPartitionPathsWithPrefixes(Collections.singletonList(""));
+    return getPartitionPathsInDirs(Collections.singletonList(""));
   }
 
   @Override
-  public List<String> getPartitionPathsWithPrefixes(List<String> prefixes) {
-    return prefixes.stream().flatMap(prefix -> {
+  public List<String> getPartitionPathsInDirs(List<String> relativePaths) {
+    return relativePaths.stream().flatMap(relativePath -> {
       try {
-        return getPartitionPathsWithPrefix(prefix).stream();
+        return getPartitionPathsInDir(relativePath).stream();
       } catch (IOException e) {
-        throw new HoodieIOException("Error fetching partition paths with prefix: " + prefix, e);
+        throw new HoodieIOException("Error fetching partition paths with relative path: " + relativePath, e);
       }
     }).collect(Collectors.toList());
   }
 
-  private List<String> getPartitionPathsWithPrefix(String prefix) throws IOException {
+  private List<String> getPartitionPathsInDir(String relativePath) throws IOException {
     List<Path> pathsToList = new CopyOnWriteArrayList<>();
-    pathsToList.add(StringUtils.isNullOrEmpty(prefix) ? new Path(datasetBasePath) : new Path(datasetBasePath, prefix));
+    pathsToList.add(StringUtils.isNullOrEmpty(relativePath) ? new Path(datasetBasePath) : new Path(datasetBasePath, relativePath));
     List<String> partitionPaths = new CopyOnWriteArrayList<>();
 
     while (!pathsToList.isEmpty()) {
