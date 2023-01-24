@@ -98,6 +98,9 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTE
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_CLEAN_TIME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_COMPACTION_TIME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_INIT_TIME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
@@ -111,8 +114,6 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetada
 public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWriter {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadataWriter.class);
-
-  public static final String METADATA_COMPACTION_TIME_SUFFIX = "001";
 
   // Virtual keys support for metadata table. This Field is
   // from the metadata payload schema.
@@ -1068,7 +1069,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Trigger cleaning with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    writeClient.clean(instantTime + "002");
+    writeClient.clean(instantTime + METADATA_CLEAN_TIME_SUFFIX);
   }
 
   /**
@@ -1119,7 +1120,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
 
-    commit(createInstantTime, partitionToRecordsMap, false);
+    commit(createInstantTime.equals(SOLO_COMMIT_TIMESTAMP) ? createInstantTime : createInstantTime + METADATA_INIT_TIME_SUFFIX,
+        partitionToRecordsMap, false);
   }
 
   private HoodieData<HoodieRecord> getFilesPartitionRecords(String createInstantTime, List<DirectoryInfo> partitionInfoList, HoodieRecord allPartitionRecord) {

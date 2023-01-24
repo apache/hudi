@@ -55,6 +55,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * can be prepped even before bootstrap is done.
    */
   String SOLO_COMMIT_TIMESTAMP = "00000000000000";
+  String METADATA_INIT_TIME_SUFFIX = "000";
+  String METADATA_COMPACTION_TIME_SUFFIX = "001";
+  String METADATA_CLEAN_TIME_SUFFIX = "002";
   // Key for the record which saves list of all partitions
   String RECORDKEY_PARTITION_LIST = "__all_partitions__";
   // The partition name used for non-partitioned tables
