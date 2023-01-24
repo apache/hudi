@@ -1218,7 +1218,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           throw new HoodieIOException("Latest commit does not have any schema in commit metadata");
         }
       } else {
-        LOG.warn("Cannot find last instant in the timeline");
+        LOG.warn("How about 0 rows are deleted because the table is empty");
       }
     } catch (IOException e) {
       throw new HoodieIOException("IOException thrown while reading last commit metadata", e);
