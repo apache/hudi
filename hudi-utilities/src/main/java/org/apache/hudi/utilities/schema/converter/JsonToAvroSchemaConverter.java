@@ -207,7 +207,11 @@ public class JsonToAvroSchemaConverter implements SchemaRegistryProvider.SchemaC
 
   private static Option<String> getAvroSchemaRecordNamespace(JsonNode jsonNode) {
     if (jsonNode.hasNonNull("$id")) {
-      return Option.of(URI.create(jsonNode.get("$id").asText()).getHost());
+      String host = URI.create(jsonNode.get("$id").asText()).getHost();
+      String avroNamespace = Stream.of(host.split("\\."))
+          .map(JsonToAvroSchemaConverter::sanitizeAsAvroName)
+          .collect(Collectors.joining("."));
+      return Option.of(avroNamespace);
     }
     return Option.empty();
   }
