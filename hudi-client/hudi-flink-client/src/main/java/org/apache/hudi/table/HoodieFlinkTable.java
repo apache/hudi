@@ -35,12 +35,10 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.avro.specific.SpecificRecordBase;
-import org.apache.hudi.util.Transient;
 
 import java.util.List;
 
@@ -51,17 +49,8 @@ public abstract class HoodieFlinkTable<T>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
     implements ExplicitWriteHandleTable<T> {
 
-  private final Transient<HoodieTableMetadata> metadata;
-
   protected HoodieFlinkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
-
-    this.metadata = Transient.lazy(() -> createMetadataTable(getContext(), config));
-  }
-
-  @Override
-  public HoodieTableMetadata getMetadataTable() {
-    return metadata.get();
   }
 
   @Override
@@ -82,15 +71,6 @@ public abstract class HoodieFlinkTable<T>
           getContext(), actionMetadata, Option.of(triggeringInstantTimestamp)));
     } else {
       return Option.empty();
-    }
-  }
-
-  @Override
-  public void close() {
-    try {
-      metadata.get().close();
-    } catch (Exception e) {
-      throw new HoodieException(e);
     }
   }
 

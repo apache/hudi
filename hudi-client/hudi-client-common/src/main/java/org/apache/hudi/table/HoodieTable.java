@@ -123,6 +123,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
   protected final HoodieIndex<?, ?> index;
   protected final TaskContextSupplier taskContextSupplier;
 
+  private final HoodieTableMetadata metadata;
+
   private final HoodieStorageLayout storageLayout;
 
   // NOTE: These are managed by {@code TransientLazy} to implement transient semantic,
@@ -139,6 +141,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
     //       and therefore instead we re-create it as [[HoodieLocalEngineContext]]
     this.context = Transient.eager(context, () -> new HoodieLocalEngineContext(metaClient.getHadoopConf()));
 
+    this.metadata = HoodieTableMetadata.create(context, config.getMetadataConfig(), config.getBasePath(),
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+
     this.viewManager = Transient.lazy(() ->
         // NOTE: It's critical we use {@code getContext()} here since {@code context} is
         //       also a transient field
@@ -152,6 +157,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
   }
 
   protected abstract HoodieIndex<?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
+
+  public HoodieTableMetadata getMetadataTable() {
+    return metadata;
+  }
 
   protected HoodieStorageLayout getStorageLayout(HoodieWriteConfig config) {
     return HoodieLayoutFactory.createLayout(config);
@@ -995,14 +1004,18 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
     }
   }
 
-  public abstract HoodieTableMetadata getMetadataTable();
-
   public Runnable getPreExecuteRunnable() {
     return Functions.noop();
   }
 
   @Override
-  public abstract void close();
+  public void close() {
+    try {
+      metadata.close();
+    } catch (Exception e) {
+      throw new HoodieException(e);
+    }
+  }
 
   protected static HoodieTableMetadata createMetadataTable(HoodieEngineContext context, HoodieWriteConfig config) {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
