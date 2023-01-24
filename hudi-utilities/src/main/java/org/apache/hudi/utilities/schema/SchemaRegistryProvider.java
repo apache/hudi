@@ -69,7 +69,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   public Schema parseSchemaFromRegistry(String registryUrl) throws IOException {
     String schema = fetchSchemaFromRegistry(registryUrl);
-    SchemaConverter converter = config.contains(Config.SCHEMA_CONVERTER_PROP)
+    SchemaConverter converter = config.containsKey(Config.SCHEMA_CONVERTER_PROP)
         ? ReflectionUtils.loadClass(config.getString(Config.SCHEMA_CONVERTER_PROP))
         : s -> s;
     return new Schema.Parser().parse(converter.convert(schema));

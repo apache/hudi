@@ -41,12 +41,12 @@ import static org.mockito.Mockito.verify;
 
 class TestSchemaRegistryProvider {
 
-  private final static String BASIC_AUTH = "foo:bar";
+  private static final String BASIC_AUTH = "foo:bar";
 
-  private final static String REGISTRY_RESPONSE = "{\"schema\":\"{\\\"type\\\": \\\"record\\\", \\\"namespace\\\": \\\"example\\\", "
+  private static final String REGISTRY_RESPONSE = "{\"schema\":\"{\\\"type\\\": \\\"record\\\", \\\"namespace\\\": \\\"example\\\", "
       + "\\\"name\\\": \\\"FullName\\\",\\\"fields\\\": [{ \\\"name\\\": \\\"first\\\", \\\"type\\\": "
       + "\\\"string\\\" }]}\"}";
-  private final static String CONVERTED_SCHEMA = "{\"type\": \"record\", \"namespace\": \"com.example.hoodie\", "
+  private static final String CONVERTED_SCHEMA = "{\"type\": \"record\", \"namespace\": \"com.example.hoodie\", "
       + "\"name\": \"FullName\",\"fields\": [{ \"name\": \"first\", \"type\": "
       + "\"string\" }]}";
 
@@ -60,7 +60,7 @@ class TestSchemaRegistryProvider {
         put("hoodie.deltastreamer.schemaprovider.registry.baseUrl", "http://" + BASIC_AUTH + "@localhost");
         put("hoodie.deltastreamer.schemaprovider.registry.urlSuffix", "-value");
         put("hoodie.deltastreamer.schemaprovider.registry.url", "http://foo:bar@localhost");
-        put("hoodie.deltastreamer.schemaprovider.registry.schemaconverter", "org.apache.hudi.utilities.schema.TestSchemaRegistryProvider.DummySchemaConverter");
+        put("hoodie.deltastreamer.schemaprovider.registry.schemaconverter", DummySchemaConverter.class.getName());
         put("hoodie.deltastreamer.source.kafka.topic", "foo");
       }
     };
