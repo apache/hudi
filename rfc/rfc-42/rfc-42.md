@@ -122,7 +122,7 @@ could also be bigger
 ![compact_process.png](compact_process.png)
 
 Let's take a look at the example above, Hudi will try to store all the records with unique key into one Memory Map, if exceed the memory limitation
-store some records into DiskMap only keep <Key, DiskMeta> in memory, in an extreme case, the DiskMap also can encounter OOM issue.
+store some records into DiskMap only keep <Key, DiskMeta> in memory, in an extreme case, the DiskMap also can encounter OOM issue the DiskMetaMap is too big.
 this OOM issue is not just exist in writer/compact process, also will happen when user read MOR table with Presto/Spark/Flink as below graph described.
 
 **mor example**
