@@ -239,6 +239,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private HoodieWriteConfig createMetadataWriteConfig(HoodieWriteConfig writeConfig) {
     int parallelism = writeConfig.getMetadataInsertParallelism();
 
+    int minCommitsToKeep = Math.max(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMinCommitsToKeep());
+    int maxCommitsToKeep = Math.max(writeConfig.getMetadataMaxCommitsToKeep(), writeConfig.getMaxCommitsToKeep());
+
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withEngineType(writeConfig.getEngineType())
@@ -270,7 +273,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .build())
         // we will trigger archive manually, to ensure only regular writer invokes it
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
-            .archiveCommitsWith(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP.defaultValue(), HoodieMetadataConfig.MAX_COMMITS_TO_KEEP.defaultValue())
+            .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep)
             .withAutoArchive(false)
             .build())
         // we will trigger compaction manually, to control the instant times

@@ -95,16 +95,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Archiving service moves older entries from metadata table’s timeline "
           + "into an archived log after each write, to keep the overhead constant, even as the "
           + "metadata table size grows.  This config controls the minimum number of instants "
-          + "to retain in the active timeline. This is an internal config and setting this "
-          + "will not overwrite the value actually used.");
+          + "to retain in the active timeline.");
 
   public static final ConfigProperty<Integer> MAX_COMMITS_TO_KEEP = ConfigProperty
       .key(METADATA_PREFIX + ".keep.max.commits")
       .defaultValue(30)
       .sinceVersion("0.7.0")
       .withDocumentation("Similar to " + MIN_COMMITS_TO_KEEP.key() + ", this config controls "
-          + "the maximum number of instants to retain in the active timeline. This is an "
-          + "internal config and setting this will not overwrite the value actually used.");
+          + "the maximum number of instants to retain in the active timeline.");
 
   // Cleaner commits retained
   public static final ConfigProperty<Integer> CLEANER_COMMITS_RETAINED = ConfigProperty
@@ -112,7 +110,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(3)
       .sinceVersion("0.7.0")
       .withDocumentation("Number of commits to retain, without cleaning, on metadata table. "
-          + "This is an internal config and setting this will not overwrite the value actually used.");
+          + "This is an internal config and setting this will not overwrite the actual value used.");
 
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
@@ -139,7 +137,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(true)
       .sinceVersion("0.10.0")
       .withDocumentation("Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries. "
-          + "This is an internal config and setting this will not overwrite the value actually used.");
+          + "This is an internal config and setting this will not overwrite the actual value used.");
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_BLOOM_FILTER = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.enable")
@@ -229,7 +227,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(false)
       .sinceVersion("0.10.0")
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated. "
-          + "This is an internal config and setting this will not overwrite the value actually used.");
+          + "This is an internal config and setting this will not overwrite the actual value used.");
 
   public static final ConfigProperty<Boolean> IGNORE_SPURIOUS_DELETES = ConfigProperty
       .key("_" + METADATA_PREFIX + ".ignore.spurious.deletes")
