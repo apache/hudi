@@ -62,6 +62,11 @@ object DataSourceReadOptions {
       "(or) Read Optimized mode (obtain latest view, based on base files) (or) Snapshot mode " +
       "(obtain latest view, by merging base and (if any) log files)")
 
+  val QUERY_USE_DATABASE: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.query.use.database")
+    .defaultValue(false)
+    .withDocumentation("Whether to add database name to qualify table name when setting parameters in Spark SQL query")
+
   val INCREMENTAL_FORMAT_LATEST_STATE_VAL = "latest_state"
   val INCREMENTAL_FORMAT_CDC_VAL = "cdc"
   val INCREMENTAL_FORMAT: ConfigProperty[String] = ConfigProperty
