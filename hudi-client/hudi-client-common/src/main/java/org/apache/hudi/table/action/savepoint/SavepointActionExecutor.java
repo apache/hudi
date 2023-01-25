@@ -137,7 +137,8 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
    * @return {@code true} if using batch lookup; {@code false} otherwise.
    */
   private boolean shouldUseBatchLookup(HoodieWriteConfig config) {
-    FileSystemViewStorageType storageType = config.getViewStorageConfig().getStorageType();
+    FileSystemViewStorageType storageType =
+        config.getClientSpecifiedViewStorageConfig().getStorageType();
     return config.getMetadataConfig().enabled()
         && !FileSystemViewStorageType.EMBEDDED_KV_STORE.equals(storageType)
         && !FileSystemViewStorageType.SPILLABLE_DISK.equals(storageType);
