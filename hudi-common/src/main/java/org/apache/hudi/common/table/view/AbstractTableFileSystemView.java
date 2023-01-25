@@ -320,14 +320,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
     Set<String> partitionSet = new HashSet<>();
     synchronized (addedPartitions) {
-      partitionList.forEach(partition ->
-          addedPartitions.computeIfAbsent(partition, partitionPathStr -> {
-            if (!isPartitionAvailableInStore(partitionPathStr)) {
-              partitionSet.add(partitionPathStr);
-            }
-            return true;
-          })
-      );
+      partitionList.forEach(partition -> {
+        if (!addedPartitions.containsKey(partition) && !isPartitionAvailableInStore(partition)) {
+          partitionSet.add(partition);
+        }
+      });
 
       if (!partitionSet.isEmpty()) {
         long beginTs = System.currentTimeMillis();
@@ -359,6 +356,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         long endTs = System.currentTimeMillis();
         LOG.debug("Time to load partition " + partitionSet + " =" + (endTs - beginTs));
       }
+
+      partitionSet.forEach(partition ->
+          addedPartitions.computeIfAbsent(partition, partitionPathStr -> true)
+      );
     }
   }
 
