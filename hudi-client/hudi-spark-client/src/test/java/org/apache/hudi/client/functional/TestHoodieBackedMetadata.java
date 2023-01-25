@@ -48,6 +48,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -59,6 +60,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -142,6 +144,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -153,7 +156,9 @@ import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getNextCommitTime;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_COMPACTION_TIME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_INIT_TIME_SUFFIX;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
@@ -342,7 +347,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testTurnOffMetadataTableAfterEnable() throws Exception {
     init(COPY_ON_WRITE, true);
-    String instant1 = "0000001";
+    String instant1 = HoodieTestDataGenerator.getCommitTimeAtUTC(1);
     HoodieCommitMetadata hoodieCommitMetadata = doWriteOperationWithMeta(testTable, instant1, INSERT);
 
     // Simulate the complete data directory including ".hoodie_partition_metadata" file
@@ -368,7 +373,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
     testTable = HoodieTestTable.of(metaClient);
-    String instant2 = "0000002";
+    String instant2 = HoodieTestDataGenerator.getCommitTimeAtUTC(2);
     HoodieCommitMetadata hoodieCommitMetadata2 = doWriteOperationWithMeta(testTable, instant2, INSERT);
     metaClient.reloadActiveTimeline();
     HoodieTable table2 = HoodieSparkTable.create(writeConfig2, context, metaClient);
@@ -390,7 +395,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
     testTable = HoodieTestTable.of(metaClient);
     metaClient.reloadActiveTimeline();
-    String instant3 = "0000003";
+    String instant3 = HoodieTestDataGenerator.getCommitTimeAtUTC(3);
     HoodieCommitMetadata hoodieCommitMetadata3 = doWriteOperationWithMeta(testTable, instant3, INSERT);
     metaClient.reloadActiveTimeline();
     HoodieTable table3 = HoodieSparkTable.create(writeConfig3, context, metaClient);
@@ -1395,20 +1400,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, emptyList(), true);
   }
 
-  /**
-   * Fetches next commit time in seconds from current one.
-   *
-   * @param curCommitTime current commit time.
-   * @return the next valid commit time.
-   */
-  private Long getNextCommitTime(long curCommitTime) {
-    if ((curCommitTime + 1) % 1000000000000L >= 60) { // max seconds is 60 and hence
-      return Long.parseLong(HoodieActiveTimeline.createNewInstantTime());
-    } else {
-      return curCommitTime + 1;
-    }
-  }
-
   @ParameterizedTest
   @MethodSource("tableTypeAndEnableOperationArgs")
   public void testMetadataBootstrapLargeCommitList(HoodieTableType tableType, boolean nonPartitionedDataset) throws Exception {
@@ -2323,6 +2314,59 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   @Test
+  public void testNewPartitionInit() throws IOException {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    HoodieWriteConfig writeConfig1 = getWriteConfig(true, true);
+    writeConfig1.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "false");
+    writeConfig1.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "false");
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig1)) {
+      for (int ts = 0; ts < 2; ts += 1) {
+        String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(ts);
+        client.startCommitWithTime(commitTime);
+        List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
+        List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+        assertNoWriteErrors(writeStatuses);
+      }
+      validateMetadata(client);
+      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+      assertEquals(Stream.of(FILES).collect(Collectors.toSet()), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
+    }
+
+
+    // enable colstats partition
+    HoodieWriteConfig writeConfig2 = getWriteConfig(true, true);
+    writeConfig2.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "true");
+    writeConfig2.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "false");
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig2)) {
+      String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(2);
+      client.startCommitWithTime(commitTime);
+      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+      assertEquals(Stream.of(FILES, COLUMN_STATS).collect(Collectors.toSet()), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
+    }
+
+    // enable bloom filter partition
+    HoodieWriteConfig writeConfig3 = getWriteConfig(true, true);
+    writeConfig3.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "true");
+    writeConfig3.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "true");
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig3)) {
+      String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(3);
+      client.startCommitWithTime(commitTime);
+      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+      assertEquals(Stream.of(FILES, COLUMN_STATS, BLOOM_FILTERS).collect(Collectors.toSet()), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
+    }
+  }
+
+  @Test
   public void testDeletePartitions() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
 
@@ -2509,8 +2553,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
   }
 
-  public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
-                                                    HoodieFailedWritesCleaningPolicy cleaningPolicy) {
+  private HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
+                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
