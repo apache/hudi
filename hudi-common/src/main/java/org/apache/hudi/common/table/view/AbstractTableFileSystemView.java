@@ -647,14 +647,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
-      return fetchAllStoredFileGroups(partitionPath)
-          .filter(fileGroup -> !isFileGroupReplacedBeforeOrOn(fileGroup.getFileGroupId(), maxCommitTime))
-          .map(fileGroup -> Option.fromJavaOptional(fileGroup.getAllBaseFiles()
-              .filter(baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, maxCommitTime
-              ))
-              .filter(df -> !isBaseFileDueToPendingCompaction(df) && !isBaseFileDueToPendingClustering(df)).findFirst()))
-          .filter(Option::isPresent).map(Option::get)
-          .map(df -> addBootstrapBaseFileIfPresent(new HoodieFileGroupId(partitionPath, df.getFileId()), df));
+      return getLatestBaseFilesBeforeOrOnFromCache(partitionPath, maxCommitTime);
     } finally {
       readLock.unlock();
     }
@@ -668,18 +661,22 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       List<String> formattedPartitionList = ensureAllPartitionsLoadedCorrectly();
       return formattedPartitionList.stream().collect(Collectors.toMap(
           Function.identity(),
-          partitionPath -> fetchAllStoredFileGroups(partitionPath)
-              .filter(fileGroup -> !isFileGroupReplacedBeforeOrOn(fileGroup.getFileGroupId(), maxCommitTime))
-              .map(fileGroup -> Option.fromJavaOptional(fileGroup.getAllBaseFiles()
-                  .filter(baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, maxCommitTime
-                  ))
-                  .filter(df -> !isBaseFileDueToPendingCompaction(df) && !isBaseFileDueToPendingClustering(df)).findFirst()))
-              .filter(Option::isPresent).map(Option::get)
-              .map(df -> addBootstrapBaseFileIfPresent(new HoodieFileGroupId(partitionPath, df.getFileId()), df))
+          partitionPath -> getLatestBaseFilesBeforeOrOnFromCache(partitionPath, maxCommitTime)
       ));
     } finally {
       readLock.unlock();
     }
+  }
+
+  private Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOnFromCache(String partitionPath, String maxCommitTime) {
+    return fetchAllStoredFileGroups(partitionPath)
+        .filter(fileGroup -> !isFileGroupReplacedBeforeOrOn(fileGroup.getFileGroupId(), maxCommitTime))
+        .map(fileGroup -> Option.fromJavaOptional(fileGroup.getAllBaseFiles()
+            .filter(baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, maxCommitTime
+            ))
+            .filter(df -> !isBaseFileDueToPendingCompaction(df) && !isBaseFileDueToPendingClustering(df)).findFirst()))
+        .filter(Option::isPresent).map(Option::get)
+        .map(df -> addBootstrapBaseFileIfPresent(new HoodieFileGroupId(partitionPath, df.getFileId()), df));
   }
 
   @Override

@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -94,7 +95,8 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       // table once in a batch manner through the timeline server;
       // (2) using direct file system listing:  we parallelize the partition listing so that
       // each partition can be listed on the file system concurrently through Spark.
-      if (config.getMetadataConfig().enabled()) {
+      // Note that
+      if (shouldUseBatchLookup(config)) {
         latestFilesMap = view.getAllLatestBaseFilesBeforeOrOn(instantTime).entrySet().stream()
             .collect(Collectors.toMap(
                 Map.Entry::getKey,
@@ -122,5 +124,22 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     } catch (IOException e) {
       throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
     }
+  }
+
+  /**
+   * Whether to use batch lookup for listing the latest base files in metadata table.
+   * <p>
+   * Note that metadata table has to be enabled, and the storage type of the file system view
+   * cannot be EMBEDDED_KV_STORE or SPILLABLE_DISK (these two types are not integrated with
+   * metadata table, see HUDI-5612).
+   *
+   * @param config Write configs.
+   * @return {@code true} if using batch lookup; {@code false} otherwise.
+   */
+  private boolean shouldUseBatchLookup(HoodieWriteConfig config) {
+    FileSystemViewStorageType storageType = config.getViewStorageConfig().getStorageType();
+    return config.getMetadataConfig().enabled()
+        && !FileSystemViewStorageType.EMBEDDED_KV_STORE.equals(storageType)
+        && !FileSystemViewStorageType.SPILLABLE_DISK.equals(storageType);
   }
 }

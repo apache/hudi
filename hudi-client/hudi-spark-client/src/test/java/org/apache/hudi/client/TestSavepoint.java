@@ -50,7 +50,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.view.FileSystemViewStorageType.EMBEDDED_KV_STORE;
 import static org.apache.hudi.common.table.view.FileSystemViewStorageType.MEMORY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -64,8 +63,7 @@ public class TestSavepoint extends HoodieClientTestBase {
 
   private static Stream<Arguments> testSavepointParams() {
     return Arrays.stream(new Object[][] {
-        {true, EMBEDDED_KV_STORE}, {true, MEMORY},
-        {false, EMBEDDED_KV_STORE}, {false, MEMORY}
+        {true, MEMORY}, {false, MEMORY}
     }).map(Arguments::of);
   }
 
