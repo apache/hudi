@@ -573,21 +573,21 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "It eagerly detects writing conflict before create markers and fails fast if a "
           + "conflict is detected, to release cluster compute resources as soon as possible.");
 
-  public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_BATCH_INTERVAL_MS = ConfigProperty
-      .key(CONCURRENCY_PREFIX + "early.conflict.async.detector.batch.interval_ms")
+  public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_INITIAL_DELAY_MS = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "async.conflict.detector.initial_delay_ms")
       .defaultValue(30000L)
       .sinceVersion("0.13.0")
       .withDocumentation("Used for timeline-server-based markers with "
           + "`AsyncTimelineServerBasedDetectionStrategy`. "
-          + "The time in milliseconds to delay first async marker conflict detection.");
+          + "The time in milliseconds to delay the first execution of async marker-based conflict detection.");
 
   public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_PERIOD_MS = ConfigProperty
-      .key(CONCURRENCY_PREFIX + "early.conflict.async.detector.period_ms")
+      .key(CONCURRENCY_PREFIX + "async.conflict.detector.period_ms")
       .defaultValue(30000L)
       .sinceVersion("0.13.0")
       .withDocumentation("Used for timeline-server-based markers with "
           + "`AsyncTimelineServerBasedDetectionStrategy`. "
-          + "The period in milliseconds between consecutive runs of async marker conflict detection.");
+          + "The period in milliseconds between successive executions of async marker-based conflict detection.");
 
   public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.check.commit.conflict")
@@ -2243,8 +2243,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return ReflectionUtils.loadClass(getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME));
   }
 
-  public Long getAsyncConflictDetectorBatchIntervalMs() {
-    return getLong(ASYNC_CONFLICT_DETECTOR_BATCH_INTERVAL_MS);
+  public Long getAsyncConflictDetectorInitialDelayMs() {
+    return getLong(ASYNC_CONFLICT_DETECTOR_INITIAL_DELAY_MS);
   }
 
   public Long getAsyncConflictDetectorPeriodMs() {
@@ -2810,8 +2810,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withAsyncConflictDetectorBatchIntervalMs(long intervalMs) {
-      writeConfig.setValue(ASYNC_CONFLICT_DETECTOR_BATCH_INTERVAL_MS, String.valueOf(intervalMs));
+    public Builder withAsyncConflictDetectorInitialDelayMs(long intervalMs) {
+      writeConfig.setValue(ASYNC_CONFLICT_DETECTOR_INITIAL_DELAY_MS, String.valueOf(intervalMs));
       return this;
     }
 

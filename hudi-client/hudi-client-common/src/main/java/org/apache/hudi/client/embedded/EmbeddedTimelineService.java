@@ -93,8 +93,8 @@ public class EmbeddedTimelineService {
       timelineServiceConfBuilder.earlyConflictDetectionEnable(true)
           .earlyConflictDetectionStrategy(writeConfig.getEarlyConflictDetectionStrategyClassName())
           .earlyConflictDetectionCheckCommitConflict(writeConfig.earlyConflictDetectionCheckCommitConflict())
-          .asyncConflictDetectorBatchIntervalMs(writeConfig.getAsyncConflictDetectorBatchIntervalMs())
-          .asyncConflictDetectorBatchPeriodMs(writeConfig.getAsyncConflictDetectorPeriodMs())
+          .asyncConflictDetectorInitialDelayMs(writeConfig.getAsyncConflictDetectorInitialDelayMs())
+          .asyncConflictDetectorPeriodMs(writeConfig.getAsyncConflictDetectorPeriodMs())
           .earlyConflictDetectionMaxAllowableHeartbeatIntervalInMs(writeConfig.getHoodieClientHeartbeatIntervalInMs());
     }
 

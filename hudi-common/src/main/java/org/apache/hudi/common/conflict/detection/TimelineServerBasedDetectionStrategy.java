@@ -48,7 +48,7 @@ public abstract class TimelineServerBasedDetectionStrategy implements EarlyConfl
   /**
    * Starts the async conflict detection thread.
    *
-   * @param batchIntervalMs                   Batch internal in milliseconds.
+   * @param initialDelayMs                    Initial delay in milliseconds.
    * @param periodMs                          Scheduling period in milliseconds.
    * @param markerDir                         Marker directory.
    * @param basePath                          Base path of the table.
@@ -57,7 +57,7 @@ public abstract class TimelineServerBasedDetectionStrategy implements EarlyConfl
    * @param markerHandler                     Marker handler.
    * @param completedCommits                  Completed Hudi commits.
    */
-  public abstract void startAsyncDetection(Long batchIntervalMs, Long periodMs, String markerDir,
+  public abstract void startAsyncDetection(Long initialDelayMs, Long periodMs, String markerDir,
                                            String basePath, Long maxAllowableHeartbeatIntervalInMs,
                                            FileSystem fileSystem, Object markerHandler,
                                            Set<HoodieInstant> completedCommits);
