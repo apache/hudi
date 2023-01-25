@@ -108,12 +108,10 @@ public class KeyGenUtils {
         keyIsNullEmpty = false;
       }
     }
-    if (recordKey.length() > 0) {
-      recordKey.deleteCharAt(recordKey.length() - 1);
-    }
+    recordKey.deleteCharAt(recordKey.length() - 1);
     if (keyIsNullEmpty) {
       throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
-          + recordKeyFields + " cannot be entirely null or empty.");
+          + recordKeyFields.toString() + " cannot be entirely null or empty.");
     }
     return recordKey.toString();
   }

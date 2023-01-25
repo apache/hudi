@@ -60,15 +60,14 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     // NOTE: We have to strip partition-path configuration, since it could only be interpreted by
     //       this key-gen
     super(stripPartitionPathConfig(props));
-    String recordKeyField = props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
-    this.recordKeyFields = recordKeyField == null ? Collections.emptyList() :
-        Arrays.stream(recordKeyField.split(","))
+    this.recordKeyFields =
+        Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
             .map(String::trim)
             .collect(Collectors.toList());
-    String partitionPathField = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
-    this.partitionPathFields = partitionPathField == null
+    String partitionPathFields = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+    this.partitionPathFields = partitionPathFields == null
         ? Collections.emptyList()
-        : Arrays.stream(partitionPathField.split(",")).map(String::trim).collect(Collectors.toList());
+        : Arrays.stream(partitionPathFields.split(",")).map(String::trim).collect(Collectors.toList());
     this.customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
 
     validateRecordKeyFields();
@@ -86,13 +85,9 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    if (autoGenerateRecordKeys) {
-      return super.getRecordKey(row);
-    } else {
-      return getRecordKeyFieldNames().size() == 1
-          ? new SimpleKeyGenerator(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()), null).getRecordKey(row)
-          : new ComplexKeyGenerator(config).getRecordKey(row);
-    }
+    return getRecordKeyFieldNames().size() == 1
+        ? new SimpleKeyGenerator(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()), null).getRecordKey(row)
+        : new ComplexKeyGenerator(config).getRecordKey(row);
   }
 
   @Override

@@ -43,6 +43,9 @@ import java.util.stream.Collectors;
  */
 public class CustomAvroKeyGenerator extends BaseKeyGenerator {
 
+  private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+  public static final String SPLIT_REGEX = ":";
+
   /**
    * Used as a part of config in CustomKeyGenerator.java.
    */
@@ -54,7 +57,6 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     super(props);
     this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
-    instantiateAutoRecordKeyGenerator();
   }
 
   @Override
@@ -100,14 +102,10 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    if (autoGenerateRecordKeys) {
-      return autoRecordKeyGenerator.getRecordKey(record);
-    } else {
-      validateRecordKeyFields();
-      return getRecordKeyFieldNames().size() == 1
-          ? new SimpleAvroKeyGenerator(config).getRecordKey(record)
-          : new ComplexAvroKeyGenerator(config).getRecordKey(record);
-    }
+    validateRecordKeyFields();
+    return getRecordKeyFieldNames().size() == 1
+        ? new SimpleAvroKeyGenerator(config).getRecordKey(record)
+        : new ComplexAvroKeyGenerator(config).getRecordKey(record);
   }
 
   private void validateRecordKeyFields() {
