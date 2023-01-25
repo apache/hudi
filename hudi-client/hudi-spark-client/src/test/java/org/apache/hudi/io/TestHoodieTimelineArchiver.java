@@ -1296,7 +1296,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
             .withMaxNumDeltaCommitsBeforeCompaction(8)
-            .retainCommits(1).archiveCommitsWith(2, 4).build())
+            .retainCommits(3).archiveCommitsWith(4, 5).build())
         .forTable("test-trip-table").build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
 
