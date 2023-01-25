@@ -509,7 +509,7 @@ public class HoodieTableMetaClient implements Serializable {
     // We should not use fs.getConf as this might be different from the original configuration
     // used to create the fs in unit tests
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath)
-        .setProperties(props).build();
+        .setMetaserverConfig(props).build();
     LOG.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType() + " from " + basePath);
     return metaClient;
   }
@@ -680,15 +680,12 @@ public class HoodieTableMetaClient implements Serializable {
 
   private static HoodieTableMetaClient newMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
       ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
-      String payloadClassName, String recordMergerStrategy, FileSystemRetryConfig fileSystemRetryConfig, Properties props) {
-    HoodieMetaserverConfig metaserverConfig = null == props
-        ? new HoodieMetaserverConfig.Builder().build()
-        : new HoodieMetaserverConfig.Builder().fromProperties(props).build();
+      String payloadClassName, String recordMergerStrategy, FileSystemRetryConfig fileSystemRetryConfig, HoodieMetaserverConfig metaserverConfig) {
     return metaserverConfig.isMetaserverEnabled()
         ? (HoodieTableMetaClient) ReflectionUtils.loadClass("org.apache.hudi.common.table.HoodieTableMetaserverClient",
         new Class<?>[] {Configuration.class, String.class, ConsistencyGuardConfig.class, String.class, FileSystemRetryConfig.class,
             String.class, String.class, HoodieMetaserverConfig.class}, conf, basePath, consistencyGuardConfig, recordMergerStrategy, fileSystemRetryConfig,
-        props.getProperty(HoodieTableConfig.DATABASE_NAME.key()), props.getProperty(HoodieTableConfig.NAME.key()), metaserverConfig)
+        metaserverConfig.getDatabaseName(), metaserverConfig.getTableName(), metaserverConfig)
         : new HoodieTableMetaClient(conf, basePath,
         loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, recordMergerStrategy, fileSystemRetryConfig);
   }
@@ -709,8 +706,8 @@ public class HoodieTableMetaClient implements Serializable {
     private String recordMergerStrategy = null;
     private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
     private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
+    private HoodieMetaserverConfig metaserverConfig = HoodieMetaserverConfig.newBuilder().build();
     private Option<TimelineLayoutVersion> layoutVersion = Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION);
-    private Properties props;
 
     public Builder setConf(Configuration conf) {
       this.conf = conf;
@@ -752,16 +749,15 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public Builder setProperties(Properties properties) {
-      this.props = properties;
+    public Builder setMetaserverConfig(Properties props) {
+      this.metaserverConfig = new HoodieMetaserverConfig.Builder().fromProperties(props).build();
       return this;
     }
 
-    public Builder setProperties(Map<String, String> map) {
+    public Builder setMetaserverConfig(Map<String, String> map) {
       Properties properties = new Properties();
       properties.putAll(map);
-      this.props = properties;
-      return this;
+      return setMetaserverConfig(properties);
     }
 
     public HoodieTableMetaClient build() {
@@ -769,7 +765,7 @@ public class HoodieTableMetaClient implements Serializable {
       ValidationUtils.checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
       return newMetaClient(conf, basePath,
           loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName,
-          recordMergerStrategy, fileSystemRetryConfig, props);
+          recordMergerStrategy, fileSystemRetryConfig, metaserverConfig);
     }
   }
 

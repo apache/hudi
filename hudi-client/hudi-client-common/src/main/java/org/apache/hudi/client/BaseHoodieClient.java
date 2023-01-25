@@ -154,7 +154,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
         .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
         .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
-        .setProperties(config.getProps()).build();
+        .setMetaserverConfig(config.getProps()).build();
   }
 
   public Option<EmbeddedTimelineService> getTimelineServer() {

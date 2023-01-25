@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
+
 import javax.annotation.concurrent.Immutable;
 
 import java.util.Properties;
@@ -37,6 +39,10 @@ public class HoodieMetaserverConfig extends HoodieConfig {
       .key(METASERVER_PREFIX + ".enabled")
       .defaultValue(false)
       .withDocumentation("Enable Hudi metaserver for storing Hudi tables' metadata.");
+
+  public static final ConfigProperty<String> DATABASE_NAME = HoodieTableConfig.DATABASE_NAME;
+
+  public static final ConfigProperty<String> TABLE_NAME = HoodieTableConfig.NAME;
 
   public static final ConfigProperty<String> METASERVER_URLS = ConfigProperty
       .key(METASERVER_PREFIX + ".uris")
@@ -59,6 +65,14 @@ public class HoodieMetaserverConfig extends HoodieConfig {
 
   public boolean isMetaserverEnabled() {
     return getBoolean(METASERVER_ENABLE);
+  }
+
+  public String getDatabaseName() {
+    return getStringOrDefault(DATABASE_NAME);
+  }
+
+  public String getTableName() {
+    return getStringOrDefault(TABLE_NAME);
   }
 
   public String getMetaserverUris() {
