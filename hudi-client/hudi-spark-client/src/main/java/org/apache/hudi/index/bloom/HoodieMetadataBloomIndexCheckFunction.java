@@ -60,6 +60,7 @@ public class HoodieMetadataBloomIndexCheckFunction implements
   // Assuming each file bloom filter takes up 512K, sizing the max file count
   // per batch so that the total fetched bloom filters would not cross 128 MB.
   private static final long BLOOM_FILTER_CHECK_MAX_FILE_COUNT_PER_BATCH = 256;
+
   private final HoodieTable hoodieTable;
 
   public HoodieMetadataBloomIndexCheckFunction(HoodieTable hoodieTable) {
@@ -92,7 +93,9 @@ public class HoodieMetadataBloomIndexCheckFunction implements
         final String partitionPath = entry._2.getPartitionPath();
         final String fileId = entry._1;
         if (!fileIDBaseFileMap.containsKey(fileId)) {
-          Option<HoodieBaseFile> baseFile = hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId);
+          Option<HoodieBaseFile> baseFile =
+              hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId);
+
           if (!baseFile.isPresent()) {
             throw new HoodieIndexException("Failed to find the base file for partition: " + partitionPath
                 + ", fileId: " + fileId);

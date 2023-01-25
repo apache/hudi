@@ -27,7 +27,6 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -57,6 +56,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
+import org.apache.hudi.util.Transient;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -88,41 +88,34 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadata.class);
 
-  private static final Schema METADATA_RECORD_SCHEMA = HoodieMetadataRecord.getClassSchema();
+  private final String metadataBasePath;
 
-  private String metadataBasePath;
-  // Metadata table's timeline and metaclient
   private HoodieTableMetaClient metadataMetaClient;
   private HoodieTableConfig metadataTableConfig;
+
   private HoodieTableFileSystemView metadataFileSystemView;
-  // should we reuse the open file handles, across calls
-  private final boolean reuse;
 
   // Readers for the latest file slice corresponding to file groups in the metadata partition
-  private final Map<Pair<String, String>, Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader>> partitionReaders =
-      new ConcurrentHashMap<>();
+  private final Transient<Map<Pair<String, String>, Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader>>> partitionReaders =
+      Transient.lazy(ConcurrentHashMap::new);
 
   public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                                    String datasetBasePath, String spillableMapDirectory) {
-    this(engineContext, metadataConfig, datasetBasePath, spillableMapDirectory, false);
-  }
-
-  public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
-                                   String datasetBasePath, String spillableMapDirectory, boolean reuse) {
     super(engineContext, metadataConfig, datasetBasePath, spillableMapDirectory);
-    this.reuse = reuse;
+
+    this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(dataBasePath.toString());
+
     initIfNeeded();
   }
 
   private void initIfNeeded() {
-    this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(dataBasePath.toString());
     if (!isMetadataTableEnabled) {
       if (!HoodieTableMetadata.isMetadataTable(metadataBasePath)) {
         LOG.info("Metadata table is disabled.");
       }
     } else if (this.metadataMetaClient == null) {
       try {
-        this.metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataBasePath).build();
+        this.metadataMetaClient = HoodieTableMetaClient.builder().setConf(getHadoopConf()).setBasePath(metadataBasePath).build();
         this.metadataFileSystemView = getFileSystemView(metadataMetaClient);
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
         this.isBloomFilterIndexEnabled = metadataConfig.isBloomFilterIndexEnabled();
@@ -203,14 +196,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
               return mergedRecords.stream()
                 .map(keyRecordPair -> keyRecordPair.getValue().orElse(null))
+                .filter(Objects::nonNull)
                 .iterator();
             } catch (IOException ioe) {
               throw new HoodieIOException("Error merging records from metadata table for  " + sortedKeyPrefixes.size() + " key : ", ioe);
             } finally {
               closeReader(readers);
             }
-          })
-        .filter(Objects::nonNull);
+          });
   }
 
   @Override
@@ -245,10 +238,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         fileSlicesKeysCount.addAndGet(fileSliceKeys.size());
       } catch (IOException ioe) {
         throw new HoodieIOException("Error merging records from metadata table for  " + sortedKeys.size() + " key : ", ioe);
-      } finally {
-        if (!reuse) {
-          closeReader(readers);
-        }
       }
     });
 
@@ -413,12 +402,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @return File reader and the record scanner pair for the requested file slice
    */
   private Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> getOrCreateReaders(String partitionName, FileSlice slice) {
-    if (reuse) {
-      Pair<String, String> key = Pair.of(partitionName, slice.getFileId());
-      return partitionReaders.computeIfAbsent(key, ignored -> openReaders(partitionName, slice));
-    } else {
-      return openReaders(partitionName, slice);
-    }
+    return partitionReaders.get().computeIfAbsent(Pair.of(partitionName, slice.getFileId()),
+        ignored -> openReaders(partitionName, slice));
   }
 
   private Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> openReaders(String partitionName, FileSlice slice) {
@@ -452,7 +437,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (basefile.isPresent()) {
       String baseFilePath = basefile.get().getPath();
       baseFileReader = (HoodieSeekingFileReader<?>) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-          .getFileReader(hadoopConf.get(), new Path(baseFilePath));
+          .getFileReader(getHadoopConf(), new Path(baseFilePath));
       baseFileOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", baseFilePath,
           basefile.get().getCommitTime(), baseFileOpenMs));
@@ -586,7 +571,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    */
   private synchronized void close(Pair<String, String> partitionFileSlicePair) {
     Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers =
-        partitionReaders.remove(partitionFileSlicePair);
+        partitionReaders.get().remove(partitionFileSlicePair);
     closeReader(readers);
   }
 
@@ -594,10 +579,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * Close and clear all the partitions readers.
    */
   private void closePartitionReaders() {
-    for (Pair<String, String> partitionFileSlicePair : partitionReaders.keySet()) {
+    for (Pair<String, String> partitionFileSlicePair : partitionReaders.get().keySet()) {
       close(partitionFileSlicePair);
     }
-    partitionReaders.clear();
+    partitionReaders.get().clear();
   }
 
   private void closeReader(Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers) {
@@ -617,10 +602,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   public boolean enabled() {
     return isMetadataTableEnabled;
-  }
-
-  public SerializableConfiguration getHadoopConf() {
-    return hadoopConf;
   }
 
   public HoodieTableMetaClient getMetadataMetaClient() {

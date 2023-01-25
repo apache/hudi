@@ -338,6 +338,10 @@ public class HoodieTableMetaClient implements Serializable {
     return hadoopConf.get();
   }
 
+  public SerializableConfiguration getSerializableHadoopConf() {
+    return hadoopConf;
+  }
+
   /**
    * Get the active instants as a timeline.
    *

@@ -32,7 +32,6 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -85,6 +84,7 @@ import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.util.Transient;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -114,32 +114,42 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public abstract class HoodieTable<T, I, K, O> implements Serializable {
+public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTable.class);
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieIndex<?, ?> index;
-  private SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
+
   private final HoodieTableMetadata metadata;
+
   private final HoodieStorageLayout storageLayout;
 
-  private transient FileSystemViewManager viewManager;
-  protected final transient HoodieEngineContext context;
+  // NOTE: These are managed by {@code TransientLazy} to implement transient semantic,
+  //       where corresponding values (if initialized) will be dropped when during serialization
+  //       and later re-initialized when accessed again
+  private final Transient<FileSystemViewManager> viewManager;
+
+  private final Transient<HoodieEngineContext> context;
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
-    this.hadoopConfiguration = context.getHadoopConf();
-    this.context = context;
+    // NOTE: We keep context as [[Transient]] to make sure we can pass on [[HoodieTable]] object
+    //       from the driver to the executors: we can't propagate whole context to the executor,
+    //       and therefore instead we re-create it as [[HoodieLocalEngineContext]]
+    this.context = Transient.eager(context, () -> new HoodieLocalEngineContext(metaClient.getHadoopConf()));
 
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
-        .build();
-    this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
+    this.metadata = HoodieTableMetadata.create(context, config.getMetadataConfig(), config.getBasePath(),
         FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
 
-    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
+    this.viewManager = Transient.lazy(() ->
+        // NOTE: It's critical we use {@code getContext()} here since {@code context} is
+        //       also a transient field
+        FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(),
+            config.getViewStorageConfig(), config.getCommonConfig(), this::getMetadataTable));
+
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
     this.storageLayout = getStorageLayout(config);
@@ -148,19 +158,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   protected abstract HoodieIndex<?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
 
+  public HoodieTableMetadata getMetadataTable() {
+    return metadata;
+  }
+
   protected HoodieStorageLayout getStorageLayout(HoodieWriteConfig config) {
     return HoodieLayoutFactory.createLayout(config);
-  }
-
-  private synchronized FileSystemViewManager getViewManager() {
-    if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
-    }
-    return viewManager;
-  }
-
-  public HoodieTableMetadata getMetadata() {
-    return metadata;
   }
 
   /**
@@ -303,21 +306,21 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Get the base file only view of the file system for this table.
    */
   public BaseFileOnlyView getBaseFileOnlyView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return viewManager.get().getFileSystemView(metaClient);
   }
 
   /**
    * Get the full view of the file system for this table.
    */
   public SliceView getSliceView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return viewManager.get().getFileSystemView(metaClient);
   }
 
   /**
    * Get complete view of the file system for this table with ability to force sync.
    */
   public SyncableFileSystemView getHoodieView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return viewManager.get().getFileSystemView(metaClient);
   }
 
   /**
@@ -622,8 +625,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
                                        Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
-    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
-    rollback(context, commitTime, inflightInstant, false, false);
+    scheduleRollback(getContext(), commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
+    rollback(getContext(), commitTime, inflightInstant, false, false);
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
   }
 
@@ -636,8 +639,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
-    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
-    rollback(context, commitTime, inflightInstant, true, false);
+    scheduleRollback(getContext(), commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
+    rollback(getContext(), commitTime, inflightInstant, true, false);
   }
 
   /**
@@ -677,7 +680,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Returns the possible invalid data file name with given marker files.
    */
   protected Set<String> getInvalidDataPaths(WriteMarkers markers) throws IOException {
-    return markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism());
+    return markers.createdAndMergedDataPaths(getContext(), config.getFinalizeWriteParallelism());
   }
 
   /**
@@ -860,9 +863,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public HoodieEngineContext getContext() {
-    // This is to handle scenarios where this is called at the executor tasks which do not have access
-    // to engine context, and it ends up being null (as its not serializable and marked transient here).
-    return context == null ? new HoodieLocalEngineContext(hadoopConfiguration.get()) : context;
+    return context.get();
   }
 
   /**
@@ -922,7 +923,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     if (shouldExecuteMetadataTableDeletion()) {
       try {
         LOG.info("Deleting metadata table because it is disabled in writer.");
-        deleteMetadataTable(config.getBasePath(), context);
+        deleteMetadataTable(config.getBasePath(), getContext());
         clearMetadataTablePartitionsConfig(Option.empty(), true);
       } catch (HoodieMetadataException e) {
         throw new HoodieException("Failed to delete metadata table.", e);
@@ -938,8 +939,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       if (shouldDeleteMetadataPartition(partitionType)) {
         try {
           LOG.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());
-          if (metadataPartitionExists(metaClient.getBasePath(), context, partitionType)) {
-            deleteMetadataPartition(metaClient.getBasePath(), context, partitionType);
+          if (metadataPartitionExists(metaClient.getBasePath(), getContext(), partitionType)) {
+            deleteMetadataPartition(metaClient.getBasePath(), getContext(), partitionType);
           }
           clearMetadataTablePartitionsConfig(Option.of(partitionType), false);
         } catch (HoodieMetadataException e) {
@@ -1003,11 +1004,25 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     }
   }
 
-  public HoodieTableMetadata getMetadataTable() {
-    return this.metadata;
-  }
-
   public Runnable getPreExecuteRunnable() {
     return Functions.noop();
+  }
+
+  @Override
+  public void close() {
+    try {
+      metadata.close();
+    } catch (Exception e) {
+      throw new HoodieException(e);
+    }
+  }
+
+  protected static HoodieTableMetadata createMetadataTable(HoodieEngineContext context, HoodieWriteConfig config) {
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .fromProperties(config.getMetadataConfig().getProps())
+        .build();
+
+    return HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
   }
 }

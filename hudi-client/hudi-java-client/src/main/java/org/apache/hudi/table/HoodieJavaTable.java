@@ -37,8 +37,14 @@ import java.util.List;
 
 public abstract class HoodieJavaTable<T>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+
   protected HoodieJavaTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
+  }
+
+  @Override
+  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+    return JavaHoodieIndexFactory.createIndex(config);
   }
 
   public static <T> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
@@ -65,10 +71,5 @@ public abstract class HoodieJavaTable<T>
   public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
       HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
     return metadata.clone(metadata.getWriteStatuses().collectAsList());
-  }
-
-  @Override
-  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return JavaHoodieIndexFactory.createIndex(config);
   }
 }

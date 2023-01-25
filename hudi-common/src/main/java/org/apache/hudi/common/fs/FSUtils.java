@@ -324,7 +324,7 @@ public class FSUtils {
                                                                String basePathStr,
                                                                String[] partitionPaths) {
     try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true)) {
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue())) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {
       throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);

@@ -18,6 +18,12 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -45,20 +51,13 @@ import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -74,11 +73,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.model.WriteOperationType.INSERT;
-import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
-
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
+import static org.apache.hudi.common.model.WriteOperationType.INSERT;
+import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -91,32 +89,29 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
   private static final Logger LOG = LogManager.getLogger(TestHoodieBackedTableMetadata.class);
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testTableOperations(boolean reuseReaders) throws Exception {
+  @Test
+  public void testTableOperations() throws Exception {
     HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     doWriteInsertAndUpsert(testTable);
 
     // trigger an upsert
     doWriteOperation(testTable, "0000003");
-    verifyBaseMetadataTable(reuseReaders);
+    verifyBaseMetadataTable();
   }
 
   /**
    * Create a cow table and call getAllFilesInPartition api in parallel which reads data files from MDT
    * This UT is guard that multi readers for MDT#getAllFilesInPartition api is safety.
-   * @param reuse
    * @throws Exception
    */
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testMultiReaderForHoodieBackedTableMetadata(boolean reuse) throws Exception {
+  @Test
+  public void testMultiReaderForHoodieBackedTableMetadata() throws Exception {
     final int taskNumber = 3;
     HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     testTable.doWriteOperation("000001", INSERT, emptyList(), asList("p1"), 1);
-    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), reuse);
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath());
     assertTrue(tableMetadata.enabled());
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
     String partition = metadataPartitions.get(0);
@@ -157,10 +152,9 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     doWriteInsertAndUpsert(testTable, "0000001", "0000002", false);
   }
 
-  private void verifyBaseMetadataTable(boolean reuseMetadataReaders) throws IOException {
-    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(
-        context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(),
-        writeConfig.getSpillableMapBasePath(), reuseMetadataReaders);
+  private void verifyBaseMetadataTable() throws IOException {
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
+        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath());
     assertTrue(tableMetadata.enabled());
     List<java.nio.file.Path> fsPartitionPaths = testTable.getAllPartitionPaths();
     List<String> fsPartitions = new ArrayList<>();
@@ -199,7 +193,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     init(tableType);
 
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
-        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), false);
+        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath());
 
     assertEquals(HoodieTableMetadataKeyGenerator.class.getCanonicalName(),
         tableMetadata.getMetadataMetaClient().getTableConfig().getKeyGeneratorClassName());
@@ -213,7 +207,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   public void testNotExistPartition(final HoodieTableType tableType) throws Exception {
     init(tableType);
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
-        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), false);
+        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath());
     FileStatus[] allFilesInPartition =
         tableMetadata.getAllFilesInPartition(new Path(writeConfig.getBasePath() + "dummy"));
     assertEquals(allFilesInPartition.length, 0);

@@ -53,6 +53,27 @@ public abstract class HoodieFlinkTable<T>
     super(config, context, metaClient);
   }
 
+  @Override
+  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+    return FlinkHoodieIndexFactory.createIndex((HoodieFlinkEngineContext) context, config);
+  }
+
+  /**
+   * Fetch instance of {@link HoodieTableMetadataWriter}.
+   *
+   * @return instance of {@link HoodieTableMetadataWriter}
+   */
+  @Override
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
+                                                                                            Option<T> actionMetadata) {
+    if (config.isMetadataTableEnabled()) {
+      return Option.of(FlinkHoodieBackedTableMetadataWriter.create(getContext().getHadoopConf().get(), config,
+          getContext(), actionMetadata, Option.of(triggeringInstantTimestamp)));
+    } else {
+      return Option.empty();
+    }
+  }
+
   public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
@@ -85,27 +106,6 @@ public abstract class HoodieFlinkTable<T>
   public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
       HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
     return metadata.clone(metadata.getWriteStatuses().collectAsList());
-  }
-
-  @Override
-  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return FlinkHoodieIndexFactory.createIndex((HoodieFlinkEngineContext) context, config);
-  }
-
-  /**
-   * Fetch instance of {@link HoodieTableMetadataWriter}.
-   *
-   * @return instance of {@link HoodieTableMetadataWriter}
-   */
-  @Override
-  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
-                                                                                            Option<T> actionMetadata) {
-    if (config.isMetadataTableEnabled()) {
-      return Option.of(FlinkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
-          context, actionMetadata, Option.of(triggeringInstantTimestamp)));
-    } else {
-      return Option.empty();
-    }
   }
 
   private static void setLatestInternalSchema(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {

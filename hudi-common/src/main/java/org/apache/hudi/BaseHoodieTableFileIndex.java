@@ -452,7 +452,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       Path basePath
   ) {
     HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true);
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
     return newTableMetadata;
   }
 

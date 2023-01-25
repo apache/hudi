@@ -51,6 +51,50 @@ public abstract class HoodieSparkTable<T>
     super(config, context, metaClient);
   }
 
+  @Override
+  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+    return SparkHoodieIndexFactory.createIndex(config);
+  }
+
+  /**
+   * Fetch instance of {@link HoodieTableMetadataWriter}.
+   *
+   * @return instance of {@link HoodieTableMetadataWriter}
+   */
+  @Override
+  public <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
+                                                                                            Option<R> actionMetadata) {
+    if (config.isMetadataTableEnabled()) {
+      // Create the metadata table writer. First time after the upgrade this creation might trigger
+      // metadata table bootstrapping. Bootstrapping process could fail and checking the table
+      // existence after the creation is needed.
+      final HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
+          getContext().getHadoopConf().get(), config, getContext(), actionMetadata, Option.of(triggeringInstantTimestamp));
+      // even with metadata enabled, some index could have been disabled
+      // delete metadata partitions corresponding to such indexes
+      deleteMetadataIndexIfNecessary();
+      try {
+        if (isMetadataTableExists || metaClient.getFs().exists(new Path(
+            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
+          isMetadataTableExists = true;
+          return Option.of(metadataWriter);
+        }
+      } catch (IOException e) {
+        throw new HoodieMetadataException("Checking existence of metadata table failed", e);
+      }
+    } else {
+      maybeDeleteMetadataTable();
+    }
+
+    return Option.empty();
+  }
+
+  @Override
+  public Runnable getPreExecuteRunnable() {
+    final TaskContext taskContext = TaskContext.get();
+    return () -> TaskContext$.MODULE$.setTaskContext(taskContext);
+  }
+
   public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
@@ -76,49 +120,5 @@ public abstract class HoodieSparkTable<T>
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
     return hoodieSparkTable;
-  }
-
-  @Override
-  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return SparkHoodieIndexFactory.createIndex(config);
-  }
-
-  /**
-   * Fetch instance of {@link HoodieTableMetadataWriter}.
-   *
-   * @return instance of {@link HoodieTableMetadataWriter}
-   */
-  @Override
-  public <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
-                                                                                            Option<R> actionMetadata) {
-    if (config.isMetadataTableEnabled()) {
-      // Create the metadata table writer. First time after the upgrade this creation might trigger
-      // metadata table bootstrapping. Bootstrapping process could fail and checking the table
-      // existence after the creation is needed.
-      final HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
-          context.getHadoopConf().get(), config, context, actionMetadata, Option.of(triggeringInstantTimestamp));
-      // even with metadata enabled, some index could have been disabled
-      // delete metadata partitions corresponding to such indexes
-      deleteMetadataIndexIfNecessary();
-      try {
-        if (isMetadataTableExists || metaClient.getFs().exists(new Path(
-            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
-          isMetadataTableExists = true;
-          return Option.of(metadataWriter);
-        }
-      } catch (IOException e) {
-        throw new HoodieMetadataException("Checking existence of metadata table failed", e);
-      }
-    } else {
-      maybeDeleteMetadataTable();
-    }
-
-    return Option.empty();
-  }
-
-  @Override
-  public Runnable getPreExecuteRunnable() {
-    final TaskContext taskContext = TaskContext.get();
-    return () -> TaskContext$.MODULE$.setTaskContext(taskContext);
   }
 }
