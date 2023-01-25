@@ -285,50 +285,49 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   }
 
   private boolean isBlockCorrupted(int blocksize) throws IOException {
-    if (!StorageSchemes.isWriteTransactional(fs.getScheme())) {
+    if (StorageSchemes.isWriteTransactional(fs.getScheme())) {
       // skip block corrupt check if writes are transactional. see https://issues.apache.org/jira/browse/HUDI-2118
-      long currentPos = inputStream.getPos();
-      long blockSizeFromFooter;
-
-      try {
-        // check if the blocksize mentioned in the footer is the same as the header;
-        // by seeking and checking the length of a long.  We do not seek `currentPos + blocksize`
-        // which can be the file size for the last block in the file, causing EOFException
-        // for some FSDataInputStream implementation
-        inputStream.seek(currentPos + blocksize - Long.BYTES);
-        // Block size in the footer includes the magic header, which the header does not include.
-        // So we have to shorten the footer block size by the size of magic hash
-        blockSizeFromFooter = inputStream.readLong() - magicBuffer.length;
-      } catch (EOFException e) {
-        LOG.info("Found corrupted block in file " + logFile + " with block size(" + blocksize + ") running past EOF");
-        // this is corrupt
-        // This seek is required because contract of seek() is different for naked DFSInputStream vs BufferedFSInputStream
-        // release-3.1.0-RC1/DFSInputStream.java#L1455
-        // release-3.1.0-RC1/BufferedFSInputStream.java#L73
-        inputStream.seek(currentPos);
-        return true;
-      }
-
-      if (blocksize != blockSizeFromFooter) {
-        LOG.info("Found corrupted block in file " + logFile + ". Header block size(" + blocksize
-            + ") did not match the footer block size(" + blockSizeFromFooter + ")");
-        inputStream.seek(currentPos);
-        return true;
-      }
-
-      try {
-        readMagic();
-        // all good - either we found the sync marker or EOF. Reset position and continue
-        return false;
-      } catch (CorruptedLogFileException e) {
-        // This is a corrupted block
-        LOG.info("Found corrupted block in file " + logFile + ". No magic hash found right after footer block size entry");
-        return true;
-      } finally {
-        inputStream.seek(currentPos);
-      }
-    } else {
       return false;
+    }
+    long currentPos = inputStream.getPos();
+    long blockSizeFromFooter;
+
+    try {
+      // check if the blocksize mentioned in the footer is the same as the header;
+      // by seeking and checking the length of a long.  We do not seek `currentPos + blocksize`
+      // which can be the file size for the last block in the file, causing EOFException
+      // for some FSDataInputStream implementation
+      inputStream.seek(currentPos + blocksize - Long.BYTES);
+      // Block size in the footer includes the magic header, which the header does not include.
+      // So we have to shorten the footer block size by the size of magic hash
+      blockSizeFromFooter = inputStream.readLong() - magicBuffer.length;
+    } catch (EOFException e) {
+      LOG.info("Found corrupted block in file " + logFile + " with block size(" + blocksize + ") running past EOF");
+      // this is corrupt
+      // This seek is required because contract of seek() is different for naked DFSInputStream vs BufferedFSInputStream
+      // release-3.1.0-RC1/DFSInputStream.java#L1455
+      // release-3.1.0-RC1/BufferedFSInputStream.java#L73
+      inputStream.seek(currentPos);
+      return true;
+    }
+
+    if (blocksize != blockSizeFromFooter) {
+      LOG.info("Found corrupted block in file " + logFile + ". Header block size(" + blocksize
+          + ") did not match the footer block size(" + blockSizeFromFooter + ")");
+      inputStream.seek(currentPos);
+      return true;
+    }
+
+    try {
+      readMagic();
+      // all good - either we found the sync marker or EOF. Reset position and continue
+      return false;
+    } catch (CorruptedLogFileException e) {
+      // This is a corrupted block
+      LOG.info("Found corrupted block in file " + logFile + ". No magic hash found right after footer block size entry");
+      return true;
+    } finally {
+      inputStream.seek(currentPos);
     }
   }
 
