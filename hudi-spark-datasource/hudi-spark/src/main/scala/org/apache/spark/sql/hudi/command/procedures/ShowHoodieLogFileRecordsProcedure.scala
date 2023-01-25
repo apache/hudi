@@ -88,7 +88,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
       logFilePaths.toStream.takeWhile(_ => allRecords.size() < limit).foreach {
         logFilePath => {
           val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePath))))
-          val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(logFilePath), schema)
+          val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(logFilePath), schema, HoodieRecordType.AVRO)
           while (reader.hasNext) {
             val block = reader.next()
             block match {

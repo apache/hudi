@@ -854,7 +854,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         }
         Schema readerSchema = converter.convert(messageType);
         reader =
-            HoodieLogFormat.newReader(fs, new HoodieLogFile(new Path(logFilePathStr)), readerSchema);
+            HoodieLogFormat.newReader(fs, new HoodieLogFile(new Path(logFilePathStr)), readerSchema, HoodieRecordType.AVRO);
         // read the avro blocks
         if (reader.hasNext()) {
           HoodieLogBlock block = reader.next();

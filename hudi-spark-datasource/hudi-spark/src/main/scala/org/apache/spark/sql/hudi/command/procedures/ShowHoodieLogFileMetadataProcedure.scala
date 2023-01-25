@@ -67,7 +67,7 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
         val statuses = fs.listStatus(new Path(logFilePath))
         val schema = new AvroSchemaConverter()
           .convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePath))))
-        val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(statuses(0).getPath), schema)
+        val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(statuses(0).getPath), schema, HoodieRecordType.AVRO)
 
         // read the avro blocks
         while (reader.hasNext) {

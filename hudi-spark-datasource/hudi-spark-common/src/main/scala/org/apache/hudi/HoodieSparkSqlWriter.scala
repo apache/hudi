@@ -329,8 +329,12 @@ object HoodieSparkSqlWriter {
               DataSourceUtils.createHoodieClient(jsc, dataFileSchemaStr, path, tblName, mapAsJavaMap(finalOpts))
             }.asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
             val writeConfig = client.getConfig
-            if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == HoodieTableType.MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
-              throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
+            val logBlockType = writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK)
+            if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK
+              && tableType == HoodieTableType.MERGE_ON_READ
+              && logBlockType != HoodieLogBlockType.PARQUET_DATA_BLOCK
+              && logBlockType != HoodieLogBlockType.AVRO_DATA_BLOCK) {
+              throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} not support $logBlockType.")
             }
             // Convert to RDD[HoodieRecord]
             val hoodieRecords = createHoodieRecordRdd(

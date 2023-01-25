@@ -18,13 +18,19 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
+import org.apache.spark.sql.avro.HoodieAvroDeserializer;
+import org.apache.spark.sql.avro.HoodieAvroSerializer;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.types.StructType;
 
 public class HoodieSparkRecordUtils {
@@ -65,5 +71,18 @@ public class HoodieSparkRecordUtils {
       objects[i] = value;
     }
     return objects;
+  }
+
+  public static HoodieSparkRecord avro2SparkRecord(Schema schema, IndexedRecord record) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
+    HoodieAvroDeserializer deserializer = HoodieInternalRowUtils.getCachedAvroDeserializer(schema);
+    UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType);
+    InternalRow row = (InternalRow) deserializer.deserialize(record).get();
+    return new HoodieSparkRecord(unsafeProjection.apply(row), structType);
+  }
+
+  public static IndexedRecord sparkRecord2Avro(Schema schema, HoodieSparkRecord record) {
+    HoodieAvroSerializer serializer = HoodieInternalRowUtils.getCachedAvroSerializer(schema);
+    return (IndexedRecord) serializer.serialize(record.getData());
   }
 }

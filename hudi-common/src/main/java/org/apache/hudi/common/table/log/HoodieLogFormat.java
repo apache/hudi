@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -287,15 +288,15 @@ public interface HoodieLogFormat {
     return new WriterBuilder();
   }
 
-  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema)
+  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, HoodieRecord.HoodieRecordType recordType)
       throws IOException {
-    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false);
+    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false, recordType);
   }
 
   static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema,
-      boolean readBlockLazily, boolean reverseReader) throws IOException {
+      boolean readBlockLazily, boolean reverseReader, HoodieRecord.HoodieRecordType recordType) throws IOException {
     return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, readBlockLazily,
-        reverseReader);
+        reverseReader, recordType);
   }
 
   /**

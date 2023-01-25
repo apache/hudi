@@ -24,9 +24,11 @@ import java.util.concurrent.ConcurrentHashMap
 import org.apache.avro.Schema
 import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.hudi.AvroConversionUtils
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, UnsafeProjection}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData, MapData}
 import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
@@ -40,6 +42,14 @@ object HoodieInternalRowUtils {
   val unsafeProjectionThreadLocal: ThreadLocal[HashMap[(StructType, StructType), UnsafeProjection]] =
     ThreadLocal.withInitial(new Supplier[HashMap[(StructType, StructType), UnsafeProjection]] {
       override def get(): HashMap[(StructType, StructType), UnsafeProjection] = new HashMap[(StructType, StructType), UnsafeProjection]
+    })
+  val avroDeserializerMapThreadLocal: ThreadLocal[HashMap[Schema, HoodieAvroDeserializer]] =
+    ThreadLocal.withInitial(new Supplier[HashMap[Schema, HoodieAvroDeserializer]] {
+      override def get(): HashMap[Schema, HoodieAvroDeserializer] = new HashMap[Schema, HoodieAvroDeserializer]
+    })
+  val avroSerializerMapThreadLocal: ThreadLocal[HashMap[Schema, HoodieAvroSerializer]] =
+    ThreadLocal.withInitial(new Supplier[HashMap[Schema, HoodieAvroSerializer]] {
+      override def get(): HashMap[Schema, HoodieAvroSerializer] = new HashMap[Schema, HoodieAvroSerializer]
     })
   val schemaMap = new ConcurrentHashMap[Schema, StructType]
   val orderPosListMap = new ConcurrentHashMap[(StructType, String), NestedFieldPath]
@@ -208,6 +218,26 @@ object HoodieInternalRowUtils {
         case _ => rewritePrimaryType(oldRecord, oldSchema, newSchema)
       }
     }
+  }
+
+  def getCachedAvroSerializer(schema: Schema): HoodieAvroSerializer = {
+    val avroSerializerMap = avroSerializerMapThreadLocal.get()
+    if (!avroSerializerMap.containsKey(schema)) {
+      val structType = getCachedSchema(schema)
+      val avroSerializer = sparkAdapter.createAvroSerializer(structType, schema, nullable = false)
+      avroSerializerMap.put(schema, avroSerializer)
+    }
+    avroSerializerMap.get(schema)
+  }
+
+  def getCachedAvroDeserializer(schema: Schema): HoodieAvroDeserializer = {
+    val avroDeserializerMap = avroDeserializerMapThreadLocal.get()
+    if (!avroDeserializerMap.containsKey(schema)) {
+      val structType = getCachedSchema(schema)
+      val avroDeserializer = sparkAdapter.createAvroDeserializer(schema, structType)
+      avroDeserializerMap.put(schema, avroDeserializer)
+    }
+    avroDeserializerMap.get(schema)
   }
 
   def getCachedPosList(structType: StructType, field: String): NestedFieldPath = {

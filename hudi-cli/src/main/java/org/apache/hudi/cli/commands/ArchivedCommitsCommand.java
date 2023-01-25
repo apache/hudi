@@ -114,7 +114,7 @@ public class ArchivedCommitsCommand {
     for (FileStatus fs : fsStatuses) {
       // read the archived file
       Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
-          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
+          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema(), HoodieRecordType.AVRO);
 
       List<IndexedRecord> readRecords = new ArrayList<>();
       // read the avro blocks
@@ -188,7 +188,7 @@ public class ArchivedCommitsCommand {
     for (FileStatus fs : fsStatuses) {
       // read the archived file
       HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
-          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
+          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema(), HoodieRecordType.AVRO);
 
       List<IndexedRecord> readRecords = new ArrayList<>();
       // read the avro blocks

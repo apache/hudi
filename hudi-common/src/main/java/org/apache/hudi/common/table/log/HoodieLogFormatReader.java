@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -48,13 +49,14 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final boolean reverseLogReader;
   private final String recordKeyField;
   private final boolean enableInlineReading;
+  private final HoodieRecordType recordType;
   private int bufferSize;
 
   private static final Logger LOG = LogManager.getLogger(HoodieLogFormatReader.class);
 
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
                         boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
-                        String recordKeyField, InternalSchema internalSchema) throws IOException {
+                        String recordKeyField, InternalSchema internalSchema, HoodieRecordType recordType) throws IOException {
     this.logFiles = logFiles;
     this.fs = fs;
     this.readerSchema = readerSchema;
@@ -65,10 +67,11 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.recordKeyField = recordKeyField;
     this.enableInlineReading = enableRecordLookups;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+    this.recordType = recordType;
     if (logFiles.size() > 0) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
       this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
-          enableRecordLookups, recordKeyField, internalSchema);
+          enableRecordLookups, recordKeyField, internalSchema, recordType);
     }
   }
 
@@ -108,7 +111,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
           this.prevReadersInOpenState.add(currentReader);
         }
         this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
-            enableInlineReading, recordKeyField, internalSchema);
+            enableInlineReading, recordKeyField, internalSchema, recordType);
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }
