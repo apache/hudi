@@ -59,8 +59,8 @@ test_spark_hadoop_mr_bundles () {
     # save Spark SQL query results
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar \
       -i <(echo 'spark.sql("select * from trips").coalesce(1).write.csv("/tmp/sparksql/trips/results"); System.exit(0)')
-    numRecordsSparkSQL=$(cat /tmp/sparksql/trips/results/*.csv | wc -l)
-    if [ "$numRecordsSparkSQL" -ne 10 ]; then
+    numRecords=$(cat /tmp/sparksql/trips/results/*.csv | wc -l)
+    if [ "$numRecords" -ne 10 ]; then
         echo "::error::validate.sh Spark SQL validation failed."
         exit 1
     fi
@@ -153,7 +153,11 @@ test_flink_bundle() {
     local EXIT_CODE=$?
     $FLINK_HOME/bin/stop-cluster.sh
     unset HADOOP_CLASSPATH
-    exit $EXIT_CODE
+    if [ "$EXIT_CODE" -ne 0 ]; then
+        echo "::error::validate.sh Flink bundle validation failed."
+        exit 1
+    fi
+    echo "::warning::validate.sh done validating Flink bundle validation was successful."
 }
 
 
@@ -184,6 +188,11 @@ test_kafka_connect_bundle() {
     $WORKDIR/kafka/consume.sh
     local EXIT_CODE=$?
     kill $ZOOKEEPER_PID $KAFKA_SERVER_PID $SCHEMA_REG_PID
+    if [ "$EXIT_CODE" -ne 0 ]; then
+        echo "::error::validate.sh Kafka Connect bundle validation failed."
+        exit 1
+    fi
+    echo "::warning::validate.sh done validating Kafka Connect bundle validation was successful."
 }
 
 ##
@@ -192,11 +201,12 @@ test_kafka_connect_bundle() {
 # env vars (defined in container):
 #   SPARK_HOME: path to the spark directory
 ##
-test_hudi_metaserver_bundles () {
-    echo "::warning::validate.sh setting up hudi metaserver bundles validation"
+test_metaserver_bundle () {
+    echo "::warning::validate.sh setting up Metaserver bundle validation"
 
-    echo "::warning::validate.sh Start hudi metaserver"
-    java -jar $JARS_DIR/metaserver.jar & local METASEVER=$!
+    echo "::warning::validate.sh Start Metaserver"
+    java -jar $JARS_DIR/metaserver.jar &
+    local METASEVER_PID=$!
 
     echo "::warning::validate.sh Start hive server"
     $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
@@ -208,18 +218,18 @@ test_hudi_metaserver_bundles () {
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/service/write.scala
     ls /tmp/hudi-bundles/tests/trips
 
-    echo "::warning::validate.sh Query and validate the results using Spark SQL"
-    # save Spark SQL query results
+    echo "::warning::validate.sh Query and validate the results using Spark DataSource"
+    # save Spark DataSource query results
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar  < $WORKDIR/service/read.scala
-    numRecordsSparkSQL=$(cat /tmp/sparksql/trips/results/*.csv | wc -l)
-    echo $numRecordsSparkSQL
-    if [ "$numRecordsSparkSQL" -ne 10 ]; then
-        echo "::error::validate.sh Spark SQL validation failed."
+    numRecords=$(cat /tmp/sparksql/trips/results/*.csv | wc -l)
+    echo $numRecords
+    if [ "$numRecords" -ne 10 ]; then
+        echo "::error::validate.sh Metaserver bundle validation failed."
         exit 1
     fi
 
-    echo "::warning::validate.sh hudi metaserver validation was successful."
-    kill $DERBY_PID $HIVE_PID $METASEVER
+    echo "::warning::validate.sh Metaserver bundle validation was successful."
+    kill $DERBY_PID $HIVE_PID $METASEVER_PID
 }
 
 
@@ -267,9 +277,9 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating kafka connect bundle"
 
-echo "::warning::validate.sh validating hudi metaserver bundle"
-test_hudi_metaserver_bundles
+echo "::warning::validate.sh validating metaserver bundle"
+test_metaserver_bundle
 if [ "$?" -ne 0 ]; then
     exit 1
 fi
-echo "::warning::validate.sh done validating hudi metaserver bundle"
+echo "::warning::validate.sh done validating metaserver bundle"
