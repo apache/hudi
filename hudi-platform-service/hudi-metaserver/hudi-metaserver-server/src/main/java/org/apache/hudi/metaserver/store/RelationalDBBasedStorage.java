@@ -31,7 +31,6 @@ import org.apache.hudi.metaserver.thrift.TState;
 import org.apache.hudi.metaserver.thrift.Table;
 
 import java.io.Serializable;
-import java.text.ParseException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -110,26 +109,22 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
     String oldTimestamp;
     String newTimestamp;
     boolean success;
-    try {
+    do {
+      oldTimestamp = getLatestTimestamp(tableId);
       do {
-        oldTimestamp = getLatestTimestamp(tableId);
-        do {
-          newTimestamp = HoodieInstantTimeGenerator.createNewInstantTime(0L);
-        } while (oldTimestamp != null && HoodieTimeline.compareTimestamps(newTimestamp,
-            HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldTimestamp));
-        Map<String, Object> params = new HashMap<>();
-        params.put("tableId", tableId);
-        params.put("oldTimestamp", oldTimestamp);
-        params.put("newTimestamp", newTimestamp);
-        if (oldTimestamp == null) {
-          success = timelineDao.insertBySql("insertTimestamp", params) == 1;
-        } else {
-          success = timelineDao.updateBySql("updateTimestamp", params) == 1;
-        }
-      } while (!success);
-    } catch (ParseException e) {
-      throw new MetaserverStorageException("Fail to parse the timestamp, " + e.getMessage());
-    }
+        newTimestamp = HoodieInstantTimeGenerator.createNewInstantTime(0L);
+      } while (oldTimestamp != null && HoodieTimeline.compareTimestamps(newTimestamp,
+          HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldTimestamp));
+      Map<String, Object> params = new HashMap<>();
+      params.put("tableId", tableId);
+      params.put("oldTimestamp", oldTimestamp);
+      params.put("newTimestamp", newTimestamp);
+      if (oldTimestamp == null) {
+        success = timelineDao.insertBySql("insertTimestamp", params) == 1;
+      } else {
+        success = timelineDao.updateBySql("updateTimestamp", params) == 1;
+      }
+    } while (!success);
     return newTimestamp;
   }
 
