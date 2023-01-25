@@ -141,17 +141,17 @@ public class TimelineService {
             + "conflict is detected, to release cluster compute resources as soon as possible.")
     public Boolean earlyConflictDetectionEnable = false;
 
-    @Parameter(names = {"--async-conflict-detector-batch-interval-ms"}, description =
+    @Parameter(names = {"--async-conflict-detector-initial-delay-ms"}, description =
         "Used for timeline-server-based markers with "
             + "`AsyncTimelineServerBasedDetectionStrategy`. "
-            + "The time in milliseconds to delay first async marker conflict detection.")
-    public Long asyncConflictDetectorBatchIntervalMs = 30000L;
+            + "The time in milliseconds to delay the first execution of async marker-based conflict detection.")
+    public Long asyncConflictDetectorInitialDelayMs = 30000L;
 
-    @Parameter(names = {"--async-conflict-detector-batch-period-ms"}, description =
+    @Parameter(names = {"--async-conflict-detector-period-ms"}, description =
         "Used for timeline-server-based markers with "
             + "`AsyncTimelineServerBasedDetectionStrategy`. "
-            + "The period in milliseconds between consecutive runs of async marker conflict detection.")
-    public Long asyncConflictDetectorBatchPeriodMs = 30000L;
+            + "The period in milliseconds between successive executions of async marker-based conflict detection.")
+    public Long asyncConflictDetectorPeriodMs = 30000L;
 
     @Parameter(names = {"--early-conflict-detection-max-heartbeat-interval-ms"}, description =
         "Used for timeline-server-based markers with "
@@ -186,8 +186,8 @@ public class TimelineService {
       private String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
       private Boolean checkCommitConflict = false;
       private Boolean earlyConflictDetectionEnable = false;
-      private Long asyncConflictDetectorBatchIntervalMs = 30000L;
-      private Long asyncConflictDetectorBatchPeriodMs = 30000L;
+      private Long asyncConflictDetectorInitialDelayMs = 30000L;
+      private Long asyncConflictDetectorPeriodMs = 30000L;
       private Long maxAllowableHeartbeatIntervalInMs = 60000L;
 
       public Builder() {
@@ -273,13 +273,13 @@ public class TimelineService {
         return this;
       }
 
-      public Builder asyncConflictDetectorBatchIntervalMs(Long asyncConflictDetectorBatchIntervalMs) {
-        this.asyncConflictDetectorBatchIntervalMs = asyncConflictDetectorBatchIntervalMs;
+      public Builder asyncConflictDetectorInitialDelayMs(Long asyncConflictDetectorInitialDelayMs) {
+        this.asyncConflictDetectorInitialDelayMs = asyncConflictDetectorInitialDelayMs;
         return this;
       }
 
-      public Builder asyncConflictDetectorBatchPeriodMs(Long asyncConflictDetectorBatchPeriodMs) {
-        this.asyncConflictDetectorBatchPeriodMs = asyncConflictDetectorBatchPeriodMs;
+      public Builder asyncConflictDetectorPeriodMs(Long asyncConflictDetectorPeriodMs) {
+        this.asyncConflictDetectorPeriodMs = asyncConflictDetectorPeriodMs;
         return this;
       }
 
@@ -306,8 +306,8 @@ public class TimelineService {
         config.earlyConflictDetectionStrategy = this.earlyConflictDetectionStrategy;
         config.checkCommitConflict = this.checkCommitConflict;
         config.earlyConflictDetectionEnable = this.earlyConflictDetectionEnable;
-        config.asyncConflictDetectorBatchIntervalMs = this.asyncConflictDetectorBatchIntervalMs;
-        config.asyncConflictDetectorBatchPeriodMs = this.asyncConflictDetectorBatchPeriodMs;
+        config.asyncConflictDetectorInitialDelayMs = this.asyncConflictDetectorInitialDelayMs;
+        config.asyncConflictDetectorPeriodMs = this.asyncConflictDetectorPeriodMs;
         config.maxAllowableHeartbeatIntervalInMs = this.maxAllowableHeartbeatIntervalInMs;
         return config;
       }

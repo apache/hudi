@@ -61,7 +61,7 @@ public class AsyncTimelineServerBasedDetectionStrategy extends TimelineServerBas
   }
 
   @Override
-  public void startAsyncDetection(Long batchIntervalMs, Long periodMs, String markerDir,
+  public void startAsyncDetection(Long initialDelayMs, Long periodMs, String markerDir,
                                   String basePath, Long maxAllowableHeartbeatIntervalInMs,
                                   FileSystem fileSystem, Object markerHandler,
                                   Set<HoodieInstant> completedCommits) {
@@ -74,7 +74,7 @@ public class AsyncTimelineServerBasedDetectionStrategy extends TimelineServerBas
         new MarkerBasedEarlyConflictDetectionRunnable(
             hasConflict, (MarkerHandler) markerHandler, markerDir, basePath,
             fileSystem, maxAllowableHeartbeatIntervalInMs, completedCommits, checkCommitConflict),
-        batchIntervalMs, periodMs, TimeUnit.MILLISECONDS);
+        initialDelayMs, periodMs, TimeUnit.MILLISECONDS);
   }
 
   @Override
