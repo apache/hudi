@@ -169,7 +169,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     // get fs and check number of latest files
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-        metaClient.getActiveTimeline().getCommitsTimeline().firstInstant(),
+        metaClient.getActiveTimeline().getCommitsTimeline().getFirstNonSavepointCommit(),
         fs.listStatus(new Path(Paths.get(tablePath, duplicatedPartitionPath).toString())));
     List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
     assertEquals(3, filteredStatuses.size(), "There should be 3 files.");
@@ -200,7 +200,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     connectTableAndReloadMetaClient(tablePath);
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-        metaClient.getActiveTimeline().getCommitsTimeline().firstInstant(),
+        metaClient.getActiveTimeline().getCommitsTimeline().getFirstNonSavepointCommit(),
         fs.listStatus(new Path(Paths.get(tablePath, duplicatedPartitionPathWithUpdates).toString())));
     List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
     assertEquals(2, filteredStatuses.size(), "There should be 2 files.");
@@ -231,7 +231,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     connectTableAndReloadMetaClient(tablePath);
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-        metaClient.getActiveTimeline().getCommitsTimeline().firstInstant(),
+        metaClient.getActiveTimeline().getCommitsTimeline().getFirstNonSavepointCommit(),
         fs.listStatus(new Path(Paths.get(tablePath, duplicatedPartitionPathWithUpserts).toString())));
     List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
     assertEquals(3, filteredStatuses.size(), "There should be 3 files.");
@@ -265,7 +265,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     connectTableAndReloadMetaClient(tablePath);
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-        metaClient.getActiveTimeline().getCommitsTimeline().firstInstant(),
+        metaClient.getActiveTimeline().getCommitsTimeline().getFirstNonSavepointCommit(),
         fs.listStatus(new Path(Paths.get(tablePath, duplicatedNoPartitionPath).toString())));
     List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
     assertEquals(2, filteredStatuses.size(), "There should be 2 files.");
@@ -300,7 +300,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     // get fs and check number of latest files
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-        metaClient.getActiveTimeline().getCommitsTimeline().firstInstant(),
+        metaClient.getActiveTimeline().getCommitsTimeline().getFirstNonSavepointCommit(),
         fs.listStatus(new Path(Paths.get(tablePath, duplicatedPartitionPath).toString())));
     List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
     assertEquals(3, filteredStatuses.size(), "There should be 3 files.");

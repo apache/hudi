@@ -432,6 +432,10 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     }
     return firstNonSavepointCommit;
   }
+
+  public Option<HoodieInstant> getFirstSavepointCommit() {
+    return  Option.fromJavaOptional(getInstantsAsStream().filter(entry -> entry.getAction().equals(HoodieTimeline.SAVEPOINT_ACTION)).findFirst());
+  }
   
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {

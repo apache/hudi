@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
@@ -130,24 +131,23 @@ public class HoodieFileGroup implements Serializable {
    * some log files, that are based off a commit or delta commit.
    */
   private boolean isFileSliceCommitted(FileSlice slice) {
-    if (!compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, lastInstant.get().getTimestamp())) {
+    // if it is after the last committed instant
+    if (compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN, lastInstant.get().getTimestamp())) {
       return false;
     }
+
     // if its part of completed timeline, return true.
     if (timeline.containsInstant(slice.getBaseInstantTime())) {
       return true;
     }
 
-    if (firstActiveInstant.isPresent() && compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, firstActiveInstant.get().getTimestamp())) {
-      // To get here:
-      // 1. the timestamp must be <= the last commit
-      // 2. not in the completed timeline
-      // 3. the timestamp must be >= the first active instant
-      // This means that it is not archived
-      return false;
+    // if it was archived after a savepoint
+    Option<HoodieInstant> firstSavepoint = timeline.getFirstSavepointCommit();
+    if (firstSavepoint.isPresent() && compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, firstSavepoint.get().getTimestamp())) {
+      return true;
     }
-    // else, if its part of archived, return true
-    return timeline.isBeforeTimelineStarts(slice.getBaseInstantTime());
+
+    return !(firstActiveInstant.isPresent() && compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, firstActiveInstant.get().getTimestamp()));
   }
 
   /**

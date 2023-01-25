@@ -363,6 +363,8 @@ public interface HoodieTimeline extends Serializable {
    */
   Option<HoodieInstant> getFirstNonSavepointCommit();
 
+  Option<HoodieInstant> getFirstSavepointCommit();
+
   /**
    * Read the completed instant details.
    */

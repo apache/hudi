@@ -481,7 +481,7 @@ public class IncrementalInputSplits implements Serializable {
   }
 
   private Option<HoodieInstant> getFirstActiveInstant(HoodieTableMetaClient metaClient) {
-    return filterInstantsByCondition(metaClient.getCommitsAndCompactionTimeline()).firstInstant();
+    return filterInstantsByCondition(metaClient.getCommitsAndCompactionTimeline()).getFirstNonSavepointCommit();
   }
 
   private HoodieTimeline getArchivedReadTimeline(HoodieTableMetaClient metaClient, String startInstant) {

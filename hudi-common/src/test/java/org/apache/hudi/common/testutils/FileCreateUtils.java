@@ -444,7 +444,7 @@ public class FileCreateUtils {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
       for (String path : paths) {
         TableFileSystemView.BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
-            metaClient.getCommitsTimeline().filterCompletedInstants(), metaClient.getCommitsTimeline().firstInstant(),
+            metaClient.getCommitsTimeline().filterCompletedInstants(), metaClient.getCommitsTimeline().getFirstNonSavepointCommit(),
             fs.globStatus(new org.apache.hadoop.fs.Path(path)));
         toReturn.put(path, fileSystemView.getLatestBaseFiles().count());
       }

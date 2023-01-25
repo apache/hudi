@@ -1046,7 +1046,7 @@ public class HoodieTableMetadataUtil {
           HoodieActiveTimeline.createNewInstantTime());
       timeline = new HoodieDefaultTimeline(Stream.of(instant), metaClient.getActiveTimeline()::getInstantDetails);
     }
-    return new HoodieTableFileSystemView(metaClient, timeline, timeline.firstInstant());
+    return new HoodieTableFileSystemView(metaClient, timeline, timeline.getFirstNonSavepointCommit());
   }
 
   /**

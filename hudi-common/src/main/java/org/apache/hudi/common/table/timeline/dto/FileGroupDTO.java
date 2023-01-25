@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.timeline.dto;
 
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -51,7 +50,7 @@ public class FileGroupDTO {
 
   @JsonProperty("firstActiveInstant")
   @Nullable
-  HoodieInstant firstActiveInstant;
+  InstantDTO firstActiveInstant;
 
   public static FileGroupDTO fromFileGroup(HoodieFileGroup fileGroup) {
     FileGroupDTO dto = new FileGroupDTO();
@@ -59,14 +58,14 @@ public class FileGroupDTO {
     dto.id = fileGroup.getFileGroupId().getFileId();
     dto.slices = fileGroup.getAllRawFileSlices().map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
     dto.timeline = TimelineDTO.fromTimeline(fileGroup.getTimeline());
-    dto.firstActiveInstant = fileGroup.getFirstActiveInstant().isPresent() ? fileGroup.getFirstActiveInstant().get() : null;
+    dto.firstActiveInstant = InstantDTO.fromInstant(fileGroup.getFirstActiveInstant().isPresent() ? fileGroup.getFirstActiveInstant().get() : null);
     return dto;
   }
 
   public static HoodieFileGroup toFileGroup(FileGroupDTO dto, HoodieTableMetaClient metaClient) {
     HoodieFileGroup fileGroup =
         new HoodieFileGroup(dto.partition, dto.id, TimelineDTO.toTimeline(dto.timeline, metaClient),
-            dto.firstActiveInstant != null ? Option.of(dto.firstActiveInstant) : Option.empty());
+            dto.firstActiveInstant == null ? Option.empty() : Option.of(InstantDTO.toInstant(dto.firstActiveInstant)));
     dto.slices.stream().map(FileSliceDTO::toFileSlice).forEach(fileSlice -> fileGroup.addFileSlice(fileSlice));
     return fileGroup;
   }

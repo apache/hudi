@@ -29,7 +29,7 @@ public class TestSpillableMapBasedIncrementalFSViewSync extends TestIncrementalF
 
   @Override
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline) {
-    return new SpillableMapBasedFileSystemView(metaClient, timeline, timeline.getWriteTimeline().firstInstant(),
+    return new SpillableMapBasedFileSystemView(metaClient, timeline, timeline.getWriteTimeline().getFirstNonSavepointCommit(),
         FileSystemViewStorageConfig.newBuilder().withMaxMemoryForView(0L).withIncrementalTimelineSync(true).build(),
         HoodieCommonConfig.newBuilder().build());
   }

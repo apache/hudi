@@ -274,7 +274,7 @@ public class HoodieInputFormatUtils {
       baseTimeline = tableMetaClient.getActiveTimeline();
     }
     return Pair.of(Option.of(baseTimeline.getCommitsTimeline().filterCompletedInstants()), baseTimeline.getCommitsTimeline()
-        .firstInstant());
+        .getFirstNonSavepointCommit());
   }
 
   /**

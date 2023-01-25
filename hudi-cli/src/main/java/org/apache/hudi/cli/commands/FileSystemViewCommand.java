@@ -273,6 +273,6 @@ public class FileSystemViewCommand {
 
     HoodieTimeline filteredTimeline = new HoodieDefaultTimeline(instantsStream,
         (Function<HoodieInstant, Option<byte[]>> & Serializable) metaClient.getActiveTimeline()::getInstantDetails);
-    return new HoodieTableFileSystemView(metaClient, filteredTimeline, writeTimeline.firstInstant(), statuses.toArray(new FileStatus[0]));
+    return new HoodieTableFileSystemView(metaClient, filteredTimeline, writeTimeline.getFirstNonSavepointCommit(), statuses.toArray(new FileStatus[0]));
   }
 }

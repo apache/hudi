@@ -119,7 +119,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       hoodieTable.getHoodieView().sync();
       FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
       HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
-          metaClient.getCommitsTimeline().firstInstant(), allFiles);
+          metaClient.getCommitsTimeline().getFirstNonSavepointCommit(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
       assertTrue(dataFilesToRead.findAny().isPresent());
 
@@ -273,12 +273,12 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
 
       FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
       HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(),
-          metaClient.getCommitsTimeline().firstInstant(), allFiles);
+          metaClient.getCommitsTimeline().getFirstNonSavepointCommit(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
       assertFalse(dataFilesToRead.findAny().isPresent());
 
       tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
-          metaClient.getCommitsTimeline().firstInstant(), allFiles);
+          metaClient.getCommitsTimeline().getFirstNonSavepointCommit(), allFiles);
       dataFilesToRead = tableView.getLatestBaseFiles();
       assertTrue(dataFilesToRead.findAny().isPresent(),
           "should list the base files we wrote in the delta commit");
@@ -316,7 +316,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
 
       allFiles = listAllBaseFilesInPath(hoodieTable);
       tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
-          metaClient.getCommitsTimeline().firstInstant(), allFiles);
+          metaClient.getCommitsTimeline().getFirstNonSavepointCommit(), allFiles);
       dataFilesToRead = tableView.getLatestBaseFiles();
       assertTrue(dataFilesToRead.findAny().isPresent());
 

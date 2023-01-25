@@ -266,7 +266,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def timeline: HoodieTimeline =
   // NOTE: We're including compaction here since it's not considering a "commit" operation
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
-  protected def firstActiveInstant: org.apache.hudi.common.util.Option[HoodieInstant] = metaClient.getCommitsAndCompactionTimeline.getWriteTimeline.firstInstant()
+  protected def firstActiveInstant: org.apache.hudi.common.util.Option[HoodieInstant] = metaClient.getCommitsAndCompactionTimeline.getWriteTimeline.getFirstNonSavepointCommit
 
   private def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))

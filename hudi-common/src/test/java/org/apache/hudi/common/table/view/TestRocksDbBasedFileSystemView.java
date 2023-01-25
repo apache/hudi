@@ -31,7 +31,7 @@ public class TestRocksDbBasedFileSystemView extends TestHoodieTableFileSystemVie
   @Override
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) throws IOException {
     String subdirPath = Files.createTempDirectory(tempDir, null).toAbsolutePath().toString();
-    return new RocksDbBasedFileSystemView(metaClient, timeline, timeline.getWriteTimeline().firstInstant(),
+    return new RocksDbBasedFileSystemView(metaClient, timeline, timeline.getWriteTimeline().getFirstNonSavepointCommit(),
         FileSystemViewStorageConfig.newBuilder().withRocksDBPath(subdirPath).build());
   }
 }

@@ -121,7 +121,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
 
     val filteredTimeline = new HoodieDefaultTimeline(
       new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
-    new HoodieTableFileSystemView(metaClient, filteredTimeline, filteredTimeline.firstInstant(),
+    new HoodieTableFileSystemView(metaClient, filteredTimeline, filteredTimeline.getFirstNonSavepointCommit,
       statuses.toArray(new Array[FileStatus](0)))
   }
 

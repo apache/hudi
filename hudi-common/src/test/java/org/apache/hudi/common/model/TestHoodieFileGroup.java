@@ -45,7 +45,7 @@ public class TestHoodieFileGroup {
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(completed, inflight);
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data",
         activeTimeline.getCommitsTimeline().filterCompletedInstants(),
-        activeTimeline.getCommitsTimeline().firstInstant());
+        activeTimeline.getCommitsTimeline().getFirstNonSavepointCommit());
     for (int i = 0; i < 3; i++) {
       HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i);
       fileGroup.addBaseFile(baseFile);
@@ -67,7 +67,7 @@ public class TestHoodieFileGroup {
         new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05") // this can be DELTA_COMMIT/REPLACE_COMMIT as well
     ).collect(Collectors.toList()));
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants(),
-        activeTimeline.getWriteTimeline().firstInstant());
+        activeTimeline.getWriteTimeline().getFirstNonSavepointCommit());
     for (int i = 0; i < 7; i++) {
       HoodieBaseFile baseFile = new HoodieBaseFile("data_1_0" + i);
       fileGroup.addBaseFile(baseFile);

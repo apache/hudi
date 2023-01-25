@@ -33,7 +33,7 @@ public class TestRocksDBBasedIncrementalFSViewSync extends TestIncrementalFSView
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline)
       throws IOException {
     String subdirPath = Files.createTempDirectory(tempDir, null).toAbsolutePath().toString();
-    return new RocksDbBasedFileSystemView(metaClient, timeline, timeline.getWriteTimeline().firstInstant(), FileSystemViewStorageConfig.newBuilder()
+    return new RocksDbBasedFileSystemView(metaClient, timeline, timeline.getWriteTimeline().getFirstNonSavepointCommit(), FileSystemViewStorageConfig.newBuilder()
         .withRocksDBPath(subdirPath).withIncrementalTimelineSync(true).build());
   }
 }

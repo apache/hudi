@@ -259,14 +259,14 @@ public class CompactionTestBase extends HoodieClientTestBase {
     FileStatus[] allBaseFiles = HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles();
     HoodieTableFileSystemView view =
         getHoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(),
-            table.getMetaClient().getActiveTimeline().getWriteTimeline().firstInstant(), allBaseFiles);
+            table.getMetaClient().getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit(), allBaseFiles);
     return view.getLatestBaseFiles().collect(Collectors.toList());
   }
 
   protected List<FileSlice> getCurrentLatestFileSlices(HoodieTable table) {
     HoodieTableFileSystemView view = new HoodieTableFileSystemView(table.getMetaClient(),
         table.getMetaClient().getActiveTimeline().reload().getWriteTimeline(),
-        table.getMetaClient().getActiveTimeline().reload().getWriteTimeline().firstInstant());
+        table.getMetaClient().getActiveTimeline().reload().getWriteTimeline().getFirstNonSavepointCommit());
     return Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS)
         .flatMap(view::getLatestFileSlices).collect(Collectors.toList());
   }

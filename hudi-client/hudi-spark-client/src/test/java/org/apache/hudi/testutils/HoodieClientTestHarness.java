@@ -663,7 +663,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     // versions are +1 as autoClean / compaction happens end of commits
     int numFileVersions = metadataWriteConfig.getCleanerFileVersionsRetained() + 1;
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline(),
-        metadataMetaClient.getActiveTimeline().firstInstant());
+        metadataMetaClient.getActiveTimeline().getFirstNonSavepointCommit());
     metadataTablePartitions.forEach(partition -> {
       MetadataPartitionType partitionType = partitionTypeMap.get(partition);
 

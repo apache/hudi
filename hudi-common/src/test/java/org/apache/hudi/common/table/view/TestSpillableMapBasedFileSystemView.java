@@ -28,7 +28,7 @@ public class TestSpillableMapBasedFileSystemView extends TestHoodieTableFileSyst
 
   @Override
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
-    return new SpillableMapBasedFileSystemView(metaClient, timeline, timeline.getWriteTimeline().firstInstant(), FileSystemViewStorageConfig.newBuilder()
+    return new SpillableMapBasedFileSystemView(metaClient, timeline, timeline.getWriteTimeline().getFirstNonSavepointCommit(), FileSystemViewStorageConfig.newBuilder()
         // pure disk base View
         .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).withMaxMemoryForView(0L).build(),
         HoodieCommonConfig.newBuilder().build());

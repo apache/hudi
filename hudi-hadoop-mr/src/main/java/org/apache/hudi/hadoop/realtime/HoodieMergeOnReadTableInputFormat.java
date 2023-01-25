@@ -174,7 +174,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
         .listAffectedFilesForCommits(job, new Path(tableMetaClient.getBasePath()), metadataList));
     // step3
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(tableMetaClient, commitsTimelineToReturn, commitsTimelineToReturn
-        .firstInstant(), affectedFileStatus.toArray(new FileStatus[0]));
+        .getFirstNonSavepointCommit(), affectedFileStatus.toArray(new FileStatus[0]));
     // build fileGroup from fsView
     Path basePath = new Path(tableMetaClient.getBasePath());
     // filter affectedPartition by inputPaths

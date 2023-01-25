@@ -191,7 +191,7 @@ public class HoodieCDCExtractor {
       return new HoodieTableFileSystemView(
           metaClient,
           metaClient.getCommitsTimeline().filterCompletedInstants(),
-          metaClient.getCommitsTimeline().firstInstant(),
+          metaClient.getCommitsTimeline().getFirstNonSavepointCommit(),
           touchedFiles.toArray(new FileStatus[0])
       );
     } catch (Exception e) {

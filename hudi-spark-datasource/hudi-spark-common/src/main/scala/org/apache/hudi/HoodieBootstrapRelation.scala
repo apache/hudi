@@ -169,7 +169,7 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
     }
 
     val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitsTimeline
-      .filterCompletedInstants, metaClient.getActiveTimeline.getCommitsTimeline.firstInstant(), fileStatuses.toArray)
+      .filterCompletedInstants, metaClient.getActiveTimeline.getCommitsTimeline.getFirstNonSavepointCommit, fileStatuses.toArray)
     val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
 
     if (log.isDebugEnabled) {

@@ -212,7 +212,7 @@ public class HoodieClientTestUtils {
       for (String path : paths) {
         BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
             metaClient.getCommitsTimeline().filterCompletedInstants(),
-            metaClient.getCommitsTimeline().firstInstant(), fs.globStatus(new Path(path)));
+            metaClient.getCommitsTimeline().getFirstNonSavepointCommit(), fs.globStatus(new Path(path)));
         latestFiles.addAll(fileSystemView.getLatestBaseFiles().collect(Collectors.toList()));
       }
     } catch (Exception e) {

@@ -192,7 +192,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext,
                 metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()),
                 metaClient.getActiveTimeline().filterCompletedInstants().findInstantsBeforeOrEquals(getConf().get(TIMESTAMP_AS_OF.key())),
-                metaClient.getActiveTimeline().findInstantsBeforeOrEquals(getConf().get(TIMESTAMP_AS_OF.key())).firstInstant());
+                metaClient.getActiveTimeline().findInstantsBeforeOrEquals(getConf().get(TIMESTAMP_AS_OF.key())).getFirstNonSavepointCommit());
           } else {
             fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
                 metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));

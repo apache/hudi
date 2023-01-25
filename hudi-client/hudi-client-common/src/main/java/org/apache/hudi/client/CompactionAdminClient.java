@@ -82,7 +82,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
     HoodieCompactionPlan plan = getCompactionPlan(metaClient, compactionInstant);
     HoodieTableFileSystemView fsView =
         new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), metaClient.getCommitsAndCompactionTimeline()
-            .firstInstant());
+            .getFirstNonSavepointCommit());
 
     if (plan.getOperations() != null) {
       List<CompactionOperation> ops = plan.getOperations().stream()
@@ -205,7 +205,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
 
     final HoodieTableFileSystemView fsView =
         new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), metaClient.getCommitsAndCompactionTimeline()
-            .firstInstant());
+            .getFirstNonSavepointCommit());
     List<Pair<HoodieLogFile, HoodieLogFile>> renameActions =
         failed.stream().flatMap(v -> getRenamingActionsToAlignWithCompactionOperation(metaClient, compactionInstant,
             v.getOperation(), Option.of(fsView)).stream()).collect(Collectors.toList());
@@ -236,7 +236,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       Option<HoodieTableFileSystemView> fsViewOpt) {
     HoodieTableFileSystemView fileSystemView = fsViewOpt.isPresent() ? fsViewOpt.get()
         : new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), metaClient.getCommitsAndCompactionTimeline()
-        .firstInstant());
+        .getFirstNonSavepointCommit());
     HoodieInstant lastInstant = metaClient.getCommitsAndCompactionTimeline().lastInstant().get();
     FileSlice merged =
         fileSystemView.getLatestMergedFileSlicesBeforeOrOn(op.getPartitionPath(), lastInstant.getTimestamp())
@@ -284,7 +284,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       CompactionOperation operation, Option<HoodieTableFileSystemView> fsViewOpt) throws IOException {
     HoodieTableFileSystemView fileSystemView = fsViewOpt.isPresent() ? fsViewOpt.get()
         : new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), metaClient.getCommitsAndCompactionTimeline()
-        .firstInstant());
+        .getFirstNonSavepointCommit());
     Option<HoodieInstant> lastInstant = metaClient.getCommitsAndCompactionTimeline().lastInstant();
     try {
       if (lastInstant.isPresent()) {
@@ -393,7 +393,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       Option<HoodieTableFileSystemView> fsViewOpt, boolean skipValidation) throws IOException {
     HoodieTableFileSystemView fsView = fsViewOpt.isPresent() ? fsViewOpt.get()
         : new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(),
-        metaClient.getCommitsAndCompactionTimeline().firstInstant());
+        metaClient.getCommitsAndCompactionTimeline().getFirstNonSavepointCommit());
     HoodieCompactionPlan plan = getCompactionPlan(metaClient, compactionInstant);
     if (plan.getOperations() != null) {
       LOG.info(
@@ -434,7 +434,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
     List<Pair<HoodieLogFile, HoodieLogFile>> result = new ArrayList<>();
     HoodieTableFileSystemView fileSystemView = fsViewOpt.isPresent() ? fsViewOpt.get()
         : new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline(), metaClient.getCommitsAndCompactionTimeline()
-        .firstInstant());
+        .getFirstNonSavepointCommit());
     if (!skipValidation) {
       validateCompactionOperation(metaClient, compactionInstant, operation, Option.of(fileSystemView));
     }

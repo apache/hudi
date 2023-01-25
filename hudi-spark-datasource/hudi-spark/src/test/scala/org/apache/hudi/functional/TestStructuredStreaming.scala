@@ -379,7 +379,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   }
 
   private def getLatestFileGroupsFileId(partition: String):Array[String] = {
-    getHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline, metaClient.getActiveTimeline.firstInstant(),
+    getHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline, metaClient.getActiveTimeline.getFirstNonSavepointCommit,
       HoodieTestTable.of(metaClient).listAllBaseFiles())
     tableView.getLatestFileSlices(partition)
       .toArray().map(slice => slice.asInstanceOf[FileSlice].getFileGroupId.getFileId)

@@ -278,7 +278,7 @@ public class HoodieSnapshotExporter {
         .build();
     return new HoodieTableFileSystemView(tableMetadata, tableMetadata
         .getActiveTimeline().getWriteTimeline().filterCompletedInstants(),
-        tableMetadata.getActiveTimeline().getWriteTimeline().firstInstant());
+        tableMetadata.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit());
   }
 
   public static void main(String[] args) throws IOException {

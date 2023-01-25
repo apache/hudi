@@ -236,7 +236,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       // the state of the table
       HoodieTableFileSystemView tableView =
           getHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(),
-              metaClient.getActiveTimeline().firstInstant(), HoodieTestTable.of(metaClient).listAllBaseFiles());
+              metaClient.getActiveTimeline().getFirstNonSavepointCommit(), HoodieTestTable.of(metaClient).listAllBaseFiles());
 
       Set<String> latestBaseFileNames = tableView.getLatestBaseFiles()
           .map(BaseFile::getFileName)
