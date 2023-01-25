@@ -24,5 +24,5 @@ spark.read.format("hudi").
   option("hoodie.metadata.enabled", "false").
   option("hoodie.metaserver.enabled", "true").
   option("hoodie.metaserver.uris", "thrift://localhost:9090").
-  load(basePath).coalesce(1).write.csv("/tmp/sparksql/trips/results")
+  load(basePath).coalesce(1).write.csv("/tmp/metaserver-bundle/sparkdatasource/trips/results")
 System.exit(0)

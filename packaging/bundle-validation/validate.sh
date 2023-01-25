@@ -58,15 +58,15 @@ test_spark_hadoop_mr_bundles () {
     echo "::warning::validate.sh Query and validate the results using Spark SQL"
     # save Spark SQL query results
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar \
-      -i <(echo 'spark.sql("select * from trips").coalesce(1).write.csv("/tmp/sparksql/trips/results"); System.exit(0)')
-    numRecords=$(cat /tmp/sparksql/trips/results/*.csv | wc -l)
+      -i <(echo 'spark.sql("select * from trips").coalesce(1).write.csv("/tmp/spark-bundle/sparksql/trips/results"); System.exit(0)')
+    numRecords=$(cat /tmp/spark-bundle/sparksql/trips/results/*.csv | wc -l)
     if [ "$numRecords" -ne 10 ]; then
         echo "::error::validate.sh Spark SQL validation failed."
         exit 1
     fi
     echo "::warning::validate.sh Query and validate the results using HiveQL"
     # save HiveQL query results
-    hiveqlresultsdir=/tmp/hiveql/trips/results
+    hiveqlresultsdir=/tmp/hadoop-mr-bundle/hiveql/trips/results
     mkdir -p $hiveqlresultsdir
     $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
       -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
@@ -221,7 +221,7 @@ test_metaserver_bundle () {
     echo "::warning::validate.sh Query and validate the results using Spark DataSource"
     # save Spark DataSource query results
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar  < $WORKDIR/service/read.scala
-    numRecords=$(cat /tmp/sparksql/trips/results/*.csv | wc -l)
+    numRecords=$(cat /tmp/metaserver-bundle/sparkdatasource/trips/results/*.csv | wc -l)
     echo $numRecords
     if [ "$numRecords" -ne 10 ]; then
         echo "::error::validate.sh Metaserver bundle validation failed."
