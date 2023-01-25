@@ -153,7 +153,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public List<String> getPartitionPathWithPathPrefixes(List<String> relativePathPrefixes) throws IOException {
-    // TODO: consider skipping this method for non-partitioned table and simply the checks
+    // TODO: consider skipping this method for non-partitioned table and simplify the checks
     return getAllPartitionPaths().stream()
         .filter(p -> relativePathPrefixes.stream().anyMatch(relativePathPrefix ->
             // Partition paths stored in metadata table do not have the slash at the end.
