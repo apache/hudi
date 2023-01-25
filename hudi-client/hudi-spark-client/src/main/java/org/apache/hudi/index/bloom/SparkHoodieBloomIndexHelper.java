@@ -24,6 +24,8 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.BaseFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -229,6 +231,10 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
     private final Broadcast<HoodieTableFileSystemView> latestBaseFilesBroadcast;
 
+    // TODO(HUDI-5619) remove when addressed
+    private final Map<String, Map<String, String>> cachedLatestBaseFileNames =
+        new HashMap<>(16);
+
     private final int targetPartitions;
 
     AffineBloomIndexFileGroupPartitioner(Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast,
@@ -248,12 +254,32 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       String partitionPath = partitionFileGroupId.getPartitionPath();
       String fileGroupId = partitionFileGroupId.getFileId();
 
+      /*
+      // TODO(HUDI-5619) uncomment when addressed
       String baseFileName =
           latestBaseFilesBroadcast.getValue()
               .getLatestBaseFile(partitionPath, fileGroupId)
               .orElseThrow(() -> new HoodieException(
                   String.format("File from file-group (%s) not found in partition path (%s)", fileGroupId, partitionPath)))
               .getFileName();
+       */
+
+      // NOTE: This is a workaround to alleviate performance impact of needing to process whole
+      //       partition for every file-group being looked up.
+      //       See HUDI-5619 for more details
+      String baseFileName = cachedLatestBaseFileNames.computeIfAbsent(partitionPath, ignored ->
+              latestBaseFilesBroadcast.getValue()
+                  .getLatestBaseFiles(partitionPath)
+                  .collect(
+                      Collectors.toMap(HoodieBaseFile::getFileId, BaseFile::getFileName)
+                  )
+          )
+          .get(fileGroupId);
+
+      if (baseFileName == null) {
+        throw new HoodieException(
+            String.format("File from file-group (%s) not found in partition path (%s)", fileGroupId, partitionPath));
+      }
 
       String bloomIndexEncodedKey =
           getBloomFilterIndexKey(new PartitionIndexID(partitionPath), new FileIndexID(baseFileName));
