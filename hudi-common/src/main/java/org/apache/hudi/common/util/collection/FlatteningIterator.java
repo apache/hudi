@@ -15,33 +15,41 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.index.bloom;
+package org.apache.hudi.common.util.collection;
 
 import java.util.Iterator;
-import java.util.function.Function;
+import java.util.NoSuchElementException;
 
 /**
- * TODO revisit (simplify)
+ * Iterator flattening source {@link Iterator} holding other {@link Iterator}s
  */
-public final class FlattenedIterator<O, I> extends AbstractIterator<I> {
-  private final Iterator<O> outerIterator;
-  private final Function<O, Iterator<I>> innerIteratorFunction;
-  private Iterator<I> innerIterator;
+public final class FlatteningIterator<T, I extends Iterator<T>> implements Iterator<T> {
 
-  public FlattenedIterator(Iterator<O> outerIterator, Function<O, Iterator<I>> innerIteratorFunction) {
-    this.outerIterator = outerIterator;
-    this.innerIteratorFunction = innerIteratorFunction;
+  private final Iterator<I> sourceIterator;
+  private Iterator<T> innerSourceIterator;
+
+  public FlatteningIterator(Iterator<I> source) {
+    this.sourceIterator = source;
+  }
+
+  public boolean hasNext() {
+    while (innerSourceIterator == null || !innerSourceIterator.hasNext()) {
+      if (sourceIterator.hasNext()) {
+        innerSourceIterator = sourceIterator.next();
+      } else {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   @Override
-  public I makeNext() {
-    while (innerIterator == null || !innerIterator.hasNext()) {
-      if (outerIterator.hasNext()) {
-        innerIterator = innerIteratorFunction.apply(outerIterator.next());
-      } else {
-        return allDone();
-      }
+  public T next() {
+    if (!hasNext()) {
+      throw new NoSuchElementException();
     }
-    return innerIterator.next();
+
+    return innerSourceIterator.next();
   }
 }

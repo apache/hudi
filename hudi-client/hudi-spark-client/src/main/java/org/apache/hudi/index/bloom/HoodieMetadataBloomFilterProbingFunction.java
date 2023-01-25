@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.FlatteningIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
@@ -43,7 +44,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 /**
  * Implementation of the function that probing Bloom Filters of individual files verifying
@@ -78,7 +78,7 @@ public class HoodieMetadataBloomFilterProbingFunction implements
 
   @Override
   public Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>> call(Iterator<Tuple2<HoodieFileGroupId, String>> tuple2Iterator) throws Exception {
-    return new FlattenedIterator<>(new BloomIndexLazyKeyCheckIterator(tuple2Iterator), Function.identity());
+    return new FlatteningIterator<>(new BloomIndexLazyKeyCheckIterator(tuple2Iterator));
   }
 
   private class BloomIndexLazyKeyCheckIterator
