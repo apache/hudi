@@ -29,7 +29,6 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -41,8 +40,7 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
   private final GlobalAvroDeleteKeyGenerator globalAvroDeleteKeyGenerator;
   public GlobalDeleteKeyGenerator(TypedProperties config) {
     super(config);
-    this.recordKeyFields = config.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
-        ? Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(",")) : Collections.emptyList();
+    this.recordKeyFields = Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","));
     this.globalAvroDeleteKeyGenerator = new GlobalAvroDeleteKeyGenerator(config);
   }
 
@@ -63,22 +61,14 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    if (autoGenerateRecordKeys) {
-      return super.getRecordKey(row);
-    } else {
-      tryInitRowAccessor(row.schema());
-      return combineCompositeRecordKey(rowAccessor.getRecordKeyParts(row));
-    }
+    tryInitRowAccessor(row.schema());
+    return combineCompositeRecordKey(rowAccessor.getRecordKeyParts(row));
   }
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
-    if (autoGenerateRecordKeys) {
-      return super.getRecordKey(internalRow, schema);
-    } else {
-      tryInitRowAccessor(schema);
-      return combineCompositeRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
-    }
+    tryInitRowAccessor(schema);
+    return combineCompositeRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
   }
 
   @Override

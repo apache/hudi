@@ -95,7 +95,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "partitionField")
 
       assertThrows(classOf[IllegalArgumentException]) {
-        new SimpleKeyGenerator(props).getRecordKey(baseRow)
+        new SimpleKeyGenerator(props)
       }
     }
 

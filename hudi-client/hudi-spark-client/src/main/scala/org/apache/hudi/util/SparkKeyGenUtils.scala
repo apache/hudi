@@ -48,7 +48,7 @@ object SparkKeyGenUtils {
       case c: BaseKeyGenerator
         if c.isInstanceOf[CustomKeyGenerator] || c.isInstanceOf[CustomAvroKeyGenerator] =>
         c.getPartitionPathFields.asScala.map(pathField =>
-          pathField.split(BaseKeyGenerator.SPLIT_REGEX)
+          pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
             .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
           .mkString(",")
 

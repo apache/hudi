@@ -32,16 +32,11 @@ import java.util.List;
  */
 public abstract class BaseKeyGenerator extends KeyGenerator {
 
-  protected static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
-  public static final String SPLIT_REGEX = ":";
-
   protected List<String> recordKeyFields;
   protected List<String> partitionPathFields;
   protected final boolean encodePartitionPath;
   protected final boolean hiveStylePartitioning;
   protected final boolean consistentLogicalTimestampEnabled;
-  protected final boolean autoGenerateRecordKeys;
-  protected AutoRecordKeyGenerator autoRecordKeyGenerator;
 
   protected BaseKeyGenerator(TypedProperties config) {
     super(config);
@@ -51,8 +46,6 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
         Boolean.parseBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.defaultValue()));
     this.consistentLogicalTimestampEnabled = config.getBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
-    this.autoGenerateRecordKeys = config.getBoolean(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.key(),
-        Boolean.parseBoolean(KeyGeneratorOptions.AUTO_GENERATE_RECORD_KEYS.defaultValue()));
   }
 
   /**
@@ -87,11 +80,5 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
 
   public boolean isConsistentLogicalTimestampEnabled() {
     return consistentLogicalTimestampEnabled;
-  }
-
-  protected void instantiateAutoRecordKeyGenerator() {
-    if (autoGenerateRecordKeys) {
-      autoRecordKeyGenerator = new AutoRecordKeyGenerator(config, getPartitionPathFields());
-    }
   }
 }

@@ -69,22 +69,6 @@ public class KeyGeneratorOptions extends HoodieConfig {
           + "`2016-12-29 09:54:00.0` in row-writer path, while it will be written as long value `1483023240000000` in non row-writer path. "
           + "If enabled, then the timestamp value will be written in both the cases.");
 
-  public static final ConfigProperty<String> AUTO_GENERATE_RECORD_KEYS = ConfigProperty
-      .key("hoodie.auto.generate.record.keys")
-      .defaultValue("false")
-      .sinceVersion("0.13.0")
-      .withDocumentation("When enabled, hudi will auto generate a deterministic key for a record based on the contents of the field. "
-          + "The keys are guaranteed to be deterministic but not unique, so they can only be used for insert workflows with deduplication disabled."
-          + "The class attempts to get sufficient uniqueness for keys to prevent frequent collisions by choosing the fields it uses in order of decreasing "
-          + "likelihood for uniqueness.");
-
-  public static final ConfigProperty<Integer> NUM_FIELDS_IN_AUTO_RECORDKEY_GENERATION = ConfigProperty
-      .key("hoodie.datasource.write.auto.recordkey.num.fields")
-      .defaultValue(5)
-      .withDocumentation("When enabling auto generation of record keys(hoodie.auto.generate.record.keys) , this sets the number of fields "
-          + "to use when computing the UUID for the record. Increasing the value will increase the randomness of the generated key but can "
-          + "impact performance.");
-
   /**
    * @deprecated Use {@link #URL_ENCODE_PARTITIONING} and its methods.
    */
