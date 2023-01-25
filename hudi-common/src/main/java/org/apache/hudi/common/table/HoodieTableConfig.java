@@ -132,6 +132,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> CDC_ENABLED = ConfigProperty
       .key("hoodie.table.cdc.enabled")
       .defaultValue(false)
+      .sinceVersion("0.13.0")
       .withDocumentation("When enable, persist the change data if necessary, and can be queried as a CDC query mode.");
 
   public static final ConfigProperty<String> CDC_SUPPLEMENTAL_LOGGING_MODE = ConfigProperty
@@ -141,6 +142,7 @@ public class HoodieTableConfig extends HoodieConfig {
           HoodieCDCSupplementalLoggingMode.OP_KEY.getValue(),
           HoodieCDCSupplementalLoggingMode.WITH_BEFORE.getValue(),
           HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER.getValue())
+      .sinceVersion("0.13.0")
       .withDocumentation("When 'cdc_op_key' persist the 'op' and the record key only,"
           + " when 'cdc_data_before' persist the additional 'before' image ,"
           + " and when 'cdc_data_before_after', persist the 'before' and 'after' at the same time.");
@@ -176,6 +178,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
       .key("hoodie.compaction.record.merger.strategy")
       .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .sinceVersion("0.13.0")
       .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
@@ -261,6 +264,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> SECONDARY_INDEXES_METADATA = ConfigProperty
       .key("hoodie.table.secondary.indexes.metadata")
       .noDefaultValue()
+      .sinceVersion("0.13.0")
       .withDocumentation("The metadata of secondary indexes");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
