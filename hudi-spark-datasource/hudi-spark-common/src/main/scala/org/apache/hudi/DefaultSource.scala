@@ -110,7 +110,8 @@ class DefaultSource extends RelationProvider
     }
     log.info("Obtained hudi table path: " + tablePath)
 
-    val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
+    val metaClient = HoodieTableMetaClient.builder().setMetaserverConfig(parameters.asJava)
+      .setConf(fs.getConf).setBasePath(tablePath).build()
 
     DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
   }

@@ -36,10 +36,6 @@ public class BatchDaoOperation {
     this.operationType = operationType;
   }
 
-  public BatchDaoOperation(String sqlID, Object parameter, String operationType) {
-    this(null, sqlID, parameter, operationType);
-  }
-
   public String getNamespace() {
     return namespace;
   }

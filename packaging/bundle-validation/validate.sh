@@ -34,6 +34,7 @@ ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
+ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
 
 
 ##
@@ -185,6 +186,42 @@ test_kafka_connect_bundle() {
     kill $ZOOKEEPER_PID $KAFKA_SERVER_PID $SCHEMA_REG_PID
 }
 
+##
+# Function to test the hudi metaserver bundles.
+#
+# env vars (defined in container):
+#   SPARK_HOME: path to the spark directory
+##
+test_hudi_metaserver_bundles () {
+    echo "::warning::validate.sh setting up hudi metaserver bundles validation"
+
+    echo "::warning::validate.sh Start hudi metaserver"
+    java -jar $JARS_DIR/metaserver.jar & local METASEVER=$!
+
+    echo "::warning::validate.sh Start hive server"
+    $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
+    local DERBY_PID=$!
+    $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
+    local HIVE_PID=$!
+
+    echo "::warning::validate.sh Writing sample data via Spark DataSource."
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/service/write.scala
+    ls /tmp/hudi-bundles/tests/trips
+
+    echo "::warning::validate.sh Query and validate the results using Spark SQL"
+    # save Spark SQL query results
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar  < $WORKDIR/service/read.scala
+    numRecordsSparkSQL=$(cat /tmp/sparksql/trips/results/*.csv | wc -l)
+    echo $numRecordsSparkSQL
+    if [ "$numRecordsSparkSQL" -ne 10 ]; then
+        echo "::error::validate.sh Spark SQL validation failed."
+        exit 1
+    fi
+
+    echo "::warning::validate.sh hudi metaserver validation was successful."
+    kill $DERBY_PID $HIVE_PID $METASEVER
+}
+
 
 ############################
 # Execute tests
@@ -229,3 +266,10 @@ if [ "$?" -ne 0 ]; then
     exit 1
 fi
 echo "::warning::validate.sh done validating kafka connect bundle"
+
+echo "::warning::validate.sh validating hudi metaserver bundle"
+test_hudi_metaserver_bundles
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+echo "::warning::validate.sh done validating hudi metaserver bundle"
