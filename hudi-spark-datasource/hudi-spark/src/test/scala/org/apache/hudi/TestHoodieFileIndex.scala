@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions.{FILE_INDEX_LISTING_MODE_EAGER, FILE_INDEX_LISTING_MODE_LAZY, QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
@@ -26,6 +27,7 @@ import org.apache.hudi.client.HoodieJavaWriteClient
 import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.EngineType
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -39,14 +41,15 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
+import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
 import org.apache.spark.sql.execution.datasources.{NoopCache, PartitionDirectory}
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{IntegerType, StringType}
-import org.apache.spark.sql.{DataFrameWriter, Row, SaveMode, SparkSession, SparkSessionExtensions}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -441,12 +444,130 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
   }
 
   @ParameterizedTest
-  @CsvSource(Array("true,a.b.c","false,a.b.c","true,c","false,c"))
-  def testQueryPartitionPathsForNestedPartition(useMetaFileList:Boolean, partitionBy:String): Unit = {
+  @CsvSource(value = Array("true,true", "true,false", "false,true", "false,false"))
+  def testFileListingWithPartitionPrefixPruning(enableMetadataTable: Boolean,
+                                                enablePartitionPathPrefixAnalysis: Boolean):
+  Unit = {
+    val _spark = spark
+    import _spark.implicits._
+
+    val writerOpts: Map[String, String] = commonOpts ++ Map(
+      DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      HoodieMetadataConfig.ENABLE.key -> enableMetadataTable.toString,
+      RECORDKEY_FIELD.key -> "id",
+      PARTITIONPATH_FIELD.key -> "region_code,dt",
+      KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName
+    )
+
+    val readerOpts: Map[String, String] = queryOpts ++ Map(
+      HoodieMetadataConfig.ENABLE.key -> enableMetadataTable.toString,
+      DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key -> "eager",
+      DataSourceReadOptions.FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED.key -> enablePartitionPathPrefixAnalysis.toString
+    )
+
+    // The following partitions are generated:
+    // ("1", "2023/01/01"), ("1", "2023/01/02"),
+    // ("10", "2023/01/01"), ("10", "2023/01/02"),
+    // ("100", "2023/01/01"), ("100", "2023/01/02"),
+    // ("2", "2023/01/01"), ("2", "2023/01/02"),
+    // ("20", "2023/01/01"), ("20", "2023/01/02"),
+    // ("200", "2023/01/01"), ("200", "2023/01/02")
+    val inputDF1 = (for (i <- 0 until 100) yield
+      (i, s"a$i", 10 + i, s"${if (i < 50) 1 else 2}" + "0" * (i % 3), s"2023/01/0${i % 2 + 1}"))
+      .toDF("id", "name", "price", "region_code", "dt")
+
+    inputDF1.write.format("hudi")
+      .options(writerOpts)
+      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, "false")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    // Test getting partition paths in a subset of directories
+    val metadata = HoodieTableMetadata.create(context,
+      HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build(),
+      metaClient.getBasePathV2.toString,
+      metaClient.getBasePathV2.getParent.toString)
+    assertEquals(
+      Seq("1/2023/01/01", "1/2023/01/02"),
+      metadata.getPartitionPathWithPathPrefixes(Seq("1")).sorted)
+    assertEquals(
+      Seq("1/2023/01/01", "1/2023/01/02", "10/2023/01/01", "10/2023/01/02",
+        "100/2023/01/01", "100/2023/01/02", "2/2023/01/01", "2/2023/01/02",
+        "20/2023/01/01", "20/2023/01/02", "200/2023/01/01", "200/2023/01/02"),
+      metadata.getPartitionPathWithPathPrefixes(Seq("")).sorted)
+    assertEquals(
+      Seq("1/2023/01/01"),
+      metadata.getPartitionPathWithPathPrefixes(Seq("1/2023/01/01")).sorted)
+
+    val fileIndex = HoodieFileIndex(spark, metaClient, None, readerOpts)
+    val readDF = spark.read.format("hudi").options(readerOpts).load()
+
+    // Partition predicates, SQL predicate expression, whether prefix pruning should kick in,
+    // expected partitions after pruning with partition prefix
+    val testCases = Seq(
+      // prefix pruning should kick in
+      (Seq(EqualTo(attribute("region_code"), literal("1"))),
+        "region_code = '1'",
+        enablePartitionPathPrefixAnalysis,
+        Seq(("1", "2023/01/01"), ("1", "2023/01/02"))),
+      // prefix pruning does not kick in and fall back to full listing
+      (Seq(EqualTo(attribute("dt"), literal("2023/01/01"))),
+        "dt = '2023/01/01'",
+        false,
+        Seq(("1", "2023/01/01"), ("10", "2023/01/01"), ("100", "2023/01/01"),
+          ("2", "2023/01/01"), ("20", "2023/01/01"), ("200", "2023/01/01"))),
+      // Exact matching should kick in
+      (Seq(EqualTo(attribute("dt"), literal("2023/01/01")),
+        EqualTo(attribute("region_code"), literal("1"))),
+        "dt = '2023/01/01' and region_code = '1'",
+        enablePartitionPathPrefixAnalysis,
+        Seq(("1", "2023/01/01")))
+    )
+
+    testCases.foreach(testCase => {
+      val partitionAndFilesAfterPruning = fileIndex.listFiles(testCase._1, Seq.empty)
+      assertEquals(1, partitionAndFilesAfterPruning.size)
+      val (partitionValuesSeq, perPartitionFilesSeq) = partitionAndFilesAfterPruning.map {
+        case PartitionDirectory(values, files) =>
+          (values.toSeq(Seq(StringType)), files)
+      }.unzip
+      val partitionPaths = perPartitionFilesSeq.flatten
+        .map(file => extractPartitionPathFromFilePath(file.getPath))
+        .distinct
+        .sorted
+      val expectedPartitionPaths = if (testCase._3) {
+        testCase._4.map(e => e._1 + "/" + e._2)
+      } else {
+        fileIndex.allFiles
+          .map(file => extractPartitionPathFromFilePath(file.getPath))
+          .distinct
+          .sorted
+      }
+      assertEquals(expectedPartitionPaths, partitionPaths)
+      assertEquals(
+        testCase._4,
+        readDF.filter(testCase._2)
+          .select("region_code", "dt").distinct().collect()
+          .map(row => (row.getString(0), row.getString(1))).sorted.toSeq)
+    })
+  }
+
+  private def extractPartitionPathFromFilePath(filePath: Path): String = {
+    val relativeFilePath = FSUtils.getRelativePartitionPath(metaClient.getBasePathV2, filePath)
+    val names = relativeFilePath.split("/")
+    val fileName = names(names.length - 1)
+    relativeFilePath.stripSuffix(fileName).stripSuffix("/")
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array("true,a.b.c", "false,a.b.c", "true,c", "false,c"))
+  def testQueryPartitionPathsForNestedPartition(useMetaFileList: Boolean, partitionBy: String): Unit = {
     val inputDF = spark.range(100)
-      .withColumn("c",lit("c"))
-      .withColumn("b",struct("c"))
-      .withColumn("a",struct("b"))
+      .withColumn("c", lit("c"))
+      .withColumn("b", struct("c"))
+      .withColumn("a", struct("b"))
     inputDF.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)

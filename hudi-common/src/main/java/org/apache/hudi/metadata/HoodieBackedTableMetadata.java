@@ -18,9 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -50,6 +47,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -57,6 +55,10 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -150,9 +152,17 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public List<String> getPartitionPathsWithPrefixes(List<String> prefixes) throws IOException {
+  public List<String> getPartitionPathWithPathPrefixes(List<String> relativePathPrefixes) throws IOException {
+    // TODO: consider skipping this method for non-partitioned table and simplify the checks
     return getAllPartitionPaths().stream()
-        .filter(p -> prefixes.stream().anyMatch(p::startsWith))
+        .filter(p -> relativePathPrefixes.stream().anyMatch(relativePathPrefix ->
+            // Partition paths stored in metadata table do not have the slash at the end.
+            // If the relativePathPrefix is empty, return all partition paths;
+            // else if the relative path prefix is the same as the path, this is an exact match;
+            // else, we need to make sure the path is a sub-directory of relativePathPrefix, by
+            // checking if the path starts with relativePathPrefix appended by a slash ("/").
+            StringUtils.isNullOrEmpty(relativePathPrefix)
+                || p.equals(relativePathPrefix) || p.startsWith(relativePathPrefix + "/")))
         .collect(Collectors.toList());
   }
 
