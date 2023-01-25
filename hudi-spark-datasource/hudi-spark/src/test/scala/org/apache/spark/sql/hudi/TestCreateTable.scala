@@ -1149,6 +1149,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"select id, name, price, cast(dt as string) from $tableName4")(
           Seq(1, "a1", 10, "2021-05-06")
         )
+        spark.sql("set hoodie.auto.generate.record.keys = false")
       }
     }
   }

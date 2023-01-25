@@ -1178,6 +1178,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | location '${tmp.getCanonicalPath}'
        """.stripMargin)
 
+      spark.sql("set hoodie.datasource.write.operation = insert")
       // Note: Do not write the field alias, the partition field must be placed last.
       spark.sql(
         s"""
