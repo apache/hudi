@@ -62,7 +62,6 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -318,68 +317,6 @@ public class FSUtils {
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
     }
-  }
-
-  /**
-   * Gets all partition paths in a table, based on a relative partition path prefix.
-   *
-   * @param engineContext {@link HoodieEngineContext} instance for file listing.
-   * @param hadoopConf    Hadoop configuration.
-   * @param basePath      Base path of the table.
-   * @param prefix        Relative partition path prefix for listing.
-   * @param parallelism   Listing parallelism to use if the engine context supports it.
-   * @return A list of  all partition paths with the prefix.
-   * @throws IOException upon error.
-   */
-  public static List<String> getPartitionPathsWithPrefix(HoodieEngineContext engineContext,
-                                                         SerializableConfiguration hadoopConf,
-                                                         String basePath,
-                                                         String prefix,
-                                                         int parallelism) throws IOException {
-    List<Path> pathsToList = new CopyOnWriteArrayList<>();
-    pathsToList.add(StringUtils.isNullOrEmpty(prefix) ? new Path(basePath) : new Path(basePath, prefix));
-    List<String> partitionPaths = new CopyOnWriteArrayList<>();
-
-    while (!pathsToList.isEmpty()) {
-      // TODO: Get the parallelism from HoodieWriteConfig
-      int listingParallelism = Math.min(parallelism, pathsToList.size());
-
-      // List all directories in parallel
-      List<FileStatus> dirToFileListing = engineContext.flatMap(pathsToList, path -> {
-        FileSystem fileSystem = path.getFileSystem(hadoopConf.get());
-        return Arrays.stream(fileSystem.listStatus(path));
-      }, listingParallelism);
-      pathsToList.clear();
-
-      // if current dictionary contains PartitionMetadata, add it to result
-      // if current dictionary does not contain PartitionMetadata, add it to queue to be processed.
-      int fileListingParallelism = Math.min(parallelism, dirToFileListing.size());
-      if (!dirToFileListing.isEmpty()) {
-        // result below holds a list of pair. first entry in the pair optionally holds the deduced list of partitions.
-        // and second entry holds optionally a directory path to be processed further.
-        List<Pair<Option<String>, Option<Path>>> result = engineContext.map(dirToFileListing, fileStatus -> {
-          FileSystem fileSystem = fileStatus.getPath().getFileSystem(hadoopConf.get());
-          if (fileStatus.isDirectory()) {
-            if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, fileStatus.getPath())) {
-              return Pair.of(Option.of(FSUtils.getRelativePartitionPath(new Path(basePath), fileStatus.getPath())), Option.empty());
-            } else if (!fileStatus.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
-              return Pair.of(Option.empty(), Option.of(fileStatus.getPath()));
-            }
-          } else if (fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
-            String partitionName = FSUtils.getRelativePartitionPath(new Path(basePath), fileStatus.getPath().getParent());
-            return Pair.of(Option.of(partitionName), Option.empty());
-          }
-          return Pair.of(Option.empty(), Option.empty());
-        }, fileListingParallelism);
-
-        partitionPaths.addAll(result.stream().filter(entry -> entry.getKey().isPresent()).map(entry -> entry.getKey().get())
-            .collect(Collectors.toList()));
-
-        pathsToList.addAll(result.stream().filter(entry -> entry.getValue().isPresent()).map(entry -> entry.getValue().get())
-            .collect(Collectors.toList()));
-      }
-    }
-    return partitionPaths;
   }
 
   public static Map<String, FileStatus[]> getFilesInPartitions(HoodieEngineContext engineContext,

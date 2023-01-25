@@ -19,8 +19,6 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
-import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.BootstrapFileMapping;
@@ -40,10 +38,10 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -86,8 +84,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   private static final Logger LOG = LogManager.getLogger(AbstractTableFileSystemView.class);
 
   protected HoodieTableMetaClient metaClient;
-  // TODO: to pass in the actual config
-  protected boolean assumeDatePartitioning = false;
 
   // This is the commits timeline that will be visible for all views extending this view
   // This is nothing but the write timeline, which contains both ingestion and compaction(major and minor) writers.
@@ -323,44 +319,46 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     ValidationUtils.checkArgument(!isClosed(), "View is already closed");
 
     Set<String> partitionSet = new HashSet<>();
-    partitionList.forEach(partition ->
-        addedPartitions.computeIfAbsent(partition, partitionPathStr -> {
-          if (!isPartitionAvailableInStore(partitionPathStr)) {
-            partitionSet.add(partitionPathStr);
-          }
-          return true;
-        })
-    );
+    synchronized (addedPartitions) {
+      partitionList.forEach(partition ->
+          addedPartitions.computeIfAbsent(partition, partitionPathStr -> {
+            if (!isPartitionAvailableInStore(partitionPathStr)) {
+              partitionSet.add(partitionPathStr);
+            }
+            return true;
+          })
+      );
 
-    if (!partitionSet.isEmpty()) {
-      long beginTs = System.currentTimeMillis();
-      // Not loaded yet
-      try {
-        LOG.info("Building file system view for partitions " + partitionSet);
+      if (!partitionSet.isEmpty()) {
+        long beginTs = System.currentTimeMillis();
+        // Not loaded yet
+        try {
+          LOG.info("Building file system view for partitions " + partitionSet);
 
-        // Pairs of relative partition path and absolute partition path
-        List<Pair<String, Path>> absolutePartitionPathList = partitionSet.stream()
-            .map(partition -> Pair.of(
-                partition, FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition)))
-            .collect(Collectors.toList());
-        long beginLsTs = System.currentTimeMillis();
-        Map<Pair<String, Path>, FileStatus[]> statusesMap =
-            listPartitions(absolutePartitionPathList);
-        long endLsTs = System.currentTimeMillis();
-        LOG.debug("Time taken to list partitions " + partitionSet + " =" + (endLsTs - beginLsTs));
-        statusesMap.forEach((partitionPair, statuses) -> {
-          String relativePartitionStr = partitionPair.getLeft();
-          List<HoodieFileGroup> groups = addFilesToView(statuses);
-          if (groups.isEmpty()) {
-            storePartitionView(relativePartitionStr, new ArrayList<>());
-          }
-          LOG.debug("#files found in partition (" + relativePartitionStr + ") =" + statuses.length);
-        });
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to list base files in partitions " + partitionSet, e);
+          // Pairs of relative partition path and absolute partition path
+          List<Pair<String, Path>> absolutePartitionPathList = partitionSet.stream()
+              .map(partition -> Pair.of(
+                  partition, FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition)))
+              .collect(Collectors.toList());
+          long beginLsTs = System.currentTimeMillis();
+          Map<Pair<String, Path>, FileStatus[]> statusesMap =
+              listPartitions(absolutePartitionPathList);
+          long endLsTs = System.currentTimeMillis();
+          LOG.debug("Time taken to list partitions " + partitionSet + " =" + (endLsTs - beginLsTs));
+          statusesMap.forEach((partitionPair, statuses) -> {
+            String relativePartitionStr = partitionPair.getLeft();
+            List<HoodieFileGroup> groups = addFilesToView(statuses);
+            if (groups.isEmpty()) {
+              storePartitionView(relativePartitionStr, new ArrayList<>());
+            }
+            LOG.debug("#files found in partition (" + relativePartitionStr + ") =" + statuses.length);
+          });
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to list base files in partitions " + partitionSet, e);
+        }
+        long endTs = System.currentTimeMillis();
+        LOG.debug("Time to load partition " + partitionSet + " =" + (endTs - beginTs));
       }
-      long endTs = System.currentTimeMillis();
-      LOG.debug("Time to load partition " + partitionSet + " =" + (endTs - beginTs));
     }
   }
 
@@ -369,20 +367,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @throws IOException upon error.
    */
   protected List<String> getAllPartitionPaths() throws IOException {
-    // TODO: integrate the direct FS listing with the actual engine context
-    LOG.warn("Getting all partition paths with file system listing sequentially can be very slow. "
-        + "This should not be invoked.");
-    String bathPath = metaClient.getBasePathV2().toString();
-    FileSystem fs = new Path(bathPath).getFileSystem(metaClient.getHadoopConf());
-    if (assumeDatePartitioning) {
-      return FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, bathPath);
-    }
-    return FSUtils.getPartitionPathsWithPrefix(
-        new HoodieLocalEngineContext(metaClient.getHadoopConf()),
-        new SerializableConfiguration(metaClient.getHadoopConf()),
-        metaClient.getBasePathV2().toString(),
-        "",
-        1);
+    throw new HoodieException("Getting all partition paths with file system listing sequentially "
+        + "can be very slow. This should not be invoked.");
   }
 
   /**
