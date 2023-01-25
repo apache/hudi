@@ -491,15 +491,15 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
       metaClient.getBasePathV2.getParent.toString)
     assertEquals(
       Seq("1/2023/01/01", "1/2023/01/02"),
-      metadata.getPartitionPathsInDirs(Seq("1")).sorted)
+      metadata.getPartitionPathWithPathPrefixes(Seq("1")).sorted)
     assertEquals(
       Seq("1/2023/01/01", "1/2023/01/02", "10/2023/01/01", "10/2023/01/02",
         "100/2023/01/01", "100/2023/01/02", "2/2023/01/01", "2/2023/01/02",
         "20/2023/01/01", "20/2023/01/02", "200/2023/01/01", "200/2023/01/02"),
-      metadata.getPartitionPathsInDirs(Seq("")).sorted)
+      metadata.getPartitionPathWithPathPrefixes(Seq("")).sorted)
     assertEquals(
       Seq("1/2023/01/01"),
-      metadata.getPartitionPathsInDirs(Seq("1/2023/01/01")).sorted)
+      metadata.getPartitionPathWithPathPrefixes(Seq("1/2023/01/01")).sorted)
 
     val fileIndex = HoodieFileIndex(spark, metaClient, None, readerOpts)
     val readDF = spark.read.format("hudi").options(readerOpts).load()

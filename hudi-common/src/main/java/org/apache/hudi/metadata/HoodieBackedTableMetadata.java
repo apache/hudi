@@ -152,11 +152,17 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public List<String> getPartitionPathsInDirs(List<String> relativePaths) throws IOException {
+  public List<String> getPartitionPathWithPathPrefixes(List<String> relativePathPrefixes) throws IOException {
+    // TODO: consider skipping this method for non-partitioned table and simply the checks
     return getAllPartitionPaths().stream()
-        .filter(p -> relativePaths.stream().anyMatch(relativePath ->
-            StringUtils.isNullOrEmpty(relativePath)
-                || p.equals(relativePath) || p.startsWith(relativePath + "/")))
+        .filter(p -> relativePathPrefixes.stream().anyMatch(relativePathPrefix ->
+            // Partition paths stored in metadata table do not have the slash at the end.
+            // If the relativePathPrefix is empty, return all partition paths;
+            // else if the relative path prefix is the same as the path, this is an exact match;
+            // else, we need to make sure the path is a sub-directory of relativePathPrefix, by
+            // checking if the path starts with relativePathPrefix appended by a slash ("/").
+            StringUtils.isNullOrEmpty(relativePathPrefix)
+                || p.equals(relativePathPrefix) || p.startsWith(relativePathPrefix + "/")))
         .collect(Collectors.toList());
   }
 

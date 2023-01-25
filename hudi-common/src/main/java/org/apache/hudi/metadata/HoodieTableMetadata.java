@@ -138,15 +138,14 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException;
 
   /**
-   * Fetch list of all partitions path that whose relative partition paths is under the
-   * directories based on the given relative paths.
+   * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.
    * <p>
    * E.g., Table has partition 4 partitions:
    * year=2022/month=08/day=30, year=2022/month=08/day=31, year=2022/month=07/day=03, year=2022/month=07/day=04
    * The relative path "year=2022" returns all partitions, while the relative path
    * "year=2022/month=07" returns only two partitions.
    */
-  List<String> getPartitionPathsInDirs(List<String> relativePaths) throws IOException;
+  List<String> getPartitionPathWithPathPrefixes(List<String> relativePathPrefixes) throws IOException;
 
   /**
    * Fetch list of all partition paths, per the latest snapshot of the metadata.
