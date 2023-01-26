@@ -141,13 +141,12 @@ public class HoodieFileGroup implements Serializable {
       return true;
     }
 
-    // if it was archived after a savepoint
-    Option<HoodieInstant> firstSavepoint = timeline.getFirstSavepointCommit();
-    if (firstSavepoint.isPresent() && compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, firstSavepoint.get().getTimestamp())) {
-      return true;
-    }
+    if (firstActiveInstant.isPresent()
+        && compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, firstActiveInstant.get().getTimestamp())) {
+      return false;
 
-    return !(firstActiveInstant.isPresent() && compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, firstActiveInstant.get().getTimestamp()));
+    }
+    return timeline.isBeforeTimelineStarts(slice.getBaseInstantTime());
   }
 
   /**

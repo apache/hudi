@@ -190,7 +190,7 @@ class DedupeSparkJob(basePath: String,
 
     val allFiles = fs.listStatus(new Path(s"$basePath/$duplicatedPartitionPath"))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitsTimeline.filterCompletedInstants(),
-      metadata.getActiveTimeline.getCommitsTimeline.getFirstNonSavepointCommit, allFiles)
+      metadata.getActiveTimeline.getWriteTimeline.getFirstNonSavepointCommit, allFiles)
 
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
 

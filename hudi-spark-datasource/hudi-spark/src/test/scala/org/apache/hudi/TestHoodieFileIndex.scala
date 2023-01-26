@@ -680,7 +680,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase with ScalaAssertionSuppor
     metaClient.reloadActiveTimeline()
     val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     val fileSystemView = new HoodieTableFileSystemView(metaClient, activeInstants,
-      metaClient.getActiveTimeline.getCommitsTimeline.getFirstNonSavepointCommit)
+      metaClient.getActiveTimeline.getWriteTimeline.getFirstNonSavepointCommit)
     fileSystemView.getAllBaseFiles(partitionPath).iterator().asScala.toSeq.length
   }
 

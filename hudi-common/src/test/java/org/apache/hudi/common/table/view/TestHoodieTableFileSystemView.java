@@ -890,7 +890,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     filenames = new HashSet<>();
     List<HoodieLogFile> logFilesList = rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime4, true)
         .map(FileSlice::getLogFiles).flatMap(logFileList -> logFileList).collect(Collectors.toList());
-    assertEquals(logFilesList.size(), 4);
+    assertEquals(4, logFilesList.size());
     for (HoodieLogFile logFile : logFilesList) {
       filenames.add(logFile.getFileName());
     }
@@ -922,8 +922,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     logFilesList = rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime3, true)
         .map(FileSlice::getLogFiles).flatMap(logFileList -> logFileList).collect(Collectors.toList());
-    assertEquals(logFilesList.size(), 1);
-    assertEquals(logFilesList.get(0).getFileName(), FSUtils.makeLogFileName(fileId2, HoodieLogFile.DELTA_EXTENSION, commitTime3, 0, TEST_WRITE_TOKEN));
+    assertEquals(1, logFilesList.size());
+    assertEquals(FSUtils.makeLogFileName(fileId2, HoodieLogFile.DELTA_EXTENSION, commitTime3, 0, TEST_WRITE_TOKEN), logFilesList.get(0).getFileName());
   }
 
   @Test

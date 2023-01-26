@@ -1270,7 +1270,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
     //Get first active instant
     Option<HoodieInstant> oldFirstActiveInstant = getFirstActiveInstant();
-    Option<HoodieInstant> newFirstActiveInstant = newTimeline.getFirstNonSavepointCommit();
+    Option<HoodieInstant> newFirstActiveInstant = newTimeline.getWriteTimeline().getFirstNonSavepointCommit();
     try {
       writeLock.lock();
       runSync(oldCompletedTimeline, newCompletedTimeline, oldFirstActiveInstant, newFirstActiveInstant);

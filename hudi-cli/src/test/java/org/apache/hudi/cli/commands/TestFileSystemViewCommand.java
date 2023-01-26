@@ -116,7 +116,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     // Reload meta client and create fsView
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    nonpartitionedFsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), metaClient.getActiveTimeline().getFirstNonSavepointCommit(), true);
+    nonpartitionedFsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit(), true);
   }
 
   private void createPartitionedTable() throws IOException {
@@ -159,7 +159,8 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     // Reload meta client and create fsView
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    partitionedFsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(),metaClient.getActiveTimeline().getFirstNonSavepointCommit(),true);
+    partitionedFsView = new HoodieTableFileSystemView(metaClient,
+        metaClient.getActiveTimeline(),metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit(),true);
   }
 
   /**
