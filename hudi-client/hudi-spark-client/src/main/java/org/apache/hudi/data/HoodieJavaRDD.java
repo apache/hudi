@@ -120,7 +120,7 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
     // NOTE: Unrolling this lambda into a method reference results in [[ClassCastException]]
     //       due to weird interop b/w Scala and Java
-    return HoodieJavaRDD.of(rddData.flatMap(x -> func.apply(x)));
+    return HoodieJavaRDD.of(rddData.flatMap(e -> func.apply(e)));
   }
 
   @Override
