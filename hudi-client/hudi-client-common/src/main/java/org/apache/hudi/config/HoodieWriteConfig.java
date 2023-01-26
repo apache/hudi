@@ -2537,13 +2537,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withWriteWaitStrategy(String waitStrategy) {
+    public Builder withWriteExecutorDisruptorWaitStrategy(String waitStrategy) {
       writeConfig.setValue(WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY, String.valueOf(waitStrategy));
-      return this;
-    }
-
-    public Builder withWriteBufferSize(int size) {
-      writeConfig.setValue(WRITE_EXECUTOR_DISRUPTOR_BUFFER_SIZE, String.valueOf(size));
       return this;
     }
 
