@@ -50,7 +50,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
 
     switch (legacyOperatingMode) {
       case PRE_COMBINING:
-        HoodieRecord res = preCombine(older, newer);
+        HoodieRecord res = preCombine(older, newer, newSchema, props);
         if (res == older) {
           return Option.of(Pair.of(res, oldSchema));
         } else {
@@ -71,8 +71,8 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
     return HoodieRecordType.AVRO;
   }
 
-  private HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer) {
-    HoodieRecordPayload picked = unsafeCast(((HoodieAvroRecord) newer).getData().preCombine(((HoodieAvroRecord) older).getData()));
+  private HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) {
+    HoodieRecordPayload picked = unsafeCast(((HoodieAvroRecord) newer).getData().preCombine(((HoodieAvroRecord) older).getData(), schema, props));
     if (picked instanceof HoodieMetadataPayload) {
       // NOTE: HoodieMetadataPayload return a new payload
       return new HoodieAvroRecord(newer.getKey(), picked, newer.getOperation());
