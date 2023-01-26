@@ -49,9 +49,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * reader and a writer schema are declared compatible if all datum instances of
  * the writer schema can be successfully decoded using the specified reader
  * schema.
- *
+ * <p>
  * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
- *
+ * <p>
  *       This code is borrowed from Avro 1.10, with the following modifications:
  *       <ol>
  *         <li>Compatibility checks ignore schema name, unless schema is held inside

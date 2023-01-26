@@ -98,10 +98,9 @@ public class DeleteRecord implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("DeleteRecord {");
-    sb.append(" key=").append(hoodieKey);
-    sb.append(" orderingVal=").append(this.orderingVal);
-    sb.append('}');
-    return sb.toString();
+    return "DeleteRecord {"
+            + " key=" + hoodieKey
+            + " orderingVal=" + this.orderingVal
+            + '}';
   }
 }
