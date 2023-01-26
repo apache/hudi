@@ -41,9 +41,11 @@ public class HoodieMetaserverConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("Enable Hudi metaserver for storing Hudi tables' metadata.");
 
-  public static final ConfigProperty<String> DATABASE_NAME = HoodieTableConfig.DATABASE_NAME;
+  public static final ConfigProperty<String> DATABASE_NAME = HoodieTableConfig.DATABASE_NAME
+      .sinceVersion("0.13.0");
 
-  public static final ConfigProperty<String> TABLE_NAME = HoodieTableConfig.NAME;
+  public static final ConfigProperty<String> TABLE_NAME = HoodieTableConfig.NAME
+      .sinceVersion("0.13.0");
 
   public static final ConfigProperty<String> METASERVER_URLS = ConfigProperty
       .key(METASERVER_PREFIX + ".uris")

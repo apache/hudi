@@ -92,6 +92,7 @@ public class HoodieMetricsConfig extends HoodieConfig {
         }
         return Option.empty();
       })
+      .sinceVersion("0.13.0")
       .withDocumentation("Enable metrics for locking infra. Useful when operating in multiwriter mode");
 
   /**
