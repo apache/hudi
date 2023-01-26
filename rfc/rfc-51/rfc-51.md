@@ -15,7 +15,7 @@
   limitations under the License.
 -->
 
-# RFC-50: Hudi to support Change-Data-Capture
+# RFC-51: Hudi to support Change-Data-Capture
 
 # Proposers
 
