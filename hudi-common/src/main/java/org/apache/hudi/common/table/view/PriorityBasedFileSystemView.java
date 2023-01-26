@@ -39,6 +39,7 @@ import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -143,6 +144,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   public Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
     return execute(partitionPath, maxCommitTime, preferredView::getLatestBaseFilesBeforeOrOn,
         secondaryView::getLatestBaseFilesBeforeOrOn);
+  }
+
+  @Override
+  public Map<String, Stream<HoodieBaseFile>> getAllLatestBaseFilesBeforeOrOn(String maxCommitTime) {
+    return execute(maxCommitTime, preferredView::getAllLatestBaseFilesBeforeOrOn,
+        secondaryView::getAllLatestBaseFilesBeforeOrOn);
   }
 
   @Override
