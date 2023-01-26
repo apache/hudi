@@ -4,7 +4,7 @@ keywords: [ configurations, default, flink options, spark, configs, parameters ]
 permalink: /docs/configurations.html
 summary: This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
 toc: true
-last_modified_at: 2022-12-27T23:40:18.658
+last_modified_at: 2023-01-25T16:51:07.703
 ---
 
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
@@ -249,6 +249,13 @@ the dot notation eg: `a.b.c`<br></br>
 
 ---
 
+> #### hoodie.datasource.write.record.merger.impls
+> List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by hoodie.datasource.write.record.merger.strategy Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)<br></br>
+> **Default Value**: org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)<br></br>
+> `Config Param: RECORD_MERGER_IMPLS`<br></br>
+
+---
+
 > #### hoodie.datasource.hive_sync.sync_comment
 > Whether to sync the table column comments while syncing the table.<br></br>
 > **Default Value**: false (Optional)<br></br>
@@ -489,10 +496,10 @@ the dot notation eg: `a.b.c`<br></br>
 
 ---
 
-> #### hoodie.datasource.write.merger.impls
-> List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by hoodie.datasource.write.merger.strategy Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)<br></br>
-> **Default Value**: org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)<br></br>
-> `Config Param: MERGER_IMPLS`<br></br>
+> #### hoodie.datasource.write.record.merger.strategy
+> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id<br></br>
+> **Default Value**: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)<br></br>
+> `Config Param: RECORD_MERGER_STRATEGY`<br></br>
 
 ---
 
@@ -530,13 +537,6 @@ By default false (the names of partition folders are only partition values)<br><
 > If true, only sync on conditions like schema change or partition change.<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: HIVE_CONDITIONAL_SYNC`<br></br>
-
----
-
-> #### hoodie.datasource.write.merger.strategy
-> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.merger.impls which has the same merger strategy id<br></br>
-> **Default Value**: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)<br></br>
-> `Config Param: MERGER_STRATEGY`<br></br>
 
 ---
 
@@ -836,7 +836,7 @@ By default 2000 and it will be doubled by every retry<br></br>
 ---
 
 > #### clustering.plan.partition.filter.mode
-> Partition filter mode used in the creation of clustering plan. Available values are - NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate.RECENT_DAYS: keep a continuous range of partitions, worked together with configs 'hoodie.clustering.plan.strategy.daybased.lookback.partitions' and 'hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions.SELECTED_PARTITIONS: keep partitions that are in the specified range ['hoodie.clustering.plan.strategy.cluster.begin.partition', 'hoodie.clustering.plan.strategy.cluster.end.partition'].<br></br>
+> Partition filter mode used in the creation of clustering plan. Available values are - NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate.RECENT_DAYS: keep a continuous range of partitions, worked together with configs 'hoodie.clustering.plan.strategy.daybased.lookback.partitions' and 'hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions.SELECTED_PARTITIONS: keep partitions that are in the specified range ['hoodie.clustering.plan.strategy.cluster.begin.partition', 'hoodie.clustering.plan.strategy.cluster.end.partition'].DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour.<br></br>
 > **Default Value**: NONE (Optional)<br></br>
 > `Config Param: CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME`<br></br>
 
@@ -1421,6 +1421,13 @@ The semantics is best effort because the compaction job would finally merge all 
 
 ---
 
+> #### hoodie.database.name
+> Database name to register to Hive metastore<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: DATABASE_NAME`<br></br>
+
+---
+
 > #### read.utc-timezone
 > Use UTC timezone or local timezone to the conversion between epoch time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x use UTC timezone, by default true<br></br>
 > **Default Value**: true (Optional)<br></br>
@@ -1633,39 +1640,6 @@ Cleaning (reclamation of older/unused file groups/slices).
 
 ---
 
-### Metastore Configs {#Metastore-Configs}
-
-Configurations used by the Hudi Metastore.
-
-`Config Class`: org.apache.hudi.common.config.HoodieMetastoreConfig<br></br>
-> #### hoodie.metastore.uris
-> Metastore server uris<br></br>
-> **Default Value**: thrift://localhost:9090 (Optional)<br></br>
-> `Config Param: METASTORE_URLS`<br></br>
-
----
-
-> #### hoodie.metastore.enable
-> Use metastore server to store hoodie table metadata<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: METASTORE_ENABLE`<br></br>
-
----
-
-> #### hoodie.metastore.connect.retries
-> Number of retries while opening a connection to metastore<br></br>
-> **Default Value**: 3 (Optional)<br></br>
-> `Config Param: METASTORE_CONNECTION_RETRIES`<br></br>
-
----
-
-> #### hoodie.metastore.connect.retry.delay
-> Number of seconds for the client to wait between consecutive connection attempts<br></br>
-> **Default Value**: 1 (Optional)<br></br>
-> `Config Param: METASTORE_CONNECTION_RETRY_DELAY`<br></br>
-
----
-
 ### Table Configurations {#Table-Configurations}
 
 Configurations that persist across writes and read on a Hudi table  like  base, log file formats, table name, creation schema, table version layouts.  Configurations are loaded from hoodie.properties, these properties are usually set during initializing a path as hoodie base path and rarely changes during the lifetime of the table. Writers/Queries' configurations are validated against these  each time for compatibility.
@@ -1689,13 +1663,6 @@ Configurations that persist across writes and read on a Hudi table  like  base, 
 > When 'cdc_op_key' persist the 'op' and the record key only, when 'cdc_data_before' persist the additional 'before' image , and when 'cdc_data_before_after', persist the 'before' and 'after' at the same time.<br></br>
 > **Default Value**: cdc_op_key (Optional)<br></br>
 > `Config Param: CDC_SUPPLEMENTAL_LOGGING_MODE`<br></br>
-
----
-
-> #### hoodie.compaction.merger.strategy
-> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.merger.impls which has the same merger strategy id<br></br>
-> **Default Value**: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)<br></br>
-> `Config Param: MERGER_STRATEGY`<br></br>
 
 ---
 
@@ -1883,6 +1850,13 @@ By default false (the names of partition folders are only partition values)<br><
 > Table name that will be used for registering with Hive. Needs to be same across runs.<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: NAME`<br></br>
+
+---
+
+> #### hoodie.compaction.record.merger.strategy
+> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id<br></br>
+> **Default Value**: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)<br></br>
+> `Config Param: RECORD_MERGER_STRATEGY`<br></br>
 
 ---
 
@@ -2164,7 +2138,7 @@ Configurations used by the Hudi Metadata Table. This table maintains the metadat
 ---
 
 > #### hoodie.metadata.enable.full.scan.log.files
-> Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries.<br></br>
+> Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries. This is an internal config and setting this will not overwrite the actual value used.<br></br>
 > **Default Value**: true (Optional)<br></br>
 > `Config Param: ENABLE_FULL_SCAN_LOG_FILES`<br></br>
 > `Since Version: 0.10.0`<br></br>
@@ -2180,7 +2154,7 @@ Configurations used by the Hudi Metadata Table. This table maintains the metadat
 ---
 
 > #### hoodie.metadata.clean.async
-> Enable asynchronous cleaning for metadata table<br></br>
+> Enable asynchronous cleaning for metadata table. This is an internal config and setting this will not overwrite the value actually used.<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: ASYNC_CLEAN_ENABLE`<br></br>
 > `Since Version: 0.7.0`<br></br>
@@ -2252,7 +2226,7 @@ Configurations used by the Hudi Metadata Table. This table maintains the metadat
 ---
 
 > #### hoodie.metadata.cleaner.commits.retained
-> Number of commits to retain, without cleaning, on metadata table.<br></br>
+> Number of commits to retain, without cleaning, on metadata table. This is an internal config and setting this will not overwrite the actual value used.<br></br>
 > **Default Value**: 3 (Optional)<br></br>
 > `Config Param: CLEANER_COMMITS_RETAINED`<br></br>
 > `Since Version: 0.7.0`<br></br>
@@ -2268,7 +2242,7 @@ Configurations used by the Hudi Metadata Table. This table maintains the metadat
 ---
 
 > #### hoodie.metadata.populate.meta.fields
-> When enabled, populates all meta fields. When disabled, no meta fields are populated.<br></br>
+> When enabled, populates all meta fields. When disabled, no meta fields are populated. This is an internal config and setting this will not overwrite the actual value used.<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: POPULATE_META_FIELDS`<br></br>
 > `Since Version: 0.10.0`<br></br>
@@ -2364,6 +2338,95 @@ The consistency guard related config options, to help talk to eventually consist
 
 ---
 
+### Table Service Manager Configs {#Table-Service-Manager-Configs}
+
+Configurations used by the Hudi Table Service Manager.
+
+`Config Class`: org.apache.hudi.common.config.HoodieTableServiceManagerConfig<br></br>
+> #### hoodie.table.service.manager.deploy.username
+> The user name for this table to deploy table services.<br></br>
+> **Default Value**: default (Optional)<br></br>
+> `Config Param: TABLE_SERVICE_MANAGER_DEPLOY_USERNAME`<br></br>
+
+---
+
+> #### hoodie.table.service.manager.connection.timeout.sec
+> Timeout in seconds for connections to table service manager.<br></br>
+> **Default Value**: 300 (Optional)<br></br>
+> `Config Param: TABLE_SERVICE_MANAGER_TIMEOUT_SEC`<br></br>
+
+---
+
+> #### hoodie.table.service.manager.connection.retry.delay.sec
+> Number of seconds for the client to wait between consecutive connection attempts<br></br>
+> **Default Value**: 1 (Optional)<br></br>
+> `Config Param: TABLE_SERVICE_MANAGER_RETRY_DELAY_SEC`<br></br>
+
+---
+
+> #### hoodie.table.service.manager.deploy.parallelism
+> The parallelism for this table to deploy table services.<br></br>
+> **Default Value**: 100 (Optional)<br></br>
+> `Config Param: TABLE_SERVICE_MANAGER_DEPLOY_PARALLELISM`<br></br>
+
+---
+
+> #### hoodie.table.service.manager.deploy.resources
+> The resources for this table to use for deploying table services.<br></br>
+> **Default Value**: spark:4g,4g (Optional)<br></br>
+> `Config Param: TABLE_SERVICE_MANAGER_DEPLOY_RESOURCES`<br></br>
+
+---
+
+> #### hoodie.table.service.manager.uris
+> Table service manager URIs (comma-delimited).<br></br>
+> **Default Value**: http://localhost:9091 (Optional)<br></br>
+> `Config Param: TABLE_SERVICE_MANAGER_URIS`<br></br>
+
+---
+
+> #### hoodie.table.service.manager.enabled
+> If true, use table service manager to execute table service<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: TABLE_SERVICE_MANAGER_ENABLED`<br></br>
+
+---
+
+> #### hoodie.table.service.manager.deploy.queue
+> The queue for this table to deploy table services.<br></br>
+> **Default Value**: default (Optional)<br></br>
+> `Config Param: TABLE_SERVICE_MANAGER_DEPLOY_QUEUE`<br></br>
+
+---
+
+> #### hoodie.table.service.manager.actions
+> The actions deployed on table service manager, such as compaction or clean.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: TABLE_SERVICE_MANAGER_ACTIONS`<br></br>
+
+---
+
+> #### hoodie.table.service.manager.deploy.extra.params
+> The extra params to deploy for table service of this table, split by ';'<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: TABLE_SERVICE_MANAGER_DEPLOY_EXTRA_PARAMS`<br></br>
+
+---
+
+> #### hoodie.table.service.manager.execution.engine
+> The execution engine to deploy for table service of this table, default spark<br></br>
+> **Default Value**: spark (Optional)<br></br>
+> `Config Param: TABLE_SERVICE_MANAGER_DEPLOY_EXECUTION_ENGINE`<br></br>
+
+---
+
+> #### hoodie.table.service.manager.connection.retries
+> Number of retries while opening a connection to table service manager<br></br>
+> **Default Value**: 3 (Optional)<br></br>
+> `Config Param: TABLE_SERVICE_MANAGER_RETRIES`<br></br>
+
+---
+
 ### FileSystem Guard Configurations {#FileSystem-Guard-Configurations}
 
 The filesystem retry related config options, to help deal with runtime exception like list/get/put/delete performance issues.
@@ -2414,6 +2477,13 @@ The filesystem retry related config options, to help deal with runtime exception
 Configurations that control write behavior on Hudi tables. These can be directly passed down from even higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g DeltaStreamer).
 
 `Config Class`: org.apache.hudi.config.HoodieWriteConfig<br></br>
+> #### hoodie.datasource.write.record.merger.impls
+> List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by hoodie.datasource.write.record.merger.strategy Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)<br></br>
+> **Default Value**: org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)<br></br>
+> `Config Param: RECORD_MERGER_IMPLS`<br></br>
+
+---
+
 > #### hoodie.combine.before.upsert
 > When upserted records share same key, controls whether they should be first combined (i.e de-duplicated) before writing to storage. This should be turned off only if you are absolutely certain that there are no duplicates incoming,  otherwise it can lead to duplicate keys and violate the uniqueness guarantees.<br></br>
 > **Default Value**: true (Optional)<br></br>
@@ -2463,6 +2533,14 @@ Configurations that control write behavior on Hudi tables. These can be directly
 > Base file format to store all the base file data.<br></br>
 > **Default Value**: PARQUET (Optional)<br></br>
 > `Config Param: BASE_FILE_FORMAT`<br></br>
+
+---
+
+> #### hoodie.write.concurrency.early.conflict.detection.strategy
+> The class name of the early conflict detection strategy to use. This should be a subclass of `org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy`.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME`<br></br>
+> `Since Version: 0.13.0`<br></br>
 
 ---
 
@@ -2631,6 +2709,14 @@ Configurations that control write behavior on Hudi tables. These can be directly
 
 ---
 
+> #### hoodie.write.concurrency.async.conflict.detector.initial_delay_ms
+> Used for timeline-server-based markers with `AsyncTimelineServerBasedDetectionStrategy`. The time in milliseconds to delay the first execution of async marker-based conflict detection.<br></br>
+> **Default Value**: 30000 (Optional)<br></br>
+> `Config Param: ASYNC_CONFLICT_DETECTOR_INITIAL_DELAY_MS`<br></br>
+> `Since Version: 0.13.0`<br></br>
+
+---
+
 > #### hoodie.bulkinsert.shuffle.parallelism
 > For large initial imports using bulk_insert operation, controls the parallelism to use for sort modes or custom partitioning donebefore writing records to the table.<br></br>
 > **Default Value**: 200 (Optional)<br></br>
@@ -2649,6 +2735,14 @@ Configurations that control write behavior on Hudi tables. These can be directly
 > Maximum number of checks, for consistency of written data.<br></br>
 > **Default Value**: 7 (Optional)<br></br>
 > `Config Param: MAX_CONSISTENCY_CHECKS`<br></br>
+
+---
+
+> #### hoodie.write.concurrency.early.conflict.detection.enable
+> Whether to enable early conflict detection based on markers. It eagerly detects writing conflict before create markers and fails fast if a conflict is detected, to release cluster compute resources as soon as possible.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: EARLY_CONFLICT_DETECTION_ENABLE`<br></br>
+> `Since Version: 0.13.0`<br></br>
 
 ---
 
@@ -2673,13 +2767,6 @@ Configurations that control write behavior on Hudi tables. These can be directly
 
 ---
 
-> #### hoodie.datasource.write.merger.impls
-> List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by hoodie.datasource.write.merger.strategy Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)<br></br>
-> **Default Value**: org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)<br></br>
-> `Config Param: MERGER_IMPLS`<br></br>
-
----
-
 > #### hoodie.datasource.write.precombine.field
 > Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br></br>
 > **Default Value**: ts (Optional)<br></br>
@@ -2691,6 +2778,21 @@ Configurations that control write behavior on Hudi tables. These can be directly
 > Sorting modes to use for sorting records for bulk insert. This is use when user hoodie.bulkinsert.user.defined.partitioner.classis not configured. Available values are - GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. PARTITION_SORT: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing lowest and best effort file sizing. PARTITION_PATH_REPARTITION: this ensures that the data for a single physical partition in the table is written by the same Spark executor, best for input data evenly distributed across different partition paths. This can cause imbalance among Spark executors if the input data is skewed, i.e., most records are intended for a handful of partition paths among all. PARTITION_PATH_REPARTITION_AND_SORT: this ensures that the data for a single physical partition in the table is written by the same Spark executor, best for input data evenly distributed across different partition paths. Compared to PARTITION_PATH_REPARTITION, this sort mode does an additional step of sorting the records based on the partition path within a single Spark partition, given that data for multiple physical partitions can be sent to the same Spark partition and executor. This can cause imbalance among Spark executors if the input data is skewed, i.e., most records are intended for a handful of partition paths among all. NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads<br></br>
 > **Default Value**: NONE (Optional)<br></br>
 > `Config Param: BULK_INSERT_SORT_MODE`<br></br>
+
+---
+
+> #### hoodie.write.concurrency.early.conflict.check.commit.conflict
+> Whether to enable commit conflict checking or not during early conflict detection.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT`<br></br>
+> `Since Version: 0.13.0`<br></br>
+
+---
+
+> #### hoodie.datasource.write.record.merger.strategy
+> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id<br></br>
+> **Default Value**: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)<br></br>
+> `Config Param: RECORD_MERGER_STRATEGY`<br></br>
 
 ---
 
@@ -2808,6 +2910,14 @@ Configurations that control write behavior on Hudi tables. These can be directly
 
 ---
 
+> #### hoodie.write.concurrency.async.conflict.detector.period_ms
+> Used for timeline-server-based markers with `AsyncTimelineServerBasedDetectionStrategy`. The period in milliseconds between successive executions of async marker-based conflict detection.<br></br>
+> **Default Value**: 30000 (Optional)<br></br>
+> `Config Param: ASYNC_CONFLICT_DETECTOR_PERIOD_MS`<br></br>
+> `Since Version: 0.13.0`<br></br>
+
+---
+
 > #### hoodie.bulkinsert.user.defined.partitioner.sort.columns
 > Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. For example 'column1,column2'<br></br>
 > **Default Value**: N/A (Required)<br></br>
@@ -2833,13 +2943,6 @@ Configurations that control write behavior on Hudi tables. These can be directly
 > Writers perform heartbeats to indicate liveness. Controls how often (in ms), such heartbeats are registered to lake storage.<br></br>
 > **Default Value**: 60000 (Optional)<br></br>
 > `Config Param: CLIENT_HEARTBEAT_INTERVAL_IN_MS`<br></br>
-
----
-
-> #### hoodie.datasource.write.merger.strategy
-> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.merger.impls which has the same merger strategy id<br></br>
-> **Default Value**: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)<br></br>
-> `Config Param: MERGER_STRATEGY`<br></br>
 
 ---
 
@@ -2876,6 +2979,57 @@ Configurations that control write behavior on Hudi tables. These can be directly
 > When enabled, records in older schema are rewritten into newer schema during upsert,delete and background compaction,clustering operations.<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE`<br></br>
+
+---
+
+### Metastore Configs {#Metastore-Configs}
+
+Configurations used by the Hudi Metastore.
+
+`Config Class`: org.apache.hudi.common.config.HoodieMetaserverConfig<br></br>
+> #### hoodie.metaserver.connect.retry.delay
+> Number of seconds for the client to wait between consecutive connection attempts<br></br>
+> **Default Value**: 1 (Optional)<br></br>
+> `Config Param: METASERVER_CONNECTION_RETRY_DELAY`<br></br>
+> `Since Version: 0.13.0`<br></br>
+
+---
+
+> #### hoodie.metaserver.uris
+> Metastore server uris<br></br>
+> **Default Value**: thrift://localhost:9090 (Optional)<br></br>
+> `Config Param: METASERVER_URLS`<br></br>
+> `Since Version: 0.13.0`<br></br>
+
+---
+
+> #### hoodie.table.name
+> Table name that will be used for registering with Hive. Needs to be same across runs.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: TABLE_NAME`<br></br>
+
+---
+
+> #### hoodie.database.name
+> Database name that will be used for incremental query.If different databases have the same table name during incremental query, we can set it to limit the table name under a specific database<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: DATABASE_NAME`<br></br>
+
+---
+
+> #### hoodie.metaserver.enabled
+> Enable Hudi metaserver for storing Hudi tables' metadata.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: METASERVER_ENABLE`<br></br>
+> `Since Version: 0.13.0`<br></br>
+
+---
+
+> #### hoodie.metaserver.connect.retries
+> Number of retries while opening a connection to metastore<br></br>
+> **Default Value**: 3 (Optional)<br></br>
+> `Config Param: METASERVER_CONNECTION_RETRIES`<br></br>
+> `Since Version: 0.13.0`<br></br>
 
 ---
 
@@ -3427,7 +3581,7 @@ Configs that control locking mechanisms required for concurrency control  betwee
 
 > #### hoodie.write.lock.client.num_retries
 > Maximum number of times to retry to acquire lock additionally from the lock manager.<br></br>
-> **Default Value**: 10 (Optional)<br></br>
+> **Default Value**: 50 (Optional)<br></br>
 > `Config Param: LOCK_ACQUIRE_CLIENT_NUM_RETRIES`<br></br>
 > `Since Version: 0.8.0`<br></br>
 
@@ -3555,7 +3709,7 @@ Configs that control locking mechanisms required for concurrency control  betwee
 
 > #### hoodie.write.lock.client.wait_time_ms_between_retry
 > Amount of time to wait between retries on the lock provider by the lock manager<br></br>
-> **Default Value**: 10000 (Optional)<br></br>
+> **Default Value**: 2000 (Optional)<br></br>
 > `Config Param: LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS`<br></br>
 > `Since Version: 0.8.0`<br></br>
 
@@ -4220,7 +4374,7 @@ Configurations that control the clustering table service in hudi, which optimize
 ---
 
 > #### hoodie.clustering.plan.partition.filter.mode
-> Partition filter mode used in the creation of clustering plan. Available values are - NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate.RECENT_DAYS: keep a continuous range of partitions, worked together with configs 'hoodie.clustering.plan.strategy.daybased.lookback.partitions' and 'hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions.SELECTED_PARTITIONS: keep partitions that are in the specified range ['hoodie.clustering.plan.strategy.cluster.begin.partition', 'hoodie.clustering.plan.strategy.cluster.end.partition'].<br></br>
+> Partition filter mode used in the creation of clustering plan. Available values are - NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate.RECENT_DAYS: keep a continuous range of partitions, worked together with configs 'hoodie.clustering.plan.strategy.daybased.lookback.partitions' and 'hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions.SELECTED_PARTITIONS: keep partitions that are in the specified range ['hoodie.clustering.plan.strategy.cluster.begin.partition', 'hoodie.clustering.plan.strategy.cluster.end.partition'].DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour.<br></br>
 > **Default Value**: NONE (Optional)<br></br>
 > `Config Param: PLAN_PARTITION_FILTER_MODE_NAME`<br></br>
 > `Since Version: 0.11.0`<br></br>
