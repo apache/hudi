@@ -131,10 +131,6 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       //    Let's take an example of N = 8 and M = 4 (default # of file-groups in Bloom Filter
       //    partition). In that case Spark partitions for which `hash(key) % N` will be either 0
       //    or 4, will map to the same (first) file-group in MT
-      //
-      // To achieve G1, we drastically reduce # of RDD partitions actually reading from MT, by
-      // setting target parallelism as a (low-factor) multiple of the # of the file-groups in MT
-      // TODO update comments
       int bloomFilterPartitionFileGroupCount =
           config.getMetadataConfig().getBloomFilterIndexFileGroupCount();
       int adjustedTargetParallelism =
@@ -156,10 +152,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       keyLookupResultRDD = fileComparisonsRDD.repartitionAndSortWithinPartitions(partitioner)
           .mapPartitionsToPair(new HoodieMetadataBloomFilterProbingFunction(baseFileOnlyViewBroadcast, hoodieTable))
           // Second, we use [[HoodieFileProbingFunction]] to open actual file and check whether it
-          // contains the records with candidate keys that were filtered in by the Bloom Filter.
-          //
-          // Here we repartition the RDD back to the desired target parallelism to make sure
-          // individual file-probing is not constrained
+          // contains the records with candidate keys that were filtered in by the Bloom Filter
           .mapPartitions(new HoodieFileProbingFunction(baseFileOnlyViewBroadcast, hadoopConf), true);
 
     } else if (config.useBloomIndexBucketizedChecking()) {
