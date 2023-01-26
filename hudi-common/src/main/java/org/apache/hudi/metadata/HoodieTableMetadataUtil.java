@@ -1837,6 +1837,7 @@ public class HoodieTableMetadataUtil {
                 engineType,
                 Collections.emptyList(), // TODO: support different merger classes, which is currently only known to write config
                 metaClient.getTableConfig().getRecordMergerStrategy()))
+            .withTableMetaClient(metaClient)
             .build();
         ClosableIterator<String> recordKeyIterator = ClosableIterator.wrap(mergedLogRecordScanner.getRecords().keySet().iterator());
         return new ClosableIterator<HoodieRecord>() {

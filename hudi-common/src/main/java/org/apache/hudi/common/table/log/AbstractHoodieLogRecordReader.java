@@ -157,10 +157,11 @@ public abstract class AbstractHoodieLogRecordReader {
                                           InternalSchema internalSchema,
                                           Option<String> keyFieldOverride,
                                           boolean enableOptimizedLogBlocksScan,
-                                          HoodieRecordMerger recordMerger) {
+                                          HoodieRecordMerger recordMerger,
+                                          Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
-    this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
+    this.hoodieTableMetaClient = hoodieTableMetaClientOption.orElseGet(() -> HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build());
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
@@ -1032,6 +1033,10 @@ public abstract class AbstractHoodieLogRecordReader {
     }
 
     public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
       throw new UnsupportedOperationException();
     }
 
