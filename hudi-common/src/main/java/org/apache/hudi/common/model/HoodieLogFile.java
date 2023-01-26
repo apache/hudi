@@ -54,10 +54,10 @@ public class HoodieLogFile implements Serializable {
   private final String pathStr;
   private long fileLen;
   private transient CachingPath path;
-  private transient String fileId;
-  private transient String baseTime;
-  private transient int logVersion = Integer.MIN_VALUE;
-  private transient String writeToken;
+  private String fileId;
+  private String baseTime;
+  private int logVersion = Integer.MIN_VALUE;
+  private String writeToken;
 
   public HoodieLogFile(HoodieLogFile logFile) {
     this.fileStatus = logFile.fileStatus;
