@@ -34,7 +34,7 @@ import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
-import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
+import org.apache.hudi.sync.common.util.ConfigUtils;
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
@@ -318,12 +318,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         StorageDescriptor sd = table.getSd();
         sd.setLocation(basePath);
         SerDeInfo serdeInfo = sd.getSerdeInfo();
-        Map<String, String> serdePathProperties = SparkDataSourceTableUtils.getSparkSerdePathProperties(basePath);
-        for (Map.Entry<String, String> entry : serdePathProperties.entrySet()) {
-          String key = entry.getKey();
-          String value = entry.getValue();
-          serdeInfo.putToParameters(key, value);
-        }
+        serdeInfo.putToParameters(ConfigUtils.TABLE_SERDE_PATH, basePath);
         table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
         client.alter_table(databaseName, tableName, table);
       } catch (Exception e) {
