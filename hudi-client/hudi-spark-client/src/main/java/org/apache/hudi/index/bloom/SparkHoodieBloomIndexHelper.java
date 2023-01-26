@@ -134,28 +134,33 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       //
       // To achieve G1, we drastically reduce # of RDD partitions actually reading from MT, by
       // setting target parallelism as a (low-factor) multiple of the # of the file-groups in MT
-      int targetMetadataParallelism =
-          config.getMetadataConfig().getBloomFilterIndexFileGroupCount() * config.getBloomIndexMetadataFetchingParallelismFactor();
+      // TODO update comments
+      int bloomFilterPartitionFileGroupCount =
+          config.getMetadataConfig().getBloomFilterIndexFileGroupCount();
+      int adjustedTargetParallelism =
+          targetParallelism % bloomFilterPartitionFileGroupCount == 0
+              ? targetParallelism
+              // NOTE: We add 1 to make sure parallelism a) value always stays positive and b)
+              //       {@code targetParallelism <= adjustedTargetParallelism}
+              : (targetParallelism / bloomFilterPartitionFileGroupCount + 1) * bloomFilterPartitionFileGroupCount;
 
       AffineBloomIndexFileGroupPartitioner partitioner =
-          new AffineBloomIndexFileGroupPartitioner(baseFileOnlyViewBroadcast, targetMetadataParallelism);
+          new AffineBloomIndexFileGroupPartitioner(baseFileOnlyViewBroadcast, adjustedTargetParallelism);
 
-      keyLookupResultRDD =
-          // First, we need to repartition and sort records using [[AffineBloomIndexFileGroupPartitioner]]
-          // to make sure every Spark task accesses no more than just a single file-group in MT (allows
-          // us to achieve G2).
+      // First, we need to repartition and sort records using [[AffineBloomIndexFileGroupPartitioner]]
+      // to make sure every Spark task accesses no more than just a single file-group in MT (allows
+      // us to achieve G2).
+      //
+      // NOTE: Sorting records w/in individual partitions is required to make sure that we cluster
+      //       together keys co-located w/in the MT files (sorted by keys)
+      keyLookupResultRDD = fileComparisonsRDD.repartitionAndSortWithinPartitions(partitioner)
+          .mapPartitionsToPair(new HoodieMetadataBloomFilterProbingFunction(baseFileOnlyViewBroadcast, hoodieTable))
+          // Second, we use [[HoodieFileProbingFunction]] to open actual file and check whether it
+          // contains the records with candidate keys that were filtered in by the Bloom Filter.
           //
-          // NOTE: Sorting records w/in individual partitions is required to make sure that we cluster
-          //       together keys co-located w/in the MT files (sorted by keys)
-          fileComparisonsRDD.repartitionAndSortWithinPartitions(partitioner)
-              .mapPartitionsToPair(new HoodieMetadataBloomFilterProbingFunction(baseFileOnlyViewBroadcast, hoodieTable))
-              // Second, we use [[HoodieFileProbingFunction]] to open actual file and check whether it
-              // contains the records with candidate keys that were filtered in by the Bloom Filter.
-              //
-              // Here we repartition the RDD back to the desired target parallelism to make sure
-              // individual file-probing is not constrained
-              .repartition(targetParallelism)
-              .mapPartitions(new HoodieFileProbingFunction(baseFileOnlyViewBroadcast, hadoopConf), true);
+          // Here we repartition the RDD back to the desired target parallelism to make sure
+          // individual file-probing is not constrained
+          .mapPartitions(new HoodieFileProbingFunction(baseFileOnlyViewBroadcast, hadoopConf), true);
 
     } else if (config.useBloomIndexBucketizedChecking()) {
       Map<HoodieFileGroupId, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(
