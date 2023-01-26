@@ -48,7 +48,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -60,7 +59,6 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -158,7 +156,6 @@ import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getNextCommitTime;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_COMPACTION_TIME_SUFFIX;
-import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_INIT_TIME_SUFFIX;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
@@ -342,6 +339,118 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertTrue(tableConfig.getMetadataPartitions().contains(FILES.getPartitionPath()));
     assertTrue(tableConfig.getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
     assertTrue(tableConfig.getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
+  }
+
+  @Test
+  public void testEnableAndDisableMetadataPartitionsAndMetadataTable() throws IOException {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    HoodieWriteConfig writeConfig1 = getWriteConfig(true, true);
+    writeConfig1.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "false");
+    writeConfig1.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "false");
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig1)) {
+      for (int ts = 0; ts < 2; ts += 1) {
+        String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(ts);
+        client.startCommitWithTime(commitTime);
+        List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
+        List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+        assertNoWriteErrors(writeStatuses);
+      }
+      validateMetadata(client);
+      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+      assertEquals(Stream.of(FILES).collect(Collectors.toSet()), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
+    }
+
+    // enable colstats partition
+    HoodieWriteConfig writeConfig2 = getWriteConfig(true, true);
+    writeConfig2.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "true");
+    writeConfig2.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "false");
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig2)) {
+      String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(2);
+      client.startCommitWithTime(commitTime);
+      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+      assertEquals(Stream.of(FILES, COLUMN_STATS).collect(Collectors.toSet()), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
+    }
+
+    // enable bloom filter partition
+    HoodieWriteConfig writeConfig3 = getWriteConfig(true, true);
+    writeConfig3.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "true");
+    writeConfig3.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "true");
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig3)) {
+      String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(3);
+      client.startCommitWithTime(commitTime);
+      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+      assertEquals(Stream.of(FILES, COLUMN_STATS, BLOOM_FILTERS).collect(Collectors.toSet()), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
+    }
+
+    // disable colstats partition
+    HoodieWriteConfig writeConfig4 = getWriteConfig(true, true);
+    writeConfig4.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "false");
+    writeConfig4.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "true");
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig4)) {
+      String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(4);
+      client.startCommitWithTime(commitTime);
+      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+      assertEquals(Stream.of(FILES, BLOOM_FILTERS).collect(Collectors.toSet()), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
+    }
+
+    // disable metadata table
+    HoodieWriteConfig writeConfig5 = getWriteConfig(true, false);
+    writeConfig5.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "false");
+    writeConfig5.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "false");
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig5)) {
+      String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(5);
+      client.startCommitWithTime(commitTime);
+      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+      assertEquals(Collections.emptySet(), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
+    }
+
+    // enable metadata table
+    HoodieWriteConfig writeConfig6 = getWriteConfig(true, true);
+    writeConfig6.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "false");
+    writeConfig6.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "false");
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig6)) {
+      String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(6);
+      client.startCommitWithTime(commitTime);
+      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+      assertEquals(Stream.of(FILES).collect(Collectors.toSet()), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
+    }
+
+    // enable bloom filter partition
+    HoodieWriteConfig writeConfig7 = getWriteConfig(true, true);
+    writeConfig7.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "false");
+    writeConfig7.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "true");
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig7)) {
+      String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(7);
+      client.startCommitWithTime(commitTime);
+      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+      assertEquals(Stream.of(FILES, BLOOM_FILTERS).collect(Collectors.toSet()), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
+    }
   }
 
   @Test
@@ -2310,59 +2419,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
-    }
-  }
-
-  @Test
-  public void testNewPartitionInit() throws IOException {
-    init(HoodieTableType.COPY_ON_WRITE);
-    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-
-    HoodieWriteConfig writeConfig1 = getWriteConfig(true, true);
-    writeConfig1.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "false");
-    writeConfig1.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "false");
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig1)) {
-      for (int ts = 0; ts < 2; ts += 1) {
-        String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(ts);
-        client.startCommitWithTime(commitTime);
-        List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
-        List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
-        assertNoWriteErrors(writeStatuses);
-      }
-      validateMetadata(client);
-      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
-      assertEquals(Stream.of(FILES).collect(Collectors.toSet()), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
-    }
-
-
-    // enable colstats partition
-    HoodieWriteConfig writeConfig2 = getWriteConfig(true, true);
-    writeConfig2.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "true");
-    writeConfig2.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "false");
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig2)) {
-      String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(2);
-      client.startCommitWithTime(commitTime);
-      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
-      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
-      assertNoWriteErrors(writeStatuses);
-      validateMetadata(client);
-      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
-      assertEquals(Stream.of(FILES, COLUMN_STATS).collect(Collectors.toSet()), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
-    }
-
-    // enable bloom filter partition
-    HoodieWriteConfig writeConfig3 = getWriteConfig(true, true);
-    writeConfig3.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "true");
-    writeConfig3.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER, "true");
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig3)) {
-      String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(3);
-      client.startCommitWithTime(commitTime);
-      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 10);
-      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
-      assertNoWriteErrors(writeStatuses);
-      validateMetadata(client);
-      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
-      assertEquals(Stream.of(FILES, COLUMN_STATS, BLOOM_FILTERS).collect(Collectors.toSet()), new HashSet<>(metadataWriter.getEnabledPartitionTypes()));
     }
   }
 

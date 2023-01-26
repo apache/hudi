@@ -417,7 +417,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       String createInstantTime = getInitialCommitInstantTime(dataMetaClient);
       initTableMetadata(); // re-init certain flags in BaseTableMetadata
       initializeEnabledFileGroups(dataMetaClient, createInstantTime, partitionsToInit);
-      initialCommit(createInstantTime, partitionsToInit);
+      initialCommit(createInstantTime, partitionsToInit, true);
       updateInitializedPartitionsInTableConfig(partitionsToInit);
     }
   }
@@ -562,7 +562,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       enabledPartitionTypes = this.enabledPartitionTypes;
     }
     initializeEnabledFileGroups(dataMetaClient, createInstantTime, enabledPartitionTypes);
-    initialCommit(createInstantTime, enabledPartitionTypes);
+    initialCommit(createInstantTime, enabledPartitionTypes, false);
     updateInitializedPartitionsInTableConfig(enabledPartitionTypes);
     return true;
   }
@@ -877,7 +877,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     inflightIndexes.addAll(indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
     dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightIndexes));
     HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
-    initialCommit(indexUptoInstantTime, partitionTypes);
+    initialCommit(indexUptoInstantTime, partitionTypes, false);
   }
 
   /**
@@ -1087,7 +1087,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * and calling the existing update(HoodieCommitMetadata) function does not scale well.
    * Hence, we have a special commit just for the initialization scenario.
    */
-  private void initialCommit(String createInstantTime, List<MetadataPartitionType> partitionTypes) {
+  private void initialCommit(String createInstantTime, List<MetadataPartitionType> partitionTypes, boolean shouldSuffix) {
     // List all partitions in the basePath of the containing dataset
     LOG.info("Initializing metadata table by using file listings in " + dataWriteConfig.getBasePath());
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Initializing metadata table by listing files and partitions: " + dataWriteConfig.getTableName());
@@ -1127,7 +1127,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
 
-    commit(createInstantTime.equals(SOLO_COMMIT_TIMESTAMP) ? createInstantTime : createInstantTime + METADATA_TABLE_INIT_TIME_SUFFIX,
+    shouldSuffix = shouldSuffix && !createInstantTime.equals(SOLO_COMMIT_TIMESTAMP);
+    commit(shouldSuffix ? createInstantTime + METADATA_TABLE_INIT_TIME_SUFFIX : createInstantTime,
         partitionToRecordsMap, false);
   }
 
