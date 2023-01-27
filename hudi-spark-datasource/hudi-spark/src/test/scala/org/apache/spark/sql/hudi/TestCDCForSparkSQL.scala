@@ -19,10 +19,9 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.common.table.HoodieTableMetaClient
-
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{data_before, op_key_only}
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
-
 import org.junit.jupiter.api.Assertions.assertEquals
 
 class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
@@ -54,7 +53,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
     spark.sql(s"use $databaseName")
 
     Seq("cow", "mor").foreach { tableType =>
-      Seq("cdc_op_key", "cdc_data_before").foreach { cdcSupplementalLoggingMode =>
+      Seq(op_key_only, data_before).foreach { loggingMode =>
         withTempDir { tmp =>
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -70,7 +69,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                |   'primaryKey' = 'id',
                |   'preCombineField' = 'ts',
                |   'hoodie.table.cdc.enabled' = 'true',
-               |   'hoodie.table.cdc.supplemental.logging.mode' = '$cdcSupplementalLoggingMode',
+               |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
                |   type = '$tableType'
                | )
                | location '$basePath'
@@ -174,7 +173,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
     spark.sql(s"use $databaseName")
 
     Seq("cow", "mor").foreach { tableType =>
-      Seq("cdc_op_key", "cdc_data_before").foreach { cdcSupplementalLoggingMode =>
+      Seq(op_key_only, data_before).foreach { loggingMode =>
         withTempDir { tmp =>
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -192,7 +191,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                |   'primaryKey' = 'id',
                |   'preCombineField' = 'ts',
                |   'hoodie.table.cdc.enabled' = 'true',
-               |   'hoodie.table.cdc.supplemental.logging.mode' = '$cdcSupplementalLoggingMode',
+               |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
                |   'type' = '$tableType'
                | )
                | location '$basePath'
