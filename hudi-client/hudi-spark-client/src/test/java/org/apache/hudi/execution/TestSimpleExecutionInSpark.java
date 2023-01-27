@@ -32,7 +32,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import scala.Tuple2;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -45,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
+public class  TestSimpleExecutionInSpark extends HoodieClientTestHarness {
 
   private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
 
@@ -66,13 +65,13 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 128);
     final List<HoodieRecord> consumedRecords = new ArrayList<>();
 
-    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    HoodieConsumer<HoodieRecord, Integer> consumer =
+        new HoodieConsumer<HoodieRecord, Integer>() {
           private int count = 0;
 
           @Override
-          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) throws Exception {
-            consumedRecords.add(record.getResult());
+          public void consume(HoodieRecord record) throws Exception {
+            consumedRecords.add(record);
             count++;
           }
 
@@ -81,10 +80,10 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
             return count;
           }
         };
-    SimpleExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
+    SimpleExecutor<HoodieRecord, HoodieRecord, Integer> exec = null;
 
     try {
-      exec = new SimpleExecutor(hoodieRecords.iterator(), consumer, Function.identity());
+      exec = new SimpleExecutor<>(hoodieRecords.iterator(), consumer, Function.identity());
 
       int result = exec.execute();
       // It should buffer and write 128 records
@@ -126,16 +125,16 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
       }
     });
 
-    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    HoodieConsumer<HoodieRecord, Integer> consumer =
+        new HoodieConsumer<HoodieRecord, Integer>() {
           private int count = 0;
 
           @Override
-          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) throws Exception {
+          public void consume(HoodieRecord record) throws Exception {
             count++;
-            afterRecord.add((HoodieAvroRecord) record.getResult());
+            afterRecord.add((HoodieAvroRecord) record);
             try {
-              IndexedRecord indexedRecord = (IndexedRecord)((HoodieAvroRecord) record.getResult())
+              IndexedRecord indexedRecord = (IndexedRecord)((HoodieAvroRecord) record)
                   .getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get();
               afterIndexedRecord.add(indexedRecord);
             } catch (IOException e) {
@@ -149,10 +148,10 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
           }
         };
 
-    SimpleExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
+    SimpleExecutor<HoodieRecord, HoodieRecord, Integer> exec = null;
 
     try {
-      exec = new SimpleExecutor(hoodieRecords.iterator(), consumer, Function.identity());
+      exec = new SimpleExecutor<>(hoodieRecords.iterator(), consumer, Function.identity());
       int result = exec.execute();
       assertEquals(100, result);
 
@@ -179,14 +178,13 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
     List<HoodieRecord> pRecs = dataGen.generateInserts(instantTime, numRecords);
     InnerIterator iterator = new InnerIterator(pRecs.iterator(), errorMessage, numRecords / 10);
 
-    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    HoodieConsumer<HoodieRecord, Integer> consumer =
+        new HoodieConsumer<HoodieRecord, Integer>() {
           int count = 0;
 
           @Override
-          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) throws Exception {
+          public void consume(HoodieRecord payload) throws Exception {
             // Read recs and ensure we have covered all producer recs.
-            final HoodieRecord rec = payload.getResult();
             count++;
           }
 
@@ -196,8 +194,8 @@ public class TestSimpleExecutionInSpark extends HoodieClientTestHarness {
           }
         };
 
-    SimpleExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec =
-        new SimpleExecutor(iterator, consumer, Function.identity());
+    SimpleExecutor<HoodieRecord, HoodieRecord, Integer> exec =
+        new SimpleExecutor<>(iterator, consumer, Function.identity());
 
     final Throwable thrown = assertThrows(HoodieException.class, exec::execute,
         "exception is expected");
