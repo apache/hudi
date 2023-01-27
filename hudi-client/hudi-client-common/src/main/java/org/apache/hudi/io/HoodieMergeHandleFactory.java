@@ -22,9 +22,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.Iterator;
@@ -45,23 +43,20 @@ public class HoodieMergeHandleFactory {
       Iterator<HoodieRecord<T>> recordItr,
       String partitionPath,
       String fileId,
-      TaskContextSupplier taskContextSupplier,
-      Option<BaseKeyGenerator> keyGeneratorOpt) {
+      TaskContextSupplier taskContextSupplier) {
     if (table.requireSortedRecords()) {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
-        return new HoodieSortedMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier,
-            keyGeneratorOpt);
+        return new HoodieSortedMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
       } else {
-        return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier,
-            keyGeneratorOpt);
+        return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
       }
     } else if (!WriteOperationType.isChangingRecords(operationType) && writeConfig.allowDuplicateInserts()) {
-      return new HoodieConcatHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+      return new HoodieConcatHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
     } else {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
-        return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+        return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
       } else {
-        return new HoodieMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+        return new HoodieMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
       }
     }
   }
@@ -77,23 +72,22 @@ public class HoodieMergeHandleFactory {
       String partitionPath,
       String fileId,
       HoodieBaseFile dataFileToBeMerged,
-      TaskContextSupplier taskContextSupplier,
-      Option<BaseKeyGenerator> keyGeneratorOpt) {
+      TaskContextSupplier taskContextSupplier) {
     if (table.requireSortedRecords()) {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
         return new HoodieSortedMergeHandleWithChangeLog<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
-            dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+            dataFileToBeMerged, taskContextSupplier);
       } else {
         return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
-            dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+            dataFileToBeMerged, taskContextSupplier);
       }
     } else {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
         return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
-            dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+            dataFileToBeMerged, taskContextSupplier);
       } else {
         return new HoodieMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
-            dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+            dataFileToBeMerged, taskContextSupplier);
       }
     }
   }

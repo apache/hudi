@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
@@ -179,11 +181,16 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
    * <p>
    * Note: This method is performant when the caller passes in a sorted candidate keys.
    *
-   * @param candidateRowKeys - Keys to check for the availability
+   * @param keyGeneratorOpt  Key generator for generating record keys when virtual keys are enabled.
+   * @param schemaOpt        Table schema when virtual keys are enabled.
+   * @param candidateRowKeys Keys to check for the availability
    * @return Subset of candidate keys that are available
    */
   @Override
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
+  public Set<String> filterRowKeys(
+      Option<BaseKeyGenerator> keyGeneratorOpt,
+      Option<SerializableSchema> schemaOpt,
+      Set<String> candidateRowKeys) {
     checkState(candidateRowKeys instanceof TreeSet,
         String.format("HFile reader expects a TreeSet as iterating over ordered keys is more performant, got (%s)", candidateRowKeys.getClass().getSimpleName()));
 

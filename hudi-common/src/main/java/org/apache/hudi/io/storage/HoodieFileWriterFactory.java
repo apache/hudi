@@ -104,6 +104,16 @@ public class HoodieFileWriterFactory {
     throw new UnsupportedOperationException();
   }
 
+  /**
+   * Gets the parquet writer for writing Hudi log blocks in parquet format.
+   *
+   * @param outputStream output stream to write to.
+   * @param conf         Hadoop configuration.
+   * @param config       Hudi configuration.
+   * @param schema       Schema of the data.
+   * @return the parquet writer for writing Hudi log blocks.
+   * @throws IOException upon errors.
+   */
   protected HoodieFileWriter newParquetFileWriter(
       FSDataOutputStream outputStream, Configuration conf, HoodieConfig config, Schema schema) throws IOException {
     throw new UnsupportedOperationException();

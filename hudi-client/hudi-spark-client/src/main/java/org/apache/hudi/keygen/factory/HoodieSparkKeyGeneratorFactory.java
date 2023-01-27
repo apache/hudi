@@ -19,10 +19,13 @@
 package org.apache.hudi.keygen.factory;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.GlobalDeleteKeyGenerator;
@@ -64,6 +67,22 @@ public class HoodieSparkKeyGeneratorFactory {
         "org.apache.hudi.keygen.SimpleKeyGenerator");
     COMMON_TO_SPARK_KEYGENERATOR.put("org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator",
         "org.apache.hudi.keygen.TimestampBasedKeyGenerator");
+  }
+
+  public static Option<BaseKeyGenerator> createVirtualKeyGenerator(HoodieWriteConfig config) {
+    try {
+      // When virtual keys are enabled, i.e., `config.populateMetaFields()` returns false,
+      // a key generator needs to be created for generating record keys on the fly
+      return config.populateMetaFields()
+          ? Option.empty()
+          : Option.of(
+          (BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(
+              new TypedProperties(config.getProps())));
+    } catch (IOException e) {
+      throw new HoodieIOException("Only BaseKeyGenerator (or any key generator that extends from "
+          + "BaseKeyGenerator) are supported when meta columns are disabled. Please choose the "
+          + "right key generator if you wish to disable meta fields.", e);
+    }
   }
 
   public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {

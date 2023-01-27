@@ -36,7 +36,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieKeyLocationFetchHandle;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.List;
@@ -50,11 +49,8 @@ import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPar
 public class HoodieSimpleIndex
     extends HoodieIndex<Object, Object> {
 
-  private final Option<BaseKeyGenerator> keyGeneratorOpt;
-
-  public HoodieSimpleIndex(HoodieWriteConfig config, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public HoodieSimpleIndex(HoodieWriteConfig config) {
     super(config);
-    this.keyGeneratorOpt = keyGeneratorOpt;
   }
 
   @Override
@@ -151,7 +147,7 @@ public class HoodieSimpleIndex
     int fetchParallelism = Math.max(1, Math.min(baseFiles.size(), parallelism));
 
     return context.parallelize(baseFiles, fetchParallelism)
-        .flatMap(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile, keyGeneratorOpt)
+        .flatMap(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile)
             .locations().iterator())
         .mapToPair(e -> (Pair<HoodieKey, HoodieRecordLocation>) e);
   }

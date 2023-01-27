@@ -70,6 +70,7 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -120,6 +121,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
+  protected final Option<BaseKeyGenerator> virtualKeyGeneratorOpt;
   protected final HoodieIndex<?, ?> index;
   private SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
@@ -141,10 +143,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
     this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
     this.metaClient = metaClient;
+    this.virtualKeyGeneratorOpt = createVirtualKeyGenerator(config);
     this.index = getIndex(config, context);
     this.storageLayout = getStorageLayout(config);
     this.taskContextSupplier = context.getTaskContextSupplier();
   }
+
+  protected abstract Option<BaseKeyGenerator> createVirtualKeyGenerator(HoodieWriteConfig config);
 
   protected abstract HoodieIndex<?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
 
@@ -157,6 +162,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
     }
     return viewManager;
+  }
+
+  public Option<BaseKeyGenerator> getVirtualKeyGeneratorOpt() {
+    return virtualKeyGeneratorOpt;
   }
 
   public HoodieTableMetadata getMetadata() {

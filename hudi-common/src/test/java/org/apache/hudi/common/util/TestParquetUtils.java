@@ -90,7 +90,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     List<String> rowKeysInFile = new ArrayList<>(
-        parquetUtils.readRowKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath)));
+        parquetUtils.readRowKeys(HoodieTestUtils.getDefaultHadoopConf(), Option.empty(), Option.empty(), new Path(filePath)));
     Collections.sort(rowKeysInFile);
     Collections.sort(rowKeys);
 
@@ -120,7 +120,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     Set<String> filtered =
-        parquetUtils.filterRowKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath), filter);
+        parquetUtils.filterRowKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath), Option.empty(), Option.empty(), filter);
 
     assertEquals(filter.size(), filtered.size(), "Filtered count does not match");
 

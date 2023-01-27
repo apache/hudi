@@ -18,10 +18,14 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+
+import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Set;
@@ -45,7 +49,7 @@ public interface HoodieFileReader<T> extends AutoCloseable {
 
   BloomFilter readBloomFilter();
 
-  Set<String> filterRowKeys(Set<String> candidateRowKeys);
+  Set<String> filterRowKeys(Option<BaseKeyGenerator> keyGeneratorOpt, Option<SerializableSchema> schemaOpt, Set<String> candidateRowKeys);
 
   ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
 

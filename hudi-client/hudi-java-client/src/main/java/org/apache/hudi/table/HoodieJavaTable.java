@@ -31,6 +31,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
@@ -65,6 +66,11 @@ public abstract class HoodieJavaTable<T>
   public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
       HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
     return metadata.clone(metadata.getWriteStatuses().collectAsList());
+  }
+
+  @Override
+  protected Option<BaseKeyGenerator> createVirtualKeyGenerator(HoodieWriteConfig config) {
+    return Option.empty();
   }
 
   @Override

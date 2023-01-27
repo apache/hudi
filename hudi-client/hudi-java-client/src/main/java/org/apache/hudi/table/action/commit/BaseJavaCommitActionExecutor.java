@@ -289,7 +289,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
-        taskContextSupplier, Option.empty());
+        taskContextSupplier);
   }
 
   @Override

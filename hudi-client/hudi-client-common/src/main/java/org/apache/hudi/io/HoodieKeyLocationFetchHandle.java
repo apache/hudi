@@ -42,19 +42,18 @@ import java.util.stream.Stream;
 public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   private final Pair<String, HoodieBaseFile> partitionPathBaseFilePair;
-  private final Option<BaseKeyGenerator> keyGeneratorOpt;
 
   public HoodieKeyLocationFetchHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-                                      Pair<String, HoodieBaseFile> partitionPathBaseFilePair, Option<BaseKeyGenerator> keyGeneratorOpt) {
+                                      Pair<String, HoodieBaseFile> partitionPathBaseFilePair) {
     super(config, hoodieTable, Pair.of(partitionPathBaseFilePair.getLeft(), partitionPathBaseFilePair.getRight().getFileId()));
     this.partitionPathBaseFilePair = partitionPathBaseFilePair;
-    this.keyGeneratorOpt = keyGeneratorOpt;
   }
 
   public Stream<Pair<HoodieKey, HoodieRecordLocation>> locations() {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
     BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(baseFile.getPath());
     List<HoodieKey> hoodieKeyList = new ArrayList<>();
+    Option<BaseKeyGenerator> keyGeneratorOpt = hoodieTable.getVirtualKeyGeneratorOpt();
     if (keyGeneratorOpt.isPresent()) {
       hoodieKeyList = baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt);
     } else {

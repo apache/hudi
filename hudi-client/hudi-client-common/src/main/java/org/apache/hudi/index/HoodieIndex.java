@@ -46,6 +46,11 @@ public abstract class HoodieIndex<I, O> implements Serializable {
 
   protected final HoodieWriteConfig config;
 
+  /**
+   * Constructor for {@link HoodieIndex}
+   *
+   * @param config Hoodie write config.
+   */
   protected HoodieIndex(HoodieWriteConfig config) {
     this.config = config;
   }

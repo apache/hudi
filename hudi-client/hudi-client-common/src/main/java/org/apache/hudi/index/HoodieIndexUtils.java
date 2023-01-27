@@ -18,6 +18,7 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -33,6 +34,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
@@ -143,12 +145,18 @@ public class HoodieIndexUtils {
   /**
    * Given a list of row keys and one file, return only row keys existing in that file.
    *
-   * @param filePath            - File to filter keys from
-   * @param candidateRecordKeys - Candidate keys to filter
-   * @return List of candidate keys that are available in the file
+   * @param filePath            File to filter keys from.
+   * @param keyGeneratorOpt     Key generator for generating record keys when virtual keys are enabled.
+   * @param schemaOpt           Table schema when virtual keys are enabled.
+   * @param candidateRecordKeys Candidate keys to filter.
+   * @return List of candidate keys that are available in the file.
    */
-  public static List<String> filterKeysFromFile(Path filePath, List<String> candidateRecordKeys,
-                                                Configuration configuration) throws HoodieIndexException {
+  public static List<String> filterKeysFromFile(
+      Path filePath,
+      Option<BaseKeyGenerator> keyGeneratorOpt,
+      Option<SerializableSchema> schemaOpt,
+      List<String> candidateRecordKeys,
+      Configuration configuration) throws HoodieIndexException {
     ValidationUtils.checkArgument(FSUtils.isBaseFile(filePath));
     List<String> foundRecordKeys = new ArrayList<>();
     try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
@@ -156,7 +164,7 @@ public class HoodieIndexUtils {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = HoodieTimer.start();
-        Set<String> fileRowKeys = fileReader.filterRowKeys(new TreeSet<>(candidateRecordKeys));
+        Set<String> fileRowKeys = fileReader.filterRowKeys(keyGeneratorOpt, schemaOpt, new TreeSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);
         LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
             timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));

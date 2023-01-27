@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrcReaderIterator;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -68,8 +69,8 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
   }
 
   @Override
-  public Set<String> filterRowKeys(Set candidateRowKeys) {
-    return orcUtils.filterRowKeys(conf, path, candidateRowKeys);
+  public Set<String> filterRowKeys(Option keyGeneratorOpt, Option schemaOpt, Set candidateRowKeys) {
+    return orcUtils.filterRowKeys(conf, path, keyGeneratorOpt, schemaOpt, candidateRowKeys);
   }
 
   @Override

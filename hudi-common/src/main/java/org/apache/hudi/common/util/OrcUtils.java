@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -170,13 +171,20 @@ public class OrcUtils extends BaseFileUtils {
    * Read the rowKey list matching the given filter, from the given ORC file. If the filter is empty, then this will
    * return all the rowkeys.
    *
-   * @param conf configuration to build fs object.
-   * @param filePath      The ORC file path.
-   * @param filter        record keys filter
-   * @return Set Set of row keys matching candidateRecordKeys
+   * @param conf            configuration to build fs object.
+   * @param filePath        The ORC file path.
+   * @param keyGeneratorOpt Key generator for generating record keys when virtual keys are enabled.
+   * @param schemaOpt       Table schema when virtual keys are enabled.
+   * @param filter          record keys filter
+   * @return Set of row keys matching candidateRecordKeys
    */
   @Override
-  public Set<String> filterRowKeys(Configuration conf, Path filePath, Set<String> filter)
+  public Set<String> filterRowKeys(
+      Configuration conf,
+      Path filePath,
+      Option<BaseKeyGenerator> keyGeneratorOpt,
+      Option<SerializableSchema> schemaOpt,
+      Set<String> filter)
       throws HoodieIOException {
     try (Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));) {
       TypeDescription schema = reader.getSchema();
