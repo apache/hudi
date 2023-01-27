@@ -19,14 +19,13 @@
 package org.apache.spark.sql
 
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.ConcurrentHashMap
 import org.apache.avro.Schema
 import org.apache.hbase.thirdparty.com.google.common.base.Supplier
-import org.apache.hudi.AvroConversionUtils
+import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
-import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath
+import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath}
 import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, SpecificInternalRow, UnsafeProjection}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData, MapData}
 import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
@@ -35,18 +34,19 @@ import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.parallel.mutable.ParHashMap
 
 object HoodieInternalRowUtils {
 
   // Projection are all thread local. Projection is not thread-safe
-  val unsafeWriterAndProjectionThreadLocal: ThreadLocal[mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)]] =
+  private val unsafeWriterAndProjectionThreadLocal: ThreadLocal[mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)]] =
     ThreadLocal.withInitial(new Supplier[mutable.HashMap[(StructType, StructType), UnsafeProjection]] {
       override def get(): mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)] =
         new mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)]
     })
 
-  val schemaMap = new ConcurrentHashMap[Schema, StructType]
-  val orderPosListMap = new ConcurrentHashMap[(StructType, String), NestedFieldPath]
+  private val schemaMap = new ParHashMap[Schema, StructType]
+  private val orderPosListMap = new ParHashMap[(StructType, String), NestedFieldPath]
 
   def genUnsafeRowWriter(prevSchema: StructType, newSchema: StructType): InternalRow => InternalRow = {
     val writer = newWriter(prevSchema, newSchema)
@@ -151,15 +151,6 @@ object HoodieInternalRowUtils {
     }
   }
 
-  def getCachedPosList(structType: StructType, field: String): NestedFieldPath = {
-    val schemaPair = (structType, field)
-    if (!orderPosListMap.containsKey(schemaPair)) {
-      val posList = HoodieUnsafeRowUtils.composeNestedFieldPath(structType, field)
-      orderPosListMap.put(schemaPair, posList)
-    }
-    orderPosListMap.get(schemaPair)
-  }
-
   def getCachedUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
     val (_, projection) = getCachedUnsafeRowWriterAndUnsafeProjection(from, to)
     projection
@@ -170,22 +161,14 @@ object HoodieInternalRowUtils {
       .getOrElseUpdate((from, to), (genUnsafeRowWriter(from, to), generateUnsafeProjection(from, to)))
   }
 
-  def getCachedSchema(schema: Schema): StructType = {
-    if (!schemaMap.containsKey(schema)) {
-      val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
-      schemaMap.put(schema, structType)
-    }
-    schemaMap.get(schema)
-  }
+  def getCachedPosList(structType: StructType, field: String): NestedFieldPath =
+    orderPosListMap.getOrElse((structType, field), composeNestedFieldPath(structType, field))
 
-  def existField(structType: StructType, name: String): Boolean = {
-    try {
-      HoodieUnsafeRowUtils.composeNestedFieldPath(structType, name)
-      true
-    } catch {
-      case _: IllegalArgumentException => false
-    }
-  }
+  def getCachedSchema(schema: Schema): StructType =
+    schemaMap.getOrElse(schema, convertAvroSchemaToStructType(schema))
+
+  def existField(structType: StructType, fieldRef: String): Boolean =
+    getCachedPosList(structType, fieldRef) != null
 
   private def rewritePrimaryType(oldValue: Any, oldSchema: DataType, newSchema: DataType) = {
     if (oldSchema.equals(newSchema) || (oldSchema.isInstanceOf[DecimalType] && newSchema.isInstanceOf[DecimalType])) {

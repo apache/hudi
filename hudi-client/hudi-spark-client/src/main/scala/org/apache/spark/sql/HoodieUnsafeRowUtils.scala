@@ -108,8 +108,10 @@ object HoodieUnsafeRowUtils {
       if (idx < fieldRefParts.length - 1) {
         curSchema = field.dataType match {
           case st: StructType => st
-          case dt@_ =>
-            throw new IllegalArgumentException(s"Invalid nested field reference ${fieldRefParts.drop(idx).mkString(".")} into $dt")
+          case dt @ _ =>
+            // In case we've stumbled upon something other than the [[StructType]] means that
+            // provided nested field reference is invalid. In that case we simply return null
+            return null
         }
       }
       idx += 1
