@@ -149,7 +149,7 @@ public abstract class AbstractHoodieLogRecordReader {
   // Collect all the block instants after scanning all the log files.
   private final List<String> validBlockInstants = new ArrayList<>();
   // Use scanV2 method.
-  private final boolean useScanV2;
+  private final boolean enableOptimizedLogBlocksScan;
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
@@ -158,7 +158,7 @@ public abstract class AbstractHoodieLogRecordReader {
                                           Option<String> partitionNameOverride,
                                           InternalSchema internalSchema,
                                           Option<String> keyFieldOverride,
-                                          boolean useScanV2,
+                                          boolean enableOptimizedLogBlocksScan,
                                           HoodieRecordMerger recordMerger) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
@@ -184,7 +184,7 @@ public abstract class AbstractHoodieLogRecordReader {
     this.withOperationField = withOperationField;
     this.forceFullScan = forceFullScan;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
-    this.useScanV2 = useScanV2;
+    this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
 
     if (keyFieldOverride.isPresent()) {
       // NOTE: This branch specifically is leveraged handling Metadata Table
@@ -217,7 +217,7 @@ public abstract class AbstractHoodieLogRecordReader {
    */
   protected final void scanInternal(Option<KeySpec> keySpecOpt, boolean skipProcessingBlocks) {
     synchronized (this) {
-      if (useScanV2) {
+      if (enableOptimizedLogBlocksScan) {
         scanInternalV2(keySpecOpt, skipProcessingBlocks);
       } else {
         scanInternalV1(keySpecOpt);
@@ -894,7 +894,7 @@ public abstract class AbstractHoodieLogRecordReader {
       throw new UnsupportedOperationException();
     }
 
-    public Builder withUseScanV2(boolean useScanV2) {
+    public Builder withEnableOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
       throw new UnsupportedOperationException();
     }
 

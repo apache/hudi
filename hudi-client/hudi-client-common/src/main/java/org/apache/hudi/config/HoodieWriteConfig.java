@@ -1306,8 +1306,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.LOG_COMPACTION_BLOCKS_THRESHOLD);
   }
 
-  public boolean useScanV2ForLogRecordReader() {
-    return getBoolean(HoodieCompactionConfig.USE_LOG_RECORD_READER_SCAN_V2);
+  public boolean enableOptimizedLogBlocksScan() {
+    return getBoolean(HoodieCompactionConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
   }
 
   public HoodieCleaningPolicy getCleanerPolicy() {

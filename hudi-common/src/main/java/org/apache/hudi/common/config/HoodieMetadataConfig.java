@@ -237,12 +237,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "metadata table which are never added before. This config determines how to handle "
           + "such spurious deletes");
 
-  public static final ConfigProperty<Boolean> USE_LOG_RECORD_READER_SCAN_V2 = ConfigProperty
-      .key(METADATA_PREFIX + ".log.record.reader.use.scanV2")
+  public static final ConfigProperty<Boolean> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
+      .key(METADATA_PREFIX + ".optimized.log.blocks.scan.enable")
       .defaultValue(false)
       .sinceVersion("0.13.0")
-      .withDocumentation("ScanV2 logic address all the multiwriter challenges while appending to log files. "
-          + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
+      .withDocumentation("Optimized log blocks scanner that addresses all the multiwriter use-cases while appending to log files. "
+          + "It also differentiates original blocks written by ingestion writers and compacted blocks written by log compaction.");
 
   private HoodieMetadataConfig() {
     super();
@@ -328,8 +328,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(IGNORE_SPURIOUS_DELETES);
   }
 
-  public boolean getUseLogRecordReaderScanV2() {
-    return getBoolean(USE_LOG_RECORD_READER_SCAN_V2);
+  public boolean doEnableOptimizedLogBlocksScan() {
+    return getBoolean(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
   }
 
   /**
@@ -478,8 +478,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withLogRecordReaderScanV2(boolean useLogRecordReaderScanV2) {
-      metadataConfig.setValue(USE_LOG_RECORD_READER_SCAN_V2, String.valueOf(useLogRecordReaderScanV2));
+    public Builder enableOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
+      metadataConfig.setValue(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, String.valueOf(enableOptimizedLogBlocksScan));
       return this;
     }
 

@@ -200,7 +200,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
   public void testLogCompactionOnMORTableWithoutBaseFile() throws Exception {
     HoodieCompactionConfig compactionConfig = HoodieCompactionConfig.newBuilder()
         .withLogCompactionBlocksThreshold("1")
-        .withLogRecordReaderScanV2("true")
+        .withEnableOptimizedLogBlocksScan("true")
         .build();
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
         HoodieIndex.IndexType.INMEMORY).withAutoCommit(true).withCompactionConfig(compactionConfig).build();
@@ -447,7 +447,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
                 .collect(Collectors.toList()))
             .withLatestInstantTime(instant)
             .withBufferSize(config.getMaxDFSStreamBufferSize())
-            .withUseScanV2(true)
+            .withEnableOptimizedLogBlocksScan(true)
             .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
             .build();
         scanner.scan(true);
@@ -461,7 +461,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
                 .collect(Collectors.toList()))
             .withLatestInstantTime(currentInstant)
             .withBufferSize(config.getMaxDFSStreamBufferSize())
-            .withUseScanV2(true)
+            .withEnableOptimizedLogBlocksScan(true)
             .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
             .build();
         scanner2.scan(true);
