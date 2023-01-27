@@ -111,3 +111,9 @@ last_modified_at: 2022-12-21T15:59:57-04:00
     Soumil Shah, Jan 17th 2023
 
 36. [Precomb Key Overview: Avoid dedupes | Hudi Labs](https://youtu.be/HfEvEf2s4Hk) - By Soumil Shah, Jan 17th 2023
+
+37. [How to detect and Mask PII data in Apache Hudi Data Lake | Hands on Lab](https://www.youtube.com/watch?v=l4RG9CP5LTM) - By Soumil Shah, Jan 21th 2023
+
+38. [How do I identify Schema Changes in Hudi Tables and Send an Email Alert when a New Column is added/remove](https://www.youtube.com/watch?v=_i5G4ojpwlk) - By Soumil Shah, Jan 21th 2023
+
+39. [Writing Data Quality and validation Scripts for the Hudi Data lake with Glue and pydeequ| Hands on Lab](https://www.youtube.com/watch?v=1us5YD2lDZw) - By Soumil Shah, Jan 23th 2023
