@@ -113,7 +113,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException {
-    GenericRecord record = HoodieAvroUtils.rewriteRecord((GenericRecord) data, targetSchema);
+    GenericRecord record = HoodieAvroUtils.rewriteRecordWithNewSchema(data, targetSchema);
     return new HoodieAvroIndexedRecord(key, record, operation, metaData);
   }
 
