@@ -19,106 +19,47 @@
 package org.apache.spark.sql
 
 import java.nio.charset.StandardCharsets
-import java.util.HashMap
 import java.util.concurrent.ConcurrentHashMap
 import org.apache.avro.Schema
 import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.exception.HoodieException
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath
-import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, SpecificInternalRow, UnsafeProjection}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData, MapData}
 import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
+
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 object HoodieInternalRowUtils {
 
   // Projection are all thread local. Projection is not thread-safe
-  val unsafeProjectionThreadLocal: ThreadLocal[HashMap[(StructType, StructType), UnsafeProjection]] =
-    ThreadLocal.withInitial(new Supplier[HashMap[(StructType, StructType), UnsafeProjection]] {
-      override def get(): HashMap[(StructType, StructType), UnsafeProjection] = new HashMap[(StructType, StructType), UnsafeProjection]
+  val unsafeWriterAndProjectionThreadLocal: ThreadLocal[mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)]] =
+    ThreadLocal.withInitial(new Supplier[mutable.HashMap[(StructType, StructType), UnsafeProjection]] {
+      override def get(): mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)] =
+        new mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)]
     })
+
   val schemaMap = new ConcurrentHashMap[Schema, StructType]
   val orderPosListMap = new ConcurrentHashMap[(StructType, String), NestedFieldPath]
 
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteRecord(org.apache.avro.generic.GenericRecord, org.apache.avro.Schema)
-   */
-  def rewriteRecord(oldRecord: InternalRow, oldSchema: StructType, newSchema: StructType): InternalRow = {
-    val newRow = new GenericInternalRow(Array.fill(newSchema.fields.length)(null).asInstanceOf[Array[Any]])
-
-    for ((field, pos) <- newSchema.fields.zipWithIndex) {
-      var oldValue: AnyRef = null
-      var oldType: DataType = null
-      if (existField(oldSchema, field.name)) {
-        val oldField = oldSchema(field.name)
-        val oldPos = oldSchema.fieldIndex(field.name)
-        oldType = oldField.dataType
-        oldValue = oldRecord.get(oldPos, oldType)
-      }
-      if (oldValue != null) {
-        field.dataType match {
-          case structType: StructType =>
-            val oldType = oldSchema(field.name).dataType.asInstanceOf[StructType]
-            val newValue = rewriteRecord(oldValue.asInstanceOf[InternalRow], oldType, structType)
-            newRow.update(pos, newValue)
-          case decimalType: DecimalType =>
-            val oldFieldSchema = oldSchema(field.name).dataType.asInstanceOf[DecimalType]
-            if (decimalType.scale != oldFieldSchema.scale || decimalType.precision != oldFieldSchema.precision) {
-              newRow.update(pos, Decimal.fromDecimal(oldValue.asInstanceOf[Decimal].toBigDecimal.setScale(newSchema.asInstanceOf[DecimalType].scale))
-              )
-            } else {
-              newRow.update(pos, oldValue)
-            }
-          case t if t == oldType => newRow.update(pos, oldValue)
-          // Type promotion
-          case _: ShortType =>
-            oldType match {
-              case _: ByteType => newRow.update(pos, oldValue.asInstanceOf[Byte].toShort)
-              case _ => throw new IllegalArgumentException(s"$oldSchema and $newSchema are incompatible")
-            }
-          case _: IntegerType =>
-            oldType match {
-              case _: ByteType => newRow.update(pos, oldValue.asInstanceOf[Byte].toInt)
-              case _: ShortType => newRow.update(pos, oldValue.asInstanceOf[Short].toInt)
-              case _ => throw new IllegalArgumentException(s"$oldSchema and $newSchema are incompatible")
-            }
-          case _: LongType =>
-            oldType match {
-              case _: ByteType => newRow.update(pos, oldValue.asInstanceOf[Byte].toLong)
-              case _: ShortType => newRow.update(pos, oldValue.asInstanceOf[Short].toLong)
-              case _: IntegerType => newRow.update(pos, oldValue.asInstanceOf[Int].toLong)
-              case _ => throw new IllegalArgumentException(s"$oldSchema and $newSchema are incompatible")
-            }
-          case _: FloatType =>
-            oldType match {
-              case _: ByteType => newRow.update(pos, oldValue.asInstanceOf[Byte].toFloat)
-              case _: ShortType => newRow.update(pos, oldValue.asInstanceOf[Short].toFloat)
-              case _: IntegerType => newRow.update(pos, oldValue.asInstanceOf[Int].toFloat)
-              case _: LongType => newRow.update(pos, oldValue.asInstanceOf[Long].toFloat)
-              case _ => throw new IllegalArgumentException(s"$oldSchema and $newSchema are incompatible")
-            }
-          case _: DoubleType =>
-            oldType match {
-              case _: ByteType => newRow.update(pos, oldValue.asInstanceOf[Byte].toDouble)
-              case _: ShortType => newRow.update(pos, oldValue.asInstanceOf[Short].toDouble)
-              case _: IntegerType => newRow.update(pos, oldValue.asInstanceOf[Int].toDouble)
-              case _: LongType => newRow.update(pos, oldValue.asInstanceOf[Long].toDouble)
-              case _: FloatType => newRow.update(pos, oldValue.asInstanceOf[Float].toDouble)
-              case _ => throw new IllegalArgumentException(s"$oldSchema and $newSchema are incompatible")
-            }
-          case _: BinaryType if oldType.isInstanceOf[StringType] => newRow.update(pos, oldValue.asInstanceOf[String].getBytes)
-          case _ => newRow.update(pos, oldValue)
-        }
-      } else {
-        // TODO default value in newSchema
-      }
+  def genUnsafeRowWriter(prevSchema: StructType, newSchema: StructType): InternalRow => InternalRow = {
+    val writer = newWriter(prevSchema, newSchema)
+    val phonyUpdater = new CatalystDataUpdater {
+      var value: InternalRow = _
+      override def set(ordinal: Int, value: Any): Unit =
+        this.value = value.asInstanceOf[InternalRow]
     }
 
-    newRow
+    oldRow => {
+      writer(phonyUpdater, 0, oldRow)
+      phonyUpdater.value
+    }
   }
 
   /**
@@ -220,13 +161,13 @@ object HoodieInternalRowUtils {
   }
 
   def getCachedUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
-    val schemaPair = (from, to)
-    val map = unsafeProjectionThreadLocal.get()
-    if (!map.containsKey(schemaPair)) {
-      val projection = HoodieCatalystExpressionUtils.generateUnsafeProjection(from, to)
-      map.put(schemaPair, projection)
-    }
-    map.get(schemaPair)
+    val (_, projection) = getCachedUnsafeRowWriterAndUnsafeProjection(from, to)
+    projection
+  }
+
+  def getCachedUnsafeRowWriterAndUnsafeProjection(from: StructType, to: StructType): (InternalRow => InternalRow, UnsafeProjection) = {
+    unsafeWriterAndProjectionThreadLocal.get()
+      .getOrElseUpdate((from, to), (genUnsafeRowWriter(from, to), generateUnsafeProjection(from, to)))
   }
 
   def getCachedSchema(schema: Schema): StructType = {
@@ -318,4 +259,155 @@ object HoodieInternalRowUtils {
   def removeFields(schema: StructType, fieldsToRemove: java.util.List[String]): StructType = {
     StructType(schema.fields.filter(field => !fieldsToRemove.contains(field.name)))
   }
+
+  private def genRowWriter(prevStructType: StructType, newStructType: StructType): (CatalystDataUpdater, Any) => Unit = {
+    // TODO need to canonicalize schemas (casing)
+    val fieldWriters = ArrayBuffer.empty[(CatalystDataUpdater, Int, Any) => Unit]
+    val positionMap = ArrayBuffer.empty[Int]
+
+    for (newField <- newStructType.fields) {
+      val prevFieldPos = prevStructType.getFieldIndex(newField.name).getOrElse(-1)
+      val fieldWriter: (CatalystDataUpdater, Int, Any) => Unit =
+        if (prevFieldPos >= 0) {
+          val prevField = prevStructType.fields(prevFieldPos)
+          newWriter(prevField.dataType, newField.dataType)
+        } else {
+          // TODO handle defaults
+          (setter, ordinal, _) => setter.setNullAt(ordinal)
+        }
+
+      positionMap += prevFieldPos
+      fieldWriters += fieldWriter
+    }
+
+    (fieldUpdater, row) => {
+      var pos = 0
+      while (pos < fieldWriters.length) {
+        val prevPos = positionMap(pos)
+        val prevValue = if (prevPos >= 0) {
+          row.asInstanceOf[InternalRow].get(prevPos, prevStructType.fields(prevPos).dataType)
+        } else {
+          null
+        }
+
+        fieldWriters(pos)(fieldUpdater, pos, prevValue)
+        pos += 1
+      }
+    }
+  }
+
+  private def newWriter(prevDataType: DataType, newDataType: DataType): (CatalystDataUpdater, Int, Any) => Unit = {
+    // TODO support map/array
+    (newDataType, prevDataType) match {
+      case (newType, prevType) if newType == prevType =>
+        (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value)
+
+      case (newStructType: StructType, prevStructType: StructType) =>
+        val writer = genRowWriter(prevStructType, newStructType)
+        val newRow = new SpecificInternalRow(newStructType.fields.map(_.dataType))
+        val rowUpdater = new RowUpdater(newRow)
+        (fieldUpdater, ordinal, value) => {
+          // TODO elaborate
+          writer(rowUpdater, value)
+          fieldUpdater.set(ordinal, newRow)
+        }
+
+      case (newDecimal: DecimalType, _: DecimalType) =>
+        // TODO validate decimal type is expanding
+        (fieldUpdater, ordinal, value) =>
+          fieldUpdater.setDecimal(ordinal, Decimal.fromDecimal(value.asInstanceOf[Decimal].toBigDecimal.setScale(newDecimal.scale)))
+
+      case (_: ShortType, _) =>
+        prevDataType match {
+          case _: ByteType => (fieldUpdater, ordinal, value) => fieldUpdater.setShort(ordinal, value.asInstanceOf[Byte].toShort)
+          case _ =>
+            throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
+        }
+
+      case (_: IntegerType, _) =>
+        prevDataType match {
+          case _: ShortType => (fieldUpdater, ordinal, value) => fieldUpdater.setInt(ordinal, value.asInstanceOf[Short].toInt)
+          case _: ByteType => (fieldUpdater, ordinal, value) => fieldUpdater.setInt(ordinal, value.asInstanceOf[Byte].toInt)
+          case _ =>
+            throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
+        }
+
+      case (_: LongType, _) =>
+        prevDataType match {
+          case _: IntegerType => (fieldUpdater, ordinal, value) => fieldUpdater.setLong(ordinal, value.asInstanceOf[Int].toLong)
+          case _: ShortType => (fieldUpdater, ordinal, value) => fieldUpdater.setLong(ordinal, value.asInstanceOf[Short].toLong)
+          case _: ByteType => (fieldUpdater, ordinal, value) => fieldUpdater.setLong(ordinal, value.asInstanceOf[Byte].toLong)
+          case _ =>
+            throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
+        }
+
+      case (_: FloatType, _) =>
+        prevDataType match {
+          case _: LongType => (fieldUpdater, ordinal, value) => fieldUpdater.setFloat(ordinal, value.asInstanceOf[Long].toFloat)
+          case _: IntegerType => (fieldUpdater, ordinal, value) => fieldUpdater.setFloat(ordinal, value.asInstanceOf[Int].toFloat)
+          case _: ShortType => (fieldUpdater, ordinal, value) => fieldUpdater.setFloat(ordinal, value.asInstanceOf[Short].toFloat)
+          case _: ByteType => (fieldUpdater, ordinal, value) => fieldUpdater.setFloat(ordinal, value.asInstanceOf[Byte].toFloat)
+          case _ =>
+            throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
+        }
+
+      case (_: DoubleType, _) =>
+        prevDataType match {
+          case _: FloatType => (fieldUpdater, ordinal, value) => fieldUpdater.setDouble(ordinal, value.asInstanceOf[Float].toDouble)
+          case _: LongType => (fieldUpdater, ordinal, value) => fieldUpdater.setDouble(ordinal, value.asInstanceOf[Long].toDouble)
+          case _: IntegerType => (fieldUpdater, ordinal, value) => fieldUpdater.setDouble(ordinal, value.asInstanceOf[Int].toDouble)
+          case _: ShortType => (fieldUpdater, ordinal, value) => fieldUpdater.setDouble(ordinal, value.asInstanceOf[Short].toDouble)
+          case _: ByteType => (fieldUpdater, ordinal, value) => fieldUpdater.setDouble(ordinal, value.asInstanceOf[Byte].toDouble)
+          case _ =>
+            throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
+        }
+
+      case (_: BinaryType, _: StringType) =>
+        (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value.asInstanceOf[UTF8String].getBytes)
+
+      case (_, _) =>
+        throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
+    }
+  }
+
+  sealed trait CatalystDataUpdater {
+    def set(ordinal: Int, value: Any): Unit
+    def setNullAt(ordinal: Int): Unit = set(ordinal, null)
+    def setBoolean(ordinal: Int, value: Boolean): Unit = set(ordinal, value)
+    def setByte(ordinal: Int, value: Byte): Unit = set(ordinal, value)
+    def setShort(ordinal: Int, value: Short): Unit = set(ordinal, value)
+    def setInt(ordinal: Int, value: Int): Unit = set(ordinal, value)
+    def setLong(ordinal: Int, value: Long): Unit = set(ordinal, value)
+    def setDouble(ordinal: Int, value: Double): Unit = set(ordinal, value)
+    def setFloat(ordinal: Int, value: Float): Unit = set(ordinal, value)
+    def setDecimal(ordinal: Int, value: Decimal): Unit = set(ordinal, value)
+  }
+
+  final class RowUpdater(row: InternalRow) extends CatalystDataUpdater {
+    override def set(ordinal: Int, value: Any): Unit = row.update(ordinal, value)
+    override def setNullAt(ordinal: Int): Unit = row.setNullAt(ordinal)
+    override def setBoolean(ordinal: Int, value: Boolean): Unit = row.setBoolean(ordinal, value)
+    override def setByte(ordinal: Int, value: Byte): Unit = row.setByte(ordinal, value)
+    override def setShort(ordinal: Int, value: Short): Unit = row.setShort(ordinal, value)
+    override def setInt(ordinal: Int, value: Int): Unit = row.setInt(ordinal, value)
+    override def setLong(ordinal: Int, value: Long): Unit = row.setLong(ordinal, value)
+    override def setDouble(ordinal: Int, value: Double): Unit = row.setDouble(ordinal, value)
+    override def setFloat(ordinal: Int, value: Float): Unit = row.setFloat(ordinal, value)
+    override def setDecimal(ordinal: Int, value: Decimal): Unit =
+      row.setDecimal(ordinal, value, value.precision)
+  }
+
+  final class ArrayDataUpdater(array: ArrayData) extends CatalystDataUpdater {
+    override def set(ordinal: Int, value: Any): Unit = array.update(ordinal, value)
+    override def setNullAt(ordinal: Int): Unit = array.setNullAt(ordinal)
+    override def setBoolean(ordinal: Int, value: Boolean): Unit = array.setBoolean(ordinal, value)
+    override def setByte(ordinal: Int, value: Byte): Unit = array.setByte(ordinal, value)
+    override def setShort(ordinal: Int, value: Short): Unit = array.setShort(ordinal, value)
+    override def setInt(ordinal: Int, value: Int): Unit = array.setInt(ordinal, value)
+    override def setLong(ordinal: Int, value: Long): Unit = array.setLong(ordinal, value)
+    override def setDouble(ordinal: Int, value: Double): Unit = array.setDouble(ordinal, value)
+    override def setFloat(ordinal: Int, value: Float): Unit = array.setFloat(ordinal, value)
+    override def setDecimal(ordinal: Int, value: Decimal): Unit = array.update(ordinal, value)
+  }
+
 }

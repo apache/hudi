@@ -18,24 +18,29 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.testutils.HoodieClientTestUtils
-
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{HoodieInternalRowUtils, Row, SparkSession}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
 
 class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAfterAll {
 
   private var sparkSession: SparkSession = _
 
-  private val schema1 = StructType(
-    Array(
+  private val schema1 = StructType(Seq(
       StructField("name", StringType),
-      StructField("age", IntegerType)
-    )
-  )
+      StructField("age", IntegerType),
+      StructField("address",
+        StructType(Seq(
+          StructField("city", StringType),
+          StructField("street", StringType)
+        ))
+      )
+    ))
+
   private val schema2 = StructType(
     Array(
       StructField("name1", StringType),
@@ -43,15 +48,6 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     )
   )
   private val schemaMerge = StructType(schema1.fields ++ schema2.fields)
-  private val schema1WithMetaData = StructType(Array(
-    StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, StringType),
-    StructField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, StringType),
-    StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, StringType),
-    StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, StringType),
-    StructField(HoodieRecord.FILENAME_METADATA_FIELD, StringType),
-    StructField(HoodieRecord.OPERATION_METADATA_FIELD, StringType),
-    StructField(HoodieRecord.HOODIE_IS_DELETED_FIELD, BooleanType)
-  ) ++ schema1.fields)
 
   override protected def beforeAll(): Unit = {
     // Initialize a local spark env
@@ -65,25 +61,32 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
   }
 
   test("test rewrite") {
-    val data = sparkSession.sparkContext.parallelize(Seq(Row("like", 18, "like1", 181)))
+    val rows = Seq(
+      Row("Andrew", 18, Row("Mission st", "SF"), "John", 19)
+    )
+    val data = sparkSession.sparkContext.parallelize(rows)
     val oldRow = sparkSession.createDataFrame(data, schemaMerge).queryExecution.toRdd.first()
-    val newRow1 = HoodieInternalRowUtils.rewriteRecord(oldRow, schemaMerge, schema1)
-    val newRow2 = HoodieInternalRowUtils.rewriteRecord(oldRow, schemaMerge, schema2)
-    assert(newRow1.get(0, StringType).toString.equals("like"))
-    assert(newRow1.get(1, IntegerType) == 18)
-    assert(newRow2.get(0, StringType).toString.equals("like1"))
-    assert(newRow2.get(1, IntegerType) == 181)
+
+    val rowWriter1 = HoodieInternalRowUtils.genUnsafeRowWriter(schemaMerge, schema1)
+    val newRow1 = rowWriter1(oldRow)
+
+    val serDe1 = sparkAdapter.createSparkRowSerDe(schema1)
+    assertEquals(serDe1.deserializeRow(newRow1), Row("Andrew", 18, Row("Mission st", "SF")));
+
+    val rowWriter2 = HoodieInternalRowUtils.genUnsafeRowWriter(schemaMerge, schema2)
+    val newRow2 = rowWriter2(oldRow)
+
+    val serDe2 = sparkAdapter.createSparkRowSerDe(schema2)
+    assertEquals(serDe2.deserializeRow(newRow2), Row("John", 19));
   }
 
   test("test rewrite with nullable value") {
-    val data = sparkSession.sparkContext.parallelize(Seq(Row("like", 18)))
+    val data = sparkSession.sparkContext.parallelize(Seq(Row("Rob", 18, null.asInstanceOf[StructType])))
     val oldRow = sparkSession.createDataFrame(data, schema1).queryExecution.toRdd.first()
-    val newRow = HoodieInternalRowUtils.rewriteRecord(oldRow, schema1, schemaMerge)
-    assert(newRow.get(0, StringType).toString.equals("like"))
-    assert(newRow.get(1, IntegerType) == 18)
-    assert(newRow.get(2, StringType) == null)
-    assert(newRow.get(3, IntegerType) == null)
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(schema1, schemaMerge)
+    val newRow = rowWriter(oldRow)
+
+    val serDe = sparkAdapter.createSparkRowSerDe(schemaMerge)
+    assertEquals(serDe.deserializeRow(newRow), Row("Rob", 18, null.asInstanceOf[StructType], null.asInstanceOf[StringType], null.asInstanceOf[IntegerType]))
   }
-
-
 }
