@@ -162,7 +162,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(FlinkOptions.CDC_ENABLED, true)
-        .option(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE, mode.getValue())
+        .option(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE, mode.name())
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
