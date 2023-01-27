@@ -57,6 +57,8 @@ import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
+import org.apache.spark.sql.HoodieInternalRowUtils.genUnsafeRowWriter
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -329,16 +331,11 @@ object HoodieSparkSqlWriter {
               writerSchema
             }
 
-            // NOTE: Avro's [[Schema]] can't be effectively serialized by JVM native serialization framework
-            //       (due to containing cyclic refs), therefore we have to convert it to string before
-            //       passing onto the Executor
-            val dataFileSchemaStr = dataFileSchema.toString
-
             // Create a HoodieWriteClient & issue the write.
             val client = hoodieWriteClient.getOrElse {
               val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema)) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key
               // TODO(HUDI-4772) proper writer-schema has to be specified here
-              DataSourceUtils.createHoodieClient(jsc, dataFileSchemaStr, path, tblName, mapAsJavaMap(finalOpts))
+              DataSourceUtils.createHoodieClient(jsc, dataFileSchema.toString, path, tblName, mapAsJavaMap(finalOpts))
             }
             val writeConfig = client.getConfig
             if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == HoodieTableType.MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
@@ -347,7 +344,7 @@ object HoodieSparkSqlWriter {
             // Convert to RDD[HoodieRecord]
             val hoodieRecords =
               createHoodieRecordRdd(df, writeConfig, parameters, avroRecordName, avroRecordNamespace, writerSchema,
-                dataFileSchemaStr, operation)
+                dataFileSchema, operation)
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
               asyncCompactionTriggerFn.get.apply(client)
@@ -1042,7 +1039,7 @@ object HoodieSparkSqlWriter {
                                     recordName: String,
                                     recordNameSpace: String,
                                     writerSchema: Schema,
-                                    dataFileSchemaStr: String,
+                                    dataFileSchema: Schema,
                                     operation: WriteOperationType) = {
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps))
@@ -1053,7 +1050,13 @@ object HoodieSparkSqlWriter {
       parameters.getOrElse(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
         HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()).toBoolean
 
-    log.debug(s"Use $recordType")
+    // NOTE: Avro's [[Schema]] can't be effectively serialized by JVM native serialization framework
+    //       (due to containing cyclic refs), therefore we have to convert it to string before
+    //       passing onto the Executor
+    val dataFileSchemaStr = dataFileSchema.toString
+
+    log.debug(s"Creating HoodieRecords (as $recordType)")
+
     recordType match {
       case HoodieRecord.HoodieRecordType.AVRO =>
         val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, recordName, recordNameSpace,
@@ -1084,28 +1087,28 @@ object HoodieSparkSqlWriter {
           }
         }).toJavaRDD()
       case HoodieRecord.HoodieRecordType.SPARK =>
-        // ut will use AvroKeyGenerator, so we need to cast it in spark record
         val sparkKeyGenerator = keyGenerator.asInstanceOf[SparkKeyGeneratorInterface]
         val dataFileSchema = new Schema.Parser().parse(dataFileSchemaStr)
         val dataFileStructType = HoodieInternalRowUtils.getCachedSchema(dataFileSchema)
         val writerStructType = HoodieInternalRowUtils.getCachedSchema(writerSchema)
         val sourceStructType = df.schema
-        df.queryExecution.toRdd.mapPartitions { iter =>
 
-          iter.map { internalRow =>
-            val recordKey = sparkKeyGenerator.getRecordKey(internalRow, sourceStructType)
-            val partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, sourceStructType)
+        df.queryExecution.toRdd.mapPartitions { it =>
+          // TODO elaborate
+          val (unsafeProjection, transformer) = if (shouldDropPartitionColumns) {
+            (generateUnsafeProjection(dataFileStructType, dataFileStructType), genUnsafeRowWriter(sourceStructType, dataFileStructType))
+          } else {
+            (generateUnsafeProjection(writerStructType, writerStructType), genUnsafeRowWriter(sourceStructType, writerStructType))
+          }
+
+          it.map { sourceRow =>
+            val recordKey = sparkKeyGenerator.getRecordKey(sourceRow, sourceStructType)
+            val partitionPath = sparkKeyGenerator.getPartitionPath(sourceRow, sourceStructType)
             val key = new HoodieKey(recordKey.toString, partitionPath.toString)
 
-            if (shouldDropPartitionColumns) {
-              val row = HoodieInternalRowUtils.getCachedUnsafeProjection(dataFileStructType, dataFileStructType)
-                .apply(HoodieInternalRowUtils.rewriteRecord(internalRow, sourceStructType, dataFileStructType))
-              new HoodieSparkRecord(key, row, dataFileStructType, false)
-            } else {
-              val row = HoodieInternalRowUtils.getCachedUnsafeProjection(writerStructType, writerStructType)
-                .apply(HoodieInternalRowUtils.rewriteRecord(internalRow, sourceStructType, writerStructType))
-              new HoodieSparkRecord(key, row, writerStructType, false)
-            }
+            // TODO elaborate
+            val targetRow = unsafeProjection(transformer(sourceRow))
+            new HoodieSparkRecord(key, targetRow, dataFileStructType, false)
           }
         }.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[_]]]
     }

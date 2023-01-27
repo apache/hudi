@@ -44,6 +44,8 @@ import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
+import scala.Function1;
+import scala.Tuple2;
 
 import java.io.IOException;
 import java.util.Map;
@@ -190,9 +192,12 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
 
-    // TODO HUDI-5281 Rewrite HoodieSparkRecord with UnsafeRowWriter
-    InternalRow rewriteRecord = HoodieInternalRowUtils.rewriteRecord(this.data, structType, targetStructType);
-    UnsafeRow unsafeRow = HoodieInternalRowUtils.getCachedUnsafeProjection(targetStructType, targetStructType).apply(rewriteRecord);
+    Tuple2<Function1<InternalRow, InternalRow>, UnsafeProjection> rowWriterAndProjection =
+        HoodieInternalRowUtils.getCachedUnsafeRowWriterAndUnsafeProjection(structType, targetStructType);
+
+    Function1<InternalRow, InternalRow> rowWriter = rowWriterAndProjection._1;
+    UnsafeProjection unsafeProjection = rowWriterAndProjection._2;
+    UnsafeRow unsafeRow = unsafeProjection.apply(rowWriter.apply(this.data));
 
     boolean containMetaFields = hasMetaFields(targetStructType);
     UTF8String[] metaFields = tryExtractMetaFields(unsafeRow, targetStructType);
