@@ -210,7 +210,7 @@ public class OptionsResolver {
    */
   public static HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode(Configuration conf) {
     String mode = conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE);
-    return HoodieCDCSupplementalLoggingMode.parse(mode);
+    return HoodieCDCSupplementalLoggingMode.valueOf(mode);
   }
 
   /**
