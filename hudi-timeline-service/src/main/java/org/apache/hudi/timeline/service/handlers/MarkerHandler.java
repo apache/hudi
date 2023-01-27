@@ -215,8 +215,8 @@ public class MarkerHandler extends Handler {
                     .getInstants());
 
             earlyConflictDetectionStrategy.startAsyncDetection(
-                timelineServiceConfig.asyncConflictDetectorBatchIntervalMs,
-                timelineServiceConfig.asyncConflictDetectorBatchPeriodMs,
+                timelineServiceConfig.asyncConflictDetectorInitialDelayMs,
+                timelineServiceConfig.asyncConflictDetectorPeriodMs,
                 markerDir, basePath, timelineServiceConfig.maxAllowableHeartbeatIntervalInMs,
                 fileSystem, this, completedCommits);
           }

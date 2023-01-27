@@ -174,7 +174,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     fs.exists(path)
   }
 
-  protected def withSQLConf(pairs: (String, String)*)(f: => Unit): Unit = {
+  protected def withSQLConf[T](pairs: (String, String)*)(f: => T): T = {
     val conf = spark.sessionState.conf
     val currentValues = pairs.unzip._1.map { k =>
       if (conf.contains(k)) {

@@ -85,9 +85,11 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.Field;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -112,6 +114,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests hoodie log format {@link HoodieLogFormat}.
@@ -912,6 +915,34 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     reader.next();
     assertFalse(reader.hasNext(), "We should have no more blocks left");
     reader.close();
+  }
+
+  @Test
+  public void testSkipCorruptedCheck() throws Exception {
+    // normal case: if the block is corrupted, we should be able to read back a corrupted block
+    Reader reader1 = createCorruptedFile("test-fileid1");
+    HoodieLogBlock block = reader1.next();
+    assertEquals(HoodieLogBlockType.CORRUPT_BLOCK, block.getBlockType(), "The read block should be a corrupt block");
+    reader1.close();
+
+    // as we can't mock a private method or directly test it, we are going this route.
+    // So adding a corrupted block which ideally should have been skipped for write transactional system. and hence when we call next() on log block reader, it will fail.
+    Reader reader2 = createCorruptedFile("test-fileid2");
+    assertTrue(reader2.hasNext(), "We should have corrupted block next");
+
+    // mock the fs to be GCS to skip isBlockCorrupted() check
+    Field f1 = reader2.getClass().getDeclaredField("fs");
+    f1.setAccessible(true);
+    FileSystem spyfs = Mockito.spy(fs);
+    when(spyfs.getScheme()).thenReturn("gs");
+    f1.set(reader2, spyfs);
+
+    // except an exception for block type since the block is corrupted
+    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
+      reader2.next();
+    });
+    assertTrue(exception.getMessage().contains("Invalid block byte type found"));
+    reader2.close();
   }
 
   @Test
@@ -2647,5 +2678,44 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> copy = new ArrayList<>(records);
     copy.sort(Comparator.comparing(r -> ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString()));
     return copy;
+  }
+
+  private HoodieLogFormat.Reader createCorruptedFile(String fileId) throws Exception {
+    // block is corrupted, but check is skipped.
+    Writer writer =
+        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withFileId(fileId).overBaseCommit("100").withFs(fs).build();
+    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
+    HoodieDataBlock dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records, header);
+    writer.appendBlock(dataBlock);
+    writer.close();
+
+    // Append some arbit byte[] to thee end of the log (mimics a partially written commit)
+    fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
+    FSDataOutputStream outputStream = fs.append(writer.getLogFile().getPath());
+    // create a block with
+    outputStream.write(HoodieLogFormat.MAGIC);
+    // Write out a length that does not confirm with the content
+    outputStream.writeLong(473);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
+    outputStream.writeInt(10000); // an invalid block type
+
+    // Write out a length that does not confirm with the content
+    outputStream.writeLong(400);
+    // Write out incomplete content
+    outputStream.write("something-random".getBytes());
+    outputStream.flush();
+    outputStream.close();
+
+    // First round of reads - we should be able to read the first block and then EOF
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
+
+    assertTrue(reader.hasNext(), "First block should be available");
+    reader.next();
+
+    return reader;
   }
 }

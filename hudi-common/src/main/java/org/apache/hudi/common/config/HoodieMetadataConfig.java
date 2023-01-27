@@ -71,7 +71,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".clean.async")
       .defaultValue(false)
       .sinceVersion("0.7.0")
-      .withDocumentation("Enable asynchronous cleaning for metadata table");
+      .withDocumentation("Enable asynchronous cleaning for metadata table. This is an internal config and setting this will not overwrite the value actually used.");
 
   // Async index
   public static final ConfigProperty<Boolean> ASYNC_INDEX_ENABLE = ConfigProperty
@@ -109,7 +109,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".cleaner.commits.retained")
       .defaultValue(3)
       .sinceVersion("0.7.0")
-      .withDocumentation("Number of commits to retain, without cleaning, on metadata table.");
+      .withDocumentation("Number of commits to retain, without cleaning, on metadata table. "
+          + "This is an internal config and setting this will not overwrite the actual value used.");
 
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
@@ -135,7 +136,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".enable.full.scan.log.files")
       .defaultValue(true)
       .sinceVersion("0.10.0")
-      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries.");
+      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries. "
+          + "This is an internal config and setting this will not overwrite the actual value used.");
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_BLOOM_FILTER = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.enable")
@@ -224,7 +226,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".populate.meta.fields")
       .defaultValue(false)
       .sinceVersion("0.10.0")
-      .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated.");
+      .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated. "
+          + "This is an internal config and setting this will not overwrite the actual value used.");
 
   public static final ConfigProperty<Boolean> IGNORE_SPURIOUS_DELETES = ConfigProperty
       .key("_" + METADATA_PREFIX + ".ignore.spurious.deletes")

@@ -32,8 +32,8 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -60,7 +60,7 @@ public class TestRelationalDBBasedStore {
     assertNotNull(dbId);
 
     Table table = new Table();
-    table.setDbName(db);
+    table.setDatabaseName(db);
     table.setTableName(tb);
     table.setOwner("owner");
     table.setLocation("test_db.db/test_tb");
@@ -99,14 +99,14 @@ public class TestRelationalDBBasedStore {
     store.saveInstantMetadata(tableId, requested, requestedMeta);
     store.saveInstantMetadata(tableId, inflight, inflightMeta);
     assertTrue(store.deleteInstantMetadata(tableId, requested));
-    assertNull(store.getInstantMetadata(tableId, requested));
-    assertEquals("inflight", new String(store.getInstantMetadata(tableId, inflight)));
+    assertFalse(store.getInstantMetadata(tableId, requested).isPresent());
+    assertEquals("inflight", new String(store.getInstantMetadata(tableId, inflight).get()));
     // delete all metadata of a timestamp
     store.saveInstantMetadata(tableId, requested, requestedMeta);
-    assertEquals("requested", new String(store.getInstantMetadata(tableId, requested)));
+    assertEquals("requested", new String(store.getInstantMetadata(tableId, requested).get()));
     assertTrue(store.deleteInstantAllMeta(tableId, ts));
-    assertNull(store.getInstantMetadata(tableId, requested));
-    assertNull(store.getInstantMetadata(tableId, inflight));
+    assertFalse(store.getInstantMetadata(tableId, requested).isPresent());
+    assertFalse(store.getInstantMetadata(tableId, inflight).isPresent());
   }
 
 }

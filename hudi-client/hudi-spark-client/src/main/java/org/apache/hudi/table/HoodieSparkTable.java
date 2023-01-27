@@ -57,7 +57,7 @@ public abstract class HoodieSparkTable<T>
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
-            .setProperties(config.getProps()).build();
+            .setMetaserverConfig(config.getProps()).build();
     return HoodieSparkTable.create(config, context, metaClient);
   }
 

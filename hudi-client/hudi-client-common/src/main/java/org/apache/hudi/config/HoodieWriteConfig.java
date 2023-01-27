@@ -141,6 +141,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> RECORD_MERGER_IMPLS = ConfigProperty
       .key("hoodie.datasource.write.record.merger.impls")
       .defaultValue(HoodieAvroRecordMerger.class.getName())
+      .sinceVersion("0.13.0")
       .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
           + "These merger impls will filter by hoodie.datasource.write.record.merger.strategy "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
@@ -148,6 +149,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
       .key("hoodie.datasource.write.record.merger.strategy")
       .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .sinceVersion("0.13.0")
       .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
 
   public static final ConfigProperty<String> KEYGENERATOR_CLASS_NAME = ConfigProperty
@@ -160,6 +162,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.write.executor.type")
       .defaultValue(BOUNDED_IN_MEMORY.name())
       .withValidValues(BOUNDED_IN_MEMORY.name(), DISRUPTOR.name())
+      .sinceVersion("0.13.0")
       .withDocumentation("Set executor which orchestrates concurrent producers and consumers communicating through a message queue."
           + "BOUNDED_IN_MEMORY(default): Use LinkedBlockingQueue as a bounded in-memory queue, this queue will use extra lock to balance producers and consumer"
           + "DISRUPTOR: Use disruptor which a lock free message queue as inner message, this queue may gain better writing performance if lock was the bottleneck. "
@@ -225,12 +228,12 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> INSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.insert.shuffle.parallelism")
-      .defaultValue("200")
+      .defaultValue("0")
       .withDocumentation("Parallelism for inserting records into the table. Inserts can shuffle data before writing to tune file sizes and optimize the storage layout.");
 
   public static final ConfigProperty<String> BULKINSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.bulkinsert.shuffle.parallelism")
-      .defaultValue("200")
+      .defaultValue("0")
       .withDocumentation("For large initial imports using bulk_insert operation, controls the parallelism to use for sort modes or custom partitioning done"
           + "before writing records to the table.");
 
@@ -249,13 +252,13 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> UPSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.upsert.shuffle.parallelism")
-      .defaultValue("200")
+      .defaultValue("0")
       .withDocumentation("Parallelism to use for upsert operation on the table. Upserts can shuffle data to perform index lookups, file sizing, bin packing records optimally"
           + "into file groups.");
 
   public static final ConfigProperty<String> DELETE_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.delete.shuffle.parallelism")
-      .defaultValue("200")
+      .defaultValue("0")
       .withDocumentation("Parallelism used for “delete” operation. Delete operations also performs shuffles, similar to upsert operation.");
 
   public static final ConfigProperty<String> ROLLBACK_PARALLELISM_VALUE = ConfigProperty
@@ -271,11 +274,13 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> WRITE_DISRUPTOR_BUFFER_SIZE = ConfigProperty
       .key("hoodie.write.executor.disruptor.buffer.size")
       .defaultValue(String.valueOf(1024))
+      .sinceVersion("0.13.0")
       .withDocumentation("The size of the Disruptor Executor ring buffer, must be power of 2");
 
   public static final ConfigProperty<String> WRITE_WAIT_STRATEGY = ConfigProperty
       .key("hoodie.write.executor.disruptor.wait.strategy")
       .defaultValue("BLOCKING_WAIT")
+      .sinceVersion("0.13.0")
       .withDocumentation("Strategy employed for making Disruptor Executor wait on a cursor. Other options are "
           + "SLEEPING_WAIT, it attempts to be conservative with CPU usage by using a simple busy wait loop"
           + "YIELDING_WAIT, it is designed for cases where there is the option to burn CPU cycles with the goal of improving latency"
@@ -422,6 +427,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION = ConfigProperty
       .key("hoodie.fail.writes.on.inline.table.service.exception")
       .defaultValue("true")
+      .sinceVersion("0.13.0")
       .withDocumentation("Table services such as compaction and clustering can fail and prevent syncing to "
           + "the metaclient. Set this to true to fail writes when table services fail");
 
@@ -573,21 +579,21 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "It eagerly detects writing conflict before create markers and fails fast if a "
           + "conflict is detected, to release cluster compute resources as soon as possible.");
 
-  public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_BATCH_INTERVAL_MS = ConfigProperty
-      .key(CONCURRENCY_PREFIX + "early.conflict.async.detector.batch.interval_ms")
+  public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_INITIAL_DELAY_MS = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "async.conflict.detector.initial_delay_ms")
       .defaultValue(30000L)
       .sinceVersion("0.13.0")
       .withDocumentation("Used for timeline-server-based markers with "
           + "`AsyncTimelineServerBasedDetectionStrategy`. "
-          + "The time in milliseconds to delay first async marker conflict detection.");
+          + "The time in milliseconds to delay the first execution of async marker-based conflict detection.");
 
   public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_PERIOD_MS = ConfigProperty
-      .key(CONCURRENCY_PREFIX + "early.conflict.async.detector.period_ms")
+      .key(CONCURRENCY_PREFIX + "async.conflict.detector.period_ms")
       .defaultValue(30000L)
       .sinceVersion("0.13.0")
       .withDocumentation("Used for timeline-server-based markers with "
           + "`AsyncTimelineServerBasedDetectionStrategy`. "
-          + "The period in milliseconds between consecutive runs of async marker conflict detection.");
+          + "The period in milliseconds between successive executions of async marker-based conflict detection.");
 
   public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.check.commit.conflict")
@@ -1150,7 +1156,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public int getDeleteShuffleParallelism() {
-    return Math.max(getInt(DELETE_PARALLELISM_VALUE), 1);
+    return getInt(DELETE_PARALLELISM_VALUE);
   }
 
   public int getRollbackParallelism() {
@@ -2243,8 +2249,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return ReflectionUtils.loadClass(getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME));
   }
 
-  public Long getAsyncConflictDetectorBatchIntervalMs() {
-    return getLong(ASYNC_CONFLICT_DETECTOR_BATCH_INTERVAL_MS);
+  public Long getAsyncConflictDetectorInitialDelayMs() {
+    return getLong(ASYNC_CONFLICT_DETECTOR_INITIAL_DELAY_MS);
   }
 
   public Long getAsyncConflictDetectorPeriodMs() {
@@ -2810,8 +2816,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withAsyncConflictDetectorBatchIntervalMs(long intervalMs) {
-      writeConfig.setValue(ASYNC_CONFLICT_DETECTOR_BATCH_INTERVAL_MS, String.valueOf(intervalMs));
+    public Builder withAsyncConflictDetectorInitialDelayMs(long intervalMs) {
+      writeConfig.setValue(ASYNC_CONFLICT_DETECTOR_INITIAL_DELAY_MS, String.valueOf(intervalMs));
       return this;
     }
 

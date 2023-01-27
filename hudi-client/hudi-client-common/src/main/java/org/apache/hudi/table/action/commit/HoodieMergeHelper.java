@@ -123,8 +123,12 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
         bootstrapFileReader =
             HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(bootstrapFileConfig, bootstrapFilePath);
-        recordIterator = new MergingIterator(baseFileRecordIterator, bootstrapFileReader.getRecordIterator(),
-            (left, right) -> left.joinWith(right, mergeHandle.getWriterSchemaWithMetaFields()));
+
+        recordIterator = new MergingIterator<>(
+            baseFileRecordIterator,
+            bootstrapFileReader.getRecordIterator(),
+            (left, right) ->
+                left.joinWith(right, mergeHandle.getWriterSchemaWithMetaFields()));
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
       } else if (schemaEvolutionTransformerOpt.isPresent()) {
         recordIterator = new MappingIterator<>(baseFileRecordIterator,

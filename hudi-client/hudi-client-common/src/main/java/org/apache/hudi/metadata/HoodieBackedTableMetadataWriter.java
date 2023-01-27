@@ -264,12 +264,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .forTable(tableName)
         // we will trigger cleaning manually, to control the instant times
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withAsyncClean(writeConfig.isMetadataAsyncClean())
+            .withAsyncClean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE.defaultValue())
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
-            .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
+            .retainCommits(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED.defaultValue())
             .build())
         // we will trigger archive manually, to ensure only regular writer invokes it
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
@@ -291,7 +291,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withFinalizeWriteParallelism(parallelism)
         .withAllowMultiWriteOnSameInstant(true)
         .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-        .withPopulateMetaFields(dataWriteConfig.getMetadataConfig().populateMetaFields());
+        .withPopulateMetaFields(HoodieMetadataConfig.POPULATE_META_FIELDS.defaultValue());
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();

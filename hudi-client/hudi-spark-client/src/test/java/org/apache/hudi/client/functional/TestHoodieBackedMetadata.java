@@ -497,8 +497,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .enableFullScan(true)
             .enableMetrics(false)
             .withMaxNumDeltaCommitsBeforeCompaction(3)
-            .archiveCommitsWith(3, 4)
-            .retainCommits(1)
+            .archiveCommitsWith(4, 5)
+            .retainCommits(3)
             .build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .retainCommits(1)
@@ -732,9 +732,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    *
    * @throws Exception
    */
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testVirtualKeysInBaseFiles(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testVirtualKeysInBaseFiles() throws Exception {
+    boolean populateMetaFields = false;
     init(MERGE_ON_READ, false);
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
@@ -970,9 +970,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    */
   public static List<Arguments> testMetadataRecordKeyExcludeFromPayloadArgs() {
     return asList(
-        Arguments.of(COPY_ON_WRITE, true),
         Arguments.of(COPY_ON_WRITE, false),
-        Arguments.of(MERGE_ON_READ, true),
         Arguments.of(MERGE_ON_READ, false)
     );
   }
@@ -1285,9 +1283,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Test that manual rollbacks work correctly and enough timeline history is maintained on the metadata table
    * timeline.
    */
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testManualRollbacks(final boolean populateMateFields) throws Exception {
+  @Test
+  public void testManualRollbacks() throws Exception {
+    boolean populateMateFields = false;
     init(COPY_ON_WRITE, false);
     // Setting to archive more aggressively on the Metadata Table than the Dataset
     final int maxDeltaCommitsBeforeCompaction = 4;
