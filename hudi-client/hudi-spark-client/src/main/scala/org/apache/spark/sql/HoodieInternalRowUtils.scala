@@ -26,7 +26,8 @@ import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath}
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.CatalystTypeConverters.DateConverter
+import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData, UnsafeProjection}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData}
 import org.apache.spark.sql.types._
@@ -426,6 +427,10 @@ object HoodieInternalRowUtils {
           case _ =>
             throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
         }
+
+      case (DateType, StringType) =>
+        (fieldUpdater, ordinal, value) =>
+          fieldUpdater.set(ordinal, CatalystTypeConverters.convertToCatalyst(java.sql.Date.valueOf(value.toString)))
 
       case (_, _) =>
         throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
