@@ -237,13 +237,15 @@ object HoodieInternalRowUtils {
         fieldNames.pop()
 
         (fieldUpdater, ordinal, value) => {
-          val array = value.asInstanceOf[Array[Any]]
-          val result = createArrayData(newElementType, array.length)
-          val elementUpdater = new ArrayDataUpdater(result)
+          val prevArrayData = value.asInstanceOf[ArrayData]
+          val prevArray = prevArrayData.toObjectArray(prevElementType)
+
+          val newArrayData = createArrayData(newElementType, prevArrayData.numElements())
+          val elementUpdater = new ArrayDataUpdater(newArrayData)
 
           var i = 0
-          while (i < array.length) {
-            val element = array(i)
+          while (i < prevArray.length) {
+            val element = prevArray(i)
             if (element == null) {
               if (!containsNull) {
                 throw new HoodieException(
@@ -257,35 +259,25 @@ object HoodieInternalRowUtils {
             i += 1
           }
 
-          fieldUpdater.set(ordinal, result)
+          fieldUpdater.set(ordinal, newArrayData)
         }
 
-      case (MapType(_, prevValueType, valueContainsNull), MapType(newKeyType, newValueType, _)) =>
-        //val newKeyArray = new GenericArrayData(Array.fill(oldMap.keyArray().numElements())(null).asInstanceOf[Array[Any]])
-        //val newValueArray = new GenericArrayData(Array.fill(oldMap.valueArray().numElements())(null).asInstanceOf[Array[Any]])
-        //val newMap = new ArrayBasedMapData(newKeyArray, newValueArray)
-        //oldMap.keyArray().toSeq[Any](prevKeyType).zipWithIndex.foreach { case (value, i) => newKeyArray.update(i, rewritePrimaryType(value, prevKeyType, prevKeyType)) }
-        //oldMap.valueArray().toSeq[Any](prevValueType).zipWithIndex.foreach { case (value, i) => newValueArray.update(i, rewriteRecordWithNewSchema(value.asInstanceOf[AnyRef], prevValueType, newValueType, renamedColumnsMap, fieldNames)) }
-        //
-        //newMap
-
+      case (MapType(_, prevValueType, valueContainsNull), MapType(_, newValueType, _)) =>
         fieldNames.push("value")
         val valueWriter = newWriterRenaming(prevValueType, newValueType, renamedColumnsMap, fieldNames)
         fieldNames.pop()
 
         (updater, ordinal, value) =>
-          val map = value.asInstanceOf[Map[AnyRef, AnyRef]]
-          val keyArray = createArrayData(newKeyType, map.size)
-          val keyUpdater = new ArrayDataUpdater(keyArray)
-          val valueArray = createArrayData(newValueType, map.size)
-          val valueUpdater = new ArrayDataUpdater(valueArray)
-          val iter = map.iterator
-          var i = 0
-          while (iter.hasNext) {
-            val (key, value) = iter.next()
-            checkArgument(key != null)
-            keyUpdater.set(i, key)
+          val arrayBasedMapData = value.asInstanceOf[ArrayBasedMapData]
+          val prevKeyArrayData = arrayBasedMapData.keyArray
+          val prevValueArrayData = arrayBasedMapData.valueArray
+          val prevValueArray = prevValueArrayData.toObjectArray(prevValueType)
 
+          val newValueArray = createArrayData(newValueType, arrayBasedMapData.numElements())
+          val valueUpdater = new ArrayDataUpdater(newValueArray)
+          var i = 0
+          while (i < prevValueArray.length) {
+            val value = prevValueArray(i)
             if (value == null) {
               if (!valueContainsNull) {
                 throw new HoodieException(s"Map value at path ${fieldNames.asScala.mkString(".")} is not allowed to be null")
@@ -298,7 +290,8 @@ object HoodieInternalRowUtils {
             i += 1
           }
 
-          updater.set(ordinal, new ArrayBasedMapData(keyArray, valueArray))
+          // NOTE: Key's couldn't be transformed and have to always be of [[StringType]]
+          updater.set(ordinal, new ArrayBasedMapData(prevKeyArrayData, newValueArray))
 
       case (_, _) => newWriter(prevDataType, newDataType)
     }
