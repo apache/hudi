@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, Generic
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
-import java.util
+import java.util.{ArrayDeque => JArrayDeque, Deque => JDeque, Map => JMap, Collections => JCollections}
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.parallel.mutable.ParHashMap
@@ -40,17 +40,35 @@ import scala.jdk.CollectionConverters.collectionAsScalaIterableConverter
 
 object HoodieInternalRowUtils {
 
+  private type RenamedColumnMap = JMap[String, String]
+  private type RowWriter = InternalRow => InternalRow
+
   // Projection are all thread local. Projection is not thread-safe
-  private val unsafeWriterAndProjectionThreadLocal: ThreadLocal[mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)]] =
-    ThreadLocal.withInitial(new Supplier[mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)]] {
-      override def get(): mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)] =
-        new mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)]
+  private val unsafeWriterAndProjectionThreadLocal: ThreadLocal[mutable.HashMap[(StructType, StructType, RenamedColumnMap), (RowWriter, UnsafeProjection)]] =
+    ThreadLocal.withInitial(new Supplier[mutable.HashMap[(StructType, StructType, RenamedColumnMap), (RowWriter, UnsafeProjection)]] {
+      override def get(): mutable.HashMap[(StructType, StructType, RenamedColumnMap), (RowWriter, UnsafeProjection)] =
+        new mutable.HashMap[(StructType, StructType, RenamedColumnMap), (RowWriter, UnsafeProjection)]
     })
 
   private val schemaMap = new ParHashMap[Schema, StructType]
   private val orderPosListMap = new ParHashMap[(StructType, String), NestedFieldPath]
 
-  def genUnsafeRowWriter(prevSchema: StructType, newSchema: StructType): InternalRow => InternalRow = {
+  def genUnsafeRowWriterRenaming(prevSchema: StructType, newSchema: StructType, renamedColumnsMap: JMap[String, String]): RowWriter = {
+    val writer = newWriterRenaming(prevSchema, newSchema, renamedColumnsMap, new JArrayDeque[String]())
+    val phonyUpdater = new CatalystDataUpdater {
+      var value: InternalRow = _
+
+      override def set(ordinal: Int, value: Any): Unit =
+        this.value = value.asInstanceOf[InternalRow]
+    }
+
+    oldRow => {
+      writer(phonyUpdater, 0, oldRow)
+      phonyUpdater.value
+    }
+  }
+
+  def genUnsafeRowWriter(prevSchema: StructType, newSchema: StructType): RowWriter = {
     val writer = newWriter(prevSchema, newSchema)
     val phonyUpdater = new CatalystDataUpdater {
       var value: InternalRow = _
@@ -65,26 +83,16 @@ object HoodieInternalRowUtils {
     }
   }
 
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteRecordWithNewSchema(org.apache.avro.generic.IndexedRecord, org.apache.avro.Schema, java.util.Map)
-   */
-  def rewriteRecordWithNewSchema(oldRecord: InternalRow, oldSchema: StructType, newSchema: StructType, renameCols: java.util.Map[String, String]): InternalRow = {
-    rewriteRecordWithNewSchema(oldRecord, oldSchema, newSchema, renameCols, new java.util.LinkedList[String]).asInstanceOf[InternalRow]
-  }
-
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteRecordWithNewSchema(java.lang.Object, org.apache.avro.Schema, org.apache.avro.Schema, java.util.Map, java.util.Deque)
-   */
-  private def rewriteRecordWithNewSchema(oldRecord: Any, oldSchema: DataType, newSchema: DataType, renameCols: java.util.Map[String, String], fieldNames: java.util.Deque[String]): Any = ???
-
   def getCachedUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
     val (_, projection) = getCachedUnsafeRowWriterAndUnsafeProjection(from, to)
     projection
   }
 
-  def getCachedUnsafeRowWriterAndUnsafeProjection(from: StructType, to: StructType): (InternalRow => InternalRow, UnsafeProjection) = {
+  def getCachedUnsafeRowWriterAndUnsafeProjection(from: StructType,
+                                                  to: StructType,
+                                                  renamedColumnsMap: JMap[String, String] = JCollections.emptyMap()): (RowWriter, UnsafeProjection) = {
     unsafeWriterAndProjectionThreadLocal.get()
-      .getOrElseUpdate((from, to), (genUnsafeRowWriter(from, to), generateUnsafeProjection(from, to)))
+      .getOrElseUpdate((from, to, renamedColumnsMap), (genUnsafeRowWriterRenaming(from, to, renamedColumnsMap), generateUnsafeProjection(from, to)))
   }
 
   def getCachedPosList(structType: StructType, field: String): Option[NestedFieldPath] =
@@ -149,11 +157,7 @@ object HoodieInternalRowUtils {
   }
    */
 
-  def removeFields(schema: StructType, fieldsToRemove: java.util.List[String]): StructType = {
-    StructType(schema.fields.filter(field => !fieldsToRemove.contains(field.name)))
-  }
-
-  private def genUnsafeRowWriterRenaming(prevStructType: StructType, newStructType: StructType, renamedColumnsMap: java.util.Map[String, String], fieldNames: java.util.Deque[String]): (CatalystDataUpdater, Any) => Unit = {
+  private def genUnsafeRowWriterRenaming(prevStructType: StructType, newStructType: StructType, renamedColumnsMap: JMap[String, String], fieldNames: JDeque[String]): (CatalystDataUpdater, Any) => Unit = {
     // TODO need to canonicalize schemas (casing)
     val fieldWriters = ArrayBuffer.empty[(CatalystDataUpdater, Int, Any) => Unit]
     val positionMap = ArrayBuffer.empty[Int]
@@ -204,7 +208,10 @@ object HoodieInternalRowUtils {
     }
   }
 
-  private def newWriterRenaming(prevDataType: DataType, newDataType: DataType, renamedColumnsMap: util.Map[String, String], fieldNames: util.Deque[String]): (CatalystDataUpdater, Int, Any) => Unit = {
+  private def newWriterRenaming(prevDataType: DataType,
+                                newDataType: DataType,
+                                renamedColumnsMap: JMap[String, String],
+                                fieldNames: JDeque[String]): (CatalystDataUpdater, Int, Any) => Unit = {
     (prevDataType, newDataType) match {
       case (prevType, newType) if prevType == newType =>
         (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value)
@@ -403,7 +410,7 @@ object HoodieInternalRowUtils {
     }
   }
 
-  private def lookupRenamedField(newFieldQualifiedName: String, renamedColumnsMap: util.Map[String, String]) = {
+  private def lookupRenamedField(newFieldQualifiedName: String, renamedColumnsMap: JMap[String, String]) = {
     val prevFieldQualifiedName = renamedColumnsMap.getOrDefault(newFieldQualifiedName, "")
     val prevFieldQualifiedNameParts = prevFieldQualifiedName.split("\\.")
     val prevFieldName = prevFieldQualifiedNameParts(prevFieldQualifiedNameParts.length - 1)
