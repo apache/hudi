@@ -349,10 +349,22 @@ object HoodieInternalRowUtils {
           fieldUpdater.set(ordinal, newRow)
         }
 
-      case (newDecimal: DecimalType, _: DecimalType) =>
-        // TODO validate decimal type is expanding
-        (fieldUpdater, ordinal, value) =>
-          fieldUpdater.setDecimal(ordinal, Decimal.fromDecimal(value.asInstanceOf[Decimal].toBigDecimal.setScale(newDecimal.scale)))
+      case (newDecimal: DecimalType, _) =>
+        prevDataType match {
+          case IntegerType | LongType | FloatType | DoubleType | StringType =>
+            (fieldUpdater, ordinal, value) =>
+              val scale = newDecimal.scale
+              fieldUpdater.setDecimal(ordinal, Decimal.fromDecimal(BigDecimal(value.toString).setScale(scale)))
+
+          // TODO validate decimal type is expanding
+          case _: DecimalType =>
+            (fieldUpdater, ordinal, value) =>
+              fieldUpdater.setDecimal(ordinal, Decimal.fromDecimal(value.asInstanceOf[Decimal].toBigDecimal.setScale(newDecimal.scale)))
+
+          case _ =>
+              throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
+        }
+
 
       case (_: ShortType, _) =>
         prevDataType match {
