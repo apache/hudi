@@ -18,29 +18,31 @@
 
 package org.apache.spark.sql
 
-import java.nio.charset.StandardCharsets
 import org.apache.avro.Schema
 import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
-import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
+import org.apache.hudi.avro.HoodieAvroUtils.createFullName
+import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath}
-import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, SpecificInternalRow, UnsafeProjection}
-import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData, MapData}
-import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData, UnsafeProjection}
+import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData}
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
+import java.util
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.parallel.mutable.ParHashMap
+import scala.jdk.CollectionConverters.collectionAsScalaIterableConverter
 
 object HoodieInternalRowUtils {
 
   // Projection are all thread local. Projection is not thread-safe
   private val unsafeWriterAndProjectionThreadLocal: ThreadLocal[mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)]] =
-    ThreadLocal.withInitial(new Supplier[mutable.HashMap[(StructType, StructType), UnsafeProjection]] {
+    ThreadLocal.withInitial(new Supplier[mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)]] {
       override def get(): mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)] =
         new mutable.HashMap[(StructType, StructType), (InternalRow => InternalRow, UnsafeProjection)]
     })
@@ -52,6 +54,7 @@ object HoodieInternalRowUtils {
     val writer = newWriter(prevSchema, newSchema)
     val phonyUpdater = new CatalystDataUpdater {
       var value: InternalRow = _
+
       override def set(ordinal: Int, value: Any): Unit =
         this.value = value.asInstanceOf[InternalRow]
     }
@@ -72,84 +75,7 @@ object HoodieInternalRowUtils {
   /**
    * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteRecordWithNewSchema(java.lang.Object, org.apache.avro.Schema, org.apache.avro.Schema, java.util.Map, java.util.Deque)
    */
-  private def rewriteRecordWithNewSchema(oldRecord: Any, oldSchema: DataType, newSchema: DataType, renameCols: java.util.Map[String, String], fieldNames: java.util.Deque[String]): Any = {
-    if (oldRecord == null) {
-      null
-    } else {
-      newSchema match {
-        case targetSchema: StructType =>
-          if (!oldRecord.isInstanceOf[InternalRow]) {
-            throw new IllegalArgumentException("cannot rewrite record with different type")
-          }
-          val oldRow = oldRecord.asInstanceOf[InternalRow]
-          val helper = mutable.Map[Integer, Any]()
-
-          val oldStrucType = oldSchema.asInstanceOf[StructType]
-          targetSchema.fields.zipWithIndex.foreach { case (field, i) =>
-            fieldNames.push(field.name)
-            if (existField(oldStrucType, field.name)) {
-              val oldField = oldStrucType(field.name)
-              val oldPos = oldStrucType.fieldIndex(field.name)
-              helper(i) = rewriteRecordWithNewSchema(oldRow.get(oldPos, oldField.dataType), oldField.dataType, field.dataType, renameCols, fieldNames)
-            } else {
-              val fieldFullName = createFullName(fieldNames)
-              val colNamePartsFromOldSchema = renameCols.getOrDefault(fieldFullName, "").split("\\.")
-              val lastColNameFromOldSchema = colNamePartsFromOldSchema(colNamePartsFromOldSchema.length - 1)
-              // deal with rename
-              if (!existField(oldStrucType, field.name) && existField(oldStrucType, lastColNameFromOldSchema)) {
-                // find rename
-                val oldField = oldStrucType(lastColNameFromOldSchema)
-                val oldPos = oldStrucType.fieldIndex(lastColNameFromOldSchema)
-                helper(i) = rewriteRecordWithNewSchema(oldRow.get(oldPos, oldField.dataType), oldField.dataType, field.dataType, renameCols, fieldNames)
-              }
-            }
-            fieldNames.pop()
-          }
-          val newRow = new GenericInternalRow(Array.fill(targetSchema.length)(null).asInstanceOf[Array[Any]])
-          targetSchema.fields.zipWithIndex.foreach { case (_, i) =>
-            if (helper.contains(i)) {
-              newRow.update(i, helper(i))
-            } else {
-              // TODO add default val
-              newRow.update(i, null)
-            }
-          }
-
-          newRow
-        case targetSchema: ArrayType =>
-          if (!oldRecord.isInstanceOf[ArrayData]) {
-            throw new IllegalArgumentException("cannot rewrite record with different type")
-          }
-          val oldElementType = oldSchema.asInstanceOf[ArrayType].elementType
-          val oldArray = oldRecord.asInstanceOf[ArrayData]
-          val newElementType = targetSchema.elementType
-          val newArray = new GenericArrayData(Array.fill(oldArray.numElements())(null).asInstanceOf[Array[Any]])
-          fieldNames.push("element")
-          oldArray.toSeq[Any](oldElementType).zipWithIndex.foreach { case (value, i) => newArray.update(i, rewriteRecordWithNewSchema(value.asInstanceOf[AnyRef], oldElementType, newElementType, renameCols, fieldNames)) }
-          fieldNames.pop()
-
-          newArray
-        case targetSchema: MapType =>
-          if (!oldRecord.isInstanceOf[MapData]) {
-            throw new IllegalArgumentException("cannot rewrite record with different type")
-          }
-          val oldValueType = oldSchema.asInstanceOf[MapType].valueType
-          val oldKeyType = oldSchema.asInstanceOf[MapType].keyType
-          val oldMap = oldRecord.asInstanceOf[MapData]
-          val newValueType = targetSchema.valueType
-          val newKeyArray = new GenericArrayData(Array.fill(oldMap.keyArray().numElements())(null).asInstanceOf[Array[Any]])
-          val newValueArray = new GenericArrayData(Array.fill(oldMap.valueArray().numElements())(null).asInstanceOf[Array[Any]])
-          val newMap = new ArrayBasedMapData(newKeyArray, newValueArray)
-          fieldNames.push("value")
-          oldMap.keyArray().toSeq[Any](oldKeyType).zipWithIndex.foreach { case (value, i) => newKeyArray.update(i, rewritePrimaryType(value, oldKeyType, oldKeyType)) }
-          oldMap.valueArray().toSeq[Any](oldValueType).zipWithIndex.foreach { case (value, i) => newValueArray.update(i, rewriteRecordWithNewSchema(value.asInstanceOf[AnyRef], oldValueType, newValueType, renameCols, fieldNames)) }
-          fieldNames.pop()
-
-          newMap
-        case _ => rewritePrimaryType(oldRecord, oldSchema, newSchema)
-      }
-    }
-  }
+  private def rewriteRecordWithNewSchema(oldRecord: Any, oldSchema: DataType, newSchema: DataType, renameCols: java.util.Map[String, String], fieldNames: java.util.Deque[String]): Any = ???
 
   def getCachedUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
     val (_, projection) = getCachedUnsafeRowWriterAndUnsafeProjection(from, to)
@@ -167,26 +93,8 @@ object HoodieInternalRowUtils {
   def getCachedSchema(schema: Schema): StructType =
     schemaMap.getOrElse(schema, convertAvroSchemaToStructType(schema))
 
-  def existField(structType: StructType, fieldRef: String): Boolean =
-    getCachedPosList(structType, fieldRef) != null
-
-  private def rewritePrimaryType(oldValue: Any, oldSchema: DataType, newSchema: DataType) = {
-    if (oldSchema.equals(newSchema) || (oldSchema.isInstanceOf[DecimalType] && newSchema.isInstanceOf[DecimalType])) {
-      oldSchema match {
-        case NullType | BooleanType | IntegerType | LongType | FloatType | DoubleType | DateType | TimestampType | BinaryType =>
-          oldValue
-        // Copy UTF8String before putting into GenericInternalRow
-        case StringType => UTF8String.fromString(oldValue.toString)
-        case DecimalType() =>
-          Decimal.fromDecimal(oldValue.asInstanceOf[Decimal].toBigDecimal.setScale(newSchema.asInstanceOf[DecimalType].scale))
-        case _ =>
-          throw new HoodieException("Unknown schema type: " + newSchema)
-      }
-    } else {
-      rewritePrimaryTypeWithDiffSchemaType(oldValue, oldSchema, newSchema)
-    }
-  }
-
+  /*
+  // TODO cleanup
   private def rewritePrimaryTypeWithDiffSchemaType(oldValue: Any, oldSchema: DataType, newSchema: DataType): Any = {
     val value = newSchema match {
       case NullType | BooleanType =>
@@ -232,18 +140,160 @@ object HoodieInternalRowUtils {
         }
       case _ =>
     }
+
     if (value == None) {
       throw new HoodieException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema))
     } else {
       CatalystTypeConverters.convertToCatalyst(value)
     }
   }
+   */
 
   def removeFields(schema: StructType, fieldsToRemove: java.util.List[String]): StructType = {
     StructType(schema.fields.filter(field => !fieldsToRemove.contains(field.name)))
   }
 
-  private def genRowWriter(prevStructType: StructType, newStructType: StructType): (CatalystDataUpdater, Any) => Unit = {
+  private def genUnsafeRowWriterRenaming(prevStructType: StructType, newStructType: StructType, renamedColumnsMap: java.util.Map[String, String], fieldNames: java.util.Deque[String]): (CatalystDataUpdater, Any) => Unit = {
+    // TODO need to canonicalize schemas (casing)
+    val fieldWriters = ArrayBuffer.empty[(CatalystDataUpdater, Int, Any) => Unit]
+    val positionMap = ArrayBuffer.empty[Int]
+
+    for (newField <- newStructType.fields) {
+      fieldNames.push(newField.name)
+
+      val fieldWriter: (CatalystDataUpdater, Int, Any) => Unit =
+        prevStructType.getFieldIndex(newField.name) match {
+          case Some(prevFieldPos) =>
+            val prevField = prevStructType(prevFieldPos)
+            newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNames)
+
+          case None =>
+            val newFieldQualifiedName = createFullName(fieldNames)
+            val prevFieldName: String = lookupRenamedField(newFieldQualifiedName, renamedColumnsMap)
+
+            // Handle rename
+            prevStructType.getFieldIndex(prevFieldName) match {
+              case Some(prevFieldPos) =>
+                val prevField = prevStructType.fields(prevFieldPos)
+                newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNames)
+
+              case None =>
+                // TODO handle defaults
+                (fieldUpdater, ordinal, _) => fieldUpdater.setNullAt(ordinal)
+            }
+        }
+
+      fieldWriters += fieldWriter
+
+      fieldNames.pop()
+    }
+
+    (fieldUpdater, row) => {
+      var pos = 0
+      while (pos < fieldWriters.length) {
+        val prevPos = positionMap(pos)
+        val prevValue = if (prevPos >= 0) {
+          row.asInstanceOf[InternalRow].get(prevPos, prevStructType.fields(prevPos).dataType)
+        } else {
+          null
+        }
+
+        fieldWriters(pos)(fieldUpdater, pos, prevValue)
+        pos += 1
+      }
+    }
+  }
+
+  private def newWriterRenaming(prevDataType: DataType, newDataType: DataType, renamedColumnsMap: util.Map[String, String], fieldNames: util.Deque[String]): (CatalystDataUpdater, Int, Any) => Unit = {
+    (prevDataType, newDataType) match {
+      case (prevType, newType) if prevType == newType =>
+        (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value)
+
+      case (prevStructType: StructType, newStructType: StructType) =>
+        val writer = genUnsafeRowWriterRenaming(prevStructType, newStructType, renamedColumnsMap, fieldNames)
+        val newRow = new SpecificInternalRow(newStructType.fields.map(_.dataType))
+        val rowUpdater = new RowUpdater(newRow)
+
+        (fieldUpdater, ordinal, value) => {
+          // TODO elaborate
+          writer(rowUpdater, value)
+          fieldUpdater.set(ordinal, newRow)
+        }
+
+      case (ArrayType(prevElementType, containsNull), ArrayType(newElementType, _)) =>
+        fieldNames.push("element")
+        val elementWriter = newWriterRenaming(prevElementType, newElementType, renamedColumnsMap, fieldNames)
+        fieldNames.pop()
+
+        (fieldUpdater, ordinal, value) => {
+          val array = value.asInstanceOf[Array[Any]]
+          val result = createArrayData(newElementType, array.length)
+          val elementUpdater = new ArrayDataUpdater(result)
+
+          var i = 0
+          while (i < array.length) {
+            val element = array(i)
+            if (element == null) {
+              if (!containsNull) {
+                throw new HoodieException(
+                  s"Array value at path '${fieldNames.asScala.mkString(".")}' is not allowed to be null")
+              } else {
+                elementUpdater.setNullAt(i)
+              }
+            } else {
+              elementWriter(elementUpdater, i, element)
+            }
+            i += 1
+          }
+
+          fieldUpdater.set(ordinal, result)
+        }
+
+      case (MapType(_, prevValueType, valueContainsNull), MapType(newKeyType, newValueType, _)) =>
+        //val newKeyArray = new GenericArrayData(Array.fill(oldMap.keyArray().numElements())(null).asInstanceOf[Array[Any]])
+        //val newValueArray = new GenericArrayData(Array.fill(oldMap.valueArray().numElements())(null).asInstanceOf[Array[Any]])
+        //val newMap = new ArrayBasedMapData(newKeyArray, newValueArray)
+        //oldMap.keyArray().toSeq[Any](prevKeyType).zipWithIndex.foreach { case (value, i) => newKeyArray.update(i, rewritePrimaryType(value, prevKeyType, prevKeyType)) }
+        //oldMap.valueArray().toSeq[Any](prevValueType).zipWithIndex.foreach { case (value, i) => newValueArray.update(i, rewriteRecordWithNewSchema(value.asInstanceOf[AnyRef], prevValueType, newValueType, renamedColumnsMap, fieldNames)) }
+        //
+        //newMap
+
+        fieldNames.push("value")
+        val valueWriter = newWriterRenaming(prevValueType, newValueType, renamedColumnsMap, fieldNames)
+        fieldNames.pop()
+
+        (updater, ordinal, value) =>
+          val map = value.asInstanceOf[Map[AnyRef, AnyRef]]
+          val keyArray = createArrayData(newKeyType, map.size)
+          val keyUpdater = new ArrayDataUpdater(keyArray)
+          val valueArray = createArrayData(newValueType, map.size)
+          val valueUpdater = new ArrayDataUpdater(valueArray)
+          val iter = map.iterator
+          var i = 0
+          while (iter.hasNext) {
+            val (key, value) = iter.next()
+            checkArgument(key != null)
+            keyUpdater.set(i, key)
+
+            if (value == null) {
+              if (!valueContainsNull) {
+                throw new HoodieException(s"Map value at path ${fieldNames.asScala.mkString(".")} is not allowed to be null")
+              } else {
+                valueUpdater.setNullAt(i)
+              }
+            } else {
+              valueWriter(valueUpdater, i, value)
+            }
+            i += 1
+          }
+
+          updater.set(ordinal, new ArrayBasedMapData(keyArray, valueArray))
+
+      case (_, _) => newWriter(prevDataType, newDataType)
+    }
+  }
+
+  private def genUnsafeRowWriterInternal(prevStructType: StructType, newStructType: StructType): (CatalystDataUpdater, Any) => Unit = {
     // TODO need to canonicalize schemas (casing)
     val fieldWriters = ArrayBuffer.empty[(CatalystDataUpdater, Int, Any) => Unit]
     val positionMap = ArrayBuffer.empty[Int]
@@ -286,7 +336,7 @@ object HoodieInternalRowUtils {
         (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value)
 
       case (newStructType: StructType, prevStructType: StructType) =>
-        val writer = genRowWriter(prevStructType, newStructType)
+        val writer = genUnsafeRowWriterInternal(prevStructType, newStructType)
         val newRow = new SpecificInternalRow(newStructType.fields.map(_.dataType))
         val rowUpdater = new RowUpdater(newRow)
         (fieldUpdater, ordinal, value) => {
@@ -351,6 +401,25 @@ object HoodieInternalRowUtils {
       case (_, _) =>
         throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
     }
+  }
+
+  private def lookupRenamedField(newFieldQualifiedName: String, renamedColumnsMap: util.Map[String, String]) = {
+    val prevFieldQualifiedName = renamedColumnsMap.getOrDefault(newFieldQualifiedName, "")
+    val prevFieldQualifiedNameParts = prevFieldQualifiedName.split("\\.")
+    val prevFieldName = prevFieldQualifiedNameParts(prevFieldQualifiedNameParts.length - 1)
+
+    prevFieldName
+  }
+
+  private def createArrayData(elementType: DataType, length: Int): ArrayData = elementType match {
+    case BooleanType => UnsafeArrayData.fromPrimitiveArray(new Array[Boolean](length))
+    case ByteType => UnsafeArrayData.fromPrimitiveArray(new Array[Byte](length))
+    case ShortType => UnsafeArrayData.fromPrimitiveArray(new Array[Short](length))
+    case IntegerType => UnsafeArrayData.fromPrimitiveArray(new Array[Int](length))
+    case LongType => UnsafeArrayData.fromPrimitiveArray(new Array[Long](length))
+    case FloatType => UnsafeArrayData.fromPrimitiveArray(new Array[Float](length))
+    case DoubleType => UnsafeArrayData.fromPrimitiveArray(new Array[Double](length))
+    case _ => new GenericArrayData(new Array[Any](length))
   }
 
   sealed trait CatalystDataUpdater {

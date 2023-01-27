@@ -125,8 +125,11 @@ class TestStructTypeSchemaEvolutionUtils extends FunSuite with Matchers with Bef
     val row = AvroConversionUtils.createAvroToInternalRowConverter(avroSchema, structTypeSchema).apply(avroRecord).get
     val newRowExpected = AvroConversionUtils.createAvroToInternalRowConverter(newAvroSchema, newStructTypeSchema)
       .apply(newRecord).get
-    val newRowActual = HoodieInternalRowUtils.rewriteRecordWithNewSchema(row, structTypeSchema, newStructTypeSchema, new HashMap[String, String])
-    internalRowCompare(newRowExpected, newRowActual, newStructTypeSchema)
+
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriterRenaming(structTypeSchema, newStructTypeSchema, new HashMap[String, String])
+    val newRow = rowWriter(row)
+
+    internalRowCompare(newRowExpected, newRow, newStructTypeSchema)
   }
 
   test("test rewrite nest record") {
@@ -177,8 +180,11 @@ class TestStructTypeSchemaEvolutionUtils extends FunSuite with Matchers with Bef
     val newStructTypeSchema = HoodieInternalRowUtils.getCachedSchema(newAvroSchema)
     val row = AvroConversionUtils.createAvroToInternalRowConverter(schema, structTypeSchema).apply(avroRecord).get
     val newRowExpected = AvroConversionUtils.createAvroToInternalRowConverter(newAvroSchema, newStructTypeSchema).apply(newAvroRecord).get
-    val newRowActual = HoodieInternalRowUtils.rewriteRecordWithNewSchema(row, structTypeSchema, newStructTypeSchema, new HashMap[String, String])
-    internalRowCompare(newRowExpected, newRowActual, newStructTypeSchema)
+
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriterRenaming(structTypeSchema, newStructTypeSchema, new HashMap[String, String])
+    val newRow = rowWriter(row)
+
+    internalRowCompare(newRowExpected, newRow, newStructTypeSchema)
   }
 
   private def internalRowCompare(expected: Any, actual: Any, schema: DataType): Unit = {

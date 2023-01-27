@@ -48,6 +48,7 @@ import scala.Function1;
 import scala.Tuple2;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 
@@ -195,7 +196,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
 
     Tuple2<Function1<InternalRow, InternalRow>, UnsafeProjection> rowWriterAndProjection =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriterAndUnsafeProjection(structType, targetStructType);
+        HoodieInternalRowUtils.getCachedUnsafeRowWriterAndUnsafeProjection(structType, targetStructType, Collections.emptyMap());
 
     Function1<InternalRow, InternalRow> rowWriter = rowWriterAndProjection._1;
     UnsafeProjection unsafeProjection = rowWriterAndProjection._2;
@@ -213,9 +214,12 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
 
-    // TODO HUDI-5281 Rewrite HoodieSparkRecord with UnsafeRowWriter
-    InternalRow rewriteRecord = HoodieInternalRowUtils.rewriteRecordWithNewSchema(this.data, structType, newStructType, renameCols);
-    UnsafeRow unsafeRow = HoodieInternalRowUtils.getCachedUnsafeProjection(newStructType, newStructType).apply(rewriteRecord);
+    Tuple2<Function1<InternalRow, InternalRow>, UnsafeProjection> rowWriterAndProjection =
+        HoodieInternalRowUtils.getCachedUnsafeRowWriterAndUnsafeProjection(structType, newStructType, renameCols);
+
+    Function1<InternalRow, InternalRow> rowWriter = rowWriterAndProjection._1;
+    UnsafeProjection unsafeProjection = rowWriterAndProjection._2;
+    UnsafeRow unsafeRow = unsafeProjection.apply(rowWriter.apply(this.data));
 
     boolean containMetaFields = hasMetaFields(newStructType);
     UTF8String[] metaFields = tryExtractMetaFields(unsafeRow, newStructType);
