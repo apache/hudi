@@ -37,7 +37,7 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{CommitUtils, StringUtils}
+import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME, KEYGEN_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
@@ -95,12 +95,11 @@ object HoodieSparkSqlWriter {
             optParams: Map[String, String],
             df: DataFrame,
             hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
-            hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty,
-            asyncCompactionTriggerFn: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]] => Unit] = Option.empty,
-            asyncClusteringTriggerFn: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]] => Unit] = Option.empty,
-            extraPreCommitFn: Option[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]] = Option.empty)
-  : (Boolean, common.util.Option[String], common.util.Option[String], common.util.Option[String],
-    SparkRDDWriteClient[HoodieRecordPayload[Nothing]], HoodieTableConfig) = {
+            hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty,
+            asyncCompactionTriggerFn: Option[SparkRDDWriteClient[_] => Unit] = Option.empty,
+            asyncClusteringTriggerFn: Option[SparkRDDWriteClient[_] => Unit] = Option.empty,
+            extraPreCommitFn: Option[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]] = Option.empty):
+  (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
 
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
     val path = optParams("path")
@@ -255,7 +254,7 @@ object HoodieSparkSqlWriter {
       }
       // scalastyle:on
 
-      val (writeResult, writeClient: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]) =
+      val (writeResult, writeClient: SparkRDDWriteClient[_]) =
         operation match {
           case WriteOperationType.DELETE =>
             val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
@@ -271,7 +270,7 @@ object HoodieSparkSqlWriter {
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path, tblName,
               mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
-              .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+              .asInstanceOf[SparkRDDWriteClient[_]]
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
               asyncCompactionTriggerFn.get.apply(client)
@@ -307,7 +306,7 @@ object HoodieSparkSqlWriter {
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               schemaStr, path, tblName,
               mapAsJavaMap(parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
-              .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+              .asInstanceOf[SparkRDDWriteClient[_]]
             // Issue delete partitions
             client.startCommitWithTime(instantTime, commitActionType)
             val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
@@ -340,21 +339,15 @@ object HoodieSparkSqlWriter {
               val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema)) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key
               // TODO(HUDI-4772) proper writer-schema has to be specified here
               DataSourceUtils.createHoodieClient(jsc, dataFileSchemaStr, path, tblName, mapAsJavaMap(finalOpts))
-            }.asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+            }
             val writeConfig = client.getConfig
             if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == HoodieTableType.MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
               throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
             }
             // Convert to RDD[HoodieRecord]
-            val hoodieRecords = createHoodieRecordRdd(
-              df,
-              writeConfig,
-              parameters,
-              avroRecordName,
-              avroRecordNamespace,
-              writerSchema,
-              dataFileSchemaStr,
-              operation)
+            val hoodieRecords =
+              createHoodieRecordRdd(df, writeConfig, parameters, avroRecordName, avroRecordNamespace, writerSchema,
+                dataFileSchemaStr, operation)
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
               asyncCompactionTriggerFn.get.apply(client)
@@ -640,7 +633,7 @@ object HoodieSparkSqlWriter {
                 optParams: Map[String, String],
                 df: DataFrame,
                 hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
-                hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty): Boolean = {
+                hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty): Boolean = {
 
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
     val path = optParams("path")
@@ -911,7 +904,7 @@ object HoodieSparkSqlWriter {
                                              schema: StructType,
                                              writeResult: HoodieWriteResult,
                                              parameters: Map[String, String],
-                                             client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
+                                             client: SparkRDDWriteClient[_],
                                              tableConfig: HoodieTableConfig,
                                              jsc: JavaSparkContext,
                                              tableInstantInfo: TableInstantInfo,
@@ -981,7 +974,7 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  private def isAsyncCompactionEnabled(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
+  private def isAsyncCompactionEnabled(client: SparkRDDWriteClient[_],
                                        tableConfig: HoodieTableConfig,
                                        parameters: Map[String, String], configuration: Configuration): Boolean = {
     log.info(s"Config.inlineCompactionEnabled ? ${client.getConfig.inlineCompactionEnabled}")
@@ -993,7 +986,7 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  private def isAsyncClusteringEnabled(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
+  private def isAsyncClusteringEnabled(client: SparkRDDWriteClient[_],
                                        parameters: Map[String, String]): Boolean = {
     log.info(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
     asyncClusteringTriggerFnDefined && client.getConfig.isAsyncClusteringEnabled
