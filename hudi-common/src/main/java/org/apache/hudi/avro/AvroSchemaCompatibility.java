@@ -52,12 +52,11 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * <p>
  * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
  * <p>
- *       This code is borrowed from Avro 1.10, with the following modifications:
- *       <ol>
- *         <li>Compatibility checks ignore schema name, unless schema is held inside
- *         a union</li>
- *       </ol>
- *
+ * This code is borrowed from Avro 1.10, with the following modifications:
+ * <ol>
+ *   <li>Compatibility checks ignore schema name, unless schema is held inside
+ *   a union</li>
+ * </ol>
  */
 public class AvroSchemaCompatibility {
   private static final Logger LOG = LoggerFactory.getLogger(AvroSchemaCompatibility.class);

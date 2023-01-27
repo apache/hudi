@@ -455,6 +455,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       throw new CorruptedLogFileException("Found possible corrupted block, cannot read log file in reverse, "
           + "fallback to forward reading of logfile");
     }
+    boolean hasNext = hasNext();
     reverseLogFilePosition -= blockSize;
     lastReverseLogFilePosition = reverseLogFilePosition;
     return next();
