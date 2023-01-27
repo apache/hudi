@@ -161,8 +161,8 @@ object HoodieInternalRowUtils {
       .getOrElseUpdate((from, to), (genUnsafeRowWriter(from, to), generateUnsafeProjection(from, to)))
   }
 
-  def getCachedPosList(structType: StructType, field: String): NestedFieldPath =
-    orderPosListMap.getOrElse((structType, field), composeNestedFieldPath(structType, field))
+  def getCachedPosList(structType: StructType, field: String): Option[NestedFieldPath] =
+    Option(orderPosListMap.getOrElse((structType, field), composeNestedFieldPath(structType, field)))
 
   def getCachedSchema(schema: Schema): StructType =
     schemaMap.getOrElse(schema, convertAvroSchemaToStructType(schema))

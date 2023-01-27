@@ -30,9 +30,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
-import org.apache.hudi.util.HoodieSparkRecordUtils;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
@@ -52,8 +52,6 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
-import static org.apache.hudi.util.HoodieSparkRecordUtils.getNullableValAsString;
-import static org.apache.hudi.util.HoodieSparkRecordUtils.getValue;
 import static org.apache.spark.sql.types.DataTypes.BooleanType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 
@@ -175,7 +173,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
   @Override
   public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
-    return HoodieSparkRecordUtils.getRecordColumnValues(data, columns, structType, consistentLogicalTimestampEnabled);
+    Object[] objects = new Object[columns.length];
+    for (int i = 0; i < objects.length; i++) {
+      objects[i] = getValue(structType, columns[i], data);
+    }
+    return objects;
   }
 
   @Override
@@ -322,12 +324,13 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     String orderingField = ConfigUtils.getOrderingField(props);
-    if (!HoodieInternalRowUtils.existField(structType, orderingField)) {
-      return 0;
+    scala.Option<NestedFieldPath> cachedNestedFieldPath =
+        HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
+    if (cachedNestedFieldPath.isDefined()) {
+      NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+      return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
     } else {
-      NestedFieldPath nestedFieldPath = HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
-      Comparable<?> value = (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
-      return value;
+      return 0;
     }
   }
 
@@ -421,7 +424,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
         getValue(structType, recordKeyPartitionPathFieldPair.getRight(), record.data).toString());
 
     HoodieOperation operation = withOperationField
-        ? HoodieOperation.fromName(getNullableValAsString(structType, record.data, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
+        ? HoodieOperation.fromName(record.data.getString(structType.fieldIndex(HoodieRecord.OPERATION_METADATA_FIELD)))
+        : null;
     return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), record.data, structType, operation, record.copy);
   }
 
@@ -438,5 +442,15 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
         || schema != null && (data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
 
     ValidationUtils.checkState(isValid);
+  }
+
+  private static Object getValue(StructType structType, String fieldName, InternalRow row) {
+    scala.Option<NestedFieldPath> cachedNestedFieldPath =
+        HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
+    if (cachedNestedFieldPath.isDefined()) {
+      return HoodieUnsafeRowUtils.getNestedInternalRowValue(row, cachedNestedFieldPath.get());
+    } else {
+      throw new HoodieException(String.format("Field at %s is not present in %s", fieldName, structType));
+    }
   }
 }
