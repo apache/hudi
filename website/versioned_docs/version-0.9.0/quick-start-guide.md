@@ -610,7 +610,6 @@ MERGE INTO tableIdentifier AS target_alias
 USING (sub_query | tableIdentifier) AS source_alias
 ON <merge_condition>
 [ WHEN MATCHED [ AND <condition> ] THEN <matched_action> ]
-[ WHEN MATCHED [ AND <condition> ] THEN <matched_action> ]
 [ WHEN NOT MATCHED [ AND <condition> ]  THEN <not_matched_action> ]
 
 <merge_condition> =A equal bool condition 
