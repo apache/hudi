@@ -21,7 +21,7 @@ package org.apache.spark.sql
 import org.apache.avro.Schema
 import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
-import org.apache.hudi.avro.HoodieAvroUtils.createFullName
+import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, Generic
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
-import java.util.{ArrayDeque => JArrayDeque, Deque => JDeque, Map => JMap, Collections => JCollections}
+import java.util.{ArrayDeque => JArrayDeque, Collections => JCollections, Deque => JDeque, Map => JMap}
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.parallel.mutable.ParHashMap
@@ -401,6 +401,19 @@ object HoodieInternalRowUtils {
 
       case (_: BinaryType, _: StringType) =>
         (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value.asInstanceOf[UTF8String].getBytes)
+
+      // TODO revisit this (we need to align permitted casting w/ Spark)
+      // NOTE: This is supported to stay compatible w/ [[HoodieAvroUtils.rewriteRecordWithNewSchema]]
+      case (_: StringType, _) =>
+        prevDataType match {
+          case BinaryType => (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, UTF8String.fromBytes(value.asInstanceOf[Array[Byte]]))
+          case DateType => (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, toJavaDate(value.asInstanceOf[Integer]).toString)
+          case IntegerType | LongType | FloatType | DoubleType | _: DecimalType =>
+            (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value.toString)
+
+          case _ =>
+            throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
+        }
 
       case (_, _) =>
         throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
