@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -72,12 +71,8 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
   }
 
   private HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) {
-    HoodieRecordPayload picked = unsafeCast(((HoodieAvroRecord) newer).getData().preCombine(((HoodieAvroRecord) older).getData(), schema, props));
-    if (picked instanceof HoodieMetadataPayload) {
-      // NOTE: HoodieMetadataPayload return a new payload
-      return new HoodieAvroRecord(newer.getKey(), picked, newer.getOperation());
-    }
-    return picked.equals(((HoodieAvroRecord) newer).getData()) ? newer : older;
+    HoodieRecordPayload payload = unsafeCast(((HoodieAvroRecord) newer).getData().preCombine(((HoodieAvroRecord) older).getData(), schema, props));
+    return new HoodieAvroRecord(newer.getKey(), payload, newer.getOperation());
   }
 
   private Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
