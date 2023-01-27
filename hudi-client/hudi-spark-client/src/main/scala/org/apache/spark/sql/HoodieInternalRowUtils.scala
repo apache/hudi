@@ -156,20 +156,22 @@ object HoodieInternalRowUtils {
     }
   }
    */
+  
+  private type RowFieldUpdater = (CatalystDataUpdater, Int, Any) => Unit
 
   private def genUnsafeRowWriterRenaming(prevStructType: StructType, newStructType: StructType, renamedColumnsMap: JMap[String, String], fieldNames: JDeque[String]): (CatalystDataUpdater, Any) => Unit = {
     // TODO need to canonicalize schemas (casing)
-    val fieldWriters = ArrayBuffer.empty[(CatalystDataUpdater, Int, Any) => Unit]
+    val fieldWriters = ArrayBuffer.empty[RowFieldUpdater]
     val positionMap = ArrayBuffer.empty[Int]
 
     for (newField <- newStructType.fields) {
       fieldNames.push(newField.name)
 
-      val fieldWriter: (CatalystDataUpdater, Int, Any) => Unit =
+      val (fieldWriter, prevFieldPos): (RowFieldUpdater, Int) =
         prevStructType.getFieldIndex(newField.name) match {
           case Some(prevFieldPos) =>
             val prevField = prevStructType(prevFieldPos)
-            newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNames)
+            (newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNames), prevFieldPos)
 
           case None =>
             val newFieldQualifiedName = createFullName(fieldNames)
@@ -179,15 +181,17 @@ object HoodieInternalRowUtils {
             prevStructType.getFieldIndex(prevFieldName) match {
               case Some(prevFieldPos) =>
                 val prevField = prevStructType.fields(prevFieldPos)
-                newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNames)
+                (newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNames), prevFieldPos)
 
               case None =>
                 // TODO handle defaults
-                (fieldUpdater, ordinal, _) => fieldUpdater.setNullAt(ordinal)
+                val updater: RowFieldUpdater = (fieldUpdater, ordinal, _) => fieldUpdater.setNullAt(ordinal)
+                (updater, -1)
             }
         }
 
       fieldWriters += fieldWriter
+      positionMap += prevFieldPos
 
       fieldNames.pop()
     }
@@ -211,7 +215,7 @@ object HoodieInternalRowUtils {
   private def newWriterRenaming(prevDataType: DataType,
                                 newDataType: DataType,
                                 renamedColumnsMap: JMap[String, String],
-                                fieldNames: JDeque[String]): (CatalystDataUpdater, Int, Any) => Unit = {
+                                fieldNames: JDeque[String]): RowFieldUpdater = {
     (prevDataType, newDataType) match {
       case (prevType, newType) if prevType == newType =>
         (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value)
@@ -302,12 +306,12 @@ object HoodieInternalRowUtils {
 
   private def genUnsafeRowWriterInternal(prevStructType: StructType, newStructType: StructType): (CatalystDataUpdater, Any) => Unit = {
     // TODO need to canonicalize schemas (casing)
-    val fieldWriters = ArrayBuffer.empty[(CatalystDataUpdater, Int, Any) => Unit]
+    val fieldWriters = ArrayBuffer.empty[RowFieldUpdater]
     val positionMap = ArrayBuffer.empty[Int]
 
     for (newField <- newStructType.fields) {
       val prevFieldPos = prevStructType.getFieldIndex(newField.name).getOrElse(-1)
-      val fieldWriter: (CatalystDataUpdater, Int, Any) => Unit =
+      val fieldWriter: RowFieldUpdater =
         if (prevFieldPos >= 0) {
           val prevField = prevStructType.fields(prevFieldPos)
           newWriter(prevField.dataType, newField.dataType)
@@ -336,7 +340,7 @@ object HoodieInternalRowUtils {
     }
   }
 
-  private def newWriter(prevDataType: DataType, newDataType: DataType): (CatalystDataUpdater, Int, Any) => Unit = {
+  private def newWriter(prevDataType: DataType, newDataType: DataType): RowFieldUpdater = {
     // TODO support map/array
     (newDataType, prevDataType) match {
       case (newType, prevType) if newType == prevType =>
