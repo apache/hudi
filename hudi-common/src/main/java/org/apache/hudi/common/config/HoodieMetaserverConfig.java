@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
+
 import javax.annotation.concurrent.Immutable;
 
 import java.util.Properties;
@@ -36,21 +38,31 @@ public class HoodieMetaserverConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> METASERVER_ENABLE = ConfigProperty
       .key(METASERVER_PREFIX + ".enabled")
       .defaultValue(false)
+      .sinceVersion("0.13.0")
       .withDocumentation("Enable Hudi metaserver for storing Hudi tables' metadata.");
+
+  public static final ConfigProperty<String> DATABASE_NAME = HoodieTableConfig.DATABASE_NAME
+      .sinceVersion("0.13.0");
+
+  public static final ConfigProperty<String> TABLE_NAME = HoodieTableConfig.NAME
+      .sinceVersion("0.13.0");
 
   public static final ConfigProperty<String> METASERVER_URLS = ConfigProperty
       .key(METASERVER_PREFIX + ".uris")
       .defaultValue("thrift://localhost:9090")
+      .sinceVersion("0.13.0")
       .withDocumentation("Metastore server uris");
 
   public static final ConfigProperty<Integer> METASERVER_CONNECTION_RETRIES = ConfigProperty
       .key(METASERVER_PREFIX + ".connect.retries")
       .defaultValue(3)
+      .sinceVersion("0.13.0")
       .withDocumentation("Number of retries while opening a connection to metastore");
 
   public static final ConfigProperty<Integer> METASERVER_CONNECTION_RETRY_DELAY = ConfigProperty
       .key(METASERVER_PREFIX + ".connect.retry.delay")
       .defaultValue(1)
+      .sinceVersion("0.13.0")
       .withDocumentation("Number of seconds for the client to wait between consecutive connection attempts");
 
   public static HoodieMetaserverConfig.Builder newBuilder() {
@@ -59,6 +71,14 @@ public class HoodieMetaserverConfig extends HoodieConfig {
 
   public boolean isMetaserverEnabled() {
     return getBoolean(METASERVER_ENABLE);
+  }
+
+  public String getDatabaseName() {
+    return getString(DATABASE_NAME);
+  }
+
+  public String getTableName() {
+    return getString(TABLE_NAME);
   }
 
   public String getMetaserverUris() {

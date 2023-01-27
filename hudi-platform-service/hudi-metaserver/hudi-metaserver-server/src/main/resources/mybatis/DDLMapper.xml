@@ -23,7 +23,7 @@
         CREATE TABLE dbs
         (
             db_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
-            desc VARCHAR(512) COMMENT 'database description',
+            description VARCHAR(512) COMMENT 'database description',
             location_uri VARCHAR(512) COMMENT 'database storage path',
             name VARCHAR(512) UNIQUE COMMENT 'database name',
             owner_name VARCHAR(512) COMMENT 'database owner',

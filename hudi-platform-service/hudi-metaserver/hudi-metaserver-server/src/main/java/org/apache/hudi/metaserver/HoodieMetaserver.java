@@ -19,7 +19,7 @@
 package org.apache.hudi.metaserver;
 
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metaserver.service.HoodieMetaserverService;
+import org.apache.hudi.metaserver.service.HoodieMetaserverGateway;
 import org.apache.hudi.metaserver.service.HoodieMetaserverProxyHandler;
 import org.apache.hudi.metaserver.service.TableService;
 import org.apache.hudi.metaserver.service.TimelineService;
@@ -49,7 +49,7 @@ public class HoodieMetaserver {
   private static TServer server;
   private static Thread serverThread;
   private static volatile MetaserverStorage metaserverStorage;
-  private static HoodieMetaserverService metaserverService;
+  private static HoodieMetaserverGateway metaserverGateway;
 
   public static void main(String[] args) {
     startServer();
@@ -61,11 +61,16 @@ public class HoodieMetaserver {
         return;
       }
       metaserverStorage = new RelationalDBBasedStorage();
+      try {
+        metaserverStorage.initStorage();
+      } catch (MetaserverStorageException e) {
+        throw new HoodieException("Fail to init the Metaserver's storage." + e);
+      }
       // service
       TableService tableService = new TableService(metaserverStorage);
       TimelineService timelineService = new TimelineService(metaserverStorage);
-      HoodieMetaserverService hoodieMetaserverService = new HoodieMetaserverService(tableService, timelineService);
-      HoodieMetaserverProxyHandler proxyHandler = new HoodieMetaserverProxyHandler(hoodieMetaserverService);
+      HoodieMetaserverGateway hoodieMetaserverGateway = new HoodieMetaserverGateway(tableService, timelineService);
+      HoodieMetaserverProxyHandler proxyHandler = new HoodieMetaserverProxyHandler(hoodieMetaserverGateway);
 
       // start a thrift server
       ThriftHoodieMetaserver.Iface proxy = (ThriftHoodieMetaserver.Iface) Proxy
@@ -96,11 +101,11 @@ public class HoodieMetaserver {
           }
           TableService tableService = new TableService(metaserverStorage);
           TimelineService timelineService = new TimelineService(metaserverStorage);
-          metaserverService = new HoodieMetaserverService(tableService, timelineService);
+          metaserverGateway = new HoodieMetaserverGateway(tableService, timelineService);
         }
       }
     }
-    return metaserverService;
+    return metaserverGateway;
   }
 
   // only for test

@@ -64,6 +64,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> INLINE_LOG_COMPACT = ConfigProperty
       .key("hoodie.log.compaction.inline")
       .defaultValue("false")
+      .sinceVersion("0.13.0")
       .withDocumentation("When set to true, logcompaction service is triggered after each write. While being "
           + " simpler operationally, this adds extra latency on the write path.");
 
@@ -119,6 +120,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<Long> COMPACTION_LOG_FILE_NUM_THRESHOLD = ConfigProperty
       .key("hoodie.compaction.logfile.num.threshold")
       .defaultValue(0L)
+      .sinceVersion("0.13.0")
       .withDocumentation("Only if the log file num is greater than the threshold,"
           + " the file group will be compacted.");
 
@@ -182,6 +184,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> LOG_COMPACTION_BLOCKS_THRESHOLD = ConfigProperty
       .key("hoodie.log.compaction.blocks.threshold")
       .defaultValue("5")
+      .sinceVersion("0.13.0")
       .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value. "
           + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
 

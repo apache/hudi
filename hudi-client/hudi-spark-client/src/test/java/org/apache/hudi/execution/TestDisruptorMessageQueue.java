@@ -325,7 +325,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
     };
 
     DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = new DisruptorExecutor(Option.of(1024),
-        producers, Option.of(consumer), getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA),
+        producers, consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA),
         Option.of(WaitStrategyFactory.DEFAULT_STRATEGY), getPreExecuteRunnable());
 
     final Throwable thrown = assertThrows(HoodieException.class, exec::execute,

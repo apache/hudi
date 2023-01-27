@@ -19,12 +19,12 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.common.config.{ConfigProperty, DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
+import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -35,7 +35,6 @@ import org.apache.hudi.util.JFunction
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
-import java.util.function.{Function => JavaFunction}
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 
@@ -68,6 +67,7 @@ object DataSourceReadOptions {
     .key("hoodie.datasource.query.incremental.format")
     .defaultValue(INCREMENTAL_FORMAT_LATEST_STATE_VAL)
     .withValidValues(INCREMENTAL_FORMAT_LATEST_STATE_VAL, INCREMENTAL_FORMAT_CDC_VAL)
+    .sinceVersion("0.13.0")
     .withDocumentation("This config is used alone with the 'incremental' query type." +
       "When set to 'latest_state', it returns the latest records' values." +
       "When set to 'cdc', it returns the cdc data.")
@@ -99,6 +99,7 @@ object DataSourceReadOptions {
   val START_OFFSET: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.streaming.startOffset")
     .defaultValue("earliest")
+    .sinceVersion("0.13.0")
     .withDocumentation("Start offset to pull data from hoodie streaming source. allow earliest, latest, and " +
       "specified start instant time")
 
@@ -344,12 +345,12 @@ object DataSourceWriteOptions {
    * HoodieMerger will replace the payload to process the merge of data
    * and provide the same capabilities as the payload
    */
-  val MERGER_IMPLS = HoodieWriteConfig.MERGER_IMPLS
+  val RECORD_MERGER_IMPLS = HoodieWriteConfig.RECORD_MERGER_IMPLS
 
   /**
    * Id of merger strategy
    */
-  val MERGER_STRATEGY = HoodieWriteConfig.MERGER_STRATEGY
+  val RECORD_MERGER_STRATEGY = HoodieWriteConfig.RECORD_MERGER_STRATEGY
 
   /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value

@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
-import org.apache.hudi.DataSourceWriteOptions.{MERGER_IMPLS, _}
+import org.apache.hudi.DataSourceWriteOptions.{RECORD_MERGER_IMPLS, _}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -70,7 +70,6 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_TABLE_NAME)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT)
-    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.METASTORE_URIS)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_USER)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_PASS)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_URL)
@@ -224,7 +223,7 @@ object HoodieWriterUtils {
     PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
     RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
     PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,
-    MERGER_STRATEGY -> HoodieTableConfig.MERGER_STRATEGY
+    RECORD_MERGER_STRATEGY -> HoodieTableConfig.RECORD_MERGER_STRATEGY
   )
   def mappingSparkDatasourceConfigsToTableConfigs(options: Map[String, String]): Map[String, String] = {
     val includingTableConfigs = scala.collection.mutable.Map() ++ options

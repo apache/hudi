@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.common.config.HoodieCommonConfig
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec, RowDataSourceScanExec, SparkPlan}
@@ -37,7 +39,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
   private def executePlan(plan: LogicalPlan): SparkPlan =
     spark.sessionState.executePlan(plan).executedPlan
 
-  test("Test NestedSchemaPruning optimization (COW/MOR)") {
+  test("Test NestedSchemaPruning optimization successful") {
     withTempDir { tmp =>
       // NOTE: This tests are only relevant for Spark >= 3.1
       // TODO extract tests into a separate spark-version-specific module
@@ -46,35 +48,14 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
           val tableName = generateTableName
           val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-          spark.sql(
-            s"""
-               |CREATE TABLE $tableName (
-               |  id int,
-               |  item STRUCT<name: string, price: double>,
-               |  ts long
-               |) USING HUDI TBLPROPERTIES (
-               |  type = '$tableType',
-               |  primaryKey = 'id',
-               |  preCombineField = 'ts',
-               |  hoodie.populate.meta.fields = 'false'
-               |)
-               |LOCATION '$tablePath'
-             """.stripMargin)
-
-          spark.sql(
-            s"""
-               |INSERT INTO $tableName
-               |SELECT 1 AS id, named_struct('name', 'a1', 'price', 10) AS item, 123456 AS ts
-          """.stripMargin)
+          createTableWithNestedStructSchema(tableType, tableName, tablePath)
 
           val selectDF = spark.sql(s"SELECT id, item.name FROM $tableName")
 
           val expectedSchema = StructType(Seq(
-            StructField("id", IntegerType),
-            StructField("item" , StructType(Seq(StructField("name", StringType))))
+            StructField("id", IntegerType, nullable = false),
+            StructField("item" , StructType(Seq(StructField("name", StringType, nullable = false))), nullable = false)
           ))
-
-          spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
 
           val expectedReadSchemaClause = "ReadSchema: struct<id:int,item:struct<name:string>>"
           val hint =
@@ -88,10 +69,12 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
               |]
               |""".stripMargin
 
-          val executedPlan = executePlan(selectDF.logicalPlan)
+          // NOTE: We're disabling WCE to simplify resulting plan
+          spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
+
           // NOTE: Unfortunately, we can't use pattern-matching to extract required fields, due to a need to maintain
           //       compatibility w/ Spark 2.4
-          executedPlan match {
+          selectDF.queryExecution.executedPlan match {
             // COW
             case ProjectExec(_, fileScan: FileSourceScanExec) =>
               val tableIdentifier = fileScan.tableIdentifier
@@ -113,9 +96,102 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
               //assertEquals(tableName, tableIdentifier.get.table)
               //assertEquals(expectedSchema, requiredSchema, hint)
           }
+
+          // Execute the query to make sure it's working as expected (smoke test)
+          selectDF.count
         }
       }
     }
   }
 
+  test("Test NestedSchemaPruning optimization unsuccessful") {
+    withTempDir { tmp =>
+      // NOTE: This tests are only relevant for Spark >= 3.1
+      // TODO extract tests into a separate spark-version-specific module
+      if (HoodieSparkUtils.gteqSpark3_1) {
+        // TODO add cow
+        Seq("mor").foreach { tableType =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+          // NOTE: Set of opts that will make [[NestedSchemaPruning]] ineffective
+          val (writeOpts, readOpts): (Map[String, String], Map[String, String]) =
+            tableType match {
+              case "cow" =>
+                (Map(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> "true"),
+                  Map(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> "true"))
+
+              case "mor" =>
+                (Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> "org.apache.hudi.common.model.DefaultHoodieRecordPayload"),
+                  Map.empty)
+            }
+
+          createTableWithNestedStructSchema(tableType, tableName, tablePath, writeOpts)
+
+          val selectDF = withSQLConf(readOpts.toSeq: _*) {
+            spark.sql(s"SELECT id, item.name FROM $tableName")
+          }
+
+          val expectedSchema = StructType(Seq(
+            StructField("id", IntegerType, nullable = false),
+            StructField("item",
+              StructType(Seq(
+                StructField("name", StringType, nullable = false),
+                StructField("price", IntegerType, nullable = false))), nullable = false)
+          ))
+
+          val expectedReadSchemaClause = "ReadSchema: struct<id:int,item:struct<name:string,price:int>>"
+
+          // NOTE: We're disabling WCE to simplify resulting plan
+          spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
+
+          // NOTE: Unfortunately, we can't use pattern-matching to extract required fields, due to a need to maintain
+          //       compatibility w/ Spark 2.4
+          selectDF.queryExecution.executedPlan match {
+            // COW
+            case ProjectExec(_, fileScan: FileSourceScanExec) =>
+              val tableIdentifier = fileScan.tableIdentifier
+              val requiredSchema = fileScan.requiredSchema
+
+              assertEquals(tableName, tableIdentifier.get.table)
+              assertEquals(expectedSchema, requiredSchema)
+
+            // MOR
+            case ProjectExec(_, dataScan: RowDataSourceScanExec) =>
+              // NOTE: This is temporary solution to assert for Spark 2.4, until it's deprecated
+              val explainedPlan = explain(selectDF.queryExecution.logical)
+              assertTrue(explainedPlan.contains(expectedReadSchemaClause))
+
+            // TODO replace w/ after Spark 2.4 deprecation
+            //val tableIdentifier = dataScan.tableIdentifier
+            //val requiredSchema = dataScan.requiredSchema
+            //
+            //assertEquals(tableName, tableIdentifier.get.table)
+            //assertEquals(expectedSchema, requiredSchema, hint)
+          }
+
+          // Execute the query to make sure it's working as expected (smoke test)
+          selectDF.count
+        }
+      }
+    }
+  }
+
+  private def createTableWithNestedStructSchema(tableType: String,
+                                                tableName: String,
+                                                tablePath: String,
+                                                opts: Map[String, String] = Map.empty): Unit = {
+    spark.sql(
+      s"""
+         |CREATE TABLE $tableName USING HUDI TBLPROPERTIES (
+         |  type = '$tableType',
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts',
+         |  hoodie.populate.meta.fields = 'false'
+         |  ${if (opts.nonEmpty) "," + opts.map{ case (k, v) => s"'$k' = '$v'" }.mkString(",") else ""}
+         |)
+         |LOCATION '$tablePath'
+         |AS SELECT 1 AS id, named_struct('name', 'a1', 'price', 10) AS item, 123456 AS ts
+             """.stripMargin)
+  }
 }
