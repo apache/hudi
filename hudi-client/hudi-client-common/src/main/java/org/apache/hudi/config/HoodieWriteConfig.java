@@ -582,7 +582,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_INITIAL_DELAY_MS = ConfigProperty
       .key(CONCURRENCY_PREFIX + "async.conflict.detector.initial_delay_ms")
-      .defaultValue(30000L)
+      .defaultValue(0L)
       .sinceVersion("0.13.0")
       .withDocumentation("Used for timeline-server-based markers with "
           + "`AsyncTimelineServerBasedDetectionStrategy`. "
