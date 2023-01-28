@@ -156,7 +156,7 @@ object DataSourceReadOptions {
   val FILE_INDEX_LISTING_MODE_LAZY = "lazy"
 
   val FILE_INDEX_LISTING_MODE_OVERRIDE: ConfigProperty[String] =
-    ConfigProperty.key("hoodie.datasource.read.file.index.listing.mode.override")
+    ConfigProperty.key("hoodie.datasource.read.file.index.listing.mode")
       .defaultValue(FILE_INDEX_LISTING_MODE_LAZY)
       .withValidValues(FILE_INDEX_LISTING_MODE_LAZY, FILE_INDEX_LISTING_MODE_EAGER)
       .sinceVersion("0.13.0")
