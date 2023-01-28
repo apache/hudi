@@ -18,6 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.avro.Schema
+import org.apache.calcite.runtime.SqlFunctions.abs
 import org.apache.hudi.HoodieBaseRelation.projectSchema
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
@@ -236,9 +237,9 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     else if (HoodieSparkUtils.isSpark2)
     // TODO re-enable tests (these tests are very unstable currently)
       Array(
-        ("rider", -1),
-        ("rider,driver", -1),
-        ("rider,driver,tip_history", -1))
+        ("rider", 14160),
+        ("rider,driver", 14160),
+        ("rider,driver,tip_history", 14160))
     else
       fail("Only Spark 3 and Spark 2 are currently supported")
 
@@ -327,13 +328,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
         else targetRecordCount
 
       assertEquals(expectedRecordCount, rows.length)
-      if (expectedBytesRead != -1) {
-        // verify within 10% of margin.
-        val ten_perc: Double = expectedBytesRead * 0.1;
-        assertTrue((expectedBytesRead + ten_perc) >= bytesRead && bytesRead >= (expectedBytesRead - ten_perc))
-      } else {
-        logWarning(s"Not matching bytes read ($bytesRead)")
-      }
+      // verify within 10% of margin.
+      assertTrue((abs(expectedBytesRead - bytesRead) / expectedBytesRead) < 0.1)
 
       val readColumns = targetColumns ++ relation.mandatoryFields
       val (_, projectedStructType, _) = projectSchema(Left(tableState.schema), readColumns)
