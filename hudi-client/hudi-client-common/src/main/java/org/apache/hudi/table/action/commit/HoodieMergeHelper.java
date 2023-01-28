@@ -94,8 +94,8 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
     // In case Advanced Schema Evolution is enabled we might need to rewrite currently
     // persisted records to adhere to an evolved schema
-    Option<Pair<Function<Schema, Function<HoodieRecord, HoodieRecord>>, Schema>> schemaEvolutionTransformerOpt =
-        composeSchemaEvolutionTransformer(writerSchema, baseFile, writeConfig, table.getMetaClient());
+    Option<Function<HoodieRecord, HoodieRecord>> schemaEvolutionTransformerOpt =
+        composeSchemaEvolutionTransformer(readerSchema, writerSchema, baseFile, writeConfig, table.getMetaClient());
 
     // Check whether the writer schema is simply a projection of the file's one, ie
     //   - Its field-set is a proper subset (of the reader schema)
@@ -130,10 +130,6 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
             (left, right) ->
                 left.joinWith(right, mergeHandle.getWriterSchemaWithMetaFields()));
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
-      } else if (schemaEvolutionTransformerOpt.isPresent()) {
-        recordIterator = new MappingIterator<>(baseFileRecordIterator,
-            schemaEvolutionTransformerOpt.get().getLeft().apply(isPureProjection ? writerSchema : readerSchema));
-        recordSchema = schemaEvolutionTransformerOpt.get().getRight();
       } else {
         recordIterator = baseFileRecordIterator;
         recordSchema = isPureProjection ? writerSchema : readerSchema;
@@ -143,13 +139,10 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
       wrapper = ExecutorFactory.create(writeConfig, recordIterator, new UpdateHandler(mergeHandle), record -> {
         HoodieRecord newRecord;
-        if (shouldRewriteInWriterSchema) {
-          try {
-            newRecord = record.rewriteRecordWithNewSchema(recordSchema, writeConfig.getProps(), writerSchema);
-          } catch (IOException e) {
-            LOG.error("Error rewrite record with new schema", e);
-            throw new HoodieException(e);
-          }
+        if (schemaEvolutionTransformerOpt.isPresent()) {
+          newRecord = schemaEvolutionTransformerOpt.get().apply(record);
+        } else if (shouldRewriteInWriterSchema) {
+          newRecord = record.rewriteRecordWithNewSchema(recordSchema, writeConfig.getProps(), writerSchema);
         } else {
           newRecord = record;
         }
@@ -178,10 +171,11 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     }
   }
 
-  private Option<Pair<Function<Schema, Function<HoodieRecord, HoodieRecord>>, Schema>> composeSchemaEvolutionTransformer(Schema writerSchema,
-                                                                                           HoodieBaseFile baseFile,
-                                                                                           HoodieWriteConfig writeConfig,
-                                                                                           HoodieTableMetaClient metaClient) {
+  private Option<Function<HoodieRecord, HoodieRecord>> composeSchemaEvolutionTransformer(Schema recordSchema,
+                                                                                         Schema writerSchema,
+                                                                                         HoodieBaseFile baseFile,
+                                                                                         HoodieWriteConfig writeConfig,
+                                                                                         HoodieTableMetaClient metaClient) {
     Option<InternalSchema> querySchemaOpt = SerDeHelper.fromJson(writeConfig.getInternalSchema());
     // TODO support bootstrap
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
@@ -219,18 +213,12 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
           || SchemaCompatibility.checkReaderWriterCompatibility(newWriterSchema, writeSchemaFromFile).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
       if (needToReWriteRecord) {
         Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(writeInternalSchema, querySchema);
-        return Option.of(Pair.of(
-            (schema) -> (record) -> {
-              try {
-                return record.rewriteRecordWithNewSchema(
-                    schema,
-                    writeConfig.getProps(),
-                    newWriterSchema, renameCols);
-              } catch (IOException e) {
-                LOG.error("Error rewrite record with new schema", e);
-                throw new HoodieException(e);
-              }
-            }, newWriterSchema));
+        return Option.of(record -> {
+          return record.rewriteRecordWithNewSchema(
+              recordSchema,
+              writeConfig.getProps(),
+              newWriterSchema, renameCols);
+        });
       } else {
         return Option.empty();
       }
