@@ -27,8 +27,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.MappingIterator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
