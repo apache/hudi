@@ -48,9 +48,9 @@ declare -a ALL_VERSION_OPTS=(
 "-Dscala-2.12 -Dspark3.1"  # this profile goes last in this section to ensure bundles use avro 1.8
 
 # spark bundles
-"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-spark-bundle -am"
+"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-spark-bundle,packaging/hudi-cli-bundle -am"
 "-Dscala-2.12 -Dspark2.4 -pl packaging/hudi-spark-bundle -am"
-"-Dscala-2.12 -Dspark3.3 -pl packaging/hudi-spark-bundle -am"
+"-Dscala-2.12 -Dspark3.3 -pl packaging/hudi-spark-bundle,packaging/hudi-cli-bundle -am"
 "-Dscala-2.12 -Dspark3.2 -pl packaging/hudi-spark-bundle -am"
 "-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-spark-bundle -am"
 
@@ -101,10 +101,18 @@ COMMON_OPTIONS="-DdeployArtifacts=true -DskipTests -DretryFailedDeploymentCount=
 for v in "${ALL_VERSION_OPTS[@]}"
 do
   # clean everything before any round of depoyment
-  $MVN clean
-  echo "Building with options ${v}"
-  $MVN install "$COMMON_OPTIONS" "${v}"
+  $MVN clean $COMMON_OPTIONS
+  if [[ "$v" == *"$BUNDLE_MODULES_EXCLUDED"* ]]; then
+    # When deploying jars with bundle exclusions, we still need to build the bundles,
+    # by removing "-pl -packaging/hudi-aws-bundle...", otherwise the build fails.
+    v1=${v%${BUNDLE_MODULES_EXCLUDED}}
+    echo "Building with options ${v1%-pl }"
+    $MVN install $COMMON_OPTIONS ${v1%-pl }
+  else
+    echo "Building with options ${v}"
+    $MVN install $COMMON_OPTIONS ${v}
+  fi
   echo "Deploying to repository.apache.org with version options ${v%-am}"
   # remove `-am` option to only deploy intended modules
-  $MVN deploy "$COMMON_OPTIONS" "${v%-am}"
+  $MVN deploy $COMMON_OPTIONS ${v%-am}
 done
