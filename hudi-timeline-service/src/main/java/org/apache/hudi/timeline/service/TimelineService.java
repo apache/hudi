@@ -145,7 +145,7 @@ public class TimelineService {
         "Used for timeline-server-based markers with "
             + "`AsyncTimelineServerBasedDetectionStrategy`. "
             + "The time in milliseconds to delay the first execution of async marker-based conflict detection.")
-    public Long asyncConflictDetectorInitialDelayMs = 30000L;
+    public Long asyncConflictDetectorInitialDelayMs = 0L;
 
     @Parameter(names = {"--async-conflict-detector-period-ms"}, description =
         "Used for timeline-server-based markers with "
@@ -157,7 +157,7 @@ public class TimelineService {
         "Used for timeline-server-based markers with "
             + "`AsyncTimelineServerBasedDetectionStrategy`. "
             + "Instants whose heartbeat is greater than the current value will not be used in early conflict detection.")
-    public Long maxAllowableHeartbeatIntervalInMs = 60000L;
+    public Long maxAllowableHeartbeatIntervalInMs = 120000L;
 
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
@@ -186,9 +186,9 @@ public class TimelineService {
       private String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
       private Boolean checkCommitConflict = false;
       private Boolean earlyConflictDetectionEnable = false;
-      private Long asyncConflictDetectorInitialDelayMs = 30000L;
+      private Long asyncConflictDetectorInitialDelayMs = 0L;
       private Long asyncConflictDetectorPeriodMs = 30000L;
-      private Long maxAllowableHeartbeatIntervalInMs = 60000L;
+      private Long maxAllowableHeartbeatIntervalInMs = 120000L;
 
       public Builder() {
       }
