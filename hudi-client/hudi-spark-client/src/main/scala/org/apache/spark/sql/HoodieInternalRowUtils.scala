@@ -22,21 +22,20 @@ import org.apache.avro.Schema
 import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
-import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath}
-import org.apache.spark.sql.catalyst.CatalystTypeConverters.DateConverter
-import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData}
+import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
+import java.util.concurrent.ConcurrentHashMap
 import java.util.{ArrayDeque => JArrayDeque, Collections => JCollections, Deque => JDeque, Map => JMap}
+import java.util.function.{Function => JFunction}
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.parallel.mutable.ParHashMap
 import scala.jdk.CollectionConverters.collectionAsScalaIterableConverter
 
 object HoodieInternalRowUtils {
@@ -58,8 +57,8 @@ object HoodieInternalRowUtils {
         new mutable.HashMap[(StructType, StructType), UnsafeProjection]
     })
 
-  private val schemaMap = new ParHashMap[Schema, StructType]
-  private val orderPosListMap = new ParHashMap[(StructType, String), NestedFieldPath]
+  private val schemaMap = new ConcurrentHashMap[Schema, StructType]
+  private val orderPosListMap = new ConcurrentHashMap[(StructType, String), NestedFieldPath]
 
   def genUnsafeRowWriterRenaming(prevSchema: StructType, newSchema: StructType, renamedColumnsMap: JMap[String, String]): UnsafeRowWriter = {
     val writer = newWriterRenaming(prevSchema, newSchema, renamedColumnsMap, new JArrayDeque[String]())
@@ -103,11 +102,31 @@ object HoodieInternalRowUtils {
       .getOrElseUpdate((from, to, renamedColumnsMap), genUnsafeRowWriterRenaming(from, to, renamedColumnsMap))
   }
 
-  def getCachedPosList(structType: StructType, field: String): Option[NestedFieldPath] =
-    Option(orderPosListMap.getOrElse((structType, field), composeNestedFieldPath(structType, field)))
+  def getCachedPosList(structType: StructType, field: String): Option[NestedFieldPath] = {
+    val nestedFieldPath = orderPosListMap.get((structType, field))
+    if (nestedFieldPath != null) {
+      Some(nestedFieldPath)
+    } else {
+      Some(
+        orderPosListMap.computeIfAbsent((structType, field), new JFunction[(StructType, String), NestedFieldPath] {
+          override def apply(t: (StructType, String)): NestedFieldPath =
+            composeNestedFieldPath(structType, field)
+        })
+      )
+    }
+  }
 
-  def getCachedSchema(schema: Schema): StructType =
-    schemaMap.getOrElse(schema, convertAvroSchemaToStructType(schema))
+  def getCachedSchema(schema: Schema): StructType = {
+    val structType = schemaMap.get(schema)
+    if (structType != null) {
+      structType
+    } else {
+      schemaMap.computeIfAbsent(schema, new JFunction[Schema, StructType] {
+        override def apply(t: Schema): StructType =
+          convertAvroSchemaToStructType(schema)
+      })
+    }
+  }
 
   /*
   // TODO cleanup
