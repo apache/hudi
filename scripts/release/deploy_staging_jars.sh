@@ -102,8 +102,16 @@ for v in "${ALL_VERSION_OPTS[@]}"
 do
   # clean everything before any round of depoyment
   $MVN clean $COMMON_OPTIONS
-  echo "Building with options ${v}"
-  $MVN install $COMMON_OPTIONS ${v}
+  if [[ "$v" == *"$BUNDLE_MODULES_EXCLUDED"* ]]; then
+    # When deploying jars with bundle exclusions, we still need to build the bundles,
+    # by removing "-pl -packaging/hudi-aws-bundle...", otherwise the build fails.
+    v1=${v%${BUNDLE_MODULES_EXCLUDED}}
+    echo "Building with options ${v1%-pl }"
+    $MVN install $COMMON_OPTIONS ${v1%-pl }
+  else
+    echo "Building with options ${v}"
+    $MVN install $COMMON_OPTIONS ${v}
+  fi
   echo "Deploying to repository.apache.org with version options ${v%-am}"
   # remove `-am` option to only deploy intended modules
   $MVN deploy $COMMON_OPTIONS ${v%-am}
