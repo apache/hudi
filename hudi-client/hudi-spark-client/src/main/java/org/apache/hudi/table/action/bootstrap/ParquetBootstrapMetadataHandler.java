@@ -76,11 +76,11 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
           //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
           //       it since these records will be inserted into the queue later.
           HoodieRecord hoodieRecord = record
-              .rewriteRecord(reader.getSchema(), config.getProps(), HoodieAvroUtils.RECORD_KEY_SCHEMA)
+              .rewriteRecordWithNewSchema(reader.getSchema(), config.getProps(), HoodieAvroUtils.RECORD_KEY_SCHEMA)
               .copy();
           MetadataValues metadataValues = new MetadataValues().setRecordKey(recKey);
           return hoodieRecord
-              .updateMetadataValues(HoodieAvroUtils.RECORD_KEY_SCHEMA, new Properties(), metadataValues)
+              .updateMetadataValues(HoodieAvroUtils.RECORD_KEY_SCHEMA, metadataValues, new Properties())
               .newInstance(new HoodieKey(recKey, partitionPath));
         } catch (IOException e) {
           LOG.error("Unable to overrideMetadataFieldValue", e);
