@@ -125,11 +125,17 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException {
-    metadataValues.getKv().forEach((key, value) -> {
+    if (metadataValues.isEmpty()) {
+      return this;
+    }
+
+    String[] values = metadataValues.getValues();
+    for (int pos = 0; pos < values.length; ++pos) {
+      String value = values[pos];
       if (value != null) {
-        ((GenericRecord) data).put(key, value);
+        ((GenericRecord) data).put(HoodieMetadataField.values()[pos].getFieldName(), value);
       }
-    });
+    }
 
     return new HoodieAvroIndexedRecord(key, data, operation, metaData);
   }
