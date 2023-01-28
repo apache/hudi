@@ -71,6 +71,8 @@ import static org.apache.spark.sql.types.DataTypes.StringType;
  */
 public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements KryoSerializable {
 
+  public static String HOODIE_SPARK_ROW_SCHEMA_KEY = "HOODIE_SPARK_ROW_SCHEMA";
+
   /**
    * Record copy operation to avoid double copying. InternalRow do not need to copy twice.
    */
@@ -150,8 +152,9 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
       return getRecordKey();
     }
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
-    return keyGeneratorOpt.isPresent() ? ((SparkKeyGeneratorInterface) keyGeneratorOpt.get())
-        .getRecordKey(data, structType).toString() : data.getString(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal());
+    return keyGeneratorOpt.isPresent()
+        ? ((SparkKeyGeneratorInterface) keyGeneratorOpt.get()).getRecordKey(data, structType).toString()
+        : data.getString(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal());
   }
 
   @Override
