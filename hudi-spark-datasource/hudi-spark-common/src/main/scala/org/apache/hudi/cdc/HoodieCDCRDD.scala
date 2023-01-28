@@ -18,40 +18,40 @@
 
 package org.apache.hudi.cdc
 
+import com.fasterxml.jackson.annotation.JsonInclude.Include
+import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import org.apache.avro.Schema
+import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
-import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieFileIndex, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
 import org.apache.hudi.HoodieConversionUtils._
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord, HoodieRecordMerger, HoodieRecordPayload}
+import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCInferCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
-import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
+import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import com.fasterxml.jackson.annotation.JsonInclude.Include
-import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericData, GenericRecord, GenericRecordBuilder, IndexedRecord}
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.spark.{Partition, SerializableWritable, TaskContext}
+import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieFileIndex, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Projection
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.types.{StringType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
+import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 
 import java.io.Closeable
 import java.util.Properties
@@ -244,7 +244,7 @@ class HoodieCDCRDD(
 
     /**
      * Keep the after-image data. Only one case will use this:
-     * the cdc infer case is [[AS_IS]] and [[cdcSupplementalLoggingMode]] is 'op_key' or 'cdc_data_before'.
+     * the cdc infer case is [[AS_IS]] and [[cdcSupplementalLoggingMode]] is [[op_key_only]] or [[data_before]].
      */
     private var afterImageRecords: mutable.Map[String, InternalRow] = mutable.Map.empty
 
@@ -306,13 +306,13 @@ class HoodieCDCRDD(
         case AS_IS =>
           val record = cdcLogRecordIterator.next().asInstanceOf[GenericRecord]
           cdcSupplementalLoggingMode match {
-            case HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER =>
+            case `data_before_after` =>
               recordToLoad.update(0, convertToUTF8String(String.valueOf(record.get(0))))
               val before = record.get(2).asInstanceOf[GenericRecord]
               recordToLoad.update(2, recordToJsonAsUTF8String(before))
               val after = record.get(3).asInstanceOf[GenericRecord]
               recordToLoad.update(3, recordToJsonAsUTF8String(after))
-            case HoodieCDCSupplementalLoggingMode.WITH_BEFORE =>
+            case `data_before` =>
               val row = cdcRecordDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
               val op = row.getString(0)
               val recordKey = row.getString(1)

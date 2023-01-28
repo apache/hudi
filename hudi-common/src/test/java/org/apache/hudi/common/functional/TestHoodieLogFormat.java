@@ -551,7 +551,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         + "]}";
     Schema dataSchema = new Schema.Parser().parse(dataSchameString);
     Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
-        HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER, dataSchema);
+        HoodieCDCSupplementalLoggingMode.data_before_after, dataSchema);
     GenericRecord insertedRecord = new GenericData.Record(dataSchema);
     insertedRecord.put("uuid", 1);
     insertedRecord.put("name", "apple");

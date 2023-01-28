@@ -324,7 +324,7 @@ public class TestInputFormat {
   void testReadWithChangeLogCOW(HoodieCDCSupplementalLoggingMode mode) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.CDC_ENABLED.key(), "true");
-    options.put(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE.key(), mode.getValue());
+    options.put(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE.key(), mode.name());
     beforeEach(HoodieTableType.COPY_ON_WRITE, options);
 
     // write the insert data sets
@@ -365,7 +365,7 @@ public class TestInputFormat {
   void testReadFromEarliestWithChangeLogCOW(HoodieCDCSupplementalLoggingMode mode) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.CDC_ENABLED.key(), "true");
-    options.put(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE.key(), mode.getValue());
+    options.put(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE.key(), mode.name());
     options.put(FlinkOptions.READ_START_COMMIT.key(), "earliest");
     beforeEach(HoodieTableType.COPY_ON_WRITE, options);
 

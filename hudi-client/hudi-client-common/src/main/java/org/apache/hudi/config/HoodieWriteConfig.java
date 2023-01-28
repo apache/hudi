@@ -2364,7 +2364,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * CDC supplemental logging mode.
    */
   public HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode() {
-    return HoodieCDCSupplementalLoggingMode.parse(
+    return HoodieCDCSupplementalLoggingMode.valueOf(
         getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE));
   }
 
