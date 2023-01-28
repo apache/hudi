@@ -150,7 +150,7 @@ class HoodieCDCRDD(
         Some(split.changes.last.getInstant),
         recordKeyField,
         preCombineFieldOpt,
-        usesVirtualKeys = !populateMetaFields,
+        usesVirtualKeys = false,
         metaClient.getTableConfig.getPayloadClass,
         metadataConfig,
         // TODO support CDC with spark record
