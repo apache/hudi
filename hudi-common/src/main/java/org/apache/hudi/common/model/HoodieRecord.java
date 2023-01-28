@@ -354,9 +354,11 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public abstract HoodieRecord joinWith(HoodieRecord other, Schema targetSchema);
 
   /**
-   * Rewrite record into new schema(add meta columns)
+   * Rewrites record into new target schema containing Hudi-specific meta-fields
+   *
+   * NOTE: This operation is idempotent
    */
-  public abstract HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema);
+  public abstract HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props);
 
   /**
    * Support schema evolution.
@@ -371,7 +373,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * This method could change in the future.
    * @temporary
    */
-  public abstract HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException;
+  public abstract HoodieRecord updateMetadataValues(Schema recordSchema, MetadataValues metadataValues, Properties props) throws IOException;
 
   public abstract boolean isDelete(Schema recordSchema, Properties props) throws IOException;
 
@@ -389,6 +391,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
 
   public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
     return instantTime + "_" + partitionId + "_" + recordIndex;
+  }
+
+  protected static boolean hasMetaFields(Schema schema) {
+    return schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) != null;
   }
 
   /**

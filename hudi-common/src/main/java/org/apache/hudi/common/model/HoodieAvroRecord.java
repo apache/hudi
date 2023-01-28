@@ -38,6 +38,8 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.hudi.common.model.HoodieAvroIndexedRecord.updateMetadataValuesInternal;
+
 /**
  * Implementation of {@link HoodieRecord} using Avro payload.
  *
@@ -124,12 +126,12 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) {
+  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
     try {
-      Option<IndexedRecord> avroRecordPayloadOpt = getData().getInsertValue(recordSchema, props);
-      GenericRecord avroPayloadInNewSchema =
-          HoodieAvroUtils.rewriteRecord((GenericRecord) avroRecordPayloadOpt.get(), targetSchema);
-      return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroPayloadInNewSchema), getOperation(), this.currentLocation, this.newLocation);
+      Option<IndexedRecord> avroRecordOpt = getData().getInsertValue(recordSchema, props);
+      GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecordOpt.get(), targetSchema);
+      updateMetadataValuesInternal(newAvroRecord, metadataValues);
+      return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(newAvroRecord), getOperation(), this.currentLocation, this.newLocation);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to deserialize record!", e);
     }
@@ -147,7 +149,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException {
+  public HoodieRecord updateMetadataValues(Schema recordSchema, MetadataValues metadataValues, Properties props) throws IOException {
     if (metadataValues.isEmpty()) {
       return this;
     }

@@ -193,18 +193,13 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
   }
 
   @Override
-  public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) {
+  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
 
-    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, targetStructType, Collections.emptyMap());
-
-    UnsafeRow unsafeRow = unsafeRowWriter.apply(this.data);
-
-    boolean containMetaFields = hasMetaFields(targetStructType);
-    UTF8String[] metaFields = tryExtractMetaFields(unsafeRow, targetStructType);
-    HoodieInternalRow internalRow = new HoodieInternalRow(metaFields, unsafeRow, containMetaFields);
+    UTF8String[] metaFields = tryExtractMetaFields(this.data, structType);
+    boolean containMetaFields = hasMetaFields(recordSchema);
+    HoodieInternalRow internalRow = new HoodieInternalRow(metaFields, this.data, containMetaFields);
 
     return new HoodieSparkRecord(getKey(), internalRow, targetStructType, getOperation(), this.currentLocation, this.newLocation, false);
   }
@@ -219,15 +214,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
 
     UnsafeRow unsafeRow = unsafeRowWriter.apply(this.data);
 
-    boolean containMetaFields = hasMetaFields(newStructType);
-    UTF8String[] metaFields = tryExtractMetaFields(unsafeRow, newStructType);
-    HoodieInternalRow internalRow = new HoodieInternalRow(metaFields, unsafeRow, containMetaFields);
-
-    return new HoodieSparkRecord(getKey(), internalRow, newStructType, getOperation(), this.currentLocation, this.newLocation, false);
+    return new HoodieSparkRecord(getKey(), unsafeRow, newStructType, getOperation(), this.currentLocation, this.newLocation, false);
   }
 
   @Override
-  public HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException {
+  public HoodieRecord updateMetadataValues(Schema recordSchema, MetadataValues metadataValues, Properties props) {
     if (metadataValues.isEmpty()) {
       return this;
     }
