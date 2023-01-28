@@ -446,9 +446,9 @@ object HoodieInternalRowUtils {
       case (_: StringType, _) =>
         prevDataType match {
           case BinaryType => (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, UTF8String.fromBytes(value.asInstanceOf[Array[Byte]]))
-          case DateType => (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, toJavaDate(value.asInstanceOf[Integer]).toString)
+          case DateType => (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, UTF8String.fromString(toJavaDate(value.asInstanceOf[Integer]).toString))
           case IntegerType | LongType | FloatType | DoubleType | _: DecimalType =>
-            (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value.toString)
+            (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, UTF8String.fromString(value.toString))
 
           case _ =>
             throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
