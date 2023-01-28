@@ -48,9 +48,9 @@ declare -a ALL_VERSION_OPTS=(
 "-Dscala-2.12 -Dspark3.1"  # this profile goes last in this section to ensure bundles use avro 1.8
 
 # spark bundles
-"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-spark-bundle -am"
+"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-spark-bundle,packaging/hudi-cli-bundle -am"
 "-Dscala-2.12 -Dspark2.4 -pl packaging/hudi-spark-bundle -am"
-"-Dscala-2.12 -Dspark3.3 -pl packaging/hudi-spark-bundle -am"
+"-Dscala-2.12 -Dspark3.3 -pl packaging/hudi-spark-bundle,packaging/hudi-cli-bundle -am"
 "-Dscala-2.12 -Dspark3.2 -pl packaging/hudi-spark-bundle -am"
 "-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-spark-bundle -am"
 
@@ -101,10 +101,10 @@ COMMON_OPTIONS="-DdeployArtifacts=true -DskipTests -DretryFailedDeploymentCount=
 for v in "${ALL_VERSION_OPTS[@]}"
 do
   # clean everything before any round of depoyment
-  $MVN clean
+  $MVN clean $COMMON_OPTIONS
   echo "Building with options ${v}"
-  $MVN install "$COMMON_OPTIONS" "${v}"
+  $MVN install $COMMON_OPTIONS ${v}
   echo "Deploying to repository.apache.org with version options ${v%-am}"
   # remove `-am` option to only deploy intended modules
-  $MVN deploy "$COMMON_OPTIONS" "${v%-am}"
+  $MVN deploy $COMMON_OPTIONS ${v%-am}
 done
