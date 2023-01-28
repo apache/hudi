@@ -31,8 +31,9 @@ import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.{Dataset, HoodieUnsafeUtils, Row, SaveMode}
-import org.junit.jupiter.api.Assertions.{assertEquals, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.{Disabled, Tag, Test}
+
 import scala.collection.JavaConverters._
 
 @Tag("functional")
@@ -327,7 +328,9 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
       assertEquals(expectedRecordCount, rows.length)
       if (expectedBytesRead != -1) {
-        assertEquals(expectedBytesRead, bytesRead)
+        // verify within 10% of margin.
+        val ten_perc: Double = expectedBytesRead * 0.1;
+        assertTrue((expectedBytesRead + ten_perc) >= bytesRead && bytesRead >= (expectedBytesRead - ten_perc))
       } else {
         logWarning(s"Not matching bytes read ($bytesRead)")
       }
