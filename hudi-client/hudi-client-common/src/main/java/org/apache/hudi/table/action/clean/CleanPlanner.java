@@ -436,23 +436,12 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         cleanPaths.add(new CleanFileInfo(dataFile.getBootstrapBaseFile().get().getPath(), true));
       }
     }
-    if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-      // If merge on read, then clean the log files for the commits as well
-      Predicate<HoodieLogFile> notCDCLogFile =
-          hoodieLogFile -> !hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
-      cleanPaths.addAll(
-          nextSlice.getLogFiles().filter(notCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-              .collect(Collectors.toList()));
-    }
-    if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
-      // The cdc log files will be written out in cdc scenario, no matter the table type is mor or cow.
-      // Here we need to clean uo these cdc log files.
-      Predicate<HoodieLogFile> isCDCLogFile =
-          hoodieLogFile -> hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
-      cleanPaths.addAll(
-          nextSlice.getLogFiles().filter(isCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-              .collect(Collectors.toList()));
-    }
+
+    // clean the log files for the commits, which contain cdc log files in cdc scenario
+    // and normal log files for mor tables.
+    cleanPaths.addAll(
+        nextSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+            .collect(Collectors.toList()));
     return cleanPaths;
   }
 
