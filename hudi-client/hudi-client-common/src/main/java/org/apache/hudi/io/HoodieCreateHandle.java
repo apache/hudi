@@ -136,19 +136,21 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         if (record.shouldIgnore(schema, config.getProps())) {
           return;
         }
-        // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        HoodieRecord rewriteRecord;
-        if (schemaOnReadEnabled) {
-          rewriteRecord = record.rewriteRecordWithNewSchema(schema, config.getProps(), writeSchemaWithMetaFields);
-        } else {
-          rewriteRecord = record.rewriteRecord(schema, config.getProps(), writeSchemaWithMetaFields);
-        }
+
+        // TODO(HUDI-5641) streamline schema evolution flow to avoid rewriting multiple times
+        //HoodieRecord rewrittenRecord = schemaOnReadEnabled
+        //    ? record.rewriteRecordWithNewSchema(schema, config.getProps(), writeSchemaWithMetaFields)
+        //    : record;
+        HoodieRecord rewrittenRecord = record;
+
         MetadataValues metadataValues = new MetadataValues().setFileName(path.getName());
-        rewriteRecord = rewriteRecord.updateMetadataValues(writeSchemaWithMetaFields, config.getProps(), metadataValues);
+        HoodieRecord populatedRecord =
+            rewrittenRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, config.getProps());
+
         if (preserveMetadata) {
-          fileWriter.write(record.getRecordKey(), rewriteRecord, writeSchemaWithMetaFields);
+          fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
         } else {
-          fileWriter.writeWithMetadata(record.getKey(), rewriteRecord, writeSchemaWithMetaFields);
+          fileWriter.writeWithMetadata(record.getKey(), populatedRecord, writeSchemaWithMetaFields);
         }
         // update the new location of record, so we know where to find it next
         record.unseal();
