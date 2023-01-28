@@ -26,11 +26,10 @@ import java.util.Properties;
 
 /**
  * Configurations used by the Hudi Table Service Manager.
+ *
+ * TODO: enable docs gen by adding {@link ConfigClassProperty} after TSM is landed (HUDI-3475)
  */
 @Immutable
-@ConfigClassProperty(name = "Table Service Manager Configs",
-    groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations used by the Hudi Table Service Manager.")
 public class HoodieTableServiceManagerConfig extends HoodieConfig {
 
   public static final String TABLE_SERVICE_MANAGER_PREFIX = "hoodie.table.service.manager";
