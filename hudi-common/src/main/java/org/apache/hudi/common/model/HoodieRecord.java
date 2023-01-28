@@ -356,14 +356,14 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * Rewrite record into new schema(add meta columns)
    */
-  public abstract HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException;
+  public abstract HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema);
 
   /**
    * Support schema evolution.
    */
-  public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException;
+  public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols);
 
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema) throws IOException {
+  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema) {
     return rewriteRecordWithNewSchema(recordSchema, props, newSchema, Collections.emptyMap());
   }
 
