@@ -50,7 +50,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
 
   private final HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
       .withExecutorType(ExecutorType.DISRUPTOR.name())
-      .withWriteExecutorDisruptorWriteBufferSize(8)
+      .withWriteExecutorDisruptorWriteBufferLimitBytes(8)
       .build(false);
 
   @BeforeEach
@@ -94,7 +94,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
     DisruptorExecutor<HoodieRecord, HoodieRecord, Integer> exec = null;
 
     try {
-      exec = new DisruptorExecutor<>(writeConfig.getWriteExecutorDisruptorWriteBufferSize(), hoodieRecords.iterator(), consumer,
+      exec = new DisruptorExecutor<>(writeConfig.getWriteExecutorDisruptorWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
           Function.identity(), WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
       int result = exec.execute();
       // It should buffer and write 100 records
