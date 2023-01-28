@@ -52,7 +52,7 @@ public class HoodieCommonConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
-      .defaultValue(false)
+      .defaultValue(true)
       .markAdvanced()
       .withDocumentation("This config controls how writer's schema will be selected based on the incoming batch's "
           + "schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's "
