@@ -20,11 +20,11 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
-import org.apache.hudi.common.util.queue.SimpleHoodieExecutor;
 import org.apache.hudi.common.util.queue.DisruptorExecutor;
 import org.apache.hudi.common.util.queue.ExecutorType;
-import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
+import org.apache.hudi.common.util.queue.HoodieExecutor;
+import org.apache.hudi.common.util.queue.SimpleExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
@@ -34,17 +34,17 @@ import java.util.function.Function;
 public class ExecutorFactory {
 
   public static <I, O, E> HoodieExecutor<E> create(HoodieWriteConfig hoodieConfig,
-                                                         Iterator<I> inputItr,
-                                                         HoodieConsumer<O, E> consumer,
-                                                         Function<I, O> transformFunction) {
+                                                   Iterator<I> inputItr,
+                                                   HoodieConsumer<O, E> consumer,
+                                                   Function<I, O> transformFunction) {
     return create(hoodieConfig, inputItr, consumer, transformFunction, Functions.noop());
   }
 
   public static <I, O, E> HoodieExecutor<E> create(HoodieWriteConfig hoodieConfig,
-                                                         Iterator<I> inputItr,
-                                                         HoodieConsumer<O, E> consumer,
-                                                         Function<I, O> transformFunction,
-                                                         Runnable preExecuteRunnable) {
+                                                   Iterator<I> inputItr,
+                                                   HoodieConsumer<O, E> consumer,
+                                                   Function<I, O> transformFunction,
+                                                   Runnable preExecuteRunnable) {
     ExecutorType executorType = hoodieConfig.getExecutorType();
 
     switch (executorType) {
@@ -52,10 +52,10 @@ public class ExecutorFactory {
         return new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, consumer,
             transformFunction, preExecuteRunnable);
       case DISRUPTOR:
-        return new DisruptorExecutor<>(hoodieConfig.getDisruptorWriteBufferSize(), inputItr, consumer,
-            transformFunction, hoodieConfig.getWriteExecutorWaitStrategy(), preExecuteRunnable);
+        return new DisruptorExecutor<>(hoodieConfig.getWriteExecutorDisruptorWriteBufferSize(), inputItr, consumer,
+            transformFunction, hoodieConfig.getWriteExecutorDisruptorWaitStrategy(), preExecuteRunnable);
       case SIMPLE:
-        return new SimpleHoodieExecutor<>(inputItr, consumer, transformFunction);
+        return new SimpleExecutor<>(inputItr, consumer, transformFunction);
       default:
         throw new HoodieException("Unsupported Executor Type " + executorType);
     }
