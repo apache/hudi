@@ -45,7 +45,6 @@ import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 import scala.Function1;
-import scala.Tuple2;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -195,12 +194,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
 
-    Tuple2<Function1<InternalRow, InternalRow>, UnsafeProjection> rowWriterAndProjection =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriterAndUnsafeProjection(structType, targetStructType, Collections.emptyMap());
+    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, targetStructType, Collections.emptyMap());
 
-    Function1<InternalRow, InternalRow> rowWriter = rowWriterAndProjection._1;
-    UnsafeProjection unsafeProjection = rowWriterAndProjection._2;
-    UnsafeRow unsafeRow = unsafeProjection.apply(rowWriter.apply(this.data));
+    UnsafeRow unsafeRow = unsafeRowWriter.apply(this.data);
 
     boolean containMetaFields = hasMetaFields(targetStructType);
     UTF8String[] metaFields = tryExtractMetaFields(unsafeRow, targetStructType);
@@ -214,12 +211,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
 
-    Tuple2<Function1<InternalRow, InternalRow>, UnsafeProjection> rowWriterAndProjection =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriterAndUnsafeProjection(structType, newStructType, renameCols);
+    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, Collections.emptyMap());
 
-    Function1<InternalRow, InternalRow> rowWriter = rowWriterAndProjection._1;
-    UnsafeProjection unsafeProjection = rowWriterAndProjection._2;
-    UnsafeRow unsafeRow = unsafeProjection.apply(rowWriter.apply(this.data));
+    UnsafeRow unsafeRow = unsafeRowWriter.apply(this.data);
 
     boolean containMetaFields = hasMetaFields(newStructType);
     UTF8String[] metaFields = tryExtractMetaFields(unsafeRow, newStructType);
