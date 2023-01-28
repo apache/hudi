@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
@@ -189,7 +190,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
 
   public static final ConfigProperty<String> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
-      .key("hoodie.optimized.log.blocks.scan.enable")
+      .key("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN)
       .defaultValue("false")
       .sinceVersion("0.13.0")
       .withDocumentation("New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. "

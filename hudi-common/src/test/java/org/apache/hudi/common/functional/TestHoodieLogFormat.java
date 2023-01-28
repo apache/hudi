@@ -652,7 +652,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
 
@@ -699,7 +699,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .withForceFullScan(false)
         .build();
@@ -790,7 +790,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .withForceFullScan(false)
         .build();
@@ -1097,7 +1097,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(200, scanner.getTotalLogRecords());
@@ -1184,7 +1184,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(200, scanner.getTotalLogRecords(), "We read 200 records from 2 write batches");
@@ -1276,7 +1276,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(200, scanner.getTotalLogRecords(), "We would read 200 records");
@@ -1359,7 +1359,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
 
@@ -1633,7 +1633,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would have scanned 0 records because of rollback");
@@ -1707,7 +1707,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
@@ -1764,7 +1764,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(100, scanner.getTotalLogRecords(), "We still would read 100 records");
@@ -1840,7 +1840,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
@@ -1952,7 +1952,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
@@ -2134,7 +2134,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withEnableOptimizedLogBlocksScan(true)
+        .withOptimizedLogBlocksScan(true)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(600, scanner.getTotalLogRecords(), "We would read 600 records from scanner");
@@ -2224,7 +2224,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           .withSpillableMapBasePath(spillableBasePath)
           .withDiskMapType(diskMapType)
           .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-          .withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+          .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
           .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
           .build();
 

@@ -430,7 +430,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
 
     @Override
-    public Builder withEnableOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
+    public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
       this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
       return this;
     }

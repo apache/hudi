@@ -894,7 +894,7 @@ public abstract class AbstractHoodieLogRecordReader {
       throw new UnsupportedOperationException();
     }
 
-    public Builder withEnableOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
+    public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
       throw new UnsupportedOperationException();
     }
 

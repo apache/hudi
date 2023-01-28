@@ -447,7 +447,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
                 .collect(Collectors.toList()))
             .withLatestInstantTime(instant)
             .withBufferSize(config.getMaxDFSStreamBufferSize())
-            .withEnableOptimizedLogBlocksScan(true)
+            .withOptimizedLogBlocksScan(true)
             .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
             .build();
         scanner.scan(true);
@@ -461,7 +461,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
                 .collect(Collectors.toList()))
             .withLatestInstantTime(currentInstant)
             .withBufferSize(config.getMaxDFSStreamBufferSize())
-            .withEnableOptimizedLogBlocksScan(true)
+            .withOptimizedLogBlocksScan(true)
             .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
             .build();
         scanner2.scan(true);

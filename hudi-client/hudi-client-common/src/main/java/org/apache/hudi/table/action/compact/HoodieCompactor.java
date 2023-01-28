@@ -199,7 +199,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
-        .withEnableOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
+        .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
         .withRecordMerger(config.getRecordMerger())
         .build();
 

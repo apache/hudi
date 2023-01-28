@@ -210,7 +210,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     }
 
     public Builder withEnableOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
-      scannerBuilder.withEnableOptimizedLogBlocksScan(enableOptimizedLogBlocksScan);
+      scannerBuilder.withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan);
       return this;
     }
 

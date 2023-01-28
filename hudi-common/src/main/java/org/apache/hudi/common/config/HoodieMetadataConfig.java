@@ -42,6 +42,7 @@ import java.util.Properties;
 public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final String METADATA_PREFIX = "hoodie.metadata";
+  public static final String OPTIMIZED_LOG_BLOCKS_SCAN = ".optimized.log.blocks.scan.enable";
 
   // Enable the internal Metadata Table which saves file listings
   public static final ConfigProperty<Boolean> ENABLE = ConfigProperty
@@ -238,7 +239,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "such spurious deletes");
 
   public static final ConfigProperty<Boolean> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
-      .key(METADATA_PREFIX + ".optimized.log.blocks.scan.enable")
+      .key(METADATA_PREFIX + OPTIMIZED_LOG_BLOCKS_SCAN)
       .defaultValue(false)
       .sinceVersion("0.13.0")
       .withDocumentation("Optimized log blocks scanner that addresses all the multiwriter use-cases while appending to log files. "
@@ -478,7 +479,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder enableOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
+    public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
       metadataConfig.setValue(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, String.valueOf(enableOptimizedLogBlocksScan));
       return this;
     }
