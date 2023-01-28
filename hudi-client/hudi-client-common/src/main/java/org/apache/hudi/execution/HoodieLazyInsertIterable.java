@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.ExecutorFactory;
 
 import java.util.Iterator;
 import java.util.List;
@@ -104,7 +105,7 @@ public abstract class HoodieLazyInsertIterable<T>
     //       it since these records will be subsequently buffered (w/in the in-memory queue);
     //       Only case when we don't need to make a copy is when using [[SimpleExecutor]] which
     //       is guaranteed to not hold on to references to any records
-    boolean shouldClone = writeConfig.getExecutorType() != ExecutorType.SIMPLE;
+    boolean shouldClone = ExecutorFactory.isBufferingRecords(writeConfig);
 
     return record -> {
       HoodieRecord<T> clonedRecord = shouldClone ? record.copy() : record;

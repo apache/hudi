@@ -139,20 +139,25 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         recordSchema = isPureProjection ? writerSchema : readerSchema;
       }
 
+      boolean isBufferingRecords = ExecutorFactory.isBufferingRecords(writeConfig);
+
       wrapper = ExecutorFactory.create(writeConfig, recordIterator, new UpdateHandler(mergeHandle), record -> {
-        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
-        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
-        //       it since these records will be put into queue of QueueBasedExecutorFactory.
+        HoodieRecord newRecord;
         if (shouldRewriteInWriterSchema) {
           try {
-            return record.rewriteRecordWithNewSchema(recordSchema, writeConfig.getProps(), writerSchema).copy();
+            newRecord = record.rewriteRecordWithNewSchema(recordSchema, writeConfig.getProps(), writerSchema);
           } catch (IOException e) {
             LOG.error("Error rewrite record with new schema", e);
             throw new HoodieException(e);
           }
         } else {
-          return record.copy();
+          newRecord = record;
         }
+
+        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+        //       it since these records will be put into queue of QueueBasedExecutorFactory.
+        return isBufferingRecords ? newRecord.copy() : newRecord;
       }, table.getPreExecuteRunnable());
 
       wrapper.execute();
