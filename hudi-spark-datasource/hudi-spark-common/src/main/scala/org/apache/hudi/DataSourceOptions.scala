@@ -448,7 +448,7 @@ object DataSourceWriteOptions {
 
   val STREAMING_CHECKPOINT_IDENTIFIER: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.streaming.checkpoint.identifier")
-    .noDefaultValue()
+    .defaultValue("default_single_writer")
     .sinceVersion("0.13.0")
     .withDocumentation("A stream identifier used for HUDI to fetch the right checkpoint(`batch id` to be more specific) "
       + "corresponding this writer. Please note that keep the identifier an unique value for different writer "
