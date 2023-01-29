@@ -47,7 +47,6 @@ import org.apache.spark.unsafe.types.UTF8String;
 import scala.Function1;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 
@@ -209,7 +208,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
 
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, Collections.emptyMap());
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, renameCols);
 
     UnsafeRow unsafeRow = unsafeRowWriter.apply(this.data);
 
