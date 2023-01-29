@@ -24,6 +24,7 @@ import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, Spark
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecordPayload, WriteConcurrencyMode}
+import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
@@ -106,8 +107,6 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       log.warn(s"Skipping already completed batch $batchId in query $queryId")
       return
     }
-
-    validateMultiWriterConfigs(options)
 
     // Override to use direct markers. In Structured streaming, timeline server is closed after
     // first micro-batch and subsequent micro-batches do not have timeline server running.
@@ -227,19 +226,9 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
-  private def validateMultiWriterConfigs(options: Map[String, String]) : Unit = {
-    // to be filled
-    if (WriteConcurrencyMode.valueOf(options.getOrDefault(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
-      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL) {
-      // ensure some valid value is set for identifier
-      assert(!options.contains(STREAMING_CHECKPOINT_IDENTIFIER), "For multi-writer scenarios, please set "
-        + STREAMING_CHECKPOINT_IDENTIFIER.key() + ". Each writer should set different values for this identifier")
-    }
-  }
-
   private def getStreamIdentifier(options: Map[String, String]) : Option[String] = {
-    if (WriteConcurrencyMode.valueOf(options.getOrDefault(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
-      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.SINGLE_WRITER) {
+    if (WriteConcurrencyMode.valueOf(options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
+      WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.SINGLE_WRITER) {
       // for single writer model, we will fetch default if not set.
       Some(options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue()))
     } else {
