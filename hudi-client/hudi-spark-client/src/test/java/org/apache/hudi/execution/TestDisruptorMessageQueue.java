@@ -68,7 +68,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
 
   private final HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
       .withExecutorType(ExecutorType.DISRUPTOR.name())
-      .withWriteExecutorDisruptorWriteBufferSize(16)
+      .withWriteExecutorDisruptorWriteBufferLimitBytes(16)
       .build(false);
 
   @BeforeEach
@@ -139,7 +139,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
     DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
 
     try {
-      exec = new DisruptorExecutor(writeConfig.getWriteExecutorDisruptorWriteBufferSize(), hoodieRecords.iterator(), consumer,
+      exec = new DisruptorExecutor(writeConfig.getWriteExecutorDisruptorWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
           getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig), WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
       int result = exec.execute();
       // It should buffer and write 100 records

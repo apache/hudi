@@ -29,7 +29,7 @@ import org.apache.hudi.avro.AvroSchemaUtils.{isCompatibleProjectionOf, isSchemaC
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.{ConfigProperty, HoodieCommonConfig, HoodieConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -71,6 +71,19 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 object HoodieSparkSqlWriter {
+
+  /**
+   * Controls whether incoming batch's schema's nullability constraints should be canonicalized
+   * relative to the table's schema. For ex, in case field A is marked as null-able in table's schema, but is marked
+   * as non-null in the incoming batch, w/o canonicalization such write might fail as we won't be able to read existing
+   * null records from the table (for updating, for ex). Note, that this config has only effect when
+   * 'hoodie.datasource.write.reconcile.schema' is set to false
+   *
+   * NOTE: This is an internal config that is not exposed to the public
+   */
+  val CANONICALIZE_NULLABLE: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.internal.write.schema.canonicalize.nullable")
+      .defaultValue(true)
 
   private val log = LogManager.getLogger(getClass)
   private var tableExists: Boolean = false
@@ -397,9 +410,9 @@ object HoodieSparkSqlWriter {
         // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
         // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
         // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
-        val shouldCanonicalizeSchema = opts.getOrDefault(DataSourceWriteOptions.CANONICALIZE_SCHEMA.key,
-          DataSourceWriteOptions.CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
-        val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
+        val shouldCanonicalizeNullable = opts.getOrDefault(CANONICALIZE_NULLABLE.key,
+          CANONICALIZE_NULLABLE.defaultValue.toString).toBoolean
+        val canonicalizedSourceSchema = if (shouldCanonicalizeNullable) {
           AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
         } else {
           sourceSchema

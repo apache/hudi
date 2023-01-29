@@ -87,7 +87,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
       // instead of serving already cached value
       spark.sessionState.catalog.invalidateAllCachedTables()
 
-      spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode.override=$listingModeOverride")
+      spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode=$listingModeOverride")
 
       val df = spark.sql(s"SELECT * FROM $tableName WHERE partition = '2021-01-05'")
       val optimizedPlan = df.queryExecution.optimizedPlan
@@ -179,7 +179,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
       // instead of serving already cached value
       spark.sessionState.catalog.invalidateAllCachedTables()
 
-      spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode.override=$listingModeOverride")
+      spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode=$listingModeOverride")
 
       val df = spark.sql(s"SELECT * FROM $tableName")
       val optimizedPlan = df.queryExecution.optimizedPlan
