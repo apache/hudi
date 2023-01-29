@@ -235,6 +235,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   static void updateMetadataValuesInternal(GenericRecord avroRecord, MetadataValues metadataValues) {
+    if (metadataValues.isEmpty()) {
+      return; // no-op
+    }
+
     String[] values = metadataValues.getValues();
     for (int pos = 0; pos < values.length; ++pos) {
       String value = values[pos];
