@@ -111,7 +111,7 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
       HoodieUnsafeUtils.createDataFrameFromRows(spark, batch, schema)
         .write
         .format("org.apache.hudi")
-        .options(opts ++ Map(HoodieWriteConfig.SCHEMA_ALLOW_DROP_COLUMNS.key -> shouldAllowDroppedColumns.toString))
+        .options(opts ++ Map(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> shouldAllowDroppedColumns.toString))
         .mode(SaveMode.Append)
         .save(basePath)
     }

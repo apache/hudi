@@ -89,7 +89,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     } else {
       commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ")
     }
-    opts = opts ++ Map(HoodieWriteConfig.SCHEMA_ALLOW_DROP_COLUMNS.key -> shouldAllowDroppedColumns.toString)
+    opts = opts ++ Map(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> shouldAllowDroppedColumns.toString)
 
     df.write.format("hudi")
       .options(opts)

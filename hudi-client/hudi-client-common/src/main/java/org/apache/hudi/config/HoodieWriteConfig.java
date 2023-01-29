@@ -227,13 +227,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue("true")
       .withDocumentation("Validate the schema used for the write against the latest schema, for backwards compatibility.");
 
-  public static final ConfigProperty<String> SCHEMA_ALLOW_DROP_COLUMNS = ConfigProperty
-      .key("hoodie.datasource.write.schema.allow.drop.columns")
+  public static final ConfigProperty<String> SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP = ConfigProperty
+      .key("hoodie.datasource.write.schema.allow.auto.evolution.column.drop")
       .defaultValue("false")
       .sinceVersion("0.13.0")
-      .withDocumentation("Controls whether incoming batch's schema can have dropped columns "
-          + "relative to the table's schema. By default, it is not allowed and "
-          + "SchemaCompatibilityException will be thrown. Set to true to allow dropped columns");
+      .withDocumentation("Controls whether table's schema is allowed to automatically evolve when "
+          + "incoming batch's schema can have any of the columns dropped. By default, Hudi will not "
+          + "allow this kind of (auto) schema evolution. Set this config to true to allow table's "
+          + "schema to be updated automatically when columns are dropped from the new incoming batch.");
 
   public static final ConfigProperty<String> INSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.insert.shuffle.parallelism")
@@ -1094,8 +1095,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(AVRO_SCHEMA_VALIDATE_ENABLE);
   }
 
-  public boolean shouldAllowDroppedColumns() {
-    return getBooleanOrDefault(SCHEMA_ALLOW_DROP_COLUMNS);
+  public boolean shouldAllowAutoEvolutionColumnDrop() {
+    return getBooleanOrDefault(SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP);
   }
 
   public String getTableName() {
@@ -2463,8 +2464,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withAllowDroppedColumns(boolean shouldAllowDroppedColumns) {
-      writeConfig.setValue(SCHEMA_ALLOW_DROP_COLUMNS, String.valueOf(shouldAllowDroppedColumns));
+    public Builder withAllowAutoEvolutionColumnDrop(boolean shouldAllowDroppedColumns) {
+      writeConfig.setValue(SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, String.valueOf(shouldAllowDroppedColumns));
       return this;
     }
 

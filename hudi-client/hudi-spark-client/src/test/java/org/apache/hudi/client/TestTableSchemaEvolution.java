@@ -257,7 +257,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfigBuilder(TRIP_EXAMPLE_SCHEMA)
         .withRollbackUsingMarkers(false)
-        .withAllowDroppedColumns(shouldAllowDroppedColumns)
+        .withAllowAutoEvolutionColumnDrop(shouldAllowDroppedColumns)
         .build();
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
@@ -388,7 +388,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   }
 
   private HoodieWriteConfig getWriteConfig(String schema, boolean shouldAllowDroppedColumns) {
-    return getWriteConfigBuilder(schema).withAllowDroppedColumns(shouldAllowDroppedColumns).build();
+    return getWriteConfigBuilder(schema).withAllowAutoEvolutionColumnDrop(shouldAllowDroppedColumns).build();
   }
 
   private HoodieWriteConfig.Builder getWriteConfigBuilder(String schema) {

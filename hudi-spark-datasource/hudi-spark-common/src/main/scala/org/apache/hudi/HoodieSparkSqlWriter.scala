@@ -417,8 +417,8 @@ object HoodieSparkSqlWriter {
           sourceSchema
         }
 
-        val shouldAllowDroppedColumns = opts.getOrDefault(HoodieWriteConfig.SCHEMA_ALLOW_DROP_COLUMNS.key,
-          HoodieWriteConfig.SCHEMA_ALLOW_DROP_COLUMNS.defaultValue).toBoolean
+        val shouldAllowDroppedColumns = opts.getOrDefault(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key,
+          HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.defaultValue).toBoolean
 
         if (shouldReconcileSchema) {
           internalSchemaOpt match {
