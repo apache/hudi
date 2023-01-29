@@ -60,8 +60,12 @@ declare -a ALL_VERSION_OPTS=(
 "-Dscala-2.12 -Dspark3 -pl packaging/hudi-spark-bundle -am" # for legacy bundle name hudi-spark3-bundle_2.12
 
 # utilities bundles (legacy) (overwriting previous uploads)
-"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-utilities-bundle -am" # utilities-bundle_2.11 is for spark 2.4 only
-"-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-utilities-bundle -am" # utilities-bundle_2.12 is for spark 3.1 only
+"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-utilities-bundle -am" # hudi-utilities-bundle_2.11 is for spark 2.4 only
+"-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-utilities-bundle -am" # hudi-utilities-bundle_2.12 is for spark 3.1 only
+
+# utilities slim bundles
+"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-utilities-slim-bundle -am" # hudi-utilities-slim-bundle_2.11
+"-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-utilities-slim-bundle -am" # hudi-utilities-slim-bundle_2.12
 
 # flink bundles (overwriting previous uploads)
 "-Dscala-2.12 -Dflink1.13 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle -am"
@@ -100,15 +104,18 @@ fi
 COMMON_OPTIONS="-DdeployArtifacts=true -DskipTests -DretryFailedDeploymentCount=10"
 for v in "${ALL_VERSION_OPTS[@]}"
 do
-  # clean everything before any round of depoyment
-  $MVN clean $COMMON_OPTIONS
-  if [[ "$v" == *"$BUNDLE_MODULES_EXCLUDED"* ]]; then
+  # TODO: consider cleaning all modules by listing directories instead of specifying profile
+  if [[ "$v" == *"$BUNDLE_MODULES_EXCLUDED" ]]; then
     # When deploying jars with bundle exclusions, we still need to build the bundles,
     # by removing "-pl -packaging/hudi-aws-bundle...", otherwise the build fails.
     v1=${v%${BUNDLE_MODULES_EXCLUDED}}
+    echo "Cleaning everything before any deployment"
+    $MVN clean $COMMON_OPTIONS ${v1%-pl }
     echo "Building with options ${v1%-pl }"
     $MVN install $COMMON_OPTIONS ${v1%-pl }
   else
+    echo "Cleaning everything before any deployment"
+    $MVN clean $COMMON_OPTIONS ${v}
     echo "Building with options ${v}"
     $MVN install $COMMON_OPTIONS ${v}
   fi
