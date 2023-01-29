@@ -127,7 +127,9 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
           @Override
           public void consume(HoodieRecord record) {
             try {
-              Thread.currentThread().wait();
+              synchronized (this) {
+                wait();
+              }
             } catch (InterruptedException ie) {
               // ignore here
             }
