@@ -18,8 +18,6 @@
 
 package org.apache.hudi
 
-import java.nio.ByteBuffer
-import java.util.{ArrayList, HashMap, Objects}
 import org.apache.avro.generic.GenericData
 import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
@@ -30,12 +28,15 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{HoodieInternalRowUtils, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.{HoodieInternalRowUtils, Row, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
+
+import java.nio.ByteBuffer
+import java.util.{ArrayList, HashMap, Objects, Collections => JCollections}
 
 class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAfterAll {
   private var sparkSession: SparkSession = _
@@ -76,13 +77,13 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val data = sparkSession.sparkContext.parallelize(rows)
     val oldRow = sparkSession.createDataFrame(data, mergedSchema).queryExecution.toRdd.first()
 
-    val rowWriter1 = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema1)
+    val rowWriter1 = HoodieInternalRowUtils.genUnsafeRowWriterRenaming(mergedSchema, schema1, JCollections.emptyMap())
     val newRow1 = rowWriter1(oldRow)
 
     val serDe1 = sparkAdapter.createSparkRowSerDe(schema1)
     assertEquals(serDe1.deserializeRow(newRow1), Row("Andrew", 18, Row("Mission st", "SF")));
 
-    val rowWriter2 = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema2)
+    val rowWriter2 = HoodieInternalRowUtils.genUnsafeRowWriterRenaming(mergedSchema, schema2, JCollections.emptyMap())
     val newRow2 = rowWriter2(oldRow)
 
     val serDe2 = sparkAdapter.createSparkRowSerDe(schema2)
@@ -92,7 +93,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
   test("Test simple rewriting (with nullable value)") {
     val data = sparkSession.sparkContext.parallelize(Seq(Row("Rob", 18, null.asInstanceOf[StructType])))
     val oldRow = sparkSession.createDataFrame(data, schema1).queryExecution.toRdd.first()
-    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(schema1, mergedSchema)
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriterRenaming(schema1, mergedSchema, JCollections.emptyMap())
     val newRow = rowWriter(oldRow)
 
     val serDe = sparkAdapter.createSparkRowSerDe(mergedSchema)
