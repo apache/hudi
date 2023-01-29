@@ -119,9 +119,9 @@ object HoodieInternalRowUtils {
     }
   }
 
-  private[hudi] def genUnsafeRowWriter(prevSchema: StructType,
-                                       newSchema: StructType,
-                                       renamedColumnsMap: JMap[String, String]): UnsafeRowWriter = {
+  private[sql] def genUnsafeRowWriter(prevSchema: StructType,
+                                      newSchema: StructType,
+                                      renamedColumnsMap: JMap[String, String]): UnsafeRowWriter = {
     val writer = newWriterRenaming(prevSchema, newSchema, renamedColumnsMap, new JArrayDeque[String]())
     val unsafeProjection = generateUnsafeProjection(newSchema, newSchema)
     val phonyUpdater = new CatalystDataUpdater {

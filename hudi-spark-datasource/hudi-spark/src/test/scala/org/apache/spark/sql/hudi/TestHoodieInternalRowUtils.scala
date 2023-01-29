@@ -16,10 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi
+package org.apache.spark.sql.hudi
 
 import org.apache.avro.generic.GenericData
 import org.apache.avro.{LogicalTypes, Schema}
+import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.internal.schema.Types
@@ -77,13 +78,13 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val data = sparkSession.sparkContext.parallelize(rows)
     val oldRow = sparkSession.createDataFrame(data, mergedSchema).queryExecution.toRdd.first()
 
-    val rowWriter1 = HoodieInternalRowUtils.genUnsafeRowWriterRenaming(mergedSchema, schema1, JCollections.emptyMap())
+    val rowWriter1 = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema1, JCollections.emptyMap())
     val newRow1 = rowWriter1(oldRow)
 
     val serDe1 = sparkAdapter.createSparkRowSerDe(schema1)
     assertEquals(serDe1.deserializeRow(newRow1), Row("Andrew", 18, Row("Mission st", "SF")));
 
-    val rowWriter2 = HoodieInternalRowUtils.genUnsafeRowWriterRenaming(mergedSchema, schema2, JCollections.emptyMap())
+    val rowWriter2 = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema2, JCollections.emptyMap())
     val newRow2 = rowWriter2(oldRow)
 
     val serDe2 = sparkAdapter.createSparkRowSerDe(schema2)
@@ -93,7 +94,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
   test("Test simple rewriting (with nullable value)") {
     val data = sparkSession.sparkContext.parallelize(Seq(Row("Rob", 18, null.asInstanceOf[StructType])))
     val oldRow = sparkSession.createDataFrame(data, schema1).queryExecution.toRdd.first()
-    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriterRenaming(schema1, mergedSchema, JCollections.emptyMap())
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(schema1, mergedSchema, JCollections.emptyMap())
     val newRow = rowWriter(oldRow)
 
     val serDe = sparkAdapter.createSparkRowSerDe(mergedSchema)
@@ -190,7 +191,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val newRowExpected = AvroConversionUtils.createAvroToInternalRowConverter(newAvroSchema, newStructTypeSchema)
       .apply(newRecord).get
 
-    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriterRenaming(structTypeSchema, newStructTypeSchema, new HashMap[String, String])
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(structTypeSchema, newStructTypeSchema, new HashMap[String, String])
     val newRow = rowWriter(row)
 
     internalRowCompare(newRowExpected, newRow, newStructTypeSchema)
@@ -245,7 +246,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val row = AvroConversionUtils.createAvroToInternalRowConverter(schema, structTypeSchema).apply(avroRecord).get
     val newRowExpected = AvroConversionUtils.createAvroToInternalRowConverter(newAvroSchema, newStructTypeSchema).apply(newAvroRecord).get
 
-    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriterRenaming(structTypeSchema, newStructTypeSchema, new HashMap[String, String])
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(structTypeSchema, newStructTypeSchema, new HashMap[String, String])
     val newRow = rowWriter(row)
 
     internalRowCompare(newRowExpected, newRow, newStructTypeSchema)
