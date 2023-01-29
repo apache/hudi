@@ -57,8 +57,7 @@ import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
-import org.apache.spark.sql.HoodieInternalRowUtils.genUnsafeRowWriter
+import org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeRowWriter
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -1061,6 +1060,7 @@ object HoodieSparkSqlWriter {
             hoodieRecord
           }
         }).toJavaRDD()
+
       case HoodieRecord.HoodieRecordType.SPARK =>
         val sparkKeyGenerator = keyGenerator.asInstanceOf[SparkKeyGeneratorInterface]
         val dataFileSchema = new Schema.Parser().parse(dataFileSchemaStr)
@@ -1069,20 +1069,17 @@ object HoodieSparkSqlWriter {
         val sourceStructType = df.schema
 
         df.queryExecution.toRdd.mapPartitions { it =>
-          // TODO elaborate
-          val (unsafeProjection, transformer) = if (shouldDropPartitionColumns) {
-            (generateUnsafeProjection(dataFileStructType, dataFileStructType), genUnsafeRowWriter(sourceStructType, dataFileStructType))
-          } else {
-            (generateUnsafeProjection(writerStructType, writerStructType), genUnsafeRowWriter(sourceStructType, writerStructType))
-          }
+          val targetStructType = if (shouldDropPartitionColumns) dataFileStructType else writerStructType
+          // NOTE: To make sure we properly transform records
+          val targetStructTypeRowWriter = getCachedUnsafeRowWriter(sourceStructType, targetStructType)
 
           it.map { sourceRow =>
             val recordKey = sparkKeyGenerator.getRecordKey(sourceRow, sourceStructType)
             val partitionPath = sparkKeyGenerator.getPartitionPath(sourceRow, sourceStructType)
             val key = new HoodieKey(recordKey.toString, partitionPath.toString)
 
-            // TODO elaborate
-            val targetRow = unsafeProjection(transformer(sourceRow))
+            val targetRow = targetStructTypeRowWriter(sourceRow)
+
             new HoodieSparkRecord(key, targetRow, dataFileStructType, false)
           }
         }.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[_]]]
