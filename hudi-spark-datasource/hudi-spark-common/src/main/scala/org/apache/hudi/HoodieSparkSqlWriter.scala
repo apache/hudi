@@ -27,6 +27,7 @@ import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils.{isCompatibleProjectionOf, isSchemaCompatible}
 import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config.{ConfigProperty, HoodieCommonConfig, HoodieConfig, HoodieMetadataConfig, TypedProperties}
@@ -395,7 +396,11 @@ object HoodieSparkSqlWriter {
       // writer's schema. No additional handling is required
       case None => sourceSchema
       // Otherwise, we need to make sure we reconcile incoming and latest table schemas
-      case Some(latestTableSchema) =>
+      case Some(latestTableSchemaWithMetaFields) =>
+        // NOTE: Meta-fields will be unconditionally injected by Hudi writing handles, for the sake of
+        //       deducing proper writer schema we're stripping them to make sure we can perform proper
+        //       analysis
+        val latestTableSchema = removeMetadataFields(latestTableSchemaWithMetaFields)
         // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
         // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
         // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
