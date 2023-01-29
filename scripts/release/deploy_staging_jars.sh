@@ -104,7 +104,8 @@ fi
 COMMON_OPTIONS="-DdeployArtifacts=true -DskipTests -DretryFailedDeploymentCount=10"
 for v in "${ALL_VERSION_OPTS[@]}"
 do
-  if [[ "$v" == *"$BUNDLE_MODULES_EXCLUDED"* ]]; then
+  # TODO: consider cleaning all modules by listing directories instead of specifying profile
+  if [[ "$v" == *"$BUNDLE_MODULES_EXCLUDED" ]]; then
     # When deploying jars with bundle exclusions, we still need to build the bundles,
     # by removing "-pl -packaging/hudi-aws-bundle...", otherwise the build fails.
     v1=${v%${BUNDLE_MODULES_EXCLUDED}}
