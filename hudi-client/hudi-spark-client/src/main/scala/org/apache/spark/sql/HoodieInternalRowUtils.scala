@@ -26,7 +26,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData, UnsafeProjection, UnsafeRow}
-import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData}
+import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData, MapData}
 import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
 import org.apache.spark.sql.types.Decimal.ROUND_HALF_EVEN
 import org.apache.spark.sql.types._
@@ -255,12 +255,12 @@ object HoodieInternalRowUtils {
         fieldNameStack.pop()
 
         (updater, ordinal, value) =>
-          val arrayBasedMapData = value.asInstanceOf[ArrayBasedMapData]
-          val prevKeyArrayData = arrayBasedMapData.keyArray
-          val prevValueArrayData = arrayBasedMapData.valueArray
+          val mapData = value.asInstanceOf[MapData]
+          val prevKeyArrayData = mapData.keyArray
+          val prevValueArrayData = mapData.valueArray
           val prevValueArray = prevValueArrayData.toObjectArray(prevValueType)
 
-          val newValueArray = createArrayData(newValueType, arrayBasedMapData.numElements())
+          val newValueArray = createArrayData(newValueType, mapData.numElements())
           val valueUpdater = new ArrayDataUpdater(newValueArray)
           var i = 0
           while (i < prevValueArray.length) {
