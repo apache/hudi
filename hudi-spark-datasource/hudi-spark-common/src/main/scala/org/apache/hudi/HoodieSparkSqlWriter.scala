@@ -230,31 +230,6 @@ object HoodieSparkSqlWriter {
         }
       }
 
-      // NOTE: Target writer's schema is deduced based on
-      //         - Source's schema
-      //         - Existing table's schema (including its Hudi's [[InternalSchema]] representation)
-      val writerSchema = deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, parameters)
-
-      validateSchemaForHoodieIsDeleted(writerSchema)
-
-      // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING THIS
-      //       We have to register w/ Kryo all of the Avro schemas that might potentially be used to decode
-      //       records into Avro format. Otherwise, Kryo wouldn't be able to apply an optimization allowing
-      //       it to avoid the need to ser/de the whole schema along _every_ Avro record
-      val targetAvroSchemas = sourceSchema +: writerSchema +: latestTableSchemaOpt.toSeq
-      registerAvroSchemasWithKryo(sparkContext, targetAvroSchemas: _*)
-
-      log.info(s"Registered Avro schemas: ${targetAvroSchemas.map(_.toString(true)).mkString("\n")}")
-
-      // Short-circuit if bulk_insert via row is enabled.
-      // scalastyle:off
-      if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
-        val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, hoodieConfig, df, tblName,
-          basePath, path, instantTime, writerSchema, tableConfig.isTablePartitioned)
-        return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
-      }
-      // scalastyle:on
-
       val (writeResult, writeClient: SparkRDDWriteClient[_]) =
         operation match {
           case WriteOperationType.DELETE =>
@@ -312,8 +287,24 @@ object HoodieSparkSqlWriter {
             client.startCommitWithTime(instantTime, commitActionType)
             val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
             (writeStatuses, client)
+
+          // Here all other (than DELETE, DELETE_PARTITION) write operations are handled
           case _ =>
-            // Here all other (than DELETE, DELETE_PARTITION) write operations are handled
+            // NOTE: Target writer's schema is deduced based on
+            //         - Source's schema
+            //         - Existing table's schema (including its Hudi's [[InternalSchema]] representation)
+            val writerSchema = deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, parameters)
+
+            validateSchemaForHoodieIsDeleted(writerSchema)
+
+            // Short-circuit if bulk_insert via row is enabled.
+            // scalastyle:off
+            if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
+              val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, hoodieConfig, df, tblName,
+                basePath, path, instantTime, writerSchema, tableConfig.isTablePartitioned)
+              return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
+            }
+            // scalastyle:on
 
             // Check whether partition columns should be persisted w/in the data-files, or should
             // be instead omitted from them and simply encoded into the partition path (which is Spark's
