@@ -93,11 +93,31 @@ object HoodieInternalRowUtils {
     }
   }
 
+  /**
+   * Provides cached instance of [[UnsafeProjection]] transforming provided [[InternalRow]]s from
+   * one [[StructType]] and into another [[StructType]]
+   *
+   * For more details regarding its semantic, please check corresponding scala-doc for
+   * [[HoodieCatalystExpressionUtils.generateUnsafeProjection]]
+   */
   def getCachedUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
     unsafeProjectionThreadLocal.get()
       .getOrElseUpdate((from, to), generateUnsafeProjection(from, to))
   }
 
+  /**
+   * Provides cached instance of [[UnsafeRowWriter]] transforming provided [[InternalRow]]s from
+   * one [[StructType]] and into another [[StructType]]
+   *
+   * Unlike [[UnsafeProjection]] requiring that [[from]] has to be a proper subset of [[to]] schema,
+   * [[UnsafeRowWriter]] is able to perform whole spectrum of schema-evolution transformations including:
+   *
+   * <ul>
+   *   <li>Transforming nested structs/maps/arrays</li>
+   *   <li>Handling type promotions (int -> long, etc)</li>
+   *   <li>Handling (field) renames</li>
+   * </ul>
+   */
   def getCachedUnsafeRowWriter(from: StructType, to: StructType, renamedColumnsMap: JMap[String, String] = JCollections.emptyMap()): UnsafeRowWriter = {
     unsafeWriterThreadLocal.get()
       .getOrElseUpdate((from, to, renamedColumnsMap), genUnsafeRowWriterRenaming(from, to, renamedColumnsMap))
@@ -131,90 +151,36 @@ object HoodieInternalRowUtils {
     }
   }
 
-  /*
-  // TODO cleanup
-  private def rewritePrimaryTypeWithDiffSchemaType(oldValue: Any, oldSchema: DataType, newSchema: DataType): Any = {
-    val value = newSchema match {
-      case NullType | BooleanType =>
-      case DateType if oldSchema.equals(StringType) =>
-        CatalystTypeConverters.convertToCatalyst(java.sql.Date.valueOf(oldValue.toString))
-      case LongType =>
-        oldSchema match {
-          case IntegerType => CatalystTypeConverters.convertToCatalyst(oldValue.asInstanceOf[Int].longValue())
-          case _ =>
-        }
-      case FloatType =>
-        oldSchema match {
-          case IntegerType => CatalystTypeConverters.convertToCatalyst(oldValue.asInstanceOf[Int].floatValue())
-          case LongType => CatalystTypeConverters.convertToCatalyst(oldValue.asInstanceOf[Long].floatValue())
-          case _ =>
-        }
-      case DoubleType =>
-        oldSchema match {
-          case IntegerType => CatalystTypeConverters.convertToCatalyst(oldValue.asInstanceOf[Int].doubleValue())
-          case LongType => CatalystTypeConverters.convertToCatalyst(oldValue.asInstanceOf[Long].doubleValue())
-          case FloatType => CatalystTypeConverters.convertToCatalyst(java.lang.Double.valueOf(oldValue.asInstanceOf[Float] + ""))
-          case _ =>
-        }
-      case BinaryType =>
-        oldSchema match {
-          case StringType => CatalystTypeConverters.convertToCatalyst(oldValue.asInstanceOf[String].getBytes(StandardCharsets.UTF_8))
-          case _ =>
-        }
-      case StringType =>
-        oldSchema match {
-          case BinaryType => CatalystTypeConverters.convertToCatalyst(new String(oldValue.asInstanceOf[Array[Byte]]))
-          case DateType => CatalystTypeConverters.convertToCatalyst(toJavaDate(oldValue.asInstanceOf[Integer]).toString)
-          case IntegerType | LongType | FloatType | DoubleType | DecimalType() => CatalystTypeConverters.convertToCatalyst(oldValue.toString)
-          case _ =>
-        }
-      case DecimalType() =>
-        oldSchema match {
-          case IntegerType | LongType | FloatType | DoubleType | StringType =>
-            val scale = newSchema.asInstanceOf[DecimalType].scale
-
-            Decimal.fromDecimal(BigDecimal(oldValue.toString).setScale(scale))
-          case _ =>
-        }
-      case _ =>
-    }
-
-    if (value == None) {
-      throw new HoodieException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema))
-    } else {
-      CatalystTypeConverters.convertToCatalyst(value)
-    }
-  }
-   */
-  
   private type RowFieldUpdater = (CatalystDataUpdater, Int, Any) => Unit
 
-  private def genUnsafeRowWriterRenaming(prevStructType: StructType, newStructType: StructType, renamedColumnsMap: JMap[String, String], fieldNames: JDeque[String]): (CatalystDataUpdater, Any) => Unit = {
+  private def genUnsafeRowWriterRenaming(prevStructType: StructType,
+                                         newStructType: StructType,
+                                         renamedColumnsMap: JMap[String, String],
+                                         fieldNamesStack: JDeque[String]): (CatalystDataUpdater, Any) => Unit = {
     // TODO need to canonicalize schemas (casing)
     val fieldWriters = ArrayBuffer.empty[RowFieldUpdater]
     val positionMap = ArrayBuffer.empty[Int]
 
     for (newField <- newStructType.fields) {
-      fieldNames.push(newField.name)
+      fieldNamesStack.push(newField.name)
 
       val (fieldWriter, prevFieldPos): (RowFieldUpdater, Int) =
         prevStructType.getFieldIndex(newField.name) match {
           case Some(prevFieldPos) =>
             val prevField = prevStructType(prevFieldPos)
-            (newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNames), prevFieldPos)
+            (newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNamesStack), prevFieldPos)
 
           case None =>
-            val newFieldQualifiedName = createFullName(fieldNames)
+            val newFieldQualifiedName = createFullName(fieldNamesStack)
             val prevFieldName: String = lookupRenamedField(newFieldQualifiedName, renamedColumnsMap)
 
             // Handle rename
             prevStructType.getFieldIndex(prevFieldName) match {
               case Some(prevFieldPos) =>
                 val prevField = prevStructType.fields(prevFieldPos)
-                (newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNames), prevFieldPos)
+                (newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNamesStack), prevFieldPos)
 
               case None =>
-                // TODO handle defaults
                 val updater: RowFieldUpdater = (fieldUpdater, ordinal, _) => fieldUpdater.setNullAt(ordinal)
                 (updater, -1)
             }
@@ -223,7 +189,7 @@ object HoodieInternalRowUtils {
       fieldWriters += fieldWriter
       positionMap += prevFieldPos
 
-      fieldNames.pop()
+      fieldNamesStack.pop()
     }
 
     (fieldUpdater, row) => {
@@ -245,26 +211,31 @@ object HoodieInternalRowUtils {
   private def newWriterRenaming(prevDataType: DataType,
                                 newDataType: DataType,
                                 renamedColumnsMap: JMap[String, String],
-                                fieldNames: JDeque[String]): RowFieldUpdater = {
+                                fieldNameStack: JDeque[String]): RowFieldUpdater = {
     (prevDataType, newDataType) match {
       case (prevType, newType) if prevType == newType =>
         (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value)
 
       case (prevStructType: StructType, newStructType: StructType) =>
-        val writer = genUnsafeRowWriterRenaming(prevStructType, newStructType, renamedColumnsMap, fieldNames)
+        val writer = genUnsafeRowWriterRenaming(prevStructType, newStructType, renamedColumnsMap, fieldNameStack)
+
         val newRow = new SpecificInternalRow(newStructType.fields.map(_.dataType))
         val rowUpdater = new RowUpdater(newRow)
 
         (fieldUpdater, ordinal, value) => {
-          // TODO elaborate
+          // Here new row is built in 2 stages:
+          //    - First, we pass mutable row (used as buffer/scratchpad) created above wrapped into [[RowUpdater]]
+          //      into generated row-writer
+          //    - Upon returning from row-writer, we call back into parent row's [[fieldUpdater]] to set returned
+          //      row as a value in it
           writer(rowUpdater, value)
           fieldUpdater.set(ordinal, newRow)
         }
 
       case (ArrayType(prevElementType, containsNull), ArrayType(newElementType, _)) =>
-        fieldNames.push("element")
-        val elementWriter = newWriterRenaming(prevElementType, newElementType, renamedColumnsMap, fieldNames)
-        fieldNames.pop()
+        fieldNameStack.push("element")
+        val elementWriter = newWriterRenaming(prevElementType, newElementType, renamedColumnsMap, fieldNameStack)
+        fieldNameStack.pop()
 
         (fieldUpdater, ordinal, value) => {
           val prevArrayData = value.asInstanceOf[ArrayData]
@@ -279,7 +250,7 @@ object HoodieInternalRowUtils {
             if (element == null) {
               if (!containsNull) {
                 throw new HoodieException(
-                  s"Array value at path '${fieldNames.asScala.mkString(".")}' is not allowed to be null")
+                  s"Array value at path '${fieldNameStack.asScala.mkString(".")}' is not allowed to be null")
               } else {
                 elementUpdater.setNullAt(i)
               }
@@ -293,9 +264,9 @@ object HoodieInternalRowUtils {
         }
 
       case (MapType(_, prevValueType, valueContainsNull), MapType(_, newValueType, _)) =>
-        fieldNames.push("value")
-        val valueWriter = newWriterRenaming(prevValueType, newValueType, renamedColumnsMap, fieldNames)
-        fieldNames.pop()
+        fieldNameStack.push("value")
+        val valueWriter = newWriterRenaming(prevValueType, newValueType, renamedColumnsMap, fieldNameStack)
+        fieldNameStack.pop()
 
         (updater, ordinal, value) =>
           val arrayBasedMapData = value.asInstanceOf[ArrayBasedMapData]
@@ -310,7 +281,7 @@ object HoodieInternalRowUtils {
             val value = prevValueArray(i)
             if (value == null) {
               if (!valueContainsNull) {
-                throw new HoodieException(s"Map value at path ${fieldNames.asScala.mkString(".")} is not allowed to be null")
+                throw new HoodieException(s"Map value at path ${fieldNameStack.asScala.mkString(".")} is not allowed to be null")
               } else {
                 valueUpdater.setNullAt(i)
               }
@@ -328,7 +299,7 @@ object HoodieInternalRowUtils {
   }
 
   private def genUnsafeRowWriterInternal(prevStructType: StructType, newStructType: StructType): (CatalystDataUpdater, Any) => Unit = {
-    // TODO need to canonicalize schemas (casing)
+    // TODO canonicalize (casing of) schemas
     val fieldWriters = ArrayBuffer.empty[RowFieldUpdater]
     val positionMap = ArrayBuffer.empty[Int]
 
@@ -339,7 +310,6 @@ object HoodieInternalRowUtils {
           val prevField = prevStructType.fields(prevFieldPos)
           newWriter(prevField.dataType, newField.dataType)
         } else {
-          // TODO handle defaults
           (setter, ordinal, _) => setter.setNullAt(ordinal)
         }
 
@@ -364,7 +334,6 @@ object HoodieInternalRowUtils {
   }
 
   private def newWriter(prevDataType: DataType, newDataType: DataType): RowFieldUpdater = {
-    // TODO support map/array
     (newDataType, prevDataType) match {
       case (newType, prevType) if newType == prevType =>
         (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value)
@@ -374,7 +343,11 @@ object HoodieInternalRowUtils {
         val newRow = new SpecificInternalRow(newStructType.fields.map(_.dataType))
         val rowUpdater = new RowUpdater(newRow)
         (fieldUpdater, ordinal, value) => {
-          // TODO elaborate
+          // Here new row is built in 2 stages:
+          //    - First, we pass mutable row (used as buffer/scratchpad) created above wrapped into [[RowUpdater]]
+          //      into generated row-writer
+          //    - Upon returning from row-writer, we call back into parent row's [[fieldUpdater]] to set returned
+          //      row as a value in it
           writer(rowUpdater, value)
           fieldUpdater.set(ordinal, newRow)
         }
@@ -387,7 +360,6 @@ object HoodieInternalRowUtils {
               // TODO this has to be revisited to avoid loss of precision (for fps)
               fieldUpdater.setDecimal(ordinal, Decimal.fromDecimal(BigDecimal(value.toString).setScale(scale, ROUND_HALF_EVEN)))
 
-          // TODO validate decimal type is expanding
           case _: DecimalType =>
             (fieldUpdater, ordinal, value) =>
               fieldUpdater.setDecimal(ordinal, Decimal.fromDecimal(value.asInstanceOf[Decimal].toBigDecimal.setScale(newDecimal.scale)))
