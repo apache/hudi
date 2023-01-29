@@ -348,8 +348,10 @@ object HoodieInternalRowUtils {
       // NOTE: This is supported to stay compatible w/ [[HoodieAvroUtils.rewriteRecordWithNewSchema]]
       case (_: StringType, _) =>
         prevDataType match {
-          case BinaryType => (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, UTF8String.fromBytes(value.asInstanceOf[Array[Byte]]))
-          case DateType => (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, UTF8String.fromString(toJavaDate(value.asInstanceOf[Integer]).toString))
+          case BinaryType => (fieldUpdater, ordinal, value) =>
+            fieldUpdater.set(ordinal, UTF8String.fromBytes(value.asInstanceOf[Array[Byte]]))
+          case DateType => (fieldUpdater, ordinal, value) =>
+            fieldUpdater.set(ordinal, UTF8String.fromString(toJavaDate(value.asInstanceOf[Integer]).toString))
           case IntegerType | LongType | FloatType | DoubleType | _: DecimalType =>
             (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, UTF8String.fromString(value.toString))
 
