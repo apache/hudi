@@ -20,6 +20,7 @@ package org.apache.hudi.avro;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaCompatibility;
 
 import java.util.List;
 import java.util.Objects;
@@ -36,10 +37,17 @@ public class AvroSchemaUtils {
   private AvroSchemaUtils() {}
 
   /**
-   * See {@link #isSchemaCompatible(Schema, Schema, boolean)} doc for more details
+   * See {@link #isSchemaCompatible(Schema, Schema, boolean, boolean)} doc for more details
    */
   public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema) {
-    return isSchemaCompatible(prevSchema, newSchema, true);
+    return isSchemaCompatible(prevSchema, newSchema, true, false);
+  }
+
+  /**
+   * See {@link #isSchemaCompatible(Schema, Schema, boolean, boolean)} doc for more details
+   */
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean shouldAllowDroppedColumns) {
+    return isSchemaCompatible(prevSchema, newSchema, true, shouldAllowDroppedColumns);
   }
 
   /**
@@ -50,10 +58,20 @@ public class AvroSchemaUtils {
    * @param newSchema new instance of the schema
    * @param checkNaming controls whether schemas fully-qualified names should be checked
    */
-  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean checkNaming) {
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean checkNaming, boolean shouldAllowDroppedColumns) {
     // NOTE: We're establishing compatibility of the {@code prevSchema} and {@code newSchema}
     //       as following: {@code newSchema} is considered compatible to {@code prevSchema},
     //       iff data written using {@code prevSchema} could be read by {@code newSchema}
+
+    if (!shouldAllowDroppedColumns) {
+      // Check that each field in the oldSchema can be populated in the newSchema
+      for (final Schema.Field oldSchemaField : prevSchema.getFields()) {
+        final Schema.Field newSchemaField = SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField);
+        if (newSchemaField == null) {
+          return false;
+        }
+      }
+    }
     AvroSchemaCompatibility.SchemaPairCompatibility result =
         AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema, checkNaming);
     return result.getType() == AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
@@ -88,7 +106,7 @@ public class AvroSchemaUtils {
   private static boolean isAtomicSchemasCompatible(Schema oneAtomicType, Schema anotherAtomicType) {
     // NOTE: Checking for compatibility of atomic types, we should ignore their
     //       corresponding fully-qualified names (as irrelevant)
-    return isSchemaCompatible(oneAtomicType, anotherAtomicType, false);
+    return isSchemaCompatible(oneAtomicType, anotherAtomicType, false, true);
   }
 
   /**

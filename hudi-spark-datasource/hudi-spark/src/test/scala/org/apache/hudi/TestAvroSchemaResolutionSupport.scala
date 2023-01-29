@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
@@ -33,7 +34,7 @@ import scala.language.postfixOps
  * Test cases to validate Hudi's support for writing and reading when evolving schema implicitly via Avro's Schema Resolution
  * Note: Test will explicitly write into different partitions to ensure that a Hudi table will have multiple filegroups with different schemas.
  */
-class TestAvroSchemaResolutionSupport extends HoodieClientTestBase {
+class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAssertionSupport {
 
   var spark: SparkSession = _
   val commonOpts: Map[String, String] = Map(
@@ -82,12 +83,13 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase {
       .save(saveDir)
   }
 
-  def upsertData(df: DataFrame, saveDir: String, isCow: Boolean = true): Unit = {
-    val opts = if (isCow) {
+  def upsertData(df: DataFrame, saveDir: String, isCow: Boolean = true, shouldAllowDroppedColumns: Boolean = false): Unit = {
+    var opts = if (isCow) {
       commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE")
     } else {
       commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ")
     }
+    opts = opts ++ Map(HoodieWriteConfig.SCHEMA_ALLOW_DROP_COLUMNS.key -> shouldAllowDroppedColumns.toString)
 
     df.write.format("hudi")
       .options(opts)
@@ -228,7 +230,11 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase {
     upsertDf.show(false)
 
     // upsert
-    upsertData(upsertDf, tempRecordPath, isCow)
+    assertThrows(classOf[SchemaCompatibilityException]) {
+      upsertData(upsertDf, tempRecordPath, isCow)
+    }
+
+    upsertData(upsertDf, tempRecordPath, isCow, shouldAllowDroppedColumns = true)
 
     // read out the table
     val readDf = spark.read.format("hudi").load(tempRecordPath)
@@ -776,7 +782,10 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase {
     df6 = df6.withColumn("userid", df6.col("userid").cast("float"))
     df6.printSchema()
     df6.show(false)
-    upsertData(df6, tempRecordPath)
+    assertThrows(classOf[SchemaCompatibilityException]) {
+      upsertData(df6, tempRecordPath)
+    }
+    upsertData(df6, tempRecordPath, shouldAllowDroppedColumns = true)
 
     // 7. Rearrange column position
     var df7 = Seq((7, "newcol1", 700, newPartition)).toDF("id", "newcol1", "userid", "name")

@@ -227,6 +227,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue("true")
       .withDocumentation("Validate the schema used for the write against the latest schema, for backwards compatibility.");
 
+  public static final ConfigProperty<String> SCHEMA_ALLOW_DROP_COLUMNS = ConfigProperty
+      .key("hoodie.datasource.write.schema.allow.drop.columns")
+      .defaultValue("false")
+      .sinceVersion("0.13.0")
+      .withDocumentation("Controls whether incoming batch's schema can have dropped columns "
+          + "relative to the table's schema. By default, it is not allowed and "
+          + "SchemaCompatibilityException will be thrown. Set to true to allow dropped columns");
+
   public static final ConfigProperty<String> INSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.insert.shuffle.parallelism")
       .defaultValue("0")
@@ -1084,6 +1092,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldValidateAvroSchema() {
     return getBoolean(AVRO_SCHEMA_VALIDATE_ENABLE);
+  }
+
+  public boolean shouldAllowDroppedColumns() {
+    return getBooleanOrDefault(SCHEMA_ALLOW_DROP_COLUMNS);
   }
 
   public String getTableName() {
@@ -2448,6 +2460,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withAvroSchemaValidate(boolean enable) {
       writeConfig.setValue(AVRO_SCHEMA_VALIDATE_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withAllowDroppedColumns(boolean shouldAllowDroppedColumns) {
+      writeConfig.setValue(SCHEMA_ALLOW_DROP_COLUMNS, String.valueOf(shouldAllowDroppedColumns));
       return this;
     }
 
