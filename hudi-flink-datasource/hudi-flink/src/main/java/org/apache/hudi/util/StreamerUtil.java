@@ -57,8 +57,6 @@ import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
@@ -287,20 +285,19 @@ public class StreamerUtil {
   }
 
   /**
-   * Returns the table config or null if the table does not exist.
+   * Returns the table config or empty if the table does not exist.
    */
-  @Nullable
-  public static HoodieTableConfig getTableConfig(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
+  public static Option<HoodieTableConfig> getTableConfig(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
     FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
     Path metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     try {
       if (fs.exists(metaPath)) {
-        return new HoodieTableConfig(fs, metaPath.toString(), null, null);
+        return Option.of(new HoodieTableConfig(fs, metaPath.toString(), null, null));
       }
     } catch (IOException e) {
       throw new HoodieIOException("Get table config error", e);
     }
-    return null;
+    return Option.empty();
   }
 
   /**
