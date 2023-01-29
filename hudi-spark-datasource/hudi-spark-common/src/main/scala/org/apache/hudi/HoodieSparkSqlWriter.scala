@@ -417,7 +417,7 @@ object HoodieSparkSqlWriter {
           sourceSchema
         }
 
-        val shouldAllowDroppedColumns = opts.getOrDefault(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key,
+        val allowAutoEvolutionColumnDrop = opts.getOrDefault(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key,
           HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.defaultValue).toBoolean
 
         if (shouldReconcileSchema) {
@@ -431,8 +431,8 @@ object HoodieSparkSqlWriter {
             case None =>
               // In case schema reconciliation is enabled we will employ (legacy) reconciliation
               // strategy to produce target writer's schema (see definition below)
-              // NOTE: if schema reconciliation is turned on, then we should allow columns to be dropped
-              val (reconciledSchema, isCompatible) = reconcileSchemasLegacy(latestTableSchema, canonicalizedSourceSchema, shouldAllowDroppedColumns = true)
+              val (reconciledSchema, isCompatible) =
+                reconcileSchemasLegacy(latestTableSchema, canonicalizedSourceSchema)
 
               // NOTE: In some cases we need to relax constraint of incoming dataset's schema to be compatible
               //       w/ the table's one and allow schemas to diverge. This is required in cases where
@@ -459,7 +459,7 @@ object HoodieSparkSqlWriter {
           //       w/ the table's one and allow schemas to diverge. This is required in cases where
           //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
           //       only incoming dataset's projection has to match the table's schema, and not the whole one
-          if (!shouldValidateSchemasCompatibility || isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema, shouldAllowDroppedColumns)) {
+          if (!shouldValidateSchemasCompatibility || isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema, allowAutoEvolutionColumnDrop)) {
             canonicalizedSourceSchema
           } else {
             log.error(
@@ -544,7 +544,7 @@ object HoodieSparkSqlWriter {
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key()  -> schemaValidateEnable)
   }
 
-  private def reconcileSchemasLegacy(tableSchema: Schema, newSchema: Schema, shouldAllowDroppedColumns: Boolean): (Schema, Boolean) = {
+  private def reconcileSchemasLegacy(tableSchema: Schema, newSchema: Schema): (Schema, Boolean) = {
     // Legacy reconciliation implements following semantic
     //    - In case new-schema is a "compatible" projection of the existing table's one (projection allowing
     //      permitted type promotions), table's schema would be picked as (reconciled) writer's schema;
@@ -554,14 +554,18 @@ object HoodieSparkSqlWriter {
     // the other one (schema A contains schema B, if schema B is a projection of A). This enables us,
     // to always "extend" the schema during schema evolution and hence never lose the data (when, for ex
     // existing column is being dropped in a new batch)
+    //
+    // NOTE: By default Hudi doesn't allow automatic schema evolution to drop the columns from the target
+    //       table. However, when schema reconciliation is turned on, we would allow columns to be dropped
+    //       in the incoming batch (as these would be reconciled in anyway)
     if (isCompatibleProjectionOf(tableSchema, newSchema)) {
       // Picking table schema as a writer schema we need to validate that we'd be able to
       // rewrite incoming batch's data (written in new schema) into it
-      (tableSchema, isSchemaCompatible(newSchema, tableSchema, shouldAllowDroppedColumns))
+      (tableSchema, isSchemaCompatible(newSchema, tableSchema, true))
     } else {
       // Picking new schema as a writer schema we need to validate that we'd be able to
       // rewrite table's data into it
-      (newSchema, isSchemaCompatible(tableSchema, newSchema, shouldAllowDroppedColumns))
+      (newSchema, isSchemaCompatible(tableSchema, newSchema, true))
     }
   }
 

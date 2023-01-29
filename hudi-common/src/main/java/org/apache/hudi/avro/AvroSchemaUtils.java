@@ -39,15 +39,8 @@ public class AvroSchemaUtils {
   /**
    * See {@link #isSchemaCompatible(Schema, Schema, boolean, boolean)} doc for more details
    */
-  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema) {
-    return isSchemaCompatible(prevSchema, newSchema, true, false);
-  }
-
-  /**
-   * See {@link #isSchemaCompatible(Schema, Schema, boolean, boolean)} doc for more details
-   */
-  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean shouldAllowDroppedColumns) {
-    return isSchemaCompatible(prevSchema, newSchema, true, shouldAllowDroppedColumns);
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean allowProjection) {
+    return isSchemaCompatible(prevSchema, newSchema, true, allowProjection);
   }
 
   /**
@@ -58,12 +51,14 @@ public class AvroSchemaUtils {
    * @param newSchema new instance of the schema
    * @param checkNaming controls whether schemas fully-qualified names should be checked
    */
-  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean checkNaming, boolean shouldAllowDroppedColumns) {
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean checkNaming, boolean allowProjection) {
     // NOTE: We're establishing compatibility of the {@code prevSchema} and {@code newSchema}
     //       as following: {@code newSchema} is considered compatible to {@code prevSchema},
     //       iff data written using {@code prevSchema} could be read by {@code newSchema}
 
-    if (!shouldAllowDroppedColumns) {
+    // In case schema projection is not allowed, new schema has to have all the same fields as the
+    // old schema
+    if (!allowProjection) {
       // Check that each field in the oldSchema can be populated in the newSchema
       for (final Schema.Field oldSchemaField : prevSchema.getFields()) {
         final Schema.Field newSchemaField = SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField);
@@ -72,6 +67,7 @@ public class AvroSchemaUtils {
         }
       }
     }
+
     AvroSchemaCompatibility.SchemaPairCompatibility result =
         AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema, checkNaming);
     return result.getType() == AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
