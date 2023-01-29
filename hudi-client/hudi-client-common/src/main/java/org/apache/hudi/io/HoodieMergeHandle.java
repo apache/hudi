@@ -374,17 +374,11 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata) throws IOException {
-    // TODO(HUDI-5641) streamline schema evolution flow to avoid rewriting multiple times
-    //HoodieRecord rewrittenRecord = schemaOnReadEnabled
-    //    ? record.rewriteRecordWithNewSchema(schema, prop, writeSchemaWithMetaFields)
-    //    : record;
-    HoodieRecord rewrittenRecord = record;
-
     // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
     //       file holding this record even in cases when overall metadata is preserved
     MetadataValues metadataValues = new MetadataValues().setFileName(newFilePath.getName());
     HoodieRecord populatedRecord =
-        rewrittenRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, prop);
+        record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, prop);
 
     if (shouldPreserveRecordMetadata) {
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);

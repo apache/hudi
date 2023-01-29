@@ -246,18 +246,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           return finalRecordOpt;
         }
 
-        // TODO(HUDI-5641) streamline schema evolution flow to avoid rewriting multiple times
-        //HoodieRecord rewrittenRecord = schemaOnReadEnabled
-        //    ? finalRecord.rewriteRecordWithNewSchema(schema, recordProperties, writeSchemaWithMetaFields)
-        //    : finalRecord;
-        // NOTE: We need to create a new instance as the incoming will be deflated at the end of
-        //       the operation
-        HoodieRecord rewrittenRecord = finalRecord.newInstance();
-
         // Prepend meta-fields into the record
-        MetadataValues metadataValues = populateMetadataFields(rewrittenRecord);
+        MetadataValues metadataValues = populateMetadataFields(finalRecord);
         HoodieRecord populatedRecord =
-            rewrittenRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
+            finalRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
 
         // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
         //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
