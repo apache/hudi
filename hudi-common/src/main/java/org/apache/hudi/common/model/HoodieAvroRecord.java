@@ -155,14 +155,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     }
 
     GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
-
-    String[] values = metadataValues.getValues();
-    for (int pos = 0; pos < values.length; ++pos) {
-      String value = values[pos];
-      if (value != null) {
-        avroRecordPayload.put(HoodieMetadataField.values()[pos].getFieldName(), value);
-      }
-    }
+    updateMetadataValuesInternal(avroRecordPayload, metadataValues);
 
     return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation(), this.currentLocation, this.newLocation);
   }

@@ -70,8 +70,6 @@ import static org.apache.spark.sql.types.DataTypes.StringType;
  */
 public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements KryoSerializable {
 
-  public static String HOODIE_SPARK_ROW_SCHEMA_KEY = "HOODIE_SPARK_ROW_SCHEMA";
-
   /**
    * Record copy operation to avoid double copying. InternalRow do not need to copy twice.
    */
