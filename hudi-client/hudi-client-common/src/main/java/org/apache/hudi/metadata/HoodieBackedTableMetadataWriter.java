@@ -283,7 +283,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             // by default, the HFile does not keep the metadata fields, set up as false
             // to always use the metadata of the new record.
             .withPreserveCommitMetadata(false)
-            .withLogRecordReaderScanV2(String.valueOf(writeConfig.useScanV2ForLogRecordReader()))
+            .withEnableOptimizedLogBlocksScan(String.valueOf(writeConfig.enableOptimizedLogBlocksScan()))
             .build())
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)

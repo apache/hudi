@@ -90,7 +90,7 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
             .collect(Collectors.toList()))
         .withLatestInstantTime(maxInstantTime)
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
-        .withUseScanV2(true)
+        .withOptimizedLogBlocksScan(true)
         .withRecordMerger(writeConfig.getRecordMerger())
         .build();
     scanner.scan(true);
