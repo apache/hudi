@@ -197,11 +197,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
 
-    UTF8String[] metaFields = tryExtractMetaFields(this.data, structType);
-    boolean containMetaFields = hasMetaFields(recordSchema);
-    HoodieInternalRow internalRow = new HoodieInternalRow(metaFields, this.data, containMetaFields);
+    HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(this.data, structType);
+    updateMetadataValuesInternal(updatableRow, metadataValues);
 
-    return new HoodieSparkRecord(getKey(), internalRow, targetStructType, getOperation(), this.currentLocation, this.newLocation, false);
+    return new HoodieSparkRecord(getKey(), updatableRow, targetStructType, getOperation(), this.currentLocation, this.newLocation, false);
   }
 
   @Override
@@ -226,13 +225,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(data, structType);
 
-    String[] values = metadataValues.getValues();
-    for (int pos = 0; pos < values.length; ++pos) {
-      String value = values[pos];
-      if (value != null) {
-        updatableRow.update(pos, CatalystTypeConverters.convertToCatalyst(value));
-      }
-    }
+    updateMetadataValuesInternal(updatableRow, metadataValues);
 
     return new HoodieSparkRecord(getKey(), updatableRow, structType, getOperation(), this.currentLocation, this.newLocation, copy);
   }
@@ -389,6 +382,16 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
           .toArray(UTF8String[]::new);
     } else {
       return new UTF8String[HoodieRecord.HOODIE_META_COLUMNS.size()];
+    }
+  }
+
+  private static void updateMetadataValuesInternal(HoodieInternalRow updatableRow, MetadataValues metadataValues) {
+    String[] values = metadataValues.getValues();
+    for (int pos = 0; pos < values.length; ++pos) {
+      String value = values[pos];
+      if (value != null) {
+        updatableRow.update(pos, CatalystTypeConverters.convertToCatalyst(value));
+      }
     }
   }
 
