@@ -59,7 +59,7 @@ object HoodieInternalRowUtils {
     })
 
   private val schemaMap = new ConcurrentHashMap[Schema, StructType]
-  private val orderPosListMap = new ConcurrentHashMap[(StructType, String), NestedFieldPath]
+  private val orderPosListMap = new ConcurrentHashMap[(StructType, String), Option[NestedFieldPath]]
 
   def genUnsafeRowWriterRenaming(prevSchema: StructType, newSchema: StructType, renamedColumnsMap: JMap[String, String]): UnsafeRowWriter = {
     val writer = newWriterRenaming(prevSchema, newSchema, renamedColumnsMap, new JArrayDeque[String]())
@@ -104,21 +104,23 @@ object HoodieInternalRowUtils {
   }
 
   def getCachedPosList(structType: StructType, field: String): Option[NestedFieldPath] = {
-    val nestedFieldPath = orderPosListMap.get((structType, field))
-    if (nestedFieldPath != null) {
-      Some(nestedFieldPath)
+    val nestedFieldPathOpt = orderPosListMap.get((structType, field))
+    // NOTE: This specifically designed to do 2 lookups (in case of cache-miss) to avoid
+    //       allocating the closure when using [[computeIfAbsent]] on more frequent cache-hit path
+    if (nestedFieldPathOpt != null) {
+      nestedFieldPathOpt
     } else {
-      Some(
-        orderPosListMap.computeIfAbsent((structType, field), new JFunction[(StructType, String), NestedFieldPath] {
-          override def apply(t: (StructType, String)): NestedFieldPath =
-            composeNestedFieldPath(structType, field)
-        })
-      )
+      orderPosListMap.computeIfAbsent((structType, field), new JFunction[(StructType, String), Option[NestedFieldPath]] {
+        override def apply(t: (StructType, String)): Option[NestedFieldPath] =
+          composeNestedFieldPath(structType, field)
+      })
     }
   }
 
   def getCachedSchema(schema: Schema): StructType = {
     val structType = schemaMap.get(schema)
+    // NOTE: This specifically designed to do 2 lookups (in case of cache-miss) to avoid
+    //       allocating the closure when using [[computeIfAbsent]] on more frequent cache-hit path
     if (structType != null) {
       structType
     } else {
