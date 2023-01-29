@@ -34,24 +34,11 @@
     <dependencies>
         <dependency>
             <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-common</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-client-common</artifactId>
             <version>${project.version}</version>
         </dependency>
 
         <!-- Test -->
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-common</artifactId>
-            <version>${project.version}</version>
-            <classifier>tests</classifier>
-            <type>test-jar</type>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-client-common</artifactId>
