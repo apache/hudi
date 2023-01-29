@@ -198,11 +198,11 @@ object HoodieInternalRowUtils {
                                 newDataType: DataType,
                                 renamedColumnsMap: JMap[String, String],
                                 fieldNameStack: JDeque[String]): RowFieldUpdater = {
-    (prevDataType, newDataType) match {
-      case (prevType, newType) if prevType == newType =>
+    (newDataType, prevDataType) match {
+      case (newType, prevType) if prevType == newType =>
         (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value)
 
-      case (prevStructType: StructType, newStructType: StructType) =>
+      case (newStructType: StructType, prevStructType: StructType) =>
         val writer = genUnsafeStructWriter(prevStructType, newStructType, renamedColumnsMap, fieldNameStack)
 
         val newRow = new SpecificInternalRow(newStructType.fields.map(_.dataType))
@@ -218,7 +218,7 @@ object HoodieInternalRowUtils {
           fieldUpdater.set(ordinal, newRow)
         }
 
-      case (ArrayType(prevElementType, containsNull), ArrayType(newElementType, _)) =>
+      case (ArrayType(newElementType, _), ArrayType(prevElementType, containsNull)) =>
         fieldNameStack.push("element")
         val elementWriter = newWriterRenaming(prevElementType, newElementType, renamedColumnsMap, fieldNameStack)
         fieldNameStack.pop()
@@ -249,7 +249,7 @@ object HoodieInternalRowUtils {
           fieldUpdater.set(ordinal, newArrayData)
         }
 
-      case (MapType(_, prevValueType, valueContainsNull), MapType(_, newValueType, _)) =>
+      case (MapType(_, newValueType, _), MapType(_, prevValueType, valueContainsNull)) =>
         fieldNameStack.push("value")
         val valueWriter = newWriterRenaming(prevValueType, newValueType, renamedColumnsMap, fieldNameStack)
         fieldNameStack.pop()
