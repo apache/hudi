@@ -125,15 +125,6 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord updateMetadataValues(Schema recordSchema, MetadataValues metadataValues, Properties props) {
-    if (metadataValues.isEmpty()) {
-      return this;
-    }
-    updateMetadataValuesInternal((GenericRecord) data, metadataValues);
-    return new HoodieAvroIndexedRecord(key, data, operation, metaData);
-  }
-
-  @Override
   public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) {
     ((GenericRecord) data).put(keyFieldName, StringUtils.EMPTY_STRING);
     return this;

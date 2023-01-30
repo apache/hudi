@@ -149,18 +149,6 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord updateMetadataValues(Schema recordSchema, MetadataValues metadataValues, Properties props) throws IOException {
-    if (metadataValues.isEmpty()) {
-      return this;
-    }
-
-    GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
-    updateMetadataValuesInternal(avroRecordPayload, metadataValues);
-
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation(), this.currentLocation, this.newLocation);
-  }
-
-  @Override
   public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) throws IOException {
     GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
     avroRecordPayload.put(keyFieldName, StringUtils.EMPTY_STRING);

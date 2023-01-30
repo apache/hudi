@@ -369,12 +369,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return rewriteRecordWithNewSchema(recordSchema, props, newSchema, Collections.emptyMap());
   }
 
-  /**
-   * This method could change in the future.
-   * @temporary
-   */
-  public abstract HoodieRecord updateMetadataValues(Schema recordSchema, MetadataValues metadataValues, Properties props) throws IOException;
-
   public abstract boolean isDelete(Schema recordSchema, Properties props) throws IOException;
 
   /**

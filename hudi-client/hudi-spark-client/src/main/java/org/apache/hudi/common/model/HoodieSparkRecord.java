@@ -214,20 +214,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
   }
 
   @Override
-  public HoodieRecord updateMetadataValues(Schema recordSchema, MetadataValues metadataValues, Properties props) {
-    if (metadataValues.isEmpty()) {
-      return this;
-    }
-
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
-    HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(data, structType);
-
-    updateMetadataValuesInternal(updatableRow, metadataValues);
-
-    return new HoodieSparkRecord(getKey(), updatableRow, structType, getOperation(), this.currentLocation, this.newLocation, copy);
-  }
-
-  @Override
   public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     int pos = structType.fieldIndex(keyFieldName);
