@@ -56,11 +56,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.AS_IS;
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.BASE_FILE_DELETE;
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.BASE_FILE_INSERT;
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.LOG_FILE;
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.REPLACE_COMMIT;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.AS_IS;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.BASE_FILE_DELETE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.BASE_FILE_INSERT;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.LOG_FILE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.REPLACE_COMMIT;
 import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before_after;
 import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.op_key_only;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
