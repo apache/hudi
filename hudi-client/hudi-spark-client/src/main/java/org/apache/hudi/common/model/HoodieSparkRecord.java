@@ -350,22 +350,28 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     }
 
     boolean containsMetaFields = hasMetaFields(structType);
-    UTF8String[] metaFields = tryExtractMetaFields(data, structType);
+    UTF8String[] metaFields = extractMetaFields(data, structType);
     return new HoodieInternalRow(metaFields, data, containsMetaFields);
   }
 
-  private static UTF8String[] tryExtractMetaFields(InternalRow row, StructType structType) {
+  private static UTF8String[] extractMetaFields(InternalRow row, StructType structType) {
     boolean containsMetaFields = hasMetaFields(structType);
-    if (containsMetaFields && structType.size() == 1) {
-      // Support bootstrap with RECORD_KEY_SCHEMA
-      return new UTF8String[] {row.getUTF8String(0)};
-    } else if (containsMetaFields) {
-      return HoodieRecord.HOODIE_META_COLUMNS.stream()
-          .map(col -> row.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(col)))
-          .toArray(UTF8String[]::new);
-    } else {
-      return new UTF8String[HoodieRecord.HOODIE_META_COLUMNS.size()];
+    if (containsMetaFields) {
+      if (structType.size() == 1) {
+        // Support bootstrap with RECORD_KEY_SCHEMA:
+        // In that case the only provided field is actually just the meta-field holding
+        // record-key
+        UTF8String[] metaFields = new UTF8String[HoodieRecord.HOODIE_META_COLUMNS.size()];
+        metaFields[HoodieRecord.RECORD_KEY_META_FIELD_ORD] = row.getUTF8String(0);
+        return metaFields;
+      } else {
+        return HoodieRecord.HOODIE_META_COLUMNS.stream()
+            .map(col -> row.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(col)))
+            .toArray(UTF8String[]::new);
+      }
     }
+
+    return new UTF8String[HoodieRecord.HOODIE_META_COLUMNS.size()];
   }
 
   private static void updateMetadataValuesInternal(HoodieInternalRow updatableRow, MetadataValues metadataValues) {
@@ -379,6 +385,9 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
   }
 
   private static boolean hasMetaFields(StructType structType) {
+    // NOTE: We're always checking for the presence of the record-key metadata field
+    //       to support Metadata Bootstrap flow, where record-key will be actually the
+    //       only provided field
     return structType.getFieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD).isDefined();
   }
 
