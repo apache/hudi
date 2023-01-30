@@ -30,7 +30,7 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -46,7 +46,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, 
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
-import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
@@ -657,13 +657,21 @@ class TestHoodieSparkSqlWriter {
    * @param tableType Type of table
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testSchemaEvolutionForTableType(tableType: String): Unit = {
+  @CsvSource(value = Array(
+    "COPY_ON_WRITE,true",
+    "COPY_ON_WRITE,false",
+    "MERGE_ON_READ,true",
+    "MERGE_ON_READ,false"
+  ))
+  def testSchemaEvolutionForTableType(tableType: String, allowColumnDrop: Boolean): Unit = {
+    val opts = getCommonParams(tempPath, hoodieFooTableName, tableType) ++ Map(
+      HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> allowColumnDrop.toString
+    )
+
     // Create new table
     // NOTE: We disable Schema Reconciliation by default (such that Writer's
     //       schema is favored over existing Table's schema)
-    val noReconciliationOpts = getCommonParams(tempPath, hoodieFooTableName, tableType)
-      .updated(DataSourceWriteOptions.RECONCILE_SCHEMA.key, "false")
+    val noReconciliationOpts = opts.updated(DataSourceWriteOptions.RECONCILE_SCHEMA.key, "false")
 
     // Generate 1st batch
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -748,22 +756,29 @@ class TestHoodieSparkSqlWriter {
     recordsSeq = convertRowListToSeq(records)
 
     val df5 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df5)
 
-    val snapshotDF5 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    if (allowColumnDrop) {
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df5)
 
-    assertEquals(35, snapshotDF5.count())
+      val snapshotDF5 = spark.read.format("org.apache.hudi")
+        .load(tempBasePath + "/*/*/*/*")
 
-    assertEquals(df5.intersect(dropMetaFields(snapshotDF5)).except(df5).count, 0)
+      assertEquals(35, snapshotDF5.count())
 
-    val fifthBatchActualSchema = fetchActualSchema()
-    val fifthBatchExpectedSchema = {
-      val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
-      AvroConversionUtils.convertStructTypeToAvroSchema(df5.schema, structName, nameSpace)
+      assertEquals(df5.intersect(dropMetaFields(snapshotDF5)).except(df5).count, 0)
+
+      val fifthBatchActualSchema = fetchActualSchema()
+      val fifthBatchExpectedSchema = {
+        val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
+        AvroConversionUtils.convertStructTypeToAvroSchema(df5.schema, structName, nameSpace)
+      }
+
+      assertEquals(fifthBatchExpectedSchema, fifthBatchActualSchema)
+    } else {
+      assertThrows[SchemaCompatibilityException] {
+        HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df5)
+      }
     }
-
-    assertEquals(fifthBatchExpectedSchema, fifthBatchActualSchema)
   }
 
   /**
