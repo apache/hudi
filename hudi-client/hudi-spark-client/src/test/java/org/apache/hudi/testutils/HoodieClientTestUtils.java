@@ -18,6 +18,7 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -92,9 +93,17 @@ public class HoodieClientTestUtils {
    */
   public static SparkConf getSparkConfForTest(String appName) {
     SparkConf sparkConf = new SparkConf().setAppName(appName)
-        .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").setMaster("local[4]")
+        .setMaster("local[4]")
+        .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+        .set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+        .set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
         .set("spark.sql.shuffle.partitions", "4")
         .set("spark.default.parallelism", "4");
+
+    if (HoodieSparkUtils.gteqSpark3_2()) {
+      sparkConf.set("spark.sql.catalog.spark_catalog",
+          "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
+    }
 
     String evlogDir = System.getProperty("SPARK_EVLOG_DIR");
     if (evlogDir != null) {

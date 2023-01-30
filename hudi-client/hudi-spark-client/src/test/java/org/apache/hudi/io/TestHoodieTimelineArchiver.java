@@ -807,7 +807,12 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
       List<HoodieInstant> originalCommits = commitsList.getKey();
       List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
       if (enableMetadata) {
-        assertEquals(originalCommits, commitsAfterArchival);
+        if (i != 6) {
+          assertEquals(originalCommits, commitsAfterArchival);
+        } else {
+          // on 6th commit, archival will kick in. but will archive only one commit since 2nd compaction commit is inflight.
+          assertEquals(originalCommits.size() - commitsAfterArchival.size(), 1);
+        }
       } else {
         if (i != 6) {
           assertEquals(originalCommits, commitsAfterArchival);
@@ -1291,7 +1296,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
             .withMaxNumDeltaCommitsBeforeCompaction(8)
-            .retainCommits(1).archiveCommitsWith(2, 4).build())
+            .retainCommits(3).archiveCommitsWith(4, 5).build())
         .forTable("test-trip-table").build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
 

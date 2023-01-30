@@ -62,9 +62,8 @@ public class HoodieIndexUtils {
    * @param hoodieTable Instance of {@link HoodieTable} of interest
    * @return the list of {@link HoodieBaseFile}
    */
-  public static List<HoodieBaseFile> getLatestBaseFilesForPartition(
-      final String partition,
-      final HoodieTable hoodieTable) {
+  public static List<HoodieBaseFile> getLatestBaseFilesForPartition(String partition,
+                                                                    HoodieTable hoodieTable) {
     Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
         .filterCompletedInstants().lastInstant();
     if (latestCommitTime.isPresent()) {

@@ -74,7 +74,7 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
     return this;
   }
 
-  public <R extends Exception> T start(CheckedFunction<T, R> func) throws R {
+  public T start(CheckedFunction<T, R> func) throws R {
     int retries = 0;
     T functionResult = null;
 

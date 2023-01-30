@@ -495,7 +495,17 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    *
    * @return information on cleaned file slices
    */
-  public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime, boolean skipLocking);
+  @Deprecated
+  public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime, boolean skipLocking) {
+    return clean(context, cleanInstantTime);
+  }
+
+  /**
+   * Executes a new clean action.
+   *
+   * @return information on cleaned file slices
+   */
+  public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime);
 
   /**
    * Schedule rollback for the instant time.

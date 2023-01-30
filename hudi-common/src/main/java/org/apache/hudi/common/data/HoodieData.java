@@ -105,9 +105,9 @@ public interface HoodieData<T> extends Serializable {
       Iterator<O>> func, boolean preservesPartitioning);
 
   /**
-   * Maps every element in the collection into a collection of the new elements (provided by
-   * {@link Iterator}) using provided mapping {@code func}, subsequently flattening the result
-   * (by concatenating) into a single collection
+   * Maps every element in the collection into a collection of the new elements using provided
+   * mapping {@code func}, subsequently flattening the result (by concatenating) into a single
+   * collection
    *
    * This is an intermediate operation
    *
@@ -116,6 +116,17 @@ public interface HoodieData<T> extends Serializable {
    * @return {@link HoodieData<O>} holding mapped elements
    */
   <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func);
+
+  /**
+   * Maps every element in the collection into a collection of the {@link Pair}s of new elements
+   * using provided mapping {@code func}, subsequently flattening the result (by concatenating) into
+   * a single collection
+   *
+   * NOTE: That this operation will convert container from {@link HoodieData} to {@link HoodiePairData}
+   *
+   * This is an intermediate operation
+   */
+  <K, V> HoodiePairData<K, V> flatMapToPair(SerializableFunction<T, Iterator<? extends Pair<K, V>>> func);
 
   /**
    * Maps every element in the collection using provided mapping {@code func} into a {@link Pair<K, V>}
