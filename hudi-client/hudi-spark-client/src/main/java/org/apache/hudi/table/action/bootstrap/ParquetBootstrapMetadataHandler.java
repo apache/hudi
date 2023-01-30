@@ -50,6 +50,7 @@ import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.util.function.Function;
@@ -118,7 +119,9 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
         StructType schema = HoodieInternalRowUtils$.MODULE$.getCachedSchema(HoodieAvroUtils.RECORD_KEY_SCHEMA);
         UnsafeProjection unsafeProjection = HoodieInternalRowUtils$.MODULE$.getCachedUnsafeProjection(schema, schema);
 
-        GenericInternalRow row = new GenericInternalRow(new Object[]{ recordKey });
+        GenericInternalRow row = new GenericInternalRow(new Object[]{
+            UTF8String.fromString(recordKey)
+        });
         UnsafeRow unsafeRow = unsafeProjection.apply(row);
         return new HoodieSparkRecord(hoodieKey, unsafeRow,false);
 
