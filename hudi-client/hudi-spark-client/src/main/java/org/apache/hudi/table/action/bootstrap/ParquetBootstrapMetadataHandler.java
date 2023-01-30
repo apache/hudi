@@ -18,9 +18,9 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
+import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -54,8 +54,16 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 
 class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
+
+  // NOTE: We have to use schema containing all the meta-fields in here b/c unlike for [[HoodieAvroRecord]],
+  //       [[HoodieSparkRecord]] requires records to always bear either all or no meta-fields in the
+  //       record schema (ie partial inclusion of the meta-fields in the schema is not allowed)
+  protected static final Schema METADATA_BOOTSTRAP_RECORD_SCHEMA = createMetadataBootstrapRecordSchema();
 
   public ParquetBootstrapMetadataHandler(HoodieWriteConfig config, HoodieTable table, HoodieFileStatus srcFileStatus) {
     super(config, table, srcFileStatus);
@@ -110,25 +118,35 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     HoodieKey hoodieKey = new HoodieKey(recordKey, partitionPath);
     switch (recordType) {
       case AVRO:
-        GenericRecord avroRecord = new GenericData.Record(HoodieAvroUtils.RECORD_KEY_SCHEMA);
+        GenericRecord avroRecord = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA);
         avroRecord.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
         BootstrapRecordPayload payload = new BootstrapRecordPayload(avroRecord);
         return new HoodieAvroRecord<>(hoodieKey, payload);
 
       case SPARK:
-        StructType schema = HoodieInternalRowUtils$.MODULE$.getCachedSchema(HoodieAvroUtils.RECORD_KEY_SCHEMA);
+        StructType schema = HoodieInternalRowUtils$.MODULE$.getCachedSchema(METADATA_BOOTSTRAP_RECORD_SCHEMA);
         UnsafeProjection unsafeProjection = HoodieInternalRowUtils$.MODULE$.getCachedUnsafeProjection(schema, schema);
 
-        GenericInternalRow row = new GenericInternalRow(new Object[]{
-            UTF8String.fromString(recordKey)
-        });
+        GenericInternalRow row = new GenericInternalRow(METADATA_BOOTSTRAP_RECORD_SCHEMA.getFields().size());
+        row.update(HoodieRecord.RECORD_KEY_META_FIELD_ORD, UTF8String.fromString(recordKey));
+
         UnsafeRow unsafeRow = unsafeProjection.apply(row);
+
         return new HoodieSparkRecord(hoodieKey, unsafeRow,false);
 
       default:
         throw new UnsupportedOperationException(String.format("Record type %s is not supported yet!", recordType));
     }
 
+  }
+
+  private static Schema createMetadataBootstrapRecordSchema() {
+    return Schema.createRecord(
+        HoodieRecord.HOODIE_META_COLUMNS.stream()
+            .map(metaField ->
+                new Schema.Field(metaField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE))
+            .collect(Collectors.toList())
+    );
   }
 }
 
