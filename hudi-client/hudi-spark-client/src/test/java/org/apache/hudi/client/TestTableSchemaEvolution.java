@@ -205,12 +205,13 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     try {
       writeBatch(client, "005", "004", Option.empty(), "003", numRecords,
           (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, false, numRecords, 2 * numRecords, 5, false);
+      assertTrue(shouldAllowDroppedColumns);
     } catch (HoodieInsertException e) {
       assertFalse(shouldAllowDroppedColumns);
       return;
     }
 
-    // Update with evolved schema (column dropped) is allowed
+    // Update with evolved schema (column dropped) might be allowed depending on config set.
     updateBatch(hoodieDevolvedWriteConfig, client, "006", "005", Option.empty(),
                 initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, false, numUpdateRecords, 2 * numRecords, 0);
 
@@ -241,6 +242,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     try {
       updateBatch(hoodieWriteConfig, client, "009", "008", Option.empty(),
           initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, false, numUpdateRecords, 4 * numRecords, 9);
+      assertTrue(shouldAllowDroppedColumns);
     } catch (HoodieUpsertException e) {
       assertFalse(shouldAllowDroppedColumns);
     }
@@ -288,6 +290,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     try {
       writeBatch(client, "004", "003", Option.empty(), "003", numRecords,
           (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, true, numRecords, numRecords * 2, 1, false);
+      assertTrue(shouldAllowDroppedColumns);
     } catch (HoodieInsertException e) {
       assertFalse(shouldAllowDroppedColumns);
       return;
@@ -324,6 +327,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       updateBatch(hoodieWriteConfig, client, "008", "007", Option.empty(),
           initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, true,
           numUpdateRecords, 3 * numRecords, 8);
+      assertTrue(shouldAllowDroppedColumns);
     } catch (HoodieUpsertException e) {
       assertFalse(shouldAllowDroppedColumns);
     }

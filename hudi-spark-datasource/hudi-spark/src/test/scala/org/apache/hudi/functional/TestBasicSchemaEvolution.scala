@@ -202,7 +202,8 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
     }
 
     //
-    // 3. Write 3d batch with another schema (w/ omitted a _nullable_ column `second_name`, expected to succeed)
+    // 3. Write 3d batch with another schema (w/ omitted a _nullable_ column `second_name`, expected to succeed if
+    // col drop is enabled)
     //
 
     val thirdSchema = StructType(

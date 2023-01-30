@@ -60,11 +60,10 @@ public class AvroSchemaUtils {
     // old schema
     if (!allowProjection) {
       // Check that each field in the oldSchema can be populated in the newSchema
-      for (final Schema.Field oldSchemaField : prevSchema.getFields()) {
-        final Schema.Field newSchemaField = SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField);
-        if (newSchemaField == null) {
-          return false;
-        }
+      if (prevSchema.getFields().stream()
+          .map(oldSchemaField -> SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField))
+          .anyMatch(Objects::isNull)) {
+        return false;
       }
     }
 
