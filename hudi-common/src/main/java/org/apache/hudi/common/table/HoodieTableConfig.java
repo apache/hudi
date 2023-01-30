@@ -140,7 +140,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> CDC_SUPPLEMENTAL_LOGGING_MODE = ConfigProperty
       .key("hoodie.table.cdc.supplemental.logging.mode")
-      .defaultValue(op_key_only.name())
+      .defaultValue(data_before_after.name())
       .withValidValues(
           op_key_only.name(),
           data_before.name(),
