@@ -21,13 +21,13 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.utils.DeletePartitionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -38,13 +38,11 @@ import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -65,7 +63,7 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    checkPreconditions();
+    DeletePartitionUtils.checkForPendingTableServiceActions(table, partitions);
 
     try {
       HoodieTimer timer = new HoodieTimer().startTimer();
@@ -102,44 +100,5 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
   private List<String> getAllExistingFileIds(String partitionPath) {
     // because new commit is not complete. it is safe to mark all existing file Ids as old files
     return table.getSliceView().getLatestFileSlices(partitionPath).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
-  }
-
-  /**
-   * Check if there are any pending table service actions (requested + inflight) on a table affecting the partitions to
-   * be dropped.
-   * <p>
-   * This check is to prevent a drop-partition from proceeding should a partition have a table service action in
-   * the pending stage. If this is allowed to happen, the filegroup that is an input for a table service action, might
-   * also be a candidate for being replaced. As such, when the table service action and drop-partition commits are
-   * committed, there will be two commits replacing a single filegroup.
-   * <p>
-   * For example, a timeline might have an execution order as such:
-   * 000.replacecommit.requested (clustering filegroup_1 + filegroup_2 -> filegroup_3)
-   * 001.replacecommit.requested, 001.replacecommit.inflight, 0001.replacecommit (drop_partition to replace filegroup_1)
-   * 000.replacecommit.inflight (clustering is executed now)
-   * 000.replacecommit (clustering completed)
-   * For an execution order as shown above, 000.replacecommit and 001.replacecommit will both flag filegroup_1 to be replaced.
-   * This will cause downstream duplicate key errors when a map is being constructed.
-   */
-  private void checkPreconditions() {
-    List<String> instantsOfOffendingPendingTableServiceAction = new ArrayList<>();
-    // ensure that there are no pending inflight clustering/compaction operations involving this partition
-    SyncableFileSystemView fileSystemView = (SyncableFileSystemView) table.getSliceView();
-
-    // separating the iteration of pending compaction operations from clustering as they return different stream types
-    Stream.concat(fileSystemView.getPendingCompactionOperations(), fileSystemView.getPendingLogCompactionOperations())
-        .filter(op -> partitions.contains(op.getRight().getPartitionPath()))
-        .forEach(op -> instantsOfOffendingPendingTableServiceAction.add(op.getLeft()));
-
-    fileSystemView.getFileGroupsInPendingClustering()
-        .filter(fgIdInstantPair -> partitions.contains(fgIdInstantPair.getLeft().getPartitionPath()))
-        .forEach(x -> instantsOfOffendingPendingTableServiceAction.add(x.getRight().getTimestamp()));
-
-    if (instantsOfOffendingPendingTableServiceAction.size() > 0) {
-      throw new HoodieDeletePartitionException("Failed to drop partitions. "
-          + "Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: " + partitions + ". "
-          + "Instant(s) of offending pending table service action: "
-          + instantsOfOffendingPendingTableServiceAction.stream().distinct().collect(Collectors.toList()));
-    }
   }
 }
