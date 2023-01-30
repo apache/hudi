@@ -126,6 +126,7 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
     // ensure that there are no pending inflight clustering/compaction operations involving this partition
     SyncableFileSystemView fileSystemView = (SyncableFileSystemView) table.getSliceView();
 
+    // separating the iteration of pending compaction operations from clustering as they return different stream types
     Stream.concat(fileSystemView.getPendingCompactionOperations(), fileSystemView.getPendingLogCompactionOperations())
         .filter(op -> partitions.contains(op.getRight().getPartitionPath()))
         .forEach(op -> instantsOfOffendingPendingTableServiceAction.add(op.getLeft()));
