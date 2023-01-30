@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.model.HoodieFileStatus;
@@ -54,16 +53,10 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
+import static org.apache.hudi.io.HoodieBootstrapHandle.METADATA_BOOTSTRAP_RECORD_SCHEMA;
 
 class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
-
-  // NOTE: We have to use schema containing all the meta-fields in here b/c unlike for [[HoodieAvroRecord]],
-  //       [[HoodieSparkRecord]] requires records to always bear either all or no meta-fields in the
-  //       record schema (ie partial inclusion of the meta-fields in the schema is not allowed)
-  protected static final Schema METADATA_BOOTSTRAP_RECORD_SCHEMA = createMetadataBootstrapRecordSchema();
 
   public ParquetBootstrapMetadataHandler(HoodieWriteConfig config, HoodieTable table, HoodieFileStatus srcFileStatus) {
     super(config, table, srcFileStatus);
@@ -138,15 +131,6 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
         throw new UnsupportedOperationException(String.format("Record type %s is not supported yet!", recordType));
     }
 
-  }
-
-  private static Schema createMetadataBootstrapRecordSchema() {
-    return Schema.createRecord(
-        HoodieRecord.HOODIE_META_COLUMNS.stream()
-            .map(metaField ->
-                new Schema.Field(metaField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE))
-            .collect(Collectors.toList())
-    );
   }
 }
 
