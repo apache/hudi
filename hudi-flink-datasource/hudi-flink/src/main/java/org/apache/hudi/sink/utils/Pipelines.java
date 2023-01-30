@@ -62,8 +62,7 @@ import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -139,10 +138,17 @@ public class Pipelines {
         dataStream = dataStream.partitionCustom(partitioner, rowDataKeyGen::getPartitionPath);
       }
       if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
-        SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, partitionFields);
-        // sort by partition keys
+        String[] sortFields = partitionFields;
+        if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY)) {
+          // sort by record keys
+          ArrayList<String> sortList = new ArrayList<>(Arrays.asList(partitionFields));
+          Collections.addAll(sortList, conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
+          sortFields = sortList.toArray(new String[0]);
+        }
+        SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, sortFields);
+        // sort by partition keys or (partition keys and record keys)
         dataStream = dataStream
-            .transform("partition_key_sorter",
+            .transform("partition_and_record_key_sorter",
                 InternalTypeInfo.of(rowType),
                 sortOperatorGen.createSortOperator())
             .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
