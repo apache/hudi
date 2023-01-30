@@ -20,12 +20,12 @@ package org.apache.hudi.client.utils;
 
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.exception.HoodieDeletePartitionException;
+import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.hudi.table.HoodieTable;
 
 public class DeletePartitionUtils {
 
