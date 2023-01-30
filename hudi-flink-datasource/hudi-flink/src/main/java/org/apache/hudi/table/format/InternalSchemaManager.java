@@ -93,6 +93,17 @@ public class InternalSchemaManager implements Serializable {
     return querySchema;
   }
 
+  /**
+   * Attempts to merge the file and query schema to produce a mergeSchema, prioritising the use of fileSchema types.
+   * An emptySchema is returned if:
+   * <ul>
+   * <li>1. An empty querySchema is provided</li>
+   * <li>2. querySchema is equal to fileSchema</li>
+   * </ul>
+   * Note that this method returns an emptySchema if merging is not required to be performed.
+   * @param fileName Name of file to fetch commitTime/versionId for
+   * @return mergeSchema, i.e. the schema on which the file should be read with
+   */
   InternalSchema getMergeSchema(String fileName) {
     if (querySchema.isEmptySchema()) {
       return querySchema;

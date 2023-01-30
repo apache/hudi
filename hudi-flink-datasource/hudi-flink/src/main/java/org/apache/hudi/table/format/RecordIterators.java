@@ -50,7 +50,8 @@ public abstract class RecordIterators {
       Path path,
       long splitStart,
       long splitLength) throws IOException {
-    if (internalSchemaManager.getQuerySchema().isEmptySchema()) {
+    InternalSchema mergeSchema = internalSchemaManager.getMergeSchema(path.getName());
+    if (mergeSchema.isEmptySchema()) {
       return new ParquetSplitRecordIterator(
           ParquetSplitReaderUtil.genPartColumnarRowReader(
               utcTimestamp,
@@ -65,7 +66,6 @@ public abstract class RecordIterators {
               splitStart,
               splitLength));
     } else {
-      InternalSchema mergeSchema = internalSchemaManager.getMergeSchema(path.getName());
       CastMap castMap = internalSchemaManager.getCastMap(mergeSchema, fieldNames, fieldTypes, selectedFields);
       Option<RowDataProjection> castProjection = castMap.toRowDataProjection(selectedFields);
       ClosableIterator<RowData> itr = new ParquetSplitRecordIterator(
