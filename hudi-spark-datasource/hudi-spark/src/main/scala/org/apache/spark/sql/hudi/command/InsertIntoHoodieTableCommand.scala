@@ -91,7 +91,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     var isOverWriteTable = false
     var isOverWritePartition = false
     if (overwrite && partitionSpec.isEmpty) {
-      // insert overwrite non-partition table
+      // insert overwrite table
       mode = SaveMode.Overwrite
       isOverWriteTable = true
     } else {
