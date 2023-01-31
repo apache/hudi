@@ -480,7 +480,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     private HoodieUnsafeRowUtils.NestedFieldPath[] resolveNestedFieldPaths(List<String> fieldPaths, StructType schema, boolean returnNull) {
       try {
         return fieldPaths.stream()
-            .map(fieldPath -> HoodieUnsafeRowUtils$.MODULE$.composeNestedFieldPath(schema, fieldPath))
+            .map(fieldPath -> HoodieUnsafeRowUtils$.MODULE$.composeNestedFieldPath(schema, fieldPath).get())
             .toArray(HoodieUnsafeRowUtils.NestedFieldPath[]::new);
       } catch (Exception e) {
         if (returnNull) {
