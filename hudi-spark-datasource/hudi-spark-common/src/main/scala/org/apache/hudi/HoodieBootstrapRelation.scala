@@ -27,6 +27,7 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
@@ -60,12 +61,11 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
   override type FileSplit = HoodieBootstrapSplit
   override type Relation = HoodieBootstrapRelation
 
-  private lazy val skeletonSchema: StructType = HoodieSparkUtils.getMetaSchema
-  private lazy val fullSchema = StructType(skeletonSchema.fields ++ dataSchema.fields)
+  private val resolver = sqlContext.sparkSession.sessionState.analyzer.resolver
+
+  private lazy val skeletonSchema = HoodieSparkUtils.getMetaSchema
 
   override val mandatoryFields: Seq[String] = Seq.empty
-
-  override def schema: StructType = fullSchema
 
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit] = {
     val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
@@ -90,22 +90,28 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
                                     filters: Array[Filter]): RDD[InternalRow] = {
-    val (partitionSchema, dataSchema, requiredDataSchema) =
-      tryPrunePartitionColumns(tableSchema, requiredSchema)
+    // NOTE: "Data" schema in here refers to the whole table's schema that doesn't include only partition
+    //       columns, as opposed to data file schema not including any meta-fields columns in case of
+    //       Bootstrap relation
+    val (partitionSchema, dataSchema, requiredDataSchema) = tryPrunePartitionColumns(tableSchema, requiredSchema)
 
-    val resolver = sqlContext.sparkSession.sessionState.analyzer.resolver
+    val dataFileSchema = StructType(dataSchema.structTypeSchema.filterNot(sf => isMetaField(sf.name)))
+    val requiredDataFileSchema = StructType(requiredDataSchema.structTypeSchema.filterNot(sf => isMetaField(sf.name)))
 
-    val requiredSkeletonSchema = StructType(skeletonSchema.filter(f => requestedColumns.exists(col => resolver(f.name, col))))
-    val requiredCombinedSchema = StructType(requiredSkeletonSchema.fields ++ requiredDataSchema.structTypeSchema.fields)
+    val requiredSkeletonFileSchema =
+      StructType(skeletonSchema.filter(f => requestedColumns.exists(col => resolver(f.name, col))))
 
-    validate(requiredCombinedSchema, requestedColumns.toSeq)
+    validate(requiredDataSchema, requiredDataFileSchema, requiredSkeletonFileSchema)
+
+    // TODO rebase readers on createBaseFileReader
 
     val dataReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = sqlContext.sparkSession,
-      dataSchema = dataSchema.structTypeSchema,
+      dataSchema = dataFileSchema,
       partitionSchema = partitionSchema,
-      requiredSchema = requiredDataSchema.structTypeSchema,
-      filters = if (requiredSkeletonSchema.isEmpty) filters else Seq(),
+      requiredSchema = requiredDataFileSchema,
+      // TODO elaborate
+      filters = if (requiredSkeletonFileSchema.isEmpty) filters else Seq(),
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
@@ -114,24 +120,26 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       sparkSession = sqlContext.sparkSession,
       dataSchema = skeletonSchema,
       partitionSchema = partitionSchema,
-      requiredSchema = requiredSkeletonSchema,
-      filters = if (requiredDataSchema.structTypeSchema.isEmpty) filters else Seq(),
+      requiredSchema = requiredSkeletonFileSchema,
+      // TODO elaborate
+      filters = if (requiredDataFileSchema.isEmpty) filters else Seq(),
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
 
+    // TODO elaborate
     val regularReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = sqlContext.sparkSession,
-      dataSchema = fullSchema,
+      dataSchema = dataSchema.structTypeSchema,
       partitionSchema = partitionSchema,
-      requiredSchema = requiredCombinedSchema,
+      requiredSchema = requiredDataSchema.structTypeSchema,
       filters = filters,
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
 
     new HoodieBootstrapRDD(sqlContext.sparkSession, dataReadFunction, skeletonReadFunction,
-      regularReadFunction, requiredDataSchema.structTypeSchema, requiredSkeletonSchema, requestedColumns, fileSplits)
+      regularReadFunction, requiredDataFileSchema, requiredSkeletonFileSchema, requestedColumns, fileSplits)
   }
 
   override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
@@ -141,9 +149,13 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 
 object HoodieBootstrapRelation {
 
-  private def validate(requiredFullSchema: StructType,requiredColumns: Seq[String]): Unit = {
-    val allRequiredColumns: Seq[String] = requiredFullSchema.fieldNames.toSeq
-    checkState(requiredColumns.sorted == allRequiredColumns.sorted)
+  private def validate(requiredDataSchema: HoodieTableSchema, requiredDataFileSchema: StructType, requiredSkeletonFileSchema: StructType): Unit = {
+    val requiredDataColumns: Seq[String] = requiredDataSchema.structTypeSchema.fieldNames.toSeq
+    val combinedColumns = (requiredSkeletonFileSchema.fieldNames ++ requiredDataFileSchema.fieldNames).toSeq
+
+    // NOTE: Here we validate that all required data columns are covered by the combination of the columns
+    //       from both skeleton file and the corresponding data file
+    checkState(combinedColumns.sorted == requiredDataColumns.sorted)
   }
 
 }
