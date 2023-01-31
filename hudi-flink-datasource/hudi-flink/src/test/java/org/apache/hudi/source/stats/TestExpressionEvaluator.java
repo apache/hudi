@@ -140,7 +140,8 @@ public class TestExpressionEvaluator {
     assertTrue(notEqualTo.eval(), "12 <> null");
 
     notEqualTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    assertTrue(notEqualTo.eval(), "null <> null");
+    notEqualTo.bindColStats(indexRow5, queryFields(2), rExpr);
+    assertFalse(notEqualTo.eval(), "null <> null");
   }
 
   @Test
@@ -206,6 +207,7 @@ public class TestExpressionEvaluator {
     assertFalse(lessThan.eval(), "12 <> null");
 
     lessThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
+    lessThan.bindColStats(indexRow4, queryFields(2), rExpr);
     assertFalse(lessThan.eval(), "null <> null");
   }
 
@@ -242,6 +244,7 @@ public class TestExpressionEvaluator {
     assertFalse(greaterThan.eval(), "12 <> null");
 
     greaterThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
+    greaterThan.bindColStats(indexRow5, queryFields(2), rExpr);
     assertFalse(greaterThan.eval(), "null <> null");
   }
 
@@ -278,6 +281,7 @@ public class TestExpressionEvaluator {
     assertFalse(lessThanOrEqual.eval(), "12 <> null");
 
     lessThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
+    lessThanOrEqual.bindColStats(indexRow4, queryFields(2), rExpr);
     assertFalse(lessThanOrEqual.eval(), "null <> null");
   }
 
@@ -314,6 +318,7 @@ public class TestExpressionEvaluator {
     assertFalse(greaterThanOrEqual.eval(), "12 <> null");
 
     greaterThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
+    greaterThanOrEqual.bindColStats(indexRow5, queryFields(2), rExpr);
     assertFalse(greaterThanOrEqual.eval(), "null <> null");
   }
 
@@ -349,6 +354,7 @@ public class TestExpressionEvaluator {
     assertFalse(in.eval(), "12 <> null");
 
     in.bindVals((Object) null);
+    in.bindColStats(indexRow3, queryFields(2), rExpr);
     assertFalse(in.eval(), "null <> null");
   }
 

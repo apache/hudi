@@ -40,6 +40,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Tool to evaluate the {@link org.apache.flink.table.expressions.ResolvedExpression}s.
@@ -237,6 +238,9 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
+      if (this.val == null) {
+        return false;
+      }
       // because the bounds are not necessarily a min or max value, this cannot be answered using
       // them. notEq(col, X) with (X, Y) doesn't guarantee that X is a value in col.
       return true;
@@ -282,6 +286,9 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
+      if (this.val == null) {
+        return false;
+      }
       if (this.minVal == null) {
         return false;
       }
@@ -299,6 +306,9 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
+      if (this.val == null) {
+        return false;
+      }
       if (this.maxVal == null) {
         return false;
       }
@@ -316,6 +326,9 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
+      if (this.val == null) {
+        return false;
+      }
       if (this.minVal == null) {
         return false;
       }
@@ -333,6 +346,9 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
+      if (this.val == null) {
+        return false;
+      }
       if (this.maxVal == null) {
         return false;
       }
@@ -352,6 +368,9 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
+      if (Arrays.stream(vals).anyMatch(Objects::isNull)) {
+        return false;
+      }
       if (this.minVal == null) {
         return false; // values are all null and literalSet cannot contain null.
       }
