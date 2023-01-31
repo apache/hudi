@@ -25,8 +25,6 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.types.StructType
 
-import org.apache.hudi.HoodieDataSourceHelper._
-
 class HoodieBootstrapRDD(@transient spark: SparkSession,
                         dataReadFunction: PartitionedFile => Iterator[InternalRow],
                         skeletonReadFunction: PartitionedFile => Iterator[InternalRow],
@@ -34,7 +32,7 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
                         dataSchema: StructType,
                         skeletonSchema: StructType,
                         requiredColumns: Array[String],
-                        tableState: HoodieBootstrapTableState)
+                        @transient splits: Seq[HoodieBootstrapSplit])
   extends RDD[InternalRow](spark.sparkContext, Nil) {
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
@@ -73,8 +71,7 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
     partitionedFileIterator
   }
 
-  def merge(skeletonFileIterator: Iterator[InternalRow], dataFileIterator: Iterator[InternalRow])
-  : Iterator[InternalRow] = {
+  def merge(skeletonFileIterator: Iterator[InternalRow], dataFileIterator: Iterator[InternalRow]): Iterator[InternalRow] = {
     new Iterator[InternalRow] {
       override def hasNext: Boolean = dataFileIterator.hasNext && skeletonFileIterator.hasNext
       override def next(): InternalRow = {
@@ -83,6 +80,7 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
     }
   }
 
+  // TODO revisit
   def mergeInternalRow(skeletonRow: InternalRow, dataRow: InternalRow): InternalRow = {
     val skeletonArr  = skeletonRow.copy().toSeq(skeletonSchema)
     val dataArr = dataRow.copy().toSeq(dataSchema)
@@ -103,7 +101,7 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
   }
 
   override protected def getPartitions: Array[Partition] = {
-    tableState.files.zipWithIndex.map(file => {
+    splits.zipWithIndex.map(file => {
       if (file._1.skeletonFile.isDefined) {
         logDebug("Forming partition with => Index: " + file._2 + ", Files: " + file._1.dataFile.filePath
           + "," + file._1.skeletonFile.get.filePath)

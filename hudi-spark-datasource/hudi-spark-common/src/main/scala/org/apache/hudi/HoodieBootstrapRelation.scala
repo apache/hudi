@@ -19,20 +19,18 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.model.HoodieBaseFile
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.exception.HoodieException
-import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
-import org.apache.spark.internal.Logging
+import org.apache.hudi.HoodieBootstrapRelation.validate
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
-import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SQLContext}
 
-import scala.collection.JavaConverters._
+case class HoodieBootstrapSplit(dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile]) extends HoodieFileSplit
 
 /**
   * This is Spark relation that can be used for querying metadata/fully bootstrapped query hoodie tables, as well as
@@ -44,150 +42,108 @@ import scala.collection.JavaConverters._
   * bootstrapped files, because then the metadata file and data file can return different number of rows causing errors
   * merging.
   *
-  * @param _sqlContext Spark SQL Context
+  * @param sqlContext Spark SQL Context
   * @param userSchema User specified schema in the datasource query
   * @param globPaths  The global paths to query. If it not none, read from the globPaths,
   *                   else read data from tablePath using HoodiFileIndex.
   * @param metaClient Hoodie table meta client
   * @param optParams DataSource options passed by the user
   */
-class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
-                              val userSchema: Option[StructType],
-                              val globPaths: Seq[Path],
-                              val metaClient: HoodieTableMetaClient,
-                              val optParams: Map[String, String]) extends BaseRelation
-  with PrunedFilteredScan with Logging {
+case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
+                                   private val userSchema: Option[StructType],
+                                   private val globPaths: Seq[Path],
+                                   override val metaClient: HoodieTableMetaClient,
+                                   override val optParams: Map[String, String],
+                                   private val prunedDataSchema: Option[StructType] = None)
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) {
 
-  val skeletonSchema: StructType = HoodieSparkUtils.getMetaSchema
-  var dataSchema: StructType = _
-  var fullSchema: StructType = _
+  override type FileSplit = HoodieBootstrapSplit
+  override type Relation = HoodieBootstrapRelation
 
-  val fileIndex: HoodieBootstrapFileIndex = buildFileIndex()
+  private lazy val skeletonSchema: StructType = HoodieSparkUtils.getMetaSchema
+  private lazy val fullSchema = StructType(skeletonSchema.fields ++ dataSchema.fields)
 
-  override def sqlContext: SQLContext = _sqlContext
+  override val mandatoryFields: Seq[String] = Seq.empty
 
-  override val needConversion: Boolean = false
+  override def schema: StructType = fullSchema
 
-  override def schema: StructType = inferFullSchema()
-
-  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
-    logInfo("Starting scan..")
-
-    // Compute splits
-    val bootstrapSplits = fileIndex.files.map(hoodieBaseFile => {
+  protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit] = {
+    val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
+    fileSlices.map { fileSlice =>
+      val baseFile = fileSlice.getBaseFile.get()
       var skeletonFile: Option[PartitionedFile] = Option.empty
       var dataFile: PartitionedFile = null
 
-      if (hoodieBaseFile.getBootstrapBaseFile.isPresent) {
-        skeletonFile = Option(PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen))
-        dataFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getBootstrapBaseFile.get().getPath, 0,
-          hoodieBaseFile.getBootstrapBaseFile.get().getFileLen)
+      if (baseFile.getBootstrapBaseFile.isPresent) {
+        skeletonFile = Option(PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen))
+        dataFile = PartitionedFile(InternalRow.empty, baseFile.getBootstrapBaseFile.get().getPath, 0,
+          baseFile.getBootstrapBaseFile.get().getFileLen)
       } else {
-        dataFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen)
+        dataFile = PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen)
       }
       HoodieBootstrapSplit(dataFile, skeletonFile)
-    })
-    val tableState = HoodieBootstrapTableState(bootstrapSplits)
+    }
+  }
 
-    // Get required schemas for column pruning
-    var requiredDataSchema = StructType(Seq())
-    var requiredSkeletonSchema = StructType(Seq())
-    // requiredColsSchema is the schema of requiredColumns, note that requiredColumns is in a random order
-    // so requiredColsSchema is not always equal to (requiredSkeletonSchema.fields ++ requiredDataSchema.fields)
-    var requiredColsSchema = StructType(Seq())
-    requiredColumns.foreach(col => {
-      var field = dataSchema.find(_.name == col)
-      if (field.isDefined) {
-        requiredDataSchema = requiredDataSchema.add(field.get)
-      } else {
-        field = skeletonSchema.find(_.name == col)
-        requiredSkeletonSchema = requiredSkeletonSchema.add(field.get)
-      }
-      requiredColsSchema = requiredColsSchema.add(field.get)
-    })
+  protected override def composeRDD(fileSplits: Seq[FileSplit],
+                                    tableSchema: HoodieTableSchema,
+                                    requiredSchema: HoodieTableSchema,
+                                    requestedColumns: Array[String],
+                                    filters: Array[Filter]): RDD[InternalRow] = {
+    val (partitionSchema, dataSchema, requiredDataSchema) =
+      tryPrunePartitionColumns(tableSchema, requiredSchema)
 
-    // Prepare readers for reading data file and skeleton files
+    val resolver = sqlContext.sparkSession.sessionState.analyzer.resolver
+
+    val requiredSkeletonSchema = StructType(skeletonSchema.filter(f => requestedColumns.exists(col => resolver(f.name, col))))
+    val requiredCombinedSchema = StructType(requiredSkeletonSchema.fields ++ requiredDataSchema.structTypeSchema.fields)
+
+    validate(requiredCombinedSchema, requestedColumns.toSeq)
+
     val dataReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
-      sparkSession = _sqlContext.sparkSession,
-      dataSchema = dataSchema,
-      partitionSchema = StructType(Seq.empty),
-      requiredSchema = requiredDataSchema,
-      filters = if (requiredSkeletonSchema.isEmpty) filters else Seq() ,
+      sparkSession = sqlContext.sparkSession,
+      dataSchema = dataSchema.structTypeSchema,
+      partitionSchema = partitionSchema,
+      requiredSchema = requiredDataSchema.structTypeSchema,
+      filters = if (requiredSkeletonSchema.isEmpty) filters else Seq(),
       options = optParams,
-      hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
+      hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
 
     val skeletonReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
-      sparkSession = _sqlContext.sparkSession,
+      sparkSession = sqlContext.sparkSession,
       dataSchema = skeletonSchema,
-      partitionSchema = StructType(Seq.empty),
+      partitionSchema = partitionSchema,
       requiredSchema = requiredSkeletonSchema,
-      filters = if (requiredDataSchema.isEmpty) filters else Seq(),
+      filters = if (requiredDataSchema.structTypeSchema.isEmpty) filters else Seq(),
       options = optParams,
-      hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
+      hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
 
     val regularReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
-      sparkSession = _sqlContext.sparkSession,
+      sparkSession = sqlContext.sparkSession,
       dataSchema = fullSchema,
-      partitionSchema = StructType(Seq.empty),
-      requiredSchema = requiredColsSchema,
+      partitionSchema = partitionSchema,
+      requiredSchema = requiredCombinedSchema,
       filters = filters,
       options = optParams,
-      hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
+      hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
 
-    val rdd = new HoodieBootstrapRDD(_sqlContext.sparkSession, dataReadFunction, skeletonReadFunction,
-      regularReadFunction, requiredDataSchema, requiredSkeletonSchema, requiredColumns, tableState)
-    rdd.asInstanceOf[RDD[Row]]
+    new HoodieBootstrapRDD(sqlContext.sparkSession, dataReadFunction, skeletonReadFunction,
+      regularReadFunction, requiredDataSchema.structTypeSchema, requiredSkeletonSchema, requestedColumns, fileSplits)
   }
 
-  def inferFullSchema(): StructType = {
-    if (fullSchema == null) {
-      logInfo("Inferring schema..")
-      val schemaResolver = new TableSchemaResolver(metaClient)
-      val tableSchema = schemaResolver.getTableAvroSchema(false)
-      dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
-      fullSchema = StructType(skeletonSchema.fields ++ dataSchema.fields)
-    }
-    fullSchema
-  }
-
-  def buildFileIndex(): HoodieBootstrapFileIndex = {
-    logInfo("Building file index..")
-    val fileStatuses  = if (globPaths.nonEmpty) {
-      // Load files from the global paths if it has defined to be compatible with the original mode
-      val inMemoryFileIndex = HoodieInMemoryFileIndex.create(_sqlContext.sparkSession, globPaths)
-      inMemoryFileIndex.allFiles()
-    } else { // Load files by the HoodieFileIndex.
-        HoodieFileIndex(sqlContext.sparkSession, metaClient, Some(schema), optParams,
-          FileStatusCache.getOrCreate(sqlContext.sparkSession)).allFiles
-    }
-    if (fileStatuses.isEmpty) {
-      throw new HoodieException("No files found for reading in user provided path.")
-    }
-
-    val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitsTimeline
-      .filterCompletedInstants, fileStatuses.toArray)
-    val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
-
-    if (log.isDebugEnabled) {
-      latestFiles.foreach(file => {
-        logDebug("Printing indexed files:")
-        if (file.getBootstrapBaseFile.isPresent) {
-          logDebug("Skeleton File: " + file.getPath + ", Data File: " + file.getBootstrapBaseFile.get().getPath)
-        } else {
-          logDebug("Regular Hoodie File: " + file.getPath)
-        }
-      })
-    }
-
-    HoodieBootstrapFileIndex(latestFiles)
-  }
+  override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
+    this.copy(prunedDataSchema = Some(prunedSchema))
 }
 
-case class HoodieBootstrapFileIndex(files: List[HoodieBaseFile])
 
-case class HoodieBootstrapTableState(files: List[HoodieBootstrapSplit])
+object HoodieBootstrapRelation {
 
-case class HoodieBootstrapSplit(dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile])
+  private def validate(requiredFullSchema: StructType,requiredColumns: Seq[String]): Unit = {
+    val allRequiredColumns: Seq[String] = requiredFullSchema.fieldNames.toSeq
+    checkState(requiredColumns.sorted == allRequiredColumns.sorted)
+  }
+
+}
