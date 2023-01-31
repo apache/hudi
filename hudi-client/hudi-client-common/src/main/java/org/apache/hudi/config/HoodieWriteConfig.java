@@ -224,7 +224,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> AVRO_SCHEMA_VALIDATE_ENABLE = ConfigProperty
       .key("hoodie.avro.schema.validate")
-      .defaultValue("true")
+      .defaultValue("false")
       .withDocumentation("Validate the schema used for the write against the latest schema, for backwards compatibility.");
 
   public static final ConfigProperty<String> SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP = ConfigProperty
