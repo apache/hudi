@@ -38,19 +38,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 public class SparkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
 
-  private boolean useWriterSchema;
-
-  public SparkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
-                                 boolean areRecordsSorted,
-                                 HoodieWriteConfig config,
-                                 String instantTime,
-                                 HoodieTable hoodieTable,
-                                 String idPrefix,
-                                 TaskContextSupplier taskContextSupplier,
-                                 boolean useWriterSchema) {
-    super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier);
-    this.useWriterSchema = useWriterSchema;
-  }
+  private final boolean useWriterSchema;
 
   public SparkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                  boolean areRecordsSorted,
