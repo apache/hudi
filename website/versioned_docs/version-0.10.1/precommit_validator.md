@@ -58,7 +58,7 @@ import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 
 df.write.format("hudi").mode(Overwrite).
   option(TABLE_NAME, tableName).
-  option("hoodie.precommit.validators", "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator").
+  option("hoodie.precommit.validators", "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator").
   option("hoodie.precommit.validators.inequality.sql.queries", "select count(*) from <TABLE_NAME> where col=null").
   save(basePath)
 ```
