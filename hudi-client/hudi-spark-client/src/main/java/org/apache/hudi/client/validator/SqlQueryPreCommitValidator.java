@@ -66,7 +66,7 @@ public abstract class SqlQueryPreCommitValidator<T, I, K, O extends HoodieData<W
     String[] queries = getQueriesToRun();
 
     Arrays.asList(queries).parallelStream().forEach(
-       query -> validateUsingQuery(query, hoodieTableBeforeCurrentCommit, hoodieTableWithInflightCommit, sqlContext));
+        query -> validateUsingQuery(query, hoodieTableBeforeCurrentCommit, hoodieTableWithInflightCommit, sqlContext));
   }
 
   protected String[] getQueriesToRun() {
