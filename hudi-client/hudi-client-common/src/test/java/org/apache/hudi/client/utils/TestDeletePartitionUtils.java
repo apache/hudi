@@ -43,19 +43,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestDeletePartitionUtils {
 
   private static final String PARTITION_IN_PENDING_SERVICE_ACTION = "partition_with_pending_table_service_action";
-  private static final String HARCODED_INSTANT_TIME = "0";
+  private static final String HARDCODED_INSTANT_TIME = "0";
 
   private final HoodieTable table = Mockito.mock(HoodieTable.class);
 
   private final SyncableFileSystemView fileSystemView = Mockito.mock(SyncableFileSystemView.class);
 
   public static Stream<Arguments> generateTruthValues() {
-    int noOfRows = 3;
-    int noOfVariables = 1 << noOfRows;
+    int noOfVariables = 3;
+    int noOfRows = 1 << noOfVariables;
     Object[][] truthValues = new Object[noOfRows][noOfVariables];
     for (int i = 0; i < noOfRows; i++) {
       for (int j = noOfVariables - 1, k = 0; j >= 0; j--, k++) {
-        boolean out = (i / (int) Math.pow(2, j)) % 2 != 0;
+        boolean out = (i / (1 << j)) % 2 != 0;
         truthValues[i][j] = out;
       }
     }
@@ -88,18 +88,18 @@ public class TestDeletePartitionUtils {
   }
 
   private static Stream<Pair<String, CompactionOperation>> createPendingCompactionOperations(boolean hasPendingCompactionOperations) {
-    return Stream.of(Pair.of(HARCODED_INSTANT_TIME, getCompactionOperation(hasPendingCompactionOperations)));
+    return Stream.of(Pair.of(HARDCODED_INSTANT_TIME, getCompactionOperation(hasPendingCompactionOperations)));
   }
 
   private static CompactionOperation getCompactionOperation(boolean hasPendingJobInPartition) {
     return new CompactionOperation(
-        "fileId", getPartitionName(hasPendingJobInPartition), HARCODED_INSTANT_TIME, Option.empty(),
+        "fileId", getPartitionName(hasPendingJobInPartition), HARDCODED_INSTANT_TIME, Option.empty(),
         new ArrayList<>(), Option.empty(), Option.empty(), new HashMap<>());
   }
 
   private static Stream<Pair<HoodieFileGroupId, HoodieInstant>> createFileGroupsInPendingClustering(boolean hasFileGroupsInPendingClustering) {
     HoodieFileGroupId hoodieFileGroupId = new HoodieFileGroupId(getPartitionName(hasFileGroupsInPendingClustering), "fileId");
-    HoodieInstant hoodieInstant = new HoodieInstant(true, "replacecommit", HARCODED_INSTANT_TIME);
+    HoodieInstant hoodieInstant = new HoodieInstant(true, "replacecommit", HARDCODED_INSTANT_TIME);
     return Stream.of(Pair.of(hoodieFileGroupId, hoodieInstant));
   }
 
