@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
-import org.apache.hudi.common.model.{HoodieCommitMetadata, TableServiceType}
+import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.util.{Option => HOption}
@@ -29,8 +29,6 @@ import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
-
-import scala.jdk.CollectionConverters.mapAsJavaMapConverter
 
 class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
