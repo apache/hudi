@@ -17,6 +17,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.client.transaction.BucketIndexSimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
@@ -25,6 +26,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 
 import java.io.File;
@@ -54,6 +56,7 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PRO
 import static org.apache.hudi.common.config.LockConfiguration.ZK_LOCK_KEY_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_PORT_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
+import static org.apache.hudi.index.HoodieIndex.IndexType.BUCKET;
 
 /**
  * Hoodie Configs for Locks.
@@ -185,8 +188,14 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key(LOCK_PREFIX + "conflict.resolution.strategy")
       .defaultValue(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
+      .withInferFunction(cfg -> {
+        if (cfg.getString(HoodieIndexConfig.INDEX_TYPE).equals(BUCKET.name())) {
+          return Option.of(BucketIndexSimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
+        }
+        return Option.of(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
+      })
       .sinceVersion("0.8.0")
-      .withDocumentation("Lock provider class name, this should be subclass of "
+      .withDocumentation("Conflict resolution strategy class name, this should be subclass of "
           + "org.apache.hudi.client.transaction.ConflictResolutionStrategy");
 
   /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead */
