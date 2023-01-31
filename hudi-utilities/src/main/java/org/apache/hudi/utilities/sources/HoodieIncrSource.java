@@ -89,6 +89,12 @@ public class HoodieIncrSource extends RowSource {
      */
     static final String SOURCE_FILE_FORMAT = "hoodie.deltastreamer.source.hoodieincr.file.format";
     static final String DEFAULT_SOURCE_FILE_FORMAT = "parquet";
+
+    /**
+     * Drops all meta fields from the source hudi table while ingesting into sink hudi table.
+     */
+    static final String HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE = "hoodie.deltastreamer.source.hoodieincr.drop.all.meta.fields.from.source";
+    public static final Boolean DEFAULT_HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE = false;
   }
 
   public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
@@ -153,8 +159,35 @@ public class HoodieIncrSource extends RowSource {
               queryTypeAndInstantEndpts.getRight().getRight()));
     }
 
-    // Remove Hoodie meta columns
-    final Dataset<Row> src = source.drop(HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new));
+    /*
+     * log.info("Partition Fields are : (" + partitionFields + "). Initial Source Schema :" + source.schema());
+     *
+     * StructType newSchema = new StructType(source.schema().fields()); for (String field : partitionFields) { newSchema
+     * = newSchema.add(field, DataTypes.StringType, true); }
+     *
+     * /** Validates if the commit time is sane and also generates Partition fields from _hoodie_partition_path if
+     * configured
+     *
+     * Dataset<Row> validated = source.map((MapFunction<Row, Row>) (Row row) -> { // _hoodie_instant_time String
+     * instantTime = row.getString(0); IncrSourceHelper.validateInstantTime(row, instantTime, instantEndpts.getKey(),
+     * instantEndpts.getValue()); if (!partitionFields.isEmpty()) { // _hoodie_partition_path String hoodiePartitionPath
+     * = row.getString(3); List<Object> partitionVals =
+     * extractor.extractPartitionValuesInPath(hoodiePartitionPath).stream() .map(o -> (Object)
+     * o).collect(Collectors.toList()); ValidationUtils.checkArgument(partitionVals.size() == partitionFields.size(),
+     * "#partition-fields != #partition-values-extracted"); List<Object> rowObjs = new
+     * ArrayList<>(scala.collection.JavaConversions.seqAsJavaList(row.toSeq())); rowObjs.addAll(partitionVals); return
+     * RowFactory.create(rowObjs.toArray()); } return row; }, RowEncoder.apply(newSchema));
+     *
+     * log.info("Validated Source Schema :" + validated.schema());
+     */
+    boolean dropAllMetaFields = props.getBoolean(Config.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE,
+        Config.DEFAULT_HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE);
+
+    // Remove Hoodie meta columns except partition path from input source
+    String[] colsToDrop = dropAllMetaFields ? HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new) :
+        HoodieRecord.HOODIE_META_COLUMNS.stream().filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new);
+    final Dataset<Row> src = source.drop(colsToDrop);
+    // log.info("Final Schema from Source is :" + src.schema());
     return Pair.of(Option.of(src), queryTypeAndInstantEndpts.getRight().getRight());
   }
 }
