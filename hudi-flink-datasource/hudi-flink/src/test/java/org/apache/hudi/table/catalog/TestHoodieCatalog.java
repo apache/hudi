@@ -243,8 +243,8 @@ public class TestHoodieCatalog {
     ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
     assertThrows(HoodieValidationException.class,
         () -> catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, true),
-        "Option 'precombine.field' is required for payload class: " +
-            "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
+        "Option 'precombine.field' is required for payload class: "
+            + "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
 
     Map<String, String> options2 = getDefaultCatalogOption();
     options2.put(FlinkOptions.PRECOMBINE_FIELD.key(), "not_exists");
@@ -253,7 +253,7 @@ public class TestHoodieCatalog {
     ObjectPath tablePath2 = new ObjectPath(TEST_DEFAULT_DATABASE, "tb2");
     assertThrows(HoodieValidationException.class,
         () -> catalog.createTable(tablePath2, EXPECTED_CATALOG_TABLE, true),
-        "Field not_exists does not exist in the table schema.Please check 'precombine.field' option.");
+        "Field not_exists does not exist in the table schema. Please check 'precombine.field' option.");
   }
 
   @Test
