@@ -26,6 +26,7 @@ import java.util.Map;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.utils.DeletePartitionUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -58,6 +59,8 @@ public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
+    DeletePartitionUtils.checkForPendingTableServiceActions(table, partitions);
+
     try {
       HoodieTimer timer = new HoodieTimer().startTimer();
       context.setJobStatus(this.getClass().getSimpleName(), "Gather all file ids from all deleting partitions.");
