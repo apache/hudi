@@ -54,7 +54,7 @@ public class TestDeletePartitionUtils {
     int noOfRows = 1 << noOfVariables;
     Object[][] truthValues = new Object[noOfRows][noOfVariables];
     for (int i = 0; i < noOfRows; i++) {
-      for (int j = noOfVariables - 1, k = 0; j >= 0; j--, k++) {
+      for (int j = noOfVariables - 1; j >= 0; j--) {
         boolean out = (i / (1 << j)) % 2 != 0;
         truthValues[i][j] = out;
       }
