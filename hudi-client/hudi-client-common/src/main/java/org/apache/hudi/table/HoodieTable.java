@@ -800,7 +800,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   private void validateSchema() throws HoodieUpsertException, HoodieInsertException {
 
-    if (!config.shouldValidateAvroSchema() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
+    if (!shouldValidateAvroSchema() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
       // Check not required
       return;
     }
@@ -1009,5 +1009,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   public Runnable getPreExecuteRunnable() {
     return Functions.noop();
+  }
+
+  private boolean shouldValidateAvroSchema() {
+    // TODO(HUDI-4772) re-enable validations in case partition columns
+    //                 being dropped from the data-file after fixing the write schema
+    Boolean shouldDropPartitionColumns = metaClient.getTableConfig().shouldDropPartitionColumns();
+
+    return config.shouldValidateAvroSchema() && !shouldDropPartitionColumns;
   }
 }
