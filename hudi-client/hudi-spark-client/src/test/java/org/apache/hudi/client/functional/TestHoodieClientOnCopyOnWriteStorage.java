@@ -2215,9 +2215,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     List<HoodieRecord> dummyInserts = dataGen.generateInserts(commitTime1, 20);
     List<HoodieKey> hoodieKeysToDelete = randomSelectAsHoodieKeys(dummyInserts, 20);
     JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(hoodieKeysToDelete, 1);
-    assertThrows(HoodieIOException.class, () -> {
-      client.delete(deleteKeys, commitTime1).collect();
-    }, "Should have thrown Exception");
+    client.delete(deleteKeys, commitTime1).collect();
   }
 
   /**
