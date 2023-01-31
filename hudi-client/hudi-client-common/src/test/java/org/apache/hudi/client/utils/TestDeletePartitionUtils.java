@@ -50,11 +50,11 @@ public class TestDeletePartitionUtils {
   private final SyncableFileSystemView fileSystemView = Mockito.mock(SyncableFileSystemView.class);
 
   public static Stream<Arguments> generateTruthValues() {
-    int NUMBER_OF_VARIABLES = 3;
-    int NUMBER_OF_ROWS = 1 << NUMBER_OF_VARIABLES;
-    Object[][] truthValues = new Object[NUMBER_OF_ROWS][NUMBER_OF_VARIABLES];
-    for(int i = 0; i < NUMBER_OF_ROWS; i++) {
-      for(int j = NUMBER_OF_VARIABLES - 1, k = 0; j >= 0; j--, k++) {
+    int noOfRows = 3;
+    int noOfVariables = 1 << noOfRows;
+    Object[][] truthValues = new Object[noOfRows][noOfVariables];
+    for (int i = 0; i < noOfRows; i++) {
+      for (int j = noOfVariables - 1, k = 0; j >= 0; j--, k++) {
         boolean out = (i / (int) Math.pow(2, j)) % 2 != 0;
         truthValues[i][j] = out;
       }
@@ -88,7 +88,7 @@ public class TestDeletePartitionUtils {
   }
 
   private static Stream<Pair<String, CompactionOperation>> createPendingCompactionOperations(boolean hasPendingCompactionOperations) {
-      return Stream.of(Pair.of(HARCODED_INSTANT_TIME, getCompactionOperation(hasPendingCompactionOperations)));
+    return Stream.of(Pair.of(HARCODED_INSTANT_TIME, getCompactionOperation(hasPendingCompactionOperations)));
   }
 
   private static CompactionOperation getCompactionOperation(boolean hasPendingJobInPartition) {
