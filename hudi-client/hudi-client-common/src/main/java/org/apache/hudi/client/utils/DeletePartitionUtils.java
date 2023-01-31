@@ -27,6 +27,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * A utility class for helper functions when performing a delete partition operation.
+ */
 public class DeletePartitionUtils {
 
   /**
