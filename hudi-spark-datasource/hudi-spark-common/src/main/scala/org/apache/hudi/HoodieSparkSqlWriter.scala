@@ -342,12 +342,21 @@ object HoodieSparkSqlWriter {
         }
 
       // Check for errors and commit the write.
+      try {
       val (writeSuccessful, compactionInstant, clusteringInstant) =
         commitAndPerformPostOperations(sqlContext.sparkSession, df.schema,
           writeResult, parameters, writeClient, tableConfig, jsc,
           TableInstantInfo(basePath, instantTime, commitActionType, operation))
-
-      (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
+        (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
+      } finally {
+        // close the write client in all cases
+        val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
+        val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
+        if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
+          log.info("Closing write client")
+          writeClient.close()
+        }
+      }
     }
   }
 
@@ -734,9 +743,6 @@ object HoodieSparkSqlWriter {
         tableInstantInfo.basePath, schema)
 
       log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
-      if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
-        client.close()
-      }
       (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
     } else {
       log.error(s"${tableInstantInfo.operation} failed with errors")
