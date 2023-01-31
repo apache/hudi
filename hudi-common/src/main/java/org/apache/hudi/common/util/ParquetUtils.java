@@ -37,6 +37,7 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
@@ -314,20 +315,25 @@ public class ParquetUtils extends BaseFileUtils {
           .flatMap(blockMetaData ->
               blockMetaData.getColumns().stream()
                 .filter(f -> cols.contains(f.getPath().toDotString()))
-                .map(columnChunkMetaData ->
-                    HoodieColumnRangeMetadata.<Comparable>create(
-                        parquetFilePath.getName(),
-                        columnChunkMetaData.getPath().toDotString(),
-                        convertToNativeJavaType(
-                            columnChunkMetaData.getPrimitiveType(),
-                            columnChunkMetaData.getStatistics().genericGetMin()),
-                        convertToNativeJavaType(
-                            columnChunkMetaData.getPrimitiveType(),
-                            columnChunkMetaData.getStatistics().genericGetMax()),
-                        columnChunkMetaData.getStatistics().getNumNulls(),
-                        columnChunkMetaData.getValueCount(),
-                        columnChunkMetaData.getTotalSize(),
-                        columnChunkMetaData.getTotalUncompressedSize()))
+                .map(columnChunkMetaData -> {
+                  Statistics stats = columnChunkMetaData.getStatistics();
+                  return HoodieColumnRangeMetadata.<Comparable>create(
+                      parquetFilePath.getName(),
+                      columnChunkMetaData.getPath().toDotString(),
+                      convertToNativeJavaType(
+                          columnChunkMetaData.getPrimitiveType(),
+                          stats.genericGetMin()),
+                      convertToNativeJavaType(
+                          columnChunkMetaData.getPrimitiveType(),
+                          stats.genericGetMax()),
+                      // NOTE: In case when column contains only nulls Parquet won't be creating
+                      //       stats for it instead returning stubbed (empty) object. In that case
+                      //       we have to equate number of nulls to the value count ourselves
+                      stats.isEmpty() ? columnChunkMetaData.getValueCount() : stats.getNumNulls(),
+                      columnChunkMetaData.getValueCount(),
+                      columnChunkMetaData.getTotalSize(),
+                      columnChunkMetaData.getTotalUncompressedSize());
+                })
           )
           .collect(groupingByCollector);
 
