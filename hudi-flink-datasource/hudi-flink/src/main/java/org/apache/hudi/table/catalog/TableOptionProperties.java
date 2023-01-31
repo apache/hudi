@@ -174,9 +174,10 @@ public class TableOptionProperties {
       CatalogTable catalogTable,
       Configuration hadoopConf,
       Map<String, String> properties,
-      List<String> partitionKeys) {
-    RowType containMetaFields = getContainMetaFields(catalogTable);
-    Schema schema = AvroSchemaConverter.convertToSchema(containMetaFields);
+      List<String> partitionKeys,
+      boolean withOperationField) {
+    RowType rowType = supplementMetaFields((RowType) catalogTable.getSchema().toPhysicalRowDataType().getLogicalType(), withOperationField);
+    Schema schema = AvroSchemaConverter.convertToSchema(rowType);
     MessageType messageType = TableSchemaResolver.convertAvroSchemaToParquet(schema, hadoopConf);
     String sparkVersion = catalogTable.getOptions().getOrDefault(SPARK_VERSION, DEFAULT_SPARK_VERSION);
     Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(
@@ -191,9 +192,7 @@ public class TableOptionProperties {
             e -> e.getKey().equalsIgnoreCase(FlinkOptions.TABLE_TYPE.key()) ? VALUE_MAPPING.get(e.getValue()) : e.getValue()));
   }
 
-  private static RowType getContainMetaFields(CatalogTable catalogTable) {
-    RowType rowType = (RowType) catalogTable.getSchema().toPhysicalRowDataType().getLogicalType().copy();
-    boolean withOperationField = Boolean.parseBoolean(catalogTable.getOptions().getOrDefault(FlinkOptions.CHANGELOG_ENABLED.key(), "false"));
+  private static RowType supplementMetaFields(RowType rowType, boolean withOperationField) {
     Collection<String> metaFields = new ArrayList<>(HoodieRecord.HOODIE_META_COLUMNS);
     if (withOperationField) {
       metaFields.add(OPERATION_METADATA_FIELD);

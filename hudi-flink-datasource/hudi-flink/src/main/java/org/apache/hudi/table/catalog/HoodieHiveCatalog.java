@@ -21,7 +21,6 @@ package org.apache.hudi.table.catalog;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -439,10 +438,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       LOG.warn("{} does not have any hoodie schema, and use hive table schema to infer the table schema", tablePath);
       schema = HiveSchemaUtils.convertTableSchema(hiveTable);
     }
-    org.apache.flink.table.api.Schema resultSchema = DataTypeUtils.dropIfExistsColumns(schema, HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
-
     Map<String, String> options = supplementOptions(tablePath, parameters);
-    return CatalogTable.of(resultSchema, parameters.get(COMMENT),
+    return CatalogTable.of(schema, parameters.get(COMMENT),
         HiveSchemaUtils.getFieldNames(hiveTable.getPartitionKeys()), options);
   }
 
@@ -599,7 +596,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     serdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(!useRealTimeInputFormat));
     serdeProperties.put("serialization.format", "1");
 
-    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark(catalogTable, hiveConf, properties, partitionKeys));
+    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark(catalogTable, hiveConf, properties, partitionKeys, withOperationField));
 
     sd.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
 
@@ -822,7 +819,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     try (HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, table)) {
       boolean hiveStylePartitioning = Boolean.parseBoolean(table.getOptions().get(FlinkOptions.HIVE_STYLE_PARTITIONING.key()));
       writeClient.deletePartitions(
-              Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
+          Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
               HoodieActiveTimeline.createNewInstantTime())
           .forEach(writeStatus -> {
             if (writeStatus.hasErrors()) {

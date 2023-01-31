@@ -34,7 +34,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -166,29 +165,6 @@ public class DataTypeUtils {
       fields.add(DataTypes.FIELD(fieldNames.get(i), fieldTypes.get(i)));
     }
     return DataTypes.ROW(fields.stream().toArray(DataTypes.Field[]::new)).notNull();
-  }
-
-  /**
-   * drop some columns.
-   *
-   * @param schema
-   * @param dropCols
-   * @return
-   */
-  public static org.apache.flink.table.api.Schema dropIfExistsColumns(org.apache.flink.table.api.Schema schema, Collection<String> dropCols) {
-    ArrayList<org.apache.flink.table.api.Schema.UnresolvedColumn> unresolvedColumns = new ArrayList<>(schema.getColumns());
-    unresolvedColumns.removeIf(c -> dropCols.contains(c.getName()));
-    org.apache.flink.table.api.Schema.Builder builder =
-        org.apache.flink.table.api.Schema.newBuilder()
-            .fromColumns(unresolvedColumns);
-    if (schema.getPrimaryKey().isPresent()) {
-      builder.primaryKey(schema.getPrimaryKey().get().getColumnNames());
-    }
-    if (schema.getWatermarkSpecs() != null) {
-      schema.getWatermarkSpecs().forEach(w -> builder.watermark(w.getColumnName(), w.getWatermarkExpression()));
-    }
-    org.apache.flink.table.api.Schema resultSchema = builder.build();
-    return resultSchema;
   }
 
 }
