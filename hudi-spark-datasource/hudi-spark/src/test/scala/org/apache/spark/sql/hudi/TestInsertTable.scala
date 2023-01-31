@@ -369,6 +369,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | partitioned by (dt)
            | location '${tmp.getCanonicalPath}/$tableName'
        """.stripMargin)
+
       //  Insert overwrite table
       spark.sql(
         s"""
@@ -435,7 +436,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(3, "a1", 10.0, 1000, "2021-01-04")
       )
 
-      // test insert overwrite non-partitioned table
+      // Test insert overwrite non-partitioned table
       spark.sql(s"insert overwrite table $tblNonPartition select 2, 'a2', 10, 1000")
       checkAnswer(s"select id, name, price, ts from $tblNonPartition")(
         Seq(2, "a2", 10.0, 1000)
