@@ -302,7 +302,7 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Whether to skip compaction instants and avoid reading compacted base files for streaming read to improve read performance.\n"
           + "There are two cases that this option can be used to avoid reading duplicates:\n"
           + "1) you are definitely sure that the consumer reads [faster than/completes before] any compaction instants "
-          + "when `" + HoodieCompactionConfig.PRESERVE_COMMIT_METADATA.key() + "` is set to `false`.\n"
+          + "when " + HoodieCompactionConfig.PRESERVE_COMMIT_METADATA.key() + " is set to false.\n"
           + "2) changelog mode is enabled, this option is a solution to keep data integrity");
 
   // this option is experimental
@@ -312,9 +312,9 @@ public class FlinkOptions extends HoodieConfig {
           .defaultValue(false)
           .withDescription("Whether to skip clustering instants to avoid reading base files of clustering operations for streaming read "
               + "to improve read performance.\n"
-              + "This option toggled to `true` to avoid duplicates when: \n"
+              + "This option toggled to true to avoid duplicates when: \n"
               + "1) you are definitely sure that the consumer reads [faster than/completes before] any clustering instants "
-              + "when `" + HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.key() + "` is set to `false`.\n");
+              + "when " + HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.key() + " is set to false.\n");
 
   public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
