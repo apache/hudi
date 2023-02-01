@@ -5,8 +5,20 @@ last_modified_at: 2021-08-18T15:59:57-04:00
 ---
 
 ### Local set up
-Once hudi has been built, the shell can be fired by via  `cd hudi-cli && ./hudi-cli.sh`. A hudi table resides on DFS, in a location referred to as the `basePath` and
+Once hudi has been built, the shell can be fired by via  `cd hudi-cli && ./hudi-cli.sh`.
+
+Optionally in release `0.13.0` we have now added another way of launching the `hudi cli`, which is using the `hudi-cli-bundle`.
+There are a couple of requirements when using this approach such as having `spark` installed locally on your machine. 
+It is required to use a spark distribution with hadoop dependencies packaged such as `spark-3.3.1-bin-hadoop2.tgz` from https://archive.apache.org/dist/spark/.
+We also recommend you set an env variable `$SPARK_HOME` to the path of where spark is installed on your machine. 
+One important thing to note is that the `hudi-spark-bundle` should also be present when using the `hudi-cli-bundle`.  
+You can run `sh packaging/hudi-cli-bundle/hudi-cli-bundle.sh` once both bundles are compiled or are present.
+
+### Base path
+A hudi table resides on DFS, in a location referred to as the `basePath` and
 we would need this location in order to connect to a Hudi table. Hudi library effectively manages this table internally, using `.hoodie` subfolder to track all metadata.
+
+
 
 
 ### Using Hudi-cli in S3
