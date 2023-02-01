@@ -33,6 +33,7 @@ import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.HoodieInternalRowUtils.hasMetaFields
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}
 import org.apache.spark.sql.HoodieUnsafeUtils.getNumPartitions
 import org.apache.spark.sql.catalyst.InternalRow
@@ -76,6 +77,7 @@ object HoodieDatasetBulkInsertHelper
     val updatedDF = if (populateMetaFields) {
       val keyGeneratorClassName = config.getStringOrThrow(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME,
         "Key-generator class name is required")
+      val containsMetaFields = hasMetaFields(schema)
 
       val prependedRdd: RDD[InternalRow] =
         df.queryExecution.toRdd.mapPartitions { iter =>
@@ -91,12 +93,12 @@ object HoodieDatasetBulkInsertHelper
             val filename = UTF8String.EMPTY_UTF8
 
             // TODO use mutable row, avoid re-allocating
-            new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
+            new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, containsMetaFields)
           }
         }
 
       val dedupedRdd = if (config.shouldCombineBeforeInsert) {
-        dedupeRows(prependedRdd, updatedSchema, config.getPreCombineField, SparkHoodieIndexFactory.isGlobalIndex(config))
+        dedupRows(prependedRdd, updatedSchema, config.getPreCombineField, SparkHoodieIndexFactory.isGlobalIndex(config))
       } else {
         prependedRdd
       }
@@ -171,7 +173,7 @@ object HoodieDatasetBulkInsertHelper
     table.getContext.parallelize(writeStatuses.toList.asJava)
   }
 
-  private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean): RDD[InternalRow] = {
+  private def dedupRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean): RDD[InternalRow] = {
     val recordKeyMetaFieldOrd = schema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)
     val partitionPathMetaFieldOrd = schema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
     // NOTE: Pre-combine field could be a nested field
