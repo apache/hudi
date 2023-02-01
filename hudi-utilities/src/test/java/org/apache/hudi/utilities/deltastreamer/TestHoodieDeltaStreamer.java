@@ -1437,7 +1437,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         TestHelpers.makeConfigForHudiIncrSrc(tableBasePath, downstreamTableBasePath, WriteOperationType.BULK_INSERT,
             true, null);
     TestHelpers.addRecordMerger(recordType, downstreamCfg.configs);
-    downstreamCfg.configs.add("hoodie.deltastreamer.source.hoodieincr.drop.all.meta.fields.from.source=true");
     new HoodieDeltaStreamer(downstreamCfg, jsc, fs, hiveServer.getHiveConf()).sync();
     TestHelpers.assertRecordCount(1000, downstreamTableBasePath, sqlContext);
     TestHelpers.assertDistanceCount(1000, downstreamTableBasePath, sqlContext);
