@@ -130,15 +130,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     }
   }
 
-  private def tripAlias(plan: LogicalPlan): LogicalPlan = {
-    plan match {
-      case SubqueryAlias(_, relation: LogicalPlan) =>
-        tripAlias(relation)
-      case other =>
-        other
-    }
-  }
-
   /**
    * Add the hoodie meta fields to the schema.
    * @param schema
