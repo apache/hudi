@@ -48,19 +48,31 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends HoodieCommonTestHarness {
+
+  private static Stream<Arguments> conflictResolutionStrategy() {
+    ConflictResolutionStrategy[] data = new ConflictResolutionStrategy[] {
+        new SimpleConcurrentFileWritesConflictResolutionStrategy(),
+        new BucketIndexSimpleConcurrentFileWritesConflictResolutionStrategy()
+    };
+    return Stream.of(data).map(Arguments::of);
+  }
 
   @BeforeEach
   public void init() throws IOException {
     initMetaClient();
   }
 
-  @Test
-  public void testNoConcurrentWrites() throws Exception {
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategy")
+  public void testNoConcurrentWrites(ConflictResolutionStrategy strategy) throws Exception {
     String newInstantTime = HoodieTestTable.makeNewCommitTime();
     createCommit(newInstantTime);
     // consider commits before this are all successful
@@ -69,13 +81,13 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     newInstantTime = HoodieTestTable.makeNewCommitTime();
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, newInstantTime));
 
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     Stream<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient.getActiveTimeline(), currentInstant.get(), lastSuccessfulInstant);
     Assertions.assertTrue(candidateInstants.count() == 0);
   }
 
-  @Test
-  public void testConcurrentWrites() throws Exception {
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategy")
+  public void testConcurrentWrites(ConflictResolutionStrategy strategy) throws Exception {
     String newInstantTime = HoodieTestTable.makeNewCommitTime();
     createCommit(newInstantTime);
     // consider commits before this are all successful
@@ -86,13 +98,13 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Option<HoodieInstant> lastSuccessfulInstant = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant();
     newInstantTime = HoodieTestTable.makeNewCommitTime();
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, newInstantTime));
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     Stream<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient.getActiveTimeline(), currentInstant.get(), lastSuccessfulInstant);
     Assertions.assertTrue(candidateInstants.count() == 0);
   }
 
-  @Test
-  public void testConcurrentWritesWithInterleavingSuccesssfulCommit() throws Exception {
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategy")
+  public void testConcurrentWritesWithInterleavingSuccesssfulCommit(ConflictResolutionStrategy strategy) throws Exception {
     createCommit(HoodieActiveTimeline.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -105,7 +117,6 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createCommit(newInstantTime);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
@@ -123,8 +134,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     }
   }
 
-  @Test
-  public void testConcurrentWritesWithReplaceInflightCommit() throws Exception {
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategy")
+  public void testConcurrentWritesWithReplaceInflightCommit(ConflictResolutionStrategy strategy) throws Exception {
     createReplaceInflight(HoodieActiveTimeline.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
@@ -138,7 +150,6 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
     createReplaceInflight(newInstantTime);
 
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     timeline = timeline.reload();
 
@@ -158,8 +169,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     }
   }
 
-  @Test
-  public void testConcurrentWritesWithInterleavingScheduledCompaction() throws Exception {
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategy")
+  public void testConcurrentWritesWithInterleavingScheduledCompaction(ConflictResolutionStrategy strategy) throws Exception {
     createCommit(HoodieActiveTimeline.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -172,7 +184,6 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createCompactionRequested(newInstantTime);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
@@ -190,8 +201,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     }
   }
 
-  @Test
-  public void testConcurrentWritesWithInterleavingSuccessfulCompaction() throws Exception {
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategy")
+  public void testConcurrentWritesWithInterleavingSuccessfulCompaction(ConflictResolutionStrategy strategy) throws Exception {
     createCommit(HoodieActiveTimeline.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -204,7 +216,6 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createCompaction(newInstantTime);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
@@ -222,8 +233,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     }
   }
 
-  @Test
-  public void testConcurrentWriteAndCompactionScheduledEarlier() throws Exception {
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategy")
+  public void testConcurrentWriteAndCompactionScheduledEarlier(ConflictResolutionStrategy strategy) throws Exception {
     createCommit(HoodieActiveTimeline.createNewInstantTime());
     // compaction 1 gets scheduled
     String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
@@ -236,7 +248,6 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createInflightCommit(currentWriterInstant);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
@@ -245,8 +256,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Assertions.assertTrue(candidateInstants.size() == 0);
   }
 
-  @Test
-  public void testConcurrentWritesWithInterleavingScheduledCluster() throws Exception {
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategy")
+  public void testConcurrentWritesWithInterleavingScheduledCluster(ConflictResolutionStrategy strategy) throws Exception {
     createCommit(HoodieActiveTimeline.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -259,7 +271,6 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createReplaceRequested(newInstantTime);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
@@ -277,8 +288,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     }
   }
 
-  @Test
-  public void testConcurrentWritesWithInterleavingSuccessfulCluster() throws Exception {
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategy")
+  public void testConcurrentWritesWithInterleavingSuccessfulCluster(ConflictResolutionStrategy strategy) throws Exception {
     createCommit(HoodieActiveTimeline.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -291,7 +303,6 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createReplace(newInstantTime, WriteOperationType.CLUSTER);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
@@ -309,8 +320,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     }
   }
 
-  @Test
-  public void testConcurrentWritesWithInterleavingSuccessfulReplace() throws Exception {
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategy")
+  public void testConcurrentWritesWithInterleavingSuccessfulReplace(ConflictResolutionStrategy strategy) throws Exception {
     createCommit(HoodieActiveTimeline.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -323,7 +335,6 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createReplace(newInstantTime, WriteOperationType.INSERT_OVERWRITE);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
@@ -342,13 +353,13 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   private void createCommit(String instantTime) throws Exception {
-    String fileId1 = "file-1";
-    String fileId2 = "file-2";
+    String fileId1 = "00000000-1";
+    String fileId2 = "00000000-2";
 
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.addMetadata("test", "test");
     HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setFileId("file-1");
+    writeStat.setFileId(fileId1);
     commitMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     commitMetadata.setOperationType(WriteOperationType.INSERT);
     HoodieTestTable.of(metaClient)
@@ -367,41 +378,41 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   private HoodieCommitMetadata createCommitMetadata(String instantTime) {
-    return createCommitMetadata(instantTime, "file-1");
+    return createCommitMetadata(instantTime, "00000000-1");
   }
 
   private void createInflightCommit(String instantTime) throws Exception {
-    String fileId1 = "file-" + instantTime + "-1";
-    String fileId2 = "file-" + instantTime + "-2";
+    String fileId1 = "00000000-" + instantTime + "-1";
+    String fileId2 = "00000000-" + instantTime + "-2";
     HoodieTestTable.of(metaClient)
         .addInflightCommit(instantTime)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
   private void createCompactionRequested(String instantTime) throws Exception {
-    String fileId1 = "file-1";
+    String fileId1 = "00000000-1";
     HoodieCompactionPlan compactionPlan = new HoodieCompactionPlan();
     compactionPlan.setVersion(TimelineLayoutVersion.CURR_VERSION);
     HoodieCompactionOperation operation = new HoodieCompactionOperation();
     operation.setFileId(fileId1);
     operation.setPartitionPath(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
-    operation.setDataFilePath("/file-1");
-    operation.setDeltaFilePaths(Arrays.asList("/file-1"));
+    operation.setDataFilePath("/" + fileId1);
+    operation.setDeltaFilePaths(Arrays.asList("/" + fileId1));
     compactionPlan.setOperations(Arrays.asList(operation));
     HoodieTestTable.of(metaClient)
         .addRequestedCompaction(instantTime, compactionPlan);
   }
 
   private void createCompaction(String instantTime) throws Exception {
-    String fileId1 = "file-1";
-    String fileId2 = "file-2";
+    String fileId1 = "00000000-1";
+    String fileId2 = "00000000-2";
 
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.addMetadata("test", "test");
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     commitMetadata.setCompacted(true);
     HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setFileId("file-1");
+    writeStat.setFileId(fileId1);
     commitMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     HoodieTestTable.of(metaClient)
         .addCommit(instantTime, Option.of(commitMetadata))
@@ -409,8 +420,8 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   private void createReplaceRequested(String instantTime) throws Exception {
-    String fileId1 = "file-1";
-    String fileId2 = "file-2";
+    String fileId1 = "00000000-1";
+    String fileId2 = "00000000-2";
 
     // create replace instant to mark fileId1 as deleted
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
@@ -430,13 +441,13 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   private void createReplaceInflight(String instantTime) throws Exception {
-    String fileId1 = "file-1";
-    String fileId2 = "file-2";
+    String fileId1 = "00000000-1";
+    String fileId2 = "00000000-2";
 
     HoodieCommitMetadata inflightReplaceMetadata = new HoodieCommitMetadata();
     inflightReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
     HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setFileId("file-1");
+    writeStat.setFileId(fileId1);
     inflightReplaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     HoodieTestTable.of(metaClient)
         .addInflightReplace(instantTime, Option.of(inflightReplaceMetadata))
@@ -444,8 +455,8 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   private void createReplace(String instantTime, WriteOperationType writeOperationType) throws Exception {
-    String fileId1 = "file-1";
-    String fileId2 = "file-2";
+    String fileId1 = "00000000-1";
+    String fileId2 = "00000000-2";
 
     // create replace instant to mark fileId1 as deleted
     HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
@@ -453,7 +464,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     partitionFileIds.put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, Arrays.asList(fileId2));
     replaceMetadata.setPartitionToReplaceFileIds(partitionFileIds);
     HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setFileId("file-1");
+    writeStat.setFileId(fileId1);
     replaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     replaceMetadata.setOperationType(writeOperationType);
     // create replace instant to mark fileId1 as deleted
@@ -474,8 +485,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   // try to simulate HUDI-3355
-  @Test
-  public void testConcurrentWritesWithPendingInstants() throws Exception {
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategy")
+  public void testConcurrentWritesWithPendingInstants(ConflictResolutionStrategy strategy) throws Exception {
     // step1: create a pending replace/commit/compact instant: C1,C11,C12
     String newInstantTimeC1 = HoodieActiveTimeline.createNewInstantTime();
     createPendingReplace(newInstantTimeC1, WriteOperationType.CLUSTER);
@@ -508,9 +520,8 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
     // step6: do check
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     // make sure c3 has conflict with C1,C11,C12,C4;
-    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant, "file-2");
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant, "00000000-2");
     timeline.reload();
     List<HoodieInstant> completedInstantsDuringCurrentWriteOperation = TransactionUtils
             .getCompletedInstantsDuringCurrentWriteOperation(metaClient, pendingInstant).collect(Collectors.toList());
@@ -531,8 +542,8 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   private void createPendingReplace(String instantTime, WriteOperationType writeOperationType) throws Exception {
-    String fileId1 = "file-1";
-    String fileId2 = "file-2";
+    String fileId1 = "00000000-1";
+    String fileId2 = "00000000-2";
     // create replace instant to mark fileId2 as deleted
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
     requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.name());
@@ -551,8 +562,8 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   private void createCompleteReplace(String instantTime, WriteOperationType writeOperationType) throws Exception {
-    String fileId1 = "file-1";
-    String fileId2 = "file-2";
+    String fileId1 = "00000000-1";
+    String fileId2 = "00000000-2";
 
     // create replace instant to mark fileId2 as deleted
     HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
@@ -560,21 +571,21 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     partitionFileIds.put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, Arrays.asList(fileId2));
     replaceMetadata.setPartitionToReplaceFileIds(partitionFileIds);
     HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setFileId("file-2");
+    writeStat.setFileId(fileId2);
     replaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     replaceMetadata.setOperationType(writeOperationType);
     FileCreateUtils.createReplaceCommit(metaClient.getBasePath(), instantTime, replaceMetadata);
   }
 
   private void createPendingCompaction(String instantTime) throws Exception {
-    String fileId1 = "file-2";
+    String fileId1 = "00000000-2";
     HoodieCompactionPlan compactionPlan = new HoodieCompactionPlan();
     compactionPlan.setVersion(TimelineLayoutVersion.CURR_VERSION);
     HoodieCompactionOperation operation = new HoodieCompactionOperation();
     operation.setFileId(fileId1);
     operation.setPartitionPath(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
-    operation.setDataFilePath("/file-2");
-    operation.setDeltaFilePaths(Arrays.asList("/file-2"));
+    operation.setDataFilePath("/" + fileId1);
+    operation.setDeltaFilePaths(Arrays.asList("/" + fileId1));
     compactionPlan.setOperations(Arrays.asList(operation));
     HoodieTestTable.of(metaClient)
             .addRequestedCompaction(instantTime, compactionPlan);
@@ -582,15 +593,15 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   private void createCompleteCompaction(String instantTime) throws Exception {
-    String fileId1 = "file-1";
-    String fileId2 = "file-2";
+    String fileId1 = "00000000-1";
+    String fileId2 = "00000000-2";
 
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.addMetadata("test", "test");
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     commitMetadata.setCompacted(true);
     HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setFileId("file-2");
+    writeStat.setFileId(fileId2);
     commitMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     HoodieTestTable.of(metaClient)
             .addCommit(instantTime, Option.of(commitMetadata))
@@ -603,13 +614,13 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   private void createCompleteCommit(String instantTime) throws Exception {
-    String fileId1 = "file-1";
-    String fileId2 = "file-2";
+    String fileId1 = "00000000-1";
+    String fileId2 = "00000000-2";
 
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.addMetadata("test", "test");
     HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setFileId("file-2");
+    writeStat.setFileId(fileId2);
     commitMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     commitMetadata.setOperationType(WriteOperationType.INSERT);
     HoodieTestTable.of(metaClient)
