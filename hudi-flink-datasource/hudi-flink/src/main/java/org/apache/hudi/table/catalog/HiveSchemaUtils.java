@@ -181,9 +181,11 @@ public class HiveSchemaUtils {
    */
   public static List<FieldSchema> toHiveFieldSchema(TableSchema schema, boolean withOperationField) {
     List<FieldSchema> columns = new ArrayList<>();
-    Collection<String> metaFields = withOperationField
-        ? HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION // caution that the set may break sequence
-        : HoodieRecord.HOODIE_META_COLUMNS;
+    Collection<String> metaFields = new ArrayList<>(HoodieRecord.HOODIE_META_COLUMNS);
+    if (withOperationField) {
+      metaFields.add(HoodieRecord.OPERATION_METADATA_FIELD);
+    }
+
     for (String metaField : metaFields) {
       columns.add(new FieldSchema(metaField, "string", null));
     }

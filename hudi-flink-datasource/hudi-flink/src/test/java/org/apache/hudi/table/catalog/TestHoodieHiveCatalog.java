@@ -124,6 +124,21 @@ public class TestHoodieHiveCatalog {
         .collect(Collectors.joining(","));
     assertEquals("par1:string", partitionSchema);
 
+    // validate spark schema properties
+    String avroSchemaStr = hiveTable.getParameters().get("spark.sql.sources.schema.part.0");
+    String expectedAvroSchemaStr = ""
+        + "{\"type\":\"struct\",\"fields\":[{\"name\":\"_hoodie_commit_time\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"_hoodie_commit_seqno\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"_hoodie_record_key\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"_hoodie_partition_path\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"_hoodie_file_name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"uuid\",\"type\":\"integer\",\"nullable\":false,\"metadata\":{}},"
+        + "{\"name\":\"name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"age\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"ts\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"par1\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}]}";
+    assertEquals(expectedAvroSchemaStr, avroSchemaStr);
+
     // validate catalog table
     CatalogBaseTable table1 = hoodieCatalog.getTable(tablePath);
     assertEquals("hudi", table1.getOptions().get(CONNECTOR.key()));
