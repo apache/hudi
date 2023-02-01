@@ -187,12 +187,6 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key(LOCK_PREFIX + "conflict.resolution.strategy")
       .defaultValue(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
-      .withInferFunction(cfg -> {
-        if (cfg.getString(HoodieIndexConfig.INDEX_TYPE).equals(BUCKET.name())) {
-          return Option.of(BucketIndexSimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
-        }
-        return Option.of(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
-      })
       .sinceVersion("0.8.0")
       .withDocumentation("Conflict resolution strategy class name, this should be subclass of "
           + "org.apache.hudi.client.transaction.ConflictResolutionStrategy");
