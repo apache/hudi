@@ -122,7 +122,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     // and therefore if we convert to Avro directly we'll lose logical type-info.
     MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(conf, path);
     StructType structType = new ParquetToSparkSchemaConverter(conf).convert(messageType);
-    return SparkAdapterSupport$.MODULE$.sparkAdapter().getAvroSchemaConverters()
+    return SparkAdapterSupport$.MODULE$.sparkAdapter()
+        .getAvroSchemaConverters()
         .toAvroType(structType, true, messageType.getName(), StringUtils.EMPTY_STRING);
   }
 

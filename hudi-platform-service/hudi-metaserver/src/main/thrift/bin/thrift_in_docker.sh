@@ -17,9 +17,9 @@
 # limitations under the License.
 
 printf "====== INSTALL THRIFT START ======\n"
-DIR_PATH=$(dirname "$PWD")
-THRIFT_FILE_PATH=${DIR_PATH}/src/main/thrift
-THRIFT_OUT_PATH=$PWD/target/generated-sources
+PARENT_PATH=$(dirname "$PWD")
+THRIFT_FILE_PATH=${PARENT_PATH}/src/main/thrift
+THRIFT_OUT_PATH=${PARENT_PATH}/target/generated-sources
 THRIFT_VERSION=0.12.0
 THRIFT_IMAGE=thrift:$THRIFT_VERSION
 docker pull $THRIFT_IMAGE

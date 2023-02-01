@@ -112,26 +112,16 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException {
-    GenericRecord record = HoodieAvroUtils.rewriteRecord((GenericRecord) data, targetSchema);
-    return new HoodieAvroIndexedRecord(key, record, operation, metaData);
+  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
+    GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(data, targetSchema);
+    updateMetadataValuesInternal(newAvroRecord, metadataValues);
+    return new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData);
   }
 
   @Override
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException {
+  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
     GenericRecord record = HoodieAvroUtils.rewriteRecordWithNewSchema(data, newSchema, renameCols);
     return new HoodieAvroIndexedRecord(key, record, operation, metaData);
-  }
-
-  @Override
-  public HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException {
-    metadataValues.getKv().forEach((key, value) -> {
-      if (value != null) {
-        ((GenericRecord) data).put(key, value);
-      }
-    });
-
-    return new HoodieAvroIndexedRecord(key, data, operation, metaData);
   }
 
   @Override
@@ -233,5 +223,19 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     Serializer<GenericRecord> avroSerializer = kryo.getSerializer(GenericRecord.class);
 
     return kryo.readObjectOrNull(input, GenericRecord.class, avroSerializer);
+  }
+
+  static void updateMetadataValuesInternal(GenericRecord avroRecord, MetadataValues metadataValues) {
+    if (metadataValues.isEmpty()) {
+      return; // no-op
+    }
+
+    String[] values = metadataValues.getValues();
+    for (int pos = 0; pos < values.length; ++pos) {
+      String value = values[pos];
+      if (value != null) {
+        avroRecord.put(HoodieMetadataField.values()[pos].getFieldName(), value);
+      }
+    }
   }
 }

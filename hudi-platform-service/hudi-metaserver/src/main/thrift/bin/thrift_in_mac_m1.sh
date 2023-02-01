@@ -28,6 +28,7 @@ printf "====== INSTALL THRIFT START ======\n"
 brew install thrift@0.12.0
 printf "====== INSTALL THRIFT END ======\n"
 printf "====== COMPILE THRIFT SOURCE FILE START ======\n"
-mkdir -p target/generated-sources
-/usr/local/bin/thrift -o target/generated-sources --gen java ../src/main/thrift/hudi-metaserver.thrift
+PARENT_PATH=$(dirname "$PWD")
+mkdir -p ${PARENT_PATH}/target/generated-sources
+/usr/local/bin/thrift -o ${PARENT_PATH}/target/generated-sources --gen java ${PARENT_PATH}/src/main/thrift/hudi-metaserver.thrift
 printf "====== COMPILE THRIFT SOURCE FILE END ======\n"

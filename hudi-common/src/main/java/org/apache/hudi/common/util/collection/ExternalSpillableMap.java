@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -51,6 +52,7 @@ import java.util.stream.Stream;
  * map may occupy more memory than is available, resulting in OOM. However, if the spill threshold is too low, we spill
  * frequently and incur unnecessary disk writes.
  */
+@NotThreadSafe
 public class ExternalSpillableMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Serializable {
 
   // Find the actual estimated payload size after inserting N records
@@ -200,10 +202,13 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   @Override
   public R put(T key, R value) {
     if (this.currentInMemoryMapSize >= maxInMemorySizeInBytes || inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
-      this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 
-        + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
+      long tmpEstimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9
+          + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
+      if (this.estimatedPayloadSize != tmpEstimatedPayloadSize) {
+        LOG.info("Update Estimated Payload size to => " + this.estimatedPayloadSize);
+      }
+      this.estimatedPayloadSize = tmpEstimatedPayloadSize;
       this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
-      LOG.info("Update Estimated Payload size to => " + this.estimatedPayloadSize);
     }
 
     if (this.currentInMemoryMapSize < maxInMemorySizeInBytes || inMemoryMap.containsKey(key)) {

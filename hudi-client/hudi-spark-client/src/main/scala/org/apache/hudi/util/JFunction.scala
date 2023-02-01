@@ -17,7 +17,7 @@
 
 package org.apache.hudi.util
 
-import org.apache.hudi.common.function.{SerializableFunction, SerializablePairFunction}
+import org.apache.hudi.common.function.{SerializableFunction, SerializableFunctionUnchecked, SerializablePairFunction}
 import org.apache.hudi.common.util.collection
 
 import scala.language.implicitConversions
@@ -50,6 +50,11 @@ object JFunction {
 
   implicit def toJavaSerializableFunction[T, R](f: Function[T, R]): SerializableFunction[T, R] =
     new SerializableFunction[T, R] {
+      override def apply(t: T): R = f.apply(t)
+    }
+
+  implicit def toJavaSerializableFunctionUnchecked[T, R](f: Function[T, R]): SerializableFunctionUnchecked[T, R] =
+    new SerializableFunctionUnchecked[T, R] {
       override def apply(t: T): R = f.apply(t)
     }
 
