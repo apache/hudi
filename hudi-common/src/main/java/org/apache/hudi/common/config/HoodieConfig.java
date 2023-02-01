@@ -142,14 +142,6 @@ public class HoodieConfig implements Serializable {
     return StringUtils.split(getString(configProperty), delimiter);
   }
 
-  public <T> List<String> getSplitStringsOrDefault(ConfigProperty<T> configProperty) {
-    return getSplitStringsOrDefault(configProperty, ",");
-  }
-
-  public <T> List<String> getSplitStringsOrDefault(ConfigProperty<T> configProperty, String delimiter) {
-    return StringUtils.split(getStringOrDefault(configProperty), delimiter);
-  }
-
   public String getString(String key) {
     return props.getProperty(key);
   }
