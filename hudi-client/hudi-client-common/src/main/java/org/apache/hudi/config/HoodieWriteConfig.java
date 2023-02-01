@@ -227,6 +227,15 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue("true")
       .withDocumentation("Validate the schema used for the write against the latest schema, for backwards compatibility.");
 
+  public static final ConfigProperty<String> SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP = ConfigProperty
+      .key("hoodie.datasource.write.schema.allow.auto.evolution.column.drop")
+      .defaultValue("false")
+      .sinceVersion("0.13.0")
+      .withDocumentation("Controls whether table's schema is allowed to automatically evolve when "
+          + "incoming batch's schema can have any of the columns dropped. By default, Hudi will not "
+          + "allow this kind of (auto) schema evolution. Set this config to true to allow table's "
+          + "schema to be updated automatically when columns are dropped from the new incoming batch.");
+
   public static final ConfigProperty<String> INSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.insert.shuffle.parallelism")
       .defaultValue("0")
@@ -1084,6 +1093,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldValidateAvroSchema() {
     return getBoolean(AVRO_SCHEMA_VALIDATE_ENABLE);
+  }
+
+  public boolean shouldAllowAutoEvolutionColumnDrop() {
+    return getBooleanOrDefault(SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP);
   }
 
   public String getTableName() {
@@ -2448,6 +2461,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withAvroSchemaValidate(boolean enable) {
       writeConfig.setValue(AVRO_SCHEMA_VALIDATE_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withAllowAutoEvolutionColumnDrop(boolean shouldAllowDroppedColumns) {
+      writeConfig.setValue(SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, String.valueOf(shouldAllowDroppedColumns));
       return this;
     }
 

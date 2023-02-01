@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -31,7 +30,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.Functions.Function1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -313,40 +311,6 @@ public class TableSchemaResolver {
     }
 
     return Option.empty();
-  }
-
-  /**
-   * Get latest schema either from incoming schema or table schema.
-   * @param writeSchema incoming batch's write schema.
-   * @param convertTableSchemaToAddNamespace {@code true} if table schema needs to be converted. {@code false} otherwise.
-   * @param converterFn converter function to be called over table schema (to add namespace may be). Each caller can decide if any conversion is required.
-   * @return the latest schema.
-   *
-   * @deprecated will be removed (HUDI-4472)
-   */
-  @Deprecated
-  public Schema getLatestSchema(Schema writeSchema, boolean convertTableSchemaToAddNamespace,
-      Function1<Schema, Schema> converterFn) {
-    Schema latestSchema = writeSchema;
-    try {
-      if (metaClient.isTimelineNonEmpty()) {
-        Schema tableSchema = getTableAvroSchemaWithoutMetadataFields();
-        if (convertTableSchemaToAddNamespace && converterFn != null) {
-          tableSchema = converterFn.apply(tableSchema);
-        }
-        if (writeSchema.getFields().size() < tableSchema.getFields().size() && AvroSchemaUtils.isSchemaCompatible(writeSchema, tableSchema)) {
-          // if incoming schema is a subset (old schema) compared to table schema. For eg, one of the
-          // ingestion pipeline is still producing events in old schema
-          latestSchema = tableSchema;
-          LOG.debug("Using latest table schema to rewrite incoming records " + tableSchema.toString());
-        }
-      }
-    } catch (IllegalArgumentException | InvalidTableException e) {
-      LOG.warn("Could not find any commits, falling back to using incoming batch's write schema");
-    } catch (Exception e) {
-      LOG.warn("Unknown exception thrown " + e.getMessage() + ", Falling back to using incoming batch's write schema");
-    }
-    return latestSchema;
   }
 
   private MessageType readSchemaFromParquetBaseFile(Path parquetFilePath) throws IOException {
