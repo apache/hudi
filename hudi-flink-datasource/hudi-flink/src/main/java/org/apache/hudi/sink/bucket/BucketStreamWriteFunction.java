@@ -135,7 +135,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    * (partition + curBucket) % numPartitions == this taskID belongs to this task.
    */
   public boolean isBucketToLoad(int bucketNumber, String partition) {
-    int globalHash = ((partition + bucketNumber).hashCode()) & Integer.MAX_VALUE;
+    int globalHash = ((partition.hashCode() + bucketNumber)) & Integer.MAX_VALUE;
     return BucketIdentifier.mod(globalHash, parallelism) == taskID;
   }
 
