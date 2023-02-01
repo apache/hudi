@@ -20,6 +20,7 @@
 package org.apache.hudi.gcp.bigquery;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.beust.jcommander.Parameter;
@@ -108,18 +109,18 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       return hoodieSyncConfigParams.isHelp();
     }
 
-    public Properties toProps() {
-      final Properties props = hoodieSyncConfigParams.toProps();
-      props.setProperty(BIGQUERY_SYNC_PROJECT_ID.key(), projectId);
-      props.setProperty(BIGQUERY_SYNC_DATASET_NAME.key(), datasetName);
-      props.setProperty(BIGQUERY_SYNC_DATASET_LOCATION.key(), datasetLocation);
-      props.setProperty(BIGQUERY_SYNC_TABLE_NAME.key(), hoodieSyncConfigParams.tableName);
-      props.setProperty(BIGQUERY_SYNC_SOURCE_URI.key(), sourceUri);
-      props.setProperty(BIGQUERY_SYNC_SOURCE_URI_PREFIX.key(), sourceUriPrefix);
-      props.setProperty(BIGQUERY_SYNC_SYNC_BASE_PATH.key(), hoodieSyncConfigParams.basePath);
-      props.setProperty(BIGQUERY_SYNC_PARTITION_FIELDS.key(), String.join(",", hoodieSyncConfigParams.partitionFields));
-      props.setProperty(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), String.valueOf(hoodieSyncConfigParams.useFileListingFromMetadata));
-      props.setProperty(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING.key(), String.valueOf(hoodieSyncConfigParams.assumeDatePartitioning));
+    public TypedProperties toProps() {
+      final TypedProperties props = hoodieSyncConfigParams.toProps();
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_PROJECT_ID.key(), projectId);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_DATASET_NAME.key(), datasetName);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_DATASET_LOCATION.key(), datasetLocation);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_TABLE_NAME.key(), hoodieSyncConfigParams.tableName);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_SOURCE_URI.key(), sourceUri);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_SOURCE_URI_PREFIX.key(), sourceUriPrefix);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_SYNC_BASE_PATH.key(), hoodieSyncConfigParams.basePath);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_PARTITION_FIELDS.key(), String.join(",", hoodieSyncConfigParams.partitionFields));
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), hoodieSyncConfigParams.useFileListingFromMetadata);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING.key(), hoodieSyncConfigParams.assumeDatePartitioning);
       return props;
     }
   }
