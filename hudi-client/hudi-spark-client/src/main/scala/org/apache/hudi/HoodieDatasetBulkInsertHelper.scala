@@ -180,29 +180,33 @@ object HoodieDatasetBulkInsertHelper
     val preCombineFieldPath = composeNestedFieldPath(schema, preCombineFieldRef)
       .getOrElse(throw new HoodieException(s"Pre-combine field $preCombineFieldRef is missing in $schema"))
 
+    // TODO elaborate
+    val numPartitions = rdd.getNumPartitions
+
     rdd.map { row =>
-        val rowKey = if (isGlobalIndex) {
-          row.getString(recordKeyMetaFieldOrd)
-        } else {
-          val partitionPath = row.getString(partitionPathMetaFieldOrd)
-          val recordKey = row.getString(recordKeyMetaFieldOrd)
-          s"$partitionPath:$recordKey"
-        }
-        // NOTE: It's critical whenever we keep the reference to the row, to make a copy
-        //       since Spark might be providing us with a mutable copy (updated during the iteration)
-        (rowKey, row.copy())
+      val rowKey = if (isGlobalIndex) {
+        (null, row.getUTF8String(recordKeyMetaFieldOrd))
+      } else {
+        val partitionPath = row.getUTF8String(partitionPathMetaFieldOrd)
+        val recordKey = row.getUTF8String(recordKeyMetaFieldOrd)
+        (partitionPath, recordKey)
       }
-      .reduceByKey {
-        (oneRow, otherRow) =>
-          val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-          val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-          if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
-            oneRow
-          } else {
-            otherRow
-          }
+      // TODO cleanup
+      // NOTE: It's critical whenever we keep the reference to the row, to make a copy
+      //       since Spark might be providing us with a mutable copy (updated during the iteration)
+      //(rowKey, row.copy())
+      (rowKey, row)
+    }
+    .reduceByKey((oneRow, otherRow) => {
+      val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+      val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+      if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
+        oneRow
+      } else {
+        otherRow
       }
-      .values
+    }, numPartitions)
+    .values
   }
 
   private def dropPartitionColumns(df: DataFrame, config: HoodieWriteConfig): DataFrame = {
