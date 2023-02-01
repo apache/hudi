@@ -18,18 +18,28 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.common.util.BinaryUtil
-import org.apache.spark.SparkConf
+import org.apache.spark.internal.config.Kryo.KRYO_USE_POOL
+import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.serializer.{KryoSerializer, SerializerInstance}
 
 import java.nio.ByteBuffer
 
 
+// TODO merge w/ SerializationUtils
 object SerDeUtils {
 
-  private val SERIALIZER_THREAD_LOCAL = new ThreadLocal[SerializerInstance] {
+  private lazy val conf = {
+    val conf = Option(SparkEnv.get)
+      // TODO elaborate
+      .map(_.conf.clone)
+      .getOrElse(new SparkConf)
+    conf.set(KRYO_USE_POOL, false)
+    conf
+  }
 
+  private val SERIALIZER_THREAD_LOCAL = new ThreadLocal[SerializerInstance] {
     override protected def initialValue: SerializerInstance = {
-      new KryoSerializer(new SparkConf(true)).newInstance()
+      new KryoSerializer(conf).newInstance()
     }
   }
 
