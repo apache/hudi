@@ -1166,6 +1166,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
    * This test is to make sure that bulk insert doesn't create a bunch of tiny files if
    * hoodie.bulkinsert.user.defined.partitioner.sort.columns doesn't start with the partition columns
    *
+   * NOTE: Additionally, this test serves as a smoke test making sure that all of the bulk-insert
+   *       modes work
    */
   test(s"Test Bulk Insert with all sort-modes") {
     withTempDir { basePath =>
@@ -1218,6 +1220,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              |(7, 'a', 23, '2021-03-21')
              |""".stripMargin)
 
+        // TODO re-enable
         //assertResult(3)(spark.sql(s"select distinct _hoodie_file_name from $tableName").count())
       }
     }
