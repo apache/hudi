@@ -24,8 +24,11 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.functions.BuiltInFunctionDefinition;
+import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
@@ -33,7 +36,9 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.source.stats.ExpressionEvaluator.Evaluator.bindCall;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -103,8 +108,9 @@ public class TestExpressionEvaluator {
     equalTo.bindColStats(indexRow6, queryFields(2), rExpr);
     assertFalse(equalTo.eval(), "12 <> null");
 
-    equalTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    assertFalse(equalTo.eval(), "null <> null");
+    assertThrows(
+        IllegalStateException.class,
+        () -> equalTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT())));
   }
 
   @Test
@@ -139,9 +145,9 @@ public class TestExpressionEvaluator {
     notEqualTo.bindColStats(indexRow6, queryFields(2), rExpr);
     assertTrue(notEqualTo.eval(), "12 <> null");
 
-    notEqualTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    notEqualTo.bindColStats(indexRow5, queryFields(2), rExpr);
-    assertFalse(notEqualTo.eval(), "null <> null");
+    assertThrows(
+        IllegalStateException.class,
+        () ->  notEqualTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT())));
   }
 
   @Test
@@ -206,9 +212,9 @@ public class TestExpressionEvaluator {
     lessThan.bindColStats(indexRow6, queryFields(2), rExpr);
     assertFalse(lessThan.eval(), "12 <> null");
 
-    lessThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    lessThan.bindColStats(indexRow4, queryFields(2), rExpr);
-    assertFalse(lessThan.eval(), "null <> null");
+    assertThrows(
+        IllegalStateException.class,
+        () -> lessThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT())));
   }
 
   @Test
@@ -243,9 +249,9 @@ public class TestExpressionEvaluator {
     greaterThan.bindColStats(indexRow6, queryFields(2), rExpr);
     assertFalse(greaterThan.eval(), "12 <> null");
 
-    greaterThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    greaterThan.bindColStats(indexRow5, queryFields(2), rExpr);
-    assertFalse(greaterThan.eval(), "null <> null");
+    assertThrows(
+        IllegalStateException.class,
+        () -> greaterThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT())));
   }
 
   @Test
@@ -280,9 +286,9 @@ public class TestExpressionEvaluator {
     lessThanOrEqual.bindColStats(indexRow6, queryFields(2), rExpr);
     assertFalse(lessThanOrEqual.eval(), "12 <> null");
 
-    lessThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    lessThanOrEqual.bindColStats(indexRow4, queryFields(2), rExpr);
-    assertFalse(lessThanOrEqual.eval(), "null <> null");
+    assertThrows(
+        IllegalStateException.class,
+        () -> lessThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT())));
   }
 
   @Test
@@ -317,9 +323,9 @@ public class TestExpressionEvaluator {
     greaterThanOrEqual.bindColStats(indexRow6, queryFields(2), rExpr);
     assertFalse(greaterThanOrEqual.eval(), "12 <> null");
 
-    greaterThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    greaterThanOrEqual.bindColStats(indexRow5, queryFields(2), rExpr);
-    assertFalse(greaterThanOrEqual.eval(), "null <> null");
+    assertThrows(
+        IllegalStateException.class,
+        () -> greaterThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT())));
   }
 
   @Test
@@ -353,9 +359,32 @@ public class TestExpressionEvaluator {
     in.bindColStats(indexRow6, queryFields(2), rExpr);
     assertFalse(in.eval(), "12 <> null");
 
-    in.bindVals((Object) null);
-    in.bindColStats(indexRow3, queryFields(2), rExpr);
-    assertFalse(in.eval(), "null <> null");
+    assertThrows(IllegalStateException.class, () -> in.bindVals((Object) null));
+  }
+
+  @Test
+  void testAlwaysFalse() {
+    FieldReferenceExpression ref = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
+    ValueLiteralExpression nullLiteral = new ValueLiteralExpression(null, DataTypes.INT());
+    RowData indexRow = intIndexRow(11, 13);
+    RowType.RowField[] queryFields = queryFields(2);
+    BuiltInFunctionDefinition[] funDefs = new BuiltInFunctionDefinition[] {
+        BuiltInFunctionDefinitions.EQUALS,
+        BuiltInFunctionDefinitions.NOT_EQUALS,
+        BuiltInFunctionDefinitions.LESS_THAN,
+        BuiltInFunctionDefinitions.GREATER_THAN,
+        BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL,
+        BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL,
+        BuiltInFunctionDefinitions.IN};
+    for (BuiltInFunctionDefinition funDef : funDefs) {
+      CallExpression expr =
+          CallExpression.permanent(
+              funDef,
+              Arrays.asList(ref, nullLiteral),
+              DataTypes.BOOLEAN());
+      // always return false if the literal value is null
+      assertFalse(bindCall(expr, indexRow, queryFields).eval());
+    }
   }
 
   private static RowData intIndexRow(Integer minVal, Integer maxVal) {

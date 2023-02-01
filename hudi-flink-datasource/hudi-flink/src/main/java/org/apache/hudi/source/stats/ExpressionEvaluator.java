@@ -119,16 +119,6 @@ public class ExpressionEvaluator {
         return ((Or) evaluator).bindEvaluator(evaluator1, evaluator2);
       }
 
-      // handle IN specifically
-      if (BuiltInFunctionDefinitions.IN.equals(funDef)) {
-        ValidationUtils.checkState(normalized, "The IN expression expects to be normalized");
-        evaluator = In.getInstance();
-        FieldReferenceExpression rExpr = (FieldReferenceExpression) childExprs.get(0);
-        evaluator.bindFieldReference(rExpr);
-        ((In) evaluator).bindVals(getInLiteralVals(childExprs));
-        return evaluator.bindColStats(indexRow, queryFields, rExpr);
-      }
-
       // handle unary operators
       if (BuiltInFunctionDefinitions.IS_NULL.equals(funDef)) {
         FieldReferenceExpression rExpr = (FieldReferenceExpression) childExprs.get(0);
@@ -140,6 +130,25 @@ public class ExpressionEvaluator {
         return IsNotNull.getInstance()
             .bindFieldReference(rExpr)
             .bindColStats(indexRow, queryFields, rExpr);
+      }
+
+      boolean hasNullLiteral =
+          childExprs.stream().anyMatch(e ->
+             e instanceof ValueLiteralExpression
+                 && ExpressionUtils.getValueFromLiteral((ValueLiteralExpression) e) == null);
+      if (hasNullLiteral) {
+        evaluator = AlwaysFalse.getInstance();
+        return evaluator;
+      }
+
+      // handle IN specifically
+      if (BuiltInFunctionDefinitions.IN.equals(funDef)) {
+        ValidationUtils.checkState(normalized, "The IN expression expects to be normalized");
+        evaluator = In.getInstance();
+        FieldReferenceExpression rExpr = (FieldReferenceExpression) childExprs.get(0);
+        evaluator.bindFieldReference(rExpr);
+        ((In) evaluator).bindVals(getInLiteralVals(childExprs));
+        return evaluator.bindColStats(indexRow, queryFields, rExpr);
       }
 
       // handle binary operators
@@ -196,6 +205,7 @@ public class ExpressionEvaluator {
 
     public Evaluator bindVal(ValueLiteralExpression vExpr) {
       this.val = ExpressionUtils.getValueFromLiteral(vExpr);
+      ValidationUtils.checkState(val != null, "Please use AlwaysFalse evaluator instead!");
       return this;
     }
 
@@ -218,7 +228,7 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
-      if (this.minVal == null || this.maxVal == null || this.val == null) {
+      if (this.minVal == null || this.maxVal == null) {
         return false;
       }
       if (compare(this.minVal, this.val, this.type) > 0) {
@@ -238,9 +248,6 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
-      if (this.val == null) {
-        return false;
-      }
       // because the bounds are not necessarily a min or max value, this cannot be answered using
       // them. notEq(col, X) with (X, Y) doesn't guarantee that X is a value in col.
       return true;
@@ -286,9 +293,6 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
-      if (this.val == null) {
-        return false;
-      }
       if (this.minVal == null) {
         return false;
       }
@@ -306,9 +310,6 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
-      if (this.val == null) {
-        return false;
-      }
       if (this.maxVal == null) {
         return false;
       }
@@ -326,9 +327,6 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
-      if (this.val == null) {
-        return false;
-      }
       if (this.minVal == null) {
         return false;
       }
@@ -346,9 +344,6 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
-      if (this.val == null) {
-        return false;
-      }
       if (this.maxVal == null) {
         return false;
       }
@@ -368,9 +363,6 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
-      if (Arrays.stream(vals).anyMatch(Objects::isNull)) {
-        return false;
-      }
       if (this.minVal == null) {
         return false; // values are all null and literalSet cannot contain null.
       }
@@ -394,7 +386,31 @@ public class ExpressionEvaluator {
     }
 
     public void bindVals(Object... vals) {
+      ValidationUtils.checkState(
+          Arrays.stream(vals).allMatch(Objects::nonNull), "Please use AlwaysFalse evaluator instead!");
       this.vals = vals;
+    }
+  }
+
+  // A special evaluator which is not possible to match any condition
+  public static class AlwaysFalse extends Evaluator {
+
+    public static AlwaysFalse getInstance() {
+      return new AlwaysFalse();
+    }
+
+    @Override
+    public Evaluator bindColStats(
+        RowData indexRow,
+        RowType.RowField[] queryFields,
+        FieldReferenceExpression expr) {
+      // this no need to do anything
+      return this;
+    }
+
+    @Override
+    public boolean eval() {
+      return false;
     }
   }
 
