@@ -32,6 +32,7 @@ import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
+import org.apache.hudi.utilities.sources.processor.canal.CanalJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.maxwell.MaxwellJsonKafkaSourcePostProcessor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -321,12 +322,12 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
 
     ObjectMapper mapper = new ObjectMapper();
     TypedProperties props = new TypedProperties();
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.DATABASE_NAME_REGEX_PROP.key(), "hudi(_)?[0-9]{0,2}");
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.TABLE_NAME_REGEX_PROP.key(), "hudi_canal(_)?[0-9]{0,2}");
+    props.setProperty(CanalJsonKafkaSourcePostProcessor.Config.DATABASE_NAME_REGEX_PROP.key(), "hudi(_)?[0-9]{0,2}");
+    props.setProperty(CanalJsonKafkaSourcePostProcessor.Config.TABLE_NAME_REGEX_PROP.key(), "hudi_canal(_)?[0-9]{0,2}");
 
     // test insert and update
     JavaRDD<String> inputInsertAndUpdate = jsc().parallelize(Arrays.asList(hudiCanal01Update, hudiCanal01Insert));
-    MaxwellJsonKafkaSourcePostProcessor processor = new MaxwellJsonKafkaSourcePostProcessor(props);
+    CanalJsonKafkaSourcePostProcessor processor = new CanalJsonKafkaSourcePostProcessor(props);
     processor.process(inputInsertAndUpdate).map(mapper::readTree).foreach(record -> {
       // database name should be null
       JsonNode database = record.get("database");
