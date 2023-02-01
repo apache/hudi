@@ -1025,7 +1025,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieRecordMerger getRecordMerger() {
-    List<String> mergers = getSplitStringsOrDefault(RECORD_MERGER_IMPLS).stream()
+    List<String> mergers = StringUtils.split(getStringOrDefault(RECORD_MERGER_IMPLS), ",").stream()
         .map(String::trim)
         .distinct()
         .collect(Collectors.toList());
