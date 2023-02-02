@@ -77,7 +77,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     this.instantToHeartbeatMap = new HashMap<>();
   }
 
-  class Heartbeat {
+  public class Heartbeat {
 
     private String instantTime;
     private Boolean isHeartbeatStarted = false;
