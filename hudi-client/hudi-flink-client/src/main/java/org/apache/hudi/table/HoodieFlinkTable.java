@@ -60,8 +60,6 @@ public abstract class HoodieFlinkTable<T>
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
-    // support flink hoodie.table.timeline.timezone config default local
-    metaClient.getTableConfig().setValue(TIMELINE_TIMEZONE.key(), config.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE));
     return HoodieFlinkTable.create(config, context, metaClient);
   }
 
