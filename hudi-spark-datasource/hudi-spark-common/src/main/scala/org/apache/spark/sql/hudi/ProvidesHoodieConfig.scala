@@ -329,7 +329,7 @@ object ProvidesHoodieConfig {
   //    - Overriding: specify mandatory values required for the feature/component (could NOT be
   //      overridden by any source)s
   //
-  private def combineOptions(catalogTable: HoodieCatalogTable,
+  def combineOptions(catalogTable: HoodieCatalogTable,
                              tableConfig: HoodieTableConfig,
                              sqlConf: SQLConf,
                              defaultOpts: Map[String, String],
