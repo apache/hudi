@@ -186,7 +186,7 @@ trait ProvidesHoodieConfig extends Logging {
       HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn)
     )
 
-    val overridingOpts = Map(
+    val overridingOpts = extraOptions ++ Map(
       "path" -> path,
       TABLE_TYPE.key -> tableType,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
