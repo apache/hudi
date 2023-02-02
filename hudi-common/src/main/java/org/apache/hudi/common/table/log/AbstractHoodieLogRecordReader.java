@@ -842,16 +842,11 @@ public abstract class AbstractHoodieLogRecordReader {
     Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, readerSchema.getFullName());
 
     return Option.of(Pair.of((record) -> {
-      try {
-        return record.rewriteRecordWithNewSchema(
-            dataBlock.getSchema(),
-            this.hoodieTableMetaClient.getTableConfig().getProps(),
-            mergedAvroSchema,
-            Collections.emptyMap());
-      } catch (IOException e) {
-        LOG.error("Error rewrite record with new schema", e);
-        throw new HoodieException(e);
-      }
+      return record.rewriteRecordWithNewSchema(
+          dataBlock.getSchema(),
+          this.hoodieTableMetaClient.getTableConfig().getProps(),
+          mergedAvroSchema,
+          Collections.emptyMap());
     }, mergedAvroSchema));
   }
 

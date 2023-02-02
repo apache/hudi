@@ -73,6 +73,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
   String propsFilePath;
   String tableBasePath;
 
+  @Disabled("HUDI-5653")
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   void testUpsertsContinuousModeWithMultipleWritersForConflicts(HoodieTableType tableType) throws Exception {

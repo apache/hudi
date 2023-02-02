@@ -107,11 +107,11 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
         DataSourceWriteOptions.OPERATION.key -> opType
       )
 
-    def appendData(schema: StructType, batch: Seq[Row]): Unit = {
+    def appendData(schema: StructType, batch: Seq[Row], shouldAllowDroppedColumns: Boolean = false): Unit = {
       HoodieUnsafeUtils.createDataFrameFromRows(spark, batch, schema)
         .write
         .format("org.apache.hudi")
-        .options(opts)
+        .options(opts ++ Map(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> shouldAllowDroppedColumns.toString))
         .mode(SaveMode.Append)
         .save(basePath)
     }
@@ -202,7 +202,8 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
     }
 
     //
-    // 3. Write 3d batch with another schema (w/ omitted a _nullable_ column `second_name`, expected to succeed)
+    // 3. Write 3d batch with another schema (w/ omitted a _nullable_ column `second_name`, expected to succeed if
+    // col drop is enabled)
     //
 
     val thirdSchema = StructType(
@@ -217,7 +218,14 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
       Row("8", "Ron", "14", 1, 1),
       Row("9", "Germiona", "16", 1, 1))
 
-    appendData(thirdSchema, thirdBatch)
+    if (shouldReconcileSchema) {
+      appendData(thirdSchema, thirdBatch)
+    } else {
+      assertThrows(classOf[SchemaCompatibilityException]) {
+        appendData(thirdSchema, thirdBatch)
+      }
+      appendData(thirdSchema, thirdBatch, shouldAllowDroppedColumns = true)
+    }
     val (tableSchemaAfterThirdBatch, rowsAfterThirdBatch) = loadTable()
 
     // NOTE: In case schema reconciliation is ENABLED, Hudi would prefer the table's schema over the new batch
@@ -270,7 +278,10 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
         appendData(fourthSchema, fourthBatch)
       }
     } else {
-      appendData(fourthSchema, fourthBatch)
+      assertThrows(classOf[SchemaCompatibilityException]) {
+        appendData(fourthSchema, fourthBatch)
+      }
+      appendData(fourthSchema, fourthBatch, shouldAllowDroppedColumns = true)
       val (latestTableSchema, rows) = loadTable()
 
       assertEquals(fourthSchema, latestTableSchema)

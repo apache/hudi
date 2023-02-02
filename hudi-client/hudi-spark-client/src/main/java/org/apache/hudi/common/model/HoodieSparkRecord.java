@@ -30,9 +30,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
-import org.apache.hudi.util.HoodieSparkRecordUtils;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
@@ -44,14 +44,13 @@ import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
+import scala.Function1;
 
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
-import static org.apache.hudi.util.HoodieSparkRecordUtils.getNullableValAsString;
-import static org.apache.hudi.util.HoodieSparkRecordUtils.getValue;
 import static org.apache.spark.sql.types.DataTypes.BooleanType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 
@@ -150,8 +149,9 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
       return getRecordKey();
     }
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
-    return keyGeneratorOpt.isPresent() ? ((SparkKeyGeneratorInterface) keyGeneratorOpt.get())
-        .getRecordKey(data, structType).toString() : data.getString(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal());
+    return keyGeneratorOpt.isPresent()
+        ? ((SparkKeyGeneratorInterface) keyGeneratorOpt.get()).getRecordKey(data, structType).toString()
+        : data.getString(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal());
   }
 
   @Override
@@ -173,7 +173,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
   @Override
   public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
-    return HoodieSparkRecordUtils.getRecordColumnValues(data, columns, structType, consistentLogicalTimestampEnabled);
+    Object[] objects = new Object[columns.length];
+    for (int i = 0; i < objects.length; i++) {
+      objects[i] = getValue(structType, columns[i], data);
+    }
+    return objects;
   }
 
   @Override
@@ -186,50 +190,27 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
   }
 
   @Override
-  public HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException {
+  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
 
-    // TODO HUDI-5281 Rewrite HoodieSparkRecord with UnsafeRowWriter
-    InternalRow rewriteRecord = HoodieInternalRowUtils.rewriteRecord(this.data, structType, targetStructType);
-    UnsafeRow unsafeRow = HoodieInternalRowUtils.getCachedUnsafeProjection(targetStructType, targetStructType).apply(rewriteRecord);
+    HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(this.data, structType);
+    updateMetadataValuesInternal(updatableRow, metadataValues);
 
-    boolean containMetaFields = hasMetaFields(targetStructType);
-    UTF8String[] metaFields = tryExtractMetaFields(unsafeRow, targetStructType);
-    HoodieInternalRow internalRow = new HoodieInternalRow(metaFields, unsafeRow, containMetaFields);
-
-    return new HoodieSparkRecord(getKey(), internalRow, targetStructType, getOperation(), this.currentLocation, this.newLocation, false);
+    return new HoodieSparkRecord(getKey(), updatableRow, targetStructType, getOperation(), this.currentLocation, this.newLocation, false);
   }
 
   @Override
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException {
+  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
 
-    // TODO HUDI-5281 Rewrite HoodieSparkRecord with UnsafeRowWriter
-    InternalRow rewriteRecord = HoodieInternalRowUtils.rewriteRecordWithNewSchema(this.data, structType, newStructType, renameCols);
-    UnsafeRow unsafeRow = HoodieInternalRowUtils.getCachedUnsafeProjection(newStructType, newStructType).apply(rewriteRecord);
+    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, renameCols);
 
-    boolean containMetaFields = hasMetaFields(newStructType);
-    UTF8String[] metaFields = tryExtractMetaFields(unsafeRow, newStructType);
-    HoodieInternalRow internalRow = new HoodieInternalRow(metaFields, unsafeRow, containMetaFields);
+    UnsafeRow unsafeRow = unsafeRowWriter.apply(this.data);
 
-    return new HoodieSparkRecord(getKey(), internalRow, newStructType, getOperation(), this.currentLocation, this.newLocation, false);
-  }
-
-  @Override
-  public HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
-    HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(data, structType);
-
-    metadataValues.getKv().forEach((key, value) -> {
-      int pos = structType.fieldIndex(key);
-      if (value != null) {
-        updatableRow.update(pos, CatalystTypeConverters.convertToCatalyst(value));
-      }
-    });
-
-    return new HoodieSparkRecord(getKey(), updatableRow, structType, getOperation(), this.currentLocation, this.newLocation, copy);
+    return new HoodieSparkRecord(getKey(), unsafeRow, newStructType, getOperation(), this.currentLocation, this.newLocation, false);
   }
 
   @Override
@@ -317,12 +298,13 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     String orderingField = ConfigUtils.getOrderingField(props);
-    if (!HoodieInternalRowUtils.existField(structType, orderingField)) {
-      return 0;
+    scala.Option<NestedFieldPath> cachedNestedFieldPath =
+        HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
+    if (cachedNestedFieldPath.isDefined()) {
+      NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+      return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
     } else {
-      NestedFieldPath nestedFieldPath = HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
-      Comparable<?> value = (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
-      return value;
+      return 0;
     }
   }
 
@@ -368,21 +350,28 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     }
 
     boolean containsMetaFields = hasMetaFields(structType);
-    UTF8String[] metaFields = tryExtractMetaFields(data, structType);
+    UTF8String[] metaFields = extractMetaFields(data, structType);
     return new HoodieInternalRow(metaFields, data, containsMetaFields);
   }
 
-  private static UTF8String[] tryExtractMetaFields(InternalRow row, StructType structType) {
+  private static UTF8String[] extractMetaFields(InternalRow row, StructType structType) {
     boolean containsMetaFields = hasMetaFields(structType);
-    if (containsMetaFields && structType.size() == 1) {
-      // Support bootstrap with RECORD_KEY_SCHEMA
-      return new UTF8String[] {row.getUTF8String(0)};
-    } else if (containsMetaFields) {
+    if (containsMetaFields) {
       return HoodieRecord.HOODIE_META_COLUMNS.stream()
           .map(col -> row.getUTF8String(HOODIE_META_COLUMNS_NAME_TO_POS.get(col)))
           .toArray(UTF8String[]::new);
-    } else {
-      return new UTF8String[HoodieRecord.HOODIE_META_COLUMNS.size()];
+    }
+
+    return new UTF8String[HoodieRecord.HOODIE_META_COLUMNS.size()];
+  }
+
+  private static void updateMetadataValuesInternal(HoodieInternalRow updatableRow, MetadataValues metadataValues) {
+    String[] values = metadataValues.getValues();
+    for (int pos = 0; pos < values.length; ++pos) {
+      String value = values[pos];
+      if (value != null) {
+        updatableRow.update(pos, CatalystTypeConverters.convertToCatalyst(value));
+      }
     }
   }
 
@@ -416,7 +405,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
         getValue(structType, recordKeyPartitionPathFieldPair.getRight(), record.data).toString());
 
     HoodieOperation operation = withOperationField
-        ? HoodieOperation.fromName(getNullableValAsString(structType, record.data, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
+        ? HoodieOperation.fromName(record.data.getString(structType.fieldIndex(HoodieRecord.OPERATION_METADATA_FIELD)))
+        : null;
     return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), record.data, structType, operation, record.copy);
   }
 
@@ -433,5 +423,15 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
         || schema != null && (data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
 
     ValidationUtils.checkState(isValid);
+  }
+
+  private static Object getValue(StructType structType, String fieldName, InternalRow row) {
+    scala.Option<NestedFieldPath> cachedNestedFieldPath =
+        HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
+    if (cachedNestedFieldPath.isDefined()) {
+      return HoodieUnsafeRowUtils.getNestedInternalRowValue(row, cachedNestedFieldPath.get());
+    } else {
+      throw new HoodieException(String.format("Field at %s is not present in %s", fieldName, structType));
+    }
   }
 }
