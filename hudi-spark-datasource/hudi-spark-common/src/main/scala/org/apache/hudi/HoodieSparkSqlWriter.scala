@@ -518,14 +518,17 @@ object HoodieSparkSqlWriter {
   }
 
   def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema], writeSchemaOpt: Option[Schema] = None): Map[String, String] = {
-    val schemaEvolutionEnable = if (internalSchemaOpt.isDefined) "true" else "false"
+    val schemaEvolutionEnabled = if (internalSchemaOpt.isDefined) "true" else "false"
+    val schemaReconciliationEnabled = parameters.getOrDefault(DataSourceWriteOptions.RECONCILE_SCHEMA.key(),
+      DataSourceWriteOptions.RECONCILE_SCHEMA.defaultValue().toString).toBoolean
 
-    val schemaValidateEnable = if (schemaEvolutionEnable.toBoolean && parameters.getOrDefault(DataSourceWriteOptions.RECONCILE_SCHEMA.key(), "false").toBoolean) {
-      // force disable schema validate, now we support schema evolution, no need to do validate
-      "false"
+    // Force disable schema validate, now we support schema evolution, no need to do validate
+    val schemaValidationEnabledOpt = if (schemaEvolutionEnabled.toBoolean && schemaReconciliationEnabled) {
+      Some(false)
     } else  {
-      parameters.getOrDefault(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key(), "true")
+      None
     }
+
     // correct internalSchema, internalSchema should contain hoodie metadata columns.
     val correctInternalSchema = internalSchemaOpt.map { internalSchema =>
       if (internalSchema.findField(HoodieRecord.RECORD_KEY_METADATA_FIELD) == null && writeSchemaOpt.isDefined) {
@@ -535,9 +538,12 @@ object HoodieSparkSqlWriter {
         internalSchema
       }
     }
-    parameters ++ Map(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key() -> SerDeHelper.toJson(correctInternalSchema.getOrElse(null)),
-      HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() -> schemaEvolutionEnable,
-      HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key()  -> schemaValidateEnable)
+
+    parameters ++ Map(
+      HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key() -> SerDeHelper.toJson(correctInternalSchema.orNull),
+      HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() -> schemaEvolutionEnabled
+    ) ++
+      schemaValidationEnabledOpt.map(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key() -> _.toString).toSeq
   }
 
   private def reconcileSchemasLegacy(tableSchema: Schema, newSchema: Schema): (Schema, Boolean) = {
