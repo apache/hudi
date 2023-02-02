@@ -180,6 +180,9 @@ trait ProvidesHoodieConfig extends Logging {
 
     val defaultOpts = Map(
       PAYLOAD_CLASS_NAME.key -> payloadClassName,
+      // NOTE: By default insert would try to do deduplication in case that pre-combine column is specified
+      //       for the table
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
     )
 
     val overridingOpts = Map(
