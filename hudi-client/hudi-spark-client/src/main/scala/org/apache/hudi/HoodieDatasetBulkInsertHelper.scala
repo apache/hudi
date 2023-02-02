@@ -37,7 +37,7 @@ import org.apache.spark.sql.HoodieInternalRowUtils.hasMetaFields
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}
 import org.apache.spark.sql.HoodieUnsafeUtils.getNumPartitions
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
+import org.apache.spark.sql.catalyst.expressions.{Alias, JoinedRow, Literal, SpecificInternalRow}
 import org.apache.spark.sql.catalyst.plans.logical.Project
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
@@ -77,10 +77,11 @@ object HoodieDatasetBulkInsertHelper
     val updatedDF = if (populateMetaFields) {
       val keyGeneratorClassName = config.getStringOrThrow(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME,
         "Key-generator class name is required")
-      val containsMetaFields = hasMetaFields(schema)
-
-      val prependedRdd: RDD[InternalRow] =
-        df.queryExecution.toRdd.mapPartitions { iter =>
+      val sourceRdd = df.queryExecution.toRdd
+      val populatedRdd: RDD[InternalRow] = if (hasMetaFields(schema)) {
+        sourceRdd
+      } else {
+        sourceRdd.mapPartitions { iter =>
           val keyGenerator =
             ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps))
               .asInstanceOf[SparkKeyGeneratorInterface]
@@ -93,14 +94,15 @@ object HoodieDatasetBulkInsertHelper
             val filename = UTF8String.EMPTY_UTF8
 
             // TODO use mutable row, avoid re-allocating
-            new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, containsMetaFields)
+            new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
           }
         }
+      }
 
       val dedupedRdd = if (config.shouldCombineBeforeInsert) {
-        dedupRows(prependedRdd, updatedSchema, config.getPreCombineField, SparkHoodieIndexFactory.isGlobalIndex(config))
+        dedupRows(populatedRdd, updatedSchema, config.getPreCombineField, SparkHoodieIndexFactory.isGlobalIndex(config))
       } else {
-        prependedRdd
+        populatedRdd
       }
 
       HoodieUnsafeUtils.createDataFrameFromRDD(df.sparkSession, dedupedRdd, updatedSchema)
