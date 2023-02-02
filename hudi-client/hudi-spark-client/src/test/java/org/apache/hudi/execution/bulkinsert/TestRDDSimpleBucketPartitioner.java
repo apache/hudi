@@ -1,0 +1,95 @@
+package org.apache.hudi.execution.bulkinsert;
+
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Stream;
+
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class TestRDDSimpleBucketPartitioner extends HoodieClientTestHarness {
+
+  @BeforeEach
+  public void setUp() throws Exception {
+    initPath();
+    initSparkContexts("TestUpdateSchemaEvolution");
+    initFileSystem();
+    initTimelineService();
+  }
+
+  @AfterEach
+  public void tearDown() throws IOException {
+    cleanupResources();
+  }
+
+  @ParameterizedTest
+  @MethodSource("configParams")
+  public void testSimpleBucketPartitioner(boolean partitionSort) throws IOException {
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, HoodieTableType.MERGE_ON_READ);
+    int bucketNum = 2;
+    HoodieWriteConfig config = HoodieWriteConfig
+        .newBuilder()
+        .withPath(basePath)
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .build();
+    config.setValue(HoodieIndexConfig.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    config.setValue(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE, HoodieIndex.BucketIndexEngineType.SIMPLE.name());
+    config.setValue(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, "_row_key");
+    config.setValue(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS, "" + bucketNum);
+    if (partitionSort) {
+      config.setValue(HoodieWriteConfig.BULK_INSERT_SORT_MODE, BulkInsertSortMode.PARTITION_SORT.name());
+    }
+
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    List<HoodieRecord> records = dataGenerator.generateInserts("0", 100);
+    HoodieJavaRDD<HoodieRecord> javaRDD = HoodieJavaRDD.of(records, context, 1);
+    javaRDD.map(HoodieRecord::getPartitionPath).count();
+
+    final HoodieSparkTable table = HoodieSparkTable.create(config, context);
+    BulkInsertPartitioner partitioner = BulkInsertInternalPartitionerFactory.get(table, config);
+    JavaRDD<HoodieRecord> repartitionRecords =
+        (JavaRDD<HoodieRecord>) partitioner.repartitionRecords(HoodieJavaRDD.getJavaRDD(javaRDD), 1);
+
+    assertEquals(bucketNum * javaRDD.map(HoodieRecord::getPartitionPath).distinct().count(),
+        repartitionRecords.getNumPartitions());
+
+    if (partitionSort) {
+      repartitionRecords.mapPartitionsWithIndex((num, partition) -> {
+        List<HoodieRecord> partitionRecords = new ArrayList<>();
+        partition.forEachRemaining(partitionRecords::add);
+        ArrayList<HoodieRecord> sortedRecordList = new ArrayList<>(partitionRecords);
+        sortedRecordList.sort(Comparator.comparing(HoodieRecord::getRecordKey));
+        assertEquals(sortedRecordList, partitionRecords);
+        return partitionRecords.iterator();
+      }, false).collect();
+    }
+  }
+
+  private static Stream<Arguments> configParams() {
+    Object[][] data = new Object[][]{
+        {true},
+        {false}
+    };
+    return Stream.of(data).map(Arguments::of);
+  }
+}

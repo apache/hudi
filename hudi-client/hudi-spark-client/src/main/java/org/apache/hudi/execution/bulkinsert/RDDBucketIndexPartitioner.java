@@ -18,10 +18,34 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.avro.Schema;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.FlatLists;
+import org.apache.hudi.io.AppendHandleFactory;
+import org.apache.hudi.io.SingleFileHandleCreateFactory;
+import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import org.apache.hudi.table.HoodieTable;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
+import scala.Tuple2;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+
 
 /**
  * Abstract of bucket index bulk_insert partitioner
@@ -29,4 +53,120 @@ import org.apache.spark.api.java.JavaRDD;
  */
 public abstract class RDDBucketIndexPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+
+  public static final Logger LOG = LogManager.getLogger(RDDBucketIndexPartitioner.class);
+
+  public final HoodieTable table;
+  public final String[] sortColumnNames;
+  final List<String> indexKeyFields;
+  final boolean consistentLogicalTimestampEnabled;
+  public final List<Boolean> doAppend = new ArrayList<>();
+  public final List<String> fileIdPfxList = new ArrayList<>();
+  final boolean preserveHoodieMetadata;
+
+  public RDDBucketIndexPartitioner(HoodieTable table, String sortString, boolean preserveHoodieMetadata) {
+
+    ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
+        "CoW table with bucket index doesn't support bulk_insert");
+
+    this.table = table;
+    this.indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
+    this.consistentLogicalTimestampEnabled = table.getConfig().isConsistentLogicalTimestampEnabled();
+    if (sortString != null) {
+      this.sortColumnNames = sortString.split(",");
+    } else {
+      this.sortColumnNames = null;
+    }
+    this.preserveHoodieMetadata = preserveHoodieMetadata;
+  }
+
+  @Override
+  public Option<WriteHandleFactory> getWriteHandleFactory(int idx) {
+    return doAppend.get(idx) ? Option.of(new AppendHandleFactory()) :
+        Option.of(new SingleFileHandleCreateFactory(FSUtils.createNewFileId(getFileIdPfx(idx), 0), this.preserveHoodieMetadata));
+  }
+
+  @Override
+  public String getFileIdPfx(int partitionId) {
+    return fileIdPfxList.get(partitionId);
+  }
+
+  @Override
+  public boolean arePartitionRecordsSorted() {
+    return (sortColumnNames != null && sortColumnNames.length > 0)
+        || table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE;
+  }
+
+  /**
+   * Execute partition using the given partitioner.
+   * If sorting is required, will do it within each data partition:
+   * - if sortColumnNames is specified, apply sort to the column (the behaviour is the same as `RDDCustomColumnsSortPartitioner`
+   * - if table requires sort or BulkInsertSortMode is not None, then sort by record key within partition.
+   * By default, do partition only.
+   *
+   * @param records
+   * @param partitioner a default partition that accepts `HoodieKey` as the partition key
+   * @return
+   */
+
+  public JavaRDD<HoodieRecord<T>> doPartition(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
+    if (sortColumnNames != null && sortColumnNames.length > 0) {
+      return doPartitionAndCustomColumnSort(records, partitioner);
+    } else if (table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE) {
+      return doPartitionAndSortByRecordKey(records, partitioner);
+    } else {
+      // By default, do partition only
+      return records.mapToPair(record -> new Tuple2<>(record.getKey(), record))
+          .partitionBy(partitioner).map(Tuple2::_2);
+    }
+  }
+
+  /**
+   * Sort by specified column value. The behaviour is the same as `RDDCustomColumnsSortPartitioner`
+   *
+   * @param records
+   * @param partitioner
+   * @return
+   */
+  private JavaRDD<HoodieRecord<T>> doPartitionAndCustomColumnSort(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
+    final String[] sortColumns = sortColumnNames;
+    final SerializableSchema schema = new SerializableSchema(HoodieAvroUtils.addMetadataFields((new Schema.Parser().parse(table.getConfig().getSchema()))));
+    Comparator<HoodieRecord<T>> comparator = (Comparator<HoodieRecord<T>> & Serializable) (t1, t2) -> {
+      FlatLists.ComparableList obj1 = FlatLists.ofComparableArray(t1.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled));
+      FlatLists.ComparableList obj2 = FlatLists.ofComparableArray(t2.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled));
+      return obj1.compareTo(obj2);
+    };
+
+    return records.mapToPair(record -> new Tuple2<>(record, record))
+        .repartitionAndSortWithinPartitions(new Partitioner() {
+          @Override
+          public int numPartitions() {
+            return partitioner.numPartitions();
+          }
+
+          @Override
+          public int getPartition(Object key) {
+            return partitioner.getPartition(((HoodieRecord) key).getKey());
+          }
+        }, comparator).map(Tuple2::_2);
+  }
+
+  /**
+   * Sort by record key within each partition. The behaviour is the same as BulkInsertSortMode.PARTITION_SORT.
+   *
+   * @param records
+   * @param partitioner
+   * @return
+   */
+  private JavaRDD<HoodieRecord<T>> doPartitionAndSortByRecordKey(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
+    if (table.getConfig().getBulkInsertSortMode() == BulkInsertSortMode.GLOBAL_SORT) {
+      LOG.warn("Bucket index does not support global sort mode, the sort will only be done within each data partition");
+    }
+
+    Comparator<HoodieKey> comparator = (Comparator<HoodieKey> & Serializable) (t1, t2) -> t1.getRecordKey().compareTo(t2.getRecordKey());
+
+    return records.mapToPair(record -> new Tuple2<>(record.getKey(), record))
+        .repartitionAndSortWithinPartitions(partitioner, comparator)
+        .map(Tuple2::_2);
+  }
 }
