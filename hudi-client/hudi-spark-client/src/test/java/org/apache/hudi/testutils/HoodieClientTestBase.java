@@ -597,7 +597,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
-    HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
+    HoodieTimeline timeline = metaClient.getCommitsTimeline();
 
     if (assertForCommit) {
       assertEquals(expTotalCommits, timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants(),
@@ -698,6 +698,66 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
       }
     }
     return result;
+  }
+
+  /**
+   * Insert a batch of records without commit(so that the instant is in-flight).
+   *
+   * @param newCommitTime The commit time
+   * @param numRecords    The number of records to insert
+   */
+  @SuppressWarnings("rawtypes, unchecked")
+  protected void insertBatchWithoutCommit(String newCommitTime, int numRecords) {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withAutoCommit(false) // disable auto commit
+        .withRollbackUsingMarkers(true)
+        .build();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+      List<WriteStatus> statuses = client.insert(writeRecords, newCommitTime).collect();
+      assertNoWriteErrors(statuses);
+    }
+  }
+
+  /**
+   * Update a batch of records without commit(so that the instant is in-flight).
+   *
+   * @param newCommitTime The commit time
+   * @param baseRecordsToUpdate The base records to update
+   */
+  @SuppressWarnings("rawtypes, unchecked")
+  protected void updateBatchWithoutCommit(String newCommitTime, List<HoodieRecord> baseRecordsToUpdate) throws IOException {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withAutoCommit(false) // disable auto commit
+        .withRollbackUsingMarkers(true)
+        .build();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      client.startCommitWithTime(newCommitTime);
+      List<HoodieRecord> records = dataGen.generateUpdates(newCommitTime, baseRecordsToUpdate);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      client.upsert(writeRecords, newCommitTime);
+    }
+  }
+
+  /**
+   * Asserts the row number in data generator equals to {@code numRows}.
+   *
+   * @param numRows The expected row number
+   */
+  protected void assertRowNumberEqualsTo(int numRows) {
+    // Check the entire dataset has all records still
+    String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+    for (int i = 0; i < fullPartitionPaths.length; i++) {
+      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+    }
+    assertEquals(numRows, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        "Must contain " + numRows + " records");
   }
 
   /**
