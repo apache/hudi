@@ -15,7 +15,7 @@
   limitations under the License.
 -->
 
-# RFC-50: Hudi to support Change-Data-Capture
+# RFC-51: Hudi to support Change-Data-Capture
 
 # Proposers
 
@@ -202,7 +202,7 @@ tblproperties (
 
 ### How to infer CDC results
 
-| `HoodieCDCInferCase` | Infer case details                                                                                                        | Infer logic                                                                                                                                                               | Note                               |
+| `HoodieCDCInferenceCase` | Infer case details                                                                                                        | Infer logic                                                                                                                                                               | Note                               |
 |----------------------|---------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------|
 | `AS_IS`              | CDC file written (suffix contains `-cdc`) alongside base files (COW) or log files (MOR)                                   | CDC info will be extracted as is                                                                                                                                          | the read-optimized way to read CDC |
 | `BASE_FILE_INSERT`   | Base files were written to a new file group                                                                               | All records (in the current commit): `op=I`, `before=null`, `after=<current value>`                                                                                       | on-the-fly inference               |

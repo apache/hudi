@@ -54,7 +54,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   private static final Logger LOG = LogManager.getLogger(HoodieCreateHandle.class);
 
-  protected final HoodieFileWriter fileWriter;
+  protected HoodieFileWriter fileWriter;
   protected final Path path;
   protected long recordsWritten = 0;
   protected long insertRecordsWritten = 0;
@@ -136,24 +136,22 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         if (record.shouldIgnore(schema, config.getProps())) {
           return;
         }
-        // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        HoodieRecord rewriteRecord;
-        if (schemaOnReadEnabled) {
-          rewriteRecord = record.rewriteRecordWithNewSchema(schema, config.getProps(), writeSchemaWithMetaFields);
-        } else {
-          rewriteRecord = record.rewriteRecord(schema, config.getProps(), writeSchemaWithMetaFields);
-        }
+
         MetadataValues metadataValues = new MetadataValues().setFileName(path.getName());
-        rewriteRecord = rewriteRecord.updateMetadataValues(writeSchemaWithMetaFields, config.getProps(), metadataValues);
+        HoodieRecord populatedRecord =
+            record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, config.getProps());
+
         if (preserveMetadata) {
-          fileWriter.write(record.getRecordKey(), rewriteRecord, writeSchemaWithMetaFields);
+          fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
         } else {
-          fileWriter.writeWithMetadata(record.getKey(), rewriteRecord, writeSchemaWithMetaFields);
+          fileWriter.writeWithMetadata(record.getKey(), populatedRecord, writeSchemaWithMetaFields);
         }
-        // update the new location of record, so we know where to find it next
+
+        // Update the new location of record, so we know where to find it next
         record.unseal();
         record.setNewLocation(new HoodieRecordLocation(instantTime, writeStatus.getFileId()));
         record.seal();
+
         recordsWritten++;
         insertRecordsWritten++;
       } else {
@@ -203,7 +201,10 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
 
-      fileWriter.close();
+      if (fileWriter != null) {
+        fileWriter.close();
+        fileWriter = null;
+      }
 
       setupWriteStatus();
 

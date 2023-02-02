@@ -495,7 +495,17 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    *
    * @return information on cleaned file slices
    */
-  public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime, boolean skipLocking);
+  @Deprecated
+  public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime, boolean skipLocking) {
+    return clean(context, cleanInstantTime);
+  }
+
+  /**
+   * Executes a new clean action.
+   *
+   * @return information on cleaned file slices
+   */
+  public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime);
 
   /**
    * Schedule rollback for the instant time.
@@ -560,15 +570,15 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * that would cause any running queries that are accessing file slices written after the instant to fail.
    */
   public abstract HoodieRestoreMetadata restore(HoodieEngineContext context,
-                                                String restoreInstantTime,
-                                                String instantToRestore);
+                                                String restoreInstantTimestamp,
+                                                String savepointToRestoreTimestamp);
 
   /**
    * Schedules Restore for the table to the given instant.
    */
   public abstract Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context,
-                                                    String restoreInstantTime,
-                                                    String instantToRestore);
+                                                    String restoreInstantTimestamp,
+                                                    String savepointToRestoreTimestamp);
 
   public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
     rollbackInflightCompaction(inflightInstant, s -> Option.empty());
@@ -790,7 +800,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   private void validateSchema() throws HoodieUpsertException, HoodieInsertException {
 
-    if (!config.shouldValidateAvroSchema() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
+    if (!shouldValidateAvroSchema() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
       // Check not required
       return;
     }
@@ -802,7 +812,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(getMetaClient());
       writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
       tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaResolver.getTableAvroSchemaWithoutMetadataFields());
-      isValid = isSchemaCompatible(tableSchema, writerSchema);
+      isValid = isSchemaCompatible(tableSchema, writerSchema, config.shouldAllowAutoEvolutionColumnDrop());
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
     }
@@ -999,5 +1009,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   public Runnable getPreExecuteRunnable() {
     return Functions.noop();
+  }
+
+  private boolean shouldValidateAvroSchema() {
+    // TODO(HUDI-4772) re-enable validations in case partition columns
+    //                 being dropped from the data-file after fixing the write schema
+    Boolean shouldDropPartitionColumns = metaClient.getTableConfig().shouldDropPartitionColumns();
+
+    return config.shouldValidateAvroSchema() && !shouldDropPartitionColumns;
   }
 }

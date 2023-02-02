@@ -86,16 +86,25 @@ public class TestHoodieTableFactory {
   }
 
   @Test
-  void testRequiredOptionsForSource() {
-    // miss pk and precombine key will throw exception
+  void testRequiredOptions() {
     ResolvedSchema schema1 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
         .build();
     final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
-    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext1));
+
+    // createDynamicTableSource doesn't call sanity check, will not throw exception
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext1));
+    // miss pk and precombine key will throw exception when create sink
     assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
+
+    // append mode does not throw
+    this.conf.set(FlinkOptions.OPERATION, "insert");
+    final MockContext sourceContext11 = MockContext.getInstance(this.conf, schema1, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext11));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext11));
+    this.conf.set(FlinkOptions.OPERATION, FlinkOptions.OPERATION.defaultValue());
 
     // a non-exists precombine key will throw exception
     ResolvedSchema schema2 = SchemaBuilder.instance()
@@ -105,7 +114,8 @@ public class TestHoodieTableFactory {
         .build();
     this.conf.setString(FlinkOptions.PRECOMBINE_FIELD, "non_exist_field");
     final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema2, "f2");
-    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext2));
+    // createDynamicTableSource doesn't call sanity check, will not throw exception
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext2));
     assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
     this.conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.PRECOMBINE_FIELD.defaultValue());
 
@@ -120,17 +130,17 @@ public class TestHoodieTableFactory {
     HoodieTableSource tableSource = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext3);
     HoodieTableSink tableSink = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext3);
     // the precombine field is overwritten
-    assertThat(tableSource.getConf().getString(FlinkOptions.PRECOMBINE_FIELD), is(FlinkOptions.NO_PRE_COMBINE));
     assertThat(tableSink.getConf().getString(FlinkOptions.PRECOMBINE_FIELD), is(FlinkOptions.NO_PRE_COMBINE));
     // precombine field not specified, use the default payload clazz
     assertThat(tableSource.getConf().getString(FlinkOptions.PAYLOAD_CLASS_NAME), is(FlinkOptions.PAYLOAD_CLASS_NAME.defaultValue()));
     assertThat(tableSink.getConf().getString(FlinkOptions.PAYLOAD_CLASS_NAME), is(FlinkOptions.PAYLOAD_CLASS_NAME.defaultValue()));
 
-    // given pk but miss the pre combine key with DefaultHoodieRecordPayload should throw
     this.conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, DefaultHoodieRecordPayload.class.getName());
     final MockContext sourceContext4 = MockContext.getInstance(this.conf, schema3, "f2");
 
-    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext4));
+    // createDynamicTableSource doesn't call sanity check, will not throw exception
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext4));
+    // given pk but miss the pre combine key with DefaultHoodieRecordPayload should throw
     assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext4));
     this.conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, FlinkOptions.PAYLOAD_CLASS_NAME.defaultValue());
 
@@ -165,6 +175,74 @@ public class TestHoodieTableFactory {
 
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext6));
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext6));
+  }
+
+  @Test
+  void testSupplementTableConfig() throws Exception {
+    String tablePath = new File(tempFile.getAbsolutePath(), "dummy").getAbsolutePath();
+    // add pk and pre-combine key to table config
+    Configuration tableConf = new Configuration();
+    tableConf.setString(FlinkOptions.PATH, tablePath);
+    tableConf.setString(FlinkOptions.TABLE_NAME, "t2");
+    tableConf.setString(FlinkOptions.RECORD_KEY_FIELD, "f0,f1");
+    tableConf.setString(FlinkOptions.PRECOMBINE_FIELD, "f2");
+
+    StreamerUtil.initTableIfNotExists(tableConf);
+
+    Configuration writeConf = new Configuration();
+    writeConf.set(FlinkOptions.PATH, tablePath);
+    writeConf.set(FlinkOptions.TABLE_NAME, "t2");
+
+    // fallback to table config
+    ResolvedSchema schema1 = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .build();
+    final MockContext sourceContext1 = MockContext.getInstance(writeConf, schema1, "f2");
+    HoodieTableSource source1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext1);
+    HoodieTableSink sink1 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext1);
+    assertThat("pk not provided, fallback to table config",
+        source1.getConf().get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
+    assertThat("pk not provided, fallback to table config",
+        sink1.getConf().get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
+    assertThat("pre-combine key not provided, fallback to table config",
+        source1.getConf().get(FlinkOptions.PRECOMBINE_FIELD), is("f2"));
+    assertThat("pre-combine key not provided, fallback to table config",
+        sink1.getConf().get(FlinkOptions.PRECOMBINE_FIELD), is("f2"));
+
+    // write config always has higher priority
+    // set up a different primary key and pre_combine key with table config options
+    writeConf.setString(FlinkOptions.RECORD_KEY_FIELD, "f0");
+    writeConf.setString(FlinkOptions.PRECOMBINE_FIELD, "f1");
+
+    final MockContext sourceContext2 = MockContext.getInstance(writeConf, schema1, "f2");
+    HoodieTableSource source2 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext2);
+    HoodieTableSink sink2 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext2);
+    assertThat("choose pk from write config",
+        source2.getConf().get(FlinkOptions.RECORD_KEY_FIELD), is("f0"));
+    assertThat("choose pk from write config",
+        sink2.getConf().get(FlinkOptions.RECORD_KEY_FIELD), is("f0"));
+    assertThat("choose preCombine key from write config",
+        source2.getConf().get(FlinkOptions.PRECOMBINE_FIELD), is("f1"));
+    assertThat("choose preCombine pk from write config",
+        sink2.getConf().get(FlinkOptions.PRECOMBINE_FIELD), is("f1"));
+
+    writeConf.removeConfig(FlinkOptions.RECORD_KEY_FIELD);
+    writeConf.removeConfig(FlinkOptions.PRECOMBINE_FIELD);
+
+    // pk defined in table config but missing in schema will throw
+    ResolvedSchema schema2 = SchemaBuilder.instance()
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .build();
+    final MockContext sourceContext3 = MockContext.getInstance(writeConf, schema2, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext3),
+        "createDynamicTableSource won't call sanity check");
+    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext3),
+        "f0 is in table config as record key, but missing in input schema");
   }
 
   @Test

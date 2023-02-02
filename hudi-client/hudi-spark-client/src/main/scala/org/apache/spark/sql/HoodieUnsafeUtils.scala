@@ -22,6 +22,7 @@ import org.apache.hudi.HoodieUnsafeRDD
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.MutablePair
 
@@ -29,6 +30,16 @@ import org.apache.spark.util.MutablePair
  * Suite of utilities helping in handling instances of [[HoodieUnsafeRDD]]
  */
 object HoodieUnsafeUtils {
+
+  /**
+   * Fetches expected output [[Partitioning]] of the provided [[DataFrame]]
+   *
+   * NOTE: Invoking [[QueryExecution#executedPlan]] wouldn't actually execute the query (ie start pumping the data)
+   *       but instead will just execute Spark resolution, optimization and actual execution planning stages
+   *       returning instance of [[SparkPlan]] ready for execution
+   */
+  def getOutputPartitioning(df: DataFrame): Partitioning =
+    df.queryExecution.executedPlan.outputPartitioning
 
   /**
    * Creates [[DataFrame]] from provided [[plan]]

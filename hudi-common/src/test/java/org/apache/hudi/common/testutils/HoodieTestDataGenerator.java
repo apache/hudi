@@ -73,6 +73,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -607,8 +608,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
+    AtomicInteger partitionIndex = new AtomicInteger(0);
     return generateInsertsStream(commitTime, n, isFlattened, schemaStr, containsAllPartitions,
-        () -> partitionPaths[rand.nextInt(partitionPaths.length)],
+        () -> {
+          // round robin to ensure we generate inserts for all partition paths
+          String partitionToUse = partitionPaths[partitionIndex.get()];
+          partitionIndex.set((partitionIndex.get() + 1) % partitionPaths.length);
+          return partitionToUse;
+        },
         () -> genPseudoRandomUUID(rand).toString());
   }
 

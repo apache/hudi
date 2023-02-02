@@ -20,6 +20,7 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
@@ -38,8 +39,12 @@ import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
+import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
+import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -50,6 +55,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -69,6 +76,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
@@ -76,6 +84,7 @@ import static org.apache.hudi.hive.testutils.HiveTestUtil.basePath;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.ddlExecutor;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.getHiveConf;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncProps;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
@@ -83,6 +92,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -116,6 +126,16 @@ public class TestHiveSyncTool {
       opts.add(new Object[] {false, mode, "true"});
       opts.add(new Object[] {true, mode, "false"});
       opts.add(new Object[] {false, mode, "false"});
+    }
+    return opts;
+  }
+
+  private static Iterable<Object[]> syncModeAndStrategy() {
+    List<Object[]> opts = new ArrayList<>();
+    for (Object mode : SYNC_MODES) {
+      opts.add(new Object[] {mode, HoodieSyncTableStrategy.ALL});
+      opts.add(new Object[] {mode, HoodieSyncTableStrategy.RO});
+      opts.add(new Object[] {mode, HoodieSyncTableStrategy.RT});
     }
     return opts;
   }
@@ -160,6 +180,52 @@ public class TestHiveSyncTool {
   @AfterEach
   public void teardown() throws Exception {
     HiveTestUtil.clear();
+  }
+
+  @ParameterizedTest
+  @MethodSource({"syncModeAndSchemaFromCommitMetadata"})
+  public void testUpdateBasePath(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+    String instantTime = "100";
+    // create a cow table and sync to hive
+    HiveTestUtil.createCOWTable(instantTime, 1, useSchemaFromCommitMetadata);
+    reinitHiveSyncClient();
+    reSyncHiveTable();
+    assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+        "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
+    IMetaStoreClient client = Hive.get(getHiveConf()).getMSC();
+    Option<String> locationOption = getMetastoreLocation(client, HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME);
+    assertTrue(locationOption.isPresent(),
+        "The location of Table " + HiveTestUtil.TABLE_NAME + " is not present in metastore");
+    String oldLocation = locationOption.get();
+
+    // we change the base path, so we need to delete temp directory manually
+    HiveTestUtil.fileSystem.delete(new Path(basePath), true);
+
+    // create a new cow table and reSync
+    basePath = Files.createTempDirectory("hivesynctest" + Instant.now().toEpochMilli()).toUri().toString();
+    hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
+    HiveTestUtil.createCOWTable(instantTime, 1, useSchemaFromCommitMetadata);
+    reinitHiveSyncClient();
+    reSyncHiveTable();
+    client.reconnect();
+    Option<String> newLocationOption = getMetastoreLocation(client, HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME);
+    assertTrue(newLocationOption.isPresent(),
+        "The location of Table " + HiveTestUtil.TABLE_NAME + " is not present in metastore");
+    String newLocation = newLocationOption.get();
+    assertNotEquals(oldLocation, newLocation, "Update base path failed");
+    client.close();
+  }
+
+  public Option<String> getMetastoreLocation(IMetaStoreClient client, String databaseName, String tableName) {
+    try {
+      Table table = client.getTable(databaseName, tableName);
+      StorageDescriptor sd = table.getSd();
+      return Option.ofNullable(sd.getLocation());
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to get the metastore location from the table " + tableName, e);
+    }
   }
 
   @ParameterizedTest
@@ -756,6 +822,51 @@ public class TestHiveSyncTool {
         "The 2 partitions we wrote should be added to hive");
     assertEquals(deltaCommitTime2, hiveClient.getLastCommitTimeSynced(snapshotTableName).get(),
         "The last commit that was synced should be 103");
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncModeAndStrategy")
+  public void testSyncMergeOnReadWithStrategy(String syncMode, HoodieSyncTableStrategy strategy)  throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_TABLE_STRATEGY.key(), strategy.name());
+
+    String instantTime = "100";
+    String deltaCommitTime = "101";
+    HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true, true);
+
+    String snapshotTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
+    String roTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE;
+    reinitHiveSyncClient();
+    assertFalse(hiveClient.tableExists(roTableName),
+            "Table " + roTableName + " should not exist initially");
+    assertFalse(hiveClient.tableExists(snapshotTableName),
+            "Table " + snapshotTableName + " should not exist initially");
+    reSyncHiveTable();
+    switch (strategy) {
+      case RO:
+        assertFalse(hiveClient.tableExists(snapshotTableName),
+                "Table " + snapshotTableName
+                        + " should not exist initially");
+        assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+                "Table " + HiveTestUtil.TABLE_NAME
+                        + " should exist after sync completes");
+        break;
+      case RT:
+        assertFalse(hiveClient.tableExists(roTableName),
+                "Table " + roTableName
+                        + " should not exist initially");
+        assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+                "Table " + HiveTestUtil.TABLE_NAME
+                        + " should exist after sync completes");
+        break;
+      default:
+        assertTrue(hiveClient.tableExists(roTableName),
+                "Table " + roTableName
+                        + " should exist after sync completes");
+        assertTrue(hiveClient.tableExists(snapshotTableName),
+                "Table " + snapshotTableName
+                        + " should exist after sync completes");
+    }
   }
 
   @ParameterizedTest

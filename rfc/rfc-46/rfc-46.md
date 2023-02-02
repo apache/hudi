@@ -148,7 +148,7 @@ class HoodieFlinkRecordMerger implements HoodieRecordMerger {
 Where user can provide their own subclass implementing such interface for the engines of interest.
 
 ### Merging Strategy
-The RecordMerger is engine-aware. We provide a config called HoodieWriteConfig.MERGER_IMPLS. You can set a list of RecordMerger class name to it. And you can set HoodieWriteConfig.MERGER_STRATEGY which is UUID of RecordMerger. Hudi will pick RecordMergers in MERGER_IMPLS which has the same MERGER_STRATEGY according to the engine type at runtime.
+The RecordMerger is engine-aware. We provide a config called HoodieWriteConfig.RECORD_MERGER_IMPLS. You can set a list of RecordMerger class name to it. And you can set HoodieWriteConfig.RECORD_MERGER_STRATEGY which is UUID of RecordMerger. Hudi will pick RecordMergers in MERGER_IMPLS which has the same MERGER_STRATEGY according to the engine type at runtime.
 - Every RecordMerger implementation being engine-specific (referred to as "implementation"), implements particular merging semantic (referred to as "merging strategy")
 - Such tiering allowing us to be flexible in terms of providing implementations for the merging strategy only for engines you might be interested in
 - Merging strategy is a table property that is set once during init

@@ -60,6 +60,29 @@ public class TestConfigProperty extends HoodieConfig {
       })
       .withDocumentation("Fake config only for testing");
 
+  public static ConfigProperty<String> FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER = ConfigProperty
+      .key("test.fake.string.config.no_default_with_infer")
+      .noDefaultValue()
+      .withInferFunction(p -> {
+        if (p.getStringOrDefault(FAKE_STRING_CONFIG).equals("value1")) {
+          return Option.of("value2");
+        }
+        return Option.of("value3");
+      })
+      .withDocumentation("Fake config with infer function and without default only for testing");
+
+  public static ConfigProperty<String> FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER_EMPTY = ConfigProperty
+      .key("test.fake.string.config.no_default_with_infer_empty")
+      .noDefaultValue()
+      .withInferFunction(p -> {
+        if (p.getStringOrDefault(FAKE_STRING_CONFIG).equals("value1")) {
+          return Option.of("value10");
+        }
+        return Option.empty();
+      })
+      .withDocumentation("Fake config with infer function that ca return empty value "
+          + "and without default only for testing");
+
   @Test
   public void testGetTypedValue() {
     HoodieConfig hoodieConfig = new HoodieConfig();
@@ -112,11 +135,30 @@ public class TestConfigProperty extends HoodieConfig {
     hoodieConfig2.setValue(FAKE_STRING_CONFIG, "5");
     hoodieConfig2.setDefaultValue(FAKE_INTEGER_CONFIG);
     assertEquals(100, hoodieConfig2.getInt(FAKE_INTEGER_CONFIG));
+
+    HoodieConfig hoodieConfig3 = new HoodieConfig();
+    hoodieConfig3.setValue(FAKE_STRING_CONFIG, "value1");
+    hoodieConfig3.setDefaultValue(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER);
+    hoodieConfig3.setDefaultValue(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER_EMPTY);
+    assertEquals("value2", hoodieConfig3.getString(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER));
+    assertEquals("value10", hoodieConfig3.getString(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER_EMPTY));
+
+    HoodieConfig hoodieConfig4 = new HoodieConfig();
+    hoodieConfig4.setValue(FAKE_STRING_CONFIG, "other");
+    hoodieConfig4.setDefaultValue(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER);
+    assertEquals("value3", hoodieConfig4.getString(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER));
+    assertEquals(null, hoodieConfig4.getString(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER_EMPTY));
+
+    HoodieConfig hoodieConfig5 = new HoodieConfig();
+    hoodieConfig5.setValue(FAKE_STRING_CONFIG, "other");
+    hoodieConfig5.setValue(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER, "value4");
+    hoodieConfig5.setDefaultValue(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER);
+    assertEquals("value4", hoodieConfig5.getString(FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER));
   }
 
   @Test
   public void testSetDefaults() {
     setDefaults(this.getClass().getName());
-    assertEquals(3, getProps().size());
+    assertEquals(4, getProps().size());
   }
 }
