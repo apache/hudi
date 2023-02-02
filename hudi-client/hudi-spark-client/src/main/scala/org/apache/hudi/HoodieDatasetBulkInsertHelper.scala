@@ -80,7 +80,6 @@ object HoodieDatasetBulkInsertHelper
           val keyGenerator =
             ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps))
               .asInstanceOf[SparkKeyGeneratorInterface]
-          val unsafeProjection = generateUnsafeProjection(populatedSchema, populatedSchema)
 
           iter.map { row =>
             val recordKey = keyGenerator.getRecordKey(row, schema)
@@ -90,10 +89,8 @@ object HoodieDatasetBulkInsertHelper
             val filename = UTF8String.EMPTY_UTF8
 
             // TODO use mutable row, avoid re-allocating
-            val populatedRow = new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename,
+            new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename,
               row, false)
-            // TODO elaborate
-            unsafeProjection(populatedRow)
           }
         }
       }
@@ -188,7 +185,6 @@ object HoodieDatasetBulkInsertHelper
 
       ((partitionPath, recordKey), row)
     }
-    // TODO elaborate
     .reduceByKey(TablePartitioningAwarePartitioner(rdd.getNumPartitions, isPartitioned),
       (oneRow, otherRow) => {
         val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
@@ -220,6 +216,24 @@ object HoodieDatasetBulkInsertHelper
     keyGenerator.getPartitionPathFields.asScala
   }
 
+  /**
+   * We use custom Spark [[Partitioner]] that is aware of the target table's partitioning
+   * so that during inevitable shuffling required for de-duplication, we also assign records
+   * into individual Spark partitions in a way affine with target table's physical partitioning
+   * (ie records from the same table's partition will be co-located in the same Spark's partition)
+   *
+   * This would allow us to
+   * <ul>
+   *   <li>Save on additional shuffling subsequently (by [[BulkInsertPartitioner]])</li>
+   *   <li>Avoid "small files explosion" entailed by random (hash) partitioning stemming
+   *   from the fact that every Spark partition hosts records from many table's partitions
+   *   resulting into every Spark task writing into their own files in these partitions (in
+   *   case no subsequent re-partitioning is performed)
+   *   </li>
+   * <ul>
+   *
+   * For more details check out HUDI-5685
+   */
   private case class TablePartitioningAwarePartitioner(override val numPartitions: Int,
                                                        val isPartitioned: Boolean) extends Partitioner {
     override def getPartition(key: Any): Int = {
