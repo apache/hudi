@@ -125,7 +125,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-        new NonSortPartitionerWithRows(), !isNonPartitionedKeyGen, false);
+        new NonSortPartitionerWithRows(), false);
     StructType resultSchema = result.schema();
 
     assertEquals(result.count(), 10);
@@ -162,7 +162,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
         .build();
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-        new NonSortPartitionerWithRows(), false, false);
+        new NonSortPartitionerWithRows(), false);
     StructType resultSchema = result.schema();
 
     assertEquals(result.count(), 10);
@@ -199,7 +199,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     rows.addAll(updates);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-        new NonSortPartitionerWithRows(), false, false);
+        new NonSortPartitionerWithRows(), false);
     StructType resultSchema = result.schema();
 
     assertEquals(result.count(), enablePreCombine ? 10 : 15);
@@ -303,7 +303,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     try {
       Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-          new NonSortPartitionerWithRows(), false, false);
+          new NonSortPartitionerWithRows(), false);
       preparedDF.count();
       fail("Should have thrown exception");
     } catch (Exception e) {
@@ -315,7 +315,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-          new NonSortPartitionerWithRows(), false, false);
+          new NonSortPartitionerWithRows(), false);
       preparedDF.count();
       fail("Should have thrown exception");
     } catch (Exception e) {
@@ -327,7 +327,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-          new NonSortPartitionerWithRows(), true, false);
+          new NonSortPartitionerWithRows(), false);
       preparedDF.count();
       fail("Should have thrown exception");
     } catch (Exception e) {
@@ -339,7 +339,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-          new NonSortPartitionerWithRows(), false, false);
+          new NonSortPartitionerWithRows(), false);
       preparedDF.count();
       fail("Should have thrown exception");
     } catch (Exception e) {

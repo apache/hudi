@@ -748,7 +748,7 @@ object HoodieSparkSqlWriter {
     }
 
     val shouldDropPartitionColumns = hoodieConfig.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
-    val hoodieDF = prepareForBulkInsert(df, writeConfig, bulkInsertPartitionerRows, isTablePartitioned, shouldDropPartitionColumns)
+    val hoodieDF = prepareForBulkInsert(df, writeConfig, bulkInsertPartitionerRows, shouldDropPartitionColumns)
 
     val optsOverrides = Map(
       HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED ->

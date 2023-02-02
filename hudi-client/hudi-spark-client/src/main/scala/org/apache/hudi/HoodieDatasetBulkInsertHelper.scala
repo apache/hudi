@@ -62,7 +62,6 @@ object HoodieDatasetBulkInsertHelper
   def prepareForBulkInsert(df: DataFrame,
                            config: HoodieWriteConfig,
                            partitioner: BulkInsertPartitioner[Dataset[Row]],
-                           isTablePartitioned: Boolean,
                            shouldDropPartitionColumns: Boolean): Dataset[Row] = {
     val populateMetaFields = config.populateMetaFields()
 
@@ -96,7 +95,7 @@ object HoodieDatasetBulkInsertHelper
       }
 
       val dedupedRdd = if (config.shouldCombineBeforeInsert) {
-        dedupRows(populatedRdd, populatedSchema, config.getPreCombineField, isTablePartitioned)
+        dedupRows(populatedRdd, populatedSchema, config.getPreCombineField)
       } else {
         populatedRdd
       }
@@ -172,7 +171,7 @@ object HoodieDatasetBulkInsertHelper
     table.getContext.parallelize(writeStatuses.toList.asJava)
   }
 
-  private def dedupRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isPartitioned: Boolean): RDD[InternalRow] = {
+  private def dedupRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String): RDD[InternalRow] = {
     val recordKeyMetaFieldOrd = schema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)
     val partitionPathMetaFieldOrd = schema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
     // NOTE: Pre-combine field could be a nested field
@@ -180,12 +179,12 @@ object HoodieDatasetBulkInsertHelper
       .getOrElse(throw new HoodieException(s"Pre-combine field $preCombineFieldRef is missing in $schema"))
 
     rdd.map { row =>
-      val partitionPath = if (isPartitioned) row.getUTF8String(partitionPathMetaFieldOrd) else UTF8String.EMPTY_UTF8
+      val partitionPath = row.getUTF8String(partitionPathMetaFieldOrd)
       val recordKey = row.getUTF8String(recordKeyMetaFieldOrd)
 
       ((partitionPath, recordKey), row)
     }
-    .reduceByKey(TablePartitioningAwarePartitioner(rdd.getNumPartitions, isPartitioned),
+    .reduceByKey(TablePartitioningAwarePartitioner(rdd.getNumPartitions),
       (oneRow, otherRow) => {
         val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
         val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
@@ -234,16 +233,18 @@ object HoodieDatasetBulkInsertHelper
    *
    * For more details check out HUDI-5685
    */
-  private case class TablePartitioningAwarePartitioner(override val numPartitions: Int,
-                                                       val isPartitioned: Boolean) extends Partitioner {
+  private case class TablePartitioningAwarePartitioner(override val numPartitions: Int) extends Partitioner {
     override def getPartition(key: Any): Int = {
       key match {
         case null => 0
         case (partitionPath, recordKey) =>
-          val targetKey = if (isPartitioned) partitionPath else recordKey
+          val targetKey = if (isPartitioned(partitionPath.asInstanceOf[UTF8String])) partitionPath else recordKey
           nonNegativeMod(targetKey.hashCode(), numPartitions)
       }
     }
+
+    private def isPartitioned(partitionPath: UTF8String): Boolean =
+      partitionPath.numBytes() > 0
 
     private def nonNegativeMod(x: Int, mod: Int): Int = {
       val rawMod = x % mod
