@@ -26,11 +26,11 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.index.SparkHoodieIndexFactory
 import org.apache.hudi.keygen.{BuiltinKeyGenerator, SparkKeyGeneratorInterface}
 import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
+import org.apache.spark.Partitioner
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
@@ -38,10 +38,10 @@ import org.apache.spark.sql.HoodieDataTypeUtils.{addMetaFields, hasMetaFields}
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}
 import org.apache.spark.sql.HoodieUnsafeUtils.getNumPartitions
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Alias, JoinedRow, Literal, SpecificInternalRow}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Project
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, Dataset, HoodieCatalystExpressionUtils, HoodieUnsafeRowUtils, HoodieUnsafeUtils, Row}
+import org.apache.spark.sql.types.{StringType, StructType}
+import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters.{asScalaBufferConverter, seqAsJavaListConverter}
@@ -62,6 +62,7 @@ object HoodieDatasetBulkInsertHelper
   def prepareForBulkInsert(df: DataFrame,
                            config: HoodieWriteConfig,
                            partitioner: BulkInsertPartitioner[Dataset[Row]],
+                           isTablePartitioned: Boolean,
                            shouldDropPartitionColumns: Boolean): Dataset[Row] = {
     val populateMetaFields = config.populateMetaFields()
 
@@ -98,7 +99,7 @@ object HoodieDatasetBulkInsertHelper
       }
 
       val dedupedRdd = if (config.shouldCombineBeforeInsert) {
-        dedupRows(populatedRdd, populatedSchema, config.getPreCombineField, SparkHoodieIndexFactory.isGlobalIndex(config))
+        dedupRows(populatedRdd, populatedSchema, config.getPreCombineField, isTablePartitioned)
       } else {
         populatedRdd
       }
@@ -174,36 +175,30 @@ object HoodieDatasetBulkInsertHelper
     table.getContext.parallelize(writeStatuses.toList.asJava)
   }
 
-  private def dedupRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean): RDD[InternalRow] = {
+  private def dedupRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isPartitioned: Boolean): RDD[InternalRow] = {
     val recordKeyMetaFieldOrd = schema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)
     val partitionPathMetaFieldOrd = schema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
     // NOTE: Pre-combine field could be a nested field
     val preCombineFieldPath = composeNestedFieldPath(schema, preCombineFieldRef)
       .getOrElse(throw new HoodieException(s"Pre-combine field $preCombineFieldRef is missing in $schema"))
 
-    // TODO elaborate
-    val numPartitions = rdd.getNumPartitions
-
     rdd.map { row =>
-      val rowKey = if (isGlobalIndex) {
-        (null, row.getUTF8String(recordKeyMetaFieldOrd))
-      } else {
-        val partitionPath = row.getUTF8String(partitionPathMetaFieldOrd)
-        val recordKey = row.getUTF8String(recordKeyMetaFieldOrd)
-        (partitionPath, recordKey)
-      }
+      val partitionPath = if (isPartitioned) row.getUTF8String(partitionPathMetaFieldOrd) else UTF8String.EMPTY_UTF8
+      val recordKey = row.getUTF8String(recordKeyMetaFieldOrd)
 
-      (rowKey, row)
+      ((partitionPath, recordKey), row)
     }
-    .reduceByKey((oneRow, otherRow) => {
-      val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-      val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-      if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
-        oneRow
-      } else {
-        otherRow
-      }
-    }, numPartitions)
+    // TODO elaborate
+    .reduceByKey(TablePartitioningAwarePartitioner(rdd.getNumPartitions, isPartitioned),
+      (oneRow, otherRow) => {
+        val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+        val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+        if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
+          oneRow
+        } else {
+          otherRow
+        }
+      })
     .values
   }
 
@@ -223,5 +218,22 @@ object HoodieDatasetBulkInsertHelper
     val keyGeneratorClassName = config.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME)
     val keyGenerator = ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps)).asInstanceOf[BuiltinKeyGenerator]
     keyGenerator.getPartitionPathFields.asScala
+  }
+
+  private case class TablePartitioningAwarePartitioner(override val numPartitions: Int,
+                                                       val isPartitioned: Boolean) extends Partitioner {
+    override def getPartition(key: Any): Int = {
+      key match {
+        case null => 0
+        case (partitionPath, recordKey) =>
+          val targetKey = if (isPartitioned) partitionPath else recordKey
+          nonNegativeMod(targetKey.hashCode(), numPartitions)
+      }
+    }
+
+    private def nonNegativeMod(x: Int, mod: Int): Int = {
+      val rawMod = x % mod
+      rawMod + (if (rawMod < 0) mod else 0)
+    }
   }
 }
