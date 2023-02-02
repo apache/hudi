@@ -22,7 +22,6 @@ import org.apache.avro.Schema
 import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
-import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath}
@@ -61,15 +60,6 @@ object HoodieInternalRowUtils {
 
   private val schemaMap = new ConcurrentHashMap[Schema, StructType]
   private val orderPosListMap = new ConcurrentHashMap[(StructType, String), Option[NestedFieldPath]]
-
-  /**
-   * Checks whether provided schema contains Hudi's meta-fields
-   *
-   * NOTE: This method validates presence of just one field [[HoodieRecord.RECORD_KEY_METADATA_FIELD]],
-   *       however assuming that meta-fields should either be omitted or specified in full
-   */
-  def hasMetaFields(structType: StructType): Boolean =
-    structType.getFieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD).isDefined
 
   /**
    * Provides cached instance of [[UnsafeProjection]] transforming provided [[InternalRow]]s from

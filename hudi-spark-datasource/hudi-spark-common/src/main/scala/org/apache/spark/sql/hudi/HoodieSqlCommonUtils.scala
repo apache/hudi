@@ -35,7 +35,7 @@ import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expressi
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, HoodieDataTypeUtils, HoodieInternalRowUtils, SparkSession}
 
 import java.net.URI
 import java.text.SimpleDateFormat
@@ -135,13 +135,8 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
    * @param schema
    * @return
    */
-  def addMetaFields(schema: StructType): StructType = {
-    val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala
-    // filter the meta field to avoid duplicate field.
-    val dataFields = schema.fields.filterNot(f => metaFields.contains(f.name))
-    val fields = metaFields.map(StructField(_, StringType)) ++ dataFields
-    StructType(fields)
-  }
+  def addMetaFields(schema: StructType): StructType =
+    HoodieDataTypeUtils.addMetaFields(schema)
 
   private lazy val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet
 
