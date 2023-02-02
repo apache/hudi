@@ -111,7 +111,8 @@ trait ProvidesHoodieConfig extends Logging {
     val tableType = hoodieCatalogTable.tableTypeName
     val tableConfig = hoodieCatalogTable.tableConfig
 
-    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf, overridingOpts = extraOptions)
+    val combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+      defaultOpts = Map.empty, overridingOpts = extraOptions)
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig, extraOptions)
 
     val partitionFieldsStr = hoodieCatalogTable.partitionFields.mkString(",")
@@ -182,7 +183,7 @@ trait ProvidesHoodieConfig extends Logging {
       PAYLOAD_CLASS_NAME.key -> payloadClassName,
       // NOTE: By default insert would try to do deduplication in case that pre-combine column is specified
       //       for the table
-      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn)
     )
 
     val overridingOpts = Map(
@@ -239,7 +240,8 @@ trait ProvidesHoodieConfig extends Logging {
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     )
 
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf, overridingOpts = overridingOpts)
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+      defaultOpts = Map.empty, overridingOpts = overridingOpts)
   }
 
   def buildHoodieDeleteTableConfig(hoodieCatalogTable: HoodieCatalogTable,
@@ -276,14 +278,16 @@ trait ProvidesHoodieConfig extends Logging {
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     )
 
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf, overridingOpts = overridingOpts)
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+      defaultOpts = Map.empty, overridingOpts = overridingOpts)
   }
 
   def buildHiveSyncConfig(sparkSession: SparkSession,
                           hoodieCatalogTable: HoodieCatalogTable,
                           tableConfig: HoodieTableConfig,
                           extraOptions: Map[String, String] = Map.empty): HiveSyncConfig = {
-    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf, overridingOpts = extraOptions)
+    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+      defaultOpts = Map.empty, overridingOpts = extraOptions)
     val props = new TypedProperties(toProperties(combinedOpts))
 
     // Enable the hive sync by default if spark have enable the hive metastore.
@@ -328,7 +332,7 @@ object ProvidesHoodieConfig {
   private def combineOptions(catalogTable: HoodieCatalogTable,
                              tableConfig: HoodieTableConfig,
                              sqlConf: SQLConf,
-                             defaultOpts: Map[String, String] = Map.empty,
+                             defaultOpts: Map[String, String],
                              overridingOpts: Map[String, String] = Map.empty): Map[String, String] = {
     // NOTE: Properties are merged in the following order of priority (first has the highest priority, last has the
     //       lowest, which is inverse to the ordering in the code):
