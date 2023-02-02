@@ -19,17 +19,19 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-public abstract class WriteHandleFactory<T extends HoodieRecordPayload, I, K, O> {
+import java.io.Serializable;
+
+public abstract class WriteHandleFactory<T, I, K, O> implements Serializable {
   private int numFilesWritten = 0;
 
   public abstract HoodieWriteHandle<T, I, K, O> create(HoodieWriteConfig config, String commitTime, HoodieTable<T, I, K, O> hoodieTable,
       String partitionPath, String fileIdPrefix, TaskContextSupplier taskContextSupplier);
 
   protected String getNextFileId(String idPfx) {
-    return String.format("%s-%d", idPfx, numFilesWritten++);
+    return FSUtils.createNewFileId(idPfx, numFilesWritten++);
   }
 }

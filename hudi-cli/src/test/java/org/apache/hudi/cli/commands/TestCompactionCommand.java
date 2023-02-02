@@ -22,8 +22,12 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.client.HoodieTimelineArchiver;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -32,16 +36,22 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.HoodieTimelineArchiveLog;
+
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -60,15 +70,20 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * Test Cases for {@link CompactionCommand}.
  */
-public class TestCompactionCommand extends AbstractShellIntegrationTest {
+@Tag("functional")
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
+public class TestCompactionCommand extends CLIFunctionalTestHarness {
+
+  @Autowired
+  private Shell shell;
 
   private String tableName;
   private String tablePath;
 
   @BeforeEach
   public void init() {
-    tableName = "test_table";
-    tablePath = basePath + tableName;
+    tableName = tableName();
+    tablePath = tablePath(tableName);
   }
 
   @Test
@@ -97,8 +112,8 @@ public class TestCompactionCommand extends AbstractShellIntegrationTest {
 
     HoodieCLI.getTableMetaClient().reloadActiveTimeline();
 
-    CommandResult cr = getShell().executeCommand("compactions show all");
-    System.out.println(cr.getResult().toString());
+    Object result = shell.evaluate(() -> "compactions show all");
+    System.out.println(result.toString());
 
     TableHeader header = new TableHeader().addTableHeaderField("Compaction Instant Time").addTableHeaderField("State")
         .addTableHeaderField("Total FileIds to be Compacted");
@@ -112,7 +127,7 @@ public class TestCompactionCommand extends AbstractShellIntegrationTest {
       rows.add(new Comparable[] {instant, "REQUESTED", fileIds.get(instant)});
     });
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-    assertEquals(expected, cr.getResult().toString());
+    assertEquals(expected, result.toString());
   }
 
   /**
@@ -129,8 +144,8 @@ public class TestCompactionCommand extends AbstractShellIntegrationTest {
 
     HoodieCLI.getTableMetaClient().reloadActiveTimeline();
 
-    CommandResult cr = getShell().executeCommand("compaction show --instant 001");
-    System.out.println(cr.getResult().toString());
+    Object result = shell.evaluate(() -> "compaction show --instant 001");
+    System.out.println(result.toString());
   }
 
   private void generateCompactionInstances() throws IOException {
@@ -147,21 +162,27 @@ public class TestCompactionCommand extends AbstractShellIntegrationTest {
       activeTimeline.transitionCompactionInflightToComplete(
           new HoodieInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, timestamp), Option.empty());
     });
-
-    metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+    // Simulate a compaction commit in metadata table timeline
+    // so the archival in data table can happen
+    HoodieTestUtils.createCompactionCommitInMetadataTable(hadoopConf(),
+        new HoodieWrapperFileSystem(
+            FSUtils.getFs(tablePath, hadoopConf()), new NoOpConsistencyGuard()), tablePath, "007");
   }
 
   private void generateArchive() throws IOException {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
         .forTable("test-trip-table").build();
     // archive
-    metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
-    HoodieSparkTable table = HoodieSparkTable.create(cfg, context, metaClient);
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
-    archiveLog.archiveIfRequired(context);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+    HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+    archiver.archiveIfRequired(context());
   }
 
   /**
@@ -173,7 +194,7 @@ public class TestCompactionCommand extends AbstractShellIntegrationTest {
 
     generateArchive();
 
-    CommandResult cr = getShell().executeCommand("compactions showarchived --startTs 001 --endTs 005");
+    Object result = shell.evaluate(() -> "compactions showarchived --startTs 001 --endTs 005");
 
     // generate result
     Map<String, Integer> fileMap = new HashMap<>();
@@ -188,7 +209,7 @@ public class TestCompactionCommand extends AbstractShellIntegrationTest {
     String expected = HoodiePrintHelper.print(header, fieldNameToConverterMap, "", false, -1, false, rows);
 
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -207,13 +228,13 @@ public class TestCompactionCommand extends AbstractShellIntegrationTest {
 
     generateArchive();
 
-    CommandResult cr = getShell().executeCommand("compaction showarchived --instant " + instance);
+    Object result = shell.evaluate(() -> "compaction showarchived --instant " + instance);
 
     // generate expected
-    String expected = new CompactionCommand().printCompaction(plan, "", false, -1, false);
+    String expected = CompactionCommand.printCompaction(plan, "", false, -1, false, null);
 
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 }

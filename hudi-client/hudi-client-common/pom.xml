@@ -19,22 +19,34 @@
   <parent>
     <artifactId>hudi-client</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.9.0-SNAPSHOT</version>
+    <version>0.14.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-client-common</artifactId>
-  <version>0.9.0-SNAPSHOT</version>
+  <version>0.14.0-SNAPSHOT</version>
 
   <name>hudi-client-common</name>
   <packaging>jar</packaging>
 
   <dependencies>
+    <!-- Logging -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-1.2-api</artifactId>
+    </dependency>
+
     <!-- Hoodie -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
       <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-aws</artifactId>
+      <version>${project.version}</version>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -47,16 +59,29 @@
       <artifactId>joda-time</artifactId>
     </dependency>
 
-    <!-- Logging -->
+    <!-- Kryo -->
     <dependency>
-      <groupId>log4j</groupId>
-      <artifactId>log4j</artifactId>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
     </dependency>
 
     <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+    </dependency>
+
+    <!-- Orc -->
+    <dependency>
+      <groupId>org.apache.orc</groupId>
+      <artifactId>orc-core</artifactId>
+    </dependency>
+
+    <!-- Hilbert Curve -->
+    <dependency>
+      <groupId>com.github.davidmoten</groupId>
+      <artifactId>hilbert-curve</artifactId>
+      <version>0.2.2</version>
     </dependency>
 
     <!-- Dropwizard Metrics -->
@@ -94,7 +119,6 @@
       <groupId>io.prometheus</groupId>
       <artifactId>simpleclient_pushgateway</artifactId>
     </dependency>
-
     <!-- Hoodie - Tests -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -110,6 +134,7 @@
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
       <classifier>tests</classifier>
+      <scope>test</scope>
       <!-- Need these exclusions to make sure JavaSparkContext can be setup. https://issues.apache.org/jira/browse/SPARK-1693 -->
       <exclusions>
         <exclusion>
@@ -130,6 +155,7 @@
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
       <classifier>tests</classifier>
+      <scope>test</scope>
       <exclusions>
         <exclusion>
           <groupId>org.mortbay.jetty</groupId>
@@ -150,7 +176,6 @@
     <dependency>
       <groupId>org.awaitility</groupId>
       <artifactId>awaitility</artifactId>
-      <version>3.1.2</version>
       <scope>test</scope>
     </dependency>
 
@@ -172,6 +197,12 @@
     </dependency>
 
     <!-- Test -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-tests-common</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>

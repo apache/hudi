@@ -18,34 +18,42 @@
 
 package org.apache.hudi.integ.testsuite.reader;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.table.view.TableFileSystemView;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ParquetReaderIterator;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieMemoryConfig;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.avro.AvroParquetReader;
-import org.apache.parquet.avro.AvroReadSupport;
+
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.MappingIterator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.TypeUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieMemoryConfig;
+import org.apache.hudi.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.Tuple2;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -59,8 +67,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-
-import scala.Tuple2;
 
 import static java.util.Map.Entry.comparingByValue;
 import static java.util.stream.Collectors.toMap;
@@ -87,7 +93,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
     // calls in metrics as they are not part of normal HUDI operation.
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, metaClient.getBasePath(),
-        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE, false);
+        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, false);
     // Sort partition so we can pick last N partitions by default
     Collections.sort(partitionPaths);
     if (!partitionPaths.isEmpty()) {
@@ -113,8 +119,14 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
 
   @Override
   protected long analyzeSingleFile(String filePath) {
-    return SparkBasedReader.readParquet(new SparkSession(jsc.sc()), Arrays.asList(filePath),
-        Option.empty(), Option.empty()).count();
+    if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+      return SparkBasedReader.readParquet(new SparkSession(jsc.sc()), Arrays.asList(filePath),
+          Option.empty(), Option.empty()).count();
+    } else if (filePath.endsWith(HoodieFileFormat.ORC.getFileExtension())) {
+      return SparkBasedReader.readOrc(new SparkSession(jsc.sc()), Arrays.asList(filePath),
+          Option.empty(), Option.empty()).count();
+    }
+    throw new UnsupportedOperationException("Format for " + filePath + " is not supported yet.");
   }
 
   private JavaRDD<GenericRecord> fetchAnyRecordsFromDataset(Option<Long> numRecordsToUpdate) throws IOException {
@@ -149,7 +161,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
 
     // TODO : read record count from metadata
     // Read the records in a single file
-    long recordsInSingleFile = iteratorSize(readParquetOrLogFiles(getSingleSliceFromRDD(partitionToFileSlice)));
+    long recordsInSingleFile = iteratorSize(readColumnarOrLogFiles(getSingleSliceFromRDD(partitionToFileSlice)));
     int numFilesToUpdate;
     long numRecordsToUpdatePerFile;
     if (!numFiles.isPresent() || numFiles.get() <= 0) {
@@ -205,9 +217,9 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
       return iteratorLimit(p._2, maxFilesToRead);
     }).flatMap(p -> p).repartition(numFiles).map(fileSlice -> {
       if (numRecordsToReadPerFile > 0) {
-        return iteratorLimit(readParquetOrLogFiles(fileSlice), numRecordsToReadPerFile);
+        return iteratorLimit(readColumnarOrLogFiles(fileSlice), numRecordsToReadPerFile);
       } else {
-        return readParquetOrLogFiles(fileSlice);
+        return readColumnarOrLogFiles(fileSlice);
       }
     }).flatMap(p -> p).map(i -> (GenericRecord) i);
   }
@@ -253,15 +265,13 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
     }).take(1).get(0);
   }
 
-  private Iterator<IndexedRecord> readParquetOrLogFiles(FileSlice fileSlice) throws IOException {
+  private Iterator<IndexedRecord> readColumnarOrLogFiles(FileSlice fileSlice) throws IOException {
     if (fileSlice.getBaseFile().isPresent()) {
-      // Read the parquet files using the latest writer schema.
-      Schema schema = new Schema.Parser().parse(schemaStr);
-      AvroReadSupport.setAvroReadSchema(metaClient.getHadoopConf(), HoodieAvroUtils.addMetadataFields(schema));
-      Iterator<IndexedRecord> itr =
-          new ParquetReaderIterator<IndexedRecord>(AvroParquetReader.<IndexedRecord>builder(new
-              Path(fileSlice.getBaseFile().get().getPath())).withConf(metaClient.getHadoopConf()).build());
-      return itr;
+      // Read the base files using the latest writer schema.
+      Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
+      HoodieAvroFileReader reader = TypeUtils.unsafeCast(HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(metaClient.getHadoopConf(),
+          new Path(fileSlice.getBaseFile().get().getPath())));
+      return new MappingIterator<>(reader.getRecordIterator(schema), HoodieRecord::getData);
     } else {
       // If there is no data file, fall back to reading log files
       HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -276,16 +286,20 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
               HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
           .withReadBlocksLazily(true)
           .withReverseReader(false)
-          .withBufferSize(HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE)
-          .withSpillableMapBasePath(HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH)
+          .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue())
+          .withSpillableMapBasePath(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue())
+          .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
+          .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
+          .withOptimizedLogBlocksScan(Boolean.parseBoolean(HoodieCompactionConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()))
+          .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
           .build();
       // readAvro log files
-      Iterable<HoodieRecord<? extends HoodieRecordPayload>> iterable = () -> scanner.iterator();
+      Iterable<HoodieRecord> iterable = () -> scanner.iterator();
       Schema schema = new Schema.Parser().parse(schemaStr);
       return StreamSupport.stream(iterable.spliterator(), false)
           .map(e -> {
             try {
-              return (IndexedRecord) e.getData().getInsertValue(schema).get();
+              return (IndexedRecord) ((HoodieAvroRecord)e).getData().getInsertValue(schema).get();
             } catch (IOException io) {
               throw new UncheckedIOException(io);
             }

@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
@@ -33,7 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class JavaInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class JavaInsertOverwriteCommitActionExecutor<T>
     extends BaseJavaCommitActionExecutor<T> {
 
   private final List<HoodieRecord<T>> inputRecords;
@@ -55,7 +54,7 @@ public class JavaInsertOverwriteCommitActionExecutor<T extends HoodieRecordPaylo
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     return JavaWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
-        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, false);
+        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
   }
 
   @Override
@@ -64,9 +63,9 @@ public class JavaInsertOverwriteCommitActionExecutor<T extends HoodieRecordPaylo
   }
 
   @Override
-  protected Map<String, List<String>> getPartitionToReplacedFileIds(List<WriteStatus> writeStatuses) {
+  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<List<WriteStatus>> writeResult) {
     return context.mapToPair(
-        writeStatuses.stream().map(status -> status.getStat().getPartitionPath()).distinct().collect(Collectors.toList()),
+        writeResult.getWriteStatuses().stream().map(status -> status.getStat().getPartitionPath()).distinct().collect(Collectors.toList()),
         partitionPath ->
             Pair.of(partitionPath, getAllExistingFileIds(partitionPath)), 1
     );

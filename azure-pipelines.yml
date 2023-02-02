@@ -19,134 +19,233 @@ trigger:
       - '*'  # must quote since "*" is a YAML reserved character; we want a string
 
 pool:
-  vmImage: 'ubuntu-16.04'
+  vmImage: 'ubuntu-22.04'
+
+parameters:
+  - name: job1Modules
+    type: object
+    default:
+      - 'hudi-common'
+      - 'hudi-flink-datasource'
+      - 'hudi-flink-datasource/hudi-flink'
+      - 'hudi-flink-datasource/hudi-flink1.13.x'
+      - 'hudi-flink-datasource/hudi-flink1.14.x'
+      - 'hudi-flink-datasource/hudi-flink1.15.x'
+      - 'hudi-flink-datasource/hudi-flink1.16.x'
+  - name: job2Modules
+    type: object
+    default:
+      - 'hudi-client/hudi-spark-client'
+  - name: job3UTModules
+    type: object
+    default:
+      - 'hudi-spark-datasource'
+      - 'hudi-spark-datasource/hudi-spark'
+      - 'hudi-spark-datasource/hudi-spark2'
+      - 'hudi-spark-datasource/hudi-spark2-common'
+      - 'hudi-spark-datasource/hudi-spark-common'
+  - name: job4UTModules
+    type: object
+    default:
+      - '!hudi-client/hudi-spark-client'
+      - '!hudi-common'
+      - '!hudi-examples'
+      - '!hudi-examples/hudi-examples-common'
+      - '!hudi-examples/hudi-examples-flink'
+      - '!hudi-examples/hudi-examples-java'
+      - '!hudi-examples/hudi-examples-spark'
+      - '!hudi-flink-datasource'
+      - '!hudi-flink-datasource/hudi-flink'
+      - '!hudi-flink-datasource/hudi-flink1.13.x'
+      - '!hudi-flink-datasource/hudi-flink1.14.x'
+      - '!hudi-flink-datasource/hudi-flink1.15.x'
+      - '!hudi-flink-datasource/hudi-flink1.16.x'
+      - '!hudi-spark-datasource'
+      - '!hudi-spark-datasource/hudi-spark'
+      - '!hudi-spark-datasource/hudi-spark2'
+      - '!hudi-spark-datasource/hudi-spark2-common'
+      - '!hudi-spark-datasource/hudi-spark-common'
+  - name: job4FTModules
+    type: object
+    default:
+      - '!hudi-client/hudi-spark-client'
+      - '!hudi-common'
+      - '!hudi-examples'
+      - '!hudi-examples/hudi-examples-common'
+      - '!hudi-examples/hudi-examples-flink'
+      - '!hudi-examples/hudi-examples-java'
+      - '!hudi-examples/hudi-examples-spark'
+      - '!hudi-flink-datasource'
+      - '!hudi-flink-datasource/hudi-flink'
+      - '!hudi-flink-datasource/hudi-flink1.13.x'
+      - '!hudi-flink-datasource/hudi-flink1.14.x'
+      - '!hudi-flink-datasource/hudi-flink1.15.x'
+      - '!hudi-flink-datasource/hudi-flink1.16.x'
 
 variables:
-  MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
-  MAVEN_OPTS: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)'
+  BUILD_PROFILES: '-Dscala-2.11 -Dspark2.4 -Dflink1.16'
+  PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
+  MVN_OPTS_INSTALL: '-Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
+  MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   SPARK_VERSION: '2.4.4'
   HADOOP_VERSION: '2.7'
-  SPARK_HOME: $(Pipeline.Workspace)/spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
+  SPARK_ARCHIVE: spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
+  JOB1_MODULES: ${{ join(',',parameters.job1Modules) }}
+  JOB2_MODULES: ${{ join(',',parameters.job2Modules) }}
+  JOB3_MODULES: ${{ join(',',parameters.job3UTModules) }}
+  JOB4_UT_MODULES: ${{ join(',',parameters.job4UTModules) }}
+  JOB4_FT_MODULES: ${{ join(',',parameters.job4FTModules) }}
 
 stages:
   - stage: test
-    displayName: "Run tests"
     jobs:
-      - job: unit_tests_spark_client
+      - job: UT_FT_1
+        displayName: UT FT common & flink & UT client/spark-client
+        timeoutInMinutes: '150'
         steps:
-          - task: Maven@3
+          - task: Maven@4
+            displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: -DskipTests
+              options: $(MVN_OPTS_INSTALL)
               publishJUnitResults: false
-              javaHomeOption: 'JDKVersion'
               jdkVersionOption: '1.8'
-              jdkArchitectureOption: 'x64'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
-          - task: Cache@2
-            inputs:
-              key: 'maven | "$(Agent.OS)" | **/pom.xml'
-              restoreKeys: |
-                maven | "$(Agent.OS)"
-                maven
-              path: $(MAVEN_CACHE_FOLDER)
-            displayName: Cache Maven local repo
-          - task: Maven@3
+          - task: Maven@4
+            displayName: UT common flink client/spark-client
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl hudi-client/hudi-spark-client
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB1_MODULES),hudi-client/hudi-spark-client
               publishJUnitResults: false
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              testRunTitle: 'unit tests spark client'
-              javaHomeOption: 'JDKVersion'
               jdkVersionOption: '1.8'
-              jdkArchitectureOption: 'x64'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
-      - job: unit_tests_utilities
-        steps:
-          - task: Maven@3
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'clean install'
-              options: -DskipTests
-              publishJUnitResults: false
-              javaHomeOption: 'JDKVersion'
-              jdkVersionOption: '1.8'
-              jdkArchitectureOption: 'x64'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
-          - task: Cache@2
-            inputs:
-              key: 'maven | "$(Agent.OS)" | **/pom.xml'
-              restoreKeys: |
-                maven | "$(Agent.OS)"
-                maven
-              path: $(MAVEN_CACHE_FOLDER)
-            displayName: Cache Maven local repo
-          - task: Maven@3
+              mavenOptions: '-Xmx4g'
+          - task: Maven@4
+            displayName: FT common flink
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl hudi-utilities
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB1_MODULES)
               publishJUnitResults: false
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              testRunTitle: 'unit tests utilities'
-              javaHomeOption: 'JDKVersion'
               jdkVersionOption: '1.8'
-              jdkArchitectureOption: 'x64'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
-      - job: unit_tests_other_modules
-        steps:
-          - task: Maven@3
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'clean install'
-              options: -DskipTests
-              publishJUnitResults: false
-              javaHomeOption: 'JDKVersion'
-              jdkVersionOption: '1.8'
-              jdkArchitectureOption: 'x64'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
-          - task: Cache@2
-            inputs:
-              key: 'maven | "$(Agent.OS)" | **/pom.xml'
-              restoreKeys: |
-                maven | "$(Agent.OS)"
-                maven
-              path: $(MAVEN_CACHE_FOLDER)
-            displayName: Cache Maven local repo
-          - task: Maven@3
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: -Punit-tests -pl !hudi-utilities,!hudi-client/hudi-spark-client
-              publishJUnitResults: false
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              testRunTitle: 'unit tests other modules'
-              javaHomeOption: 'JDKVersion'
-              jdkVersionOption: '1.8'
-              jdkArchitectureOption: 'x64'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
-      - job: functional_tests
-        steps:
-          - task: Maven@3
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: -Pfunctional-tests
-              publishJUnitResults: false
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              testRunTitle: 'functional tests'
-              javaHomeOption: 'JDKVersion'
-              jdkVersionOption: '1.8'
-              jdkArchitectureOption: 'x64'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
-      - job: integration_tests
-        steps:
+              mavenOptions: '-Xmx4g'
           - script: |
-              echo 'Downloading spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)'
-              wget https://archive.apache.org/dist/spark/spark-$(SPARK_VERSION)/spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION).tgz -O $(Pipeline.Workspace)/spark-$(SPARK_VERSION).tgz
-              tar -xvf $(Pipeline.Workspace)/spark-$(SPARK_VERSION).tgz -C $(Pipeline.Workspace)/
-              mkdir /tmp/spark-events/
-              mvn -Pintegration-tests verify
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_2
+        displayName: FT client/spark-client
+        timeoutInMinutes: '150'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: FT client/spark-client
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_MODULES)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_3
+        displayName: UT spark-datasource
+        timeoutInMinutes: '180'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: UT spark-datasource
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB3_MODULES)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_4
+        displayName: UT FT other modules
+        timeoutInMinutes: '180'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: UT other modules
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - task: Maven@4
+            displayName: FT other modules
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: IT
+        displayName: IT modules
+        timeoutInMinutes: '150'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL) -Pintegration-tests
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: UT integ-test
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - task: AzureCLI@2
+            displayName: Prepare for IT
+            inputs:
+              azureSubscription: apachehudici-service-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo 'Downloading $(SPARK_ARCHIVE)'
+                az storage blob download -c ci-caches -n $(SPARK_ARCHIVE).tgz -f $(Pipeline.Workspace)/$(SPARK_ARCHIVE).tgz --account-name apachehudici
+                tar -xvf $(Pipeline.Workspace)/$(SPARK_ARCHIVE).tgz -C $(Pipeline.Workspace)/
+                mkdir /tmp/spark-events/
+          - script: |
+              export SPARK_HOME=$(Pipeline.Workspace)/$(SPARK_ARCHIVE)
+              mvn $(MVN_OPTS_TEST) -Pintegration-tests verify
+            displayName: IT

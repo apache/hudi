@@ -103,4 +103,8 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
   public float getProgress() throws IOException {
     return this.reader.getProgress();
   }
+
+  public RecordReader<NullWritable, ArrayWritable> getReader() {
+    return this.reader;
+  }
 }

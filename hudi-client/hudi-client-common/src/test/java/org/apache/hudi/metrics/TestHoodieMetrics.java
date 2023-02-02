@@ -50,8 +50,9 @@ public class TestHoodieMetrics {
   @BeforeEach
   void setUp() {
     when(config.isMetricsOn()).thenReturn(true);
+    when(config.getTableName()).thenReturn("raw_table");
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
-    metrics = new HoodieMetrics(config, "raw_table");
+    metrics = new HoodieMetrics(config);
   }
 
   @AfterEach
@@ -136,8 +137,9 @@ public class TestHoodieMetrics {
       when(metadata.getTotalCompactedRecordsUpdated()).thenReturn(randomValue + 11);
       when(metadata.getTotalLogFilesCompacted()).thenReturn(randomValue + 12);
       when(metadata.getTotalLogFilesSize()).thenReturn(randomValue + 13);
+      when(metadata.getTotalRecordsDeleted()).thenReturn(randomValue + 14);
       when(metadata.getMinAndMaxEventTime()).thenReturn(Pair.of(Option.empty(), Option.empty()));
-      metrics.updateCommitMetrics(randomValue + 14, commitTimer.stop(), metadata, action);
+      metrics.updateCommitMetrics(randomValue + 15, commitTimer.stop(), metadata, action);
 
       String metricname = metrics.getMetricsName(action, "duration");
       long duration = (Long)Metrics.getInstance().getRegistry().getGauges().get(metricname).getValue();
@@ -157,7 +159,7 @@ public class TestHoodieMetrics {
       metricname = metrics.getMetricsName(action, "totalBytesWritten");
       assertEquals((long)Metrics.getInstance().getRegistry().getGauges().get(metricname).getValue(), metadata.fetchTotalBytesWritten());
       metricname = metrics.getMetricsName(action, "commitTime");
-      assertEquals((long)Metrics.getInstance().getRegistry().getGauges().get(metricname).getValue(), randomValue + 14);
+      assertEquals((long)Metrics.getInstance().getRegistry().getGauges().get(metricname).getValue(), randomValue + 15);
       metricname = metrics.getMetricsName(action, "totalScanTime");
       assertEquals(Metrics.getInstance().getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalScanTime());
       metricname = metrics.getMetricsName(action, "totalCreateTime");
@@ -170,6 +172,8 @@ public class TestHoodieMetrics {
       assertEquals(Metrics.getInstance().getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalLogFilesCompacted());
       metricname = metrics.getMetricsName(action, "totalLogFilesSize");
       assertEquals(Metrics.getInstance().getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalLogFilesSize());
+      metricname = metrics.getMetricsName(action, "totalRecordsDeleted");
+      assertEquals(Metrics.getInstance().getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalRecordsDeleted());
     });
   }
 }

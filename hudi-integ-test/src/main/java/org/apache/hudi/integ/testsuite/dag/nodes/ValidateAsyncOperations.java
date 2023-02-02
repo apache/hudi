@@ -18,8 +18,14 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
@@ -29,14 +35,8 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * Node to validate data set sanity like total file versions retained, has cleaning happened, has archival happened, etc.
@@ -59,54 +59,48 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
 
         int maxCommitsRetained = executionContext.getHoodieTestSuiteWriter().getWriteConfig().getCleanerCommitsRetained() + 1;
         FileSystem fs = FSUtils.getFs(basePath, executionContext.getHoodieTestSuiteWriter().getConfiguration());
-        Map<String, Integer> fileIdCount = new HashMap<>();
-
-        AtomicInteger maxVal = new AtomicInteger();
-        List<String> partitionPaths = FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, basePath);
-        for (String partitionPath : partitionPaths) {
-          List<FileStatus> fileStatuses = Arrays.stream(FSUtils.getAllDataFilesInPartition(fs, new Path(basePath + "/" + partitionPath))).collect(Collectors.toList());
-          fileStatuses.forEach(entry -> {
-            String fileId = FSUtils.getFileId(entry.getPath().getName());
-            fileIdCount.computeIfAbsent(fileId, k -> 0);
-            fileIdCount.put(fileId, fileIdCount.get(fileId) + 1);
-            maxVal.set(Math.max(maxVal.get(), fileIdCount.get(fileId)));
-          });
-        }
-        if (maxVal.get() > maxCommitsRetained) {
-          throw new AssertionError("Total commits (" + maxVal + ") retained exceeds max value of " + maxCommitsRetained + ", total commits : ");
+        
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
+            .setConf(executionContext.getJsc().hadoopConfiguration()).build();
+        Option<HoodieInstant> latestCleanInstant = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
+        if (latestCleanInstant.isPresent()) {
+          log.warn("Latest clean commit " + latestCleanInstant.get());
+          HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, latestCleanInstant.get());
+          String earliestCommitToRetain = cleanMetadata.getEarliestCommitToRetain();
+          log.warn("Earliest commit to retain : " + earliestCommitToRetain);
+          long unCleanedInstants = metaClient.getActiveTimeline().filterCompletedInstants().filter(instant ->
+              HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestCommitToRetain)).countInstants();
+          ValidationUtils.checkArgument(unCleanedInstants >= (maxCommitsRetained + 1), "Total uncleaned instants " + unCleanedInstants
+              + " mismatched with max commits retained " + (maxCommitsRetained + 1));
         }
 
         if (config.validateArchival() || config.validateClean()) {
-          Pattern ARCHIVE_FILE_PATTERN =
+          final Pattern ARCHIVE_FILE_PATTERN =
               Pattern.compile("\\.commits_\\.archive\\..*");
-          Pattern CLEAN_FILE_PATTERN =
+          final Pattern CLEAN_FILE_PATTERN =
               Pattern.compile(".*\\.clean\\..*");
 
           String metadataPath = executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/.hoodie";
           FileStatus[] metaFileStatuses = fs.listStatus(new Path(metadataPath));
-          boolean archFound = false;
           boolean cleanFound = false;
+          for (FileStatus fileStatus : metaFileStatuses) {
+            Matcher cleanFileMatcher = CLEAN_FILE_PATTERN.matcher(fileStatus.getPath().getName());
+            if (cleanFileMatcher.matches()) {
+              cleanFound = true;
+              break;
+            }
+          }
+
+          String archivalPath = executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/.hoodie/archived";
+          metaFileStatuses = fs.listStatus(new Path(archivalPath));
+          boolean archFound = false;
           for (FileStatus fileStatus : metaFileStatuses) {
             Matcher archFileMatcher = ARCHIVE_FILE_PATTERN.matcher(fileStatus.getPath().getName());
             if (archFileMatcher.matches()) {
               archFound = true;
-              if (config.validateArchival() && !config.validateClean()) {
-                break;
-              }
-            }
-            Matcher cleanFileMatcher = CLEAN_FILE_PATTERN.matcher(fileStatus.getPath().getName());
-            if (cleanFileMatcher.matches()) {
-              cleanFound = true;
-              if (!config.validateArchival() && config.validateClean()) {
-                break;
-              }
-            }
-            if (config.validateClean() && config.validateArchival()) {
-              if (archFound && cleanFound) {
-                break;
-              }
             }
           }
+
           if (config.validateArchival() && !archFound) {
             throw new AssertionError("Archival NotFound in " + metadataPath);
           }

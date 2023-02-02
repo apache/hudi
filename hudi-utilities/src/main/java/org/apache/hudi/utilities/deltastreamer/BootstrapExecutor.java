@@ -18,14 +18,15 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -34,13 +35,15 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -49,15 +52,29 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT;
+import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
+import static org.apache.hudi.config.HoodieBootstrapConfig.KEYGEN_CLASS_NAME;
+import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+
 /**
  * Performs bootstrap from a non-hudi source.
  */
-public class BootstrapExecutor  implements Serializable {
+public class BootstrapExecutor implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(BootstrapExecutor.class);
 
   /**
-   *  Config.
+   * Config.
    */
   private final HoodieDeltaStreamer.Config cfg;
 
@@ -95,9 +112,10 @@ public class BootstrapExecutor  implements Serializable {
 
   /**
    * Bootstrap Executor.
-   * @param cfg DeltaStreamer Config
-   * @param jssc Java Spark Context
-   * @param fs File System
+   *
+   * @param cfg        DeltaStreamer Config
+   * @param jssc       Java Spark Context
+   * @param fs         File System
    * @param properties Bootstrap Writer Properties
    * @throws IOException
    */
@@ -109,13 +127,14 @@ public class BootstrapExecutor  implements Serializable {
     this.configuration = conf;
     this.props = properties;
 
-    ValidationUtils.checkArgument(properties.containsKey(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH),
-        HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH + " must be specified.");
-    this.bootstrapBasePath = properties.getString(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH);
+    ValidationUtils.checkArgument(properties.containsKey(HoodieTableConfig.BOOTSTRAP_BASE_PATH
+            .key()),
+        HoodieTableConfig.BOOTSTRAP_BASE_PATH.key() + " must be specified.");
+    this.bootstrapBasePath = properties.getString(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key());
 
     // Add more defaults if full bootstrap requested
-    this.props.putIfAbsent(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY(),
-        DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL());
+    this.props.putIfAbsent(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
+        DataSourceWriteOptions.PAYLOAD_CLASS_NAME().defaultValue());
     this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath)
@@ -156,28 +175,69 @@ public class BootstrapExecutor  implements Serializable {
    * Sync to Hive.
    */
   private void syncHive() {
-    if (cfg.enableHiveSync) {
-      HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
-      LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
-          + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
-      new HiveSyncTool(hiveSyncConfig, new HiveConf(configuration, HiveConf.class), fs).syncHoodieTable();
+    if (cfg.enableHiveSync || cfg.enableMetaSync) {
+      TypedProperties metaProps = new TypedProperties();
+      metaProps.putAll(props);
+      metaProps.put(META_SYNC_BASE_PATH.key(), cfg.targetBasePath);
+      metaProps.put(META_SYNC_BASE_FILE_FORMAT.key(), cfg.baseFileFormat);
+      if (props.getBoolean(HIVE_SYNC_BUCKET_SYNC.key(), HIVE_SYNC_BUCKET_SYNC.defaultValue())) {
+        metaProps.put(HIVE_SYNC_BUCKET_SYNC_SPEC.key(), HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
+            props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
+      }
+
+      new HiveSyncTool(metaProps, configuration).syncHoodieTable();
     }
   }
 
   private void initializeTable() throws IOException {
-    if (fs.exists(new Path(cfg.targetBasePath))) {
-      throw new HoodieException("target base path already exists at " + cfg.targetBasePath
-          + ". Cannot bootstrap data on top of an existing table");
+    Path basePath = new Path(cfg.targetBasePath);
+    if (fs.exists(basePath)) {
+      if (cfg.bootstrapOverwrite) {
+        LOG.warn("Target base path already exists, overwrite it");
+        fs.delete(basePath, true);
+      } else {
+        throw new HoodieException("target base path already exists at " + cfg.targetBasePath
+            + ". Cannot bootstrap data on top of an existing table");
+      }
     }
-    HoodieTableMetaClient.withPropertyBuilder()
+
+    HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
+        .fromProperties(props)
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
-        .setArchiveLogFolder("archived")
+        .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
+        .setPreCombineField(props.getString(
+            PRECOMBINE_FIELD_NAME.key(), PRECOMBINE_FIELD_NAME.defaultValue()))
+        .setPopulateMetaFields(props.getBoolean(
+            POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue()))
+        .setArchiveLogFolder(props.getString(
+            ARCHIVELOG_FOLDER.key(), ARCHIVELOG_FOLDER.defaultValue()))
         .setPayloadClassName(cfg.payloadClassName)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setBootstrapIndexClass(cfg.bootstrapIndexClass)
         .setBootstrapBasePath(bootstrapBasePath)
-        .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
+        .setHiveStylePartitioningEnable(props.getBoolean(
+            HIVE_STYLE_PARTITIONING_ENABLE.key(),
+            Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())
+        ))
+        .setUrlEncodePartitioning(props.getBoolean(
+            URL_ENCODE_PARTITIONING.key(),
+            Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
+        .setCommitTimezone(HoodieTimelineTimeZone.valueOf(
+            props.getString(
+                TIMELINE_TIMEZONE.key(),
+                String.valueOf(TIMELINE_TIMEZONE.defaultValue()))))
+        .setPartitionMetafileUseBaseFormat(props.getBoolean(
+            PARTITION_METAFILE_USE_BASE_FORMAT.key(),
+            PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()));
+    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
+    if (!StringUtils.isNullOrEmpty(partitionColumns)) {
+      builder.setPartitionFields(partitionColumns).setKeyGeneratorClassProp(props.getString(KEYGEN_CLASS_NAME.key(), SimpleKeyGenerator.class.getName()));
+    } else {
+      builder.setKeyGeneratorClassProp(props.getString(KEYGEN_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName()));
+    }
+
+    builder.initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
   }
 
   public HoodieWriteConfig getBootstrapConfig() {

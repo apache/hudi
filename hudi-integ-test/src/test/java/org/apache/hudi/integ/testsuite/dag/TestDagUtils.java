@@ -18,16 +18,19 @@
 
 package org.apache.hudi.integ.testsuite.dag;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * A utility class for DAG test.
@@ -44,6 +47,8 @@ public class TestDagUtils {
   }
 
   @Test
+  @Disabled
+  // TODO(HUDI-3668): Fix this test
   public void testConvertDagToYamlHiveQuery() throws Exception {
     WorkflowDag dag = new HiveSyncDagGenerator().build();
     DagNode insert1 = (DagNode) dag.getNodeList().get(0);

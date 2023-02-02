@@ -18,11 +18,13 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,9 +32,15 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+/**
+ * Tests {@link FileSystemBackedTableMetadata}.
+ */
 public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
 
   private static final String DEFAULT_PARTITION = "";
@@ -50,6 +58,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
   @AfterEach
   public void tearDown() throws IOException {
     metaClient.getFs().delete(new Path(metaClient.getBasePath()), true);
+    cleanMetaClient();
   }
 
   /**
@@ -63,8 +72,10 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
         new FileSystemBackedTableMetadata(localEngineContext, new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
-    Assertions.assertTrue(fileSystemBackedTableMetadata.getAllPartitionPaths().size() == 0);
-    Assertions.assertTrue(fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath)).length == 10);
+    Assertions.assertEquals(0, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
+    Assertions.assertEquals(10, fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath)).length);
+    Assertions.assertEquals(10, fileSystemBackedTableMetadata.getAllFilesInPartitions(
+        Collections.singletonList(basePath)).get(basePath).length);
   }
 
   /**
@@ -86,8 +97,14 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
         new FileSystemBackedTableMetadata(localEngineContext, new SerializableConfiguration(metaClient.getHadoopConf()), basePath, true);
-    Assertions.assertTrue(fileSystemBackedTableMetadata.getAllPartitionPaths().size() == 3);
-    Assertions.assertTrue(fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath + "/" + DATE_PARTITIONS.get(0))).length == 10);
+    Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
+    Assertions.assertEquals(10, fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath + "/" + DATE_PARTITIONS.get(0))).length);
+
+    List<String> fullPartitionPaths = DATE_PARTITIONS.stream().map(p -> basePath + "/" + p).collect(Collectors.toList());
+    Map<String, FileStatus[]> partitionToFilesMap = fileSystemBackedTableMetadata.getAllFilesInPartitions(fullPartitionPaths);
+    for (String p : fullPartitionPaths) {
+      Assertions.assertEquals(10, partitionToFilesMap.get(p).length);
+    }
   }
 
   /**
@@ -101,7 +118,9 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     // Generate 10 files under each partition
     DATE_PARTITIONS.stream().forEach(p -> {
       try {
-        hoodieTestTable = hoodieTestTable.withBaseFilesInPartition(p, IntStream.range(0, 10).toArray());
+        hoodieTestTable = hoodieTestTable
+            .withPartitionMetaFiles(p)
+            .withBaseFilesInPartition(p, IntStream.range(0, 10).toArray());
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -109,7 +128,13 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
         new FileSystemBackedTableMetadata(localEngineContext, new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
-    Assertions.assertTrue(fileSystemBackedTableMetadata.getAllPartitionPaths().size() == 0);
+    Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
+
+    List<String> fullPartitionPaths = DATE_PARTITIONS.stream().map(p -> basePath + "/" + p).collect(Collectors.toList());
+    Map<String, FileStatus[]> partitionToFilesMap = fileSystemBackedTableMetadata.getAllFilesInPartitions(fullPartitionPaths);
+    for (String p : fullPartitionPaths) {
+      Assertions.assertEquals(10, partitionToFilesMap.get(p).length);
+    }
   }
 
   @Test
@@ -128,8 +153,14 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
         new FileSystemBackedTableMetadata(localEngineContext, new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
-    Assertions.assertTrue(fileSystemBackedTableMetadata.getAllPartitionPaths().size() == 3);
-    Assertions.assertTrue(fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath + "/" + ONE_LEVEL_PARTITIONS.get(0))).length == 10);
+    Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
+    Assertions.assertEquals(10, fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath + "/" + ONE_LEVEL_PARTITIONS.get(0))).length);
+
+    List<String> fullPartitionPaths = ONE_LEVEL_PARTITIONS.stream().map(p -> basePath + "/" + p).collect(Collectors.toList());
+    Map<String, FileStatus[]> partitionToFilesMap = fileSystemBackedTableMetadata.getAllFilesInPartitions(fullPartitionPaths);
+    for (String p : fullPartitionPaths) {
+      Assertions.assertEquals(10, partitionToFilesMap.get(p).length);
+    }
   }
 
   @Test
@@ -148,8 +179,14 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
         new FileSystemBackedTableMetadata(localEngineContext, new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
-    Assertions.assertTrue(fileSystemBackedTableMetadata.getAllPartitionPaths().size() == 3);
-    Assertions.assertTrue(fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath + "/" + MULTI_LEVEL_PARTITIONS.get(0))).length == 10);
+    Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
+    Assertions.assertEquals(10, fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath + "/" + MULTI_LEVEL_PARTITIONS.get(0))).length);
+
+    List<String> fullPartitionPaths = MULTI_LEVEL_PARTITIONS.stream().map(p -> basePath + "/" + p).collect(Collectors.toList());
+    Map<String, FileStatus[]> partitionToFilesMap = fileSystemBackedTableMetadata.getAllFilesInPartitions(fullPartitionPaths);
+    for (String p : fullPartitionPaths) {
+      Assertions.assertEquals(10, partitionToFilesMap.get(p).length);
+    }
   }
 
   @Test
@@ -167,8 +204,14 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
         new FileSystemBackedTableMetadata(localEngineContext, new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
-    Assertions.assertTrue(fileSystemBackedTableMetadata.getAllPartitionPaths().size() == 3);
-    Assertions.assertTrue(fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath + "/" + MULTI_LEVEL_PARTITIONS.get(0))).length == 0);
+    Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
+    Assertions.assertEquals(0, fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath + "/" + MULTI_LEVEL_PARTITIONS.get(0))).length);
+
+    List<String> fullPartitionPaths = MULTI_LEVEL_PARTITIONS.stream().map(p -> basePath + "/" + p).collect(Collectors.toList());
+    Map<String, FileStatus[]> partitionToFilesMap = fileSystemBackedTableMetadata.getAllFilesInPartitions(fullPartitionPaths);
+    for (String p : fullPartitionPaths) {
+      Assertions.assertEquals(0, partitionToFilesMap.get(p).length);
+    }
   }
 
 }

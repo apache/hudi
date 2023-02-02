@@ -45,6 +45,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
@@ -64,11 +65,13 @@ public class RocksDBDAO {
   private transient RocksDB rocksDB;
   private boolean closed = false;
   private final String rocksDBBasePath;
+  private long totalBytesWritten;
 
   public RocksDBDAO(String basePath, String rocksDBBasePath) {
     this.rocksDBBasePath =
         String.format("%s/%s/%s", rocksDBBasePath, basePath.replace("/", "_"), UUID.randomUUID().toString());
     init();
+    totalBytesWritten = 0L;
   }
 
   /**
@@ -169,7 +172,7 @@ public class RocksDBDAO {
    */
   public <T extends Serializable> void putInBatch(WriteBatch batch, String columnFamilyName, String key, T value) {
     try {
-      byte[] payload = SerializationUtils.serialize(value);
+      byte[] payload = serializePayload(value);
       batch.put(managedHandlesMap.get(columnFamilyName), key.getBytes(), payload);
     } catch (Exception e) {
       throw new HoodieException(e);
@@ -189,7 +192,7 @@ public class RocksDBDAO {
       K key, T value) {
     try {
       byte[] keyBytes = SerializationUtils.serialize(key);
-      byte[] payload = SerializationUtils.serialize(value);
+      byte[] payload = serializePayload(value);
       batch.put(managedHandlesMap.get(columnFamilyName), keyBytes, payload);
     } catch (Exception e) {
       throw new HoodieException(e);
@@ -206,7 +209,7 @@ public class RocksDBDAO {
    */
   public <T extends Serializable> void put(String columnFamilyName, String key, T value) {
     try {
-      byte[] payload = SerializationUtils.serialize(value);
+      byte[] payload = serializePayload(value);
       getRocksDB().put(managedHandlesMap.get(columnFamilyName), key.getBytes(), payload);
     } catch (Exception e) {
       throw new HoodieException(e);
@@ -223,7 +226,7 @@ public class RocksDBDAO {
    */
   public <K extends Serializable, T extends Serializable> void put(String columnFamilyName, K key, T value) {
     try {
-      byte[] payload = SerializationUtils.serialize(value);
+      byte[] payload = serializePayload(value);
       getRocksDB().put(managedHandlesMap.get(columnFamilyName), SerializationUtils.serialize(key), payload);
     } catch (Exception e) {
       throw new HoodieException(e);
@@ -331,8 +334,7 @@ public class RocksDBDAO {
    */
   public <T extends Serializable> Stream<Pair<String, T>> prefixSearch(String columnFamilyName, String prefix) {
     ValidationUtils.checkArgument(!closed);
-    final HoodieTimer timer = new HoodieTimer();
-    timer.startTimer();
+    final HoodieTimer timer = HoodieTimer.start();
     long timeTakenMicro = 0;
     List<Pair<String, T>> results = new LinkedList<>();
     try (final RocksIterator it = getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName))) {
@@ -349,6 +351,16 @@ public class RocksDBDAO {
     LOG.info("Prefix Search for (query=" + prefix + ") on " + columnFamilyName + ". Total Time Taken (msec)="
         + timer.endTimer() + ". Serialization Time taken(micro)=" + timeTakenMicro + ", num entries=" + results.size());
     return results.stream();
+  }
+
+  /**
+   * Return Iterator of key-value pairs from RocksIterator.
+   *
+   * @param columnFamilyName Column Family Name
+   * @param <T>              Type of value stored
+   */
+  public <T extends Serializable> Iterator<T> iterator(String columnFamilyName) {
+    return new IteratorWrapper<>(getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName)));
   }
 
   /**
@@ -448,8 +460,46 @@ public class RocksDBDAO {
     }
   }
 
+  public long getTotalBytesWritten() {
+    return totalBytesWritten;
+  }
+
+  private <T extends Serializable> byte[] serializePayload(T value) throws IOException {
+    byte[] payload = SerializationUtils.serialize(value);
+    totalBytesWritten += payload.length;
+    return payload;
+  }
+
   String getRocksDBBasePath() {
     return rocksDBBasePath;
+  }
+
+  /**
+   * {@link Iterator} wrapper for RocksDb Iterator {@link RocksIterator}.
+   */
+  private static class IteratorWrapper<R> implements Iterator<R> {
+
+    private final RocksIterator iterator;
+
+    public IteratorWrapper(final RocksIterator iterator) {
+      this.iterator = iterator;
+      iterator.seekToFirst();
+    }
+
+    @Override
+    public boolean hasNext() {
+      return iterator.isValid();
+    }
+
+    @Override
+    public R next() {
+      if (!hasNext()) {
+        throw new IllegalStateException("next() called on rocksDB with no more valid entries");
+      }
+      R val = SerializationUtils.deserialize(iterator.value());
+      iterator.next();
+      return val;
+    }
   }
 
   /**

@@ -1,7 +1,9 @@
 # Directories #
 /build/
 target/
- 
+metastore_db/
+.mvn/
+
 # OS Files #
 .DS_Store
  
@@ -61,7 +63,8 @@ local.properties
 # IntelliJ specific files/directories #
 #######################################
 .out
-.idea
+.idea/*
+!.idea/vcs.xml
 *.ipr
 *.iws
 *.iml

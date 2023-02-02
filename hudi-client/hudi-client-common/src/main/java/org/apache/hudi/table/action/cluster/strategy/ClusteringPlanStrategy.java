@@ -25,13 +25,15 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -47,7 +49,7 @@ import java.util.stream.Stream;
 /**
  * Pluggable implementation for scheduling clustering and creating ClusteringPlan.
  */
-public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O> implements Serializable {
+public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
   private static final Logger LOG = LogManager.getLogger(ClusteringPlanStrategy.class);
 
   public static final int CLUSTERING_PLAN_VERSION_1 = 1;
@@ -55,6 +57,37 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
   private final HoodieTable<T,I,K,O> hoodieTable;
   private final transient HoodieEngineContext engineContext;
   private final HoodieWriteConfig writeConfig;
+
+  /**
+   * Check if the given class is deprecated.
+   * If it is, then try to convert it to suitable one and update the write config accordingly.
+   * @param config write config
+   * @return class name of clustering plan strategy
+   */
+  public static String checkAndGetClusteringPlanStrategy(HoodieWriteConfig config) {
+    String className = config.getClusteringPlanStrategyClass();
+    String sparkSizeBasedClassName = HoodieClusteringConfig.SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+    String sparkSelectedPartitionsClassName = "org.apache.hudi.client.clustering.plan.strategy.SparkSelectedPartitionsClusteringPlanStrategy";
+    String sparkRecentDaysClassName = "org.apache.hudi.client.clustering.plan.strategy.SparkRecentDaysClusteringPlanStrategy";
+    String javaSelectedPartitionClassName = "org.apache.hudi.client.clustering.plan.strategy.JavaRecentDaysClusteringPlanStrategy";
+    String javaSizeBasedClassName = HoodieClusteringConfig.JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+
+    String logStr = "The clustering plan '%s' is deprecated. Please set the plan as '%s' and set '%s' as '%s' to achieve the same behaviour";
+    if (sparkRecentDaysClassName.equals(className)) {
+      config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.RECENT_DAYS.name());
+      LOG.warn(String.format(logStr, className, sparkSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.RECENT_DAYS.name()));
+      return sparkSizeBasedClassName;
+    } else if (sparkSelectedPartitionsClassName.equals(className)) {
+      config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
+      LOG.warn(String.format(logStr, className, sparkSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name()));
+      return sparkSizeBasedClassName;
+    } else if (javaSelectedPartitionClassName.equals(className)) {
+      config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.RECENT_DAYS.name());
+      LOG.warn(String.format(logStr, className, javaSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name()));
+      return javaSizeBasedClassName;
+    }
+    return className;
+  }
 
   public ClusteringPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     this.writeConfig = writeConfig;
@@ -71,18 +104,26 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
   public abstract Option<HoodieClusteringPlan> generateClusteringPlan();
 
   /**
+   * Check if the clustering can proceed. If not (i.e., return false), the PlanStrategy will generate an empty plan to stop the scheduling.
+   */
+  public boolean checkPrecondition() {
+    return true;
+  }
+
+  /**
    * Return file slices eligible for clustering. FileIds in pending clustering/compaction are not eligible for clustering.
    */
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(String partition) {
     SyncableFileSystemView fileSystemView = (SyncableFileSystemView) getHoodieTable().getSliceView();
-    Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering = fileSystemView.getPendingCompactionOperations()
-        .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
-        .collect(Collectors.toSet());
-    fgIdsInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet()));
+    Set<HoodieFileGroupId> fgIdsInPendingCompactionLogCompactionAndClustering =
+        Stream.concat(fileSystemView.getPendingCompactionOperations(), fileSystemView.getPendingLogCompactionOperations())
+            .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
+            .collect(Collectors.toSet());
+    fgIdsInPendingCompactionLogCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet()));
 
     return hoodieTable.getSliceView().getLatestFileSlices(partition)
         // file ids already in clustering are not eligible
-        .filter(slice -> !fgIdsInPendingCompactionAndClustering.contains(slice.getFileGroupId()));
+        .filter(slice -> !fgIdsInPendingCompactionLogCompactionAndClustering.contains(slice.getFileGroupId()));
   }
 
   /**
@@ -128,7 +169,7 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
     return metrics;
   }
 
-  protected HoodieTable<T,I,K, O> getHoodieTable() {
+  protected HoodieTable<T, I, K, O> getHoodieTable() {
     return this.hoodieTable;
   }
 

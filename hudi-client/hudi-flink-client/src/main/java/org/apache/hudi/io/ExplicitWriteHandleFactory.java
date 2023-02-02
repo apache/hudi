@@ -19,16 +19,15 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 /**
  * Create handle factory for Flink writer, use the specified write handle directly.
  */
-public class ExplicitWriteHandleFactory<T extends HoodieRecordPayload, I, K, O>
+public class ExplicitWriteHandleFactory<T, I, K, O>
     extends WriteHandleFactory<T, I, K, O> {
-  private HoodieWriteHandle<T, I, K, O> writeHandle;
+  private final HoodieWriteHandle<T, I, K, O> writeHandle;
 
   public ExplicitWriteHandleFactory(HoodieWriteHandle<T, I, K, O> writeHandle) {
     this.writeHandle = writeHandle;
@@ -39,6 +38,10 @@ public class ExplicitWriteHandleFactory<T extends HoodieRecordPayload, I, K, O>
       HoodieWriteConfig hoodieConfig, String commitTime,
       HoodieTable<T, I, K, O> hoodieTable, String partitionPath,
       String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
+    return writeHandle;
+  }
+
+  public HoodieWriteHandle<T, I, K, O> getWriteHandle() {
     return writeHandle;
   }
 }

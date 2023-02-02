@@ -16,18 +16,26 @@
  */
 
 package org.apache.spark.sql.execution.datasources
+
 import java.util.TimeZone
 
 import org.apache.hadoop.fs.Path
-import org.apache.spark.sql.execution.datasources.PartitioningUtils.PartitionValues
-import org.apache.spark.sql.types.DataType
 
-class Spark2ParsePartitionUtil extends SparkParsePartitionUtil {
-  override def parsePartition(path: Path, typeInference: Boolean,
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.catalyst.InternalRow
+
+object Spark2ParsePartitionUtil extends SparkParsePartitionUtil {
+
+  override def parsePartition(path: Path,
+                              typeInference: Boolean,
                               basePaths: Set[Path],
                               userSpecifiedDataTypes: Map[String, DataType],
-                              timeZone: TimeZone): Option[PartitionValues] = {
-    PartitioningUtils.parsePartition(path, typeInference,
-      basePaths, userSpecifiedDataTypes, timeZone)._1
+                              timeZone: TimeZone,
+                              validatePartitionValues: Boolean = false): InternalRow = {
+    val (partitionValues, _) = PartitioningUtils.parsePartition(path, typeInference,
+      basePaths, userSpecifiedDataTypes, timeZone)
+
+    partitionValues.map(_.literals.map(_.value)).map(InternalRow.fromSeq)
+      .getOrElse(InternalRow.empty)
   }
 }

@@ -18,10 +18,9 @@
 
 package org.apache.hudi.integ.testsuite;
 
-import org.apache.avro.Schema;
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -43,11 +42,13 @@ import org.apache.hudi.integ.testsuite.helpers.ZookeeperServiceProvider;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -60,6 +61,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * This is the entry point for running a Hudi Test Suite. Although this class has similarities with {@link HoodieDeltaStreamer} this class does not extend it since do not want to create a dependency
@@ -91,26 +95,36 @@ public class HoodieTestSuiteJob {
    */
   private transient HiveConf hiveConf;
 
+  private boolean stopJsc = true;
   private BuiltinKeyGenerator keyGenerator;
   private transient HoodieTableMetaClient metaClient;
 
   public HoodieTestSuiteJob(HoodieTestSuiteConfig cfg, JavaSparkContext jsc) throws IOException {
+    this(cfg, jsc, true);
+  }
+
+  public HoodieTestSuiteJob(HoodieTestSuiteConfig cfg, JavaSparkContext jsc, boolean stopJsc) throws IOException {
     log.warn("Running spark job w/ app id " + jsc.sc().applicationId());
     this.cfg = cfg;
     this.jsc = jsc;
+    this.stopJsc = stopJsc;
     cfg.propsFilePath = FSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
-    this.sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
+    this.sparkSession = SparkSession.builder().config(jsc.getConf()).enableHiveSupport().getOrCreate();
     this.fs = FSUtils.getFs(cfg.inputBasePath, jsc.hadoopConfiguration());
-    this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+    this.props = UtilHelpers.readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps();
     log.info("Creating workload generator with configs : {}", props.toString());
     this.hiveConf = getDefaultHiveConf(jsc.hadoopConfiguration());
-    this.keyGenerator = (BuiltinKeyGenerator) DataSourceUtils.createKeyGenerator(props);
+    this.keyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
-    metaClient = HoodieTableMetaClient.withPropertyBuilder()
-        .setTableType(cfg.tableType)
-        .setTableName(cfg.targetTableName)
-        .setArchiveLogFolder("archived")
-        .initTable(jsc.hadoopConfiguration(), cfg.targetBasePath);
+    if (!fs.exists(new Path(cfg.targetBasePath))) {
+      metaClient = HoodieTableMetaClient.withPropertyBuilder()
+          .setTableType(cfg.tableType)
+          .setTableName(cfg.targetTableName)
+          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
+          .initTable(jsc.hadoopConfiguration(), cfg.targetBasePath);
+    } else {
+      metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.targetBasePath).build();
+    }
 
     if (cfg.cleanInput) {
       Path inputPath = new Path(cfg.inputBasePath);
@@ -165,24 +179,25 @@ public class HoodieTestSuiteJob {
 
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("workload-generator-" + cfg.outputTypeName
         + "-" + cfg.inputFormatName, cfg.sparkMaster);
-    new HoodieTestSuiteJob(cfg, jssc).runTestSuite();
+    new HoodieTestSuiteJob(cfg, jssc, true).runTestSuite();
   }
 
   public WorkflowDag createWorkflowDag() throws IOException {
     WorkflowDag workflowDag = this.cfg.workloadYamlPath == null ? ((WorkflowDagGenerator) ReflectionUtils
         .loadClass((this.cfg).workloadDagGenerator)).build()
         : DagUtils.convertYamlPathToDag(
-            FSUtils.getFs(this.cfg.workloadYamlPath, jsc.hadoopConfiguration(), true),
-            this.cfg.workloadYamlPath);
+        FSUtils.getFs(this.cfg.workloadYamlPath, jsc.hadoopConfiguration(), true),
+        this.cfg.workloadYamlPath);
     return workflowDag;
   }
 
   public void runTestSuite() {
+    WriterContext writerContext = null;
     try {
       WorkflowDag workflowDag = createWorkflowDag();
       log.info("Workflow Dag => " + DagUtils.convertDagToYaml(workflowDag));
       long startTime = System.currentTimeMillis();
-      WriterContext writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
+      writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
       writerContext.initContext(jsc);
       startOtherServicesIfNeeded(writerContext);
       if (this.cfg.saferSchemaEvolution) {
@@ -205,11 +220,16 @@ public class HoodieTestSuiteJob {
       log.error("Failed to run Test Suite ", e);
       throw new HoodieException("Failed to run Test Suite ", e);
     } finally {
-      stopQuietly();
+      if (writerContext != null) {
+        writerContext.shutdownResources();
+      }
+      if (stopJsc) {
+        stopQuietly();
+      }
     }
   }
 
-  private void stopQuietly() {
+  protected void stopQuietly() {
     try {
       sparkSession.stop();
       jsc.stop();
@@ -293,5 +313,42 @@ public class HoodieTestSuiteJob {
 
     @Parameter(names = {"--start-hive-metastore"}, description = "Start Hive Metastore to use for optimistic lock ")
     public Boolean startHiveMetastore = false;
+
+    @Parameter(names = {"--use-hudi-data-to-generate-updates"}, description = "Use data from hudi to generate updates for new batches ")
+    public Boolean useHudiToGenerateUpdates = false;
+
+    @Parameter(names = {"--test-continuous-mode"}, description = "Tests continuous mode in deltastreamer.")
+    public Boolean testContinousMode = false;
+
+    @Parameter(names = {"--enable-presto-validation"}, description = "Enables presto validation")
+    public Boolean enablePrestoValidation = false;
+
+    @Parameter(names = {"--presto-jdbc-url"}, description = "Presto JDBC URL in the format jdbc:presto://<host>:<port>/<catalog>/<schema>  "
+        + "e.g. URL to connect to Presto running on localhost port 8080 with the catalog `hive` and the schema `sales`: "
+        + "jdbc:presto://localhost:8080/hive/sales")
+    public String prestoJdbcUrl = EMPTY_STRING;
+
+    @Parameter(names = {"--presto-jdbc-username"}, description = "Username to use for authentication")
+    public String prestoUsername = "test";
+
+    @Parameter(names = {"--presto-jdbc-password"}, description = "Password corresponding to the username to use for authentication")
+    public String prestoPassword;
+
+    @Parameter(names = {"--trino-jdbc-url"}, description = "Trino JDBC URL in the format jdbc:trino://<host>:<port>/<catalog>/<schema>  "
+        + "e.g. URL to connect to Trino running on localhost port 8080 with the catalog `hive` and the schema `sales`: "
+        + "jdbc:trino://localhost:8080/hive/sales")
+    public String trinoJdbcUrl = EMPTY_STRING;
+
+    @Parameter(names = {"--trino-jdbc-username"}, description = "Username to use for authentication")
+    public String trinoUsername = "test";
+
+    @Parameter(names = {"--trino-jdbc-password"}, description = "Password corresponding to the username to use for authentication")
+    public String trinoPassword;
+
+    @Parameter(names = {"--index-type"}, description = "Index type to use for writes")
+    public String indexType = "SIMPLE";
+
+    @Parameter(names = {"--enable-metadata-on-read"}, description = "Enable's metadata for queries")
+    public Boolean enableMetadataOnRead = HoodieMetadataConfig.ENABLE.defaultValue();
   }
 }

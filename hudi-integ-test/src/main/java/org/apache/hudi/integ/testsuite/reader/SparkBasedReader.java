@@ -18,17 +18,19 @@
 
 package org.apache.hudi.integ.testsuite.reader;
 
-import java.util.List;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import scala.collection.JavaConverters;
 
+import java.util.List;
+
+import scala.collection.JavaConverters;
 
 /**
  * Helper class to read avro and/or parquet files and generate a RDD of {@link GenericRecord}.
@@ -51,7 +53,7 @@ public class SparkBasedReader {
 
     return HoodieSparkUtils
         .createRdd(dataSet.toDF(), structName.orElse(RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME),
-            nameSpace.orElse(RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE))
+            nameSpace.orElse(RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE), false, Option.empty())
         .toJavaRDD();
   }
 
@@ -63,8 +65,21 @@ public class SparkBasedReader {
 
     return HoodieSparkUtils
         .createRdd(dataSet.toDF(), structName.orElse(RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME),
-            RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE)
+            RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE, false, Option.empty())
         .toJavaRDD();
+  }
+
+  public static JavaRDD<GenericRecord> readOrc(SparkSession sparkSession, List<String>
+      listOfPaths, Option<String> structName, Option<String> nameSpace) {
+
+    Dataset<Row> dataSet = sparkSession.read()
+        .orc((JavaConverters.asScalaIteratorConverter(listOfPaths.iterator()).asScala().toSeq()));
+
+    return HoodieSparkUtils.createRdd(dataSet.toDF(),
+        structName.orElse(RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME),
+        RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE,
+        false, Option.empty()
+    ).toJavaRDD();
   }
 
 }

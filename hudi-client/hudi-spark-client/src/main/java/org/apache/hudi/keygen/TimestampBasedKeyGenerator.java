@@ -23,12 +23,15 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Objects;
 
-import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH;
-import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
-import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
+import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 
 /**
  * Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
@@ -38,8 +41,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   private final TimestampBasedAvroKeyGenerator timestampBasedAvroKeyGenerator;
 
   public TimestampBasedKeyGenerator(TypedProperties config) throws IOException {
-    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY),
-        config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY));
+    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
+        config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 
   TimestampBasedKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
@@ -58,25 +61,44 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    buildFieldPositionMapIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, false);
+    tryInitRowAccessor(row.schema());
+    return combineRecordKey(getRecordKeyFieldNames(), Arrays.asList(rowAccessor.getRecordKeyParts(row)));
+  }
+
+  @Override
+  public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
+    tryInitRowAccessor(schema);
+    return combineRecordKeyUnsafe(getRecordKeyFieldNames(), Arrays.asList(rowAccessor.getRecordKeyParts(internalRow)));
   }
 
   @Override
   public String getPartitionPath(Row row) {
-    Object fieldVal = null;
-    buildFieldPositionMapIfNeeded(row.schema());
-    Object partitionPathFieldVal = RowKeyGeneratorHelper.getNestedFieldVal(row, partitionPathPositions.get(getPartitionPathFields().get(0)));
+    tryInitRowAccessor(row.schema());
+    Object[] partitionPathValues = rowAccessor.getRecordPartitionPathValues(row);
+    return getFormattedPartitionPath(partitionPathValues[0]);
+  }
+
+  @Override
+  public UTF8String getPartitionPath(InternalRow row, StructType schema) {
+    tryInitRowAccessor(schema);
+    Object[] partitionPathValues = rowAccessor.getRecordPartitionPathValues(row);
+    return UTF8String.fromString(getFormattedPartitionPath(partitionPathValues[0]));
+  }
+
+  private String getFormattedPartitionPath(Object partitionPathPart) {
+    Object fieldVal;
+    if (partitionPathPart == null || Objects.equals(partitionPathPart, HUDI_DEFAULT_PARTITION_PATH)) {
+      fieldVal = timestampBasedAvroKeyGenerator.getDefaultPartitionVal();
+    } else if (partitionPathPart instanceof UTF8String) {
+      fieldVal = partitionPathPart.toString();
+    } else {
+      fieldVal = partitionPathPart;
+    }
+
     try {
-      if (partitionPathFieldVal == null || partitionPathFieldVal.toString().contains(DEFAULT_PARTITION_PATH) || partitionPathFieldVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER)
-          || partitionPathFieldVal.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
-        fieldVal = timestampBasedAvroKeyGenerator.getDefaultPartitionVal();
-      } else {
-        fieldVal = partitionPathFieldVal;
-      }
       return timestampBasedAvroKeyGenerator.getPartitionPath(fieldVal);
     } catch (Exception e) {
-      throw new HoodieKeyGeneratorException("Unable to parse input partition field :" + fieldVal, e);
+      throw new HoodieKeyGeneratorException(String.format("Failed to properly format partition-path (%s)", fieldVal), e);
     }
   }
 }

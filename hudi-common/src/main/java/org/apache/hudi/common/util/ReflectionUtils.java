@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.log4j.LogManager;
@@ -27,6 +26,7 @@ import org.apache.log4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -45,38 +45,27 @@ public class ReflectionUtils {
 
   private static final Logger LOG = LogManager.getLogger(ReflectionUtils.class);
 
-  private static Map<String, Class<?>> clazzCache = new HashMap<>();
+  private static final Map<String, Class<?>> CLAZZ_CACHE = new HashMap<>();
 
   public static Class<?> getClass(String clazzName) {
-    if (!clazzCache.containsKey(clazzName)) {
-      try {
-        Class<?> clazz = Class.forName(clazzName, true,
-                Thread.currentThread().getContextClassLoader());
-        clazzCache.put(clazzName, clazz);
-      } catch (ClassNotFoundException e) {
-        throw new HoodieException("Unable to load class", e);
+    synchronized (CLAZZ_CACHE) {
+      if (!CLAZZ_CACHE.containsKey(clazzName)) {
+        try {
+          Class<?> clazz = Class.forName(clazzName);
+          CLAZZ_CACHE.put(clazzName, clazz);
+        } catch (ClassNotFoundException e) {
+          throw new HoodieException("Unable to load class", e);
+        }
       }
     }
-    return clazzCache.get(clazzName);
+    return CLAZZ_CACHE.get(clazzName);
   }
 
-  public static <T> T loadClass(String fqcn) {
+  public static <T> T loadClass(String className) {
     try {
-      return (T) getClass(fqcn).newInstance();
+      return (T) getClass(className).newInstance();
     } catch (InstantiationException | IllegalAccessException e) {
-      throw new HoodieException("Could not load class " + fqcn, e);
-    }
-  }
-
-  /**
-   * Instantiate a given class with a generic record payload.
-   */
-  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, Object[] payloadArgs,
-      Class<?>... constructorArgTypes) {
-    try {
-      return (T) getClass(recordPayloadClass).getConstructor(constructorArgTypes).newInstance(payloadArgs);
-    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-      throw new HoodieException("Unable to instantiate payload class ", e);
+      throw new HoodieException("Could not load class " + className, e);
     }
   }
 
@@ -87,7 +76,25 @@ public class ReflectionUtils {
     try {
       return getClass(clazz).getConstructor(constructorArgTypes).newInstance(constructorArgs);
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-      throw new HoodieException("Unable to instantiate class ", e);
+      throw new HoodieException("Unable to instantiate class " + clazz, e);
+    }
+  }
+
+  /**
+   * Check if the clazz has the target constructor or not.
+   *
+   * When catch {@link HoodieException} from {@link #loadClass}, it's inconvenient to say if the exception was thrown
+   * due to the instantiation's own logic or missing constructor.
+   *
+   * TODO: ReflectionUtils should throw a specific exception to indicate Reflection problem.
+   */
+  public static boolean hasConstructor(String clazz, Class<?>[] constructorArgTypes) {
+    try {
+      getClass(clazz).getConstructor(constructorArgTypes);
+      return true;
+    } catch (NoSuchMethodException e) {
+      LOG.warn("Unable to instantiate class " + clazz, e);
+      return false;
     }
   }
 
@@ -153,5 +160,45 @@ public class ReflectionUtils {
       }
     }
     return classes;
+  }
+
+  /**
+   * Returns whether the given two comparable values come from the same runtime class.
+   */
+  public static boolean isSameClass(Comparable<?> v, Comparable<?> o) {
+    return v.getClass() == o.getClass();
+  }
+
+  /**
+   * Invoke a static method of a class.
+   * @param clazz
+   * @param methodName
+   * @param args
+   * @param parametersType
+   * @return the return value of the method
+   */
+  public static Object invokeStaticMethod(String clazz, String methodName, Object[] args, Class<?>... parametersType) {
+    try {
+      Method method = Class.forName(clazz).getMethod(methodName, parametersType);
+      return method.invoke(null, args);
+    } catch (ClassNotFoundException e) {
+      throw new HoodieException("Unable to find the class " + clazz, e);
+    } catch (NoSuchMethodException e) {
+      throw new HoodieException(String.format("Unable to find the method %s of the class %s ",  methodName, clazz), e);
+    } catch (InvocationTargetException | IllegalAccessException e) {
+      throw new HoodieException(String.format("Unable to invoke the methond %s of the class %s ",  methodName, clazz), e);
+    }
+  }
+
+  /**
+   * Checks if the given class with the name is a subclass of another class.
+   *
+   * @param aClazzName Class name.
+   * @param superClazz Super class to check.
+   * @return {@code true} if {@code aClazzName} is a subclass of {@code superClazz};
+   * {@code false} otherwise.
+   */
+  public static boolean isSubClass(String aClazzName, Class<?> superClazz) {
+    return superClazz.isAssignableFrom(getClass(aClazzName));
   }
 }

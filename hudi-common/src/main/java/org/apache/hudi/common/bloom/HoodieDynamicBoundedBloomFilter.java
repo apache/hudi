@@ -63,7 +63,7 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
    * @param serString the serialized string which represents the {@link HoodieDynamicBoundedBloomFilter}
    * @param typeCode  type code of the bloom filter
    */
-  HoodieDynamicBoundedBloomFilter(String serString, BloomFilterTypeCode typeCode) {
+  public HoodieDynamicBoundedBloomFilter(String serString, BloomFilterTypeCode typeCode) {
     // ignoring the type code for now, since we have just one version
     byte[] bytes = Base64CodecUtil.decode(serString);
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
@@ -78,7 +78,12 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
 
   @Override
   public void add(String key) {
-    internalDynamicBloomFilter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    add(key.getBytes(StandardCharsets.UTF_8));
+  }
+
+  @Override
+  public void add(byte[] keyBytes) {
+    internalDynamicBloomFilter.add(new Key(keyBytes));
   }
 
   @Override

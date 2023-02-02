@@ -21,12 +21,12 @@ package org.apache.hudi.common.bootstrap.index;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ReflectionUtils;
 
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.ReflectionUtils;
 
 /**
  * Bootstrap Index Interface.
@@ -161,6 +161,6 @@ public abstract class BootstrapIndex implements Serializable {
 
   public static BootstrapIndex getBootstrapIndex(HoodieTableMetaClient metaClient) {
     return ((BootstrapIndex)(ReflectionUtils.loadClass(
-        metaClient.getTableConfig().getBootstrapIndexClass(), metaClient)));
+        metaClient.getTableConfig().getBootstrapIndexClass(), new Class[]{HoodieTableMetaClient.class}, metaClient)));
   }
 }

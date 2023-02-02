@@ -42,9 +42,10 @@ public class TestHoodieRecord {
 
   @BeforeEach
   public void setUp() throws Exception {
-    final List<IndexedRecord> indexedRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1);
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    final List<IndexedRecord> indexedRecords = testUtil.generateHoodieTestRecords(0, 1);
     final List<HoodieRecord> hoodieRecords =
-        indexedRecords.stream().map(r -> new HoodieRecord(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+        indexedRecords.stream().map(r -> new HoodieAvroRecord(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
             new AvroBinaryTestPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
     hoodieRecord = hoodieRecords.get(0);
   }

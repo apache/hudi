@@ -20,37 +20,46 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
-
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @SuppressWarnings("unchecked")
 public class TestHoodieMergeHandle extends HoodieClientTestHarness {
@@ -69,16 +78,24 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
     cleanupResources();
   }
 
-  @Test
-  public void testUpsertsForMultipleRecordsInSameFile() throws Exception {
+  @ParameterizedTest
+  @MethodSource("testArguments")
+  public void testUpsertsForMultipleRecordsInSameFile(ExternalSpillableMap.DiskMapType diskMapType,
+                                                      boolean isCompressionEnabled) throws Exception {
     // Create records in a single partition
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
     dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
 
+    // Build a common config with diff configs
+    Properties properties = new Properties();
+    properties.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), diskMapType.name());
+    properties.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), String.valueOf(isCompressionEnabled));
+
     // Build a write config with bulkinsertparallelism set
-    HoodieWriteConfig cfg = getConfigBuilder().build();
+    HoodieWriteConfig cfg = getConfigBuilder()
+        .withProperties(properties)
+        .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
-      FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
 
       /**
        * Write 1 (only inserts) This will do a bulk insert of 44 records of which there are 2 records repeated 21 times
@@ -186,6 +203,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       // Check the entire dataset has 47 records still
       dataSet = getRecords();
       assertEquals(47, dataSet.count(), "Must contain 47 records");
+
       Row[] rows = (Row[]) dataSet.collect();
       int record1Count = 0;
       int record2Count = 0;
@@ -212,13 +230,38 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       // Assert that id2 record count which has been updated to rider-004 and driver-004 is 21, which is the total
       // number of records with row_key id2
       assertEquals(21, record2Count);
+
+      // Validate that all the records only reference the _latest_ base files as part of the
+      // FILENAME_METADATA_FIELD payload (entailing that corresponding metadata is in-sync with
+      // the state of the table
+      HoodieTableFileSystemView tableView =
+          getHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), HoodieTestTable.of(metaClient).listAllBaseFiles());
+
+      Set<String> latestBaseFileNames = tableView.getLatestBaseFiles()
+          .map(BaseFile::getFileName)
+          .collect(Collectors.toSet());
+
+      Set<Object> metadataFilenameFieldRefs = dataSet.collectAsList().stream()
+          .map(row -> row.getAs(HoodieRecord.FILENAME_METADATA_FIELD))
+          .collect(Collectors.toSet());
+
+      assertEquals(latestBaseFileNames, metadataFilenameFieldRefs);
     }
   }
 
-  @Test
-  public void testHoodieMergeHandleWriteStatMetrics() throws Exception {
+  @ParameterizedTest
+  @MethodSource("testArguments")
+  public void testHoodieMergeHandleWriteStatMetrics(ExternalSpillableMap.DiskMapType diskMapType,
+                                                    boolean isCompressionEnabled) throws Exception {
     // insert 100 records
-    HoodieWriteConfig config = getConfigBuilder().build();
+    // Build a common config with diff configs
+    Properties properties = new Properties();
+    properties.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), diskMapType.name());
+    properties.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), String.valueOf(isCompressionEnabled));
+
+    HoodieWriteConfig config = getConfigBuilder()
+        .withProperties(properties)
+        .build();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
@@ -315,6 +358,16 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .withBulkInsertParallelism(2).withWriteStatusClass(TestWriteStatus.class);
+  }
+
+  private static Stream<Arguments> testArguments() {
+    // Arg1: ExternalSpillableMap Type, Arg2: isDiskMapCompressionEnabled
+    return Stream.of(
+        arguments(ExternalSpillableMap.DiskMapType.BITCASK, false),
+        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, false),
+        arguments(ExternalSpillableMap.DiskMapType.BITCASK, true),
+        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, true)
+    );
   }
 
   /**

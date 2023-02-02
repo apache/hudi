@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+
 import org.apache.flink.api.java.hadoop.mapred.utils.HadoopUtils;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -30,11 +32,10 @@ import java.io.File;
 public class FlinkClientUtil {
 
   /**
-   * Parses the file name from path.
+   * Creates the meta client.
    */
-  public static String parseFileName(String path) {
-    int slash = path.lastIndexOf(Path.SEPARATOR);
-    return path.substring(slash + 1);
+  public static HoodieTableMetaClient createMetaClient(String basePath) {
+    return HoodieTableMetaClient.builder().setBasePath(basePath).setConf(FlinkClientUtil.getHadoopConf()).build();
   }
 
   /**

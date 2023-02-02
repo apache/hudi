@@ -18,6 +18,7 @@
 
 package org.apache.hudi.timeline.service.functional;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -27,10 +28,16 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TestHoodieTableFileSystemView;
+import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.timeline.service.TimelineService;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Bring up a remote Timeline Server and run all test-cases of TestHoodieTableFileSystemView against it.
@@ -46,11 +53,13 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     FileSystemViewStorageConfig sConf =
         FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
+    HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
 
     try {
-      server = new TimelineService(0,
-          FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf));
+      server = new TimelineService(localEngineContext, new Configuration(),
+          TimelineService.Config.builder().serverPort(0).build(), FileSystem.get(new Configuration()),
+          FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
       server.startService();
     } catch (Exception ex) {
       throw new RuntimeException(ex);
@@ -58,5 +67,47 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     LOG.info("Connecting to Timeline Server :" + server.getServerPort());
     view = new RemoteHoodieTableFileSystemView("localhost", server.getServerPort(), metaClient);
     return view;
+  }
+
+  @Test
+  public void testRemoteHoodieTableFileSystemViewWithRetry() {
+    // Service is available.
+    view.getLatestBaseFiles();
+    // Shut down the service.
+    server.close();
+    try {
+      // Immediately fails and throws a connection refused exception.
+      view.getLatestBaseFiles();
+      fail("Should be catch Exception 'Connection refused (Connection refused)'");
+    } catch (HoodieRemoteException e) {
+      assert e.getMessage().contains("Connection refused (Connection refused)");
+    }
+    // Enable API request retry for remote file system view.
+    view =  new RemoteHoodieTableFileSystemView(metaClient, FileSystemViewStorageConfig
+            .newBuilder()
+            .withRemoteServerHost("localhost")
+            .withRemoteServerPort(server.getServerPort())
+            .withRemoteTimelineClientRetry(true)
+            .withRemoteTimelineClientMaxRetryIntervalMs(2000L)
+            .withRemoteTimelineClientMaxRetryNumbers(4)
+            .build());
+    try {
+      view.getLatestBaseFiles();
+      fail("Should be catch Exception 'Connection refused (Connection refused)'");
+    } catch (HoodieRemoteException e) {
+      assert e.getMessage().contains("Connection refused (Connection refused)");
+    }
+    // Retry succeed after 2 or 3 tries.
+    new Thread(() -> {
+      try {
+        Thread.sleep(5000L);
+        LOG.info("Restart server.");
+        server.startService();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }).run();
+    view.getLatestBaseFiles();
+    server.close();
   }
 }

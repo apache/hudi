@@ -20,20 +20,24 @@ package org.apache.hudi.table.action.cluster.strategy;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.table.HoodieTable;
 
+import java.io.Serializable;
 import java.util.Set;
 
 /**
  * When file groups in clustering, write records to these file group need to check.
  */
-public abstract class UpdateStrategy<T extends HoodieRecordPayload<T>, I> {
+public abstract class UpdateStrategy<T, I> implements Serializable {
 
-  protected final HoodieEngineContext engineContext;
-  protected Set<HoodieFileGroupId> fileGroupsInPendingClustering;
+  protected final transient HoodieEngineContext engineContext;
+  protected final HoodieTable table;
+  protected final Set<HoodieFileGroupId> fileGroupsInPendingClustering;
 
-  protected UpdateStrategy(HoodieEngineContext engineContext, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
+  public UpdateStrategy(HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
     this.engineContext = engineContext;
+    this.table = table;
     this.fileGroupsInPendingClustering = fileGroupsInPendingClustering;
   }
 
@@ -41,8 +45,8 @@ public abstract class UpdateStrategy<T extends HoodieRecordPayload<T>, I> {
    * Check the update records to the file group in clustering.
    * @param taggedRecordsRDD the records to write, tagged with target file id,
    *                         future can update tagged records location to a different fileId.
-   * @return the recordsRDD strategy updated
+   * @return the recordsRDD strategy updated and a set of file groups to be updated while pending clustering.
    */
-  public abstract I handleUpdate(I taggedRecordsRDD);
+  public abstract Pair<I, Set<HoodieFileGroupId>> handleUpdate(I taggedRecordsRDD);
 
 }

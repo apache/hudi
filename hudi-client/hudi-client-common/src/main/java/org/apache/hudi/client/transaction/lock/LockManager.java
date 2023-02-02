@@ -18,23 +18,25 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP;
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP;
+import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
+import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.config.HoodieLockConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieLockException;
+
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.lock.LockProvider;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieLockException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
 
 /**
  * This class wraps implementations of {@link LockProvider} and provides an easy way to manage the lifecycle of a lock.
@@ -45,15 +47,24 @@ public class LockManager implements Serializable, AutoCloseable {
   private final HoodieWriteConfig writeConfig;
   private final LockConfiguration lockConfiguration;
   private final SerializableConfiguration hadoopConf;
+  private final int maxRetries;
+  private final long maxWaitTimeInMs;
+  private transient HoodieLockMetrics metrics;
   private volatile LockProvider lockProvider;
-  // Holds the latest completed write instant to know which ones to check conflict against
-  private final AtomicReference<Option<HoodieInstant>> latestCompletedWriteInstant;
 
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs) {
-    this.latestCompletedWriteInstant = new AtomicReference<>(Option.empty());
+    this(writeConfig, fs, writeConfig.getProps());
+  }
+
+  public LockManager(HoodieWriteConfig writeConfig, FileSystem fs, TypedProperties lockProps) {
     this.writeConfig = writeConfig;
     this.hadoopConf = new SerializableConfiguration(fs.getConf());
-    this.lockConfiguration = new LockConfiguration(writeConfig.getProps());
+    this.lockConfiguration = new LockConfiguration(lockProps);
+    maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
+        Integer.parseInt(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.defaultValue()));
+    maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
+        Long.parseLong(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS.defaultValue()));
+    metrics = new HoodieLockMetrics(writeConfig);
   }
 
   public void lock() {
@@ -61,21 +72,29 @@ public class LockManager implements Serializable, AutoCloseable {
       LockProvider lockProvider = getLockProvider();
       int retryCount = 0;
       boolean acquired = false;
-      int retries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP);
-      long waitTimeInMs = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP);
-      while (retryCount <= retries) {
+      while (retryCount <= maxRetries) {
         try {
+          metrics.startLockApiTimerContext();
           acquired = lockProvider.tryLock(writeConfig.getLockAcquireWaitTimeoutInMs(), TimeUnit.MILLISECONDS);
           if (acquired) {
+            metrics.updateLockAcquiredMetric();
             break;
           }
-          LOG.info("Retrying to acquire lock...");
-          Thread.sleep(waitTimeInMs);
-          retryCount++;
-        } catch (InterruptedException e) {
-          if (retryCount >= retries) {
-            throw new HoodieLockException("Unable to acquire lock, lock object ", e);
+          metrics.updateLockNotAcquiredMetric();
+          LOG.info("Retrying to acquire lock. Current lock owner information : " + lockProvider.getCurrentOwnerLockInfo());
+          Thread.sleep(maxWaitTimeInMs);
+        } catch (HoodieLockException | InterruptedException e) {
+          metrics.updateLockNotAcquiredMetric();
+          if (retryCount >= maxRetries) {
+            throw new HoodieLockException("Unable to acquire lock, lock object " + lockProvider.getLock(), e);
           }
+          try {
+            Thread.sleep(maxWaitTimeInMs);
+          } catch (InterruptedException ex) {
+            // ignore InterruptedException here
+          }
+        } finally {
+          retryCount++;
         }
       }
       if (!acquired) {
@@ -84,9 +103,14 @@ public class LockManager implements Serializable, AutoCloseable {
     }
   }
 
+  /**
+   * We need to take care of the scenarios that current thread may not be the holder of this lock
+   * and tries to call unlock()
+   */
   public void unlock() {
     if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       getLockProvider().unlock();
+      metrics.updateLockHeldTimerMetrics();
     }
   }
 
@@ -98,22 +122,6 @@ public class LockManager implements Serializable, AutoCloseable {
           lockConfiguration, hadoopConf.get());
     }
     return lockProvider;
-  }
-
-  public void setLatestCompletedWriteInstant(Option<HoodieInstant> instant) {
-    this.latestCompletedWriteInstant.set(instant);
-  }
-
-  public void compareAndSetLatestCompletedWriteInstant(Option<HoodieInstant> expected, Option<HoodieInstant> newValue) {
-    this.latestCompletedWriteInstant.compareAndSet(expected, newValue);
-  }
-
-  public AtomicReference<Option<HoodieInstant>> getLatestCompletedWriteInstant() {
-    return latestCompletedWriteInstant;
-  }
-
-  public void resetLatestCompletedWriteInstant() {
-    this.latestCompletedWriteInstant.set(Option.empty());
   }
 
   @Override

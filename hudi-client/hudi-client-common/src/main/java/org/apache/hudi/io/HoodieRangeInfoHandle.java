@@ -18,9 +18,10 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
@@ -28,14 +29,23 @@ import java.io.IOException;
 /**
  * Extract range information for a given file slice.
  */
-public class HoodieRangeInfoHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T, I, K, O> {
+public class HoodieRangeInfoHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
       Pair<String, String> partitionPathFilePair) {
-    super(config, null, hoodieTable, partitionPathFilePair);
+    super(config, hoodieTable, partitionPathFilePair);
   }
 
   public String[] getMinMaxKeys() throws IOException {
-    return createNewFileReader().readMinMaxRecordKeys();
+    try (HoodieFileReader reader = createNewFileReader()) {
+      return reader.readMinMaxRecordKeys();
+    }
   }
+
+  public String[] getMinMaxKeys(HoodieBaseFile baseFile) throws IOException {
+    try (HoodieFileReader reader = createNewFileReader(baseFile)) {
+      return reader.readMinMaxRecordKeys();
+    }
+  }
+
 }

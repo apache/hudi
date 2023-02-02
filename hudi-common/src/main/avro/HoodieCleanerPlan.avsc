@@ -43,6 +43,11 @@
       "default" : null
     },
     {
+      "name": "lastCompletedCommitTimestamp",
+      "type": "string",
+      "default" : ""
+    },
+    {
       "name": "policy",
       "type": "string"
     },
@@ -92,6 +97,14 @@
           }
       }}],
       "default" : null
+    },
+    {
+      "name": "partitionsToBeDeleted",
+      "doc": "partitions to be deleted",
+      "type":["null",
+      { "type":"array", "items":"string"}
+      ],
+      "default": null
     }
   ]
 }

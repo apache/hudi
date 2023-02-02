@@ -18,11 +18,14 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -40,6 +43,7 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_E
 /**
  * Status of a write operation.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public class WriteStatus implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(WriteStatus.class);
@@ -73,6 +77,12 @@ public class WriteStatus implements Serializable {
     this.random = new Random(RANDOM_SEED);
   }
 
+  public WriteStatus() {
+    this.failureFraction = 0.0d;
+    this.trackSuccessRecords = false;
+    this.random = null;
+  }
+
   /**
    * Mark write as success, optionally using given parameters for the purpose of calculating some aggregate metrics.
    * This method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
@@ -90,9 +100,11 @@ public class WriteStatus implements Serializable {
     if (optionalRecordMetadata.isPresent()) {
       String eventTimeVal = optionalRecordMetadata.get().getOrDefault(METADATA_EVENT_TIME_KEY, null);
       try {
-        long eventTime = DateTimeUtils.parseDateTime(eventTimeVal).toEpochMilli();
-        stat.setMinEventTime(eventTime);
-        stat.setMaxEventTime(eventTime);
+        if (!StringUtils.isNullOrEmpty(eventTimeVal)) {
+          long eventTime = DateTimeUtils.parseDateTime(eventTimeVal).toEpochMilli();
+          stat.setMinEventTime(eventTime);
+          stat.setMaxEventTime(eventTime);
+        }
       } catch (DateTimeException | IllegalArgumentException e) {
         LOG.debug(String.format("Fail to parse event time value: %s", eventTimeVal), e);
       }
@@ -192,6 +204,7 @@ public class WriteStatus implements Serializable {
   public String toString() {
     final StringBuilder sb = new StringBuilder("WriteStatus {");
     sb.append("fileId=").append(fileId);
+    sb.append(", writeStat=").append(stat);
     sb.append(", globalError='").append(globalError).append('\'');
     sb.append(", hasErrors='").append(hasErrors()).append('\'');
     sb.append(", errorCount='").append(totalErrorRecords).append('\'');

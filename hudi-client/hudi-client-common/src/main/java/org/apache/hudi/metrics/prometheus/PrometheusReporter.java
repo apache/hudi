@@ -18,17 +18,17 @@
 
 package org.apache.hudi.metrics.prometheus;
 
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.MetricsReporter;
+
 import com.codahale.metrics.MetricRegistry;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.dropwizard.DropwizardExports;
 import io.prometheus.client.exporter.HTTPServer;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metrics.MetricsReporter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.Closeable;
 import java.net.InetSocketAddress;
 
 /**
@@ -63,11 +63,6 @@ public class PrometheusReporter extends MetricsReporter {
 
   @Override
   public void report() {
-  }
-
-  @Override
-  public Closeable getReporter() {
-    return null;
   }
 
   @Override

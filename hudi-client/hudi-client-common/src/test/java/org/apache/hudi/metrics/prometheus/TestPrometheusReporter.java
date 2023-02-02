@@ -46,10 +46,11 @@ public class TestPrometheusReporter {
   @Test
   public void testRegisterGauge() {
     when(config.isMetricsOn()).thenReturn(true);
+    when(config.getTableName()).thenReturn("foo");
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS);
     when(config.getPrometheusPort()).thenReturn(9090);
     assertDoesNotThrow(() -> {
-      new HoodieMetrics(config, "raw_table");
+      new HoodieMetrics(config);
     });
   }
 }

@@ -20,15 +20,16 @@ package org.apache.spark.sql.execution.datasources
 import java.util.TimeZone
 
 import org.apache.hadoop.fs.Path
-import org.apache.spark.sql.execution.datasources.PartitioningUtils.PartitionValues
+
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.DataType
 
 trait SparkParsePartitionUtil extends Serializable {
 
-  def parsePartition(
-    path: Path,
-    typeInference: Boolean,
-    basePaths: Set[Path],
-    userSpecifiedDataTypes: Map[String, DataType],
-    timeZone: TimeZone): Option[PartitionValues]
+  def parsePartition(path: Path,
+                     typeInference: Boolean,
+                     basePaths: Set[Path],
+                     userSpecifiedDataTypes: Map[String, DataType],
+                     timeZone: TimeZone,
+                     validatePartitionValues: Boolean = false): InternalRow
 }

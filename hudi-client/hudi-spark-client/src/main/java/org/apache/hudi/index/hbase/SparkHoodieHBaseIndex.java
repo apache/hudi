@@ -18,13 +18,13 @@
 
 package org.apache.hudi.index.hbase;
 
-import org.apache.hadoop.hbase.client.ResultScanner;
-import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkMemoryUtils;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -37,11 +37,11 @@ import org.apache.hudi.common.util.RateLimiter;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieDependentSystemUnavailableException;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.index.SparkHoodieIndex;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HRegionLocation;
@@ -56,11 +56,15 @@ import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.RegionLocator;
 import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkFiles;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -69,6 +73,7 @@ import org.joda.time.DateTime;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -80,10 +85,19 @@ import java.util.concurrent.TimeUnit;
 
 import scala.Tuple2;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION;
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_QUORUM;
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_ZNODE_PARENT;
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_CLIENT_PORT;
+import static org.apache.hadoop.hbase.security.SecurityConstants.MASTER_KRB_PRINCIPAL;
+import static org.apache.hadoop.hbase.security.SecurityConstants.REGIONSERVER_KRB_PRINCIPAL;
+import static org.apache.hadoop.hbase.security.User.HBASE_SECURITY_AUTHORIZATION_CONF_KEY;
+import static org.apache.hadoop.hbase.security.User.HBASE_SECURITY_CONF_KEY;
+
 /**
  * Hoodie Index implementation backed by HBase.
  */
-public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkHoodieIndex<T> {
+public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
 
   public static final String DEFAULT_SPARK_EXECUTOR_INSTANCES_CONFIG_NAME = "spark.executor.instances";
   public static final String DEFAULT_SPARK_DYNAMIC_ALLOCATION_ENABLED_CONFIG_NAME = "spark.dynamicAllocation.enabled";
@@ -105,7 +119,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
 
   /**
    * multiPutBatchSize will be computed and re-set in updateLocation if
-   * {@link HoodieHBaseIndexConfig#HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP} is set to true.
+   * {@link HoodieHBaseIndexConfig#PUT_BATCH_SIZE_AUTO_COMPUTE} is set to true.
    */
   private Integer multiPutBatchSize;
   private Integer numRegionServersForTable;
@@ -140,16 +154,35 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
   private Connection getHBaseConnection() {
     Configuration hbaseConfig = HBaseConfiguration.create();
     String quorum = config.getHbaseZkQuorum();
-    hbaseConfig.set("hbase.zookeeper.quorum", quorum);
+    hbaseConfig.set(ZOOKEEPER_QUORUM, quorum);
     String zkZnodeParent = config.getHBaseZkZnodeParent();
     if (zkZnodeParent != null) {
-      hbaseConfig.set("zookeeper.znode.parent", zkZnodeParent);
+      hbaseConfig.set(ZOOKEEPER_ZNODE_PARENT, zkZnodeParent);
     }
     String port = String.valueOf(config.getHbaseZkPort());
-    hbaseConfig.set("hbase.zookeeper.property.clientPort", port);
+    hbaseConfig.set(ZOOKEEPER_CLIENT_PORT, port);
+
     try {
-      return ConnectionFactory.createConnection(hbaseConfig);
-    } catch (IOException e) {
+      String authentication = config.getHBaseIndexSecurityAuthentication();
+      if (authentication.equals("kerberos")) {
+        hbaseConfig.set(HBASE_SECURITY_CONF_KEY, "kerberos");
+        hbaseConfig.set(HADOOP_SECURITY_AUTHENTICATION, "kerberos");
+        hbaseConfig.set(HBASE_SECURITY_AUTHORIZATION_CONF_KEY, "true");
+        hbaseConfig.set(REGIONSERVER_KRB_PRINCIPAL, config.getHBaseIndexRegionserverPrincipal());
+        hbaseConfig.set(MASTER_KRB_PRINCIPAL, config.getHBaseIndexMasterPrincipal());
+
+        String principal = config.getHBaseIndexKerberosUserPrincipal();
+        String keytab = SparkFiles.get(config.getHBaseIndexKerberosUserKeytab());
+
+        UserGroupInformation.setConfiguration(hbaseConfig);
+        UserGroupInformation ugi = UserGroupInformation.loginUserFromKeytabAndReturnUGI(principal, keytab);
+        return ugi.doAs((PrivilegedExceptionAction<Connection>) () ->
+          (Connection) ConnectionFactory.createConnection(hbaseConfig)
+        );
+      } else {
+        return ConnectionFactory.createConnection(hbaseConfig);
+      }
+    } catch (IOException | InterruptedException e) {
       throw new HoodieDependentSystemUnavailableException(HoodieDependentSystemUnavailableException.HBASE,
           quorum + ":" + port, e);
     }
@@ -181,12 +214,16 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
   }
 
   private Get generateStatement(String key) throws IOException {
-    return new Get(Bytes.toBytes(key)).setMaxVersions(1).addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN)
+    return new Get(Bytes.toBytes(getHBaseKey(key))).readVersions(1).addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN)
         .addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN).addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN);
   }
 
   private Get generateStatement(String key, long startTime, long endTime) throws IOException {
     return generateStatement(key).setTimeRange(startTime, endTime);
+  }
+
+  protected String getHBaseKey(String key) {
+    return key;
   }
 
   private boolean checkIfValidCommit(HoodieTableMetaClient metaClient, String commitTs) {
@@ -200,15 +237,13 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
   /**
    * Function that tags each HoodieRecord with an existing location, if known.
    */
-  private Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>> locationTagFunction(
+  private <R> Function2<Integer, Iterator<HoodieRecord<R>>, Iterator<HoodieRecord<R>>> locationTagFunction(
       HoodieTableMetaClient metaClient) {
 
     // `multiGetBatchSize` is intended to be a batch per 100ms. To create a rate limiter that measures
     // operations per second, we need to multiply `multiGetBatchSize` by 10.
     Integer multiGetBatchSize = config.getHbaseIndexGetBatchSize();
-    return (Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>>) (partitionNum,
-        hoodieRecordIterator) -> {
-
+    return (partitionNum, hoodieRecordIterator) -> {
       boolean updatePartitionPath = config.getHbaseIndexUpdatePartitionPath();
       RateLimiter limiter = RateLimiter.create(multiGetBatchSize * 10, TimeUnit.SECONDS);
       // Grab the global HBase connection
@@ -217,7 +252,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
           hbaseConnection = getHBaseConnection();
         }
       }
-      List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
+      List<HoodieRecord<R>> taggedRecords = new ArrayList<>();
       try (HTable hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName))) {
         List<Get> statements = new ArrayList<>();
         List<HoodieRecord> currentBatchOfRecords = new LinkedList<>();
@@ -253,19 +288,19 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
             // check whether to do partition change processing
             if (updatePartitionPath && !partitionPath.equals(currentRecord.getPartitionPath())) {
               // delete partition old data record
-              HoodieRecord emptyRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
+              HoodieRecord emptyRecord = new HoodieAvroRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
                   new EmptyHoodieRecordPayload());
               emptyRecord.unseal();
               emptyRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
               emptyRecord.seal();
               // insert partition new data record
-              currentRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(), currentRecord.getPartitionPath()),
-                  currentRecord.getData());
+              currentRecord = new HoodieAvroRecord(new HoodieKey(currentRecord.getRecordKey(), currentRecord.getPartitionPath()),
+                  (HoodieRecordPayload) currentRecord.getData());
               taggedRecords.add(emptyRecord);
               taggedRecords.add(currentRecord);
             } else {
-              currentRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
-                  currentRecord.getData());
+              currentRecord = new HoodieAvroRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
+                  (HoodieRecordPayload) currentRecord.getData());
               currentRecord.unseal();
               currentRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
               currentRecord.seal();
@@ -277,6 +312,8 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
         }
       } catch (IOException e) {
         throw new HoodieIndexException("Failed to Tag indexed locations because of exception with HBase Client", e);
+      } finally {
+        limiter.stop();
       }
       return taggedRecords.iterator();
     };
@@ -291,15 +328,16 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
-                                              HoodieEngineContext context,
-                                              HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
-    return recordRDD.mapPartitionsWithIndex(locationTagFunction(hoodieTable.getMetaClient()), true);
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
+      HoodieTable hoodieTable) {
+    return HoodieJavaRDD.of(HoodieJavaRDD.getJavaRDD(records)
+        .mapPartitionsWithIndex(locationTagFunction(hoodieTable.getMetaClient()), true));
   }
 
   private Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>> updateLocationFunction() {
 
-    return (Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>>) (partition, statusIterator) -> {
+    return (partition, statusIterator) -> {
 
       List<WriteStatus> writeStatusList = new ArrayList<>();
       // Grab the global HBase connection
@@ -311,8 +349,8 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
       final long startTimeForPutsTask = DateTime.now().getMillis();
       LOG.info("startTimeForPutsTask for this task: " + startTimeForPutsTask);
 
+      final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
       try (BufferedMutator mutator = hbaseConnection.getBufferedMutator(TableName.valueOf(tableName))) {
-        final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
         while (statusIterator.hasNext()) {
           WriteStatus writeStatus = statusIterator.next();
           List<Mutation> mutations = new ArrayList<>();
@@ -331,14 +369,14 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
                     // This is an update, no need to update index
                     continue;
                   }
-                  Put put = new Put(Bytes.toBytes(rec.getRecordKey()));
+                  Put put = new Put(Bytes.toBytes(getHBaseKey(rec.getRecordKey())));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN, Bytes.toBytes(loc.get().getInstantTime()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN, Bytes.toBytes(loc.get().getFileId()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN, Bytes.toBytes(rec.getPartitionPath()));
                   mutations.add(put);
                 } else {
                   // Delete existing index for a deleted record
-                  Delete delete = new Delete(Bytes.toBytes(rec.getRecordKey()));
+                  Delete delete = new Delete(Bytes.toBytes(getHBaseKey(rec.getRecordKey())));
                   mutations.add(delete);
                 }
               }
@@ -360,6 +398,8 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
         LOG.info("hbase puts task time for this task: " + (endPutsTime - startTimeForPutsTask));
       } catch (IOException e) {
         throw new HoodieIndexException("Failed to Update Index locations because of exception with HBase Client", e);
+      } finally {
+        limiter.stop();
       }
       return writeStatusList.iterator();
     };
@@ -381,13 +421,13 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
     mutations.clear();
   }
 
-  public Map<String, Integer> mapFileWithInsertsToUniquePartition(JavaRDD<WriteStatus> writeStatusRDD) {
+  Map<String, Integer> mapFileWithInsertsToUniquePartition(JavaRDD<WriteStatus> writeStatusRDD) {
     final Map<String, Integer> fileIdPartitionMap = new HashMap<>();
     int partitionIndex = 0;
     // Map each fileId that has inserts to a unique partition Id. This will be used while
     // repartitioning RDD<WriteStatus>
     final List<String> fileIds = writeStatusRDD.filter(w -> w.getStat().getNumInserts() > 0)
-                                   .map(w -> w.getFileId()).collect();
+                                   .map(WriteStatus::getFileId).collect();
     for (final String fileId : fileIds) {
       fileIdPartitionMap.put(fileId, partitionIndex++);
     }
@@ -395,16 +435,17 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
   }
 
   @Override
-  public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, HoodieEngineContext context,
-                                             HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>,
-                                                            JavaRDD<WriteStatus>> hoodieTable) {
-    final Option<Float> desiredQPSFraction =  calculateQPSFraction(writeStatusRDD);
+  public HoodieData<WriteStatus> updateLocation(
+      HoodieData<WriteStatus> writeStatus, HoodieEngineContext context,
+      HoodieTable hoodieTable) {
+    JavaRDD<WriteStatus> writeStatusRDD = HoodieJavaRDD.getJavaRDD(writeStatus);
+    final Option<Float> desiredQPSFraction = calculateQPSFraction(writeStatusRDD);
     final Map<String, Integer> fileIdPartitionMap = mapFileWithInsertsToUniquePartition(writeStatusRDD);
     JavaRDD<WriteStatus> partitionedRDD = this.numWriteStatusWithInserts == 0 ? writeStatusRDD :
-                                          writeStatusRDD.mapToPair(w -> new Tuple2<>(w.getFileId(), w))
-                                              .partitionBy(new WriteStatusPartitioner(fileIdPartitionMap,
-                                                  this.numWriteStatusWithInserts))
-                                              .map(w -> w._2());
+        writeStatusRDD.mapToPair(w -> new Tuple2<>(w.getFileId(), w))
+            .partitionBy(new WriteStatusPartitioner(fileIdPartitionMap,
+                this.numWriteStatusWithInserts))
+            .map(Tuple2::_2);
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     acquireQPSResourcesAndSetBatchSize(desiredQPSFraction, jsc);
     JavaRDD<WriteStatus> writeStatusJavaRDD = partitionedRDD.mapPartitionsWithIndex(updateLocationFunction(),
@@ -414,7 +455,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
     // force trigger update location(hbase puts)
     writeStatusJavaRDD.count();
     this.hBaseIndexQPSResourceAllocator.releaseQPSResources();
-    return writeStatusJavaRDD;
+    return HoodieJavaRDD.of(writeStatusJavaRDD);
   }
 
   private Option<Float> calculateQPSFraction(JavaRDD<WriteStatus> writeStatusRDD) {
@@ -461,7 +502,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
     }
   }
 
-  public Tuple2<Long, Integer> getHBasePutAccessParallelism(final JavaRDD<WriteStatus> writeStatusRDD) {
+  Tuple2<Long, Integer> getHBasePutAccessParallelism(final JavaRDD<WriteStatus> writeStatusRDD) {
     final JavaPairRDD<Long, Integer> insertOnlyWriteStatusRDD = writeStatusRDD
         .filter(w -> w.getStat().getNumInserts() > 0).mapToPair(w -> new Tuple2<>(w.getStat().getNumInserts(), 1));
     return insertOnlyWriteStatusRDD.fold(new Tuple2<>(0L, 0), (w, c) -> new Tuple2<>(w._1 + c._1, w._2 + c._2));
@@ -558,11 +599,10 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
         hbaseConnection = getHBaseConnection();
       }
     }
+    final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
     try (HTable hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName));
          BufferedMutator mutator = hbaseConnection.getBufferedMutator(TableName.valueOf(tableName))) {
-      final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
-
-      Long rollbackTime = HoodieActiveTimeline.COMMIT_FORMATTER.parse(instantTime).getTime();
+      Long rollbackTime = HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime();
       Long currentTime = new Date().getTime();
       Scan scan = new Scan();
       scan.addFamily(SYSTEM_COLUMN_FAMILY);
@@ -610,6 +650,8 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
     } catch (Exception e) {
       LOG.error("hbase index roll back failed", e);
       return false;
+    } finally {
+      limiter.stop();
     }
     return true;
   }

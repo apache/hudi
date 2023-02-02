@@ -30,6 +30,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.http.client.HttpResponseException;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,17 +44,23 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests {@link PriorityBasedFileSystemView}.
+ */
 @ExtendWith(MockitoExtension.class)
 public class TestPriorityBasedFileSystemView {
 
@@ -68,7 +81,14 @@ public class TestPriorityBasedFileSystemView {
     fsView = new PriorityBasedFileSystemView(primary, secondary);
     testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
     testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
-        "file0001" + HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension()));
+        "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    testFileSliceStream.close();
+    testBaseFileStream.close();
+    fsView.close();
   }
 
   private void resetMocks() {
@@ -100,6 +120,31 @@ public class TestPriorityBasedFileSystemView {
     assertThrows(RuntimeException.class, () -> {
       fsView.getLatestBaseFiles();
     });
+  }
+
+  @Test
+  public void testBadRequestExceptionWithPrimary() {
+    final TestLogAppender appender = new TestLogAppender();
+    final Logger logger = (Logger) LogManager.getLogger(PriorityBasedFileSystemView.class);
+    try {
+      appender.start();
+      logger.addAppender(appender);
+      Stream<HoodieBaseFile> actual;
+      Stream<HoodieBaseFile> expected = testBaseFileStream;
+
+      resetMocks();
+      when(primary.getLatestBaseFiles()).thenThrow(new RuntimeException(new HttpResponseException(400, "Bad Request")));
+      when(secondary.getLatestBaseFiles()).thenReturn(testBaseFileStream);
+      actual = fsView.getLatestBaseFiles();
+      assertEquals(expected, actual);
+      final List<LogEvent> logs = appender.getLog();
+      final LogEvent firstLogEntry = logs.get(0);
+      assertEquals(firstLogEntry.getLevel(), Level.WARN);
+      assertTrue((firstLogEntry.getMessage().getFormattedMessage()).contains("Got error running preferred function. Likely due to another "
+          + "concurrent writer in progress. Trying secondary"));
+    } finally {
+      logger.removeAppender(appender);
+    }
   }
 
   @Test
@@ -495,7 +540,7 @@ public class TestPriorityBasedFileSystemView {
   public void testGetPendingCompactionOperations() {
     Stream<Pair<String, CompactionOperation>> actual;
     Stream<Pair<String, CompactionOperation>> expected = Collections.singleton(
-        (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()))
+            (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()))
         .stream();
 
     when(primary.getPendingCompactionOperations()).thenReturn(expected);
@@ -517,6 +562,35 @@ public class TestPriorityBasedFileSystemView {
     when(secondary.getPendingCompactionOperations()).thenThrow(new RuntimeException());
     assertThrows(RuntimeException.class, () -> {
       fsView.getPendingCompactionOperations();
+    });
+  }
+
+  @Test
+  public void testGetPendingLogCompactionOperations() {
+    Stream<Pair<String, CompactionOperation>> actual;
+    Stream<Pair<String, CompactionOperation>> expected = Collections.singleton(
+            (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()))
+        .stream();
+
+    when(primary.getPendingLogCompactionOperations()).thenReturn(expected);
+    actual = fsView.getPendingLogCompactionOperations();
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(primary.getPendingLogCompactionOperations()).thenThrow(new RuntimeException());
+    when(secondary.getPendingLogCompactionOperations()).thenReturn(expected);
+    actual = fsView.getPendingLogCompactionOperations();
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(secondary.getPendingLogCompactionOperations()).thenReturn(expected);
+    actual = fsView.getPendingLogCompactionOperations();
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(secondary.getPendingLogCompactionOperations()).thenThrow(new RuntimeException());
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getPendingLogCompactionOperations();
     });
   }
 
@@ -591,8 +665,8 @@ public class TestPriorityBasedFileSystemView {
   @Test
   public void testSync() {
     fsView.sync();
-    verify(primary, times(1)).reset();
-    verify(secondary, times(1)).reset();
+    verify(primary, times(1)).sync();
+    verify(secondary, times(1)).sync();
   }
 
   @Test
@@ -632,5 +706,22 @@ public class TestPriorityBasedFileSystemView {
   @Test
   public void testGetSecondaryView() {
     assertEquals(secondary, fsView.getSecondaryView());
+  }
+
+  class TestLogAppender extends AbstractAppender {
+    private final List<LogEvent> log = new ArrayList<>();
+
+    protected TestLogAppender() {
+      super(UUID.randomUUID().toString(), null, null, false, null);
+    }
+
+    @Override
+    public void append(LogEvent event) {
+      log.add(event);
+    }
+
+    public List<LogEvent> getLog() {
+      return new ArrayList<LogEvent>(log);
+    }
   }
 }

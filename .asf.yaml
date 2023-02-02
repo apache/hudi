@@ -29,3 +29,21 @@ github:
     - data-integration
     - apachespark
     - apacheflink
+  features:
+    wiki: true
+    issues: true
+    projects: true
+    discussions: true
+  enabled_merge_buttons:
+    squash:  true
+    merge:   false
+    rebase:  false
+  protected_branches:
+    master:
+      required_pull_request_reviews:
+        required_approving_review_count: 1
+notifications:
+  commits:      commits@hudi.apache.org
+  issues:       commits@hudi.apache.org
+  pullrequests: commits@hudi.apache.org
+  jira_options: link label

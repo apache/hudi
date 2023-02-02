@@ -36,9 +36,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
-import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.Option;
 
 /**
  * Helper class to convert between different action related payloads and {@link HoodieArchivedMetaEntry}.
@@ -59,12 +60,18 @@ public class MetadataConversionUtils {
         archivedMetaWrapper.setActionType(ActionType.clean.name());
         break;
       }
-      case HoodieTimeline.COMMIT_ACTION:
-      case HoodieTimeline.DELTA_COMMIT_ACTION: {
+      case HoodieTimeline.COMMIT_ACTION: {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
                 .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
         archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
+        break;
+      }
+      case HoodieTimeline.DELTA_COMMIT_ACTION: {
+        HoodieCommitMetadata deltaCommitMetadata = HoodieCommitMetadata
+                .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
+        archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(deltaCommitMetadata));
+        archivedMetaWrapper.setActionType(ActionType.deltacommit.name());
         break;
       }
       case HoodieTimeline.REPLACE_COMMIT_ACTION: {
@@ -72,10 +79,21 @@ public class MetadataConversionUtils {
           HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
               .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
           archivedMetaWrapper.setHoodieReplaceCommitMetadata(ReplaceArchivalHelper.convertReplaceCommitMetadata(replaceCommitMetadata));
+        } else if (hoodieInstant.isInflight()) {
+          // inflight replacecommit files have the same meta data body as HoodieCommitMetadata
+          // so we could re-use it without further creating an inflight extension.
+          // Or inflight replacecommit files are empty under clustering circumstance
+          Option<HoodieCommitMetadata> inflightCommitMetadata = getInflightReplaceMetadata(metaClient, hoodieInstant);
+          if (inflightCommitMetadata.isPresent()) {
+            archivedMetaWrapper.setHoodieInflightReplaceMetadata(convertCommitMetadata(inflightCommitMetadata.get()));
+          }
         } else {
-          HoodieRequestedReplaceMetadata requestedReplaceMetadata =
-              ClusteringUtils.getRequestedReplaceMetadata(metaClient, hoodieInstant).get();
-          archivedMetaWrapper.setHoodieRequestedReplaceMetadata(requestedReplaceMetadata);
+          // we may have cases with empty HoodieRequestedReplaceMetadata e.g. insert_overwrite_table or insert_overwrite
+          // without clustering. However, we should revisit the requested commit file standardization
+          Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = getRequestedReplaceMetadata(metaClient, hoodieInstant);
+          if (requestedReplaceMetadata.isPresent()) {
+            archivedMetaWrapper.setHoodieRequestedReplaceMetadata(requestedReplaceMetadata.get());
+          }
         }
         archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
         break;
@@ -100,6 +118,12 @@ public class MetadataConversionUtils {
         archivedMetaWrapper.setActionType(ActionType.compaction.name());
         break;
       }
+      case HoodieTimeline.LOG_COMPACTION_ACTION: {
+        HoodieCompactionPlan plan = CompactionUtils.getLogCompactionPlan(metaClient, hoodieInstant.getTimestamp());
+        archivedMetaWrapper.setHoodieCompactionPlan(plan);
+        archivedMetaWrapper.setActionType(ActionType.logcompaction.name());
+        break;
+      }
       default: {
         throw new UnsupportedOperationException("Action not fully supported yet");
       }
@@ -107,14 +131,70 @@ public class MetadataConversionUtils {
     return archivedMetaWrapper;
   }
 
-  public static HoodieArchivedMetaEntry createMetaWrapper(HoodieInstant hoodieInstant,
-                                                          HoodieCommitMetadata hoodieCommitMetadata) {
+  public static HoodieArchivedMetaEntry createMetaWrapperForEmptyInstant(HoodieInstant hoodieInstant) throws IOException {
     HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
     archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
     archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
-    archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(hoodieCommitMetadata));
-    archivedMetaWrapper.setActionType(ActionType.commit.name());
+    switch (hoodieInstant.getAction()) {
+      case HoodieTimeline.CLEAN_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.clean.name());
+        break;
+      }
+      case HoodieTimeline.COMMIT_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.commit.name());
+        break;
+      }
+      case HoodieTimeline.DELTA_COMMIT_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.deltacommit.name());
+        break;
+      }
+      case HoodieTimeline.REPLACE_COMMIT_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
+        break;
+      }
+      case HoodieTimeline.ROLLBACK_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.rollback.name());
+        break;
+      }
+      case HoodieTimeline.SAVEPOINT_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.savepoint.name());
+        break;
+      }
+      case HoodieTimeline.COMPACTION_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.compaction.name());
+        break;
+      }
+      default: {
+        throw new UnsupportedOperationException("Action not fully supported yet");
+      }
+    }
     return archivedMetaWrapper;
+  }
+
+  public static Option<HoodieCommitMetadata> getInflightReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant) throws IOException {
+    Option<byte[]> inflightContent = metaClient.getActiveTimeline().getInstantDetails(instant);
+    if (!inflightContent.isPresent() || inflightContent.get().length == 0) {
+      // inflight files can be empty in some certain cases, e.g. when users opt in clustering
+      return Option.empty();
+    }
+    return Option.of(HoodieCommitMetadata.fromBytes(inflightContent.get(), HoodieCommitMetadata.class));
+  }
+
+  private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant) throws IOException {
+    Option<byte[]> requestedContent = metaClient.getActiveTimeline().getInstantDetails(instant);
+    if (!requestedContent.isPresent() || requestedContent.get().length == 0) {
+      // requested commit files can be empty in some certain cases, e.g. insert_overwrite or insert_overwrite_table.
+      // However, it appears requested files are supposed to contain meta data and we should revisit the standardization
+      // of requested commit files
+      // TODO revisit requested commit file standardization https://issues.apache.org/jira/browse/HUDI-1739
+      return Option.empty();
+    }
+    return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(requestedContent.get()));
+  }
+
+  public static Option<HoodieCommitMetadata> getHoodieCommitMetadata(HoodieTableMetaClient metaClient, HoodieInstant hoodieInstant) throws IOException {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    return Option.of(TimelineUtils.getCommitMetadata(hoodieInstant, timeline));
   }
 
   public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(

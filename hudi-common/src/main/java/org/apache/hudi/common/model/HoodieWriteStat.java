@@ -18,18 +18,18 @@
 
 package org.apache.hudi.common.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.apache.hudi.common.util.JsonUtils;
+
 import org.apache.hadoop.fs.Path;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.util.Map;
 
 /**
  * Statistics about a single Hoodie write operation.
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieWriteStat implements Serializable {
 
   public static final String NULL_COMMIT = "null";
@@ -43,6 +43,11 @@ public class HoodieWriteStat implements Serializable {
    * Relative path to the file from the base path.
    */
   private String path;
+
+  /**
+   * Relative CDC file path that store the CDC data and its size.
+   */
+  private Map<String, Long> cdcStats;
 
   /**
    * The previous version of the file. (null if this is the first version. i.e insert)
@@ -156,7 +161,6 @@ public class HoodieWriteStat implements Serializable {
   private Long maxEventTime;
 
   @Nullable
-  @JsonIgnore
   private RuntimeStats runtimeStats;
 
   public HoodieWriteStat() {
@@ -233,6 +237,15 @@ public class HoodieWriteStat implements Serializable {
 
   public String getPath() {
     return path;
+  }
+
+  @Nullable
+  public Map<String, Long> getCdcStats() {
+    return cdcStats;
+  }
+
+  public void setCdcStats(Map<String, Long> cdcStats) {
+    this.cdcStats = cdcStats;
   }
 
   public String getPartitionPath() {
@@ -360,6 +373,7 @@ public class HoodieWriteStat implements Serializable {
     return "HoodieWriteStat{fileId='" + fileId + '\'' + ", path='" + path + '\'' + ", prevCommit='" + prevCommit
         + '\'' + ", numWrites=" + numWrites + ", numDeletes=" + numDeletes + ", numUpdateWrites=" + numUpdateWrites
         + ", totalWriteBytes=" + totalWriteBytes + ", totalWriteErrors=" + totalWriteErrors + ", tempPath='" + tempPath
+        + '\'' + ", cdcStats='" + JsonUtils.toString(cdcStats)
         + '\'' + ", partitionPath='" + partitionPath + '\'' + ", totalLogRecords=" + totalLogRecords
         + ", totalLogFilesCompacted=" + totalLogFilesCompacted + ", totalLogSizeCompacted=" + totalLogSizeCompacted
         + ", totalUpdatedRecordsCompacted=" + totalUpdatedRecordsCompacted + ", totalLogBlocks=" + totalLogBlocks

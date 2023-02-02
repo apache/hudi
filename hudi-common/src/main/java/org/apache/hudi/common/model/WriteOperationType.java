@@ -48,6 +48,13 @@ public enum WriteOperationType {
   INSERT_OVERWRITE_TABLE("insert_overwrite_table"),
   // compact
   COMPACT("compact"),
+
+  INDEX("index"),
+
+  // alter schema
+  ALTER_SCHEMA("alter_schema"),
+  // log compact
+  LOG_COMPACT("logcompact"),
   // used for old version
   UNKNOWN("unknown");
 
@@ -86,6 +93,10 @@ public enum WriteOperationType {
         return CLUSTER;
       case "compact":
         return COMPACT;
+      case "index":
+        return INDEX;
+      case "alter_schema":
+        return ALTER_SCHEMA;
       case "unknown":
         return UNKNOWN;
       default:
@@ -107,5 +118,19 @@ public enum WriteOperationType {
 
   public static boolean isOverwrite(WriteOperationType operationType) {
     return operationType == INSERT_OVERWRITE || operationType == INSERT_OVERWRITE_TABLE;
+  }
+
+  /**
+   * Whether the operation changes the dataset.
+   */
+  public static boolean isDataChange(WriteOperationType operation) {
+    return operation == WriteOperationType.INSERT
+        || operation == WriteOperationType.UPSERT
+        || operation == WriteOperationType.DELETE
+        || operation == WriteOperationType.BULK_INSERT
+        || operation == WriteOperationType.DELETE_PARTITION
+        || operation == WriteOperationType.INSERT_OVERWRITE
+        || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
+        || operation == WriteOperationType.BOOTSTRAP;
   }
 }

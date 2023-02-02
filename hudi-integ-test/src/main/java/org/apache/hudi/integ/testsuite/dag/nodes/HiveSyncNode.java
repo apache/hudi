@@ -18,31 +18,29 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
-import org.apache.hudi.integ.testsuite.helpers.HiveServiceProvider;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
+import org.apache.hudi.sync.common.util.SyncUtilHelpers;
+
+import org.apache.hadoop.fs.Path;
 
 /**
  * Represents a hive sync node in the DAG of operations for a workflow. Helps to sync hoodie data to hive table.
  */
 public class HiveSyncNode extends DagNode<Boolean> {
 
-  private HiveServiceProvider hiveServiceProvider;
-
   public HiveSyncNode(Config config) {
     this.config = config;
-    this.hiveServiceProvider = new HiveServiceProvider(config);
   }
 
   @Override
   public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
     log.info("Executing hive sync node");
-    this.hiveServiceProvider.startLocalHiveServiceIfNeeded(executionContext.getHoodieTestSuiteWriter().getConfiguration());
-    this.hiveServiceProvider.syncToLocalHiveIfNeeded(executionContext.getHoodieTestSuiteWriter());
-    this.hiveServiceProvider.stopLocalHiveServiceIfNeeded();
-  }
-
-  public HiveServiceProvider getHiveServiceProvider() {
-    return hiveServiceProvider;
+    SyncUtilHelpers.runHoodieMetaSync(HiveSyncTool.class.getName(), new TypedProperties(executionContext.getHoodieTestSuiteWriter().getProps()),
+        executionContext.getHoodieTestSuiteWriter().getConfiguration(),
+        new Path(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath).getFileSystem(executionContext.getHoodieTestSuiteWriter().getConfiguration()),
+        executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath, executionContext.getHoodieTestSuiteWriter().getCfg().baseFileFormat);
   }
 }

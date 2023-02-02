@@ -20,6 +20,7 @@ package org.apache.hudi.utils;
 
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -80,7 +81,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   @Test
   public void testCompletedReplace() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
-    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE);
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE, true);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
@@ -88,13 +89,53 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testCompletedCommitOrDeltaCommit() throws Exception {
+  public void testEmptyRequestedReplace() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, false);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
+            new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
+    assertEquals(metaEntry.getActionState(), State.REQUESTED.toString());
+    assertNull(metaEntry.getHoodieRequestedReplaceMetadata());
+  }
+
+  @Test
+  public void testEmptyInflightReplace() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, true);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
+            new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
+    assertEquals(metaEntry.getActionState(), State.INFLIGHT.toString());
+    assertNull(metaEntry.getHoodieInflightReplaceMetadata());
+  }
+
+  @Test
+  public void testNonEmptyInflightReplace() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, false);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
+    assertEquals(metaEntry.getActionState(), State.INFLIGHT.toString());
+    assertEquals(metaEntry.getHoodieInflightReplaceMetadata().getOperationType(), WriteOperationType.INSERT_OVERWRITE_TABLE.name());
+  }
+
+  @Test
+  public void testCompletedCommit() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createCommitMetadata(newCommitTime);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
     assertEquals(metaEntry.getHoodieCommitMetadata().getOperationType(), WriteOperationType.INSERT.toString());
+  }
+
+  @Test
+  public void testCompletedDeltaCommit() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createDeltaCommitMetadata(newCommitTime);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
+            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), metaClient);
+    assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
+    assertEquals(metaEntry.getActionType(), HoodieTimeline.DELTA_COMMIT_ACTION);
   }
 
   @Test
@@ -135,7 +176,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     commitMetadata.setCompacted(true);
     HoodieTestTable.of(metaClient)
-        .addCommit(instantTime, commitMetadata)
+        .addCommit(instantTime, Option.of(commitMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
@@ -147,7 +188,6 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     rollbackPartitionMetadata.setPartitionPath("p1");
     rollbackPartitionMetadata.setSuccessDeleteFiles(Arrays.asList("f1"));
     rollbackPartitionMetadata.setFailedDeleteFiles(new ArrayList<>());
-    rollbackPartitionMetadata.setWrittenLogFiles(new HashMap<>());
     rollbackPartitionMetadata.setRollbackLogFiles(new HashMap<>());
     Map<String, HoodieRollbackPartitionMetadata> partitionMetadataMap = new HashMap<>();
     partitionMetadataMap.put("p1", rollbackPartitionMetadata);
@@ -165,11 +205,20 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     commitMetadata.addMetadata("test", "test");
     commitMetadata.setOperationType(WriteOperationType.INSERT);
     HoodieTestTable.of(metaClient)
-        .addCommit(instantTime, commitMetadata)
+        .addCommit(instantTime, Option.of(commitMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  private void createReplace(String instantTime, WriteOperationType writeOperationType) throws Exception {
+  private void createDeltaCommitMetadata(String instantTime) throws Exception {
+    String fileId1 = "file-" + instantTime + "-1";
+    String fileId2 = "file-" + instantTime + "-2";
+    HoodieTestTable.of(metaClient)
+            .addDeltaCommit(instantTime)
+            .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+  }
+
+  private void createReplace(String instantTime, WriteOperationType writeOperationType, Boolean isClustering)
+          throws Exception {
     String fileId1 = "file-1";
     String fileId2 = "file-2";
 
@@ -182,31 +231,43 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     writeStat.setFileId("file-1");
     replaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     replaceMetadata.setOperationType(writeOperationType);
-    // create replace instant to mark fileId1 as deleted
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
-    requestedReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE.name());
-    HoodieClusteringPlan clusteringPlan = new HoodieClusteringPlan();
-    HoodieClusteringGroup clusteringGroup = new HoodieClusteringGroup();
-    HoodieSliceInfo sliceInfo = new HoodieSliceInfo();
-    clusteringGroup.setSlices(Arrays.asList(sliceInfo));
-    clusteringPlan.setInputGroups(Arrays.asList(clusteringGroup));
-    requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
-    requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
+    // some cases requestedReplaceMetadata will be null
+    // e.g. insert_overwrite_table or insert_overwrite without clustering
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = null;
+    HoodieCommitMetadata inflightReplaceMetadata = null;
+    if (isClustering) {
+      requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
+      requestedReplaceMetadata.setOperationType(writeOperationType.name());
+      HoodieClusteringPlan clusteringPlan = new HoodieClusteringPlan();
+      HoodieClusteringGroup clusteringGroup = new HoodieClusteringGroup();
+      HoodieSliceInfo sliceInfo = new HoodieSliceInfo();
+      clusteringGroup.setSlices(Arrays.asList(sliceInfo));
+      clusteringPlan.setInputGroups(Arrays.asList(clusteringGroup));
+      requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
+      requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
+    } else {
+      // inflightReplaceMetadata will be null in clustering but not null
+      // in insert_overwrite or insert_overwrite_table
+      inflightReplaceMetadata = new HoodieCommitMetadata();
+      inflightReplaceMetadata.setOperationType(writeOperationType);
+      inflightReplaceMetadata.setCompacted(false);
+    }
     HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, requestedReplaceMetadata, replaceMetadata)
+        .addReplaceCommit(instantTime, Option.ofNullable(requestedReplaceMetadata), Option.ofNullable(inflightReplaceMetadata), replaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
   private void createCleanMetadata(String instantTime) throws IOException {
-    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(),
-        CleanPlanV2MigrationHandler.VERSION, new HashMap<>());
+    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""),
+        "", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
     HoodieCleanStat cleanStats = new HoodieCleanStat(
         HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
         HoodieTestUtils.DEFAULT_PARTITION_PATHS[new Random().nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
         Collections.emptyList(),
         Collections.emptyList(),
         Collections.emptyList(),
-        instantTime);
+        instantTime,
+        "");
     HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats));
     HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata);
   }
