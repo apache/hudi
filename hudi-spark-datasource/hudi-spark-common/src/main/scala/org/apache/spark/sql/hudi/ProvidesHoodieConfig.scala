@@ -338,16 +338,16 @@ object ProvidesHoodieConfig {
     //       lowest, which is inverse to the ordering in the code):
     //          1. (Extra) Option overrides
     //          2. Spark SQL configs
-    //          3. (Feature-specific) Default values
-    //          4. Persisted Hudi's Table configs
-    //          5. Table's properties in Spark Catalog
-    //          6. Global DFS properties
-    DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++
+    //          3. Persisted Hudi's Table configs
+    //          4. Table's properties in Spark Catalog
+    //          5. Global DFS properties
+    //          6. (Feature-specific) Default values
+    filterNullValues(defaultOpts) ++
+      DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++
       // NOTE: Catalog table provided t/h `TBLPROPERTIES` clause might contain Spark SQL specific
       //       properties that need to be mapped into Hudi's conventional ones
       mapSqlOptionsToDataSourceWriteConfigs(catalogTable.catalogProperties) ++
       tableConfig.getProps.asScala.toMap ++
-      filterNullValues(defaultOpts) ++
       filterHoodieConfigs(sqlConf.getAllConfs) ++
       filterNullValues(overridingOpts)
   }
