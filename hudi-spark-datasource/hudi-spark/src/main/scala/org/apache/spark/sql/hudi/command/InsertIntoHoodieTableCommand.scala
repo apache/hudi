@@ -113,6 +113,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
 
     if (success && refreshTable) {
       sparkSession.catalog.refreshTable(table.identifier.unquotedString)
+      HoodieCatalogUtils.refreshTable(sparkSession, table.identifier)
     }
 
     success

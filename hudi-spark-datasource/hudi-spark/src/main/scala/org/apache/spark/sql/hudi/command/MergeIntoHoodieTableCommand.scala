@@ -250,7 +250,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // Do the upsert
     executeUpsert(sourceDF, props)
     // Refresh the table in the catalog
-    sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
+    HoodieCatalogUtils.refreshTable(sparkSession, hoodieCatalogTable.table.identifier)
 
     Seq.empty[Row]
   }

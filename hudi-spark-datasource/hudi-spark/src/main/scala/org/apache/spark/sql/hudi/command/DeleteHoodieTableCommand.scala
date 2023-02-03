@@ -54,7 +54,7 @@ case class DeleteHoodieTableCommand(dft: DeleteFromTable) extends HoodieLeafRunn
       .options(config)
       .save()
 
-    sparkSession.catalog.refreshTable(tableId)
+    HoodieCatalogUtils.refreshTable(sparkSession, tableId)
 
     logInfo(s"Finished executing 'DELETE FROM' command for $tableId")
 

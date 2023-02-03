@@ -904,7 +904,7 @@ object HoodieSparkSqlWriter {
       getHiveTableNames(hoodieConfig).foreach(name => {
         val qualifiedTableName = String.join(".", hoodieConfig.getStringOrDefault(HIVE_DATABASE), name)
         if (spark.catalog.tableExists(qualifiedTableName)) {
-          spark.catalog.refreshTable(qualifiedTableName)
+          HoodieCatalogUtils.refreshTable(spark, qualifiedTableName)
         }
       })
     }

@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.command
 
 import java.nio.charset.StandardCharsets
-
 import org.apache.avro.Schema
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
@@ -27,7 +26,7 @@ import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.{AnalysisException, HoodieCatalogUtils, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.types.{StructField, StructType}
@@ -80,7 +79,8 @@ case class AlterHoodieTableAddColumnsCommand(
       case NonFatal(e) =>
         log.warn(s"Exception when attempting to uncache table ${tableId.quotedString}", e)
     }
-    sparkSession.catalog.refreshTable(table.identifier.unquotedString)
+
+    HoodieCatalogUtils.refreshTable(sparkSession, table.identifier)
 
     SchemaUtils.checkColumnNameDuplication(
       newSqlDataSchema.map(_.name),

@@ -18,15 +18,12 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.fs.Path
-
-import org.apache.hudi.common.table.HoodieTableConfig
-
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.execution.command.PartitionStatistics
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.{AnalysisException, HoodieCatalogUtils, Row, SparkSession}
 import org.apache.spark.util.ThreadUtils
 
 import java.util.concurrent.TimeUnit.MILLISECONDS
@@ -99,7 +96,7 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     // before Spark 2.1 unless they are converted via `msck repair table`.
     spark.sessionState.catalog.alterTable(table.copy(tracksPartitionsInCatalog = true))
     try {
-      spark.catalog.refreshTable(tableIdentWithDB)
+      HoodieCatalogUtils.refreshTable(spark, table.identifier)
     } catch {
       case NonFatal(e) =>
         logError(s"Cannot refresh the table '$tableIdentWithDB'. A query of the table " +

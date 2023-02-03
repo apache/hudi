@@ -64,7 +64,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
       .options(config)
       .save()
 
-    sparkSession.catalog.refreshTable(tableId)
+    HoodieCatalogUtils.refreshTable(sparkSession, tableId)
 
     logInfo(s"Finished executing 'UPDATE' command for $tableId")
 

@@ -22,7 +22,7 @@ import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.{AnalysisException, HoodieCatalogUtils, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
@@ -87,7 +87,8 @@ case class AlterHoodieTableChangeColumnCommand(
       case NonFatal(e) =>
         log.warn(s"Exception when attempting to uncache table ${tableIdentifier.quotedString}", e)
     }
-    sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
+
+    HoodieCatalogUtils.refreshTable(sparkSession, tableIdentifier)
     // Change the schema in the meta using new data schema.
     sparkSession.sessionState.catalog.alterTableDataSchema(tableIdentifier, newDataSchema)
 

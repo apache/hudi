@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getPartitionPathToDrop, normalizePartitionSpec}
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.{AnalysisException, HoodieCatalogUtils, Row, SaveMode, SparkSession}
 
 /**
  * Command for truncate hudi table.
@@ -98,7 +98,8 @@ case class TruncateHoodieTableCommand(
 
     // After deleting the data, refresh the table to make sure we don't keep around a stale
     // file relation in the metastore cache and cached table data in the cache manager.
-    sparkSession.catalog.refreshTable(table.identifier.quotedString)
+    HoodieCatalogUtils.refreshTable(sparkSession, table.identifier)
+
     logInfo(s"Finish execute truncate table command for $fullTableName")
     Seq.empty[Row]
   }
