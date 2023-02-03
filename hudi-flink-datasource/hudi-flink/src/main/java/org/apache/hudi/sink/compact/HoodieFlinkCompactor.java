@@ -279,7 +279,6 @@ public class HoodieFlinkCompactor {
           LOG.warn("The compaction plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
               + "Clean the compaction plan in auxiliary path and cancels the compaction");
           CompactionUtil.cleanInstant(table.getMetaClient(), instant);
-          return;
         }
       }
 
