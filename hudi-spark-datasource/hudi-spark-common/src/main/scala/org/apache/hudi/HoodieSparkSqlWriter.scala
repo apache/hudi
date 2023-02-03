@@ -826,7 +826,6 @@ object HoodieSparkSqlWriter {
     }
 
     if (metaSyncEnabled) {
-      spark.sparkContext.setJobGroup(this.getClass().getSimpleName(),"Triggering meta sync", true);
       val fs = basePath.getFileSystem(spark.sessionState.newHadoopConf())
       val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT);
       val properties = new TypedProperties()

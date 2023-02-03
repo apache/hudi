@@ -1086,9 +1086,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
 
-    // skip parsing file system for metadata records if its first commit for the table.
-    if (dataMetaClient.getActiveTimeline().getWriteTimeline().countInstants() > 1
-        || dataMetaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().countInstants() != 0) {
+    // skip file system listing to populate metadata records if its a fresh table.
+    // this is applicable only if the table already has N commits and metadata is enabled at a later point in time.
+    if (createInstantTime.equals(SOLO_COMMIT_TIMESTAMP)) { // SOLO_COMMIT_TIMESTAMP will be the initial commit time in MDT for a fresh table.
+      // If not, last completed commit in data table will be chosen as the initial commit time.
+      LOG.info("Triggering empty Commit to metadata to initialize");
+    } else {
       List<DirectoryInfo> partitionInfoList = listAllPartitions(dataMetaClient);
       Map<String, Map<String, Long>> partitionToFilesMap = partitionInfoList.stream()
           .map(p -> {
@@ -1120,8 +1123,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, recordsRDD);
       }
       LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
-    } else {
-      LOG.info("Triggering empty Commit to metadata to initialize");
     }
 
     commit(createInstantTime, partitionToRecordsMap, false);
