@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 
 public class RDDSimpleBucketPartitioner<T extends HoodieRecordPayload> extends RDDBucketIndexPartitioner<T> {
 
-
   public RDDSimpleBucketPartitioner(HoodieTable table) {
     super(table, null, false);
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSimpleBucketIndex);

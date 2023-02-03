@@ -39,11 +39,11 @@ public abstract class BulkInsertInternalPartitionerFactory {
                                           HoodieWriteConfig config,
                                           boolean enforceNumOutputPartitions) {
     if (config.getIndexType().equals(HoodieIndex.IndexType.BUCKET)) {
-        if (config.getBucketIndexEngineType().equals(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)) {
-          return new RDDConsistentBucketPartitioner(table);
-        } else if (config.getBucketIndexEngineType().equals(HoodieIndex.BucketIndexEngineType.SIMPLE)) {
-          return new RDDSimpleBucketPartitioner(table);
-        }
+      if (config.getBucketIndexEngineType().equals(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)) {
+        return new RDDConsistentBucketPartitioner(table);
+      } else if (config.getBucketIndexEngineType().equals(HoodieIndex.BucketIndexEngineType.SIMPLE)) {
+        return new RDDSimpleBucketPartitioner(table);
+      }
     }
     return get(config, table.isPartitioned(), enforceNumOutputPartitions);
   }
