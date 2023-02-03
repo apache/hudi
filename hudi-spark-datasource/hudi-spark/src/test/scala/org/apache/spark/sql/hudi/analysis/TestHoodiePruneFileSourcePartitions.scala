@@ -54,8 +54,11 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
     )
 
   @ParameterizedTest
-  @CsvSource(value = Array("cow", "mor"))
-  def testPartitionFiltersPushDown(tableType: String): Unit = {
+  @CsvSource(value = Array(
+    "cow,true", "cow,false",
+    "mor,true", "mor,false"
+  ))
+  def testPartitionFiltersPushDown(tableType: String, partitioned: Boolean): Unit = {
     spark.sql(
       s"""
          |CREATE TABLE $tableName (
@@ -65,7 +68,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
          |  ts long,
          |  partition string
          |) USING hudi
-         |PARTITIONED BY (partition)
+         |${if (partitioned) "PARTITIONED BY (partition)" else ""}
          |TBLPROPERTIES (
          |  type = '$tableType',
          |  primaryKey = 'id',
@@ -103,8 +106,14 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
             //          support (for partition-pruning) will only occur during execution phase, while file-listing
             //          actually happens during analysis stage
             case "eager" =>
-              assertEquals(1275, f.stats.sizeInBytes.longValue() / 1024)
-              assertEquals(1275, lr.stats.sizeInBytes.longValue() / 1024)
+              // NOTE: In case of partitioned table 3 files will be created, while in case of non-partitioned just 1
+              if (partitioned) {
+                assertEquals(1275, f.stats.sizeInBytes.longValue() / 1024)
+                assertEquals(1275, lr.stats.sizeInBytes.longValue() / 1024)
+              } else {
+                assertEquals(425, f.stats.sizeInBytes.longValue() / 1024)
+                assertEquals(425, lr.stats.sizeInBytes.longValue() / 1024)
+              }
 
             // Case #2: Lazy listing (default mode).
             //          In case of lazy listing mode, Hudi will only list partitions matching partition-predicates that are
