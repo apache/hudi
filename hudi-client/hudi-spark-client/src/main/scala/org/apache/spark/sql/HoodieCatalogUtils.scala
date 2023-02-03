@@ -17,8 +17,63 @@
 
 package org.apache.spark.sql
 
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.CatalogTableType
+
 /**
  * NOTE: Since support for [[TableCatalog]] was only added in Spark 3, this trait
  *       is going to be an empty one simply serving as a placeholder (for compatibility w/ Spark 2)
  */
 trait HoodieCatalogUtils {}
+
+object HoodieCatalogUtils {
+
+  def refreshTable(spark: SparkSession, qualifiedTableName: String): Unit = {
+    val tableId = spark.sessionState.sqlParser.parseTableIdentifier(qualifiedTableName)
+    refreshTable(spark, tableId)
+  }
+
+  /**
+   * NOTE: This is borrowed from Spark 3.1.3
+   *
+   * TODO elaborate
+   */
+  def refreshTable(spark: SparkSession, tableId: TableIdentifier): Unit = {
+    val sessionCatalog = spark.sessionState.catalog
+    val tableMetadata = sessionCatalog.getTempViewOrPermanentTableMetadata(tableId)
+    val table = spark.table(tableId)
+
+    if (tableMetadata.tableType == CatalogTableType.VIEW) {
+      // Temp or persistent views: refresh (or invalidate) any metadata/data cached
+      // in the plan recursively
+      table.queryExecution.analyzed.refresh()
+    } else {
+      // Non-temp tables: refresh the metadata cache
+      sessionCatalog.refreshTable(tableId)
+    }
+
+    // If this table is cached as an InMemoryRelation, drop the original
+    // cached version and make the new version cached lazily
+    val cache = spark.sharedState.cacheManager.lookupCachedData(table)
+
+    // Uncache the logical plan
+    // NOTE: This is a no-op for the table itself if it's not cached, but will invalidate all
+    // caches referencing this table.
+    spark.sharedState.cacheManager.uncacheQuery(table, cascade = true)
+
+    // TODO can we refresh the CacheManager if we're not refreshing the relation?
+    //if (cache.nonEmpty) {
+    //  // save the cache name and cache level for recreation
+    //  val cacheName = cache.get.cachedRepresentation.cacheBuilder.tableName
+    //  val cacheLevel = cache.get.cachedRepresentation.cacheBuilder.storageLevel
+    //
+    //  // creates a new logical plan since the old table refers to old relation which
+    //  // should be refreshed
+    //  val newTable = spark.table(tableIdent)
+    //
+    //  // recache with the same name and cache level.
+    //  spark.sharedState.cacheManager.cacheQuery(newTable, cacheName, cacheLevel)
+    //}
+  }
+
+}
