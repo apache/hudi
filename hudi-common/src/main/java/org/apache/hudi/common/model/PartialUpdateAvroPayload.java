@@ -125,7 +125,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties prop) throws IOException {
-    return mergeOldRecord(currentValue, schema, isRecordNewer(orderingVal, currentValue, prop));
+    return mergeOldRecord(currentValue, schema, isRecordNewer(schema, currentValue, prop));
   }
 
   /**
@@ -197,17 +197,29 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
    * Returns whether the given record is newer than the record of this payload.
    *
    * @param orderingVal
-   * @param record The record
-   * @param prop   The payload properties
-   *
+   * @param schema
+   * @param record      The record
+   * @param prop        The payload properties
    * @return true if the given record is newer
    */
-  private static boolean isRecordNewer(Comparable orderingVal, IndexedRecord record, Properties prop) {
+  private boolean isRecordNewer(Schema schema, IndexedRecord record, Properties prop) throws IOException {
     String orderingField = prop.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
+    String preCombineField = prop.getProperty("hoodie.datasource.write.precombine.field");
+
     if (!StringUtils.isNullOrEmpty(orderingField)) {
       boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(prop.getProperty(
           KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
           KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+
+      Comparable incomingOrderingVal;
+      if (orderingField.equals(preCombineField)) {
+        incomingOrderingVal = orderingVal;
+      } else {
+        GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+        incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal(incomingRecord,
+            orderingField,
+            true, consistentLogicalTimestampEnabled);
+      }
 
       Comparable oldOrderingVal =
           (Comparable) HoodieAvroUtils.getNestedFieldVal(
@@ -215,11 +227,10 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
               orderingField,
               true,
               consistentLogicalTimestampEnabled);
-
       // pick the payload with greater ordering value as insert record
       return oldOrderingVal != null
-          && ReflectionUtils.isSameClass(oldOrderingVal, orderingVal)
-          && oldOrderingVal.compareTo(orderingVal) > 0;
+          && ReflectionUtils.isSameClass(oldOrderingVal, incomingOrderingVal)
+          && oldOrderingVal.compareTo(incomingOrderingVal) > 0;
     }
     return false;
   }
