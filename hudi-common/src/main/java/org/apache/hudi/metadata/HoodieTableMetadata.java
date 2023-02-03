@@ -49,6 +49,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   // Table name suffix
   String METADATA_TABLE_NAME_SUFFIX = "_metadata";
+  String METADATA_TABLE_INIT_TIME_SUFFIX = "000";
+  String METADATA_TABLE_COMPACTION_TIME_SUFFIX = "001";
+  String METADATA_TABLE_CLEAN_TIME_SUFFIX = "002";
   /**
    * Timestamp for a commit when the base dataset had not had any commits yet. this is < than even
    * {@link org.apache.hudi.common.table.timeline.HoodieTimeline#INIT_INSTANT_TS}, such that the metadata table
