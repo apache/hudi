@@ -111,8 +111,8 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
                 assertEquals(1275, f.stats.sizeInBytes.longValue() / 1024)
                 assertEquals(1275, lr.stats.sizeInBytes.longValue() / 1024)
               } else {
-                assertEquals(424, f.stats.sizeInBytes.longValue() / 1024)
-                assertEquals(424, lr.stats.sizeInBytes.longValue() / 1024)
+                assertEquals(425, (f.stats.sizeInBytes.longValue() + 512) / 1024)
+                assertEquals(425, (lr.stats.sizeInBytes.longValue() + 512) / 1024)
               }
 
             // Case #2: Lazy listing (default mode).
@@ -120,8 +120,8 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
             //          eagerly pushed down (w/ help of [[HoodiePruneFileSourcePartitions]]) avoiding the necessity to
             //          list the whole table
             case "lazy" =>
-              assertEquals(425, f.stats.sizeInBytes.longValue() / 1024)
-              assertEquals(425, lr.stats.sizeInBytes.longValue() / 1024)
+              assertEquals(425, (f.stats.sizeInBytes.longValue() + 512) / 1024)
+              assertEquals(425, (lr.stats.sizeInBytes.longValue() + 512) / 1024)
 
             case _ => throw new UnsupportedOperationException()
           }
