@@ -34,7 +34,6 @@ import org.apache.spark.sql.sources.v2.writer.WriterCommitMessage;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -51,7 +50,7 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
   private final DataSourceInternalWriterHelper dataSourceInternalWriterHelper;
   private final boolean populateMetaFields;
   private final Boolean arePartitionRecordsSorted;
-  private Map<String, String> extraMetadataMap = new HashMap<>();
+  private final SparkSession sparkSession;
 
   public HoodieDataSourceInternalWriter(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
                                         SparkSession sparkSession, Configuration configuration, DataSourceOptions dataSourceOptions,
@@ -61,13 +60,15 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
     this.structType = structType;
     this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
-    this.extraMetadataMap = DataSourceUtils.getExtraMetadata(dataSourceOptions.asMap());
+    this.sparkSession = sparkSession;
+    Map<String, String> extraMetadataMap = DataSourceUtils.getExtraMetadata(dataSourceOptions.asMap());
     this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
         sparkSession, configuration, extraMetadataMap);
   }
 
   @Override
   public DataWriterFactory<InternalRow> createWriterFactory() {
+    sparkSession.sparkContext().setJobGroup(this.getClass().getSimpleName(), "Writing data to files using bulk_insert", true);
     dataSourceInternalWriterHelper.createInflightCommit();
     if (WriteOperationType.BULK_INSERT == dataSourceInternalWriterHelper.getWriteOperationType()) {
       return new HoodieBulkInsertDataInternalWriterFactory(dataSourceInternalWriterHelper.getHoodieTable(),
@@ -89,6 +90,7 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
 
   @Override
   public void commit(WriterCommitMessage[] messages) {
+    sparkSession.sparkContext().setJobGroup(this.getClass().getSimpleName(), "Committing to data table", true);
     List<HoodieWriteStat> writeStatList = Arrays.stream(messages).map(m -> (HoodieWriterCommitMessage) m)
         .flatMap(m -> m.getWriteStatuses().stream().map(HoodieInternalWriteStatus::getStat)).collect(Collectors.toList());
     dataSourceInternalWriterHelper.commit(writeStatList);
