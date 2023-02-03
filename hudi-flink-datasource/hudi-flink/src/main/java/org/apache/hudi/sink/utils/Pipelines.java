@@ -62,6 +62,9 @@ import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -139,10 +142,19 @@ public class Pipelines {
         dataStream = dataStream.partitionCustom(partitioner, rowDataKeyGen::getPartitionPath);
       }
       if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
-        SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, partitionFields);
-        // sort by partition keys
+        String[] sortFields = partitionFields;
+        String operatorName = "partition_key_sorter";
+        if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY)) {
+          String[] recordKeyFields = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
+          ArrayList<String> sortList = new ArrayList<>(Arrays.asList(partitionFields));
+          Collections.addAll(sortList, recordKeyFields);
+          sortFields = sortList.toArray(new String[0]);
+          operatorName = "partition_and_record_key_sorter";
+        }
+        SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, sortFields);
+        // sort by partition keys or (partition keys and record keys)
         dataStream = dataStream
-            .transform("partition_key_sorter",
+            .transform(operatorName,
                 InternalTypeInfo.of(rowType),
                 sortOperatorGen.createSortOperator())
             .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
@@ -150,22 +162,6 @@ public class Pipelines {
             conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
       }
     }
-
-    final String[] recordKeyFields = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
-    if (recordKeyFields.length > 0) {
-      if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY)) {
-        SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, recordKeyFields);
-        // sort by record keys
-        dataStream = dataStream
-            .transform("record_key_sorter",
-                InternalTypeInfo.of(rowType),
-                sortOperatorGen.createSortOperator())
-            .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
-        ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
-                conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
-      }
-    }
-
     return dataStream
         .transform(opName("hoodie_bulk_insert_write", conf),
             TypeInformation.of(Object.class),
