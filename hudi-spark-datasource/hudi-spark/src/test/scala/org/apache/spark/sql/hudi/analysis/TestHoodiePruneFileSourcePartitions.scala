@@ -111,6 +111,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
                 assertEquals(1275, f.stats.sizeInBytes.longValue() / 1024)
                 assertEquals(1275, lr.stats.sizeInBytes.longValue() / 1024)
               } else {
+                // NOTE: We're adding 512 to make sure we always round to the next integer value
                 assertEquals(425, (f.stats.sizeInBytes.longValue() + 512) / 1024)
                 assertEquals(425, (lr.stats.sizeInBytes.longValue() + 512) / 1024)
               }
@@ -120,6 +121,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
             //          eagerly pushed down (w/ help of [[HoodiePruneFileSourcePartitions]]) avoiding the necessity to
             //          list the whole table
             case "lazy" =>
+              // NOTE: We're adding 512 to make sure we always round to the next integer value
               assertEquals(425, (f.stats.sizeInBytes.longValue() + 512) / 1024)
               assertEquals(425, (lr.stats.sizeInBytes.longValue() + 512) / 1024)
 
