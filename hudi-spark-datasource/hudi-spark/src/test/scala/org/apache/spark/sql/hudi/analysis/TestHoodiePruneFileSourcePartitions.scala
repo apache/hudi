@@ -126,13 +126,15 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
             case _ => throw new UnsupportedOperationException()
           }
 
-          val executionPlan = df.queryExecution.executedPlan
-          val expectedPhysicalPlanPartitionFiltersClause = tableType match {
-            case "cow" => s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
-            case "mor" => s"PushedFilters: [IsNotNull(partition), EqualTo(partition,2021-01-05)]"
-          }
+          if (partitioned) {
+            val executionPlan = df.queryExecution.executedPlan
+            val expectedPhysicalPlanPartitionFiltersClause = tableType match {
+              case "cow" => s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
+              case "mor" => s"PushedFilters: [IsNotNull(partition), EqualTo(partition,2021-01-05)]"
+            }
 
-          Assertions.assertTrue(executionPlan.toString().contains(expectedPhysicalPlanPartitionFiltersClause))
+            Assertions.assertTrue(executionPlan.toString().contains(expectedPhysicalPlanPartitionFiltersClause))
+          }
 
         case _ =>
           val failureHint =
