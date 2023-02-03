@@ -33,29 +33,45 @@ import java.util.function.Function;
 
 public class ExecutorFactory {
 
-  public static <I, O, E> HoodieExecutor<E> create(HoodieWriteConfig hoodieConfig,
+  public static <I, O, E> HoodieExecutor<E> create(HoodieWriteConfig config,
                                                    Iterator<I> inputItr,
                                                    HoodieConsumer<O, E> consumer,
                                                    Function<I, O> transformFunction) {
-    return create(hoodieConfig, inputItr, consumer, transformFunction, Functions.noop());
+    return create(config, inputItr, consumer, transformFunction, Functions.noop());
   }
 
-  public static <I, O, E> HoodieExecutor<E> create(HoodieWriteConfig hoodieConfig,
+  public static <I, O, E> HoodieExecutor<E> create(HoodieWriteConfig config,
                                                    Iterator<I> inputItr,
                                                    HoodieConsumer<O, E> consumer,
                                                    Function<I, O> transformFunction,
                                                    Runnable preExecuteRunnable) {
-    ExecutorType executorType = hoodieConfig.getExecutorType();
-
+    ExecutorType executorType = config.getExecutorType();
     switch (executorType) {
       case BOUNDED_IN_MEMORY:
-        return new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, consumer,
+        return new BoundedInMemoryExecutor<>(config.getWriteBufferLimitBytes(), inputItr, consumer,
             transformFunction, preExecuteRunnable);
       case DISRUPTOR:
-        return new DisruptorExecutor<>(hoodieConfig.getWriteExecutorDisruptorWriteBufferLimitBytes(), inputItr, consumer,
-            transformFunction, hoodieConfig.getWriteExecutorDisruptorWaitStrategy(), preExecuteRunnable);
+        return new DisruptorExecutor<>(config.getWriteExecutorDisruptorWriteBufferLimitBytes(), inputItr, consumer,
+            transformFunction, config.getWriteExecutorDisruptorWaitStrategy(), preExecuteRunnable);
       case SIMPLE:
         return new SimpleExecutor<>(inputItr, consumer, transformFunction);
+      default:
+        throw new HoodieException("Unsupported Executor Type " + executorType);
+    }
+  }
+
+  /**
+   * Checks whether configured {@link HoodieExecutor} buffer records (for ex, by holding them
+   * in the queue)
+   */
+  public static boolean isBufferingRecords(HoodieWriteConfig config) {
+    ExecutorType executorType = config.getExecutorType();
+    switch (executorType) {
+      case BOUNDED_IN_MEMORY:
+      case DISRUPTOR:
+        return true;
+      case SIMPLE:
+        return false;
       default:
         throw new HoodieException("Unsupported Executor Type " + executorType);
     }
