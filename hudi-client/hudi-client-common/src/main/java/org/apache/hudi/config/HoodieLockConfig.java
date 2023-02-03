@@ -17,6 +17,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.index.HoodieIndex;
 
 import java.io.File;
 import java.io.FileReader;
@@ -185,6 +187,13 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key(LOCK_PREFIX + "conflict.resolution.strategy")
       .defaultValue(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
+      .withInferFunction(hoodieConfig -> {
+        if (HoodieIndex.IndexType.BUCKET.name().equalsIgnoreCase(hoodieConfig.getStringOrDefault(HoodieIndexConfig.INDEX_TYPE, null))) {
+          return Option.of(BucketIndexConcurrentFileWritesConflictResolutionStrategy.class.getName());
+        } else {
+          return Option.of(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
+        }
+      })
       .sinceVersion("0.8.0")
       .withDocumentation("Lock provider class name, this should be subclass of "
           + "org.apache.hudi.client.transaction.ConflictResolutionStrategy");
