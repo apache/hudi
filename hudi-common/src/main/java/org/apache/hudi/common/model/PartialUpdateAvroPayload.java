@@ -196,8 +196,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
   /**
    * Returns whether the given record is newer than the record of this payload.
    *
-   * @param orderingVal
-   * @param schema
+   * @param schema      The schema
    * @param record      The record
    * @param prop        The payload properties
    * @return true if the given record is newer
