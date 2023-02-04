@@ -123,7 +123,7 @@ public class FlinkCompactionConfig extends Configuration {
   public String compactionPlanInstant;
 
   @Parameter(names = {"--spillable_map_path"}, description = "Default file path prefix for spillable map.")
-  public String spillableMapPath = HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue();
+  public String spillableMapPath = HoodieMemoryConfig.getDefaultSpillableMapBasePath();
 
   /**
    * Transforms a {@code HoodieFlinkCompaction.config} into {@code Configuration}.

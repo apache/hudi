@@ -2090,7 +2090,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getSpillableMapBasePath() {
-    return getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH);
+    return Option.ofNullable(getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH))
+        .orElseGet(HoodieMemoryConfig::getDefaultSpillableMapBasePath);
   }
 
   public double getWriteStatusFailureFraction() {

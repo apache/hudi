@@ -36,6 +36,7 @@ import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -72,8 +73,12 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
   String basePath;
   String propsFilePath;
   String tableBasePath;
+  
+  @AfterEach
+  public void teardown() throws Exception {
+    TestDataSource.resetDataGen();
+  }
 
-  @Disabled("HUDI-5653")
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   void testUpsertsContinuousModeWithMultipleWritersForConflicts(HoodieTableType tableType) throws Exception {
