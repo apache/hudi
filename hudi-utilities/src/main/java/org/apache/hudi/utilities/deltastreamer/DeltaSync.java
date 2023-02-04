@@ -55,7 +55,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
@@ -759,10 +758,8 @@ public class DeltaSync implements Serializable, Closeable {
     RuntimeException lastException = null;
     while (retryNum <= maxRetries) {
       try {
-        String instantTime = HoodieActiveTimeline.createNewInstantTime();
         String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-        writeClient.startCommitWithTime(instantTime, commitActionType);
-        return instantTime;
+        return writeClient.startCommit(commitActionType);
       } catch (IllegalArgumentException ie) {
         lastException = ie;
         LOG.error("Got error trying to start a new commit. Retrying after sleeping for a sec", ie);

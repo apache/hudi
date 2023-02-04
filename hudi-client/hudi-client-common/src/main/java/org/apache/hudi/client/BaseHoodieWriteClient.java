@@ -811,6 +811,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return instantTime;
   }
 
+
+  /**
+   * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
+   */
+  public String startCommit(String actionType) {
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    return startCommit(actionType, metaClient);
+  }
+
   /**
    * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) without specified action.
    * @param instantTime Instant time to be generated
