@@ -342,6 +342,10 @@ public class DeltaSync implements Serializable, Closeable {
         .setPreCombineField(cfg.sourceOrderingField)
         .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
             HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
+        .setCDCEnabled(props.getBoolean(HoodieTableConfig.CDC_ENABLED.key(),
+            HoodieTableConfig.CDC_ENABLED.defaultValue()))
+        .setCDCSupplementalLoggingMode(props.getString(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key(),
+            HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.defaultValue()))
         .setShouldDropPartitionColumns(isDropPartitionColumns())
         .initTable(new Configuration(jssc.hadoopConfiguration()),
             cfg.targetBasePath);
