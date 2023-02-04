@@ -32,6 +32,7 @@ public class ConfigGroups {
     SPARK_DATASOURCE("Spark Datasource Configs"),
     FLINK_SQL("Flink Sql Configs"),
     WRITE_CLIENT("Write Client Configs"),
+    META_SYNC("Metastore and Catalog Sync Configs"),
     METRICS("Metrics Configs"),
     RECORD_PAYLOAD("Record Payload Config"),
     KAFKA_CONNECT("Kafka Connect Configs"),
