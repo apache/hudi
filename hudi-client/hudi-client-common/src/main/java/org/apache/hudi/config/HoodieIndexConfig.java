@@ -59,10 +59,11 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
  * Indexing related config.
  */
 @Immutable
-@ConfigClassProperty(name = "Index Configs",
+@ConfigClassProperty(name = "Common Index Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that control indexing behavior, "
-        + "which tags incoming records as either inserts or updates to older records.")
+    subGroupName = ConfigGroups.Names.INDEX,
+    shouldPresentFirst = true,
+    description = "")
 public class HoodieIndexConfig extends HoodieConfig {
 
   private static final Logger LOG = LogManager.getLogger(HoodieIndexConfig.class);

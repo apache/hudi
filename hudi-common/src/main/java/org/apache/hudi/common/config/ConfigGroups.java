@@ -32,11 +32,15 @@ public class ConfigGroups {
     SPARK_DATASOURCE("Spark Datasource Configs"),
     FLINK_SQL("Flink Sql Configs"),
     WRITE_CLIENT("Write Client Configs"),
+    INDEX("Index Configs"),
+    LOCK("Lock Configs"),
+    COMMIT_CALLBACK("Commit Callback Configs"),
     META_SYNC("Metastore and Catalog Sync Configs"),
     METRICS("Metrics Configs"),
     RECORD_PAYLOAD("Record Payload Config"),
     KAFKA_CONNECT("Kafka Connect Configs"),
-    AWS("Amazon Web Services Configs");
+    AWS("Amazon Web Services Configs"),
+    NONE("(No categorization)");
 
     public final String name;
 
@@ -66,8 +70,24 @@ public class ConfigGroups {
             + "write schema, cleaning etc. Although Hudi provides sane defaults, from time-time "
             + "these configs may need to be tweaked to optimize for specific workloads.";
         break;
+      case INDEX:
+        description = "Configurations that control indexing behavior, "
+            + "which tags incoming records as either inserts or updates to older records.";
+        break;
+      case LOCK:
+        description = "Configurations that control locking mechanisms required for concurrency control "
+            + " between writers to a Hudi table. Concurrency between Hudi's own table services "
+            + " are auto managed internally.";
+        break;
+      case COMMIT_CALLBACK:
+        description = "Configurations controling callback behavior into HTTP endpoints, to push "
+            + "notifications on commits on hudi tables.";
+        break;
+      case META_SYNC:
+        description = "Configurations used by the Hudi to sync metadata to external metastores and catalogs.";
+        break;
       case RECORD_PAYLOAD:
-        description =  "This is the lowest level of customization offered by Hudi. "
+        description = "This is the lowest level of customization offered by Hudi. "
             + "Record payloads define how to produce new values to upsert based on incoming "
             + "new record and stored old record. Hudi provides default implementations such as "
             + "OverwriteWithLatestAvroPayload which simply update table with the latest/last-written record. "
@@ -80,6 +100,9 @@ public class ConfigGroups {
         break;
       case KAFKA_CONNECT:
         description = "These set of configs are used for Kafka Connect Sink Connector for writing Hudi Tables";
+        break;
+      case AWS:
+        description = "Configurations specific to Amazon Web Services.";
         break;
       default:
         description = "Please fill in the description for Config Group Name: " + names.name;
