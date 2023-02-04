@@ -49,20 +49,20 @@ import java.util.List;
 
 /**
  * Abstract of bucket index bulk_insert partitioner
- * TODO implement partitioner for SIMPLE BUCKET INDEX
  */
 public abstract class RDDBucketIndexPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   public static final Logger LOG = LogManager.getLogger(RDDBucketIndexPartitioner.class);
 
-  public final HoodieTable table;
-  public final String[] sortColumnNames;
-  final List<String> indexKeyFields;
-  final boolean consistentLogicalTimestampEnabled;
-  public final List<Boolean> doAppend = new ArrayList<>();
-  public final List<String> fileIdPfxList = new ArrayList<>();
-  final boolean preserveHoodieMetadata;
+  private final String[] sortColumnNames;
+  private final boolean consistentLogicalTimestampEnabled;
+  private final boolean preserveHoodieMetadata;
+
+  protected final HoodieTable table;
+  protected final List<String> indexKeyFields;
+  protected final List<Boolean> doAppend = new ArrayList<>();
+  protected final List<String> fileIdPfxList = new ArrayList<>();
 
   public RDDBucketIndexPartitioner(HoodieTable table, String sortString, boolean preserveHoodieMetadata) {
 
@@ -100,7 +100,7 @@ public abstract class RDDBucketIndexPartitioner<T>
   /**
    * Execute partition using the given partitioner.
    * If sorting is required, will do it within each data partition:
-   * - if sortColumnNames is specified, apply sort to the column (the behaviour is the same as `RDDCustomColumnsSortPartitioner`
+   * - if sortColumnNames is specified, apply sort to the column (the behaviour is the same as `RDDCustomColumnsSortPartitioner`)
    * - if table requires sort or BulkInsertSortMode is not None, then sort by record key within partition.
    * By default, do partition only.
    *
