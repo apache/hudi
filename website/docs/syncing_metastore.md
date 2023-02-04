@@ -82,8 +82,8 @@ To use this mode, just pass the jdbc url to the hive server (`--use-jdbc` is tru
 
 #### Install
 
-Now you can git clone Hudi master branch to test Flink hive sync. The first step is to install Hudi to get `hudi-flink-bundle_2.11-0.x.jar`.
-`hudi-flink-bundle` module pom.xml sets the scope related to hive as `provided` by default. If you want to use hive sync, you need to use the
+Now you can git clone Hudi master branch to test Flink hive sync. The first step is to install Hudi to get `hudi-flink1.1x-bundle-0.x.x.jar`.
+ `hudi-flink-bundle` module pom.xml sets the scope related to hive as `provided` by default. If you want to use hive sync, you need to use the
 profile `flink-bundle-shade-hive` during packaging. Executing command below to install:
 
 ```bash
