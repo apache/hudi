@@ -19,11 +19,15 @@
 
 package org.apache.hudi.gcp.bigquery;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParametersDelegate;
+
+import javax.annotation.concurrent.Immutable;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -33,6 +37,10 @@ import java.util.Properties;
 /**
  * Configs needed to sync data into BigQuery.
  */
+@Immutable
+@ConfigClassProperty(name = "BigQuery Sync Configs",
+    groupName = ConfigGroups.Names.META_SYNC,
+    description = "Configurations used by the Hudi to sync metadata to Google BigQuery.")
 public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable {
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_PROJECT_ID = ConfigProperty
