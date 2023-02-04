@@ -69,7 +69,7 @@ public class HoodieMergeHandleFactory {
   /**
    * Creates a merge handle for compaction path.
    */
-  public static <T, I, K, O> HoodieMergeHandle<T, I, K, O> createForCompaction(
+  public static <T, I, K, O> HoodieMergeHandle<T, I, K, O> create(
       HoodieWriteConfig writeConfig,
       String instantTime,
       HoodieTable<T, I, K, O> table,

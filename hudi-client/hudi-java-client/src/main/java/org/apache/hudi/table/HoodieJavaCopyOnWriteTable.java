@@ -292,7 +292,7 @@ public class HoodieJavaCopyOnWriteTable<T>
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
                                               Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
-    return HoodieMergeHandleFactory.createForCompaction(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
+    return HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
         dataFileToBeMerged, taskContextSupplier, Option.empty());
   }
 
