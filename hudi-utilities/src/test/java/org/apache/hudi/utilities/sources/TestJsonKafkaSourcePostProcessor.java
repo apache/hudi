@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -35,6 +34,7 @@ import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.canal.CanalJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.maxwell.MaxwellJsonKafkaSourcePostProcessor;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -297,7 +297,6 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     assertEquals(2, countWithoutDatabaseRegex);
   }
 
-
   @Test
   public void testCanalJsonKafkaSourcePostProcessor() throws IOException {
     // ------------------------------------------------------------------------
@@ -305,16 +304,16 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     // ------------------------------------------------------------------------
 
     // database hudi, table hudi_canal_001 (insert, update and delete)
-    String hudiCanal01Update = "{\"data\":[{\"id\":\"111\",\"name\":\"scooter\",\"description\":\"Big 2-wheel scooter\",\"weight\":\"5.18\"}]," +
-            "\"database\":\"hudi001\",\"es\":1589373560000,\"id\":9,\"isDdl\":false," +
-            "\"mysqlType\":{\"id\":\"INTEGER\",\"name\":\"VARCHAR(255)\",\"description\":\"VARCHAR(512)\",\"weight\":\"FLOAT\"}," +
-            "\"old\":[{\"weight\":\"5.15\"}],\"pkNames\":[\"id\"],\"sql\":\"\",\"sqlType\":{\"id\":4,\"name\":12," +
-            "\"description\":12,\"weight\":7},\"table\":\"hudi_canal001\",\"ts\":1589373560798,\"type\":\"update\"}";
-    String hudiCanal01Insert = "{\"data\":[{\"id\":\"111\",\"name\":\"scooter\",\"description\":\"Big 2-wheel scooter\",\"weight\":\"5.18\"}]," +
-            "\"database\":\"hudi001\",\"es\":1589373560000,\"id\":9,\"isDdl\":false," +
-            "\"mysqlType\":{\"id\":\"INTEGER\",\"name\":\"VARCHAR(255)\",\"description\":\"VARCHAR(512)\",\"weight\":\"FLOAT\"}," +
-            "\"old\":[{\"weight\":\"5.15\"}],\"pkNames\":[\"id\"],\"sql\":\"\",\"sqlType\":{\"id\":4,\"name\":12," +
-            "\"description\":12,\"weight\":7},\"table\":\"hudi_canal001\",\"ts\":1589373560798,\"type\":\"insert\"}";
+    String hudiCanal01Update = "{\"data\":[{\"id\":\"111\",\"name\":\"scooter\",\"description\":\"Big 2-wheel scooter\",\"weight\":\"5.18\"}],"
+        + "\"database\":\"hudi001\",\"es\":1589373560000,\"id\":9,\"isDdl\":false,"
+        + "\"mysqlType\":{\"id\":\"INTEGER\",\"name\":\"VARCHAR(255)\",\"description\":\"VARCHAR(512)\",\"weight\":\"FLOAT\"},"
+        + "\"old\":[{\"weight\":\"5.15\"}],\"pkNames\":[\"id\"],\"sql\":\"\",\"sqlType\":{\"id\":4,\"name\":12,"
+        + "\"description\":12,\"weight\":7},\"table\":\"hudi_canal001\",\"ts\":1589373560798,\"type\":\"update\"}";
+    String hudiCanal01Insert = "{\"data\":[{\"id\":\"111\",\"name\":\"scooter\",\"description\":\"Big 2-wheel scooter\",\"weight\":\"5.18\"}],"
+        + "\"database\":\"hudi001\",\"es\":1589373560000,\"id\":9,\"isDdl\":false,"
+        + "\"mysqlType\":{\"id\":\"INTEGER\",\"name\":\"VARCHAR(255)\",\"description\":\"VARCHAR(512)\",\"weight\":\"FLOAT\"},"
+        + "\"old\":[{\"weight\":\"5.15\"}],\"pkNames\":[\"id\"],\"sql\":\"\",\"sqlType\":{\"id\":4,\"name\":12,"
+        + "\"description\":12,\"weight\":7},\"table\":\"hudi_canal001\",\"ts\":1589373560798,\"type\":\"insert\"}";
 
     // ------------------------------------------------------------------------
     //  Tests
