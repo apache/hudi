@@ -32,8 +32,8 @@ import java.util.Properties;
  */
 @ConfigClassProperty(name = "Write commit callback configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    subGroupName = ConfigGroups.Names.COMMIT_CALLBACK,
-    shouldPresentFirst = true,
+    subGroupName = ConfigGroups.SubGroupNames.COMMIT_CALLBACK,
+    areCommonConfigs = true,
     description = "")
 public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
 

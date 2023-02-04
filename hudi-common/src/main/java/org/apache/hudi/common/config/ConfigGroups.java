@@ -32,15 +32,11 @@ public class ConfigGroups {
     SPARK_DATASOURCE("Spark Datasource Configs"),
     FLINK_SQL("Flink Sql Configs"),
     WRITE_CLIENT("Write Client Configs"),
-    INDEX("Index Configs"),
-    LOCK("Lock Configs"),
-    COMMIT_CALLBACK("Commit Callback Configs"),
     META_SYNC("Metastore and Catalog Sync Configs"),
     METRICS("Metrics Configs"),
     RECORD_PAYLOAD("Record Payload Config"),
     KAFKA_CONNECT("Kafka Connect Configs"),
-    AWS("Amazon Web Services Configs"),
-    NONE("(No categorization)");
+    AWS("Amazon Web Services Configs");
 
     public final String name;
 
@@ -49,11 +45,42 @@ public class ConfigGroups {
     }
   }
 
+  public enum SubGroupNames {
+    INDEX(
+        "Index Configs",
+        "Configurations that control indexing behavior, "
+            + "which tags incoming records as either inserts or updates to older records."),
+    LOCK(
+        "Lock Configs",
+        "Configurations that control locking mechanisms required for concurrency control "
+            + " between writers to a Hudi table. Concurrency between Hudi's own table services "
+            + " are auto managed internally."),
+    COMMIT_CALLBACK(
+        "Commit Callback Configs",
+        "Configurations controling callback behavior into HTTP endpoints, to push "
+            + "notifications on commits on hudi tables."),
+    NONE(
+        "None",
+        "No subgroup. This description should be hidden.");
+
+    public final String name;
+    private final String description;
+
+    SubGroupNames(String name, String description) {
+      this.name = name;
+      this.description = description;
+    }
+
+    public String getDescription() {
+      return description;
+    }
+  }
+
   public static String getDescription(Names names) {
     String description;
     switch (names) {
       case SPARK_DATASOURCE:
-        description =  "These configs control the Hudi Spark Datasource, "
+        description = "These configs control the Hudi Spark Datasource, "
             + "providing ability to define keys/partitioning, pick out the write operation, "
             + "specify how to merge records or choosing query type to read.";
         break;
@@ -69,19 +96,6 @@ public class ConfigGroups {
             + "lower level aspects like file sizing, compression, parallelism, compaction, "
             + "write schema, cleaning etc. Although Hudi provides sane defaults, from time-time "
             + "these configs may need to be tweaked to optimize for specific workloads.";
-        break;
-      case INDEX:
-        description = "Configurations that control indexing behavior, "
-            + "which tags incoming records as either inserts or updates to older records.";
-        break;
-      case LOCK:
-        description = "Configurations that control locking mechanisms required for concurrency control "
-            + " between writers to a Hudi table. Concurrency between Hudi's own table services "
-            + " are auto managed internally.";
-        break;
-      case COMMIT_CALLBACK:
-        description = "Configurations controling callback behavior into HTTP endpoints, to push "
-            + "notifications on commits on hudi tables.";
         break;
       case META_SYNC:
         description = "Configurations used by the Hudi to sync metadata to external metastores and catalogs.";

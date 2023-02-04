@@ -35,7 +35,7 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_PREFIX;
  */
 @ConfigClassProperty(name = "DynamoDB based Locks Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    subGroupName = ConfigGroups.Names.LOCK,
+    subGroupName = ConfigGroups.SubGroupNames.LOCK,
     description = "Configs that control DynamoDB based locking mechanisms required for concurrency control "
         + " between writers to a Hudi table. Concurrency between Hudi's own table services "
         + " are auto managed internally.")

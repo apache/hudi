@@ -62,8 +62,8 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
  */
 @ConfigClassProperty(name = "Common Lock Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    subGroupName = ConfigGroups.Names.LOCK,
-    shouldPresentFirst = true,
+    subGroupName = ConfigGroups.SubGroupNames.LOCK,
+    areCommonConfigs = true,
     description = "")
 public class HoodieLockConfig extends HoodieConfig {
 

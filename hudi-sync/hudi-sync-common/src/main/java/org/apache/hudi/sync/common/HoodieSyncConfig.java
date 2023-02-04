@@ -58,7 +58,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIO
 @Immutable
 @ConfigClassProperty(name = "Common Metadata Sync Configs",
     groupName = ConfigGroups.Names.META_SYNC,
-    shouldPresentFirst = true,
+    areCommonConfigs = true,
     description = "")
 public class HoodieSyncConfig extends HoodieConfig {
 

@@ -61,8 +61,8 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
 @Immutable
 @ConfigClassProperty(name = "Common Index Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    subGroupName = ConfigGroups.Names.INDEX,
-    shouldPresentFirst = true,
+    subGroupName = ConfigGroups.SubGroupNames.INDEX,
+    areCommonConfigs = true,
     description = "")
 public class HoodieIndexConfig extends HoodieConfig {
 

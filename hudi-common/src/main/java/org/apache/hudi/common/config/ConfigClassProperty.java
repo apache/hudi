@@ -36,9 +36,9 @@ public @interface ConfigClassProperty {
 
   ConfigGroups.Names groupName();
 
-  ConfigGroups.Names subGroupName() default ConfigGroups.Names.NONE;
+  ConfigGroups.SubGroupNames subGroupName() default ConfigGroups.SubGroupNames.NONE;
 
-  boolean shouldPresentFirst() default false;
+  boolean areCommonConfigs() default false;
 
   String description();
 }
