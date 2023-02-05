@@ -49,6 +49,7 @@ if [[ ${SPARK_PROFILE} == 'spark' ]]; then
   hudi_spark_bundle_name=hudi-spark-bundle_2.11
   hudi_utilities_bundle_name=hudi-utilities-bundle_2.11
   hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.11
+  hudi_metaserver_server_bundle_name=hudi-metaserver-server-bundle
 elif [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=2.3.9
@@ -65,6 +66,7 @@ elif [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
   hudi_spark_bundle_name=hudi-spark2.4-bundle_2.11
   hudi_utilities_bundle_name=hudi-utilities-bundle_2.11
   hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.11
+  hudi_metaserver_server_bundle_name=hudi-metaserver-server-bundle
 elif [[ ${SPARK_PROFILE} == 'spark3.1' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -81,6 +83,7 @@ elif [[ ${SPARK_PROFILE} == 'spark3.1' ]]; then
   hudi_spark_bundle_name=hudi-spark3.1-bundle_2.12
   hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
   hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
+  hudi_metaserver_server_bundle_name=hudi-metaserver-server-bundle
 elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -97,6 +100,7 @@ elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
   hudi_spark_bundle_name=hudi-spark3.2-bundle_2.12
   hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
   hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
+  hudi_metaserver_server_bundle_name=hudi-metaserver-server-bundle
 elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -113,6 +117,7 @@ elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
   hudi_spark_bundle_name=hudi-spark3.3-bundle_2.12
   hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
   hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
+  hudi_metaserver_server_bundle_name=hudi-metaserver-server-bundle
 elif [[ ${SPARK_PROFILE} == 'spark3' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -129,6 +134,7 @@ elif [[ ${SPARK_PROFILE} == 'spark3' ]]; then
   hudi_spark_bundle_name=hudi-spark3-bundle_2.12
   hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
   hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
+  hudi_metaserver_server_bundle_name=hudi-metaserver-server-bundle
 fi
 
 # Copy bundle jars to temp dir for mounting
@@ -140,6 +146,7 @@ wget -q $REPO_BASE_URL/$hudi_kafka_connect_bundle_name/$HUDI_VERSION/$hudi_kafka
 wget -q $REPO_BASE_URL/$hudi_spark_bundle_name/$HUDI_VERSION/$hudi_spark_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
 wget -q $REPO_BASE_URL/$hudi_utilities_bundle_name/$HUDI_VERSION/$hudi_utilities_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
 wget -q $REPO_BASE_URL/$hudi_utilities_slim_bundle_name/$HUDI_VERSION/$hudi_utilities_slim_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_metaserver_server_bundle_name/$HUDI_VERSION/$hudi_metaserver_server_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
 echo "Downloaded these jars from $REPO_BASE_URL for validation:"
 ls -l $TMP_JARS_DIR
 

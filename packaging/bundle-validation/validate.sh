@@ -279,7 +279,7 @@ fi
 echo "::warning::validate.sh done validating kafka connect bundle"
 
 echo "::warning::validate.sh validating metaserver bundle"
-#test_metaserver_bundle
+test_metaserver_bundle
 if [ "$?" -ne 0 ]; then
     exit 1
 fi
