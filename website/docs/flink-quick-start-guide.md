@@ -35,13 +35,14 @@ quick start tool for SQL users.
 
 #### Step.1 download Flink jar
 
-Hudi works with both Flink 1.13, Flink 1.14 and Flink 1.15. You can follow the
+Hudi works with both Flink 1.13, Flink 1.14, Flink 1.15 and Flink 1.16. You can follow the
 instructions [here](https://flink.apache.org/downloads) for setting up Flink. Then choose the desired Hudi-Flink bundle
 jar to work with different Flink and Scala versions:
 
 - `hudi-flink1.13-bundle`
 - `hudi-flink1.14-bundle`
 - `hudi-flink1.15-bundle`
+- `hudi-flink1.16-bundle`
 
 #### Step.2 start Flink cluster
 Start a standalone Flink cluster within hadoop environment.
@@ -62,9 +63,9 @@ export HADOOP_CLASSPATH=`$HADOOP_HOME/bin/hadoop classpath`
 ```
 #### Step.3 start Flink SQL client
 
-Hudi has a prepared bundle jar for Flink, which should be loaded in the Flink SQL Client when it starts up.
-You can build the jar manually under path `hudi-source-dir/packaging/hudi-flink-bundle`, or download it from the
-[Apache Official Repository](https://repo.maven.apache.org/maven2/org/apache/hudi/hudi-flink-bundle_2.11/).
+Hudi supports packaged bundle jar for Flink, which should be loaded in the Flink SQL Client when it starts up.
+You can build the jar manually under path `hudi-source-dir/packaging/hudi-flink-bundle`(see [Build Flink Bundle Jar](/docs/syncing_metastore#install)), or download it from the
+[Apache Official Repository](https://repo.maven.apache.org/maven2/org/apache/hudi/).
 
 Now starts the SQL CLI:
 
@@ -114,6 +115,15 @@ dependency to your project:
 <dependency>
     <groupId>org.apache.hudi</groupId>
     <artifactId>hudi-flink1.15-bundle</artifactId>
+    <version>0.12.2</version>
+</dependency>
+```
+
+```xml
+<!-- Flink 1.16 -->
+<dependency>
+    <groupId>org.apache.hudi</groupId>
+    <artifactId>hudi-flink1.16-bundle</artifactId>
     <version>0.12.2</version>
 </dependency>
 ```
@@ -287,6 +297,11 @@ denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `age` field
 Hudi Flink also provides capability to obtain a stream of records that changed since given commit timestamp. 
 This can be achieved using Hudi's streaming querying and providing a start time from which changes need to be streamed. 
 We do not need to specify endTime, if we want all changes after the given commit (as is the common case). 
+
+:::note
+The bundle jar with **hive profile** is needed for streaming query, by default the officially released flink bundle is built **without**
+**hive profile**, the jar needs to be built manually, see [Build Flink Bundle Jar](/docs/syncing_metastore#install) for more details.
+:::
 
 ```sql
 CREATE TABLE t1(

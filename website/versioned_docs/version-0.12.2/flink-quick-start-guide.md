@@ -63,7 +63,7 @@ export HADOOP_CLASSPATH=`$HADOOP_HOME/bin/hadoop classpath`
 #### Step.3 start Flink SQL client
 
 Hudi has a prepared bundle jar for Flink, which should be loaded in the Flink SQL Client when it starts up.
-You can build the jar manually under path `hudi-source-dir/packaging/hudi-flink-bundle`, or download it from the
+You can build the jar manually under path `hudi-source-dir/packaging/hudi-flink-bundle` (see [Build Flink Bundle Jar](/docs/syncing_metastore#install)), or download it from the
 [Apache Official Repository](https://repo.maven.apache.org/maven2/org/apache/hudi/hudi-flink-bundle_2.11/).
 
 Now starts the SQL CLI:
@@ -286,7 +286,12 @@ denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `age` field
 
 Hudi Flink also provides capability to obtain a stream of records that changed since given commit timestamp. 
 This can be achieved using Hudi's streaming querying and providing a start time from which changes need to be streamed. 
-We do not need to specify endTime, if we want all changes after the given commit (as is the common case). 
+We do not need to specify endTime, if we want all changes after the given commit (as is the common case).
+
+:::note
+The bundle jar with **hive profile** is needed for streaming query, by default the officially released flink bundle is built **without**
+**hive profile**, the jar needs to be built manually, see [Build Flink Bundle Jar](/docs/syncing_metastore#install) for more details.
+:::
 
 ```sql
 CREATE TABLE t1(
