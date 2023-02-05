@@ -175,7 +175,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.datasource.write.keygenerator.type")
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .withDocumentation("Easily configure one the built-in key generators, instead of specifying the key generator class."
-          + "Currently supports SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE");
+          + "Currently supports SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE. "
+          + "**Note** This is being actively worked on. Please use "
+          + "`hoodie.datasource.write.keygenerator.class` instead.");
 
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty
       .key("hoodie.rollback.using.markers")

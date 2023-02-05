@@ -82,7 +82,7 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "billing_mode")
       .defaultValue(BillingMode.PAY_PER_REQUEST.name())
       .sinceVersion("0.10.0")
-      .withDocumentation("For DynamoDB based lock provider, by default it is PAY_PER_REQUEST mode");
+      .withDocumentation("For DynamoDB based lock provider, by default it is `PAY_PER_REQUEST` mode. Alternative is `PROVISIONED`.");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_READ_CAPACITY = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "read_capacity")

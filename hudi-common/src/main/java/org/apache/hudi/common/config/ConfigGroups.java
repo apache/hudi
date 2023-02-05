@@ -29,6 +29,7 @@ public class ConfigGroups {
    * Config group names.
    */
   public enum Names {
+    ENVIRONMENT_CONFIG("Environment Config"),
     SPARK_DATASOURCE("Spark Datasource Configs"),
     FLINK_SQL("Flink Sql Configs"),
     WRITE_CLIENT("Write Client Configs"),
@@ -79,6 +80,23 @@ public class ConfigGroups {
   public static String getDescription(Names names) {
     String description;
     switch (names) {
+      case ENVIRONMENT_CONFIG:
+        description = "Hudi supports passing configurations via a configuration file "
+            + "`hudi-default.conf` in which each line consists of a key and a value "
+            + "separated by whitespace or = sign. For example:\n"
+            + "```\n"
+            + "hoodie.datasource.hive_sync.mode               jdbc\n"
+            + "hoodie.datasource.hive_sync.jdbcurl            jdbc:hive2://localhost:10000\n"
+            + "hoodie.datasource.hive_sync.support_timestamp  false\n"
+            + "```\n"
+            + "It helps to have a central configuration file for your common cross "
+            + "job configurations/tunings, so all the jobs on your cluster can utilize it. "
+            + "It also works with Spark SQL DML/DDL, and helps avoid having to pass configs "
+            + "inside the SQL statements.\n\n"
+            + "By default, Hudi would load the configuration file under `/etc/hudi/conf` "
+            + "directory. You can specify a different configuration directory location by "
+            + "setting the `HUDI_CONF_DIR` environment variable.";
+        break;
       case SPARK_DATASOURCE:
         description = "These configs control the Hudi Spark Datasource, "
             + "providing ability to define keys/partitioning, pick out the write operation, "
