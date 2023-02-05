@@ -127,8 +127,8 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: 'scala-2.12'
         run: |
-          mvn clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true  -Phudi-platform-service $MVN_ARGS
-          mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+          mvn clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+          mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
       - name: IT - Bundle Validation
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
