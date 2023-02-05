@@ -19,8 +19,8 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
-import org.apache.hudi.DataSourceWriteOptions.{MERGE_INTO_WRITES, _}
-import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_NULLABLE
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_NULLABLE, SQL_MERGE_INTO_WRITES}
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -533,7 +533,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       AVRO_SCHEMA_VALIDATE_ENABLE.key -> "false",
       RECONCILE_SCHEMA.key -> "false",
       CANONICALIZE_NULLABLE.key -> "false",
-      MERGE_INTO_WRITES -> "true"
+      SQL_MERGE_INTO_WRITES.key -> "true"
     )
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,

@@ -30,9 +30,6 @@ set hoodie.delete.shuffle.parallelism = 1;
 | ok       |
 +----------+
 
-+----------+
-| ok       |
-+----------+
 
 # CTAS
 
