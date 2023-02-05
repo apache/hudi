@@ -56,9 +56,10 @@ import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIO
  * Configs needed to sync data into external meta stores, catalogs, etc.
  */
 @Immutable
-@ConfigClassProperty(name = "Metadata Sync Configs",
+@ConfigClassProperty(name = "Common Metadata Sync Configs",
     groupName = ConfigGroups.Names.META_SYNC,
-    description = "Configurations used by the Hudi to sync metadata to external metastores and catalogs.")
+    areCommonConfigs = true,
+    description = "")
 public class HoodieSyncConfig extends HoodieConfig {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSyncConfig.class);
