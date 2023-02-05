@@ -17,10 +17,11 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.exception.SchemaCompatibilityException
 
-class TestMergeIntoTable extends HoodieSparkSqlTestBase {
+class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
   test("Test MergeInto Basic") {
     withRecordType()(withTempDir { tmp =>
@@ -269,6 +270,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         Seq(2, "a2", 10, "2021-03-21")
       )
       // Update with different source column names.
+      // By default, column drop or column name change are not allowed. Need to set below session property to true.
+      spark.sql("set hoodie.datasource.write.schema.allow.auto.evolution.column.drop=true")
       spark.sql(
         s"""
            | merge into $tableName t0

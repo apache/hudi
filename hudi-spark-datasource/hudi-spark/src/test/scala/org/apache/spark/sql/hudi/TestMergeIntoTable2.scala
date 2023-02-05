@@ -383,6 +383,8 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            | )
        """.stripMargin)
 
+      // By default, column drop or column name change are not allowed. Need to set below session property to true.
+      spark.sql("set hoodie.datasource.write.schema.allow.auto.evolution.column.drop=true")
       spark.sql(
         s"""
            | merge into $tableName
