@@ -214,7 +214,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     "MERGE_ON_READ,true",
     "MERGE_ON_READ,false"
   ))
-  def testDeleteColumn(tableType: String, schemaValidationEnable : Boolean): Unit = {
+  def testDeleteColumn(tableType: String, schemaValidationEnabled : Boolean): Unit = {
     // test to delete a column
     val tempRecordPath = basePath + "/record_tbl/"
     val _spark = spark
@@ -239,10 +239,10 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     // upsert
     assertThrows(classOf[SchemaCompatibilityException]) {
-      upsertData(upsertDf, tempRecordPath, isCow, enableSchemaValidation = schemaValidationEnable)
+      upsertData(upsertDf, tempRecordPath, isCow, enableSchemaValidation = schemaValidationEnabled)
     }
 
-    upsertData(upsertDf, tempRecordPath, isCow, shouldAllowDroppedColumns = true, enableSchemaValidation = schemaValidationEnable)
+    upsertData(upsertDf, tempRecordPath, isCow, shouldAllowDroppedColumns = true, enableSchemaValidation = schemaValidationEnabled)
 
     // read out the table
     val readDf = spark.read.format("hudi").load(tempRecordPath)
