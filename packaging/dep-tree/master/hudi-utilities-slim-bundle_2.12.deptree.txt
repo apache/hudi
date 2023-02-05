@@ -1,4 +1,4 @@
-org.apache.hudi:hudi-utilities-slim-bundle_2.11:0.12.2:compile
+org.apache.hudi:hudi-utilities-slim-bundle_2.12:0.12.2:compile
 +- org.apache.hudi:hudi-common:0.12.2:compile
 |  +- org.openjdk.jol:jol-core:0.16:compile
 |  +- com.fasterxml.jackson.core:jackson-annotations:2.6.7:compile
@@ -129,7 +129,7 @@ org.apache.hudi:hudi-utilities-slim-bundle_2.11:0.12.2:compile
 |  |     +- commons-daemon:commons-daemon:1.0.13:provided
 |  |     \- org.fusesource.leveldbjni:leveldbjni-all:1.8:provided
 |  \- org.lz4:lz4-java:1.8.0:compile
-\- org.apache.hudi:hudi-utilities_2.11:0.12.2:compile
+\- org.apache.hudi:hudi-utilities_2.12:0.12.2:compile
    +- org.apache.hudi:hudi-hive-sync:0.12.2:compile
    |  +- org.apache.hudi:hudi-hadoop-mr:0.12.2:compile
    |  \- org.apache.hudi:hudi-sync-common:0.12.2:compile
@@ -147,17 +147,17 @@ org.apache.hudi:hudi-utilities-slim-bundle_2.11:0.12.2:compile
    |  +- com.sun.activation:javax.activation:1.2.0:compile
    |  +- javax.validation:validation-api:1.1.0.Final:compile
    |  \- net.jcip:jcip-annotations:1.0:compile
-   +- com.fasterxml.jackson.module:jackson-module-scala_2.11:2.6.7.1:compile
-   |  +- org.scala-lang:scala-library:2.11.8:compile
-   |  +- org.scala-lang:scala-reflect:2.11.8:compile
+   +- com.fasterxml.jackson.module:jackson-module-scala_2.12:2.6.7.1:compile
+   |  +- org.scala-lang:scala-library:2.12.1:compile
+   |  +- org.scala-lang:scala-reflect:2.12.1:compile
    |  \- com.fasterxml.jackson.module:jackson-module-paranamer:2.7.9:compile
    |     \- com.thoughtworks.paranamer:paranamer:2.8:compile
    +- com.fasterxml.jackson.dataformat:jackson-dataformat-csv:2.6.7:compile
-   +- org.apache.spark:spark-streaming_2.11:2.4.8:compile
-   |  +- org.apache.spark:spark-core_2.11:2.4.8:provided
+   +- org.apache.spark:spark-streaming_2.12:2.4.8:compile
+   |  +- org.apache.spark:spark-core_2.12:2.4.8:provided
    |  |  +- org.apache.avro:avro-mapred:1.8.2:provided
    |  |  |  \- org.apache.avro:avro-ipc:1.8.2:provided
-   |  |  +- com.twitter:chill_2.11:0.9.3:provided
+   |  |  +- com.twitter:chill_2.12:0.9.3:provided
    |  |  +- com.twitter:chill-java:0.9.3:provided
    |  |  +- org.apache.xbean:xbean-asm6-shaded:4.8:provided
    |  |  +- org.apache.hadoop:hadoop-client:2.10.1:provided
@@ -171,22 +171,22 @@ org.apache.hudi:hudi-utilities-slim-bundle_2.11:0.12.2:compile
    |  |  |  |        +- com.zaxxer:HikariCP-java7:2.4.12:provided
    |  |  |  |        \- com.microsoft.sqlserver:mssql-jdbc:6.2.1.jre7:provided
    |  |  |  \- org.apache.hadoop:hadoop-mapreduce-client-jobclient:2.10.1:provided
-   |  |  +- org.apache.spark:spark-launcher_2.11:2.4.8:provided
-   |  |  +- org.apache.spark:spark-kvstore_2.11:2.4.8:provided
-   |  |  +- org.apache.spark:spark-network-common_2.11:2.4.8:provided
-   |  |  +- org.apache.spark:spark-network-shuffle_2.11:2.4.8:provided
-   |  |  +- org.apache.spark:spark-unsafe_2.11:2.4.8:provided
+   |  |  +- org.apache.spark:spark-launcher_2.12:2.4.8:provided
+   |  |  +- org.apache.spark:spark-kvstore_2.12:2.4.8:provided
+   |  |  +- org.apache.spark:spark-network-common_2.12:2.4.8:provided
+   |  |  +- org.apache.spark:spark-network-shuffle_2.12:2.4.8:provided
+   |  |  +- org.apache.spark:spark-unsafe_2.12:2.4.8:provided
    |  |  +- javax.activation:activation:1.1.1:provided
    |  |  +- javax.servlet:javax.servlet-api:3.1.0:provided
    |  |  +- com.ning:compress-lzf:1.0.3:provided
    |  |  +- com.github.luben:zstd-jni:1.4.4-3:provided
    |  |  +- org.roaringbitmap:RoaringBitmap:0.7.45:provided
    |  |  |  \- org.roaringbitmap:shims:0.7.45:provided
-   |  |  +- org.json4s:json4s-jackson_2.11:3.5.3:provided
-   |  |  |  \- org.json4s:json4s-core_2.11:3.5.3:provided
-   |  |  |     +- org.json4s:json4s-ast_2.11:3.5.3:provided
-   |  |  |     +- org.json4s:json4s-scalap_2.11:3.5.3:provided
-   |  |  |     \- org.scala-lang.modules:scala-xml_2.11:1.0.6:provided
+   |  |  +- org.json4s:json4s-jackson_2.12:3.5.3:provided
+   |  |  |  \- org.json4s:json4s-core_2.12:3.5.3:provided
+   |  |  |     +- org.json4s:json4s-ast_2.12:3.5.3:provided
+   |  |  |     +- org.json4s:json4s-scalap_2.12:3.5.3:provided
+   |  |  |     \- org.scala-lang.modules:scala-xml_2.12:1.0.6:provided
    |  |  +- org.glassfish.jersey.core:jersey-client:2.22.2:provided
    |  |  |  +- org.glassfish.hk2:hk2-api:2.4.0-b34:provided
    |  |  |  |  +- org.glassfish.hk2:hk2-utils:2.4.0-b34:provided
@@ -211,15 +211,15 @@ org.apache.hudi:hudi-utilities-slim-bundle_2.11:0.12.2:compile
    |  |  +- oro:oro:2.0.8:provided
    |  |  +- net.razorvine:pyrolite:4.13:provided
    |  |  \- net.sf.py4j:py4j:0.10.7:provided
-   |  +- org.apache.spark:spark-tags_2.11:2.4.8:compile
+   |  +- org.apache.spark:spark-tags_2.12:2.4.8:compile
    |  \- org.spark-project.spark:unused:1.0.0:compile
-   +- org.apache.spark:spark-streaming-kafka-0-10_2.11:2.4.8:compile
-   +- org.apache.spark:spark-streaming-kafka-0-10_2.11:2.4.8:compile
+   +- org.apache.spark:spark-streaming-kafka-0-10_2.12:2.4.8:compile
+   +- org.apache.spark:spark-streaming-kafka-0-10_2.12:2.4.8:compile
    +- io.dropwizard.metrics:metrics-core:4.1.1:compile
    +- org.antlr:stringtemplate:4.0.2:compile
    +- com.beust:jcommander:1.78:compile
-   +- com.twitter:bijection-avro_2.11:0.9.7:compile
-   |  +- com.twitter:bijection-core_2.11:0.9.7:compile
+   +- com.twitter:bijection-avro_2.12:0.9.7:compile
+   |  +- com.twitter:bijection-core_2.12:0.9.7:compile
    |  \- org.apache.avro:avro:1.8.2:provided
    |     \- org.tukaani:xz:1.5:provided
    +- io.confluent:kafka-avro-serializer:5.3.4:compile
