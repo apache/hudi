@@ -60,11 +60,11 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
 /**
  * Hoodie Configs for Locks.
  */
-@ConfigClassProperty(name = "Locks Configurations",
+@ConfigClassProperty(name = "Common Lock Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configs that control locking mechanisms required for concurrency control "
-        + " between writers to a Hudi table. Concurrency between Hudi's own table services "
-        + " are auto managed internally.")
+    subGroupName = ConfigGroups.SubGroupNames.LOCK,
+    areCommonConfigs = true,
+    description = "")
 public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS = ConfigProperty
