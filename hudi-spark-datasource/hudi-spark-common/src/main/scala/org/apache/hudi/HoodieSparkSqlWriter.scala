@@ -25,7 +25,7 @@ import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAv
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.AvroSchemaUtils.{checkProjection, isCompatibleProjectionOf, isSchemaCompatible}
+import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -459,7 +459,7 @@ object HoodieSparkSqlWriter {
           if (!shouldValidateSchemasCompatibility) {
             // if no validation is enabled, check for col drop
             // if col drop is allowed, go ahead. if not, check for projection, so that we do not allow dropping cols
-            if (allowAutoEvolutionColumnDrop || checkProjection(latestTableSchema, canonicalizedSourceSchema)) {
+            if (allowAutoEvolutionColumnDrop || canProject(latestTableSchema, canonicalizedSourceSchema)) {
               canonicalizedSourceSchema
             } else {
               log.error(
