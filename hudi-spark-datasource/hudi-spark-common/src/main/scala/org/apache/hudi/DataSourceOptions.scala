@@ -463,6 +463,9 @@ object DataSourceWriteOptions {
 
   val RECONCILE_SCHEMA: ConfigProperty[Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
 
+  val MERGE_INTO_WRITES = "hoodie.merge.into.writes"
+  val DEFAULT_MERGE_INTO_WRITES = "false"
+
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
   // unexpected issues with config getting reset

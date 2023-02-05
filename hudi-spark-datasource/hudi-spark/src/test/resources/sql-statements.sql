@@ -30,8 +30,6 @@ set hoodie.delete.shuffle.parallelism = 1;
 | ok       |
 +----------+
 
--- By default, column drop or column name change are not allowed. Need to set below session property to true.
-set hoodie.datasource.write.schema.allow.auto.evolution.column.drop=true;
 +----------+
 | ok       |
 +----------+

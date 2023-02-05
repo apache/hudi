@@ -415,6 +415,7 @@ object HoodieSparkSqlWriter {
 
         val allowAutoEvolutionColumnDrop = opts.getOrDefault(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key,
           HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.defaultValue).toBoolean
+        val mergeIntoWrites = opts.getOrDefault(DataSourceWriteOptions.MERGE_INTO_WRITES, DataSourceWriteOptions.DEFAULT_MERGE_INTO_WRITES).toBoolean
 
         if (shouldReconcileSchema) {
           internalSchemaOpt match {
@@ -456,7 +457,12 @@ object HoodieSparkSqlWriter {
           //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
           //       only incoming dataset's projection has to match the table's schema, and not the whole one
 
-          if (!shouldValidateSchemasCompatibility) {
+          if (mergeIntoWrites) {
+            // if its merge into writes, do not check for projection nor schema compatability. Writers down the line will
+            // take care of it.
+            canonicalizedSourceSchema
+          } else {
+            if (!shouldValidateSchemasCompatibility) {
             // if no validation is enabled, check for col drop
             // if col drop is allowed, go ahead. if not, check for projection, so that we do not allow dropping cols
             if (allowAutoEvolutionColumnDrop || canProject(latestTableSchema, canonicalizedSourceSchema)) {
@@ -480,6 +486,7 @@ object HoodieSparkSqlWriter {
                  |Table's schema ${latestTableSchema.toString(true)}
                  |""".stripMargin)
             throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
+            }
           }
         }
     }
