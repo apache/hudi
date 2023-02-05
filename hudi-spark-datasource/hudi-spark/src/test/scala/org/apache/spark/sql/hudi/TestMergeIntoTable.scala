@@ -270,8 +270,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         Seq(2, "a2", 10, "2021-03-21")
       )
       // Update with different source column names.
-      // By default, column drop or column name change are not allowed. Need to set below session property to true.
-      spark.sql("set hoodie.datasource.write.schema.allow.auto.evolution.column.drop=true")
       spark.sql(
         s"""
            | merge into $tableName t0
