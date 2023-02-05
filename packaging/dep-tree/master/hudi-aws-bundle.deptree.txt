@@ -1,5 +1,5 @@
-org.apache.hudi:hudi-aws-bundle:0.12.2:compile
-+- org.apache.hudi:hudi-common:0.12.2:compile
+org.apache.hudi:hudi-aws-bundle:0.13.0-rc1:compile
++- org.apache.hudi:hudi-common:0.13.0-rc1:compile
 |  +- org.openjdk.jol:jol-core:0.16:compile
 |  +- com.fasterxml.jackson.core:jackson-annotations:2.6.7:compile
 |  +- com.fasterxml.jackson.core:jackson-databind:2.6.7.3:compile
@@ -9,7 +9,7 @@ org.apache.hudi:hudi-aws-bundle:0.12.2:compile
 |  |  \- com.google.errorprone:error_prone_annotations:2.5.1:compile
 |  +- org.apache.orc:orc-core:1.6.0:compile
 |  |  +- org.apache.orc:orc-shims:1.6.0:compile
-|  |  +- com.google.protobuf:protobuf-java:2.5.0:compile
+|  |  +- com.google.protobuf:protobuf-java:3.21.5:compile
 |  |  +- commons-lang:commons-lang:2.6:compile
 |  |  +- io.airlift:aircompressor:0.15:compile
 |  |  +- javax.xml.bind:jaxb-api:2.2.11:compile
@@ -22,9 +22,6 @@ org.apache.hudi:hudi-aws-bundle:0.12.2:compile
 |  |  +- org.apache.httpcomponents:httpcore:4.4.1:compile
 |  |  \- commons-codec:commons-codec:1.9:compile
 |  +- org.rocksdb:rocksdbjni:6.29.4.1:compile
-|  +- com.esotericsoftware:kryo-shaded:4.0.2:compile
-|  |  +- com.esotericsoftware:minlog:1.3.0:compile
-|  |  \- org.objenesis:objenesis:2.5.1:compile
 |  +- org.apache.hbase:hbase-client:2.4.9:compile
 |  |  +- org.apache.hbase.thirdparty:hbase-shaded-protobuf:3.5.1:compile
 |  |  +- org.apache.hbase:hbase-common:2.4.9:compile
@@ -74,14 +71,14 @@ org.apache.hudi:hudi-aws-bundle:0.12.2:compile
 |  |  |  \- org.glassfish:javax.el:3.0.1-b12:provided
 |  |  +- javax.servlet.jsp:javax.servlet.jsp-api:2.3.1:compile
 |  |  +- org.apache.commons:commons-math3:3.6.1:compile
-|  |  +- org.jamon:jamon-runtime:2.4.1:compile
-|  |  \- com.lmax:disruptor:3.4.2:compile
-|  \- org.lz4:lz4-java:1.8.0:compile
-+- org.apache.hudi:hudi-hive-sync:0.12.2:compile
-|  +- org.apache.hudi:hudi-hadoop-mr:0.12.2:compile
-|  +- org.apache.hudi:hudi-sync-common:0.12.2:compile
+|  |  \- org.jamon:jamon-runtime:2.4.1:compile
+|  +- org.lz4:lz4-java:1.8.0:compile
+|  \- com.lmax:disruptor:3.4.2:compile
++- org.apache.hudi:hudi-hive-sync:0.13.0-rc1:compile
+|  +- org.apache.hudi:hudi-hadoop-mr:0.13.0-rc1:compile
+|  +- org.apache.hudi:hudi-sync-common:0.13.0-rc1:compile
 |  \- com.beust:jcommander:1.78:compile
-+- org.apache.hudi:hudi-aws:0.12.2:compile
++- org.apache.hudi:hudi-aws:0.13.0-rc1:compile
 |  +- com.amazonaws:dynamodb-lock-client:1.1.0:compile
 |  +- com.amazonaws:aws-java-sdk-cloudwatch:1.12.22:compile
 |  |  \- com.amazonaws:jmespath-java:1.12.22:compile
@@ -93,7 +90,8 @@ org.apache.hudi:hudi-aws-bundle:0.12.2:compile
 |  |  +- com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.12.3:compile
 |  |  \- joda-time:joda-time:2.9.9:compile
 |  +- io.dropwizard.metrics:metrics-core:4.1.1:compile
-|  \- com.amazonaws:aws-java-sdk-glue:1.12.22:compile
+|  +- com.amazonaws:aws-java-sdk-glue:1.12.22:compile
+|  \- com.amazonaws:aws-java-sdk-sqs:1.12.22:compile
 \- org.apache.parquet:parquet-avro:1.10.1:compile
    +- org.apache.parquet:parquet-column:1.10.1:compile
    |  +- org.apache.parquet:parquet-common:1.10.1:compile

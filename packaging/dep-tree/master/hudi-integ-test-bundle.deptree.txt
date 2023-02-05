@@ -1,4 +1,4 @@
-org.apache.hudi:hudi-integ-test-bundle:0.12.2:compile
+org.apache.hudi:hudi-integ-test-bundle:0.13.0-rc1:compile
 +- io.javalin:javalin:2.8.0:compile
 |  +- org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.2.71:compile
 |  |  +- org.jetbrains.kotlin:kotlin-stdlib:1.2.71:compile
@@ -29,15 +29,103 @@ org.apache.hudi:hudi-integ-test-bundle:0.12.2:compile
 |  \- com.fasterxml.jackson.module:jackson-module-paranamer:2.7.9:compile
 +- com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.7.4:compile
 |  \- org.yaml:snakeyaml:1.15:compile
-+- org.apache.hudi:hudi-spark_2.11:0.12.2:compile
-|  +- org.apache.hudi:hudi-spark-client:0.12.2:compile
-|  +- org.apache.hudi:hudi-spark2_2.11:0.12.2:compile
-|  +- org.apache.hudi:hudi-client-common:0.12.2:compile
-|  +- org.apache.hudi:hudi-common:0.12.2:compile
-|  +- org.apache.hudi:hudi-hadoop-mr:0.12.2:compile
-|  \- org.apache.hudi:hudi-sync-common:0.12.2:compile
-+- org.apache.hudi:hudi-hive-sync:0.12.2:compile
-+- org.apache.hudi:hudi-utilities_2.11:0.12.2:compile
++- org.apache.hudi:hudi-spark_2.11:0.13.0-rc1:compile
+|  +- org.apache.hudi:hudi-spark-client:0.13.0-rc1:compile
+|  +- org.apache.hudi:hudi-spark2_2.11:0.13.0-rc1:compile
+|  +- org.apache.hudi:hudi-client-common:0.13.0-rc1:compile
+|  +- org.apache.hudi:hudi-common:0.13.0-rc1:compile
+|  +- org.apache.hudi:hudi-hadoop-mr:0.13.0-rc1:compile
+|  \- org.apache.hudi:hudi-sync-common:0.13.0-rc1:compile
++- org.apache.hudi:hudi-hive-sync:0.13.0-rc1:compile
++- org.apache.hudi:hudi-utilities_2.11:0.13.0-rc1:compile
+|  +- com.google.protobuf:protobuf-java:3.21.5:compile
+|  +- com.google.protobuf:protobuf-java-util:3.21.5:compile
+|  |  +- com.google.errorprone:error_prone_annotations:2.5.1:compile
+|  |  \- com.google.j2objc:j2objc-annotations:1.3:compile
+|  +- org.apache.hudi:hudi-aws:0.13.0-rc1:compile
+|  |  +- com.amazonaws:dynamodb-lock-client:1.1.0:compile
+|  |  +- com.amazonaws:aws-java-sdk-cloudwatch:1.12.22:compile
+|  |  |  \- com.amazonaws:jmespath-java:1.12.22:compile
+|  |  +- com.amazonaws:aws-java-sdk-dynamodb:1.12.22:compile
+|  |  |  \- com.amazonaws:aws-java-sdk-s3:1.12.22:compile
+|  |  |     \- com.amazonaws:aws-java-sdk-kms:1.12.22:compile
+|  |  +- com.amazonaws:aws-java-sdk-core:1.12.22:compile
+|  |  |  +- software.amazon.ion:ion-java:1.0.2:compile
+|  |  |  \- com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.12.3:compile
+|  |  +- com.amazonaws:aws-java-sdk-glue:1.12.22:compile
+|  |  \- com.amazonaws:aws-java-sdk-sqs:1.12.22:compile
+|  +- org.apache.hudi:hudi-gcp:0.13.0-rc1:compile
+|  |  +- com.google.cloud:google-cloud-bigquery:2.10.4:compile
+|  |  |  +- com.google.cloud:google-cloud-core:2.5.11:compile
+|  |  |  +- com.google.api.grpc:proto-google-common-protos:2.8.0:compile
+|  |  |  +- com.google.api.grpc:proto-google-iam-v1:1.2.10:compile
+|  |  |  +- com.google.auth:google-auth-library-credentials:1.6.0:compile
+|  |  |  +- com.google.http-client:google-http-client-gson:1.41.5:compile
+|  |  |  +- com.google.cloud:google-cloud-core-http:2.5.11:compile
+|  |  |  +- com.google.api-client:google-api-client:1.33.4:compile
+|  |  |  +- com.google.oauth-client:google-oauth-client:1.33.1:compile
+|  |  |  +- com.google.http-client:google-http-client-apache-v2:1.41.5:compile
+|  |  |  +- com.google.http-client:google-http-client-appengine:1.41.5:compile
+|  |  |  +- com.google.api:gax-httpjson:0.98.0:compile
+|  |  |  +- io.opencensus:opencensus-api:0.31.0:compile
+|  |  |  +- io.grpc:grpc-context:1.45.0:compile
+|  |  |  +- io.opencensus:opencensus-contrib-http-util:0.31.0:compile
+|  |  |  +- com.google.http-client:google-http-client-jackson2:1.41.5:compile
+|  |  |  +- com.google.http-client:google-http-client:1.41.5:compile
+|  |  |  +- org.checkerframework:checker-compat-qual:2.5.5:compile
+|  |  |  +- com.google.auth:google-auth-library-oauth2-http:1.6.0:compile
+|  |  |  +- com.google.apis:google-api-services-bigquery:v2-rev20220313-1.32.1:compile
+|  |  |  +- com.google.api:api-common:2.1.5:compile
+|  |  |  +- com.google.guava:failureaccess:1.0.1:compile
+|  |  |  +- com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava:compile
+|  |  |  +- com.google.api:gax:2.13.0:compile
+|  |  |  +- org.threeten:threetenbp:1.6.0:compile
+|  |  |  \- org.threeten:threeten-extra:1.7.0:compile
+|  |  +- com.google.cloud:google-cloud-pubsub:1.120.0:compile
+|  |  |  +- io.grpc:grpc-stub:1.47.0:compile
+|  |  |  +- io.grpc:grpc-protobuf:1.47.0:compile
+|  |  |  +- io.grpc:grpc-protobuf-lite:1.47.0:compile
+|  |  |  +- com.google.api.grpc:proto-google-cloud-pubsub-v1:1.102.0:compile
+|  |  |  +- com.google.api:gax-grpc:2.18.2:compile
+|  |  |  +- io.grpc:grpc-alts:1.47.0:compile
+|  |  |  +- io.grpc:grpc-grpclb:1.47.0:runtime
+|  |  |  +- org.conscrypt:conscrypt-openjdk-uber:2.5.1:runtime
+|  |  |  +- io.grpc:grpc-auth:1.47.0:compile
+|  |  |  +- io.grpc:grpc-netty-shaded:1.47.0:compile
+|  |  |  +- io.grpc:grpc-googleapis:1.47.0:runtime
+|  |  |  +- io.grpc:grpc-xds:1.47.0:compile
+|  |  |  +- io.grpc:grpc-services:1.47.0:runtime
+|  |  |  +- com.google.re2j:re2j:1.5:runtime
+|  |  |  +- io.opencensus:opencensus-proto:0.2.0:runtime
+|  |  |  +- io.grpc:grpc-core:1.47.0:compile
+|  |  |  +- com.google.android:annotations:4.1.1.4:runtime
+|  |  |  +- org.codehaus.mojo:animal-sniffer-annotations:1.21:runtime
+|  |  |  +- io.perfmark:perfmark-api:0.25.0:runtime
+|  |  |  \- com.google.auto.value:auto-value-annotations:1.9:compile
+|  |  \- com.google.cloud.bigdataoss:gcs-connector:hadoop2-2.2.7:compile
+|  |     +- com.google.api-client:google-api-client-jackson2:1.32.2:compile
+|  |     +- com.google.cloud.bigdataoss:util:2.2.7:compile
+|  |     |  +- com.google.apis:google-api-services-iamcredentials:v1-rev20210326-1.32.1:compile
+|  |     |  \- com.google.apis:google-api-services-storage:v1-rev20211018-1.32.1:compile
+|  |     +- com.google.cloud.bigdataoss:util-hadoop:hadoop2-2.2.7:compile
+|  |     +- com.google.cloud.bigdataoss:gcsio:2.2.7:compile
+|  |     |  +- io.grpc:grpc-api:1.43.2:compile
+|  |     |  +- io.grpc:grpc-census:1.43.2:compile
+|  |     |  +- com.google.api.grpc:grpc-google-cloud-storage-v2:2.2.2-alpha:compile
+|  |     |  |  \- com.google.api.grpc:proto-google-cloud-storage-v2:2.2.2-alpha:compile
+|  |     |  +- io.opencensus:opencensus-impl:0.31.0:compile
+|  |     |  |  \- io.opencensus:opencensus-impl-core:0.31.0:compile
+|  |     |  +- io.opencensus:opencensus-exporter-stats-stackdriver:0.31.0:compile
+|  |     |  |  +- io.opencensus:opencensus-contrib-exemplar-util:0.31.0:compile
+|  |     |  |  +- io.opencensus:opencensus-contrib-resource-util:0.31.0:compile
+|  |     |  |  +- io.opencensus:opencensus-exporter-metrics-util:0.31.0:compile
+|  |     |  |  \- com.google.cloud:google-cloud-monitoring:1.82.0:compile
+|  |     |  |     +- com.google.cloud:google-cloud-core-grpc:1.82.0:compile
+|  |     |  |     \- com.google.api.grpc:proto-google-cloud-monitoring-v3:1.64.0:compile
+|  |     |  \- io.opencensus:opencensus-contrib-grpc-metrics:0.31.0:compile
+|  |     +- com.google.flogger:flogger:0.7.1:compile
+|  |     +- com.google.flogger:google-extensions:0.7.1:compile
+|  |     \- com.google.flogger:flogger-system-backend:0.7.1:compile
 |  +- org.apache.kafka:kafka-clients:2.0.0:compile
 |  +- org.apache.pulsar:pulsar-client:2.8.1:compile
 |  |  +- org.apache.pulsar:pulsar-client-api:2.8.1:compile
@@ -53,13 +141,8 @@ org.apache.hudi:hudi-integ-test-bundle:0.12.2:compile
 |  |  \- net.jcip:jcip-annotations:1.0:compile
 |  +- com.fasterxml.jackson.dataformat:jackson-dataformat-csv:2.6.7:compile
 |  +- org.apache.spark:spark-streaming-kafka-0-10_2.11:2.4.8:compile
-|  +- org.apache.httpcomponents:httpcore:4.4.1:compile
-|  \- com.amazonaws:aws-java-sdk-sqs:1.12.22:compile
-|     +- com.amazonaws:aws-java-sdk-core:1.12.22:compile
-|     |  +- software.amazon.ion:ion-java:1.0.2:compile
-|     |  \- com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.12.3:compile
-|     \- com.amazonaws:jmespath-java:1.12.22:compile
-+- org.apache.hudi:hudi-integ-test:0.12.2:compile
+|  \- org.apache.httpcomponents:httpcore:4.4.1:compile
++- org.apache.hudi:hudi-integ-test:0.13.0-rc1:compile
 |  +- org.glassfish.jersey.core:jersey-server:2.17:compile
 |  |  +- org.glassfish.jersey.media:jersey-media-jaxb:2.17:compile
 |  |  +- org.glassfish.hk2:hk2-api:2.4.0-b10:compile
@@ -70,15 +153,20 @@ org.apache.hudi:hudi-integ-test-bundle:0.12.2:compile
 |  |     \- org.javassist:javassist:3.18.1-GA:compile
 |  +- org.glassfish.jersey.connectors:jersey-apache-connector:2.17:compile
 |  +- org.glassfish.jersey.containers:jersey-container-servlet-core:2.17:compile
-|  +- org.apache.hudi:hudi-spark-common_2.11:0.12.2:compile
-|  +- org.apache.hudi:hudi-hadoop-sparkworker-docker:0.12.2:compile
-|  |  \- org.apache.hudi:hudi-spark-bundle_2.11:0.12.2:compile
-|  +- org.apache.hudi:hudi-spark-common_2.11:0.12.2:compile
+|  +- org.apache.hudi:hudi-spark-common_2.11:0.13.0-rc1:compile
+|  +- org.apache.hudi:hudi-hadoop-sparkworker-docker:0.13.0-rc1:compile
+|  |  \- org.apache.hudi:hudi-spark-bundle_2.11:0.13.0-rc1:compile
+|  +- org.apache.hudi:hudi-spark-common_2.11:0.13.0-rc1:compile
 |  +- com.facebook.presto:presto-jdbc:0.273:compile
 |  \- io.trino:trino-jdbc:390:compile
-+- org.apache.hudi:hudi-client-common:0.12.2:test
-|  +- org.apache.hudi:hudi-timeline-service:0.12.2:compile
++- org.apache.hudi:hudi-client-common:0.13.0-rc1:test
+|  +- org.apache.hudi:hudi-timeline-service:0.13.0-rc1:compile
 |  +- joda-time:joda-time:2.9.9:compile
+|  +- org.apache.orc:orc-core:1.6.0:compile
+|  |  +- org.apache.orc:orc-shims:1.6.0:compile
+|  |  +- io.airlift:aircompressor:0.15:compile
+|  |  +- javax.xml.bind:jaxb-api:2.2.11:compile
+|  |  \- org.jetbrains:annotations:17.0.0:compile
 |  +- com.github.davidmoten:hilbert-curve:0.2.2:compile
 |  |  \- com.github.davidmoten:guava-mini:0.1.3:compile
 |  +- io.dropwizard.metrics:metrics-graphite:4.1.1:compile
@@ -88,24 +176,15 @@ org.apache.hudi:hudi-integ-test-bundle:0.12.2:compile
 |  |  \- io.prometheus:simpleclient_common:0.8.0:compile
 |  +- io.prometheus:simpleclient_dropwizard:0.8.0:compile
 |  \- io.prometheus:simpleclient_pushgateway:0.8.0:compile
-+- org.apache.hudi:hudi-spark-client:0.12.2:test
++- org.apache.hudi:hudi-spark-client:0.13.0-rc1:test
 |  \- org.scala-lang.modules:scala-collection-compat_2.11:2.8.1:compile
-+- org.apache.hudi:hudi-common:0.12.2:compile
++- org.apache.hudi:hudi-common:0.13.0-rc1:compile
 |  +- org.openjdk.jol:jol-core:0.16:compile
 |  +- com.github.ben-manes.caffeine:caffeine:2.9.1:compile
-|  |  +- org.checkerframework:checker-qual:3.10.0:compile
-|  |  \- com.google.errorprone:error_prone_annotations:2.5.1:compile
-|  +- org.apache.orc:orc-core:1.6.0:compile
-|  |  +- org.apache.orc:orc-shims:1.6.0:compile
-|  |  +- io.airlift:aircompressor:0.15:compile
-|  |  +- javax.xml.bind:jaxb-api:2.2.11:compile
-|  |  \- org.jetbrains:annotations:17.0.0:compile
+|  |  \- org.checkerframework:checker-qual:3.10.0:compile
 |  +- org.apache.httpcomponents:fluent-hc:4.4.1:compile
 |  +- org.apache.httpcomponents:httpclient:4.4.1:compile
 |  +- org.rocksdb:rocksdbjni:6.29.4.1:compile
-|  +- com.esotericsoftware:kryo-shaded:4.0.2:compile
-|  |  +- com.esotericsoftware:minlog:1.3.0:compile
-|  |  \- org.objenesis:objenesis:2.5.1:compile
 |  +- org.apache.hbase:hbase-client:2.4.9:compile
 |  |  +- org.apache.hbase.thirdparty:hbase-shaded-protobuf:3.5.1:compile
 |  |  +- org.apache.hbase:hbase-common:2.4.9:compile
@@ -139,11 +218,11 @@ org.apache.hudi:hudi-integ-test-bundle:0.12.2:compile
 |  |  |  \- org.glassfish:javax.el:3.0.1-b12:provided
 |  |  +- javax.servlet.jsp:javax.servlet.jsp-api:2.3.1:compile
 |  |  +- org.jamon:jamon-runtime:2.4.1:compile
-|  |  +- com.lmax:disruptor:3.4.2:compile
 |  |  +- org.apache.hadoop:hadoop-distcp:2.10.0:compile
 |  |  \- org.apache.hadoop:hadoop-hdfs:2.10.1:provided
-|  \- org.lz4:lz4-java:1.8.0:compile
-+- org.apache.hudi:hudi-hive-sync:0.12.2:compile
+|  +- org.lz4:lz4-java:1.8.0:compile
+|  \- com.lmax:disruptor:3.4.2:compile
++- org.apache.hudi:hudi-hive-sync:0.13.0-rc1:compile
 +- org.apache.hadoop:hadoop-hdfs:2.10.1:test
 |  +- org.apache.hadoop:hadoop-hdfs-client:2.10.1:provided
 |  |  \- com.squareup.okhttp:okhttp:2.7.5:provided
@@ -159,7 +238,6 @@ org.apache.hudi:hudi-integ-test-bundle:0.12.2:compile
 |  +- commons-lang:commons-lang:2.6:compile
 |  +- commons-logging:commons-logging:1.1.3:compile
 |  +- commons-daemon:commons-daemon:1.0.13:provided
-|  +- com.google.protobuf:protobuf-java:2.5.0:compile
 |  +- javax.servlet:servlet-api:2.5:test
 |  +- org.codehaus.jackson:jackson-core-asl:1.9.13:compile
 |  +- org.codehaus.jackson:jackson-mapper-asl:1.9.13:compile
@@ -279,7 +357,6 @@ org.apache.hudi:hudi-integ-test-bundle:0.12.2:compile
 +- org.apache.hive:hive-jdbc:2.3.1:provided
 +- org.apache.hive:hive-common:2.3.1:compile
 |  +- org.apache.hive:hive-storage-api:2.3.1:compile
-|  +- org.apache.orc:orc-core:1.3.3:compile
 |  +- jline:jline:2.12:compile
 |  +- org.eclipse.jetty.orbit:javax.servlet:3.0.0.v201112011016:compile
 |  +- com.tdunning:json:1.8:compile
@@ -313,6 +390,9 @@ org.apache.hudi:hudi-integ-test-bundle:0.12.2:compile
 |  +- com.thoughtworks.paranamer:paranamer:2.8:compile
 |  +- org.apache.avro:avro-mapred:1.8.2:provided
 |  +- com.twitter:chill_2.11:0.9.3:provided
+|  |  \- com.esotericsoftware:kryo-shaded:4.0.2:provided
+|  |     +- com.esotericsoftware:minlog:1.3.0:provided
+|  |     \- org.objenesis:objenesis:2.5.1:provided
 |  +- com.twitter:chill-java:0.9.3:provided
 |  +- org.apache.xbean:xbean-asm6-shaded:4.8:provided
 |  +- org.apache.spark:spark-launcher_2.11:2.4.8:provided
@@ -350,6 +430,7 @@ org.apache.hudi:hudi-integ-test-bundle:0.12.2:compile
 |  +- org.apache.spark:spark-catalyst_2.11:2.4.8:provided
 |  |  +- org.scala-lang.modules:scala-parser-combinators_2.11:1.1.0:provided
 |  |  \- org.antlr:antlr4-runtime:4.7:provided
+|  +- org.apache.orc:orc-core:1.5.5:provided
 |  +- org.apache.orc:orc-mapreduce:1.5.5:provided
 |  +- org.apache.parquet:parquet-column:1.10.1:compile
 |  |  +- org.apache.parquet:parquet-common:1.10.1:compile
