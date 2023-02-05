@@ -1,0 +1,336 @@
+org.apache.hudi:hudi-integ-test-bundle:0.12.2:compile
++- com.fasterxml.jackson.module:jackson-module-scala_2.12:2.10.0:compile
+|  +- org.scala-lang:scala-library:2.12.10:compile
+|  +- com.fasterxml.jackson.core:jackson-core:2.6.7:compile
+|  +- com.fasterxml.jackson.core:jackson-annotations:2.6.7:compile
+|  +- com.fasterxml.jackson.core:jackson-databind:2.6.7.3:compile
+|  \- com.fasterxml.jackson.module:jackson-module-paranamer:2.10.0:compile
++- org.apache.hudi:hudi-client-common:0.12.2:test
+|  +- org.apache.hudi:hudi-common:0.12.2:test
+|  |  +- org.openjdk.jol:jol-core:0.16:test
+|  |  +- com.github.ben-manes.caffeine:caffeine:2.9.1:test
+|  |  |  +- org.checkerframework:checker-qual:3.10.0:test
+|  |  |  \- com.google.errorprone:error_prone_annotations:2.5.1:test
+|  |  +- org.apache.orc:orc-core:1.6.0:test
+|  |  |  +- javax.xml.bind:jaxb-api:2.2.11:test
+|  |  |  \- org.jetbrains:annotations:17.0.0:test
+|  |  +- org.apache.httpcomponents:fluent-hc:4.4.1:test
+|  |  +- org.rocksdb:rocksdbjni:6.29.4.1:test
+|  |  +- com.esotericsoftware:kryo-shaded:4.0.2:provided
+|  |  |  +- com.esotericsoftware:minlog:1.3.0:provided
+|  |  |  \- org.objenesis:objenesis:2.5.1:provided
+|  |  +- org.apache.hbase:hbase-client:2.4.9:test
+|  |  |  +- org.apache.hbase.thirdparty:hbase-shaded-protobuf:3.5.1:test
+|  |  |  +- org.apache.hbase:hbase-common:2.4.9:test
+|  |  |  |  +- org.apache.hbase:hbase-logging:2.4.9:test
+|  |  |  |  \- org.apache.hbase.thirdparty:hbase-shaded-gson:3.5.1:test
+|  |  |  +- org.apache.hbase:hbase-hadoop-compat:2.4.9:test
+|  |  |  +- org.apache.hbase:hbase-hadoop2-compat:2.4.9:test
+|  |  |  |  \- javax.activation:javax.activation-api:1.2.0:test
+|  |  |  +- org.apache.hbase:hbase-protocol-shaded:2.4.9:test
+|  |  |  +- org.apache.hbase:hbase-protocol:2.4.9:test
+|  |  |  +- org.apache.hbase.thirdparty:hbase-shaded-miscellaneous:3.5.1:test
+|  |  |  +- org.apache.hbase.thirdparty:hbase-shaded-netty:3.5.1:test
+|  |  |  +- org.jruby.jcodings:jcodings:1.0.55:test
+|  |  |  \- org.jruby.joni:joni:2.1.31:test
+|  |  \- org.apache.hbase:hbase-server:2.4.9:test
+|  |     +- org.apache.hbase:hbase-http:2.4.9:test
+|  |     |  +- org.apache.hbase.thirdparty:hbase-shaded-jetty:3.5.1:test
+|  |     |  \- org.apache.hbase.thirdparty:hbase-shaded-jersey:3.5.1:test
+|  |     |     \- jakarta.validation:jakarta.validation-api:2.0.2:test
+|  |     +- org.apache.hbase:hbase-procedure:2.4.9:test
+|  |     +- org.apache.hbase:hbase-zookeeper:2.4.9:test
+|  |     +- org.apache.hbase:hbase-replication:2.4.9:test
+|  |     +- org.apache.hbase:hbase-metrics-api:2.4.9:test
+|  |     +- org.apache.hbase:hbase-metrics:2.4.9:test
+|  |     +- org.apache.hbase:hbase-asyncfs:2.4.9:test
+|  |     +- org.glassfish.web:javax.servlet.jsp:2.3.2:test
+|  |     |  \- org.glassfish:javax.el:3.0.1-b12:provided
+|  |     +- javax.servlet.jsp:javax.servlet.jsp-api:2.3.1:test
+|  |     +- com.lmax:disruptor:3.4.2:test
+|  |     +- org.apache.hadoop:hadoop-distcp:2.10.0:test
+|  |     \- org.apache.hadoop:hadoop-hdfs:2.10.1:provided
+|  +- org.apache.hudi:hudi-timeline-service:0.12.2:test
+|  |  +- io.javalin:javalin:4.6.7:test
+|  |  |  +- org.eclipse.jetty:jetty-server:9.4.48.v20220622:test
+|  |  |  |  +- javax.servlet:javax.servlet-api:3.1.0:test
+|  |  |  |  +- org.eclipse.jetty:jetty-http:9.4.48.v20220622:test
+|  |  |  |  |  \- org.eclipse.jetty:jetty-util:9.4.48.v20220622:test
+|  |  |  |  \- org.eclipse.jetty:jetty-io:9.4.48.v20220622:test
+|  |  |  +- org.eclipse.jetty:jetty-webapp:9.4.48.v20220622:test
+|  |  |  |  +- org.eclipse.jetty:jetty-xml:9.4.48.v20220622:test
+|  |  |  |  \- org.eclipse.jetty:jetty-servlet:9.4.48.v20220622:test
+|  |  |  |     +- org.eclipse.jetty:jetty-security:9.4.48.v20220622:test
+|  |  |  |     \- org.eclipse.jetty:jetty-util-ajax:9.4.48.v20220622:test
+|  |  |  +- org.eclipse.jetty.websocket:websocket-server:9.4.48.v20220622:test
+|  |  |  |  +- org.eclipse.jetty.websocket:websocket-common:9.4.48.v20220622:test
+|  |  |  |  |  \- org.eclipse.jetty.websocket:websocket-api:9.4.48.v20220622:test
+|  |  |  |  +- org.eclipse.jetty.websocket:websocket-client:9.4.48.v20220622:test
+|  |  |  |  |  \- org.eclipse.jetty:jetty-client:9.4.48.v20220622:test
+|  |  |  |  \- org.eclipse.jetty.websocket:websocket-servlet:9.4.48.v20220622:test
+|  |  |  \- org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.5.32:test
+|  |  |     +- org.jetbrains.kotlin:kotlin-stdlib:1.5.32:test
+|  |  |     |  \- org.jetbrains.kotlin:kotlin-stdlib-common:1.5.32:test
+|  |  |     \- org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.5.32:test
+|  |  \- com.beust:jcommander:1.78:provided
+|  +- joda-time:joda-time:2.9.9:provided
+|  +- com.github.davidmoten:hilbert-curve:0.2.2:test
+|  |  \- com.github.davidmoten:guava-mini:0.1.3:test
+|  +- io.dropwizard.metrics:metrics-graphite:4.1.1:provided
+|  +- io.dropwizard.metrics:metrics-core:4.1.1:provided
+|  +- io.dropwizard.metrics:metrics-jmx:4.1.1:provided
+|  +- io.prometheus:simpleclient:0.8.0:test
+|  +- io.prometheus:simpleclient_httpserver:0.8.0:test
+|  |  \- io.prometheus:simpleclient_common:0.8.0:test
+|  +- io.prometheus:simpleclient_dropwizard:0.8.0:test
+|  +- io.prometheus:simpleclient_pushgateway:0.8.0:test
+|  +- org.apache.curator:curator-framework:2.7.1:compile
+|  +- org.apache.curator:curator-client:2.7.1:compile
+|  \- org.apache.curator:curator-recipes:2.7.1:compile
++- org.apache.hudi:hudi-spark-client:0.12.2:test
+|  +- org.scala-lang.modules:scala-collection-compat_2.11:2.8.1:test
+|  \- org.apache.hudi:hudi-client-common:0.12.2:test
++- org.apache.hadoop:hadoop-hdfs:2.10.1:test
+|  +- org.apache.hadoop:hadoop-hdfs-client:2.10.1:provided
+|  |  \- com.squareup.okhttp:okhttp:2.7.5:provided
+|  |     \- com.squareup.okio:okio:1.6.0:provided
+|  +- com.google.guava:guava:11.0.2:compile
+|  +- org.mortbay.jetty:jetty:6.1.26:compile
+|  +- org.mortbay.jetty:jetty-util:6.1.26:compile
+|  +- com.sun.jersey:jersey-core:1.9:compile
+|  +- com.sun.jersey:jersey-server:1.9:compile
+|  |  \- asm:asm:3.1:compile
+|  +- commons-cli:commons-cli:1.2:compile
+|  +- commons-codec:commons-codec:1.4:compile
+|  +- commons-io:commons-io:2.4:compile
+|  +- commons-lang:commons-lang:2.6:compile
+|  +- commons-logging:commons-logging:1.1.3:compile
+|  +- commons-daemon:commons-daemon:1.0.13:provided
+|  +- com.google.protobuf:protobuf-java:2.5.0:compile
+|  +- org.codehaus.jackson:jackson-core-asl:1.9.13:compile
+|  +- org.codehaus.jackson:jackson-mapper-asl:1.9.13:compile
+|  +- xmlenc:xmlenc:0.52:compile
+|  +- io.netty:netty:3.10.6.Final:compile
+|  +- io.netty:netty-all:4.1.50.Final:provided
+|  +- org.apache.htrace:htrace-core4:4.1.0-incubating:compile
+|  \- org.fusesource.leveldbjni:leveldbjni-all:1.8:provided
++- org.apache.hadoop:hadoop-common:2.10.1:compile
+|  +- org.apache.hadoop:hadoop-annotations:2.10.1:compile
+|  +- org.apache.commons:commons-math3:3.1.1:compile
+|  +- org.apache.httpcomponents:httpclient:4.4.1:compile
+|  +- commons-net:commons-net:3.1:compile
+|  +- commons-collections:commons-collections:3.2.2:compile
+|  +- com.sun.jersey:jersey-json:1.9:compile
+|  |  +- org.codehaus.jettison:jettison:1.1:compile
+|  |  +- com.sun.xml.bind:jaxb-impl:2.2.3-1:compile
+|  |  +- org.codehaus.jackson:jackson-jaxrs:1.8.3:compile
+|  |  \- org.codehaus.jackson:jackson-xc:1.8.3:compile
+|  +- net.java.dev.jets3t:jets3t:0.9.0:compile
+|  |  \- com.jamesmurty.utils:java-xmlbuilder:0.4:compile
+|  +- commons-configuration:commons-configuration:1.6:compile
+|  +- commons-digester:commons-digester:1.8:compile
+|  +- commons-beanutils:commons-beanutils:1.9.4:compile
+|  +- org.apache.commons:commons-lang3:3.4:compile
+|  +- org.slf4j:slf4j-api:1.7.36:provided
+|  +- org.apache.avro:avro:1.8.2:provided
+|  |  \- org.tukaani:xz:1.5:provided
+|  +- com.google.code.gson:gson:2.2.4:compile
+|  +- org.apache.hadoop:hadoop-auth:2.10.1:provided
+|  |  +- com.nimbusds:nimbus-jose-jwt:7.9:provided
+|  |  |  +- com.github.stephenc.jcip:jcip-annotations:1.0-1:provided
+|  |  |  \- net.minidev:json-smart:2.3:provided
+|  |  |     \- net.minidev:accessors-smart:1.2:provided
+|  |  |        \- org.ow2.asm:asm:5.0.4:provided
+|  |  \- org.apache.directory.server:apacheds-kerberos-codec:2.0.0-M15:provided
+|  |     +- org.apache.directory.server:apacheds-i18n:2.0.0-M15:provided
+|  |     +- org.apache.directory.api:api-asn1-api:1.0.0-M20:provided
+|  |     \- org.apache.directory.api:api-util:1.0.0-M20:provided
+|  +- com.jcraft:jsch:0.1.55:compile
+|  +- com.google.code.findbugs:jsr305:3.0.2:compile
+|  +- org.apache.zookeeper:zookeeper:3.4.14:compile
+|  |  +- com.github.spotbugs:spotbugs-annotations:3.1.9:compile
+|  |  \- org.apache.yetus:audience-annotations:0.5.0:compile
+|  +- org.apache.commons:commons-compress:1.19:compile
+|  +- org.codehaus.woodstox:stax2-api:3.1.4:compile
+|  \- com.fasterxml.woodstox:woodstox-core:5.0.3:compile
++- org.apache.hive:hive-metastore:2.3.1:provided
+|  +- org.apache.hive:hive-serde:2.3.1:provided
+|  |  +- net.sf.opencsv:opencsv:2.3:provided
+|  |  \- org.apache.parquet:parquet-hadoop-bundle:1.8.1:provided
+|  +- org.apache.hive:hive-shims:2.3.1:provided
+|  |  +- org.apache.hive.shims:hive-shims-common:2.3.1:provided
+|  |  |  \- org.apache.logging.log4j:log4j-slf4j-impl:2.17.2:provided
+|  |  |     +- org.apache.logging.log4j:log4j-api:2.17.2:provided
+|  |  |     \- org.apache.logging.log4j:log4j-core:2.17.2:provided
+|  |  +- org.apache.hive.shims:hive-shims-0.23:2.3.1:provided
+|  |  |  \- org.apache.hadoop:hadoop-yarn-server-resourcemanager:2.7.2:provided
+|  |  |     +- org.apache.hadoop:hadoop-yarn-server-applicationhistoryservice:2.7.2:provided
+|  |  |     +- org.apache.hadoop:hadoop-yarn-server-web-proxy:2.7.2:provided
+|  |  |     \- org.apache.zookeeper:zookeeper:3.4.6:provided
+|  |  |        \- org.slf4j:slf4j-log4j12:1.6.1:provided
+|  |  \- org.apache.hive.shims:hive-shims-scheduler:2.3.1:provided
+|  +- javolution:javolution:5.5.1:provided
+|  +- com.jolbox:bonecp:0.8.0.RELEASE:provided
+|  +- com.zaxxer:HikariCP:2.5.1:provided
+|  +- org.apache.derby:derby:10.10.2.0:provided
+|  +- org.datanucleus:datanucleus-api-jdo:4.2.4:provided
+|  +- org.datanucleus:datanucleus-core:4.1.17:provided
+|  +- org.datanucleus:datanucleus-rdbms:4.1.19:provided
+|  +- commons-pool:commons-pool:1.5.4:compile
+|  +- commons-dbcp:commons-dbcp:1.4:provided
+|  +- javax.jdo:jdo-api:3.0.1:provided
+|  +- org.datanucleus:javax.jdo:3.2.0-m3:provided
+|  +- org.antlr:antlr-runtime:3.5.2:compile
+|  +- org.apache.thrift:libfb303:0.9.3:provided
+|  +- org.apache.thrift:libthrift:0.9.3:provided
+|  +- co.cask.tephra:tephra-api:0.6.0:provided
+|  +- co.cask.tephra:tephra-core:0.6.0:provided
+|  |  +- com.google.inject:guice:3.0:provided
+|  |  |  +- javax.inject:javax.inject:1:provided
+|  |  |  \- aopalliance:aopalliance:1.0:provided
+|  |  +- com.google.inject.extensions:guice-assistedinject:3.0:provided
+|  |  +- it.unimi.dsi:fastutil:6.5.6:provided
+|  |  +- org.apache.twill:twill-common:0.6.0-incubating:provided
+|  |  +- org.apache.twill:twill-core:0.6.0-incubating:provided
+|  |  |  \- org.apache.twill:twill-api:0.6.0-incubating:provided
+|  |  +- org.apache.twill:twill-discovery-api:0.6.0-incubating:provided
+|  |  +- org.apache.twill:twill-discovery-core:0.6.0-incubating:provided
+|  |  \- org.apache.twill:twill-zookeeper:0.6.0-incubating:provided
+|  \- co.cask.tephra:tephra-hbase-compat-1.0:0.6.0:provided
++- org.apache.hive:hive-jdbc:2.3.1:provided
+|  +- org.apache.hive:hive-common:2.3.1:provided
+|  |  +- jline:jline:2.12:provided
+|  |  +- org.eclipse.jetty.orbit:javax.servlet:3.0.0.v201112011016:provided
+|  |  +- org.apache.ant:ant:1.9.1:provided
+|  |  |  \- org.apache.ant:ant-launcher:1.9.1:provided
+|  |  +- com.tdunning:json:1.8:provided
+|  |  \- com.github.joshelser:dropwizard-metrics-hadoop-metrics2-reporter:0.1.2:provided
+|  +- org.apache.hive:hive-service:2.3.1:provided
+|  |  +- org.apache.hive:hive-llap-server:2.3.1:provided
+|  |  |  +- org.apache.hive:hive-llap-common:2.3.1:provided
+|  |  |  +- org.apache.hive:hive-llap-client:2.3.1:provided
+|  |  |  |  \- org.apache.curator:apache-curator:2.7.1:provided
+|  |  |  +- org.apache.hive:hive-llap-tez:2.3.1:provided
+|  |  |  +- org.apache.slider:slider-core:0.90.2-incubating:provided
+|  |  |  |  +- org.apache.hadoop:hadoop-yarn-registry:2.7.1:provided
+|  |  |  |  \- commons-httpclient:commons-httpclient:3.1:provided
+|  |  |  \- org.apache.hive:hive-llap-common:2.3.1:provided
+|  |  +- net.sf.jpam:jpam:1.1:provided
+|  |  +- tomcat:jasper-compiler:5.5.23:provided
+|  |  |  +- javax.servlet:jsp-api:2.0:provided
+|  |  |  \- ant:ant:1.6.5:provided
+|  |  +- tomcat:jasper-runtime:5.5.23:provided
+|  |  |  \- commons-el:commons-el:1.0:provided
+|  |  \- org.jamon:jamon-runtime:2.3.1:provided
+|  +- org.apache.hive:hive-service-rpc:2.3.1:provided
+|  \- org.apache.httpcomponents:httpcore:4.4.1:compile
++- org.apache.hadoop:hadoop-mapreduce-client-common:2.10.1:provided
+|  +- org.apache.hadoop:hadoop-yarn-common:2.10.1:provided
+|  |  +- com.sun.jersey:jersey-client:1.9:provided
+|  |  \- com.sun.jersey.contribs:jersey-guice:1.9:provided
+|  +- org.apache.hadoop:hadoop-yarn-client:2.10.1:provided
+|  +- org.apache.hadoop:hadoop-mapreduce-client-core:2.10.1:provided
+|  \- com.google.inject.extensions:guice-servlet:3.0:provided
++- org.apache.hadoop:hadoop-client:2.10.1:provided
+|  +- org.apache.hadoop:hadoop-common:2.10.1:provided
+|  |  +- org.mortbay.jetty:jetty-sslengine:6.1.26:provided
+|  |  \- javax.servlet.jsp:jsp-api:2.1:provided
+|  +- org.apache.hadoop:hadoop-mapreduce-client-app:2.10.1:provided
+|  |  \- org.apache.hadoop:hadoop-mapreduce-client-shuffle:2.10.1:provided
+|  |     \- org.apache.hadoop:hadoop-yarn-server-common:2.10.1:provided
+|  |        +- org.apache.geronimo.specs:geronimo-jcache_1.0_spec:1.0-alpha-1:provided
+|  |        +- org.ehcache:ehcache:3.3.1:provided
+|  |        +- com.zaxxer:HikariCP-java7:2.4.12:provided
+|  |        \- com.microsoft.sqlserver:mssql-jdbc:6.2.1.jre7:provided
+|  +- org.apache.hadoop:hadoop-yarn-api:2.10.1:provided
+|  \- org.apache.hadoop:hadoop-mapreduce-client-jobclient:2.10.1:provided
++- org.apache.spark:spark-core_2.12:3.1.3:provided
+|  +- com.thoughtworks.paranamer:paranamer:2.8:compile
+|  +- org.apache.avro:avro-mapred:1.8.2:provided
+|  +- com.twitter:chill_2.12:0.9.5:provided
+|  +- com.twitter:chill-java:0.9.5:provided
+|  +- org.apache.xbean:xbean-asm7-shaded:4.15:provided
+|  +- org.apache.spark:spark-launcher_2.12:3.1.3:provided
+|  +- org.apache.spark:spark-kvstore_2.12:3.1.3:provided
+|  +- org.apache.spark:spark-network-common_2.12:3.1.3:provided
+|  |  \- com.google.crypto.tink:tink:1.6.0:provided
+|  +- org.apache.spark:spark-network-shuffle_2.12:3.1.3:provided
+|  +- org.apache.spark:spark-unsafe_2.12:3.1.3:provided
+|  +- javax.activation:activation:1.1.1:provided
+|  +- jakarta.servlet:jakarta.servlet-api:4.0.3:provided
+|  +- org.apache.commons:commons-text:1.6:provided
+|  +- com.ning:compress-lzf:1.0.3:provided
+|  +- org.xerial.snappy:snappy-java:1.1.8.3:compile
+|  +- org.lz4:lz4-java:1.7.1:provided
+|  +- com.github.luben:zstd-jni:1.4.8-1:provided
+|  +- org.roaringbitmap:RoaringBitmap:0.9.0:provided
+|  |  \- org.roaringbitmap:shims:0.9.0:provided
+|  +- org.scala-lang.modules:scala-xml_2.12:1.2.0:provided
+|  +- org.scala-lang:scala-reflect:2.12.10:provided
+|  +- org.json4s:json4s-jackson_2.12:3.7.0-M5:provided
+|  |  \- org.json4s:json4s-core_2.12:3.7.0-M5:provided
+|  |     +- org.json4s:json4s-ast_2.12:3.7.0-M5:provided
+|  |     \- org.json4s:json4s-scalap_2.12:3.7.0-M5:provided
+|  +- org.glassfish.jersey.core:jersey-client:2.30:provided
+|  |  +- jakarta.ws.rs:jakarta.ws.rs-api:2.1.6:provided
+|  |  \- org.glassfish.hk2.external:jakarta.inject:2.6.1:provided
+|  +- org.glassfish.jersey.core:jersey-common:2.30:provided
+|  |  +- jakarta.annotation:jakarta.annotation-api:1.3.5:provided
+|  |  \- org.glassfish.hk2:osgi-resource-locator:1.0.3:provided
+|  +- org.glassfish.jersey.core:jersey-server:2.17:provided
+|  |  +- javax.ws.rs:javax.ws.rs-api:2.0.1:provided
+|  |  +- org.glassfish.jersey.media:jersey-media-jaxb:2.17:provided
+|  |  +- javax.annotation:javax.annotation-api:1.2:provided
+|  |  +- org.glassfish.hk2:hk2-api:2.4.0-b10:provided
+|  |  |  +- org.glassfish.hk2:hk2-utils:2.4.0-b10:provided
+|  |  |  \- org.glassfish.hk2.external:aopalliance-repackaged:2.4.0-b10:provided
+|  |  +- org.glassfish.hk2.external:javax.inject:2.4.0-b10:provided
+|  |  +- org.glassfish.hk2:hk2-locator:2.4.0-b10:provided
+|  |  \- javax.validation:validation-api:1.1.0.Final:provided
+|  +- org.glassfish.jersey.containers:jersey-container-servlet:2.30:provided
+|  +- org.glassfish.jersey.containers:jersey-container-servlet-core:2.17:provided
+|  +- org.glassfish.jersey.inject:jersey-hk2:2.30:provided
+|  |  \- org.javassist:javassist:3.25.0-GA:provided
+|  +- com.clearspring.analytics:stream:2.9.6:provided
+|  +- io.dropwizard.metrics:metrics-jvm:4.1.1:provided
+|  +- io.dropwizard.metrics:metrics-json:4.1.1:provided
+|  +- org.apache.ivy:ivy:2.4.0:provided
+|  +- oro:oro:2.0.8:provided
+|  +- net.razorvine:pyrolite:4.30:provided
+|  +- net.sf.py4j:py4j:0.10.9:provided
+|  +- org.apache.spark:spark-tags_2.12:3.1.3:provided
+|  +- org.apache.commons:commons-crypto:1.1.0:provided
+|  \- org.spark-project.spark:unused:1.0.0:provided
++- org.apache.spark:spark-sql_2.12:3.1.3:provided
+|  +- com.univocity:univocity-parsers:2.9.1:provided
+|  +- org.apache.spark:spark-sketch_2.12:3.1.3:provided
+|  +- org.apache.spark:spark-catalyst_2.12:3.1.3:provided
+|  |  +- org.scala-lang.modules:scala-parser-combinators_2.12:1.1.2:provided
+|  |  +- org.codehaus.janino:janino:3.0.16:provided
+|  |  +- org.codehaus.janino:commons-compiler:3.0.16:provided
+|  |  +- org.antlr:antlr4-runtime:4.8-1:provided
+|  |  +- org.apache.arrow:arrow-vector:2.0.0:provided
+|  |  |  +- org.apache.arrow:arrow-format:2.0.0:provided
+|  |  |  +- org.apache.arrow:arrow-memory-core:2.0.0:provided
+|  |  |  \- com.google.flatbuffers:flatbuffers-java:1.9.0:provided
+|  |  \- org.apache.arrow:arrow-memory-netty:2.0.0:provided
+|  +- org.apache.orc:orc-core:1.5.13:provided
+|  |  +- org.apache.orc:orc-shims:1.5.13:provided
+|  |  +- io.airlift:aircompressor:0.10:provided
+|  |  \- org.threeten:threeten-extra:1.5.0:provided
+|  +- org.apache.orc:orc-mapreduce:1.5.13:provided
+|  +- org.apache.hive:hive-storage-api:2.7.2:provided
+|  \- org.apache.parquet:parquet-column:1.10.1:compile
+|     +- org.apache.parquet:parquet-common:1.10.1:compile
+|     \- org.apache.parquet:parquet-encoding:1.10.1:compile
++- org.apache.spark:spark-streaming_2.12:3.1.3:provided
++- org.antlr:stringtemplate:4.0.2:compile
++- org.mockito:mockito-all:1.10.19:test
++- org.apache.avro:avro-mapred:1.7.7:compile
+|  +- org.apache.avro:avro-ipc:1.7.7:compile
+|  |  +- org.apache.velocity:velocity:1.7:compile
+|  |  \- org.mortbay.jetty:servlet-api:2.5-20081211:compile
+|  \- org.apache.avro:avro-ipc:1.7.7:compile
+\- org.apache.parquet:parquet-hadoop:1.10.1:compile
+   +- org.apache.parquet:parquet-format:2.4.0:compile
+   \- org.apache.parquet:parquet-jackson:1.10.1:compile
