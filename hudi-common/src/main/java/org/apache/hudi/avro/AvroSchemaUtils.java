@@ -59,10 +59,7 @@ public class AvroSchemaUtils {
     // In case schema projection is not allowed, new schema has to have all the same fields as the
     // old schema
     if (!allowProjection) {
-      // Check that each field in the oldSchema can be populated in the newSchema
-      if (prevSchema.getFields().stream()
-          .map(oldSchemaField -> SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField))
-          .anyMatch(Objects::isNull)) {
+      if (!checkProjection(prevSchema, newSchema)) {
         return false;
       }
     }
@@ -70,6 +67,18 @@ public class AvroSchemaUtils {
     AvroSchemaCompatibility.SchemaPairCompatibility result =
         AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema, checkNaming);
     return result.getType() == AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+  }
+
+  /**
+   * Check that each field in the prevSchema can be populated in the newSchema
+   * @param prevSchema prev schema.
+   * @param newSchema new schema
+   * @return true if prev schema is a projection of new schema.
+   */
+  public static boolean checkProjection(Schema prevSchema, Schema newSchema) {
+    return prevSchema.getFields().stream()
+        .map(oldSchemaField -> SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField))
+        .noneMatch(Objects::isNull);
   }
 
   /**
