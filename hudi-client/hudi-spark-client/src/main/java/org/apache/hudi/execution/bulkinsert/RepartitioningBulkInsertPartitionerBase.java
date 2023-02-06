@@ -39,6 +39,10 @@ public abstract class RepartitioningBulkInsertPartitionerBase<I> implements Bulk
     this.isPartitionedTable = tableConfig.getPartitionFields().map(pfs -> pfs.length > 0).orElse(false);
   }
 
+  public RepartitioningBulkInsertPartitionerBase(boolean isPartitionedTable) {
+    this.isPartitionedTable = isPartitionedTable;
+  }
+
   protected static class PartitionPathRDDPartitioner extends Partitioner implements Serializable {
     private final SerializableFunctionUnchecked<Object, String> partitionPathExtractor;
     private final int numPartitions;

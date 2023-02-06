@@ -44,14 +44,13 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_
  *
  * @param <T> HoodieRecordPayload type
  */
-public class PartitionPathRepartitionPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public class PartitionPathRepartitionPartitioner<T>
+    extends RepartitioningBulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
-  private final boolean isTablePartitioned;
   private final boolean shouldPopulateMetaFields;
 
   public PartitionPathRepartitionPartitioner(boolean isTablePartitioned, HoodieWriteConfig config) {
-    this.isTablePartitioned = isTablePartitioned;
+    super(isTablePartitioned);
     this.shouldPopulateMetaFields = config.populateMetaFields();
   }
 
@@ -62,7 +61,7 @@ public class PartitionPathRepartitionPartitioner<T extends HoodieRecordPayload>
       throw new HoodieException(PARTITION_PATH_REPARTITION.name() + " mode requires meta-fields to be enabled");
     }
 
-    if (isTablePartitioned) {
+    if (isPartitionedTable) {
       PartitionPathRDDPartitioner partitioner = new PartitionPathRDDPartitioner(
           (partitionPath) -> (String) partitionPath, outputSparkPartitions);
       return records
@@ -70,6 +69,7 @@ public class PartitionPathRepartitionPartitioner<T extends HoodieRecordPayload>
           .partitionBy(partitioner)
           .values();
     }
+
     return records.coalesce(outputSparkPartitions);
   }
 

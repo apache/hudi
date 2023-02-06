@@ -41,13 +41,13 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_
  * <p>
  * Corresponding to the {@code BulkInsertSortMode.PARTITION_PATH_REPARTITION} mode.
  */
-public class PartitionPathRepartitionPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class PartitionPathRepartitionPartitionerWithRows
+    extends RepartitioningBulkInsertPartitionerBase<Dataset<Row>> {
 
-  private final boolean isTablePartitioned;
   private final boolean shouldPopulateMetaFields;
 
   public PartitionPathRepartitionPartitionerWithRows(boolean isTablePartitioned, HoodieWriteConfig config) {
-    this.isTablePartitioned = isTablePartitioned;
+    super(isTablePartitioned);
     this.shouldPopulateMetaFields = config.populateMetaFields();
   }
 
@@ -57,7 +57,7 @@ public class PartitionPathRepartitionPartitionerWithRows implements BulkInsertPa
       throw new HoodieException(PARTITION_PATH_REPARTITION.name() + " mode requires meta-fields to be enabled");
     }
 
-    if (isTablePartitioned) {
+    if (isPartitionedTable) {
       return rows.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
     }
     return rows.coalesce(outputSparkPartitions);

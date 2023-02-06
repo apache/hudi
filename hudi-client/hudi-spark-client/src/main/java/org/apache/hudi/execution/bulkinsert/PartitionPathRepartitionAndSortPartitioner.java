@@ -45,14 +45,13 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_
  *
  * @param <T> HoodieRecordPayload type
  */
-public class PartitionPathRepartitionAndSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public class PartitionPathRepartitionAndSortPartitioner<T>
+    extends RepartitioningBulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
-  private final boolean isTablePartitioned;
   private final boolean shouldPopulateMetaFields;
 
-  public PartitionPathRepartitionAndSortPartitioner(boolean isTablePartitioned, HoodieWriteConfig config) {
-    this.isTablePartitioned = isTablePartitioned;
+  public PartitionPathRepartitionAndSortPartitioner(boolean isPartitionedTable, HoodieWriteConfig config) {
+    super(isPartitionedTable);
     this.shouldPopulateMetaFields = config.populateMetaFields();
   }
 
@@ -63,7 +62,7 @@ public class PartitionPathRepartitionAndSortPartitioner<T extends HoodieRecordPa
       throw new HoodieException(PARTITION_PATH_REPARTITION_AND_SORT.name() + " mode requires meta-fields to be enabled");
     }
 
-    if (isTablePartitioned) {
+    if (isPartitionedTable) {
       PartitionPathRDDPartitioner partitioner = new PartitionPathRDDPartitioner(
           (partitionPath) -> (String) partitionPath, outputSparkPartitions);
       return records
@@ -71,11 +70,13 @@ public class PartitionPathRepartitionAndSortPartitioner<T extends HoodieRecordPa
           .repartitionAndSortWithinPartitions(partitioner)
           .values();
     }
+
     return records.coalesce(outputSparkPartitions);
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
-    return isTablePartitioned;
+    // In case of non-partitioned tables this partitioner is a no-op
+    return isPartitionedTable;
   }
 }
