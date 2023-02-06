@@ -67,6 +67,14 @@ public class HoodieCommonConfig extends HoodieConfig {
       .defaultValue(true)
       .withDocumentation("Turn on compression for BITCASK disk map used by the External Spillable Map");
 
+  public static final String LEGACY_RECONCILE_STRATEGY = "legacy_reconcile_strategy";
+  public static final String DYNAMIC_SCHEMA_RECONCILE_STRATEGY = "dynamic_schema_reconcile_strategy";
+
+  public static final ConfigProperty<String> RECONCILE_SCHEMA_STRATEGY = ConfigProperty
+      .key("hoodie.datasource.write.reconcile.schema.strategy")
+      .defaultValue(LEGACY_RECONCILE_STRATEGY)
+      .withDocumentation("To be fixed");
+
   public ExternalSpillableMap.DiskMapType getSpillableDiskMapType() {
     return ExternalSpillableMap.DiskMapType.valueOf(getString(SPILLABLE_DISK_MAP_TYPE).toUpperCase(Locale.ROOT));
   }
