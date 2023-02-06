@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -28,11 +30,17 @@ import com.beust.jcommander.ParametersDelegate;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 
+import javax.annotation.concurrent.Immutable;
+
 import java.util.Properties;
 
 /**
  * Configs needed to sync data into the Hive Metastore.
  */
+@Immutable
+@ConfigClassProperty(name = "Hive Sync Configs",
+    groupName = ConfigGroups.Names.META_SYNC,
+    description = "Configurations used by the Hudi to sync metadata to Hive Metastore.")
 public class HiveSyncConfig extends HoodieSyncConfig {
 
   /*
