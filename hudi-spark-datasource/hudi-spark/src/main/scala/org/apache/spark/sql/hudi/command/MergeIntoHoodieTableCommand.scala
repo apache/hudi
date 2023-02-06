@@ -583,7 +583,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
       SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
-      MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName,
+      RECORD_MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName,
 
         // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
       //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'
@@ -667,6 +667,6 @@ object MergeIntoHoodieTableCommand {
     StructType(attrs.map(a => StructField(a.qualifiedName.replace('.', '_'), a.dataType, a.nullable, a.metadata)))
 
   def encodeAsBase64String(any: Any): String =
-    Base64.getEncoder.encodeToString(SerDeUtils.toBytes(any))
+    Base64.getEncoder.encodeToString(Serializer.toBytes(any))
 }
 

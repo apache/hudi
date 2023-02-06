@@ -388,7 +388,7 @@ object ExpressionPayload {
 
     getCachedSchema(props.getProperty(PAYLOAD_EXPECTED_COMBINED_SCHEMA),
       base64EncodedStructType =>
-        SerDeUtils.toObject(Base64.getDecoder.decode(base64EncodedStructType)).asInstanceOf[StructType])
+        Serializer.toObject(Base64.getDecoder.decode(base64EncodedStructType)).asInstanceOf[StructType])
   }
 
   private def getCachedSchema[T <: AnyRef](key: String, ctor: String => T): T = {
