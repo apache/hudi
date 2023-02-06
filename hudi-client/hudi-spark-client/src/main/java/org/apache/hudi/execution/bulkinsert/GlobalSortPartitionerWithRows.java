@@ -21,7 +21,6 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -37,7 +36,7 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.GLOBAL_SOR
  * directly to avoid de-/serialization into intermediate representation. Please check out
  * {@link GlobalSortPartitioner} java-doc for more details regarding its sorting procedure
  */
-public class GlobalSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class GlobalSortPartitionerWithRows extends BulkInsertPartitionerBase<Dataset<Row>> {
 
   private final boolean shouldPopulateMetaFields;
 
@@ -51,8 +50,10 @@ public class GlobalSortPartitionerWithRows implements BulkInsertPartitioner<Data
       throw new HoodieException(GLOBAL_SORT.name() + " mode requires meta-fields to be enabled");
     }
 
-    return dataset.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
-        .coalesce(outputSparkPartitions);
+    Dataset<Row> sorted = dataset.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+        functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+
+    return tryCoalesce(sorted, outputSparkPartitions);
   }
 
   @Override

@@ -70,7 +70,7 @@ public class PartitionPathRepartitionPartitioner<T>
           .values();
     }
 
-    return records.coalesce(outputSparkPartitions);
+    return tryCoalesce(records, outputSparkPartitions);
   }
 
   @Override

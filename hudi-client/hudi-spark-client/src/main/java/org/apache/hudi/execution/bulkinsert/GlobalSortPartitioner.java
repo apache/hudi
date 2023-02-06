@@ -55,8 +55,7 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.GLOBAL_SOR
  *
  * @param <T> {@code HoodieRecordPayload} type
  */
-public class GlobalSortPartitioner<T>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public class GlobalSortPartitioner<T> extends BulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
   private final boolean shouldPopulateMetaFields;
 

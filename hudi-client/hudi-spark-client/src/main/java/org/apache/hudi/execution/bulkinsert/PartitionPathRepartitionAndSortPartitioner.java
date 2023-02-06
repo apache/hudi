@@ -71,7 +71,7 @@ public class PartitionPathRepartitionAndSortPartitioner<T>
           .values();
     }
 
-    return records.coalesce(outputSparkPartitions);
+    return tryCoalesce(records, outputSparkPartitions);
   }
 
   @Override

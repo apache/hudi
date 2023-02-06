@@ -70,7 +70,7 @@ public class RowCustomColumnsSortPartitioner extends RepartitioningBulkInsertPar
     if (isPartitionedTable) {
       repartitionedDataset = dataset.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
     } else {
-      repartitionedDataset = dataset.coalesce(outputSparkPartitions);
+      repartitionedDataset = tryCoalesce(dataset, outputSparkPartitions);
     }
 
     return repartitionedDataset.sortWithinPartitions(

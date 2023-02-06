@@ -62,7 +62,8 @@ public class PartitionPathRepartitionAndSortPartitionerWithRows
       return rows.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD))
           .sortWithinPartitions(new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
     }
-    return rows.coalesce(outputSparkPartitions);
+
+    return tryCoalesce(rows, outputSparkPartitions);
   }
 
   @Override

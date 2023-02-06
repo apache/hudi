@@ -60,7 +60,8 @@ public class PartitionPathRepartitionPartitionerWithRows
     if (isPartitionedTable) {
       return rows.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
     }
-    return rows.coalesce(outputSparkPartitions);
+
+    return tryCoalesce(rows, outputSparkPartitions);
   }
 
   @Override

@@ -18,10 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.table.BulkInsertPartitioner;
-
 import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.HoodieUnsafeUtils$;
 import org.apache.spark.sql.Row;
 
 /**
@@ -34,7 +31,7 @@ import org.apache.spark.sql.Row;
  * <p>
  * Corresponds to the {@link BulkInsertSortMode#NONE} mode.
  */
-public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class NonSortPartitionerWithRows extends BulkInsertPartitionerBase<Dataset<Row>> {
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> dataset, int outputSparkPartitions) {
@@ -46,11 +43,4 @@ public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset
     return false;
   }
 
-  protected static Dataset<Row> tryCoalesce(Dataset<Row> dataset, int outputSparkPartitions) {
-    if (HoodieUnsafeUtils$.MODULE$.getNumPartitions(dataset) != outputSparkPartitions) {
-      return dataset.coalesce(outputSparkPartitions);
-    }
-
-    return dataset;
-  }
 }

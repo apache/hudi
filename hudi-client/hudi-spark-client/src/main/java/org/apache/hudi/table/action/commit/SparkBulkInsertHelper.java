@@ -74,12 +74,12 @@ public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieD
         config.shouldAllowMultiWriteOnSameInstant());
 
     BulkInsertPartitioner partitioner =
-        userDefinedBulkInsertPartitioner.orElseGet(() ->
-            BulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode(), table.getMetaClient().getTableConfig()));
+        userDefinedBulkInsertPartitioner.orElseGet(() -> BulkInsertInternalPartitionerFactory.get(table, config));
 
     // Write new files
     HoodieData<WriteStatus> writeStatuses =
         bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false,
+            // TODO fix
             config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
 
     // Update index

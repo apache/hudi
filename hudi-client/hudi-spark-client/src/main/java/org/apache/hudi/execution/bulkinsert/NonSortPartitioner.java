@@ -34,8 +34,7 @@ import org.apache.spark.api.java.JavaRDD;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class NonSortPartitioner<T>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public class NonSortPartitioner<T> extends BulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitionsCount) {
@@ -45,15 +44,5 @@ public class NonSortPartitioner<T>
   @Override
   public boolean arePartitionRecordsSorted() {
     return false;
-  }
-
-  private static <T> JavaRDD<HoodieRecord<T>> tryCoalesce(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitionsCount) {
-    if (records.getNumPartitions() == outputSparkPartitionsCount) {
-      // NOTE: In case incoming RDD's partition count matches the target one,
-      //       we short-circuit coalescing altogether (since this isn't done by Spark itself)
-      return records;
-    }
-
-    return records.coalesce(outputSparkPartitionsCount);
   }
 }
