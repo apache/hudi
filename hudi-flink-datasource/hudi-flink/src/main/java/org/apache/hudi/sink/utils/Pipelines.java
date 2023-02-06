@@ -143,13 +143,13 @@ public class Pipelines {
       }
       if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
         String[] sortFields = partitionFields;
-        String operatorName = "partition_key_sorter";
+        String operatorName = "sorter:(partition_key)";
         if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY)) {
           String[] recordKeyFields = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
           ArrayList<String> sortList = new ArrayList<>(Arrays.asList(partitionFields));
           Collections.addAll(sortList, recordKeyFields);
           sortFields = sortList.toArray(new String[0]);
-          operatorName = "partition_and_record_key_sorter";
+          operatorName = "sorter:(partition_key, record_key)";
         }
         SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, sortFields);
         // sort by partition keys or (partition keys and record keys)
