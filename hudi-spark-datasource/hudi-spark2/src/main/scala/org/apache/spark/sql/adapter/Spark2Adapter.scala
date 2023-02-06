@@ -130,23 +130,6 @@ class Spark2Adapter extends SparkAdapter {
     partitions.toSeq
   }
 
-  override def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
-    super.isHoodieTable(table, spark) ||
-      // NOTE: Following checks extending the logic of the base class specifically for Spark 2.x
-      (unfoldSubqueryAliases(table) match {
-        // This is to handle the cases when table is loaded by providing
-        // the path to the Spark DS and not from the catalog
-        //
-        // NOTE: This logic can't be relocated to the hudi-spark-client
-        case LogicalRelation(_: HoodieBaseRelation, _, _, _) => true
-
-        case relation: UnresolvedRelation =>
-          isHoodieTable(getCatalystPlanUtils.toTableIdentifier(relation), spark)
-
-        case _ => false
-      })
-  }
-
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark24HoodieParquetFileFormat(appendPartitionValues))
   }
