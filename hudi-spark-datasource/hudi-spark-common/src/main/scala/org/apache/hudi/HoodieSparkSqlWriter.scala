@@ -1021,7 +1021,7 @@ object HoodieSparkSqlWriter {
   private def mergeParamsAndGetHoodieConfig(optParams: Map[String, String],
                                             tableConfig: HoodieTableConfig, mode: SaveMode): (Map[String, String], HoodieConfig) = {
     val translatedOptions = DataSourceWriteOptions.translateSqlOptions(optParams)
-    val mergedParams = mutable.Map.empty ++ fixKeyGeneratorClassConfig(HoodieWriterUtils.parametersWithWriteDefaults(translatedOptions))
+    val mergedParams = mutable.Map.empty ++ inferKeyGeneratorClassConfig(HoodieWriterUtils.parametersWithWriteDefaults(translatedOptions))
     if (null != tableConfig && mode != SaveMode.Overwrite) {
       tableConfig.getProps.foreach { case (key, value) =>
         mergedParams(key) = value

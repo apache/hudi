@@ -249,7 +249,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
           s"Missing schema for Create Table: $catalogTableName")
         val schema = table.schema
         val options = extraTableConfig(tableExists = false, globalTableConfigs) ++
-          mapSqlOptionsToTableConfigs(fixKeyGeneratorClassConfig(sqlOptions))
+          mapSqlOptionsToTableConfigs(inferKeyGeneratorClassConfig(sqlOptions))
         (addMetaFields(schema), options)
 
       case (CatalogTableType.MANAGED, true) =>
