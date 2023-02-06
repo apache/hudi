@@ -103,3 +103,7 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 ### Zendesk 
 At [Zendesk](https://www.zendesk.com/), Apache Hudi is adopted for building Data Lake on AWS.
+
+### ZTO Express
+[ZTO Express](https://www.zto.com/) is a large group company integrating express delivery, logistics and other businesses.
+ZTO uses Apache Hudi to build a technical architecture integrating lakes and warehouses. As the core of this architecture, Hudi has helped ZTO realize the quasi-real-time update and analysis capabilities of massive data.
