@@ -241,7 +241,12 @@ object DefaultSource {
     }
 
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
-      new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
+      val structType = resolveSchema(metaClient, parameters, Some(schema))
+      if (structType == null) {
+        new EmptyRelation(sqlContext, new StructType())
+      } else {
+        new EmptyRelation(sqlContext, structType)
+      }
     } else if (isCdcQuery) {
       CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
     } else {
