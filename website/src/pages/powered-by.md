@@ -18,6 +18,10 @@ or come to one of our [virtual community events](https://hudi.apache.org/communi
 Apache Hudi is integrated into our Data Middle Platform offering real-time data warehouse and solving the problem of frequent changes of data.
 Meanwhile, we build a set of data access standards based on Hudi, which provides a guarantee for massive data queries in game operation scenarios.
 
+### ZTO Express
+[ZTO](https://www.zto.com/) is an enterprise with logistics as its core. 
+With the help of hudi, we have created our own ZRC real-time computing platform, built a real-time data warehouse platform combining Flink and Hudi, and promoted the ZTO real-time platform based on the integration of streaming and batching.
+
 ### Alibaba Cloud 
 Alibaba Cloud provides cloud computing services to online businesses and Alibaba's own e-commerce ecosystem, Apache Hudi is integrated into Alibaba Cloud [Data Lake Analytics](https://www.alibabacloud.com/help/product/70174.htm)
 offering real-time analysis on hudi dataset.
