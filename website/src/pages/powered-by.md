@@ -18,10 +18,6 @@ or come to one of our [virtual community events](https://hudi.apache.org/communi
 Apache Hudi is integrated into our Data Middle Platform offering real-time data warehouse and solving the problem of frequent changes of data.
 Meanwhile, we build a set of data access standards based on Hudi, which provides a guarantee for massive data queries in game operation scenarios.
 
-### ZTO Express
-[ZTO Express](https://www.zto.com/) is a large group company integrating express delivery, logistics and other businesses.
-ZTO uses Apache Hudi to build a technical architecture integrating lakes and warehouses. As the core of this architecture, Hudi has helped ZTO realize the quasi-real-time update and analysis capabilities of massive data.
-
 ### Alibaba Cloud 
 Alibaba Cloud provides cloud computing services to online businesses and Alibaba's own e-commerce ecosystem, Apache Hudi is integrated into Alibaba Cloud [Data Lake Analytics](https://www.alibabacloud.com/help/product/70174.htm)
 offering real-time analysis on hudi dataset.
@@ -107,3 +103,7 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 ### Zendesk 
 At [Zendesk](https://www.zendesk.com/), Apache Hudi is adopted for building Data Lake on AWS.
+
+### ZTO Express
+[ZTO Express](https://www.zto.com/) is a large group company integrating express delivery, logistics and other businesses.
+ZTO uses Apache Hudi to build a technical architecture integrating lakes and warehouses. As the core of this architecture, Hudi has helped ZTO realize the quasi-real-time update and analysis capabilities of massive data.
