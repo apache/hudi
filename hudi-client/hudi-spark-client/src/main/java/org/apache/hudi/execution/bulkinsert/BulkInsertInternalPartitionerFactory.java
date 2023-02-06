@@ -28,31 +28,25 @@ import org.apache.hudi.table.HoodieTable;
  * A factory to generate built-in partitioner to repartition input records into at least
  * expected number of output spark partitions for bulk insert operation.
  */
-public abstract class BulkInsertInternalPartitionerFactory {
+public class BulkInsertInternalPartitionerFactory {
+
+  private BulkInsertInternalPartitionerFactory() {}
 
   public static BulkInsertPartitioner get(HoodieTable table,
                                           HoodieWriteConfig config) {
-    return get(table, config, false);
-  }
-
-  public static BulkInsertPartitioner get(HoodieTable table,
-                                          HoodieWriteConfig config,
-                                          boolean enforceNumOutputPartitions) {
     if (config.getIndexType().equals(HoodieIndex.IndexType.BUCKET)
         && config.getBucketIndexEngineType().equals(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)) {
       return new RDDConsistentBucketPartitioner(table);
     }
-    return get(config, table.isPartitioned(), enforceNumOutputPartitions);
+    return get(config, table.isPartitioned());
   }
 
   public static BulkInsertPartitioner get(HoodieWriteConfig config,
-                                          boolean isTablePartitioned,
-                                          boolean enforceNumOutputPartitions) {
-    BulkInsertSortMode sortMode = config.getBulkInsertSortMode();
-
-    switch (sortMode) {
+                                          boolean isTablePartitioned) {
+    BulkInsertSortMode mode = config.getBulkInsertSortMode();
+    switch (mode) {
       case NONE:
-        return new NonSortPartitioner<>(enforceNumOutputPartitions);
+        return new NonSortPartitioner<>();
       case GLOBAL_SORT:
         return new GlobalSortPartitioner<>(config);
       case PARTITION_SORT:
@@ -62,7 +56,7 @@ public abstract class BulkInsertInternalPartitionerFactory {
       case PARTITION_PATH_REPARTITION_AND_SORT:
         return new PartitionPathRepartitionAndSortPartitioner(isTablePartitioned, config);
       default:
-        throw new HoodieException("The bulk insert sort mode \"" + bulkInsertMode.name() + "\" is not supported.");
+        throw new HoodieException("The bulk insert sort mode \"" + mode.name() + "\" is not supported.");
     }
   }
 }

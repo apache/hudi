@@ -181,7 +181,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         .build();
 
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerFactory.get(config, isTablePartitioned, enforceNumOutputPartitions),
+        BulkInsertInternalPartitionerFactory.get(config, isTablePartitioned),
         records1,
         enforceNumOutputPartitions,
         isGloballySorted,
@@ -189,7 +189,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         generateExpectedPartitionNumRecords(records1),
         populateMetaFields);
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerFactory.get(config, isTablePartitioned, enforceNumOutputPartitions),
+        BulkInsertInternalPartitionerFactory.get(config, isTablePartitioned),
         records2,
         enforceNumOutputPartitions,
         isGloballySorted,

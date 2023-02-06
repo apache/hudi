@@ -37,34 +37,23 @@ import org.apache.spark.api.java.JavaRDD;
 public class NonSortPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
-  private final boolean enforceNumOutputPartitions;
-
-  /**
-   * Default constructor without enforcing the number of output partitions.
-   */
-  public NonSortPartitioner() {
-    this(false);
-  }
-
-  /**
-   * Constructor with `enforceNumOutputPartitions` config.
-   *
-   * @param enforceNumOutputPartitions Whether to enforce the number of output partitions.
-   */
-  public NonSortPartitioner(boolean enforceNumOutputPartitions) {
-    this.enforceNumOutputPartitions = enforceNumOutputPartitions;
-  }
-
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitionsCount) {
-    if (enforceNumOutputPartitions) {
-      return records.coalesce(outputSparkPartitionsCount);
-    }
-    return records;
+    return tryCoalesce(records, outputSparkPartitionsCount);
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
     return false;
+  }
+
+  private static <T> JavaRDD<HoodieRecord<T>> tryCoalesce(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitionsCount) {
+    if (records.getNumPartitions() == outputSparkPartitionsCount) {
+      // NOTE: In case incoming RDD's partition count matches the target one,
+      //       we short-circuit coalescing altogether (since this isn't done by Spark itself)
+      return records;
+    }
+
+    return records.coalesce(outputSparkPartitionsCount);
   }
 }

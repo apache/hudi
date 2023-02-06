@@ -27,20 +27,16 @@ import org.apache.spark.sql.Row;
  * A factory to generate built-in partitioner to repartition input Rows into at least
  * expected number of output spark partitions for bulk insert operation.
  */
-public abstract class BulkInsertInternalPartitionerWithRowsFactory {
+public class BulkInsertInternalPartitionerWithRowsFactory {
+
+  private BulkInsertInternalPartitionerWithRowsFactory() {}
 
   public static BulkInsertPartitioner<Dataset<Row>> get(HoodieWriteConfig config,
                                                         boolean isTablePartitioned) {
-    return get(config, isTablePartitioned, false);
-  }
-
-  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieWriteConfig config,
-                                                        boolean isTablePartitioned,
-                                                        boolean enforceNumOutputPartitions) {
-    BulkInsertSortMode sortMode = config.getBulkInsertSortMode();
-    switch (sortMode) {
+    BulkInsertSortMode mode = config.getBulkInsertSortMode();
+    switch (mode) {
       case NONE:
-        return new NonSortPartitionerWithRows(enforceNumOutputPartitions);
+        return new NonSortPartitionerWithRows();
       case GLOBAL_SORT:
         return new GlobalSortPartitionerWithRows(config);
       case PARTITION_SORT:
@@ -50,7 +46,7 @@ public abstract class BulkInsertInternalPartitionerWithRowsFactory {
       case PARTITION_PATH_REPARTITION_AND_SORT:
         return new PartitionPathRepartitionAndSortPartitionerWithRows(isTablePartitioned, config);
       default:
-        throw new UnsupportedOperationException("The bulk insert sort mode \"" + bulkInsertMode.name() + "\" is not supported.");
+        throw new UnsupportedOperationException("The bulk insert sort mode \"" + mode.name() + "\" is not supported.");
     }
   }
 }
