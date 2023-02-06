@@ -19,7 +19,7 @@ on:
       - master
       - 'release-*'
 env:
-  MVN_ARGS: -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
+  MVN_ARGS: -e -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
 
 jobs:
   test-spark:
@@ -127,8 +127,10 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: 'scala-2.12'
         run: |
-          mvn clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true  -Phudi-platform-service $MVN_ARGS
-          mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+          mvn clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+          # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
+          sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
+          mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
       - name: IT - Bundle Validation
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
