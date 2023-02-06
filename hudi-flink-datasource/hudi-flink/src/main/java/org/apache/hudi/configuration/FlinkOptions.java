@@ -438,7 +438,9 @@ public class FlinkOptions extends HoodieConfig {
       .key(HoodieWriteConfig.KEYGENERATOR_TYPE.key())
       .stringType()
       .defaultValue(KeyGeneratorType.SIMPLE.name())
-      .withDescription("Key generator type, that implements will extract the key out of incoming record");
+      .withDescription("Key generator type, that implements will extract the key out of incoming record. "
+          + "**Note** This is being actively worked on. Please use "
+          + "`hoodie.datasource.write.keygenerator.class` instead.");
 
   public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
   public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
