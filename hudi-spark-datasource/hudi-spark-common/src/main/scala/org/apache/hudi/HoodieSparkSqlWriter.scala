@@ -25,7 +25,7 @@ import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAv
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.AvroSchemaUtils.{isCompatibleProjectionOf, isSchemaCompatible}
+import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -86,6 +86,14 @@ object HoodieSparkSqlWriter {
   val CANONICALIZE_NULLABLE: ConfigProperty[Boolean] =
     ConfigProperty.key("hoodie.internal.write.schema.canonicalize.nullable")
       .defaultValue(true)
+
+  /**
+   * For merge into from spark-sql, we need some special handling. for eg, schema validation should be disabled
+   * for writes from merge into. This config is used for internal purposes.
+   */
+  val SQL_MERGE_INTO_WRITES: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.internal.sql.merge.into.writes")
+      .defaultValue(false)
 
   private val log = LogManager.getLogger(getClass)
   private var tableExists: Boolean = false
@@ -407,6 +415,9 @@ object HoodieSparkSqlWriter {
         // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
         val shouldCanonicalizeNullable = opts.getOrDefault(CANONICALIZE_NULLABLE.key,
           CANONICALIZE_NULLABLE.defaultValue.toString).toBoolean
+        val mergeIntoWrites = opts.getOrDefault(SQL_MERGE_INTO_WRITES.key(),
+          SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
+
         val canonicalizedSourceSchema = if (shouldCanonicalizeNullable) {
           AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
         } else {
@@ -455,17 +466,38 @@ object HoodieSparkSqlWriter {
           //       w/ the table's one and allow schemas to diverge. This is required in cases where
           //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
           //       only incoming dataset's projection has to match the table's schema, and not the whole one
-          if (!shouldValidateSchemasCompatibility || isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema, allowAutoEvolutionColumnDrop)) {
+
+          if (mergeIntoWrites) {
+            // if its merge into writes, do not check for projection nor schema compatability. Writers down the line will
+            // take care of it.
             canonicalizedSourceSchema
           } else {
-            log.error(
-              s"""Incoming batch schema is not compatible with the table's one.
-                 |Incoming schema ${sourceSchema.toString(true)}
-                 |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
-                 |Table's schema ${latestTableSchema.toString(true)}
-                 |""".stripMargin)
-            throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
-          }
+            if (!shouldValidateSchemasCompatibility) {
+              // if no validation is enabled, check for col drop
+              // if col drop is allowed, go ahead. if not, check for projection, so that we do not allow dropping cols
+              if (allowAutoEvolutionColumnDrop || canProject(latestTableSchema, canonicalizedSourceSchema)) {
+                canonicalizedSourceSchema
+              } else {
+                log.error(
+                  s"""Incoming batch schema is not compatible with the table's one.
+                   |Incoming schema ${sourceSchema.toString(true)}
+                   |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
+                   |Table's schema ${latestTableSchema.toString(true)}
+                   |""".stripMargin)
+                throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
+              }
+            } else if (isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema, allowAutoEvolutionColumnDrop)) {
+                canonicalizedSourceSchema
+            } else {
+                log.error(
+                s"""Incoming batch schema is not compatible with the table's one.
+                   |Incoming schema ${sourceSchema.toString(true)}
+                   |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
+                   |Table's schema ${latestTableSchema.toString(true)}
+                   |""".stripMargin)
+                throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
+              }
+            }
         }
     }
   }
