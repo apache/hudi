@@ -57,7 +57,9 @@ public interface BulkInsertPartitioner<I> extends Serializable {
    *
    * @param partitionId data partition
    * @return
+   * @deprecated this method will be removed
    */
+  @Deprecated
   default String getFileIdPfx(int partitionId) {
     return FSUtils.createNewFileIdPfx();
   }
@@ -67,7 +69,9 @@ public interface BulkInsertPartitioner<I> extends Serializable {
    *
    * @param partitionId data partition
    * @return
+   * @deprecated this method will be removed
    */
+  @Deprecated
   default Option<WriteHandleFactory> getWriteHandleFactory(int partitionId) {
     return Option.empty();
   }
