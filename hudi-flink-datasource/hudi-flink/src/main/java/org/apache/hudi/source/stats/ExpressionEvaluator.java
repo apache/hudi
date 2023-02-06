@@ -205,7 +205,6 @@ public class ExpressionEvaluator {
 
     public Evaluator bindVal(ValueLiteralExpression vExpr) {
       this.val = ExpressionUtils.getValueFromLiteral(vExpr);
-      ValidationUtils.checkState(val != null, "Please use AlwaysFalse evaluator instead!");
       return this;
     }
 
@@ -217,37 +216,51 @@ public class ExpressionEvaluator {
     public abstract boolean eval();
   }
 
+  public abstract static class NullFalseEvaluator extends Evaluator {
+
+    @Override
+    public final boolean eval() {
+      if (this.val == null) {
+        return false;
+      } else {
+        return eval(this.val);
+      }
+    }
+
+    protected abstract boolean eval(@NotNull Object val);
+  }
+
   /**
    * To evaluate = expr.
    */
-  public static class EqualTo extends Evaluator {
+  public static class EqualTo extends NullFalseEvaluator {
 
     public static EqualTo getInstance() {
       return new EqualTo();
     }
 
     @Override
-    public boolean eval() {
+    protected boolean eval(@NotNull Object val) {
       if (this.minVal == null || this.maxVal == null) {
         return false;
       }
-      if (compare(this.minVal, this.val, this.type) > 0) {
+      if (compare(this.minVal, val, this.type) > 0) {
         return false;
       }
-      return compare(this.maxVal, this.val, this.type) >= 0;
+      return compare(this.maxVal, val, this.type) >= 0;
     }
   }
 
   /**
    * To evaluate <> expr.
    */
-  public static class NotEqualTo extends Evaluator {
+  public static class NotEqualTo extends NullFalseEvaluator {
     public static NotEqualTo getInstance() {
       return new NotEqualTo();
     }
 
     @Override
-    public boolean eval() {
+    protected boolean eval(@NotNull Object val) {
       // because the bounds are not necessarily a min or max value, this cannot be answered using
       // them. notEq(col, X) with (X, Y) doesn't guarantee that X is a value in col.
       return true;
@@ -286,68 +299,68 @@ public class ExpressionEvaluator {
   /**
    * To evaluate < expr.
    */
-  public static class LessThan extends Evaluator {
+  public static class LessThan extends NullFalseEvaluator {
     public static LessThan getInstance() {
       return new LessThan();
     }
 
     @Override
-    public boolean eval() {
+    public boolean eval(@NotNull Object val) {
       if (this.minVal == null) {
         return false;
       }
-      return compare(this.minVal, this.val, this.type) < 0;
+      return compare(this.minVal, val, this.type) < 0;
     }
   }
 
   /**
    * To evaluate > expr.
    */
-  public static class GreaterThan extends Evaluator {
+  public static class GreaterThan extends NullFalseEvaluator {
     public static GreaterThan getInstance() {
       return new GreaterThan();
     }
 
     @Override
-    public boolean eval() {
+    protected boolean eval(@NotNull Object val) {
       if (this.maxVal == null) {
         return false;
       }
-      return compare(this.maxVal, this.val, this.type) > 0;
+      return compare(this.maxVal, val, this.type) > 0;
     }
   }
 
   /**
    * To evaluate <= expr.
    */
-  public static class LessThanOrEqual extends Evaluator {
+  public static class LessThanOrEqual extends NullFalseEvaluator {
     public static LessThanOrEqual getInstance() {
       return new LessThanOrEqual();
     }
 
     @Override
-    public boolean eval() {
+    protected boolean eval(@NotNull Object val) {
       if (this.minVal == null) {
         return false;
       }
-      return compare(this.minVal, this.val, this.type) <= 0;
+      return compare(this.minVal, val, this.type) <= 0;
     }
   }
 
   /**
    * To evaluate >= expr.
    */
-  public static class GreaterThanOrEqual extends Evaluator {
+  public static class GreaterThanOrEqual extends NullFalseEvaluator {
     public static GreaterThanOrEqual getInstance() {
       return new GreaterThanOrEqual();
     }
 
     @Override
-    public boolean eval() {
+    protected boolean eval(@NotNull Object val) {
       if (this.maxVal == null) {
         return false;
       }
-      return compare(this.maxVal, this.val, this.type) >= 0;
+      return compare(this.maxVal, val, this.type) >= 0;
     }
   }
 
@@ -363,6 +376,9 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
+      if (Arrays.stream(vals).anyMatch(Objects::isNull)) {
+        return false;
+      }
       if (this.minVal == null) {
         return false; // values are all null and literalSet cannot contain null.
       }
@@ -386,8 +402,6 @@ public class ExpressionEvaluator {
     }
 
     public void bindVals(Object... vals) {
-      ValidationUtils.checkState(
-          Arrays.stream(vals).allMatch(Objects::nonNull), "Please use AlwaysFalse evaluator instead!");
       this.vals = vals;
     }
   }

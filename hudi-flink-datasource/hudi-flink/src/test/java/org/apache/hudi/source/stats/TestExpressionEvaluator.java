@@ -38,7 +38,6 @@ import java.util.List;
 
 import static org.apache.hudi.source.stats.ExpressionEvaluator.Evaluator.bindCall;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -108,9 +107,8 @@ public class TestExpressionEvaluator {
     equalTo.bindColStats(indexRow6, queryFields(2), rExpr);
     assertFalse(equalTo.eval(), "12 <> null");
 
-    assertThrows(
-        IllegalStateException.class,
-        () -> equalTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT())));
+    equalTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
+    assertFalse(equalTo.eval(), "It is not possible to test for NULL values with '=' operator");
   }
 
   @Test
@@ -145,9 +143,8 @@ public class TestExpressionEvaluator {
     notEqualTo.bindColStats(indexRow6, queryFields(2), rExpr);
     assertTrue(notEqualTo.eval(), "12 <> null");
 
-    assertThrows(
-        IllegalStateException.class,
-        () ->  notEqualTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT())));
+    notEqualTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
+    assertFalse(notEqualTo.eval(), "It is not possible to test for NULL values with '<>' operator");
   }
 
   @Test
@@ -212,9 +209,8 @@ public class TestExpressionEvaluator {
     lessThan.bindColStats(indexRow6, queryFields(2), rExpr);
     assertFalse(lessThan.eval(), "12 <> null");
 
-    assertThrows(
-        IllegalStateException.class,
-        () -> lessThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT())));
+    lessThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
+    assertFalse(lessThan.eval(), "It is not possible to test for NULL values with '<' operator");
   }
 
   @Test
@@ -249,9 +245,8 @@ public class TestExpressionEvaluator {
     greaterThan.bindColStats(indexRow6, queryFields(2), rExpr);
     assertFalse(greaterThan.eval(), "12 <> null");
 
-    assertThrows(
-        IllegalStateException.class,
-        () -> greaterThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT())));
+    greaterThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
+    assertFalse(greaterThan.eval(), "It is not possible to test for NULL values with '>' operator");
   }
 
   @Test
@@ -286,9 +281,8 @@ public class TestExpressionEvaluator {
     lessThanOrEqual.bindColStats(indexRow6, queryFields(2), rExpr);
     assertFalse(lessThanOrEqual.eval(), "12 <> null");
 
-    assertThrows(
-        IllegalStateException.class,
-        () -> lessThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT())));
+    lessThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
+    assertFalse(lessThanOrEqual.eval(), "It is not possible to test for NULL values with '<=' operator");
   }
 
   @Test
@@ -323,9 +317,8 @@ public class TestExpressionEvaluator {
     greaterThanOrEqual.bindColStats(indexRow6, queryFields(2), rExpr);
     assertFalse(greaterThanOrEqual.eval(), "12 <> null");
 
-    assertThrows(
-        IllegalStateException.class,
-        () -> greaterThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT())));
+    greaterThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
+    assertFalse(greaterThanOrEqual.eval(), "It is not possible to test for NULL values with '>=' operator");
   }
 
   @Test
@@ -359,7 +352,8 @@ public class TestExpressionEvaluator {
     in.bindColStats(indexRow6, queryFields(2), rExpr);
     assertFalse(in.eval(), "12 <> null");
 
-    assertThrows(IllegalStateException.class, () -> in.bindVals((Object) null));
+    in.bindVals((Object) null);
+    assertFalse(in.eval(), "It is not possible to test for NULL values with 'in' operator");
   }
 
   @Test
