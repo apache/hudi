@@ -204,6 +204,18 @@ object HoodieWriterUtils {
     }
   }
 
+  /**
+   * In some contexts table config and the datasource write config are interchangeable.
+   * This is not usually the case so don't use this unless you are sure it is ok.
+   * */
+  def fixKeyGeneratorClassConfig(params: Map[String, String]): Map[String, String] = {
+    if (!params.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
+      && params.contains(KEYGENERATOR_CLASS_NAME.key)) {
+      return params + (HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key -> params(KEYGENERATOR_CLASS_NAME.key))
+    }
+    params
+  }
+
   private def getStringFromTableConfigWithAlternatives(tableConfig: HoodieConfig, key: String): String = {
     if (null == tableConfig) {
       null
