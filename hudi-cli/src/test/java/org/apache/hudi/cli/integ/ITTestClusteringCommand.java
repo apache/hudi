@@ -147,7 +147,7 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
     generateCommits();
 
     Object result = shell.evaluate(() ->
-            String.format("clustering scheduleAndExecute --hoodieConfigs hoodie.clustering.plan.strategy.sort.columns='_row_key' --parallelism %s --sparkMaster %s", 2, "local"));
+            String.format("clustering scheduleAndExecute --parallelism %s --sparkMaster %s", 2, "local"));
 
     assertAll("Command run failed",
         () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
@@ -164,7 +164,7 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
   private Object scheduleClustering() {
     // generate requested clustering
     return shell.evaluate(() ->
-            String.format("clustering schedule --hoodieConfigs hoodie.clustering.inline.max.commits=1 hoodie.clustering.plan.strategy.sort.columns='_row_key' --sparkMaster %s", "local"));
+            String.format("clustering schedule --hoodieConfigs hoodie.clustering.inline.max.commits=1 --sparkMaster %s", "local"));
   }
 
   private void generateCommits() throws IOException {

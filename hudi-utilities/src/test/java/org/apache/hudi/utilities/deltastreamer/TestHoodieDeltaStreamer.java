@@ -1105,7 +1105,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     if (!StringUtils.isNullOrEmpty(asyncClusterMaxCommit)) {
       configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key(), asyncClusterMaxCommit));
     }
-    configs.add(String.format("%s=%s", HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), "_row_key"));
     return configs;
   }
 
@@ -1138,7 +1137,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     if (retryLastFailedClusteringJob != null) {
       config.retryLastFailedClusteringJob = retryLastFailedClusteringJob;
     }
-    config.configs.add(String.format("%s=%s", HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), "_row_key"));
     return config;
   }
 

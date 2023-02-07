@@ -64,12 +64,13 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
     List<FileSlice> currentGroup = new ArrayList<>();
     long totalSizeSoFar = 0;
+    int totalFileNumSoFar = 0;
 
     for (FileSlice currentSlice : fileSlices) {
       // check if max size is reached and create new group, if needed.
       // in now, every clustering group out put is 1 file group.
       if (totalSizeSoFar >= writeConfig.getClusteringTargetFileMaxBytes() && !currentGroup.isEmpty()) {
-        if (currentGroup.size() > 1 || writeConfig.isClusteringSortEnabled()) {
+        if (writeConfig.isClusteringForce() || currentGroup.size() > 1 || writeConfig.isClusteringSortEnabled()) {
           int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
           LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
                   + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size());
@@ -79,13 +80,15 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
         totalSizeSoFar = 0;
       }
 
-      // Add to the current file-group
-      currentGroup.add(currentSlice);
-      // assume each file group size is ~= parquet.max.file.size
-      totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
+      if (writeConfig.isClusteringForce() || ++totalFileNumSoFar < fileSlices.size() || currentGroup.size() != 0 || writeConfig.isClusteringSortEnabled())  {
+        // Add to the current file-group
+        currentGroup.add(currentSlice);
+        // assume each file group size is ~= parquet.max.file.size
+        totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
+      }
     }
 
-    if (currentGroup.size() > 1 || (writeConfig.isClusteringSortEnabled() && currentGroup.size() == 1)) {
+    if (!currentGroup.isEmpty()) {
       LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
               + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size());
       fileSliceGroups.add(Pair.of(currentGroup, 1));

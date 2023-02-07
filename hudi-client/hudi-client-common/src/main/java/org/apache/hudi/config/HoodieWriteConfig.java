@@ -1601,6 +1601,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST);
   }
 
+  public boolean isClusteringForce() {
+    return getBoolean(HoodieClusteringConfig.PLAN_STRATEGY_FORCE);
+  }
+
   public String getClusteringSortColumns() {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS);
   }

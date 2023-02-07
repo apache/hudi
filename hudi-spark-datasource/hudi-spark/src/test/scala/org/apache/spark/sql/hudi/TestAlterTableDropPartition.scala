@@ -423,8 +423,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
       spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-      val conf = Map("hoodie.clustering.plan.strategy.sort.columns" -> "ts")
-      val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, conf)
+      val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
 
       // Generate the first clustering plan
       val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime

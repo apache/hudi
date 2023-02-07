@@ -64,6 +64,7 @@ public class TestSparkBuildClusteringGroupsForPartition {
     HoodieWriteConfig configWithSortEnabled = hoodieWriteConfigBuilder.withClusteringConfig(
         HoodieClusteringConfig.newBuilder()
           .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.NONE)
+          .withClusteringIsForce(false)
           .withClusteringSortColumns("f0")
           .build())
         .build();
@@ -75,6 +76,7 @@ public class TestSparkBuildClusteringGroupsForPartition {
     HoodieWriteConfig configWithSortDisabled = hoodieWriteConfigBuilder.withClusteringConfig(
         HoodieClusteringConfig.newBuilder()
           .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.NONE)
+          .withClusteringIsForce(false)
           .withClusteringSortColumns("")
           .build())
         .build();

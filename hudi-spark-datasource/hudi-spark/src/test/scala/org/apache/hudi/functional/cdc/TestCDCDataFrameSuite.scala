@@ -118,7 +118,6 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
       .option("hoodie.clustering.inline", "true")
       .option("hoodie.clustering.inline.max.commits", "1")
-      .option("hoodie.clustering.plan.strategy.sort.columns", "_row_key")
       .mode(SaveMode.Append)
       .save(basePath)
     val instant3 = metaClient.reloadActiveTimeline.lastInstant().get()
