@@ -203,6 +203,17 @@ object HoodieDatasetBulkInsertHelper
       .values
   }
 
+  override protected def deduceShuffleParallelism(input: DataFrame, configuredParallelism: Int): Int = {
+    val deduceParallelism = super.deduceShuffleParallelism(input, configuredParallelism)
+    // NOTE: In case parallelism deduction failed to accurately deduce parallelism level of the
+    //       incoming dataset we fallback to default parallelism level set for this Spark session
+    if (deduceParallelism > 0) {
+      deduceParallelism
+    } else {
+      input.sparkSession.sparkContext.defaultParallelism
+    }
+  }
+
   private def dropPartitionColumns(df: DataFrame, config: HoodieWriteConfig): DataFrame = {
     val partitionPathFields = getPartitionPathFields(config).toSet
     val nestedPartitionPathFields = partitionPathFields.filter(f => f.contains('.'))
