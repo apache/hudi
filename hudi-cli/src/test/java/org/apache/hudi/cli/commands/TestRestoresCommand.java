@@ -1,6 +1,7 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
@@ -19,6 +20,7 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -42,6 +44,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_P
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
@@ -112,7 +115,7 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
   }
 
   @Test
-  public void testShowRestore() {
+  public void testShowRestores() {
     System.out.println("Starting test");
     Object result = shell.evaluate(() -> "show restores");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
@@ -148,6 +151,46 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
+  }
+
+  @Test
+  public void testShowRestore() throws IOException {
+    // get instant
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
+    Stream<HoodieInstant> restores = activeTimeline.getRestoreTimeline().filterCompletedInstants().getInstantsAsStream();
+    HoodieInstant instant = restores.findFirst().orElse(null);
+    assertNotNull(instant, "The instant can not be null.");
+
+    Object result = shell.evaluate(() -> "show restore --instant " + instant.getTimestamp());
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
+
+//    List<Comparable[]> rows = new ArrayList<>();
+//    // get metadata of instant
+//    HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
+//            activeTimeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
+//    // generate expect result
+//    metadata.getPartitionMetadata().forEach((key, value) -> Stream
+//            .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),
+//                    value.getFailedDeleteFiles().stream().map(f -> Pair.of(f, false)))
+//            .forEach(fileWithDeleteStatus -> {
+//              Comparable[] row = new Comparable[5];
+//              row[0] = metadata.getStartRollbackTime();
+//              row[1] = metadata.getCommitsRollback().toString();
+//              row[2] = key;
+//              row[3] = fileWithDeleteStatus.getLeft();
+//              row[4] = fileWithDeleteStatus.getRight();
+//              rows.add(row);
+//            }));
+//
+//    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
+//            .addTableHeaderField(HoodieTableHeaderFields.HEADER_ROLLBACK_INSTANT)
+//            .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION)
+//            .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELETED_FILE)
+//            .addTableHeaderField(HoodieTableHeaderFields.HEADER_SUCCEEDED);
+//    String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
+//    expected = removeNonWordAndStripSpace(expected);
+//    String got = removeNonWordAndStripSpace(result.toString());
+//    assertEquals(expected, got);
   }
 
 }
