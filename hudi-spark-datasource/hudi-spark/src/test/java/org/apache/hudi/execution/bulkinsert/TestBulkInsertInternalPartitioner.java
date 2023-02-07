@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -56,7 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase implements Serializable {
   private static final Comparator<HoodieRecord<? extends HoodieRecordPayload>> KEY_COMPARATOR =
-      Comparator.comparing(o -> (o.getPartitionPath() + "+" + o.getRecordKey()));
+      Comparator.comparing(o -> Pair.of(o.getPartitionPath(), o.getRecordKey()));
 
   private static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc, boolean isPartitionedTable) {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
