@@ -69,6 +69,11 @@ public enum WriteConcurrencyMode {
     }
   }
 
+  @Override
+  public String toString() {
+    return value;
+  }
+
   public boolean supportsOptimisticConcurrencyControl() {
     return this == OPTIMISTIC_CONCURRENCY_CONTROL;
   }
