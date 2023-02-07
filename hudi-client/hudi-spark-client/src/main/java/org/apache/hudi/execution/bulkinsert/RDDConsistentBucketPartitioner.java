@@ -102,11 +102,11 @@ public class RDDConsistentBucketPartitioner<T> extends RDDBucketIndexPartitioner
    * using hashing metadata and records' key.
    *
    * @param records               Input Hoodie records
-   * @param outputSparkPartitions Not used, the actual parallelism is determined by the bucket number
+   * @param targetPartitionNumHint Not used, the actual parallelism is determined by the bucket number
    * @return partitioned records, each partition of data corresponds to a bucket (i.e., file group)
    */
   @Override
-  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
+  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int targetPartitionNumHint) {
     Map<String, ConsistentBucketIdentifier> partitionToIdentifier = initializeBucketIdentifier(records);
     Map<String, Map<String, Integer>> partitionToFileIdPfxIdxMap = generateFileIdPfx(partitionToIdentifier);
     return doPartition(records, new Partitioner() {

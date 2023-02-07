@@ -72,7 +72,7 @@ public class RDDCustomColumnsSortPartitioner<T>
   @SuppressWarnings("unchecked")
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     int outputSparkPartitions) {
+                                                     int targetPartitionNumHint) {
     final String[] sortColumns = this.orderByColumnNames;
     final SerializableSchema schema = this.serializableSchema;
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
@@ -91,7 +91,8 @@ public class RDDCustomColumnsSortPartitioner<T>
           Comparator.comparing((Function<Pair<String, String>, String> & Serializable) Pair::getValue);
 
       PartitionPathRDDPartitioner partitioner =
-          new PartitionPathRDDPartitioner((pair) -> ((Pair<String, String>) pair).getKey(), outputSparkPartitions);
+          new PartitionPathRDDPartitioner((pair) -> ((Pair<String, String>) pair).getKey(),
+              handleTargetPartitionNumHint(targetPartitionNumHint));
 
       // Both partition-path and record-key are extracted, since
       //    - Partition-path will be used for re-partitioning (as called out above)
@@ -105,7 +106,7 @@ public class RDDCustomColumnsSortPartitioner<T>
           .values();
     } else {
       return records.sortBy(record -> getSortingKey(record, sortColumns, schema, consistentLogicalTimestampEnabled),
-          true, outputSparkPartitions);
+          true, handleTargetPartitionNumHint(targetPartitionNumHint));
     }
   }
 

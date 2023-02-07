@@ -36,7 +36,7 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.GLOBAL_SOR
  * directly to avoid de-/serialization into intermediate representation. Please check out
  * {@link GlobalSortPartitioner} java-doc for more details regarding its sorting procedure
  */
-public class GlobalSortPartitionerWithRows extends BulkInsertPartitionerBase<Dataset<Row>> {
+public class GlobalSortPartitionerWithRows extends SparkBulkInsertPartitionerBase<Dataset<Row>> {
 
   private final boolean shouldPopulateMetaFields;
 
@@ -45,7 +45,7 @@ public class GlobalSortPartitionerWithRows extends BulkInsertPartitionerBase<Dat
   }
 
   @Override
-  public Dataset<Row> repartitionRecords(Dataset<Row> dataset, int outputSparkPartitions) {
+  public Dataset<Row> repartitionRecords(Dataset<Row> dataset, int targetPartitionNumHint) {
     if (!shouldPopulateMetaFields) {
       throw new HoodieException(GLOBAL_SORT.name() + " mode requires meta-fields to be enabled");
     }
@@ -53,7 +53,7 @@ public class GlobalSortPartitionerWithRows extends BulkInsertPartitionerBase<Dat
     Dataset<Row> sorted = dataset.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD));
 
-    return tryCoalesce(sorted, outputSparkPartitions);
+    return tryCoalesce(sorted, targetPartitionNumHint);
   }
 
   @Override

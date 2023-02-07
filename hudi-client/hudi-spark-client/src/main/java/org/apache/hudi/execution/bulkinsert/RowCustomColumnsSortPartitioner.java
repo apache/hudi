@@ -55,7 +55,7 @@ public class RowCustomColumnsSortPartitioner extends RepartitioningBulkInsertPar
   }
 
   @Override
-  public Dataset<Row> repartitionRecords(Dataset<Row> dataset, int outputSparkPartitions) {
+  public Dataset<Row> repartitionRecords(Dataset<Row> dataset, int targetPartitionNumHint) {
     Dataset<Row> repartitionedDataset;
 
     // NOTE: In case of partitioned table even "global" ordering (across all RDD partitions) could
@@ -68,9 +68,10 @@ public class RowCustomColumnsSortPartitioner extends RepartitioningBulkInsertPar
     //
     //       Non-partitioned tables will be globally sorted.
     if (isPartitionedTable) {
-      repartitionedDataset = dataset.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+      repartitionedDataset = dataset.repartition(handleTargetPartitionNumHint(targetPartitionNumHint),
+          new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
     } else {
-      repartitionedDataset = tryCoalesce(dataset, outputSparkPartitions);
+      repartitionedDataset = tryCoalesce(dataset, targetPartitionNumHint);
     }
 
     return repartitionedDataset.sortWithinPartitions(

@@ -55,21 +55,21 @@ public class PartitionPathRepartitionAndSortPartitioner<T>
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     int outputSparkPartitions) {
+                                                     int targetPartitionNumHint) {
     if (!shouldPopulateMetaFields) {
       throw new HoodieException(PARTITION_PATH_REPARTITION_AND_SORT.name() + " mode requires meta-fields to be enabled");
     }
 
     if (isPartitionedTable) {
       PartitionPathRDDPartitioner partitioner = new PartitionPathRDDPartitioner(
-          (partitionPath) -> (String) partitionPath, outputSparkPartitions);
+          (partitionPath) -> (String) partitionPath, handleTargetPartitionNumHint(targetPartitionNumHint));
       return records
           .mapToPair(record -> new Tuple2<>(record.getPartitionPath(), record))
           .repartitionAndSortWithinPartitions(partitioner)
           .values();
     }
 
-    return tryCoalesce(records, outputSparkPartitions);
+    return tryCoalesce(records, targetPartitionNumHint);
   }
 
   @Override

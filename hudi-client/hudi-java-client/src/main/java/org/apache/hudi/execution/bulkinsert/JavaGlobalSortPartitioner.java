@@ -36,7 +36,7 @@ public class JavaGlobalSortPartitioner<T>
 
   @Override
   public List<HoodieRecord<T>> repartitionRecords(List<HoodieRecord<T>> records,
-                                                  int outputPartitions) {
+                                                  int targetPartitionNumHint) {
     records.sort(new Comparator<HoodieRecord<T>>() {
       @Override
       public int compare(HoodieRecord<T> o1, HoodieRecord<T> o2) {

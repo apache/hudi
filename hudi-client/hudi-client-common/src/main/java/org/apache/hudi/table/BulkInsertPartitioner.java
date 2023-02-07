@@ -40,11 +40,12 @@ public interface BulkInsertPartitioner<I> extends Serializable {
    * Note that, the number of output partitions may or may not be enforced, depending on the
    * specific implementation.
    *
-   * @param records          Input Hoodie records.
-   * @param outputPartitions Expected number of output partitions as a hint.
-   * @return
+   * @param records                Input Hoodie records
+   * @param targetPartitionNumHint Hint of an expected number of output partitions (note, that this
+   *                               value might be 0, in which it should be treated as if no change
+   *                               in the level of parallelism is expected)
    */
-  I repartitionRecords(I records, int outputPartitions);
+  I repartitionRecords(I records, int targetPartitionNumHint);
 
   /**
    * @return {@code true} if the records within a partition are sorted; {@code false} otherwise.

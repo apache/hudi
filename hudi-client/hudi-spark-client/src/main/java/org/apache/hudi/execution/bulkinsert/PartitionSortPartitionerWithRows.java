@@ -30,7 +30,7 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_
  * A built-in partitioner that does local sorting w/in the Spark partition,
  * corresponding to the {@code BulkInsertSortMode.PARTITION_SORT} mode.
  */
-public class PartitionSortPartitionerWithRows extends BulkInsertPartitionerBase<Dataset<Row>> {
+public class PartitionSortPartitionerWithRows extends SparkBulkInsertPartitionerBase<Dataset<Row>> {
 
   private final boolean shouldPopulateMetaFields;
 
@@ -39,12 +39,12 @@ public class PartitionSortPartitionerWithRows extends BulkInsertPartitionerBase<
   }
 
   @Override
-  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int targetPartitionNumHint) {
     if (!shouldPopulateMetaFields) {
       throw new HoodieException(PARTITION_SORT.name() + " mode requires meta-fields to be enabled");
     }
 
-    return tryCoalesce(rows, outputSparkPartitions)
+    return tryCoalesce(rows, targetPartitionNumHint)
         .sortWithinPartitions(HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 

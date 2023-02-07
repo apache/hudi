@@ -31,11 +31,11 @@ import org.apache.spark.sql.Row;
  * <p>
  * Corresponds to the {@link BulkInsertSortMode#NONE} mode.
  */
-public class NonSortPartitionerWithRows extends BulkInsertPartitionerBase<Dataset<Row>> {
+public class NonSortPartitionerWithRows extends SparkBulkInsertPartitionerBase<Dataset<Row>> {
 
   @Override
-  public Dataset<Row> repartitionRecords(Dataset<Row> dataset, int outputSparkPartitions) {
-    return tryCoalesce(dataset, outputSparkPartitions);
+  public Dataset<Row> repartitionRecords(Dataset<Row> dataset, int targetPartitionNumHint) {
+    return tryCoalesce(dataset, targetPartitionNumHint);
   }
 
   @Override

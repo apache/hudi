@@ -31,7 +31,7 @@ import java.util.Objects;
  * to better align "logical" (query-engine's partitioning of the incoming dataset) w/ the table's
  * "physical" partitioning
  */
-public abstract class RepartitioningBulkInsertPartitionerBase<I> extends BulkInsertPartitionerBase<I> {
+public abstract class RepartitioningBulkInsertPartitionerBase<I> extends SparkBulkInsertPartitionerBase<I> {
 
   protected final boolean isPartitionedTable;
 

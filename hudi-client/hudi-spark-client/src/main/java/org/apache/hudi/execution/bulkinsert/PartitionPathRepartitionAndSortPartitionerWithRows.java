@@ -52,17 +52,17 @@ public class PartitionPathRepartitionAndSortPartitionerWithRows
   }
 
   @Override
-  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int targetPartitionNumHint) {
     if (!shouldPopulateMetaFields) {
       throw new HoodieException(PARTITION_PATH_REPARTITION_AND_SORT.name() + " mode requires meta-fields to be enabled");
     }
 
     if (isPartitionedTable) {
-      return rows.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD))
+      return rows.repartition(handleTargetPartitionNumHint(targetPartitionNumHint), new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD))
           .sortWithinPartitions(new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
     }
 
-    return tryCoalesce(rows, outputSparkPartitions);
+    return tryCoalesce(rows, targetPartitionNumHint);
   }
 
   @Override

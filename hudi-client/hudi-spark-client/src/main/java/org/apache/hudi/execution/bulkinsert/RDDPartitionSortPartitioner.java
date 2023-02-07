@@ -37,7 +37,7 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_
  *
  * @param <T> HoodieRecordPayload type
  */
-public class RDDPartitionSortPartitioner<T> extends BulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
+public class RDDPartitionSortPartitioner<T> extends SparkBulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
   private final boolean shouldPopulateMetaFields;
 
@@ -47,12 +47,12 @@ public class RDDPartitionSortPartitioner<T> extends BulkInsertPartitionerBase<Ja
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     int outputSparkPartitions) {
+                                                     int targetPartitionNumHint) {
     if (!shouldPopulateMetaFields) {
       throw new HoodieException(PARTITION_SORT.name() + " mode requires meta-fields to be enabled");
     }
 
-    JavaPairRDD<String, HoodieRecord<T>> kvPairsRDD = tryCoalesce(records, outputSparkPartitions)
+    JavaPairRDD<String, HoodieRecord<T>> kvPairsRDD = tryCoalesce(records, targetPartitionNumHint)
         .mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
 
     // NOTE: [[JavaRDD]] doesn't expose an API to do the sorting w/o (re-)shuffling, as such
