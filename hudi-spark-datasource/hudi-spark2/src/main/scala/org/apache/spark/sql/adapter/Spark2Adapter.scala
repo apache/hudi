@@ -58,6 +58,8 @@ class Spark2Adapter extends SparkAdapter {
     r.isInstanceOf[MutableColumnarRow]
   }
 
+  def getRDDUtils: HoodieRDDUtils = HoodieSpark2RDDUtils
+
   override def getCatalogUtils: HoodieCatalogUtils = {
     throw new UnsupportedOperationException("Catalog utilities are not supported in Spark 2.x");
   }
@@ -203,19 +205,5 @@ class Spark2Adapter extends SparkAdapter {
     case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
-  }
-
-  override def insertInto[K, V, C](ctx: TaskContext,
-                                   records: Iterator[Product2[K, V]],
-                                   sorter: ExternalSorter[K, V, C]): Iterator[Product2[K, C]] = {
-    sorter.insertAll(records)
-
-    ctx.taskMetrics().incMemoryBytesSpilled(sorter.memoryBytesSpilled)
-    ctx.taskMetrics().incDiskBytesSpilled(sorter.diskBytesSpilled)
-    ctx.taskMetrics().incPeakExecutionMemory(sorter.peakMemoryUsedBytes)
-    // Use completion callback to stop sorter if task was finished/cancelled.
-    ctx.addTaskCompletionListener[Unit](_ => sorter.stop())
-
-    CompletionIterator[Product2[K, C], Iterator[Product2[K, C]]](sorter.iterator, sorter.stop())
   }
 }

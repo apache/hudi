@@ -18,25 +18,20 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.Spark31HoodieFileScanRDD
 import org.apache.avro.Schema
-import org.apache.spark.TaskContext
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
+import org.apache.hudi.Spark31HoodieFileScanRDD
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, HoodieSpark3_1AvroDeserializer, HoodieSpark3_1AvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.parser.HoodieSpark3_1ExtendedSqlParser
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
+import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark31HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
 import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.parser.HoodieSpark3_1ExtendedSqlParser
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.vectorized.ColumnarUtils
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSpark31CatalogUtils, HoodieSpark31CatalystExpressionUtils, HoodieSpark31CatalystPlanUtils, HoodieSpark3CatalogUtils, SparkSession}
-import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSpark31CatalystExpressionUtils, HoodieSpark31CatalystPlanUtils}
-import org.apache.spark.util.CompletionIterator
-import org.apache.spark.util.collection.ExternalSorter
+import org.apache.spark.sql._
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.1.x
@@ -44,6 +39,8 @@ import org.apache.spark.util.collection.ExternalSorter
 class Spark3_1Adapter extends BaseSpark3Adapter {
 
   override def isColumnarBatchRow(r: InternalRow): Boolean = ColumnarUtils.isColumnarBatchRow(r)
+
+  override def getRDDUtils: HoodieRDDUtils = HoodieSpark31RDDUtils
 
   override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark31CatalogUtils
 
@@ -85,19 +82,5 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
 
   override def extractDeleteCondition(deleteFromTable: Command): Expression = {
     deleteFromTable.asInstanceOf[DeleteFromTable].condition.getOrElse(null)
-  }
-
-  override def insertInto[K, V, C](ctx: TaskContext,
-                                   records: Iterator[Product2[K, V]],
-                                   sorter: ExternalSorter[K, V, C]): Iterator[Product2[K, C]] = {
-    sorter.insertAll(records)
-
-    ctx.taskMetrics().incMemoryBytesSpilled(sorter.memoryBytesSpilled)
-    ctx.taskMetrics().incDiskBytesSpilled(sorter.diskBytesSpilled)
-    ctx.taskMetrics().incPeakExecutionMemory(sorter.peakMemoryUsedBytes)
-    // Use completion callback to stop sorter if task was finished/cancelled.
-    ctx.addTaskCompletionListener[Unit](_ => sorter.stop())
-
-    CompletionIterator[Product2[K, C], Iterator[Product2[K, C]]](sorter.iterator, sorter.stop())
   }
 }

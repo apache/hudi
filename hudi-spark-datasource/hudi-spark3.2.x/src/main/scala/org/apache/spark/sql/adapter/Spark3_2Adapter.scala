@@ -19,7 +19,6 @@ package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
 import org.apache.hudi.Spark32HoodieFileScanRDD
-import org.apache.spark.TaskContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -31,7 +30,6 @@ import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, P
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.parser.HoodieSpark3_2ExtendedSqlParser
 import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.util.collection.ExternalSorter
 import org.apache.spark.sql.vectorized.ColumnarUtils
 
 /**
@@ -40,6 +38,8 @@ import org.apache.spark.sql.vectorized.ColumnarUtils
 class Spark3_2Adapter extends BaseSpark3Adapter {
 
   override def isColumnarBatchRow(r: InternalRow): Boolean = ColumnarUtils.isColumnarBatchRow(r)
+
+  override def getRDDUtils: HoodieRDDUtils = HoodieSpark32RDDUtils
 
   override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark32CatalogUtils
 
@@ -85,8 +85,4 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
   override def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {
     TableValuedFunctions.funcs.foreach(extensions.injectTableFunction)
   }
-
-  override def insertInto[K, V, C](ctx: TaskContext,
-                                   records: Iterator[Product2[K, V]],
-                                   sorter: ExternalSorter[K, V, C]): Iterator[Product2[K, C]] = sorter.insertAllAndUpdateMetrics(records)
 }

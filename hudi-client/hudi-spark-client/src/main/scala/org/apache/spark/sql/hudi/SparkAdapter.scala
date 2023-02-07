@@ -59,6 +59,12 @@ trait SparkAdapter extends Serializable {
    * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
    * [[TableCatalog]]s
    */
+  def getRDDUtils: HoodieRDDUtils
+
+  /**
+   * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
+   * [[TableCatalog]]s
+   */
   def getCatalogUtils: HoodieCatalogUtils
 
   /**
@@ -210,16 +216,5 @@ trait SparkAdapter extends Serializable {
    * Converts instance of [[StorageLevel]] to a corresponding string
    */
   def convertStorageLevelToString(level: StorageLevel): String
-
-  /**
-   * Insert all records, updates related task metrics, and return a completion iterator
-   * over all the data written to this [[ExternalSorter]], aggregated by our aggregator.
-   *
-   * On task completion (success, failure, or cancellation), it releases resources by
-   * calling `stop()`.
-   *
-   * NOTE: This method is an [[ExternalSorter#insertAllAndUpdateMetrics]] back-ported to Spark 2.4
-   */
-  def insertInto[K, V, C](ctx: TaskContext, records: Iterator[Product2[K, V]], sorter: ExternalSorter[K, V, C]): Iterator[Product2[K, C]]
 
 }

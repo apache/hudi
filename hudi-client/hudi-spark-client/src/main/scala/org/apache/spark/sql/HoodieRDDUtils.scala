@@ -25,6 +25,21 @@ import org.apache.spark.{InterruptibleIterator, TaskContext}
 
 import java.util.Comparator
 
+trait HoodieRDDUtils {
+
+  /**
+   * Insert all records, updates related task metrics, and return a completion iterator
+   * over all the data written to this [[ExternalSorter]], aggregated by our aggregator.
+   *
+   * On task completion (success, failure, or cancellation), it releases resources by
+   * calling `stop()`.
+   *
+   * NOTE: This method is an [[ExternalSorter#insertAllAndUpdateMetrics]] back-ported to Spark 2.4
+   */
+  def insertInto[K, V, C](ctx: TaskContext, records: Iterator[Product2[K, V]], sorter: ExternalSorter[K, V, C]): Iterator[Product2[K, C]]
+
+}
+
 /**
  * Suite of utilities helping in handling [[RDD]]
  */
@@ -43,7 +58,7 @@ object HoodieRDDUtils extends SparkAdapterSupport {
       val ctx = TaskContext.get()
       val sorter = new ExternalSorter[K, V, V](ctx, None, None, Some(ordering))
       new InterruptibleIterator(ctx,
-        sparkAdapter.insertInto(ctx, iter, sorter).asInstanceOf[Iterator[(K, V)]])
+        sparkAdapter.getRDDUtils.insertInto(ctx, iter, sorter).asInstanceOf[Iterator[(K, V)]])
     }, preservesPartitioning = true)
   }
 
