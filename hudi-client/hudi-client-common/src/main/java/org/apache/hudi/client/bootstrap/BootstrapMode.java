@@ -18,18 +18,27 @@
 
 package org.apache.hudi.client.bootstrap;
 
+import org.apache.hudi.common.config.EnumDefault;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
+
 /**
  * Identifies different types of bootstrap.
  */
+@EnumDescription("Bootstrap types")
 public enum BootstrapMode {
   /**
    * In this mode, record level metadata is generated for each source record and both original record and metadata
    * for each record copied.
    */
+  @EnumFieldDescription("In this mode, record level metadata is generated for each source record and both original record and metadata "
+      + "for each record copied.")
   FULL_RECORD,
 
   /**
    * In this mode, record level metadata alone is generated for each source record and stored in new bootstrap location.
    */
+  @EnumDefault
+  @EnumFieldDescription("In this mode, record level metadata alone is generated for each source record and stored in new bootstrap location.")
   METADATA_ONLY
 }

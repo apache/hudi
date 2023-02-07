@@ -118,6 +118,11 @@ public class TestHoodieWriteConfig {
             EngineType.JAVA, HoodieClusteringConfig.JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY));
   }
 
+  @Test void testEnumConfigs() {
+    HoodieWriteConfig cfg = new HoodieWriteConfig();
+    cfg.testEnums();
+  }
+
   @Test
   public void testDefaultMarkersTypeAccordingToEngineType() {
     testEngineSpecificConfig(HoodieWriteConfig::getMarkersType,

@@ -22,6 +22,9 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.EnumDefault;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
@@ -152,11 +155,51 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public void close() {
   }
 
+  @EnumDescription("Determines how records are indexed. Default is engine specific.")
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET, FLINK_STATE
+
+    @EnumFieldDescription("Index mapping is managed in an external Apache HBase table.")
+    HBASE,
+
+    @EnumFieldDescription("Index is in memory?")
+    INMEMORY,
+
+    @EnumFieldDescription("Employs bloom filters built out of the record keys, "
+        + "optionally also pruning candidate files using record key ranges. "
+        + "Key uniqueness is enforced inside partitions.")
+    BLOOM,
+
+    @EnumFieldDescription("Employs bloom filters built out of the record keys, "
+        + "optionally also pruning candidate files using record key ranges. "
+        + "Key uniqueness is enforced across all partitions in the table. ")
+    GLOBAL_BLOOM,
+
+    @EnumFieldDescription("Performs a lean join of the incoming update/delete records "
+        + "against keys extracted from the table on storage."
+        + "Key uniqueness is enforced inside partitions.")
+    SIMPLE,
+
+    @EnumFieldDescription("Performs a lean join of the incoming update/delete records "
+        + "against keys extracted from the table on storage."
+        + "Key uniqueness is enforced across all partitions in the table. ")
+    GLOBAL_SIMPLE,
+
+    @EnumFieldDescription("Bucket Index is targeted to locate the record fast by hash in big data scenarios. "
+        + "Use `hoodie.index.bucket.engine` to choose bucket engine type.")
+    BUCKET,
+    @EnumFieldDescription("Managed by Flink?")
+    FLINK_STATE
   }
 
+  @EnumDescription("Determines bucket index to use when `hoodie.index.type` is set to `BUCKET`")
   public enum BucketIndexEngineType {
-    SIMPLE, CONSISTENT_HASHING
+
+    @EnumDefault
+    @EnumFieldDescription("Mandatory for COW tables when using BUCKET index. Uses a fixed number of buckets.")
+    SIMPLE,
+
+    @EnumFieldDescription("Consistent hashing supports dynamic resizing of the number of bucket, solving potential "
+        + "data skew and file size issues of the SIMPLE hashing engine. Consistent hashing only works with MOR tables.")
+    CONSISTENT_HASHING
   }
 }

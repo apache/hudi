@@ -18,15 +18,31 @@
 
 package org.apache.hudi.table.action.compact;
 
+import org.apache.hudi.common.config.EnumDefault;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
+
+@EnumDescription("Controls when compaction is scheduled")
 public enum CompactionTriggerStrategy {
+
     // trigger compaction when reach N delta commits
+    @EnumDefault
+    @EnumFieldDescription("trigger compaction when reach N delta commits")
     NUM_COMMITS,
+
     // trigger compaction when reach N delta commits since last compaction request
+    @EnumFieldDescription("trigger compaction when reach N delta commits since last compaction request")
     NUM_COMMITS_AFTER_LAST_REQUEST,
+
     // trigger compaction when time elapsed > N seconds since last compaction
+    @EnumFieldDescription("trigger compaction when time elapsed > N seconds since last compaction")
     TIME_ELAPSED,
+
     // trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied
+    @EnumFieldDescription("trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied")
     NUM_AND_TIME,
+
     // trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied
+    @EnumFieldDescription("trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied")
     NUM_OR_TIME
 }

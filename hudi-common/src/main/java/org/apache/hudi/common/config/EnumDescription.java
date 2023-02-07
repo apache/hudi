@@ -16,23 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.bloom;
+package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.config.EnumDefault;
-import org.apache.hudi.common.config.EnumDescription;
-import org.apache.hudi.common.config.EnumFieldDescription;
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-/**
- * Bloom filter type codes.
- * Please do not change the order of the entries.
- */
-@EnumDescription("Filter type used by Bloom filter")
-public enum BloomFilterTypeCode {
-
-  @EnumFieldDescription("Bloom filter with fixed size?")
-  SIMPLE,
-
-  @EnumDefault
-  @EnumFieldDescription("Bloom filter that is auto sized based on number of keys")
-  DYNAMIC_V0
+@Documented
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+public @interface EnumDescription {
+  String value();
 }

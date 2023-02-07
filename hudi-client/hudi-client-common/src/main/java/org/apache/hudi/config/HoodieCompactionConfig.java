@@ -32,9 +32,7 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 /**
  * Compaction related config.
@@ -85,9 +83,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> INLINE_COMPACT_TRIGGER_STRATEGY = ConfigProperty
       .key("hoodie.compact.inline.trigger.strategy")
-      .defaultValue(CompactionTriggerStrategy.NUM_COMMITS.name())
-      .withDocumentation("Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. "
-          + "Valid options: " + Arrays.stream(CompactionTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
+      .enumDefaultStringValueAndDocumentation(CompactionTriggerStrategy.class);
 
   public static final ConfigProperty<String> PARQUET_SMALL_FILE_LIMIT = ConfigProperty
       .key("hoodie.parquet.small.file.limit")

@@ -19,10 +19,23 @@
 
 package org.apache.hudi.common.table.marker;
 
+import org.apache.hudi.common.config.EnumDefault;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
+
 /**
  * Marker type indicating how markers are stored in the file system.
  */
+@EnumDescription("Marker type indicating how markers are stored in the file system.")
 public enum MarkerType {
+
+  @EnumFieldDescription("Individual marker file corresponding to each data file is directly created by the writer.")
   DIRECT,
+
+  @EnumDefault
+  @EnumFieldDescription("Marker operations are all handled at the timeline service which serves as a proxy. "
+    + "New marker entries are batch processed and stored in a limited number of underlying files for efficiency. "
+    + "If HDFS is used or timeline server is disabled, DIRECT markers are used as fallback even if this is configured. "
+    + "This configuration does not take effect for Spark structured streaming; DIRECT markers are always used.")
   TIMELINE_SERVER_BASED
 }

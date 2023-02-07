@@ -18,9 +18,23 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.config.EnumDefault;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
+
 /**
  * Hoodie cleaning policies.
  */
+@EnumDescription("Policy to be used by the cleaner for deleting older file slices to re-claim space.")
 public enum HoodieCleaningPolicy {
-  KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_COMMITS, KEEP_LATEST_BY_HOURS
+
+  @EnumFieldDescription("Retain the most recent N file slices in each file group, determined by `hoodie.cleaner.fileversions.retained`.")
+  KEEP_LATEST_FILE_VERSIONS,
+
+  @EnumDefault
+  @EnumFieldDescription("Retain the file slices written by the last N commits, determined by `hoodie.cleaner.commits.retained`.")
+  KEEP_LATEST_COMMITS,
+
+  @EnumFieldDescription("Retain commits from the last N hours, determined by `hoodie.cleaner.hours.retained`.")
+  KEEP_LATEST_BY_HOURS
 }

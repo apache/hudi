@@ -21,6 +21,9 @@ package org.apache.hudi.config;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.EnumDefault;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
@@ -151,16 +154,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public static final ConfigProperty<ClusteringPlanPartitionFilterMode> PLAN_PARTITION_FILTER_MODE_NAME = ConfigProperty
       .key(PLAN_PARTITION_FILTER_MODE)
-      .defaultValue(ClusteringPlanPartitionFilterMode.NONE)
-      .sinceVersion("0.11.0")
-      .withDocumentation("Partition filter mode used in the creation of clustering plan. Available values are - "
-          + "NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate."
-          + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
-          + PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
-          + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
-          + PARTITION_FILTER_END_PARTITION.key() + "']."
-          + "DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, "
-          + "which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour.");
+      .enumDefaultValueAndDocumentation(ClusteringPlanPartitionFilterMode.class)
+      .sinceVersion("0.11.0");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
@@ -703,9 +698,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /**
    * Layout optimization strategies such as Z-order/Hilbert space-curves, etc
    */
+  @EnumDescription("Determines ordering strategy for records layout optimization")
   public enum LayoutOptimizationStrategy {
+
+    @EnumDefault
+    @EnumFieldDescription("Order records lexicographically.")
     LINEAR("linear"),
+
+    @EnumFieldDescription("Order records along Z-order spatial-curve")
     ZORDER("z-order"),
+
+    @EnumFieldDescription("Order records along Hilbert's spatial-curve")
     HILBERT("hilbert");
 
     private static final Map<String, LayoutOptimizationStrategy> VALUE_TO_ENUM_MAP =

@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.config.EnumDefault;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
+
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -26,10 +30,23 @@ import java.util.stream.Collectors;
 /**
  * Hoodie file format.
  */
+@EnumDescription("Hoodie file formats")
 public enum HoodieFileFormat {
+
+  @EnumDefault
+  @EnumFieldDescription("Apache Parquet is an  open source, column-oriented data file format designed for efficient data storage and retrieval. "
+      + "It provides efficient data compression and encoding schemes with enhanced performance to handle complex data in bulk.")
   PARQUET(".parquet"),
+
+  @EnumFieldDescription("File format used in the Hudi Timeline")
   HOODIE_LOG(".log"),
+
+  @EnumFieldDescription("File format for hbase. A file of sorted key/value pairs. Both keys and values are byte arrays.")
   HFILE(".hfile"),
+
+  @EnumFieldDescription("The Optimized Row Columnar (ORC) file format provides a highly efficient way to store Hive data. "
+      + "It was designed to overcome limitations of the other Hive file formats. Using ORC files improves performance when "
+      + "Hive is reading, writing, and processing data.")
   ORC(".orc");
 
   public static final Set<String> BASE_FILE_EXTENSIONS = Arrays.stream(HoodieFileFormat.values())

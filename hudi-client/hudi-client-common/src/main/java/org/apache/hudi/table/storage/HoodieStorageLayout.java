@@ -18,6 +18,9 @@
 
 package org.apache.hudi.table.storage;
 
+import org.apache.hudi.common.config.EnumDefault;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -50,7 +53,14 @@ public abstract class HoodieStorageLayout implements Serializable {
    */
   public abstract boolean writeOperationSupported(WriteOperationType operationType);
 
+  @EnumDescription("Determines how the files are organized within a table")
   public enum LayoutType {
-    DEFAULT, BUCKET
+
+    @EnumDefault
+    @EnumFieldDescription("Default storage layout?")
+    DEFAULT,
+
+    @EnumFieldDescription("Storage layout for when `hoodie.index.type` is set to `BUCKET`?")
+    BUCKET
   }
 }

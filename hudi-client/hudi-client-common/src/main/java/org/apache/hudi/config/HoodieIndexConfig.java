@@ -75,11 +75,10 @@ public class HoodieIndexConfig extends HoodieConfig {
       .noDefaultValue()
       .withValidValues(HBASE.name(), INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(),
           SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name(), FLINK_STATE.name())
-      .withDocumentation("Type of index to use. Default is SIMPLE on Spark engine, "
-          + "and INMEMORY on Flink and Java engines. "
-          + "Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. "
-          + "Bloom filters removes the dependency on a external system "
-          + "and is stored in the footer of the Parquet Data Files");
+      .withEnumDocumentation(HoodieIndex.IndexType.class,
+          "Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java engines",
+          "FLINK_STATE");
+
 
   public static final ConfigProperty<String> INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.index.class")
@@ -162,11 +161,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BLOOM_FILTER_TYPE = ConfigProperty
       .key("hoodie.bloom.index.filter.type")
-      .defaultValue(BloomFilterTypeCode.DYNAMIC_V0.name())
-      .withValidValues(BloomFilterTypeCode.SIMPLE.name(), BloomFilterTypeCode.DYNAMIC_V0.name())
-      .withDocumentation("Filter type used. Default is BloomFilterTypeCode.DYNAMIC_V0. "
-          + "Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. "
-          + "Dynamic bloom filters auto size themselves based on number of keys.");
+      .enumDefaultStringValueAndDocumentation(BloomFilterTypeCode.class);
 
   public static final ConfigProperty<String> BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = ConfigProperty
       .key("hoodie.bloom.index.filter.dynamic.max.entries")
@@ -264,12 +259,8 @@ public class HoodieIndexConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> BUCKET_INDEX_ENGINE_TYPE = ConfigProperty
       .key("hoodie.index.bucket.engine")
-      .defaultValue("SIMPLE")
-      .sinceVersion("0.11.0")
-      .withDocumentation("Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket."
-          + "Possible options are [SIMPLE | CONSISTENT_HASHING]."
-          + "Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size "
-          + "issues of the SIMPLE hashing engine. Consistent hashing only works with MOR tables, only use simple hashing on COW tables.");
+      .enumDefaultStringValueAndDocumentation(HoodieIndex.BucketIndexEngineType.class)
+      .sinceVersion("0.11.0");
 
   /**
    * Bucket num equals file groups num in each partition.
