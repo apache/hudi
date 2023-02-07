@@ -266,7 +266,7 @@ public class TestDataSourceUtils {
     public NoOpBulkInsertPartitioner(HoodieWriteConfig config) {}
 
     @Override
-    public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
+    public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int targetPartitionNumHint) {
       return records;
     }
 
@@ -282,7 +282,7 @@ public class TestDataSourceUtils {
     public NoOpBulkInsertPartitionerRows(HoodieWriteConfig config) {}
 
     @Override
-    public Dataset<Row> repartitionRecords(Dataset<Row> records, int outputSparkPartitions) {
+    public Dataset<Row> repartitionRecords(Dataset<Row> records, int targetPartitionNumHint) {
       return records;
     }
 
