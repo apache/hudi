@@ -20,6 +20,9 @@ import java.util.List;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.RESTORE_ACTION;
 
+/**
+ * CLI command to display info about restore actions.
+ */
 @ShellComponent
 public class RestoresCommand {
 
@@ -63,7 +66,7 @@ public class RestoresCommand {
   @ShellMethod(key = "show restore", value = "Show details of a restore instant")
   public String showRestore(
           @ShellOption(value = {"--instant"}, help = "Restore instant") String restoreInstant,
-          @ShellOption(value = {"--limit"}, help = "Limit  #rows to be displayed", defaultValue = "10") Integer limit,
+          @ShellOption(value = {"--limit"}, help = "Limit #rows to be displayed", defaultValue = "10") Integer limit,
           @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
           @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
           @ShellOption(value = {"--headeronly"}, help = "Print Header Only",

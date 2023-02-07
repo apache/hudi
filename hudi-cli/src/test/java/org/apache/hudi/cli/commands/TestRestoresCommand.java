@@ -1,7 +1,6 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
-import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
@@ -20,7 +19,6 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -116,10 +114,8 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
 
   @Test
   public void testShowRestores() {
-    System.out.println("Starting test");
     Object result = shell.evaluate(() -> "show restores");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
-    System.out.println(result);
 
     // get restored instants
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
@@ -164,33 +160,29 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
     Object result = shell.evaluate(() -> "show restore --instant " + instant.getTimestamp());
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
-//    List<Comparable[]> rows = new ArrayList<>();
 //    // get metadata of instant
-//    HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
-//            activeTimeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
-//    // generate expect result
-//    metadata.getPartitionMetadata().forEach((key, value) -> Stream
-//            .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),
-//                    value.getFailedDeleteFiles().stream().map(f -> Pair.of(f, false)))
-//            .forEach(fileWithDeleteStatus -> {
-//              Comparable[] row = new Comparable[5];
-//              row[0] = metadata.getStartRollbackTime();
-//              row[1] = metadata.getCommitsRollback().toString();
-//              row[2] = key;
-//              row[3] = fileWithDeleteStatus.getLeft();
-//              row[4] = fileWithDeleteStatus.getRight();
-//              rows.add(row);
-//            }));
-//
-//    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
-//            .addTableHeaderField(HoodieTableHeaderFields.HEADER_ROLLBACK_INSTANT)
-//            .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION)
-//            .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELETED_FILE)
-//            .addTableHeaderField(HoodieTableHeaderFields.HEADER_SUCCEEDED);
-//    String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-//    expected = removeNonWordAndStripSpace(expected);
-//    String got = removeNonWordAndStripSpace(result.toString());
-//    assertEquals(expected, got);
+    HoodieRestoreMetadata instantMetadata = TimelineMetadataUtils.deserializeAvroMetadata(
+            activeTimeline.getInstantDetails(instant).get(), HoodieRestoreMetadata.class);
+
+    // generate expected result
+    TableHeader header = new TableHeader()
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_RESTORE_INSTANT)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TIME_TOKEN_MILLIS);
+
+    List<Comparable[]> rows = new ArrayList<>();
+    instantMetadata.getInstantsToRollback().forEach((String rolledbackInstant) -> {
+      Comparable[] row = new Comparable[3];
+      row[0] = instantMetadata.getStartRestoreTime();
+      row[1] = rolledbackInstant;
+      row[2] = instantMetadata.getTimeTakenInMillis();
+      rows.add(row);
+    });
+    String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1,
+            false, rows);
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(result.toString());
+    assertEquals(expected, got);
   }
 
 }
