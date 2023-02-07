@@ -20,6 +20,10 @@ package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.AttributeReference
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.collection.ExternalSorter
 import org.apache.spark.{InterruptibleIterator, TaskContext}
 
@@ -37,6 +41,16 @@ trait HoodieRDDUtils {
    * NOTE: This method is an [[ExternalSorter#insertAllAndUpdateMetrics]] back-ported to Spark 2.4
    */
   def insertInto[K, V, C](ctx: TaskContext, records: Iterator[Product2[K, V]], sorter: ExternalSorter[K, V, C]): Iterator[Product2[K, C]]
+
+  /**
+   * Create instance of [[HoodieFileScanRDD]]
+   * SPARK-37273 FileScanRDD constructor changed in SPARK 3.3
+   */
+  def createHoodieFileScanRDD(sparkSession: SparkSession,
+                              readFunction: PartitionedFile => Iterator[InternalRow],
+                              filePartitions: Seq[FilePartition],
+                              readDataSchema: StructType,
+                              metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD
 
 }
 

@@ -18,7 +18,12 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.Spark32HoodieFileScanRDD
 import org.apache.spark.TaskContext
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.AttributeReference
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.collection.ExternalSorter
 
 object HoodieSpark32RDDUtils extends HoodieRDDUtils {
@@ -27,5 +32,13 @@ object HoodieSpark32RDDUtils extends HoodieRDDUtils {
                                    records: Iterator[Product2[K, V]],
                                    sorter: ExternalSorter[K, V, C]): Iterator[Product2[K, C]] =
     sorter.insertAllAndUpdateMetrics(records)
+
+  override def createHoodieFileScanRDD(sparkSession: SparkSession,
+                                       readFunction: PartitionedFile => Iterator[InternalRow],
+                                       filePartitions: Seq[FilePartition],
+                                       readDataSchema: StructType,
+                                       metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
+    new Spark32HoodieFileScanRDD(sparkSession, readFunction, filePartitions)
+  }
 
 }

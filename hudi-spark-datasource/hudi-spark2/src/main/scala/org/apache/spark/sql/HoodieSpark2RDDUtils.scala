@@ -17,11 +17,24 @@
  */
 
 package org.apache.spark.sql
+import org.apache.hudi.Spark2HoodieFileScanRDD
 import org.apache.spark.TaskContext
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.AttributeReference
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.CompletionIterator
 import org.apache.spark.util.collection.ExternalSorter
 
 object HoodieSpark2RDDUtils extends HoodieRDDUtils {
+
+  override def createHoodieFileScanRDD(sparkSession: SparkSession,
+                                       readFunction: PartitionedFile => Iterator[InternalRow],
+                                       filePartitions: Seq[FilePartition],
+                                       readDataSchema: StructType,
+                                       metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
+    new Spark2HoodieFileScanRDD(sparkSession, readFunction, filePartitions)
+  }
 
   override def insertInto[K, V, C](ctx: TaskContext,
                                    records: Iterator[Product2[K, V]],

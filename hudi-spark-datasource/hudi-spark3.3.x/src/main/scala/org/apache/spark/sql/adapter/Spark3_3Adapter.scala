@@ -63,14 +63,6 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     Some(new Spark32PlusHoodieParquetFileFormat(appendPartitionValues))
   }
 
-  override def createHoodieFileScanRDD(sparkSession: SparkSession,
-                                       readFunction: PartitionedFile => Iterator[InternalRow],
-                                       filePartitions: Seq[FilePartition],
-                                       readDataSchema: StructType,
-                                       metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
-    new Spark33HoodieFileScanRDD(sparkSession, readFunction, filePartitions, readDataSchema, metadataColumns)
-  }
-
   override def resolveDeleteFromTable(deleteFromTable: Command,
                                       resolveExpression: Expression => Expression): DeleteFromTable = {
     val deleteFromTableCommand = deleteFromTable.asInstanceOf[DeleteFromTable]

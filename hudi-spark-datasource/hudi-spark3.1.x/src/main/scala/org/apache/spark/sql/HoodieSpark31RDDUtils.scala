@@ -18,7 +18,12 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.Spark31HoodieFileScanRDD
 import org.apache.spark.TaskContext
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.AttributeReference
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.CompletionIterator
 import org.apache.spark.util.collection.ExternalSorter
 
@@ -36,6 +41,14 @@ object HoodieSpark31RDDUtils extends HoodieRDDUtils {
     ctx.addTaskCompletionListener[Unit](_ => sorter.stop())
 
     CompletionIterator[Product2[K, C], Iterator[Product2[K, C]]](sorter.iterator, sorter.stop())
+  }
+
+  override def createHoodieFileScanRDD(sparkSession: SparkSession,
+                                       readFunction: PartitionedFile => Iterator[InternalRow],
+                                       filePartitions: Seq[FilePartition],
+                                       readDataSchema: StructType,
+                                       metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
+    new Spark31HoodieFileScanRDD(sparkSession, readFunction, filePartitions)
   }
 
 }

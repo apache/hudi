@@ -181,16 +181,6 @@ trait SparkAdapter extends Serializable {
                      parameters: java.util.Map[String, String]): BaseRelation
 
   /**
-   * Create instance of [[HoodieFileScanRDD]]
-   * SPARK-37273 FileScanRDD constructor changed in SPARK 3.3
-   */
-  def createHoodieFileScanRDD(sparkSession: SparkSession,
-                              readFunction: PartitionedFile => Iterator[InternalRow],
-                              filePartitions: Seq[FilePartition],
-                              readDataSchema: StructType,
-                              metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD
-
-  /**
    * Resolve [[DeleteFromTable]]
    * SPARK-38626 condition is no longer Option in Spark 3.3
    */

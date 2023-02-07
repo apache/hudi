@@ -22,14 +22,13 @@ import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieBaseRelation, Spark2HoodieFileScanRDD, Spark2RowSerDe}
-import org.apache.spark.TaskContext
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieBaseRelation, Spark2RowSerDe}
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
+import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
 import org.apache.spark.sql.execution.datasources._
@@ -41,8 +40,6 @@ import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.util.CompletionIterator
-import org.apache.spark.util.collection.ExternalSorter
 
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.mutable.ArrayBuffer
@@ -165,14 +162,6 @@ class Spark2Adapter extends SparkAdapter {
                               parameters: java.util.Map[String, String]): BaseRelation = {
     val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)
-  }
-
-  override def createHoodieFileScanRDD(sparkSession: SparkSession,
-                                       readFunction: PartitionedFile => Iterator[InternalRow],
-                                       filePartitions: Seq[FilePartition],
-                                       readDataSchema: StructType,
-                                       metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
-    new Spark2HoodieFileScanRDD(sparkSession, readFunction, filePartitions)
   }
 
   override def resolveDeleteFromTable(deleteFromTable: Command,
