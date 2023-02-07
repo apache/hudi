@@ -1,5 +1,5 @@
-org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
-+- org.apache.hudi:hudi-common:0.12.2:compile
+org.apache.hudi:hudi-flink1.15-bundle:0.13.0-rc2:compile
++- org.apache.hudi:hudi-common:0.13.0-rc2:compile
 |  +- org.openjdk.jol:jol-core:0.16:compile
 |  +- com.github.ben-manes.caffeine:caffeine:2.9.1:compile
 |  |  +- org.checkerframework:checker-qual:3.10.0:compile
@@ -7,9 +7,6 @@ org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
 |  +- org.apache.httpcomponents:fluent-hc:4.4.1:compile
 |  |  \- commons-logging:commons-logging:1.2:compile
 |  +- org.apache.httpcomponents:httpclient:4.4.1:compile
-|  +- com.esotericsoftware:kryo-shaded:4.0.2:compile
-|  |  +- com.esotericsoftware:minlog:1.3.0:compile
-|  |  \- org.objenesis:objenesis:2.5.1:compile
 |  +- org.apache.hbase:hbase-client:2.4.9:compile
 |  |  +- org.apache.hbase.thirdparty:hbase-shaded-protobuf:3.5.1:compile
 |  |  +- org.apache.hbase:hbase-common:2.4.9:compile
@@ -26,26 +23,13 @@ org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
 |  |  +- org.jruby.jcodings:jcodings:1.0.55:compile
 |  |  +- org.jruby.joni:joni:2.1.31:compile
 |  |  +- org.apache.commons:commons-crypto:1.0.0:compile
-|  |  +- org.apache.hadoop:hadoop-auth:2.10.1:provided
-|  |  |  +- com.nimbusds:nimbus-jose-jwt:7.9:provided
-|  |  |  |  \- com.github.stephenc.jcip:jcip-annotations:1.0-1:provided
-|  |  |  \- org.apache.directory.server:apacheds-kerberos-codec:2.0.0-M15:provided
-|  |  |     +- org.apache.directory.server:apacheds-i18n:2.0.0-M15:provided
-|  |  |     +- org.apache.directory.api:api-asn1-api:1.0.0-M20:provided
-|  |  |     \- org.apache.directory.api:api-util:1.0.0-M20:provided
-|  |  \- org.apache.hadoop:hadoop-common:2.10.1:provided
-|  |     +- xmlenc:xmlenc:0.52:provided
-|  |     +- commons-net:commons-net:3.1:provided
-|  |     +- commons-collections:commons-collections:3.2.2:provided
-|  |     +- org.mortbay.jetty:jetty-sslengine:6.1.26:provided
-|  |     +- commons-configuration:commons-configuration:1.6:provided
-|  |     +- commons-digester:commons-digester:1.8:provided
-|  |     +- commons-beanutils:commons-beanutils:1.9.4:provided
-|  |     +- org.codehaus.jackson:jackson-core-asl:1.9.13:provided
-|  |     +- org.codehaus.jackson:jackson-mapper-asl:1.9.13:provided
-|  |     +- com.jcraft:jsch:0.1.55:provided
-|  |     +- org.codehaus.woodstox:stax2-api:3.1.4:provided
-|  |     \- com.fasterxml.woodstox:woodstox-core:5.0.3:provided
+|  |  \- org.apache.hadoop:hadoop-auth:2.10.1:provided
+|  |     +- com.nimbusds:nimbus-jose-jwt:7.9:provided
+|  |     |  \- com.github.stephenc.jcip:jcip-annotations:1.0-1:provided
+|  |     \- org.apache.directory.server:apacheds-kerberos-codec:2.0.0-M15:provided
+|  |        +- org.apache.directory.server:apacheds-i18n:2.0.0-M15:provided
+|  |        +- org.apache.directory.api:api-asn1-api:1.0.0-M20:provided
+|  |        \- org.apache.directory.api:api-util:1.0.0-M20:provided
 |  +- org.apache.hbase:hbase-server:2.4.9:compile
 |  |  +- org.apache.hbase:hbase-http:2.4.9:compile
 |  |  |  +- org.apache.hbase.thirdparty:hbase-shaded-jetty:3.5.1:compile
@@ -65,20 +49,12 @@ org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
 |  |  |  \- org.glassfish:javax.el:3.0.1-b12:provided
 |  |  +- javax.servlet.jsp:javax.servlet.jsp-api:2.3.1:compile
 |  |  +- org.apache.commons:commons-math3:3.6.1:compile
-|  |  +- com.lmax:disruptor:3.4.2:compile
 |  |  +- org.apache.hadoop:hadoop-distcp:2.10.0:compile
-|  |  +- org.apache.hadoop:hadoop-annotations:2.10.0:compile
-|  |  |  \- jdk.tools:jdk.tools:1.8:system
-|  |  \- org.apache.hadoop:hadoop-hdfs:2.10.1:provided
-|  |     +- org.apache.hadoop:hadoop-hdfs-client:2.10.1:provided
-|  |     |  \- com.squareup.okhttp:okhttp:2.7.5:provided
-|  |     |     \- com.squareup.okio:okio:1.6.0:provided
-|  |     +- com.sun.jersey:jersey-server:1.9:provided
-|  |     |  \- asm:asm:3.1:provided
-|  |     +- commons-daemon:commons-daemon:1.0.13:provided
-|  |     \- org.fusesource.leveldbjni:leveldbjni-all:1.8:provided
-|  \- org.lz4:lz4-java:1.8.0:compile
-+- org.apache.hudi:hudi-client-common:0.12.2:compile
+|  |  \- org.apache.hadoop:hadoop-annotations:2.10.0:compile
+|  |     \- jdk.tools:jdk.tools:1.8:system
+|  +- org.lz4:lz4-java:1.8.0:compile
+|  \- com.lmax:disruptor:3.4.2:compile
++- org.apache.hudi:hudi-client-common:0.13.0-rc2:compile
 |  +- com.github.davidmoten:hilbert-curve:0.2.2:compile
 |  |  \- com.github.davidmoten:guava-mini:0.1.3:compile
 |  +- io.dropwizard.metrics:metrics-graphite:4.1.1:compile
@@ -92,7 +68,7 @@ org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
 |  +- org.apache.curator:curator-framework:2.7.1:compile
 |  +- org.apache.curator:curator-client:2.7.1:compile
 |  \- org.apache.curator:curator-recipes:2.7.1:compile
-+- org.apache.hudi:hudi-aws:0.12.2:compile
++- org.apache.hudi:hudi-aws:0.13.0-rc2:compile
 |  +- com.amazonaws:dynamodb-lock-client:1.1.0:compile
 |  +- com.amazonaws:aws-java-sdk-cloudwatch:1.12.22:compile
 |  |  \- com.amazonaws:jmespath-java:1.12.22:compile
@@ -102,18 +78,17 @@ org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
 |  +- com.amazonaws:aws-java-sdk-core:1.12.22:compile
 |  |  +- software.amazon.ion:ion-java:1.0.2:compile
 |  |  \- com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.12.3:compile
-|  \- com.amazonaws:aws-java-sdk-glue:1.12.22:compile
-+- org.apache.hudi:hudi-flink-client:0.12.2:compile
-+- org.apache.hudi:hudi-flink1.15.x:0.12.2:compile
-+- org.apache.hudi:hudi-flink:0.12.2:compile
-|  +- org.apache.hudi:hudi-sync-common:0.12.2:compile
+|  +- com.amazonaws:aws-java-sdk-glue:1.12.22:compile
+|  \- com.amazonaws:aws-java-sdk-sqs:1.12.22:compile
++- org.apache.hudi:hudi-flink-client:0.13.0-rc2:compile
++- org.apache.hudi:hudi-flink1.15.x:0.13.0-rc2:compile
++- org.apache.hudi:hudi-flink:0.13.0-rc2:compile
+|  +- org.apache.hudi:hudi-sync-common:0.13.0-rc2:compile
 |  +- org.apache.flink:flink-streaming-java:1.15.1:provided
 |  |  +- org.apache.flink:flink-core:1.15.1:provided
 |  |  |  +- org.apache.flink:flink-annotations:1.15.1:provided
 |  |  |  +- org.apache.flink:flink-metrics-core:1.15.1:provided
-|  |  |  +- org.apache.flink:flink-shaded-asm-9:9.2-15.0:provided
-|  |  |  \- com.esotericsoftware.kryo:kryo:2.24.0:provided
-|  |  |     \- com.esotericsoftware.minlog:minlog:1.2:provided
+|  |  |  \- org.apache.flink:flink-shaded-asm-9:9.2-15.0:provided
 |  |  +- org.apache.flink:flink-file-sink-common:1.15.1:provided
 |  |  +- org.apache.flink:flink-runtime:1.15.1:provided
 |  |  |  +- org.apache.flink:flink-rpc-core:1.15.1:provided
@@ -138,7 +113,6 @@ org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
 |  |  |  \- org.apache.hadoop:hadoop-yarn-api:2.10.1:provided
 |  |  +- org.apache.hadoop:hadoop-yarn-common:2.10.1:provided
 |  |  |  +- org.mortbay.jetty:jetty-util:6.1.26:provided
-|  |  |  +- com.sun.jersey:jersey-core:1.9:provided
 |  |  |  +- com.sun.jersey:jersey-client:1.9:provided
 |  |  |  +- org.codehaus.jackson:jackson-jaxrs:1.9.13:provided
 |  |  |  +- org.codehaus.jackson:jackson-xc:1.9.13:provided
@@ -148,9 +122,9 @@ org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
 |  |  +- com.google.inject.extensions:guice-servlet:3.0:provided
 |  |  \- io.netty:netty:3.10.6.Final:compile
 |  \- com.beust:jcommander:1.78:compile
-+- org.apache.hudi:hudi-hadoop-mr:0.12.2:compile
-+- org.apache.hudi:hudi-hive-sync:0.12.2:compile
-+- org.apache.hudi:hudi-timeline-service:0.12.2:compile
++- org.apache.hudi:hudi-hadoop-mr:0.13.0-rc2:compile
++- org.apache.hudi:hudi-hive-sync:0.13.0-rc2:compile
++- org.apache.hudi:hudi-timeline-service:0.13.0-rc2:compile
 |  \- io.javalin:javalin:4.6.7:compile
 |     +- org.eclipse.jetty.websocket:websocket-server:9.4.48.v20220622:compile
 |     |  +- org.eclipse.jetty.websocket:websocket-common:9.4.48.v20220622:compile
@@ -160,13 +134,17 @@ org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
 |     |  \- org.eclipse.jetty.websocket:websocket-servlet:9.4.48.v20220622:compile
 |     \- org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.5.32:compile
 |        +- org.jetbrains.kotlin:kotlin-stdlib:1.5.32:compile
+|        |  +- org.jetbrains:annotations:13.0:compile
 |        |  \- org.jetbrains.kotlin:kotlin-stdlib-common:1.5.32:compile
 |        \- org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.5.32:compile
++- com.esotericsoftware:kryo-shaded:4.0.2:compile
+|  +- com.esotericsoftware:minlog:1.3.0:compile
+|  \- org.objenesis:objenesis:2.5.1:compile
 +- javax.servlet:javax.servlet-api:3.1.0:compile
 +- org.apache.flink:flink-hadoop-compatibility_2.12:1.15.1:compile
 |  \- org.apache.flink:flink-shaded-force-shading:15.0:compile
 +- org.apache.flink:flink-parquet:1.15.1:compile
-|  +- com.google.protobuf:protobuf-java:3.17.3:compile
+|  +- com.google.protobuf:protobuf-java:3.21.5:compile
 |  \- com.google.code.findbugs:jsr305:1.3.9:compile
 +- org.apache.flink:flink-json:1.15.1:compile
 +- org.apache.parquet:parquet-hadoop:1.12.2:compile
@@ -209,7 +187,7 @@ org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
 |  +- tomcat:jasper-runtime:5.5.23:provided
 |  |  +- javax.servlet:servlet-api:2.4:provided
 |  |  \- commons-el:commons-el:1.0:provided
-|  +- org.apache.thrift:libthrift:0.9.3:provided
+|  +- org.apache.thrift:libthrift:0.9.3:compile
 |  \- org.jamon:jamon-runtime:2.3.1:compile
 +- org.apache.hive:hive-exec:2.3.1:provided
 |  +- org.apache.hive:hive-vector-code-gen:2.3.1:provided
@@ -222,7 +200,8 @@ org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
 |  |  |  \- org.apache.hadoop:hadoop-yarn-server-resourcemanager:2.7.2:provided
 |  |  |     +- org.apache.hadoop:hadoop-yarn-server-common:2.7.2:provided
 |  |  |     +- org.apache.hadoop:hadoop-yarn-server-applicationhistoryservice:2.7.2:provided
-|  |  |     \- org.apache.hadoop:hadoop-yarn-server-web-proxy:2.7.2:provided
+|  |  |     +- org.apache.hadoop:hadoop-yarn-server-web-proxy:2.7.2:provided
+|  |  |     \- org.fusesource.leveldbjni:leveldbjni-all:1.8:provided
 |  |  \- org.apache.hive.shims:hive-shims-scheduler:2.3.1:provided
 |  +- commons-httpclient:commons-httpclient:3.0.1:provided
 |  |  \- junit:junit:3.8.1:provided
@@ -276,7 +255,6 @@ org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
 +- org.apache.hive:hive-common:2.3.1:provided
 |  +- org.apache.hive:hive-storage-api:2.3.1:provided
 |  +- org.apache.commons:commons-lang3:3.1:compile
-|  +- org.apache.orc:orc-core:1.3.3:provided
 |  +- jline:jline:2.12:compile
 |  +- com.tdunning:json:1.8:provided
 |  +- io.dropwizard.metrics:metrics-jvm:3.1.0:provided
@@ -295,11 +273,38 @@ org.apache.hudi:hudi-flink1.15-bundle:0.12.2:compile
 |     \- org.eclipse.jetty:jetty-util-ajax:9.4.48.v20220622:compile
 +- org.eclipse.jetty:jetty-http:9.4.48.v20220622:compile
 +- org.apache.thrift:libfb303:0.9.3:provided
-+- org.apache.orc:orc-core:1.6.0:provided
-|  +- org.apache.orc:orc-shims:1.6.0:provided
-|  +- io.airlift:aircompressor:0.15:provided
++- org.apache.orc:orc-core:1.5.6:provided
+|  +- org.apache.orc:orc-shims:1.5.6:provided
+|  +- io.airlift:aircompressor:0.10:provided
 |  +- javax.xml.bind:jaxb-api:2.2.11:provided
-|  \- org.jetbrains:annotations:17.0.0:compile
+|  +- org.apache.hadoop:hadoop-common:2.10.1:provided
+|  |  +- com.google.guava:guava:11.0.2:provided
+|  |  +- xmlenc:xmlenc:0.52:provided
+|  |  +- commons-net:commons-net:3.1:provided
+|  |  +- commons-collections:commons-collections:3.2.2:provided
+|  |  +- org.mortbay.jetty:jetty-sslengine:6.1.26:provided
+|  |  +- com.sun.jersey:jersey-core:1.9:provided
+|  |  +- com.sun.jersey:jersey-server:1.9:provided
+|  |  |  \- asm:asm:3.1:provided
+|  |  +- commons-configuration:commons-configuration:1.6:provided
+|  |  +- commons-beanutils:commons-beanutils:1.9.4:provided
+|  |  +- org.codehaus.jackson:jackson-core-asl:1.9.13:provided
+|  |  +- org.codehaus.jackson:jackson-mapper-asl:1.9.13:provided
+|  |  +- com.jcraft:jsch:0.1.55:provided
+|  |  +- org.codehaus.woodstox:stax2-api:3.1.4:provided
+|  |  \- com.fasterxml.woodstox:woodstox-core:5.0.3:provided
+|  \- org.apache.hadoop:hadoop-hdfs:2.10.1:provided
+|     +- org.apache.hadoop:hadoop-hdfs-client:2.10.1:provided
+|     |  \- com.squareup.okhttp:okhttp:2.7.5:provided
+|     |     \- com.squareup.okio:okio:1.6.0:provided
+|     \- io.netty:netty-all:4.1.50.Final:provided
 +- com.fasterxml.jackson.core:jackson-core:2.6.7:compile
 +- com.fasterxml.jackson.core:jackson-databind:2.6.7.3:compile
-\- com.fasterxml.jackson.core:jackson-annotations:2.6.7:compile
++- com.fasterxml.jackson.core:jackson-annotations:2.6.7:compile
+\- org.apache.hudi:hudi-metaserver-client:0.13.0-rc2:compile
+   +- org.apache.logging.log4j:log4j-api:2.17.2:provided
+   +- org.apache.logging.log4j:log4j-core:2.17.2:provided
+   +- org.apache.logging.log4j:log4j-1.2-api:2.17.2:provided
+   +- org.apache.logging.log4j:log4j-slf4j-impl:2.17.2:provided
+   +- org.slf4j:jul-to-slf4j:1.7.36:provided
+   \- com.h2database:h2:1.4.200:test-compile

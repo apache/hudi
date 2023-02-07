@@ -1,4 +1,4 @@
-org.apache.hudi:hudi-flink1.14-bundle:0.13.0-rc2:compile
+org.apache.hudi:hudi-flink1.16-bundle:0.13.0-rc2:compile
 +- org.apache.hudi:hudi-common:0.13.0-rc2:compile
 |  +- org.openjdk.jol:jol-core:0.16:compile
 |  +- com.github.ben-manes.caffeine:caffeine:2.9.1:compile
@@ -81,37 +81,31 @@ org.apache.hudi:hudi-flink1.14-bundle:0.13.0-rc2:compile
 |  +- com.amazonaws:aws-java-sdk-glue:1.12.22:compile
 |  \- com.amazonaws:aws-java-sdk-sqs:1.12.22:compile
 +- org.apache.hudi:hudi-flink-client:0.13.0-rc2:compile
-+- org.apache.hudi:hudi-flink1.14.x:0.13.0-rc2:compile
++- org.apache.hudi:hudi-flink1.16.x:0.13.0-rc2:compile
 +- org.apache.hudi:hudi-flink:0.13.0-rc2:compile
 |  +- org.apache.hudi:hudi-sync-common:0.13.0-rc2:compile
-|  +- org.apache.flink:flink-streaming-java_2.12:1.14.5:provided
-|  |  +- org.apache.flink:flink-core:1.14.5:provided
-|  |  |  +- org.apache.flink:flink-annotations:1.14.5:provided
-|  |  |  +- org.apache.flink:flink-metrics-core:1.14.5:provided
-|  |  |  \- org.apache.flink:flink-shaded-asm-7:7.1-14.0:provided
-|  |  +- org.apache.flink:flink-file-sink-common:1.14.5:provided
-|  |  +- org.apache.flink:flink-runtime:1.14.5:provided
-|  |  |  +- org.apache.flink:flink-rpc-core:1.14.5:provided
-|  |  |  +- org.apache.flink:flink-rpc-akka-loader:1.14.5:provided
-|  |  |  +- org.apache.flink:flink-queryable-state-client-java:1.14.5:provided
-|  |  |  +- org.apache.flink:flink-hadoop-fs:1.14.5:provided
-|  |  |  +- org.apache.flink:flink-shaded-netty:4.1.65.Final-14.0:provided
-|  |  |  +- org.apache.flink:flink-shaded-jackson:2.12.4-14.0:provided
-|  |  |  +- org.apache.flink:flink-shaded-zookeeper-3:3.4.14-14.0:provided
+|  +- org.apache.flink:flink-streaming-java:1.16.0:provided
+|  |  +- org.apache.flink:flink-core:1.16.0:provided
+|  |  |  +- org.apache.flink:flink-annotations:1.16.0:provided
+|  |  |  +- org.apache.flink:flink-metrics-core:1.16.0:provided
+|  |  |  +- org.apache.flink:flink-shaded-asm-9:9.2-15.0:provided
+|  |  |  \- org.apache.flink:flink-shaded-jackson:2.12.4-15.0:provided
+|  |  +- org.apache.flink:flink-file-sink-common:1.16.0:provided
+|  |  +- org.apache.flink:flink-runtime:1.16.0:provided
+|  |  |  +- org.apache.flink:flink-rpc-core:1.16.0:provided
+|  |  |  +- org.apache.flink:flink-rpc-akka-loader:1.16.0:provided
+|  |  |  +- org.apache.flink:flink-queryable-state-client-java:1.16.0:provided
+|  |  |  +- org.apache.flink:flink-hadoop-fs:1.16.0:provided
+|  |  |  +- org.apache.flink:flink-shaded-netty:4.1.70.Final-15.0:provided
+|  |  |  +- org.apache.flink:flink-shaded-zookeeper-3:3.5.9-15.0:provided
 |  |  |  \- org.javassist:javassist:3.24.0-GA:compile
-|  |  +- org.apache.flink:flink-scala_2.12:1.14.5:provided
-|  |  |  +- org.scala-lang:scala-reflect:2.12.7:provided
-|  |  |  +- org.scala-lang:scala-library:2.12.7:provided
-|  |  |  +- org.scala-lang:scala-compiler:2.12.7:provided
-|  |  |  |  \- org.scala-lang.modules:scala-xml_2.12:1.0.6:provided
-|  |  |  \- com.twitter:chill_2.12:0.7.6:provided
-|  |  |     \- com.twitter:chill-java:0.7.6:provided
-|  |  +- org.apache.flink:flink-java:1.14.5:provided
-|  |  \- org.apache.flink:flink-shaded-guava:30.1.1-jre-14.0:provided
-|  +- org.apache.flink:flink-clients_2.12:1.14.5:provided
-|  |  \- org.apache.flink:flink-optimizer:1.14.5:provided
-|  +- org.apache.flink:flink-connector-kafka_2.12:1.14.5:provided
-|  |  \- org.apache.flink:flink-connector-base:1.14.5:provided
+|  |  +- org.apache.flink:flink-java:1.16.0:provided
+|  |  |  \- com.twitter:chill-java:0.7.6:provided
+|  |  \- org.apache.flink:flink-shaded-guava:30.1.1-jre-15.0:provided
+|  +- org.apache.flink:flink-clients:1.16.0:provided
+|  |  \- org.apache.flink:flink-optimizer:1.16.0:provided
+|  +- org.apache.flink:flink-connector-kafka:1.16.0:provided
+|  |  \- org.apache.flink:flink-connector-base:1.16.0:provided
 |  +- org.apache.kafka:kafka-clients:2.0.0:compile
 |  |  \- org.xerial.snappy:snappy-java:1.1.8.3:compile
 |  +- org.apache.hadoop:hadoop-mapreduce-client-core:2.10.1:provided
@@ -147,11 +141,12 @@ org.apache.hudi:hudi-flink1.14-bundle:0.13.0-rc2:compile
 |  +- com.esotericsoftware:minlog:1.3.0:compile
 |  \- org.objenesis:objenesis:2.5.1:compile
 +- javax.servlet:javax.servlet-api:3.1.0:compile
-+- org.apache.flink:flink-hadoop-compatibility_2.12:1.14.5:compile
-|  \- org.apache.flink:flink-shaded-force-shading:14.0:compile
-+- org.apache.flink:flink-parquet_2.12:1.14.5:compile
++- org.apache.flink:flink-hadoop-compatibility_2.12:1.16.0:compile
+|  \- org.apache.flink:flink-shaded-force-shading:15.0:compile
++- org.apache.flink:flink-parquet:1.16.0:compile
+|  +- com.google.protobuf:protobuf-java:3.21.5:compile
 |  \- com.google.code.findbugs:jsr305:1.3.9:compile
-+- org.apache.flink:flink-json:1.14.5:compile
++- org.apache.flink:flink-json:1.16.0:compile
 +- org.apache.parquet:parquet-hadoop:1.12.2:compile
 |  +- commons-pool:commons-pool:1.6:compile
 |  \- com.github.luben:zstd-jni:1.4.9-1:compile
@@ -233,7 +228,6 @@ org.apache.hudi:hudi-flink1.14-bundle:0.13.0-rc2:compile
 |  |  +- net.sf.opencsv:opencsv:2.3:provided
 |  |  \- org.apache.parquet:parquet-hadoop-bundle:1.8.1:provided
 |  +- javolution:javolution:5.5.1:provided
-|  +- com.google.protobuf:protobuf-java:3.21.5:compile
 |  +- com.jolbox:bonecp:0.8.0.RELEASE:provided
 |  +- com.zaxxer:HikariCP:2.5.1:provided
 |  +- org.apache.derby:derby:10.10.2.0:provided

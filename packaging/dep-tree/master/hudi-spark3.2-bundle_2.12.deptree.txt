@@ -1,17 +1,17 @@
-org.apache.hudi:hudi-spark3.2-bundle_2.12:0.12.2:compile
-+- org.apache.hudi:hudi-spark_2.12:0.12.2:compile
-|  +- org.apache.hudi:hudi-spark-client:0.12.2:compile
+org.apache.hudi:hudi-spark3.2-bundle_2.12:0.13.0-rc2:compile
++- org.apache.hudi:hudi-spark_2.12:0.13.0-rc2:compile
+|  +- org.apache.hudi:hudi-spark-client:0.13.0-rc2:compile
 |  |  +- org.scala-lang:scala-library:2.12.10:compile
 |  |  \- org.scala-lang.modules:scala-collection-compat_2.12:2.8.1:compile
-|  +- org.apache.hudi:hudi-spark3.2.x_2.12:0.12.2:compile
-|  |  +- org.apache.hudi:hudi-spark-common_2.12:0.12.2:compile
+|  +- org.apache.hudi:hudi-spark3.2.x_2.12:0.13.0-rc2:compile
+|  |  +- org.apache.hudi:hudi-spark-common_2.12:0.13.0-rc2:compile
 |  |  +- org.json4s:json4s-jackson_2.12:3.7.0-M11:compile
 |  |  |  \- org.json4s:json4s-core_2.12:3.7.0-M11:compile
 |  |  |     +- org.json4s:json4s-ast_2.12:3.7.0-M11:compile
 |  |  |     \- org.json4s:json4s-scalap_2.12:3.7.0-M11:compile
-|  |  +- org.apache.hudi:hudi-spark3-common:0.12.2:compile
-|  |  \- org.apache.hudi:hudi-spark3.2plus-common:0.12.2:compile
-|  +- org.apache.hudi:hudi-client-common:0.12.2:compile
+|  |  +- org.apache.hudi:hudi-spark3-common:0.13.0-rc2:compile
+|  |  \- org.apache.hudi:hudi-spark3.2plus-common:0.13.0-rc2:compile
+|  +- org.apache.hudi:hudi-client-common:0.13.0-rc2:compile
 |  |  +- com.github.davidmoten:hilbert-curve:0.2.2:compile
 |  |  |  \- com.github.davidmoten:guava-mini:0.1.3:compile
 |  |  +- io.dropwizard.metrics:metrics-graphite:4.1.1:compile
@@ -21,18 +21,11 @@ org.apache.hudi:hudi-spark3.2-bundle_2.12:0.12.2:compile
 |  |  |  \- io.prometheus:simpleclient_common:0.8.0:compile
 |  |  +- io.prometheus:simpleclient_dropwizard:0.8.0:compile
 |  |  \- io.prometheus:simpleclient_pushgateway:0.8.0:compile
-|  +- org.apache.hudi:hudi-common:0.12.2:compile
+|  +- org.apache.hudi:hudi-common:0.13.0-rc2:compile
 |  |  +- org.openjdk.jol:jol-core:0.16:compile
 |  |  +- com.github.ben-manes.caffeine:caffeine:2.9.1:compile
 |  |  |  +- org.checkerframework:checker-qual:3.10.0:compile
 |  |  |  \- com.google.errorprone:error_prone_annotations:2.5.1:compile
-|  |  +- org.apache.orc:orc-core:1.6.12:compile
-|  |  |  +- org.apache.orc:orc-shims:1.6.12:compile
-|  |  |  +- org.jetbrains:annotations:17.0.0:compile
-|  |  |  \- org.threeten:threeten-extra:1.5.0:compile
-|  |  +- com.esotericsoftware:kryo-shaded:4.0.2:compile
-|  |  |  +- com.esotericsoftware:minlog:1.3.0:compile
-|  |  |  \- org.objenesis:objenesis:2.5.1:compile
 |  |  +- org.apache.hbase:hbase-client:2.4.9:compile
 |  |  |  +- org.apache.hbase.thirdparty:hbase-shaded-protobuf:3.5.1:compile
 |  |  |  +- org.apache.hbase:hbase-common:2.4.9:compile
@@ -77,7 +70,6 @@ org.apache.hudi:hudi-spark3.2-bundle_2.12:0.12.2:compile
 |  |  |  |  \- org.glassfish:javax.el:3.0.1-b12:provided
 |  |  |  +- javax.servlet.jsp:javax.servlet.jsp-api:2.3.1:compile
 |  |  |  +- org.apache.commons:commons-math3:3.6.1:compile
-|  |  |  +- com.lmax:disruptor:3.4.2:compile
 |  |  |  +- org.apache.hadoop:hadoop-distcp:2.10.0:compile
 |  |  |  +- org.apache.hadoop:hadoop-annotations:2.10.0:compile
 |  |  |  |  \- jdk.tools:jdk.tools:1.8:system
@@ -90,16 +82,17 @@ org.apache.hudi:hudi-spark3.2-bundle_2.12:0.12.2:compile
 |  |  |     |     \- com.squareup.okio:okio:1.6.0:provided
 |  |  |     +- commons-daemon:commons-daemon:1.0.13:provided
 |  |  |     \- org.fusesource.leveldbjni:leveldbjni-all:1.8:provided
-|  |  \- org.lz4:lz4-java:1.8.0:compile
-|  +- org.apache.hudi:hudi-sync-common:0.12.2:compile
+|  |  +- org.lz4:lz4-java:1.8.0:compile
+|  |  \- com.lmax:disruptor:3.4.2:compile
+|  +- org.apache.hudi:hudi-sync-common:0.13.0-rc2:compile
 |  +- com.fasterxml.jackson.core:jackson-annotations:2.10.0:compile
 |  \- com.fasterxml.jackson.module:jackson-module-scala_2.12:2.10.0:compile
 |     \- com.fasterxml.jackson.module:jackson-module-paranamer:2.10.0:compile
 |        \- com.thoughtworks.paranamer:paranamer:2.8:compile
-+- org.apache.hudi:hudi-hadoop-mr:0.12.2:compile
-+- org.apache.hudi:hudi-hive-sync:0.12.2:compile
++- org.apache.hudi:hudi-hadoop-mr:0.13.0-rc2:compile
++- org.apache.hudi:hudi-hive-sync:0.13.0-rc2:compile
 |  \- com.beust:jcommander:1.78:compile
-+- org.apache.hudi:hudi-timeline-service:0.12.2:compile
++- org.apache.hudi:hudi-timeline-service:0.13.0-rc2:compile
 |  +- com.fasterxml.jackson.core:jackson-core:2.10.0:compile
 |  +- com.fasterxml.jackson.core:jackson-databind:2.10.0:compile
 |  +- org.apache.httpcomponents:fluent-hc:4.4.1:compile
@@ -188,14 +181,14 @@ org.apache.hudi:hudi-spark3.2-bundle_2.12:0.12.2:compile
 |  +- commons-codec:commons-codec:1.4:compile
 |  +- commons-cli:commons-cli:1.2:provided
 |  +- net.sf.jpam:jpam:1.1:provided
-|  +- commons-lang:commons-lang:2.6:compile
+|  +- commons-lang:commons-lang:2.6:provided
 |  +- tomcat:jasper-compiler:5.5.23:provided
 |  |  +- javax.servlet:jsp-api:2.0:provided
 |  |  \- ant:ant:1.6.5:provided
 |  +- tomcat:jasper-runtime:5.5.23:provided
 |  |  \- commons-el:commons-el:1.0:provided
 |  +- org.apache.thrift:libfb303:0.9.3:provided
-|  +- org.apache.thrift:libthrift:0.9.3:provided
+|  +- org.apache.thrift:libthrift:0.9.3:compile
 |  \- org.jamon:jamon-runtime:2.3.1:compile
 +- org.apache.hive:hive-service-rpc:2.3.1:provided
 |  \- org.slf4j:slf4j-api:1.7.36:provided
@@ -206,9 +199,6 @@ org.apache.hudi:hudi-spark3.2-bundle_2.12:0.12.2:compile
 |  |  \- org.apache.parquet:parquet-hadoop-bundle:1.8.1:provided
 |  +- org.apache.hive:hive-shims:2.3.1:provided
 |  |  +- org.apache.hive.shims:hive-shims-common:2.3.1:provided
-|  |  |  \- org.apache.logging.log4j:log4j-slf4j-impl:2.17.2:provided
-|  |  |     +- org.apache.logging.log4j:log4j-api:2.17.2:provided
-|  |  |     \- org.apache.logging.log4j:log4j-core:2.17.2:provided
 |  |  +- org.apache.hive.shims:hive-shims-0.23:2.3.1:provided
 |  |  |  \- org.apache.hadoop:hadoop-yarn-server-resourcemanager:2.7.2:provided
 |  |  |     +- com.sun.jersey.contribs:jersey-guice:1.9:provided
@@ -223,7 +213,7 @@ org.apache.hudi:hudi-spark3.2-bundle_2.12:0.12.2:compile
 +- org.apache.hive:hive-metastore:2.3.1:provided
 |  +- javolution:javolution:5.5.1:provided
 |  +- com.google.guava:guava:14.0.1:compile
-|  +- com.google.protobuf:protobuf-java:2.5.0:compile
+|  +- com.google.protobuf:protobuf-java:3.21.5:compile
 |  +- com.jolbox:bonecp:0.8.0.RELEASE:provided
 |  +- com.zaxxer:HikariCP:2.5.1:provided
 |  +- org.apache.derby:derby:10.10.2.0:provided
@@ -250,10 +240,13 @@ org.apache.hudi:hudi-spark3.2-bundle_2.12:0.12.2:compile
 |  |  \- org.apache.twill:twill-zookeeper:0.6.0-incubating:provided
 |  \- co.cask.tephra:tephra-hbase-compat-1.0:0.6.0:provided
 +- org.apache.hive:hive-common:2.3.1:provided
-|  +- org.apache.hive:hive-storage-api:2.3.1:compile
+|  +- org.apache.hive:hive-storage-api:2.3.1:provided
 |  +- org.apache.commons:commons-lang3:3.1:compile
-|  +- org.apache.orc:orc-core:1.3.3:provided
-|  |  \- io.airlift:aircompressor:0.3:compile
+|  +- org.apache.orc:orc-core:1.6.12:compile
+|  |  +- org.apache.orc:orc-shims:1.6.12:compile
+|  |  +- io.airlift:aircompressor:0.21:compile
+|  |  +- org.jetbrains:annotations:17.0.0:compile
+|  |  \- org.threeten:threeten-extra:1.5.0:compile
 |  +- jline:jline:2.12:compile
 |  +- org.eclipse.jetty.orbit:javax.servlet:3.0.0.v201112011016:provided
 |  +- joda-time:joda-time:2.9.9:compile
@@ -283,4 +276,11 @@ org.apache.hudi:hudi-spark3.2-bundle_2.12:0.12.2:compile
 +- org.apache.curator:curator-framework:2.7.1:compile
 +- org.apache.curator:curator-client:2.7.1:compile
 +- org.apache.curator:curator-recipes:2.7.1:compile
-\- javax.servlet:javax.servlet-api:3.1.0:compile
++- javax.servlet:javax.servlet-api:3.1.0:compile
+\- org.apache.hudi:hudi-metaserver-client:0.13.0-rc2:compile
+   +- org.apache.logging.log4j:log4j-api:2.17.2:provided
+   +- org.apache.logging.log4j:log4j-core:2.17.2:provided
+   +- org.apache.logging.log4j:log4j-1.2-api:2.17.2:provided
+   +- org.apache.logging.log4j:log4j-slf4j-impl:2.17.2:provided
+   +- org.slf4j:jul-to-slf4j:1.7.36:provided
+   \- com.h2database:h2:1.4.200:test-compile
