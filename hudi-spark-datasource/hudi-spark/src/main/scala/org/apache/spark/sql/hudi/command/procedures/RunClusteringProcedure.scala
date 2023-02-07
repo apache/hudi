@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.common.util.{ClusteringUtils, StringUtils, Option => HOption}
@@ -57,7 +57,8 @@ class RunClusteringProcedure extends BaseProcedure
     ProcedureParameter.optional(6, "order_strategy", DataTypes.StringType, None),
     // params => key=value, key2=value2
     ProcedureParameter.optional(7, "options", DataTypes.StringType, None),
-    ProcedureParameter.optional(8, "instants", DataTypes.StringType, None)
+    ProcedureParameter.optional(8, "instants", DataTypes.StringType, None),
+    ProcedureParameter.optional(9, "selected_partitions", DataTypes.StringType, None)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -83,20 +84,26 @@ class RunClusteringProcedure extends BaseProcedure
     val orderStrategy = getArgValueOrDefault(args, PARAMETERS(6))
     val options = getArgValueOrDefault(args, PARAMETERS(7))
     val instantsStr = getArgValueOrDefault(args, PARAMETERS(8))
+    val parts = getArgValueOrDefault(args, PARAMETERS(9))
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     var conf: Map[String, String] = Map.empty
-    predicate match {
-      case Some(p) =>
-        val prunedPartitions = prunePartition(metaClient, p.asInstanceOf[String])
-        conf = conf ++ Map(
-          HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key() -> "SELECTED_PARTITIONS",
-          HoodieClusteringConfig.PARTITION_SELECTED.key() -> prunedPartitions
-        )
-        logInfo(s"Partition predicates: $p, partition selected: $prunedPartitions")
-      case _ =>
-        logInfo("No partition predicates")
+
+    val selectedPartitions: String = (parts, predicate) match {
+      case (_, Some(p)) => prunePartition(metaClient, p.asInstanceOf[String])
+      case (Some(o), _) => o.asInstanceOf[String]
+      case _ => ""
+    }
+
+    if (selectedPartitions.nonEmpty) {
+      conf = conf ++ Map(
+        HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key() -> "SELECTED_PARTITIONS",
+        HoodieClusteringConfig.PARTITION_SELECTED.key() -> selectedPartitions
+      )
+      logInfo(s"Partition selected: $selectedPartitions")
+    } else {
+      logInfo("No partition selected")
     }
 
     // Construct sort column info
