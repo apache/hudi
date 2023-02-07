@@ -127,15 +127,17 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
                                                  Map<String, Long> expectedPartitionNumRecords,
                                                  Option<Comparator<HoodieRecord<? extends HoodieRecordPayload>>> comparator,
                                                  boolean populateMetaFields) {
-    int numPartitions = 2;
+    // NOTE: In cases when we enforce number of target Spark partitions we will provide
+    //       concrete value as a hint. Otherwise, we will specify hint as 0
+    int numPartitionsHint = enforceNumOutputPartitions ? 2 : 0;
     if (!populateMetaFields) {
-      assertThrows(HoodieException.class, () -> partitioner.repartitionRecords(records, numPartitions));
+      assertThrows(HoodieException.class, () -> partitioner.repartitionRecords(records, numPartitionsHint));
       return;
     }
     JavaRDD<HoodieRecord<? extends HoodieRecordPayload>> actualRecords =
-        (JavaRDD<HoodieRecord<? extends HoodieRecordPayload>>) partitioner.repartitionRecords(records, numPartitions);
+        (JavaRDD<HoodieRecord<? extends HoodieRecordPayload>>) partitioner.repartitionRecords(records, numPartitionsHint);
     assertEquals(
-        enforceNumOutputPartitions ? numPartitions : records.getNumPartitions(),
+        enforceNumOutputPartitions ? numPartitionsHint : records.getNumPartitions(),
         actualRecords.getNumPartitions());
     List<HoodieRecord<? extends HoodieRecordPayload>> collectedActualRecords = actualRecords.collect();
     if (isGloballySorted) {
