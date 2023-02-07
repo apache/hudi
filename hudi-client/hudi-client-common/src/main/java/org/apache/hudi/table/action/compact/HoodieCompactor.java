@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -41,6 +42,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
@@ -111,7 +113,13 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     try {
       if (StringUtils.isNullOrEmpty(config.getInternalSchema())) {
         Schema readerSchema = schemaResolver.getTableAvroSchema(false);
-        config.setSchema(readerSchema.toString());
+        if (config.getBoolean(HoodieTableConfig.DROP_PARTITION_COLUMNS)) {
+          String[] partitionFields = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME).split(",");
+          Schema schemaWithoutPartitionFields = HoodieAvroUtils.removeFields(readerSchema, CollectionUtils.createSet(partitionFields));
+          config.setSchema(schemaWithoutPartitionFields.toString());
+        } else {
+          config.setSchema(readerSchema.toString());
+        }
       }
     } catch (Exception e) {
       // If there is no commit in the table, just ignore the exception.
