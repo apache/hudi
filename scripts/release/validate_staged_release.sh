@@ -177,7 +177,7 @@ echo -e "\t\tLicensing Check Passed [OK]\n"
 
 ### Checking for RAT
 echo "Running RAT Check"
-(bash -c "mvn apache-rat:check -Pintegration-tests -Phudi-platform-service $REDIRECT") || (echo -e "\t\t Rat Check Failed. [ERROR]\n\t\t Please run with --verbose to get details\n" && exit 1)
+(bash -c "mvn apache-rat:check -DdeployArtifacts=true $REDIRECT") || (echo -e "\t\t Rat Check Failed. [ERROR]\n\t\t Please run with --verbose to get details\n" && exit 1)
 echo -e "\t\tRAT Check Passed [OK]\n"
 
 popd
