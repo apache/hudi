@@ -19,6 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -52,8 +53,8 @@ public class RDDPartitionSortPartitioner<T> extends SparkBulkInsertPartitionerBa
       throw new HoodieException(PARTITION_SORT.name() + " mode requires meta-fields to be enabled");
     }
 
-    JavaPairRDD<String, HoodieRecord<T>> kvPairsRDD = tryCoalesce(records, targetPartitionNumHint)
-        .mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
+    JavaPairRDD<Pair<String, String>, HoodieRecord<T>> kvPairsRDD = tryCoalesce(records, targetPartitionNumHint)
+        .mapToPair(record -> new Tuple2<>(Pair.of(record.getPartitionPath(), record.getRecordKey()), record));
 
     // NOTE: [[JavaRDD]] doesn't expose an API to do the sorting w/o (re-)shuffling, as such
     //       we're relying on our own sequence to achieve that
