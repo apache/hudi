@@ -168,9 +168,9 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
                                                 boolean enforceNumOutputPartitions,
                                                 boolean isGloballySorted,
                                                 boolean isLocallySorted,
-                                                boolean populateMetaFields) {
-    JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
-    JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
+                                                boolean populateMetaFields) throws Exception {
+    JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc, isTablePartitioned);
+    JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc, isTablePartitioned);
 
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()

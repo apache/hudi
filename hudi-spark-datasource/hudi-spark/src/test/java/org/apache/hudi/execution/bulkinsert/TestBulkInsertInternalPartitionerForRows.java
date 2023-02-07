@@ -115,7 +115,7 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
         .build();
 
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerWithRowsFactory.get(config, isTablePartitioned, enforceNumOutputPartitions),
+        BulkInsertInternalPartitionerWithRowsFactory.get(config, isTablePartitioned),
         records1,
         enforceNumOutputPartitions,
         isGloballySorted,
@@ -124,7 +124,7 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
         Option.empty(),
         populateMetaFields);
     testBulkInsertInternalPartitioner(
-        BulkInsertInternalPartitionerWithRowsFactory.get(config, isTablePartitioned, enforceNumOutputPartitions),
+        BulkInsertInternalPartitionerWithRowsFactory.get(config, isTablePartitioned),
         records2,
         enforceNumOutputPartitions,
         isGloballySorted,
