@@ -19,6 +19,8 @@
 package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.exception.HoodieValidationException;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
@@ -132,11 +134,16 @@ public class TestHoodieCatalog {
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 2);
     File testDb = new File(tempFile, TEST_DEFAULT_DATABASE);
     testDb.mkdir();
+
+    catalog = new HoodieCatalog("hudi", Configuration.fromMap(getDefaultCatalogOption()));
+    catalog.open();
+  }
+
+  Map<String, String> getDefaultCatalogOption() {
     Map<String, String> catalogOptions = new HashMap<>();
     catalogOptions.put(CATALOG_PATH.key(), tempFile.getAbsolutePath());
     catalogOptions.put(DEFAULT_DATABASE.key(), TEST_DEFAULT_DATABASE);
-    catalog = new HoodieCatalog("hudi", Configuration.fromMap(catalogOptions));
-    catalog.open();
+    return catalogOptions;
   }
 
   @AfterEach
@@ -204,6 +211,28 @@ public class TestHoodieCatalog {
     // test create exist table
     assertThrows(TableAlreadyExistException.class,
         () -> catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, false));
+  }
+
+  @Test
+  void testCreateTableWithoutPreCombineKey() {
+    Map<String, String> options = getDefaultCatalogOption();
+    options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
+    catalog = new HoodieCatalog("hudi", Configuration.fromMap(options));
+    catalog.open();
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
+    assertThrows(HoodieValidationException.class,
+        () -> catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, true),
+        "Option 'precombine.field' is required for payload class: "
+            + "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
+
+    Map<String, String> options2 = getDefaultCatalogOption();
+    options2.put(FlinkOptions.PRECOMBINE_FIELD.key(), "not_exists");
+    catalog = new HoodieCatalog("hudi", Configuration.fromMap(options2));
+    catalog.open();
+    ObjectPath tablePath2 = new ObjectPath(TEST_DEFAULT_DATABASE, "tb2");
+    assertThrows(HoodieValidationException.class,
+        () -> catalog.createTable(tablePath2, EXPECTED_CATALOG_TABLE, true),
+        "Field not_exists does not exist in the table schema. Please check 'precombine.field' option.");
   }
 
   @Test

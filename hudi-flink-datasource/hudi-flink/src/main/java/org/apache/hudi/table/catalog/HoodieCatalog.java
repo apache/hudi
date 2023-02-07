@@ -19,10 +19,13 @@
 package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -296,6 +299,21 @@ public class HoodieCatalog extends AbstractCatalog {
     conf.setString(FlinkOptions.RECORD_KEY_FIELD, pkColumns);
     options.put(TableOptionProperties.PK_CONSTRAINT_NAME, resolvedSchema.getPrimaryKey().get().getName());
     options.put(TableOptionProperties.PK_COLUMNS, pkColumns);
+
+    // check preCombine
+    final String preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
+    if (!resolvedSchema.getColumnNames().contains(preCombineField)) {
+      if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
+        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
+            + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
+      }
+      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
+        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
+      } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
+        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
+            + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
+      }
+    }
 
     if (resolvedTable.isPartitioned()) {
       final String partitions = String.join(",", resolvedTable.getPartitionKeys());
