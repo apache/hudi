@@ -88,16 +88,6 @@ else
     ARTIFACT_SUFFIX=${RELEASE_VERSION}-rc${RC_NUM}
 fi
 
-
-rm -rf $LOCAL_SVN_DIR
-mkdir $LOCAL_SVN_DIR
-cd $LOCAL_SVN_DIR
-
-echo "Downloading from svn co ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO}"
-
-(bash -c "svn co ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO} $REDIRECT") || (echo -e "\t\t Unable to checkout  ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO} to $REDIRECT. Please run with --verbose to get details\n" && exit -1)
-
-echo "Validating hudi-${ARTIFACT_SUFFIX} with release type \"${REPO_TYPE}\""
 if [ $RELEASE_TYPE == "release" ]; then
   ARTIFACT_PREFIX=
 elif [ $RELEASE_TYPE == "dev" ]; then
@@ -106,7 +96,21 @@ else
   echo "Unexpected RELEASE_TYPE: $RELEASE_TYPE"
   exit 1;
 fi
-cd ${HUDI_REPO}/${ARTIFACT_PREFIX}${ARTIFACT_SUFFIX}
+
+rm -rf $LOCAL_SVN_DIR
+mkdir $LOCAL_SVN_DIR
+cd $LOCAL_SVN_DIR
+
+echo "Current directory: `pwd`"
+
+FULL_SVN_URL=${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO}/${ARTIFACT_PREFIX}${ARTIFACT_SUFFIX}
+
+echo "Downloading from svn co $FULL_SVN_URL"
+
+(bash -c "svn co $FULL_SVN_URL $REDIRECT") || (echo -e "\t\t Unable to checkout  $FULL_SVN_URL to $REDIRECT. Please run with --verbose to get details\n" && exit -1)
+
+echo "Validating hudi-${ARTIFACT_SUFFIX} with release type \"${REPO_TYPE}\""
+cd ${ARTIFACT_PREFIX}${ARTIFACT_SUFFIX}
 $SHASUM hudi-${ARTIFACT_SUFFIX}.src.tgz > got.sha512
 
 echo "Checking Checksum of Source Release"
