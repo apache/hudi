@@ -110,7 +110,7 @@ jobs:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+          mvn test -Punit-tests -Pfunctional-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
 
   validate-bundles:
     runs-on: ubuntu-latest
