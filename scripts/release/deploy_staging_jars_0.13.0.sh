@@ -123,7 +123,7 @@ do
   echo "Deploying to repository.apache.org with version options ${v%-am}"
   # remove `-am` option to only deploy intended modules
   #$MVN deploy $COMMON_OPTIONS ${v%-am}
-  VERSION=0.14.0-SNAPSHOT
+  VERSION=0.13.0-rc2
   OUTPUT_DIRECTORY="packaging/dep-tree/$VERSION"
   aid=${v##* -DartifactId=}
   echo $aid
