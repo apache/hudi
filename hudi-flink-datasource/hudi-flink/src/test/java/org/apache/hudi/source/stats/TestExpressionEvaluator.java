@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.stats;
 
+import org.apache.hudi.adapter.TestCallExpressions;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.table.api.DataTypes;
@@ -372,7 +373,7 @@ public class TestExpressionEvaluator {
         BuiltInFunctionDefinitions.IN};
     for (BuiltInFunctionDefinition funDef : funDefs) {
       CallExpression expr =
-          CallExpression.permanent(
+          TestCallExpressions.permanent(
               funDef,
               Arrays.asList(ref, nullLiteral),
               DataTypes.BOOLEAN());
