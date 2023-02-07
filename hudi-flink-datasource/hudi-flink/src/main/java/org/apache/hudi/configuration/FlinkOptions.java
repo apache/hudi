@@ -549,6 +549,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(true)
       .withDescription("Whether to sort the inputs by specific fields for bulk insert tasks, default true");
 
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY = ConfigOptions
+          .key("write.bulk_insert.sort_input.by_record_key")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to sort the inputs by record keys for bulk insert tasks, default false");
+
   public static final ConfigOption<Integer> WRITE_SORT_MEMORY = ConfigOptions
       .key("write.sort.memory")
       .intType()

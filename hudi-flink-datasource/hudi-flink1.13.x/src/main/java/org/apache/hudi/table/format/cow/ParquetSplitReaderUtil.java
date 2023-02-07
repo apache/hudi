@@ -354,7 +354,7 @@ public class ParquetSplitReaderUtil {
             return new BytesColumnReader(descriptor, pageReader);
           case FIXED_LEN_BYTE_ARRAY:
             return new FixedLenBytesColumnReader(
-                descriptor, pageReader, ((DecimalType) fieldType).getPrecision());
+                descriptor, pageReader);
           default:
             throw new AssertionError();
         }
