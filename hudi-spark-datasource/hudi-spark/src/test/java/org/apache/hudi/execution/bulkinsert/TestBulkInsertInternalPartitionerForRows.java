@@ -171,7 +171,9 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
                                                  Map<String, Long> expectedPartitionNumRecords,
                                                  Option<Comparator<Row>> comparator,
                                                  boolean populateMetaFields) {
-    int numPartitions = 2;
+    // NOTE: In cases when we enforce number of target Spark partitions we will provide
+    //       concrete value as a hint. Otherwise, we will specify hint as 0
+    int numPartitions = enforceNumOutputPartitions ? 2 : 0;
     if (!populateMetaFields) {
       assertThrows(HoodieException.class, () -> partitioner.repartitionRecords(rows, numPartitions));
       return;
