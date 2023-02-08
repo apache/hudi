@@ -18,10 +18,14 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.exception.SchemaCompatibilityException;
+
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BiFunction;
@@ -35,6 +39,13 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class AvroSchemaUtils {
 
   private AvroSchemaUtils() {}
+
+  /**
+   * See {@link #isSchemaCompatible(Schema, Schema, boolean, boolean)} doc for more details
+   */
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema) {
+    return isSchemaCompatible(prevSchema, newSchema, true);
+  }
 
   /**
    * See {@link #isSchemaCompatible(Schema, Schema, boolean, boolean)} doc for more details
@@ -76,7 +87,18 @@ public class AvroSchemaUtils {
    * @return true if prev schema is a projection of new schema.
    */
   public static boolean canProject(Schema prevSchema, Schema newSchema) {
+    return canProject(prevSchema, newSchema, Collections.emptySet());
+  }
+
+  /**
+   * Check that each field in the prevSchema can be populated in the newSchema except specified columns
+   * @param prevSchema prev schema.
+   * @param newSchema new schema
+   * @return true if prev schema is a projection of new schema.
+   */
+  public static boolean canProject(Schema prevSchema, Schema newSchema, Collection<String> exceptCols) {
     return prevSchema.getFields().stream()
+        .filter(f -> !exceptCols.contains(f.name()))
         .map(oldSchemaField -> SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField))
         .noneMatch(Objects::isNull);
   }
@@ -273,6 +295,35 @@ public class AvroSchemaUtils {
       return field != null;
     } catch (Exception e) {
       return false;
+    }
+  }
+
+  public static void checkSchemaCompatible(
+      Schema tableSchema,
+      Schema writerSchema,
+      Collection<String> dropPartitionColNames,
+      boolean shouldValidate,
+      boolean allowProjection) throws SchemaCompatibilityException {
+
+    String errorMessage = null;
+
+    if (!allowProjection && !canProject(tableSchema, writerSchema, dropPartitionColNames)) {
+      errorMessage = "Column dropping is not allowed";
+    }
+
+    // TODO(HUDI-4772) re-enable validations in case partition columns
+    //                 being dropped from the data-file after fixing the write schema
+    if (dropPartitionColNames.isEmpty() && shouldValidate && !isSchemaCompatible(tableSchema, writerSchema)) {
+      errorMessage = "Failed schema compatibility check";
+    }
+
+    if (errorMessage != null) {
+      String errorDetails = String.format(
+          "%s\nwriterSchema: %s\ntableSchema: %s",
+          errorMessage,
+          writerSchema,
+          tableSchema);
+      throw new SchemaCompatibilityException(errorDetails);
     }
   }
 }
