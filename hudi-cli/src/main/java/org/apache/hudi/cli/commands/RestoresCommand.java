@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.avro.model.HoodieInstantInfo;
@@ -42,13 +60,13 @@ public class RestoresCommand {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     List<HoodieInstant> restoreInstants = getRestoreInstants(activeTimeline, showInFlight);
 
-    final List<Comparable[]> rows = new ArrayList<>();
+    final List<Comparable[]> outputRows = new ArrayList<>();
     for (HoodieInstant restoreInstant : restoreInstants) {
-      populateRowsFromRestoreInstant(restoreInstant, rows, activeTimeline);
+      populateOutputFromRestoreInstant(restoreInstant, outputRows, activeTimeline);
     };
 
     TableHeader header = createResultHeader();
-    return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
+    return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, outputRows);
   }
 
   @ShellMethod(key = "show restore", value = "Show details of a restore instant")
@@ -70,11 +88,11 @@ public class RestoresCommand {
 
     // Assuming a single exact match is found in either completed or inflight instants
     HoodieInstant instant = matchingInstants.get(0);
-    List<Comparable[]> rows = new ArrayList<>();
-    populateRowsFromRestoreInstant(instant, rows, activeTimeline);
+    List<Comparable[]> outputRows = new ArrayList<>();
+    populateOutputFromRestoreInstant(instant, outputRows, activeTimeline);
 
     TableHeader header = createResultHeader();
-    return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
+    return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, outputRows);
   }
 
   private void addDetailsOfCompletedRestore(HoodieActiveTimeline activeTimeline, List<Comparable[]> rows,
@@ -93,16 +111,21 @@ public class RestoresCommand {
 
   private void addDetailsOfInflightRestore(HoodieActiveTimeline activeTimeline, List<Comparable[]> rows,
                                            HoodieInstant restoreInstant) throws IOException {
-    HoodieInstant instantKey = new HoodieInstant(HoodieInstant.State.REQUESTED, RESTORE_ACTION,
-            restoreInstant.getTimestamp());
-    Option<byte[]> instantDetails = activeTimeline.getInstantDetails(instantKey);
-    HoodieRestorePlan restorePlan = TimelineMetadataUtils
-            .deserializeAvroMetadata(instantDetails.get(), HoodieRestorePlan.class);
+    HoodieRestorePlan restorePlan = getRestorePlan(activeTimeline, restoreInstant);
     for (HoodieInstantInfo instantToRollback : restorePlan.getInstantsToRollback()) {
       Comparable[] dataRow = createDataRow(restoreInstant.getTimestamp(), instantToRollback.getCommitTime(), "",
               restoreInstant.getState());
       rows.add(dataRow);
     }
+  }
+
+  private HoodieRestorePlan getRestorePlan(HoodieActiveTimeline activeTimeline, HoodieInstant restoreInstant) throws IOException {
+    HoodieInstant instantKey = new HoodieInstant(HoodieInstant.State.REQUESTED, RESTORE_ACTION,
+            restoreInstant.getTimestamp());
+    Option<byte[]> instantDetails = activeTimeline.getInstantDetails(instantKey);
+    HoodieRestorePlan restorePlan = TimelineMetadataUtils
+            .deserializeAvroMetadata(instantDetails.get(), HoodieRestorePlan.class);
+    return restorePlan;
   }
 
   @NotNull
@@ -125,13 +148,13 @@ public class RestoresCommand {
             .addTableHeaderField(HoodieTableHeaderFields.HEADER_RESTORE_STATE);
   }
 
-  private void populateRowsFromRestoreInstant(HoodieInstant restoreInstant, List<Comparable[]> rows,
-                                              HoodieActiveTimeline activeTimeline) {
+  private void populateOutputFromRestoreInstant(HoodieInstant restoreInstant, List<Comparable[]> outputRows,
+                                                HoodieActiveTimeline activeTimeline) {
     try {
       if (restoreInstant.isInflight() || restoreInstant.isRequested()) {
-        addDetailsOfInflightRestore(activeTimeline, rows, restoreInstant);
+        addDetailsOfInflightRestore(activeTimeline, outputRows, restoreInstant);
       } else if (restoreInstant.isCompleted()) {
-        addDetailsOfCompletedRestore(activeTimeline, rows, restoreInstant);
+        addDetailsOfCompletedRestore(activeTimeline, outputRows, restoreInstant);
       }
     } catch (IOException e) {
       e.printStackTrace();
