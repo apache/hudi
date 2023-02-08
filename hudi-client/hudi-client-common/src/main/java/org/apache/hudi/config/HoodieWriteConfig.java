@@ -2306,7 +2306,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public WriteConcurrencyMode getWriteConcurrencyMode() {
-    return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
+    return WriteConcurrencyMode.valueOf(getStringOrDefault(WRITE_CONCURRENCY_MODE));
   }
 
   public boolean isEarlyConflictDetectionEnable() {
@@ -2823,7 +2823,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withWriteConcurrencyMode(WriteConcurrencyMode concurrencyMode) {
-      writeConfig.setValue(WRITE_CONCURRENCY_MODE, concurrencyMode.value());
+      writeConfig.setValue(WRITE_CONCURRENCY_MODE, concurrencyMode.name());
       return this;
     }
 
@@ -2973,7 +2973,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       // We check if "hoodie.cleaner.policy.failed.writes"
       // is properly set to LAZY for optimistic concurrency control
       String writeConcurrencyMode = writeConfig.getString(WRITE_CONCURRENCY_MODE);
-      if (WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value()
+      if (WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()
           .equalsIgnoreCase(writeConcurrencyMode)) {
         // In this case, we assume that the user takes care of setting the lock provider used
         writeConfig.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
@@ -2991,11 +2991,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       Objects.requireNonNull(writeConfig.getString(BASE_PATH));
       if (writeConfig.isEarlyConflictDetectionEnable()) {
         checkArgument(writeConfig.getString(WRITE_CONCURRENCY_MODE)
-                .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value()),
+                .equals(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()),
             "To use early conflict detection, set hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL");
       }
       if (writeConfig.getString(WRITE_CONCURRENCY_MODE)
-          .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value())) {
+          .equals(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
         checkArgument(!writeConfig.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)
             .equals(HoodieFailedWritesCleaningPolicy.EAGER.name()), "To enable optimistic concurrency control, set hoodie.cleaner.policy.failed.writes=LAZY");
       }
