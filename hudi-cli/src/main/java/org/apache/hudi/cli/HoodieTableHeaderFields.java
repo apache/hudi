@@ -105,6 +105,7 @@ public class HoodieTableHeaderFields {
    * Fields of Restore.
    */
   public static final String HEADER_RESTORE_INSTANT = "Restored " + HEADER_INSTANT;
+  public static final String HEADER_RESTORE_STATE = "Restore State";
 
   /**
    * Fields of Stats.

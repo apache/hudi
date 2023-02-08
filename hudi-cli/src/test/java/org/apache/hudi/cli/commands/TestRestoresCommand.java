@@ -127,10 +127,11 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
         HoodieRestoreMetadata metadata = TimelineMetadataUtils
                 .deserializeAvroMetadata(activeTimeline.getInstantDetails(instant).get(), HoodieRestoreMetadata.class);
         metadata.getInstantsToRollback().forEach(c -> {
-          Comparable[] row = new Comparable[3];
+          Comparable[] row = new Comparable[4];
           row[0] = metadata.getStartRestoreTime();
           row[1] = c;
           row[2] = metadata.getTimeTakenInMillis();
+          row[3] = HoodieInstant.State.COMPLETED.toString();
           rows.add(row);
         });
       } catch (IOException e) {
@@ -141,7 +142,8 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
     TableHeader header = new TableHeader()
             .addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
             .addTableHeaderField(HoodieTableHeaderFields.HEADER_RESTORE_INSTANT)
-            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TIME_TOKEN_MILLIS);
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TIME_TOKEN_MILLIS)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_RESTORE_STATE);
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false,
             -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);
@@ -168,14 +170,16 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
     TableHeader header = new TableHeader()
             .addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
             .addTableHeaderField(HoodieTableHeaderFields.HEADER_RESTORE_INSTANT)
-            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TIME_TOKEN_MILLIS);
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TIME_TOKEN_MILLIS)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_RESTORE_STATE);
 
     List<Comparable[]> rows = new ArrayList<>();
     instantMetadata.getInstantsToRollback().forEach((String rolledbackInstant) -> {
-      Comparable[] row = new Comparable[3];
+      Comparable[] row = new Comparable[4];
       row[0] = instantMetadata.getStartRestoreTime();
       row[1] = rolledbackInstant;
       row[2] = instantMetadata.getTimeTakenInMillis();
+      row[3] = HoodieInstant.State.COMPLETED.toString();
       rows.add(row);
     });
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1,
