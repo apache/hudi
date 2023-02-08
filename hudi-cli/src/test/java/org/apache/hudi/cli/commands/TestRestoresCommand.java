@@ -41,6 +41,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -106,25 +107,21 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
             .withBaseFilesInPartitions(partitionAndFileId)
             .addCommit("101");
 
-    hoodieTestTable.addCommit("102").
-            withBaseFilesInPartitions(partitionAndFileId);
+    hoodieTestTable.addCommit("102").withBaseFilesInPartitions(partitionAndFileId);
     HoodieSavepointMetadata savepointMetadata2 = hoodieTestTable.doSavepoint("102");
     hoodieTestTable.addSavepoint("102", savepointMetadata2);
 
-    hoodieTestTable.addCommit("103").
-            withBaseFilesInPartitions(partitionAndFileId);
+    hoodieTestTable.addCommit("103").withBaseFilesInPartitions(partitionAndFileId);
 
     BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config);
     client.rollback("103");
     client.restoreToSavepoint("102");
 
-    hoodieTestTable.addCommit("105").
-            withBaseFilesInPartitions(partitionAndFileId);
+    hoodieTestTable.addCommit("105").withBaseFilesInPartitions(partitionAndFileId);
     HoodieSavepointMetadata savepointMetadata = hoodieTestTable.doSavepoint("105");
     hoodieTestTable.addSavepoint("105", savepointMetadata);
 
-    hoodieTestTable.addCommit("106").
-            withBaseFilesInPartitions(partitionAndFileId);
+    hoodieTestTable.addCommit("106").withBaseFilesInPartitions(partitionAndFileId);
     client.rollback("106");
     client.restoreToSavepoint("105");
     client.close();
@@ -180,7 +177,7 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
     Object result = shell.evaluate(() -> "show restore --instant " + instant.getTimestamp());
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
-//    // get metadata of instant
+    // get metadata of instant
     HoodieRestoreMetadata instantMetadata = TimelineMetadataUtils.deserializeAvroMetadata(
             activeTimeline.getInstantDetails(instant).get(), HoodieRestoreMetadata.class);
 
