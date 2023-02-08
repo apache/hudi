@@ -1693,6 +1693,121 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result, expected);
   }
 
+  @Test
+  void testBulkInsertWithUtcTimezoneRead() {
+    TableEnvironment tableEnv = batchTableEnv;
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, "bulk_insert")
+        .option(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_INPUT, true)
+        .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, true)
+        .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, true)
+        .option(FlinkOptions.UTC_TIMEZONE, true)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    final String insertInto = "insert into t1 values\n"
+        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 18:00:02','par1'),\n"
+        + "('id1','Julian',53,TIMESTAMP '1970-01-01 18:00:03','par1')";
+
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, "["
+        + "+I[id1, Julian, 53, 1970-01-01T10:00:03, par1], "
+        + "+I[id2, Stephen, 33, 1970-01-01T10:00:02, par1]]", 4);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = ExecMode.class)
+  void testWriteAndWithoutUtcTimezoneReadParMiddle(ExecMode execMode) throws Exception {
+    boolean streaming = execMode == ExecMode.STREAM;
+    String hoodieTableDDL = "create table t1(\n"
+        + "  uuid varchar(20),\n"
+        + "  name varchar(10),\n"
+        + "  age int,\n"
+        + "  `partition` varchar(20),\n" // test streaming read with partition field in the middle
+        + "  ts timestamp(3),\n"
+        + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+        + ")\n"
+        + "PARTITIONED BY (`partition`)\n"
+        + "with (\n"
+        + "  'connector' = 'hudi',\n"
+        + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
+        + "  'read.utc-timezone' = 'true' ,\n"
+        + "  'read.streaming.enabled' = '" + streaming + "'\n"
+        + ")";
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 values\n"
+        + "('id1','Danny',23,'par1',TIMESTAMP '1970-01-01 08:00:01'),\n"
+        + "('id2','Stephen',33,'par1',TIMESTAMP '1970-01-01 08:00:02'),\n"
+        + "('id3','Julian',53,'par2',TIMESTAMP '1970-01-01 08:00:03'),\n"
+        + "('id4','Fabian',31,'par2',TIMESTAMP '1970-01-01 08:00:04'),\n"
+        + "('id5','Sophia',18,'par3',TIMESTAMP '1970-01-01 08:00:05'),\n"
+        + "('id6','Emma',20,'par3',TIMESTAMP '1970-01-01 08:00:06'),\n"
+        + "('id7','Bob',44,'par4',TIMESTAMP '1970-01-01 08:00:07'),\n"
+        + "('id8','Han',56,'par4',TIMESTAMP '1970-01-01 08:00:08')";
+    execInsertSql(streamTableEnv, insertInto);
+
+    final String expected = "["
+        + "+I[id1, Danny, 23, par1, 1970-01-01T00:00:01], "
+        + "+I[id2, Stephen, 33, par1, 1970-01-01T00:00:02], "
+        + "+I[id3, Julian, 53, par2, 1970-01-01T00:00:03], "
+        + "+I[id4, Fabian, 31, par2, 1970-01-01T00:00:04], "
+        + "+I[id5, Sophia, 18, par3, 1970-01-01T00:00:05], "
+        + "+I[id6, Emma, 20, par3, 1970-01-01T00:00:06], "
+        + "+I[id7, Bob, 44, par4, 1970-01-01T00:00:07], "
+        + "+I[id8, Han, 56, par4, 1970-01-01T00:00:08]]";
+
+    List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
+
+    assertRowsEquals(result, expected);
+
+    // insert another batch of data
+    execInsertSql(streamTableEnv, insertInto);
+    List<Row> result2 = execSelectSql(streamTableEnv, "select * from t1", execMode);
+    assertRowsEquals(result2, expected);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = ExecMode.class)
+  void testWriteAndWithoutUtcTimezoneReadWithTimestampMicros(ExecMode execMode) throws Exception {
+    boolean streaming = execMode == ExecMode.STREAM;
+    String hoodieTableDDL = sql("t1")
+        .field("id int")
+        .field("name varchar(10)")
+        .field("ts timestamp(6)")
+        .pkField("id")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_AS_STREAMING, streaming)
+        .option(FlinkOptions.UTC_TIMEZONE, true)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 values\n"
+        + "(1,'Danny',TIMESTAMP '2021-12-01 09:02:01.100001'),\n"
+        + "(2,'Stephen',TIMESTAMP '2021-12-02 11:04:02.200002'),\n"
+        + "(3,'Julian',TIMESTAMP '2021-12-03 21:14:03.300003'),\n"
+        + "(4,'Fabian',TIMESTAMP '2021-12-04 21:16:04.400004')";
+    execInsertSql(streamTableEnv, insertInto);
+
+    final String expected = "["
+        + "+I[1, Danny, 2021-12-01T01:02:01.100001], "
+        + "+I[2, Stephen, 2021-12-02T03:04:02.200002], "
+        + "+I[3, Julian, 2021-12-03T13:14:03.300003], "
+        + "+I[4, Fabian, 2021-12-04T13:16:04.400004]]";
+
+    List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
+    assertRowsEquals(result, expected);
+
+    // insert another batch of data
+    execInsertSql(streamTableEnv, insertInto);
+    List<Row> result2 = execSelectSql(streamTableEnv, "select * from t1", execMode);
+    assertRowsEquals(result2, expected);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
