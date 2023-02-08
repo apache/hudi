@@ -49,23 +49,23 @@ jobs:
         include:
           - scalaProfile: "scala-2.11"
             sparkProfile: "spark2.4"
-            sparkProjects: "hudi-spark-datasource/hudi-spark2"
+            sparkModules: "hudi-spark-datasource/hudi-spark2"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark2.4"
-            sparkProjects: "hudi-spark-datasource/hudi-spark2"
+            sparkModules: "hudi-spark-datasource/hudi-spark2"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.1"
-            sparkProjects: "hudi-spark-datasource/hudi-spark3.1.x"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.1.x"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.2"
-            sparkProjects: "hudi-spark-datasource/hudi-spark3.2.x"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.2.x"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.3"
-            sparkProjects: "hudi-spark-datasource/hudi-spark3.3.x"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
 
     steps:
       - uses: actions/checkout@v2
@@ -93,14 +93,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark,$SPARK_PROJECTS $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark,$SPARK_MODULES $MVN_ARGS
       - name: FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
         run:
-          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-spark-datasource/hudi-spark,$SPARK_PROJECTS $MVN_ARGS
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-spark-datasource/hudi-spark,$SPARK_MODULES $MVN_ARGS
 
   test-flink:
     runs-on: ubuntu-latest
