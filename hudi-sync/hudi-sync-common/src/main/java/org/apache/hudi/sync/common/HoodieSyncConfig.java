@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sync.common;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -35,6 +37,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.concurrent.Immutable;
+
 import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
@@ -51,6 +55,11 @@ import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIO
 /**
  * Configs needed to sync data into external meta stores, catalogs, etc.
  */
+@Immutable
+@ConfigClassProperty(name = "Common Metadata Sync Configs",
+    groupName = ConfigGroups.Names.META_SYNC,
+    areCommonConfigs = true,
+    description = "")
 public class HoodieSyncConfig extends HoodieConfig {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSyncConfig.class);

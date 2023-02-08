@@ -25,8 +25,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before_after;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
 import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_BEGIN_PARTITION;
@@ -168,12 +169,11 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> SUPPLEMENTAL_LOGGING_MODE = ConfigOptions
       .key("cdc.supplemental.logging.mode")
       .stringType()
-      .defaultValue("cdc_data_before_after") // default record all the change log images
+      .defaultValue(data_before_after.name())
       .withFallbackKeys(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key())
-      .withDescription("The supplemental logging mode:"
-          + "1) 'cdc_op_key': persist the 'op' and the record key only,"
-          + "2) 'cdc_data_before': persist the additional 'before' image,"
-          + "3) 'cdc_data_before_after': persist the 'before' and 'after' images at the same time");
+      .withDescription("Setting 'op_key_only' persists the 'op' and the record key only, "
+          + "setting 'data_before' persists the additional 'before' image, "
+          + "and setting 'data_before_after' persists the additional 'before' and 'after' images.");
 
   // ------------------------------------------------------------------------
   //  Metadata table Options
@@ -438,7 +438,9 @@ public class FlinkOptions extends HoodieConfig {
       .key(HoodieWriteConfig.KEYGENERATOR_TYPE.key())
       .stringType()
       .defaultValue(KeyGeneratorType.SIMPLE.name())
-      .withDescription("Key generator type, that implements will extract the key out of incoming record");
+      .withDescription("Key generator type, that implements will extract the key out of incoming record. "
+          + "**Note** This is being actively worked on. Please use "
+          + "`hoodie.datasource.write.keygenerator.class` instead.");
 
   public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
   public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
@@ -546,6 +548,12 @@ public class FlinkOptions extends HoodieConfig {
       .booleanType()
       .defaultValue(true)
       .withDescription("Whether to sort the inputs by specific fields for bulk insert tasks, default true");
+
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY = ConfigOptions
+          .key("write.bulk_insert.sort_input.by_record_key")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to sort the inputs by record keys for bulk insert tasks, default false");
 
   public static final ConfigOption<Integer> WRITE_SORT_MEMORY = ConfigOptions
       .key("write.sort.memory")

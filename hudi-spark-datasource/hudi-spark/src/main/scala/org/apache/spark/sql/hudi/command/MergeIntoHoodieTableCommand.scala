@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.avro.Schema
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_NULLABLE, SQL_MERGE_INTO_WRITES}
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -37,11 +38,11 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeRef
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.HoodieSqlUtils.getMergeIntoTargetTableId
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig.withCombinedOptions
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.combineOptions
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.CoercedAttributeReference
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
-import org.apache.spark.sql.hudi.{ProvidesHoodieConfig, SerDeUtils}
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.types.{BooleanType, StructType}
 
 import java.util.Base64
@@ -327,7 +328,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       }).toMap
     // Serialize the Map[UpdateCondition, UpdateAssignments] to base64 string
     val serializedUpdateConditionAndExpressions = Base64.getEncoder
-      .encodeToString(SerDeUtils.toBytes(updateConditionToAssignments))
+      .encodeToString(Serializer.toBytes(updateConditionToAssignments))
     writeParams += (PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
       serializedUpdateConditionAndExpressions)
 
@@ -337,7 +338,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         .getOrElse(Literal.create(true, BooleanType))
       // Serialize the Map[DeleteCondition, empty] to base64 string
       val serializedDeleteCondition = Base64.getEncoder
-        .encodeToString(SerDeUtils.toBytes(Map(deleteCondition -> Seq.empty[Assignment])))
+        .encodeToString(Serializer.toBytes(Map(deleteCondition -> Seq.empty[Assignment])))
       writeParams += (PAYLOAD_DELETE_CONDITION -> serializedDeleteCondition)
     }
 
@@ -413,7 +414,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         rewriteCondition -> formatAssignments
       }).toMap
     Base64.getEncoder.encodeToString(
-      SerDeUtils.toBytes(insertConditionAndAssignments))
+      Serializer.toBytes(insertConditionAndAssignments))
   }
 
   /**
@@ -503,38 +504,40 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
-    withCombinedOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf) {
-      Map(
-        "path" -> path,
-        RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
-        PRECOMBINE_FIELD.key -> preCombineField,
-        TBL_NAME.key -> hoodieCatalogTable.tableName,
-        PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
-        HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
-        URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
-        KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
-        SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
-        HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
-        HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
-        HiveSyncConfigHolder.HIVE_SYNC_MODE.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_MODE),
-        HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> targetTableDb,
-        HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> targetTableName,
-        HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
-        HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> tableConfig.getPartitionFieldProp,
-        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
-        SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
-        PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
+    val overridingOpts = Map(
+      "path" -> path,
+      RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
+      PRECOMBINE_FIELD.key -> preCombineField,
+      TBL_NAME.key -> hoodieCatalogTable.tableName,
+      PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
+      HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
+      URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
+      KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
+      SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
+      HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
+      HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
+      HiveSyncConfigHolder.HIVE_SYNC_MODE.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_MODE),
+      HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> targetTableDb,
+      HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> targetTableName,
+      HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
+      HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> tableConfig.getPartitionFieldProp,
+      HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
+      SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
+      PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
 
-        // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
-        //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'
-        //       compatibility b/w table's schema and incoming one is not necessary in this case since we can
-        //       be cherry-picking only selected columns from the incoming dataset to be inserted/updated in the
-        //       target table, ie partially updating)
-        AVRO_SCHEMA_VALIDATE_ENABLE.key -> "false",
-        RECONCILE_SCHEMA.key -> "false",
-        "hoodie.datasource.write.schema.canonicalize" -> "false"
-      )
-    }
+      // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
+      //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'
+      //       compatibility b/w table's schema and incoming one is not necessary in this case since we can
+      //       be cherry-picking only selected columns from the incoming dataset to be inserted/updated in the
+      //       target table, ie partially updating)
+      AVRO_SCHEMA_VALIDATE_ENABLE.key -> "false",
+      RECONCILE_SCHEMA.key -> "false",
+      CANONICALIZE_NULLABLE.key -> "false",
+      SQL_MERGE_INTO_WRITES.key -> "true"
+    )
+
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+      defaultOpts = Map.empty, overridingOpts = overridingOpts)
   }
 }
 

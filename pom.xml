@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>0.13.0-SNAPSHOT</version>
+  <version>0.14.0-SNAPSHOT</version>
   <description>Apache Hudi brings stream style processing on big data</description>
   <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
@@ -1872,6 +1872,19 @@
       </build>
     </profile>
     <profile>
+      <id>hudi-platform-service</id>
+      <activation>
+        <property>
+          <name>deployArtifacts</name>
+          <value>true</value>
+        </property>
+      </activation>
+      <modules>
+        <module>hudi-platform-service</module>
+        <module>packaging/hudi-metaserver-server-bundle</module>
+      </modules>
+    </profile>
+    <profile>
       <id>integration-tests</id>
       <activation>
         <property>
@@ -2417,13 +2430,6 @@
       </activation>
     </profile>
 
-    <profile>
-      <id>hudi-platform-service</id>
-      <modules>
-        <module>hudi-platform-service</module>
-        <module>packaging/hudi-metaserver-server-bundle</module>
-      </modules>
-    </profile>
   </profiles>
 
 </project>

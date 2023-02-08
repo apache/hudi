@@ -162,7 +162,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(FlinkOptions.CDC_ENABLED, true)
-        .option(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE, mode.getValue())
+        .option(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE, mode.name())
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
@@ -1064,6 +1064,32 @@ public class ITTestHoodieDataSource {
         + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
         + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+  }
+
+  @Test
+  void testBulkInsertWithSortByRecordKey() {
+    TableEnvironment tableEnv = batchTableEnv;
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, "bulk_insert")
+        .option(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_INPUT, true)
+        .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, true)
+        .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, true)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    final String insertInto = "insert into t1 values\n"
+        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"
+        + "('id1','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par1')";
+
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, "["
+        + "+I[id1, Julian, 53, 1970-01-01T00:00:03, par1], "
+        + "+I[id2, Stephen, 33, 1970-01-01T00:00:02, par1]]", 4);
   }
 
   @Test

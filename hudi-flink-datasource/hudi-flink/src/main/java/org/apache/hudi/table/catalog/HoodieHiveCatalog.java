@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -386,9 +387,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         if (!parameters.containsKey(FlinkOptions.HIVE_STYLE_PARTITIONING.key())) {
           // read the table config first
           final boolean hiveStyle;
-          HoodieTableConfig tableConfig = StreamerUtil.getTableConfig(path, hiveConf);
-          if (tableConfig != null && tableConfig.contains(FlinkOptions.HIVE_STYLE_PARTITIONING.key())) {
-            hiveStyle = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
+          Option<HoodieTableConfig> tableConfig = StreamerUtil.getTableConfig(path, hiveConf);
+          if (tableConfig.isPresent() && tableConfig.get().contains(FlinkOptions.HIVE_STYLE_PARTITIONING.key())) {
+            hiveStyle = Boolean.parseBoolean(tableConfig.get().getHiveStylePartitioningEnable());
           } else {
             // fallback to the partition path pattern
             Path hoodieTablePath = new Path(path);
@@ -596,7 +597,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     serdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(!useRealTimeInputFormat));
     serdeProperties.put("serialization.format", "1");
 
-    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark(catalogTable, hiveConf, properties, partitionKeys));
+    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark(catalogTable, hiveConf, properties, partitionKeys, withOperationField));
 
     sd.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
 

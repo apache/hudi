@@ -20,8 +20,6 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
-import org.apache.hudi.common.config.ConfigClassProperty;
-import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
@@ -64,6 +62,9 @@ import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before;
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before_after;
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.op_key_only;
 
 /**
  * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are loaded from hoodie.properties, these properties are usually set during
@@ -72,14 +73,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * @see HoodieTableMetaClient
  * @since 0.3.0
  */
-@ConfigClassProperty(name = "Table Configurations",
-    groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that persist across writes and read on a Hudi table "
-        + " like  base, log file formats, table name, creation schema, table version layouts. "
-        + " Configurations are loaded from hoodie.properties, these properties are usually set during "
-        + "initializing a path as hoodie base path and rarely changes during "
-        + "the lifetime of the table. Writers/Queries' configurations are validated against these "
-        + " each time for compatibility.")
 public class HoodieTableConfig extends HoodieConfig {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
@@ -137,15 +130,15 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> CDC_SUPPLEMENTAL_LOGGING_MODE = ConfigProperty
       .key("hoodie.table.cdc.supplemental.logging.mode")
-      .defaultValue(HoodieCDCSupplementalLoggingMode.OP_KEY.getValue())
+      .defaultValue(data_before_after.name())
       .withValidValues(
-          HoodieCDCSupplementalLoggingMode.OP_KEY.getValue(),
-          HoodieCDCSupplementalLoggingMode.WITH_BEFORE.getValue(),
-          HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER.getValue())
+          op_key_only.name(),
+          data_before.name(),
+          data_before_after.name())
       .sinceVersion("0.13.0")
-      .withDocumentation("When 'cdc_op_key' persist the 'op' and the record key only,"
-          + " when 'cdc_data_before' persist the additional 'before' image ,"
-          + " and when 'cdc_data_before_after', persist the 'before' and 'after' at the same time.");
+      .withDocumentation("Setting 'op_key_only' persists the 'op' and the record key only, "
+          + "setting 'data_before' persists the additional 'before' image, "
+          + "and setting 'data_before_after' persists the additional 'before' and 'after' images.");
 
   public static final ConfigProperty<String> CREATE_SCHEMA = ConfigProperty
       .key("hoodie.table.create.schema")
@@ -659,7 +652,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public HoodieCDCSupplementalLoggingMode cdcSupplementalLoggingMode() {
-    return HoodieCDCSupplementalLoggingMode.parse(getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE));
+    return HoodieCDCSupplementalLoggingMode.valueOf(getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE));
   }
 
   public String getKeyGeneratorClassName() {

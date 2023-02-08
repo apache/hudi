@@ -24,10 +24,10 @@ package org.apache.hudi.common.table.cdc;
  *
  * AS_IS:
  *   For this type, there must be a real cdc log file from which we get the whole/part change data.
- *   when `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_data_before_after', it keeps all the fields about the
+ *   when `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#data_before_after}, it keeps all the fields about the
  *   change data, including `op`, `ts_ms`, `before` and `after`. So read it and return directly,
  *   no more other files need to be loaded.
- *   when `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_data_before', it keeps the `op`, the key and the
+ *   when `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#data_before}, it keeps the `op`, the key and the
  *   `before` of the changing record. When `op` is equal to 'i' or 'u', need to get the current record from the
  *   current base/log file as `after`.
  *   when `hoodie.table.cdc.supplemental.logging.mode` is 'op_key', it just keeps the `op` and the key of
@@ -42,7 +42,7 @@ package org.apache.hudi.common.table.cdc;
  *   file is new-coming, so we can load this, mark all the records with `i`, and treat them as
  *   the value of `after`. The value of `before` for each record is null.
  *
- * BASE_FILE_INSERT:
+ * BASE_FILE_DELETE:
  *   For this type, there must be an empty file at the current instant, but a non-empty base file
  *   at the previous instant. First we find this base file that has the same file group and belongs
  *   to the previous instant. Then load this, mark all the records with `d`, and treat them as
@@ -67,7 +67,7 @@ package org.apache.hudi.common.table.cdc;
  *   a whole file group. First we find this file group. Then load this, mark all the records with
  *   `d`, and treat them as the value of `before`. The value of `after` for each record is null.
  */
-public enum HoodieCDCInferCase {
+public enum HoodieCDCInferenceCase {
 
   AS_IS,
   BASE_FILE_INSERT,

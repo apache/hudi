@@ -17,10 +17,11 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.exception.SchemaCompatibilityException
 
-class TestMergeIntoTable extends HoodieSparkSqlTestBase {
+class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
   test("Test MergeInto Basic") {
     withRecordType()(withTempDir { tmp =>

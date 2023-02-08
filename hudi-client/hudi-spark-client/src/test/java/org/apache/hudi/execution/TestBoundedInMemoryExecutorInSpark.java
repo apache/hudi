@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
+import org.apache.hudi.common.util.queue.ExecutorType;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -41,17 +42,20 @@ import java.util.List;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.execution.HoodieLazyInsertIterable.getCloningTransformer;
+import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness {
 
   private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
+
+  private final HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+      .withExecutorType(ExecutorType.BOUNDED_IN_MEMORY.name())
+      .withWriteBufferLimitBytes(1024)
+      .build(false);
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -74,8 +78,6 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
     final int recordNumber = 100;
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, recordNumber);
 
-    HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
     HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
@@ -94,8 +96,8 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
 
     BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
     try {
-      executor = new BoundedInMemoryExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
-          getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
+      executor = new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
+          getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig), getPreExecuteRunnable());
       int result = executor.execute();
 
       assertEquals(100, result);
@@ -113,8 +115,6 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
   public void testInterruptExecutor() {
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
 
-    HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
     HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
@@ -136,8 +136,8 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
         };
 
     BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor =
-        new BoundedInMemoryExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
-            getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
+        new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
+            getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig), getPreExecuteRunnable());
 
     // Interrupt the current thread (therefore triggering executor to throw as soon as it
     // invokes [[get]] on the [[CompletableFuture]])
@@ -154,8 +154,6 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
 
   @Test
   public void testExecutorTermination() {
-    HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
     Iterator<GenericRecord> unboundedRecordIter = new Iterator<GenericRecord>() {
       @Override
       public boolean hasNext() {
@@ -181,8 +179,8 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
         };
 
     BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor =
-        new BoundedInMemoryExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), unboundedRecordIter,
-            consumer, getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA),
+        new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), unboundedRecordIter,
+            consumer, getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
             getPreExecuteRunnable());
     executor.shutdownNow();
     boolean terminatedGracefully = executor.awaitTermination();

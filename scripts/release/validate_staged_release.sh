@@ -88,16 +88,6 @@ else
     ARTIFACT_SUFFIX=${RELEASE_VERSION}-rc${RC_NUM}
 fi
 
-
-rm -rf $LOCAL_SVN_DIR
-mkdir $LOCAL_SVN_DIR
-cd $LOCAL_SVN_DIR
-
-echo "Downloading from svn co ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO}"
-
-(bash -c "svn co ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO} $REDIRECT") || (echo -e "\t\t Unable to checkout  ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO} to $REDIRECT. Please run with --verbose to get details\n" && exit -1)
-
-echo "Validating hudi-${ARTIFACT_SUFFIX} with release type \"${REPO_TYPE}\""
 if [ $RELEASE_TYPE == "release" ]; then
   ARTIFACT_PREFIX=
 elif [ $RELEASE_TYPE == "dev" ]; then
@@ -106,7 +96,21 @@ else
   echo "Unexpected RELEASE_TYPE: $RELEASE_TYPE"
   exit 1;
 fi
-cd ${HUDI_REPO}/${ARTIFACT_PREFIX}${ARTIFACT_SUFFIX}
+
+rm -rf $LOCAL_SVN_DIR
+mkdir $LOCAL_SVN_DIR
+cd $LOCAL_SVN_DIR
+
+echo "Current directory: `pwd`"
+
+FULL_SVN_URL=${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO}/${ARTIFACT_PREFIX}${ARTIFACT_SUFFIX}
+
+echo "Downloading from svn co $FULL_SVN_URL"
+
+(bash -c "svn co $FULL_SVN_URL $REDIRECT") || (echo -e "\t\t Unable to checkout  $FULL_SVN_URL to $REDIRECT. Please run with --verbose to get details\n" && exit -1)
+
+echo "Validating hudi-${ARTIFACT_SUFFIX} with release type \"${REPO_TYPE}\""
+cd ${ARTIFACT_PREFIX}${ARTIFACT_SUFFIX}
 $SHASUM hudi-${ARTIFACT_SUFFIX}.src.tgz > got.sha512
 
 echo "Checking Checksum of Source Release"
@@ -126,11 +130,11 @@ cd hudi-${ARTIFACT_SUFFIX}
 
 ### BEGIN: Binary Files Check
 echo "Checking for binary files in source release"
-numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
+numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "release/" | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
 
 if [ "$numBinaryFiles" -gt "0" ]; then
   echo -e "There were non-text files in source release. [ERROR]\n Please check below\n"
-  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' |  grep -va 'application/xml'
+  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "release/release_guide" | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' |  grep -va 'application/xml'
   exit 1
 fi
 echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
@@ -163,17 +167,17 @@ echo -e "\t\tNotice file exists ? [OK]\n"
 
 ### Licensing Check
 echo "Performing custom Licensing Check "
-numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'banner.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
+numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.jpg' | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'banner.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
 if [ "$numfilesWithNoLicense" -gt  "0" ]; then
   echo "There were some source files that did not have Apache License [ERROR]"
-  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'banner.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
+  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.jpg' | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'banner.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
   exit 1
 fi
 echo -e "\t\tLicensing Check Passed [OK]\n"
 
 ### Checking for RAT
 echo "Running RAT Check"
-(bash -c "mvn apache-rat:check $REDIRECT") || (echo -e "\t\t Rat Check Failed. [ERROR]\n\t\t Please run with --verbose to get details\n" && exit 1)
+(bash -c "mvn apache-rat:check -DdeployArtifacts=true $REDIRECT") || (echo -e "\t\t Rat Check Failed. [ERROR]\n\t\t Please run with --verbose to get details\n" && exit 1)
 echo -e "\t\tRAT Check Passed [OK]\n"
 
 popd
