@@ -36,37 +36,19 @@ public class RestoresCommand {
           @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
           @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
                   defaultValue = "false") final boolean headerOnly,
-          @ShellOption(value = {"--show-inflight"}, help = "Also list restores that are in flight",
+          @ShellOption(value = {"--inflight"}, help = "Also list restores that are in flight",
                   defaultValue = "false") final boolean showInFlight) {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    List<HoodieInstant> hoodieInstants = getInstants(activeTimeline, showInFlight);
+    List<HoodieInstant> restoreInstants = getRestoreInstants(activeTimeline, showInFlight);
 
     final List<Comparable[]> rows = new ArrayList<>();
-    TableHeader header = new TableHeader()
-            .addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
-            .addTableHeaderField(HoodieTableHeaderFields.HEADER_RESTORE_INSTANT)
-            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TIME_TOKEN_MILLIS)
-            .addTableHeaderField(HoodieTableHeaderFields.HEADER_RESTORE_STATE);
-
-    hoodieInstants.forEach((HoodieInstant restoreInstant) -> {
+    for (HoodieInstant restoreInstant : restoreInstants) {
       populateRowsFromRestoreInstant(restoreInstant, rows, activeTimeline);
-    });
+    };
 
+    TableHeader header = createResultHeader();
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
-  }
-
-  private void populateRowsFromRestoreInstant(HoodieInstant restoreInstant, List<Comparable[]> rows,
-                                              HoodieActiveTimeline activeTimeline) {
-    try {
-      if (restoreInstant.isInflight() || restoreInstant.isRequested()) {
-        addDetailsOfInflightRestore(activeTimeline, rows, restoreInstant);
-      } else {
-        addDetailsOfCompletedRestore(activeTimeline, rows, restoreInstant);
-      }
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
   }
 
   @ShellMethod(key = "show restore", value = "Show details of a restore instant")
@@ -76,14 +58,7 @@ public class RestoresCommand {
           @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
           @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
           @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
-                  defaultValue = "false") final boolean headerOnly)
-          throws IOException {
-
-    TableHeader header = new TableHeader()
-            .addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
-            .addTableHeaderField(HoodieTableHeaderFields.HEADER_RESTORE_INSTANT)
-            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TIME_TOKEN_MILLIS)
-            .addTableHeaderField(HoodieTableHeaderFields.HEADER_RESTORE_STATE);
+                  defaultValue = "false") final boolean headerOnly) {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     List<HoodieInstant> matchingInstants = activeTimeline.filterCompletedInstants().filter(completed ->
@@ -98,6 +73,7 @@ public class RestoresCommand {
     List<Comparable[]> rows = new ArrayList<>();
     populateRowsFromRestoreInstant(instant, rows, activeTimeline);
 
+    TableHeader header = createResultHeader();
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
@@ -107,14 +83,12 @@ public class RestoresCommand {
     Option<byte[]> instantDetails = activeTimeline.getInstantDetails(restoreInstant);
     instantMetadata = TimelineMetadataUtils
             .deserializeAvroMetadata(instantDetails.get(), HoodieRestoreMetadata.class);
-    instantMetadata.getInstantsToRollback().forEach((String rolledbackInstant) -> {
-      Comparable[] row = new Comparable[4];
-      row[0] = instantMetadata.getStartRestoreTime();
-      row[1] = rolledbackInstant;
-      row[2] = instantMetadata.getTimeTakenInMillis();
-      row[3] = restoreInstant.getState();
+
+    for (String rolledbackInstant : instantMetadata.getInstantsToRollback()) {
+      Comparable[] row = createDataRow(instantMetadata.getStartRestoreTime(), rolledbackInstant,
+              instantMetadata.getTimeTakenInMillis(), restoreInstant.getState());
       rows.add(row);
-    });
+    }
   }
 
   private void addDetailsOfInflightRestore(HoodieActiveTimeline activeTimeline, List<Comparable[]> rows,
@@ -124,24 +98,54 @@ public class RestoresCommand {
     Option<byte[]> instantDetails = activeTimeline.getInstantDetails(instantKey);
     HoodieRestorePlan restorePlan = TimelineMetadataUtils
             .deserializeAvroMetadata(instantDetails.get(), HoodieRestorePlan.class);
-    restorePlan.getInstantsToRollback().forEach((HoodieInstantInfo rolledbackInstant) -> {
-      Comparable[] row = new Comparable[4];
-      row[0] = restoreInstant.getTimestamp();
-      row[1] = rolledbackInstant.getCommitTime();
-      row[2] = "";
-      row[3] = restoreInstant.getState();
-      rows.add(row);
-    });
+    for (HoodieInstantInfo instantToRollback : restorePlan.getInstantsToRollback()) {
+      Comparable[] dataRow = createDataRow(restoreInstant.getTimestamp(), instantToRollback.getCommitTime(), "",
+              restoreInstant.getState());
+      rows.add(dataRow);
+    }
   }
 
   @NotNull
-  private List<HoodieInstant> getInstants(HoodieActiveTimeline activeTimeline, boolean showInFlight) {
-    List<HoodieInstant> hoodieInstants = new ArrayList<>();
-    hoodieInstants.addAll(activeTimeline.getRestoreTimeline().filterCompletedInstants().getInstants());
-    if (showInFlight) {
-      hoodieInstants.addAll(activeTimeline.getRestoreTimeline().filterInflights().getInstants());
+  private List<HoodieInstant> getRestoreInstants(HoodieActiveTimeline activeTimeline, boolean includeInFlight) {
+    List<HoodieInstant> restores = new ArrayList<>();
+    restores.addAll(activeTimeline.getRestoreTimeline().filterCompletedInstants().getInstants());
+
+    if (includeInFlight) {
+      restores.addAll(activeTimeline.getRestoreTimeline().filterInflights().getInstants());
     }
-    return hoodieInstants;
+
+    return restores;
+  }
+
+  private TableHeader createResultHeader() {
+    return new TableHeader()
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_RESTORE_INSTANT)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TIME_TOKEN_MILLIS)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_RESTORE_STATE);
+  }
+
+  private void populateRowsFromRestoreInstant(HoodieInstant restoreInstant, List<Comparable[]> rows,
+                                              HoodieActiveTimeline activeTimeline) {
+    try {
+      if (restoreInstant.isInflight() || restoreInstant.isRequested()) {
+        addDetailsOfInflightRestore(activeTimeline, rows, restoreInstant);
+      } else if (restoreInstant.isCompleted()) {
+        addDetailsOfCompletedRestore(activeTimeline, rows, restoreInstant);
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+
+  private Comparable[] createDataRow(Comparable restoreInstantTimestamp, Comparable rolledbackInstantTimestamp,
+                                         Comparable timeInterval, Comparable state) {
+    Comparable[] row = new Comparable[4];
+    row[0] = restoreInstantTimestamp;
+    row[1] = rolledbackInstantTimestamp;
+    row[2] = timeInterval;
+    row[3] = state;
+    return row;
   }
 
 }
