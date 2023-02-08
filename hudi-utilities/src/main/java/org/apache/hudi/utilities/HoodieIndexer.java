@@ -80,7 +80,7 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
  * hoodie.metadata.index.async=true
  * hoodie.metadata.index.column.stats.enable=true
  * hoodie.metadata.index.check.timeout.seconds=60
- * hoodie.write.concurrency.mode=optimistic_concurrency_control
+ * hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL
  * hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
  */
 public class HoodieIndexer {

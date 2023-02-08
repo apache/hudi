@@ -268,7 +268,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     this.cleanDFSDirs();
 
     TypedProperties props = getProperties();
-    props.setProperty("hoodie.write.concurrency.mode", "optimistic_concurrency_control");
+    props.setProperty("hoodie.write.concurrency.mode", "OPTIMISTIC_CONCURRENCY_CONTROL");
     props.setProperty("hoodie.failed.writes.cleaner.policy", "LAZY");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs, basePath + "/test-source"
         + ".properties");

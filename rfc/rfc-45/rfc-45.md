@@ -225,7 +225,7 @@ hoodie.metadata.index.column.stats.enable=true
 # set indexing catchup timeout
 hoodie.metadata.index.check.timeout.seconds=60
 # set OCC concurrency mode
-hoodie.write.concurrency.mode=optimistic_concurrency_control
+hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL
 # set lock provider
 hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.InProcessLockProvider
 ```
