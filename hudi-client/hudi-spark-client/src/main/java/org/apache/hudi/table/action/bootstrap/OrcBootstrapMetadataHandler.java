@@ -64,17 +64,17 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
 
   @Override
   void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle, Path sourceFilePath, KeyGeneratorInterface keyGenerator,
-                        String partitionPath, Schema avroSchema) throws Exception {
+                        String partitionPath, Schema schema) throws Exception {
     // TODO support spark orc reader
     if (config.getRecordMerger().getRecordType() == HoodieRecordType.SPARK) {
       throw new UnsupportedOperationException();
     }
     BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void> wrapper = null;
     Reader orcReader = OrcFile.createReader(sourceFilePath, OrcFile.readerOptions(table.getHadoopConf()));
-    TypeDescription orcSchema = orcReader.getSchema();
+    TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(schema);
     try (RecordReader reader = orcReader.rows(new Reader.Options(table.getHadoopConf()).schema(orcSchema))) {
       wrapper = new BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
-          new OrcReaderIterator(reader, avroSchema, orcSchema), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
+          new OrcReaderIterator(reader, schema, orcSchema), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
         String recKey = keyGenerator.getKey(inp).getRecordKey();
         GenericRecord gr = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA);
         gr.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recKey);
