@@ -113,8 +113,8 @@ public class FlinkClusteringConfig extends Configuration {
   public static final String SEQ_FIFO = "FIFO";
   public static final String SEQ_LIFO = "LIFO";
   @Parameter(names = {"--seq"}, description = "Clustering plan execution sequence, two options are supported:\n"
-      + "1). FIFO: execute the oldest plan first;\n"
-      + "2). LIFO: execute the latest plan first, by default FIFO")
+      + "1). FIFO: execute the oldest plan first, by default FIFO;\n"
+      + "2). LIFO: execute the latest plan first")
   public String clusteringSeq = SEQ_FIFO;
 
   @Parameter(names = {"--service"}, description = "Flink Clustering runs in service mode, disable by default")
