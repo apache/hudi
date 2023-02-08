@@ -53,7 +53,7 @@ public class RowDataParquetWriteSupport extends WriteSupport<RowData> {
   @Override
   public void prepareForWrite(RecordConsumer recordConsumer) {
     // should make the utc timestamp configurable
-    this.writer = new ParquetRowDataWriter(recordConsumer, rowType, schema, true);
+    this.writer = new ParquetRowDataWriter(recordConsumer, rowType, schema, false);
   }
 
   @Override

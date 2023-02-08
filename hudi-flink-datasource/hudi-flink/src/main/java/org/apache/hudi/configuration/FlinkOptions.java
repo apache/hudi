@@ -275,7 +275,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> UTC_TIMEZONE = ConfigOptions
       .key("read.utc-timezone")
       .booleanType()
-      .defaultValue(true)
+      .defaultValue(false)
       .withDescription("Use UTC timezone or local timezone to the conversion between epoch"
           + " time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x"
           + " use UTC timezone, by default true");

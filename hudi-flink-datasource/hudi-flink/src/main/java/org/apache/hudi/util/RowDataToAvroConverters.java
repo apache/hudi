@@ -166,7 +166,7 @@ public class RowDataToAvroConverters {
 
                 @Override
                 public Object convert(Schema schema, Object object) {
-                  return ((TimestampData) object).toInstant().toEpochMilli();
+                  return ((TimestampData) object).toTimestamp().getTime();
                 }
               };
         } else if (precision <= 6) {
