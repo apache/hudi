@@ -49,12 +49,8 @@ public class RDDCustomColumnsSortPartitioner<T>
   private final boolean consistentLogicalTimestampEnabled;
 
   public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config, HoodieTableConfig tableConfig) {
-    super(tableConfig);
-    this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
-    this.orderByColumnNames = getOrderByColumnNames(config);
-    this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
-
-    checkState(orderByColumnNames.length > 0);
+    this(getOrderByColumnNames(config), new Schema.Parser().parse(config.getSchema()),
+        config.isConsistentLogicalTimestampEnabled(), tableConfig);
   }
 
   public RDDCustomColumnsSortPartitioner(String[] columnNames,
