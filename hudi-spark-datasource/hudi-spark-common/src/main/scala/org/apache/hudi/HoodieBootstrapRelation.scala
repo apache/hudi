@@ -110,7 +110,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       dataSchema = dataFileSchema,
       partitionSchema = partitionSchema,
       requiredSchema = requiredDataFileSchema,
-      // TODO elaborate
+      // TODO elaborate (we can't filter as we need record sequences to be aligned b/w data and skeleton files)
       filters = if (requiredSkeletonFileSchema.isEmpty) filters else Seq(),
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
@@ -121,7 +121,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       dataSchema = skeletonSchema,
       partitionSchema = partitionSchema,
       requiredSchema = requiredSkeletonFileSchema,
-      // TODO elaborate
+      // TODO elaborate (we can't filter as we need record sequences to be aligned b/w data and skeleton files)
       filters = if (requiredDataFileSchema.isEmpty) filters else Seq(),
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()

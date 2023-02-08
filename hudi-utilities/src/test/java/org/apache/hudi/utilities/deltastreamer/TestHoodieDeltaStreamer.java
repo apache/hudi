@@ -660,6 +660,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertRecordCount(1950, newDatasetBasePath, sqlContext);
     res.registerTempTable("bootstrapped");
     assertEquals(1950, sqlContext.sql("select distinct _hoodie_record_key from bootstrapped").count());
+    // NOTE: To fetch record's count Spark will optimize the query fetching minimal possible amount
+    //       of data, which might not provide adequate amount of test coverage
+    sqlContext.sql("select * from bootstrapped").show();
 
     StructField[] fields = res.schema().fields();
     List<String> fieldNames = Arrays.asList(res.schema().fieldNames());
