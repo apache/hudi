@@ -67,6 +67,12 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 
   override val mandatoryFields: Seq[String] = Seq.empty
 
+  // NOTE: Bootstrap relation have to always extract partition values from the partition-path as this is a
+  //       default Spark behavior: Spark by default strips partition-columns from the data schema and does
+  //       NOT persist them in the data files, instead parsing them from partition-paths (on the fly) whenever
+  //       table is queried
+  override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = true
+
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit] = {
     val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
     fileSlices.map { fileSlice =>
