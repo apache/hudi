@@ -83,12 +83,8 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
       }
 
       override def next(): InternalRow = {
-        combinedRow.withLeft(skeletonFileIterator.next())
-        combinedRow.withRight(dataFileIterator.next())
-
-        unsafeProjection(combinedRow)
+        unsafeProjection(combinedRow(skeletonFileIterator.next(), dataFileIterator.next()))
       }
-
     }
   }
 
