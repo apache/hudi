@@ -206,6 +206,10 @@ public class AvroToRowDataConverters {
   }
 
   private static AvroToRowDataConverter createTimestampConverter(int precision) {
+    return createTimestampConverter(precision,false);
+  }
+
+  private static AvroToRowDataConverter createTimestampConverter(int precision,boolean utcTimestamp) {
     final ChronoUnit chronoUnit;
     if (precision <= 3) {
       chronoUnit = ChronoUnit.MILLIS;
@@ -213,9 +217,9 @@ public class AvroToRowDataConverters {
       chronoUnit = ChronoUnit.MICROS;
     } else {
       throw new IllegalArgumentException(
-          "Avro does not support TIMESTAMP type with precision: "
-              + precision
-              + ", it only supports precision less than 6.");
+              "Avro does not support TIMESTAMP type with precision: "
+                      + precision
+                      + ", it only supports precision less than 6.");
     }
     return avroObject -> {
       final Instant instant;
@@ -230,10 +234,14 @@ public class AvroToRowDataConverters {
           instant = Instant.ofEpochMilli(jodaConverter.convertTimestamp(avroObject));
         } else {
           throw new IllegalArgumentException(
-              "Unexpected object type for TIMESTAMP logical type. Received: " + avroObject);
+                  "Unexpected object type for TIMESTAMP logical type. Received: " + avroObject);
         }
       }
-      return TimestampData.fromInstant(instant);
+      if (utcTimestamp) {
+        return TimestampData.fromInstant(instant);
+      } else {
+        return TimestampData.fromTimestamp(Timestamp.from(instant));
+      }
     };
   }
 
