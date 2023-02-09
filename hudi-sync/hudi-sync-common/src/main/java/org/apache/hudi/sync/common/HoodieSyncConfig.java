@@ -203,6 +203,7 @@ public class HoodieSyncConfig extends HoodieConfig {
   }
 
   public static class HoodieSyncConfigParams {
+    //cli
     @Parameter(names = {"--database"}, description = "name of the target database in meta store")
     public String databaseName;
     @Parameter(names = {"--table"}, description = "name of the target table in meta store")

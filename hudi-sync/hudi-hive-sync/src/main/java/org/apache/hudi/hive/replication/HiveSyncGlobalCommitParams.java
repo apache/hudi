@@ -45,6 +45,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
     + "  timestamp from already successful sync on other clusters but that can also fail."
     + "  The tool does not roll back any synced partitions but only the timestamp.")
 public class HiveSyncGlobalCommitParams {
+  //cli
 
   private static final Logger LOG = LogManager.getLogger(HiveSyncGlobalCommitParams.class);
 
