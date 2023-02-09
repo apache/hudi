@@ -73,8 +73,8 @@ public class TestHiveTableSchemaEvolution {
 
   @Test
   public void testCopyOnWriteTableForHive() throws Exception {
-    String tableName = "huditest" + new Date().getTime();
-    File file = new File(System.getProperty("java.io.tmpdir") + tableName);
+    String tableName = genTableName();
+    File file = new File(genTablePath(tableName));
     if (HoodieSparkUtils.gteqSpark3_1()) {
       sparkSession.sql("set hoodie.schema.on.read.enable=true");
       String path = new Path(file.getCanonicalPath()).toUri().toString();
@@ -94,8 +94,8 @@ public class TestHiveTableSchemaEvolution {
 
   @Test
   public void testMergeOnReadTableForHive() throws Exception {
-    String tableName = "huditest" + new Date().getTime();
-    File file = new File(System.getProperty("java.io.tmpdir") + tableName);
+    String tableName = genTableName();
+    File file = new File(genTablePath(tableName));
     if (HoodieSparkUtils.gteqSpark3_1()) {
       sparkSession.sql("set hoodie.schema.on.read.enable=true");
       String path = new Path(file.getCanonicalPath()).toUri().toString();
@@ -145,5 +145,13 @@ public class TestHiveTableSchemaEvolution {
     assertEquals(jobConf.get(serdeConstants.LIST_COLUMNS), "_hoodie_commit_time,_hoodie_commit_seqno,"
         + "_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,col0,col1,col2");
     assertEquals(jobConf.get(serdeConstants.LIST_COLUMN_TYPES), "string,string,string,string,string,int,double,string");
+  }
+
+  private static String genTableName() {
+    return "huditest" + new Date().getTime();
+  }
+
+  private static String genTablePath(String tableName) {
+    return String.format("%s/%s", System.getProperty("java.io.tmpdir"), tableName);
   }
 }
