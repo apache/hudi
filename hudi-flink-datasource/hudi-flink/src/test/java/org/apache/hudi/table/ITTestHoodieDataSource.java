@@ -384,7 +384,7 @@ public class ITTestHoodieDataSource {
     final String query = String.format("select * from t1/*+ options('read.start-commit'='%s')*/",
             FlinkOptions.START_COMMIT_EARLIEST);
 
-    List<Row> rows = execSelectSql(streamTableEnv, query, 10);
+    List<Row> rows = CollectionUtil.iterableToList(() -> streamTableEnv.sqlQuery(query).execute().collect());
     // batch read will not lose data when cleaned clustered files.
     assertRowsEquals(rows, CollectionUtils.combine(TestData.DATA_SET_SOURCE_INSERT_FIRST_COMMIT,
         TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT));
