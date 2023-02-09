@@ -23,16 +23,13 @@ import org.apache.spark.{Partition, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.types.StructType
 
 class HoodieBootstrapRDD(@transient spark: SparkSession,
-                        dataReadFunction: BaseFileReader,
-                        skeletonReadFunction: BaseFileReader,
-                        regularReadFunction: BaseFileReader,
-                        dataSchema: StructType,
-                        skeletonSchema: StructType,
-                        requiredColumns: Array[String],
-                        @transient splits: Seq[HoodieBootstrapSplit])
+                         bootstrapDataFileReader: BaseFileReader,
+                         bootstrapSkeletonFileReader: BaseFileReader,
+                         nativeFileReader: BaseFileReader,
+                         requiredColumns: Array[String],
+                         @transient splits: Seq[HoodieBootstrapSplit])
   extends RDD[InternalRow](spark.sparkContext, Nil) {
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
@@ -49,26 +46,25 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
       }
     }
 
-    var partitionedFileIterator: Iterator[InternalRow] = null
+    bootstrapPartition.split.skeletonFile match {
+      case Some(skeletonFile) =>
+        // It is a bootstrap split. Check both skeleton and data files.
+        if (bootstrapDataFileReader.schema.isEmpty) {
+          // No data column to fetch, hence fetch only from skeleton file
+          bootstrapSkeletonFileReader.read(skeletonFile)
+        } else if (bootstrapSkeletonFileReader.schema.isEmpty) {
+          // No metadata column to fetch, hence fetch only from data file
+          bootstrapDataFileReader.read(bootstrapPartition.split.dataFile)
+        } else {
+          // Fetch from both data and skeleton file, and merge
+          val dataFileIterator = bootstrapDataFileReader.read(bootstrapPartition.split.dataFile)
+          val skeletonFileIterator = bootstrapSkeletonFileReader.read(skeletonFile)
+          merge(skeletonFileIterator, dataFileIterator)
+        }
 
-    if (bootstrapPartition.split.skeletonFile.isDefined) {
-      // It is a bootstrap split. Check both skeleton and data files.
-      if (dataSchema.isEmpty) {
-        // No data column to fetch, hence fetch only from skeleton file
-        partitionedFileIterator = skeletonReadFunction.read(bootstrapPartition.split.skeletonFile.get)
-      } else if (skeletonSchema.isEmpty) {
-        // No metadata column to fetch, hence fetch only from data file
-        partitionedFileIterator = dataReadFunction.read(bootstrapPartition.split.dataFile)
-      } else {
-        // Fetch from both data and skeleton file, and merge
-        val dataFileIterator = dataReadFunction.read(bootstrapPartition.split.dataFile)
-        val skeletonFileIterator = skeletonReadFunction.read(bootstrapPartition.split.skeletonFile.get)
-        partitionedFileIterator = merge(skeletonFileIterator, dataFileIterator)
-      }
-    } else {
-      partitionedFileIterator = regularReadFunction.read(bootstrapPartition.split.dataFile)
+      case _ =>
+        nativeFileReader.read(bootstrapPartition.split.dataFile)
     }
-    partitionedFileIterator
   }
 
   def merge(skeletonFileIterator: Iterator[InternalRow], dataFileIterator: Iterator[InternalRow]): Iterator[InternalRow] = {
@@ -82,15 +78,15 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
 
   // TODO revisit
   def mergeInternalRow(skeletonRow: InternalRow, dataRow: InternalRow): InternalRow = {
-    val skeletonArr  = skeletonRow.copy().toSeq(skeletonSchema)
-    val dataArr = dataRow.copy().toSeq(dataSchema)
+    val skeletonArr  = skeletonRow.copy().toSeq(bootstrapSkeletonFileReader.schema)
+    val dataArr = dataRow.copy().toSeq(bootstrapDataFileReader.schema)
     // We need to return it in the order requested
     val mergedArr = requiredColumns.map(col => {
-      if (skeletonSchema.fieldNames.contains(col)) {
-        val idx = skeletonSchema.fieldIndex(col)
+      if (bootstrapSkeletonFileReader.schema.fieldNames.contains(col)) {
+        val idx = bootstrapSkeletonFileReader.schema.fieldIndex(col)
         skeletonArr(idx)
       } else {
-        val idx = dataSchema.fieldIndex(col)
+        val idx = bootstrapDataFileReader.schema.fieldIndex(col)
         dataArr(idx)
       }
     })
