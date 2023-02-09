@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{Option, StringUtils}
-import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -828,6 +828,33 @@ object DataSourceOptionsHelper {
       }
     })
     translatedOpt.toMap
+  }
+
+  /**
+   * Some config keys differ from what user sets and whats part of table Config. this method assists in fetching the
+   * right table config and populating write configs.
+   * @param tableConfig table config of interest.
+   * @param params incoming write params.
+   * @return missing params that needs to be added to incoming write params
+   */
+  def loadParamsFromTableConfig(tableConfig: HoodieTableConfig, params: Map[String, String]) : Map[String, String] = {
+    val mergedParamsOpt = scala.collection.mutable.Map[String, String]()
+    if (!params.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) && tableConfig.getRecordKeyFieldProp != null) {
+      mergedParamsOpt ++= Map(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> tableConfig.getRecordKeyFieldProp)
+    }
+    if (!params.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) && tableConfig.getPartitionFieldProp != null) {
+      mergedParamsOpt ++= Map(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> tableConfig.getPartitionFieldProp)
+    }
+    if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
+      mergedParamsOpt ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)
+    }
+    if (!params.contains(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()) && tableConfig.getPreCombineField != null) {
+      mergedParamsOpt ++= Map(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key -> tableConfig.getPreCombineField)
+    }
+    if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
+      mergedParamsOpt ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
+    }
+    mergedParamsOpt.toMap
   }
 
   def parametersWithReadDefaults(parameters: Map[String, String]): Map[String, String] = {

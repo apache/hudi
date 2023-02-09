@@ -22,6 +22,7 @@ import org.apache.avro.generic.{GenericData, GenericRecord}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
+import org.apache.hudi.DataSourceOptionsHelper.loadParamsFromTableConfig
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
@@ -122,14 +123,18 @@ object HoodieSparkSqlWriter {
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
     var tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
-    val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode)
-    val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(parameters)
+    // get initial params and validate configs
+    val initialRawParams = getInitialParams(optParams)
+    val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(initialRawParams)
     val timestampKeyGeneratorConfigs = extractConfigsRelatedToTimestampBasedKeyGenerator(
-      originKeyGeneratorClassName, parameters)
+      originKeyGeneratorClassName, initialRawParams)
 
     // Validate datasource and tableconfig keygen are the same
     validateKeyGeneratorConfig(originKeyGeneratorClassName, tableConfig);
     validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite);
+
+    // re-use table configs and set write config details
+    val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode)
 
     val databaseName = hoodieConfig.getStringOrDefault(HoodieTableConfig.DATABASE_NAME, "")
     val tblName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME,
@@ -1037,14 +1042,18 @@ object HoodieSparkSqlWriter {
   private def mergeParamsAndGetHoodieConfig(optParams: Map[String, String],
                                             tableConfig: HoodieTableConfig, mode: SaveMode): (Map[String, String], HoodieConfig) = {
     val translatedOptions = DataSourceWriteOptions.translateSqlOptions(optParams)
-    val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.parametersWithWriteDefaults(translatedOptions)
+    val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.parametersWithWriteDefaults(translatedOptions, tableConfig == null)
     if (!mergedParams.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
       && mergedParams.contains(KEYGENERATOR_CLASS_NAME.key)) {
-      mergedParams(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = mergedParams(KEYGENERATOR_CLASS_NAME.key)
+      mergedParams(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = mergedParams(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)
     }
     if (null != tableConfig && mode != SaveMode.Overwrite) {
+      loadParamsFromTableConfig(tableConfig, optParams).foreach((kv) => mergedParams(kv._1) = kv._2)
+
       tableConfig.getProps.foreach { case (key, value) =>
-        mergedParams(key) = value
+        if (!mergedParams.containsKey(key)) { // over-ride only if not explicitly set by the user.
+          mergedParams(key) = value
+        }
       }
     }
 
@@ -1054,6 +1063,20 @@ object HoodieSparkSqlWriter {
     }
     val params = mergedParams.toMap
     (params, HoodieWriterUtils.convertMapToHoodieConfig(params))
+  }
+
+  private def getInitialParams(optParams: Map[String, String]): (Map[String, String]) = {
+    val translatedOptions = DataSourceWriteOptions.translateSqlOptions(optParams)
+    val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.getRawInitialParams(translatedOptions)
+    if (!mergedParams.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
+      && mergedParams.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)) {
+      mergedParams(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = mergedParams(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)
+    }
+    // use preCombineField to fill in PAYLOAD_ORDERING_FIELD_PROP_KEY
+    if (mergedParams.contains(PRECOMBINE_FIELD.key())) {
+      mergedParams.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, mergedParams(PRECOMBINE_FIELD.key()))
+    }
+     mergedParams.toMap
   }
 
   private def extractConfigsRelatedToTimestampBasedKeyGenerator(keyGenerator: String,

@@ -38,9 +38,9 @@ import scala.collection.JavaConverters._
  */
 object HoodieWriterUtils {
 
-  def javaParametersWithWriteDefaults(parameters: java.util.Map[String, String]): java.util.Map[String, String] = {
+  /*def javaParametersWithWriteDefaults(parameters: java.util.Map[String, String]): java.util.Map[String, String] = {
     mapAsJavaMap(parametersWithWriteDefaults(parameters.asScala.toMap))
-  }
+  }*/
 
   /**
     * Add default options for unspecified write options keys.
@@ -48,16 +48,13 @@ object HoodieWriterUtils {
     * @param parameters
     * @return
     */
-  def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
+  def parametersWithWriteDefaults(parameters: Map[String, String], isFreshTable: Boolean = false): Map[String, String] = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
     val props = new Properties()
     props.putAll(parameters)
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
-    hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
-    hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
-    hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     hoodieConfig.setDefaultValue(ENABLE)
     hoodieConfig.setDefaultValue(COMMIT_METADATA_KEYPREFIX)
     hoodieConfig.setDefaultValue(INSERT_DROP_DUPS)
@@ -86,6 +83,20 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(RECONCILE_SCHEMA)
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
+    if (isFreshTable) { // only set default values for a fresh table. these might be used for config validation in subsequent commits and hence
+      // we should not setting defaults. (infer function could result in setting wrong defaults)
+      hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
+      hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
+    }
+    Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
+  }
+
+  def getRawInitialParams(parameters: Map[String, String]): Map[String, String] = {
+    val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
+    val props = new Properties()
+    props.putAll(parameters)
+    val hoodieConfig: HoodieConfig = new HoodieConfig(props)
+    // do not set any default as this is called before validation.
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
@@ -150,6 +161,10 @@ object HoodieWriterUtils {
           && datasourcePreCombineKey != tableConfigPreCombineKey) {
           diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
         }
+        // not set in tableConfig, but incoming has some valid value
+        if (tableConfigPreCombineKey == null && datasourcePreCombineKey != null) {
+          diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\tnull\n")
+        }
 
         val datasourceKeyGen = getOriginKeyGenerator(params)
         val tableConfigKeyGen = tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)
@@ -195,6 +210,11 @@ object HoodieWriterUtils {
         if (nonPartitionedTableConfig && simpleKeyDataSourceConfig) {
           diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
         }
+      }
+      // in default scenario(simple key gen,there won't be any entry in table config, but we need to ensure new incoming also
+      // matches it
+      if (tableConfigKeyGen == null && datasourceKeyGen != null && !datasourceKeyGen.equalsIgnoreCase(classOf[SimpleKeyGenerator].getCanonicalName)) {
+        diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t " + classOf[SimpleKeyGenerator].getCanonicalName + "\n")
       }
     }
 
