@@ -60,11 +60,12 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
   void testFilterInstantsWithRange() {
     HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient, true);
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true);
     IncrementalInputSplits iis = IncrementalInputSplits.builder()
         .conf(conf)
         .path(new Path(basePath))
         .rowType(TestConfigurations.ROW_TYPE)
-        .skipClustering(true)
+        .skipClustering(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING))
         .build();
 
     HoodieInstant commit1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "1");
