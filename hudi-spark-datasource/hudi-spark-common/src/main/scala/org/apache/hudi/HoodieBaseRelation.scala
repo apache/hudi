@@ -66,7 +66,12 @@ import scala.util.{Failure, Success, Try}
 
 trait HoodieFileSplit {}
 
-case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String, internalSchema: Option[InternalSchema] = None)
+case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String, internalSchema: Option[InternalSchema] = None) {
+
+  def this(structTypeSchema: StructType) =
+    this(structTypeSchema, convertToAvroSchema(structTypeSchema).toString)
+
+}
 
 case class HoodieTableState(tablePath: String,
                             latestCommitTimestamp: Option[String],
@@ -604,8 +609,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       val prunedRequiredSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
 
       (partitionSchema,
-        HoodieTableSchema(prunedDataStructSchema, convertToAvroSchema(prunedDataStructSchema).toString),
-        HoodieTableSchema(prunedRequiredSchema, convertToAvroSchema(prunedRequiredSchema).toString))
+        new HoodieTableSchema(prunedDataStructSchema),
+        new HoodieTableSchema(prunedRequiredSchema))
     } else {
       (StructType(Nil), tableSchema, requiredSchema)
     }
