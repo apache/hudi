@@ -190,7 +190,7 @@ class TestDataSourceForBootstrap {
     // TODO(HUDI-5602) troubleshoot
     val expectedDF = bootstrapMode match {
       case "METADATA_ONLY" =>
-        sort(sourceDF).withColumn("datestr", lit(null))
+        sort(sourceDF)
       case "FULL_RECORD" =>
         sort(sourceDF)
     }
