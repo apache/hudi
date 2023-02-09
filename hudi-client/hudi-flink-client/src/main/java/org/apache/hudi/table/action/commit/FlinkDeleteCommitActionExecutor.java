@@ -21,21 +21,27 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
 
-public class FlinkDeleteCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseFlinkCommitActionExecutor<T> {
+/**
+ * Flink delete commit action executor.
+ */
+public class FlinkDeleteCommitActionExecutor<T> extends BaseFlinkCommitActionExecutor<T> {
   private final List<HoodieKey> keys;
 
   public FlinkDeleteCommitActionExecutor(HoodieEngineContext context,
-                                         HoodieWriteConfig config, HoodieTable table,
-                                         String instantTime, List<HoodieKey> keys) {
-    super(context, config, table, instantTime, WriteOperationType.DELETE);
+                                         HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+                                         HoodieWriteConfig config,
+                                         HoodieTable table,
+                                         String instantTime,
+                                         List<HoodieKey> keys) {
+    super(context, writeHandle, config, table, instantTime, WriteOperationType.DELETE);
     this.keys = keys;
   }
 

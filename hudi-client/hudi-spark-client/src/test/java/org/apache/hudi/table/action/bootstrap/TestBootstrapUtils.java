@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -47,13 +49,15 @@ public class TestBootstrapUtils extends HoodieClientTestBase {
     });
 
     // Files inside partitions and marker directories
-    List<String> files = Arrays.asList(
-        "2016/04/15/1_1-0-1_20190528120000.parquet",
-        "2016/04/15/2_1-0-1_20190528120000.parquet",
-        "2016/05/16/3_1-0-1_20190528120000.parquet",
-        "2016/05/16/4_1-0-1_20190528120000.parquet",
-        "2016/04/17/5_1-0-1_20190528120000.parquet",
-        "2016/04/17/6_1-0-1_20190528120000.parquet");
+    List<String> files = Stream.of(
+        "2016/04/15/1_1-0-1_20190528120000",
+        "2016/04/15/2_1-0-1_20190528120000",
+        "2016/05/16/3_1-0-1_20190528120000",
+        "2016/05/16/4_1-0-1_20190528120000",
+        "2016/04/17/5_1-0-1_20190528120000",
+        "2016/04/17/6_1-0-1_20190528120000")
+        .map(file -> file + metaClient.getTableConfig().getBaseFileFormat().getFileExtension())
+        .collect(Collectors.toList());
 
     files.forEach(f -> {
       try {

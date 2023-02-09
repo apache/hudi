@@ -112,10 +112,7 @@ public class HoodieWithTimelineServer implements Serializable {
 
       try (BufferedReader rd = new BufferedReader(new InputStreamReader(response.getEntity().getContent()))) {
         StringBuilder result = new StringBuilder();
-        String line;
-        while ((line = rd.readLine()) != null) {
-          result.append(line);
-        }
+        rd.lines().forEach(result::append);
         System.out.println("Got result (" + result + ")");
         return result.toString();
       } catch (IOException e) {

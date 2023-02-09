@@ -293,7 +293,7 @@ public class MercifulJsonConverter {
         for (Object v : (List) value) {
           listRes.add(convertJsonToAvroField(v, name, elementSchema));
         }
-        return Pair.of(true, listRes);
+        return Pair.of(true, new GenericData.Array<>(schema, listRes));
       }
     };
   }

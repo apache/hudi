@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -25,6 +26,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -38,6 +40,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -46,6 +49,7 @@ import java.util.UUID;
  */
 public class HoodieTestUtils {
 
+  public static final String HOODIE_DATABASE = "test_incremental";
   public static final String RAW_TRIPS_TEST_NAME = "raw_trips";
   public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
   public static final int DEFAULT_LOG_VERSION = 1;
@@ -63,9 +67,14 @@ public class HoodieTestUtils {
     return init(getDefaultHadoopConf(), basePath, tableType);
   }
 
-  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath) throws IOException {
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, Properties properties) throws IOException {
+    return init(getDefaultHadoopConf(), basePath, tableType, properties);
+  }
+
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable) throws IOException {
     Properties props = new Properties();
-    props.setProperty(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH, bootstrapBasePath);
+    props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
+    props.put(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE.key(), bootstrapIndexEnable);
     return init(getDefaultHadoopConf(), basePath, tableType, props);
   }
 
@@ -86,29 +95,69 @@ public class HoodieTestUtils {
                                            String tableName)
       throws IOException {
     Properties properties = new Properties();
-    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
+    properties.setProperty(HoodieTableConfig.NAME.key(), tableName);
     return init(hadoopConf, basePath, tableType, properties);
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                           HoodieFileFormat baseFileFormat)
+                                           HoodieFileFormat baseFileFormat, String databaseName)
       throws IOException {
     Properties properties = new Properties();
-    properties.setProperty(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME, baseFileFormat.toString());
+    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
+    return init(hadoopConf, basePath, tableType, properties, databaseName);
+  }
+
+  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                           HoodieFileFormat baseFileFormat) throws IOException {
+    return init(hadoopConf, basePath, tableType, baseFileFormat, false, null, true);
+  }
+
+  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                           HoodieFileFormat baseFileFormat, boolean setKeyGen, String keyGenerator, boolean populateMetaFields)
+      throws IOException {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
+    if (setKeyGen) {
+      properties.setProperty("hoodie.datasource.write.keygenerator.class", keyGenerator);
+    }
+    properties.setProperty("hoodie.populate.meta.fields", Boolean.toString(populateMetaFields));
     return init(hadoopConf, basePath, tableType, properties);
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                           Properties properties)
+                                           Properties properties) throws IOException {
+    return init(hadoopConf, basePath, tableType, properties, null);
+  }
+
+  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                           Properties properties, String databaseName)
       throws IOException {
-    properties.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, RAW_TRIPS_TEST_NAME);
-    properties.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
-    properties.putIfAbsent(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
+    HoodieTableMetaClient.PropertyBuilder builder =
+        HoodieTableMetaClient.withPropertyBuilder()
+            .setDatabaseName(databaseName)
+            .setTableName(RAW_TRIPS_TEST_NAME)
+            .setTableType(tableType)
+            .setPayloadClass(HoodieAvroPayload.class);
+
+    String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
+    if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
+      builder.setPartitionFields("some_nonexistent_field");
+    }
+
+    Properties processedProperties = builder.fromProperties(properties).build();
+
+    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, processedProperties);
+  }
+
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat) throws IOException {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
+    props.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.name());
+    return init(getDefaultHadoopConf(), basePath, tableType, props);
   }
 
   public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {
-    // Using Kyro as the default serializer in Spark Jobs
+    // Using Kryo as the default serializer in Spark Jobs
     Kryo kryo = new Kryo();
     kryo.register(HoodieTableMetaClient.class, new JavaSerializer());
 
@@ -118,9 +167,9 @@ public class HoodieTestUtils {
     output.close();
 
     Input input = new Input(new ByteArrayInputStream(baos.toByteArray()));
-    T deseralizedObject = kryo.readObject(input, clazz);
+    T deserializedObject = kryo.readObject(input, clazz);
     input.close();
-    return deseralizedObject;
+    return deserializedObject;
   }
 
   public static List<HoodieWriteStat> generateFakeHoodieWriteStat(int limit) {
@@ -142,5 +191,18 @@ public class HoodieTestUtils {
       writeStatList.add(writeStat);
     }
     return writeStatList;
+  }
+
+  public static void createCompactionCommitInMetadataTable(
+      Configuration hadoopConf, HoodieWrapperFileSystem wrapperFs, String basePath,
+      String instantTime) throws IOException {
+    // This is to simulate a completed compaction commit in metadata table timeline,
+    // so that the commits on data table timeline can be archived
+    // Note that, if metadata table is enabled, instants in data table timeline,
+    // which are more recent than the last compaction on the metadata table,
+    // are not archived (HoodieTimelineArchiveLog::getInstantsToArchive)
+    String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+    HoodieTestUtils.init(hadoopConf, metadataTableBasePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestDataGenerator.createCommitFile(metadataTableBasePath, instantTime + "001", wrapperFs.getConf());
   }
 }

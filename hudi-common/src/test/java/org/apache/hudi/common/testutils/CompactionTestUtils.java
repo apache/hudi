@@ -110,7 +110,7 @@ public class CompactionTestUtils {
       }
     });
 
-    metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath(), true);
+    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).setLoadActiveTimelineOnLoad(true).build();
     Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> pendingCompactionMap =
         CompactionUtils.getAllPendingCompactionOperations(metaClient);
 
@@ -189,7 +189,7 @@ public class CompactionTestUtils {
       }
     }).collect(Collectors.toList());
     return new HoodieCompactionPlan(ops.isEmpty() ? null : ops, new HashMap<>(),
-        CompactionUtils.LATEST_COMPACTION_METADATA_VERSION);
+        CompactionUtils.LATEST_COMPACTION_METADATA_VERSION, null, null);
   }
 
   /**

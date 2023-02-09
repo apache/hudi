@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -36,8 +37,8 @@ public class TestConcatenatingIterator {
   @Test
   public void testConcatBasic() {
     Iterator<Integer> i1 = Arrays.asList(5, 3, 2, 1).iterator();
-    Iterator<Integer> i2 = new ArrayList<Integer>().iterator(); // empty iterator
-    Iterator<Integer> i3 = Arrays.asList(3).iterator();
+    Iterator<Integer> i2 = Collections.emptyIterator(); // empty iterator
+    Iterator<Integer> i3 = Collections.singletonList(3).iterator();
 
     ConcatenatingIterator<Integer> ci = new ConcatenatingIterator<>(Arrays.asList(i1, i2, i3));
     List<Integer> allElements = new ArrayList<>();
@@ -51,9 +52,9 @@ public class TestConcatenatingIterator {
 
   @Test
   public void testConcatError() {
-    Iterator<Integer> i1 = new ArrayList<Integer>().iterator(); // empty iterator
+    Iterator<Integer> i1 = Collections.emptyIterator(); // empty iterator
 
-    ConcatenatingIterator<Integer> ci = new ConcatenatingIterator<>(Arrays.asList(i1));
+    ConcatenatingIterator<Integer> ci = new ConcatenatingIterator<>(Collections.singletonList(i1));
     assertFalse(ci.hasNext());
     try {
       ci.next();

@@ -45,7 +45,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
 
 /**
  * Given a path is a part of - Hoodie table = accepts ONLY the latest version of each path - Non-Hoodie table = then
@@ -71,7 +74,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   /**
    * Paths that are known to be non-hoodie tables.
    */
-  private Set<String> nonHoodiePathCache;
+  Set<String> nonHoodiePathCache;
 
   /**
    * Table Meta Client Cache.
@@ -93,7 +96,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   }
 
   public HoodieROTablePathFilter(Configuration conf) {
-    this.hoodiePathCache = new HashMap<>();
+    this.hoodiePathCache = new ConcurrentHashMap<>();
     this.nonHoodiePathCache = new HashSet<>();
     this.conf = new SerializableConfiguration(conf);
     this.metaClientCache = new HashMap<>();
@@ -167,16 +170,32 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       }
 
       if (baseDir != null) {
+        // Check whether baseDir in nonHoodiePathCache
+        if (nonHoodiePathCache.contains(baseDir.toString())) {
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("Accepting non-hoodie path from cache: " + path);
+          }
+          return true;
+        }
         HoodieTableFileSystemView fsView = null;
         try {
           HoodieTableMetaClient metaClient = metaClientCache.get(baseDir.toString());
           if (null == metaClient) {
-            metaClient = new HoodieTableMetaClient(fs.getConf(), baseDir.toString(), true);
+            metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).setLoadActiveTimelineOnLoad(true).build();
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 
-          fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
-              metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
+          if (getConf().get(TIMESTAMP_AS_OF.key()) != null) {
+            // Build FileSystemViewManager with specified time, it's necessary to set this config when you may
+            // access old version files. For example, in spark side, using "hoodie.datasource.read.paths"
+            // which contains old version files, if not specify this value, these files will be filtered.
+            fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext,
+                metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()),
+                metaClient.getActiveTimeline().filterCompletedInstants().findInstantsBeforeOrEquals(getConf().get(TIMESTAMP_AS_OF.key())));
+          } else {
+            fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
+                metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
+          }
           String partition = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());
           // populate the cache
@@ -198,9 +217,10 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
         } catch (TableNotFoundException e) {
           // Non-hoodie path, accept it.
           if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("(1) Caching non-hoodie path under %s \n", folder.toString()));
+            LOG.debug(String.format("(1) Caching non-hoodie path under %s with basePath %s \n", folder.toString(), baseDir.toString()));
           }
           nonHoodiePathCache.add(folder.toString());
+          nonHoodiePathCache.add(baseDir.toString());
           return true;
         } finally {
           if (fsView != null) {

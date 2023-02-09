@@ -32,11 +32,14 @@ import org.apache.hudi.common.util.Functions.Function3;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.http.HttpStatus;
+import org.apache.http.client.HttpResponseException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -65,7 +68,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
       try {
         return preferredFunction.apply();
       } catch (RuntimeException re) {
-        LOG.error("Got error running preferred function. Trying secondary", re);
+        handleRuntimeException(re);
         errorOnPreferredView = true;
         return secondaryFunction.apply();
       }
@@ -80,7 +83,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
       try {
         return preferredFunction.apply(val);
       } catch (RuntimeException re) {
-        LOG.error("Got error running preferred function. Trying secondary", re);
+        handleRuntimeException(re);
         errorOnPreferredView = true;
         return secondaryFunction.apply(val);
       }
@@ -96,7 +99,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
       try {
         return preferredFunction.apply(val, val2);
       } catch (RuntimeException re) {
-        LOG.error("Got error running preferred function. Trying secondary", re);
+        handleRuntimeException(re);
         errorOnPreferredView = true;
         return secondaryFunction.apply(val, val2);
       }
@@ -112,10 +115,18 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
       try {
         return preferredFunction.apply(val, val2, val3);
       } catch (RuntimeException re) {
-        LOG.error("Got error running preferred function. Trying secondary", re);
+        handleRuntimeException(re);
         errorOnPreferredView = true;
         return secondaryFunction.apply(val, val2, val3);
       }
+    }
+  }
+
+  private void handleRuntimeException(RuntimeException re) {
+    if (re.getCause() instanceof HttpResponseException && ((HttpResponseException)re.getCause()).getStatusCode() == HttpStatus.SC_BAD_REQUEST) {
+      LOG.warn("Got error running preferred function. Likely due to another concurrent writer in progress. Trying secondary");
+    } else {
+      LOG.error("Got error running preferred function. Trying secondary", re);
     }
   }
 
@@ -133,6 +144,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   public Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
     return execute(partitionPath, maxCommitTime, preferredView::getLatestBaseFilesBeforeOrOn,
         secondaryView::getLatestBaseFilesBeforeOrOn);
+  }
+
+  @Override
+  public Map<String, Stream<HoodieBaseFile>> getAllLatestBaseFilesBeforeOrOn(String maxCommitTime) {
+    return execute(maxCommitTime, preferredView::getAllLatestBaseFilesBeforeOrOn,
+        secondaryView::getAllLatestBaseFilesBeforeOrOn);
   }
 
   @Override
@@ -215,6 +232,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations() {
+    return execute(preferredView::getPendingLogCompactionOperations, secondaryView::getPendingLogCompactionOperations);
+  }
+
+  @Override
   public Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering() {
     return execute(preferredView::getFileGroupsInPendingClustering, secondaryView::getFileGroupsInPendingClustering);
   }
@@ -229,6 +251,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   public void reset() {
     preferredView.reset();
     secondaryView.reset();
+    errorOnPreferredView = false;
   }
 
   @Override
@@ -243,8 +266,9 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   @Override
   public void sync() {
-    preferredView.reset();
-    secondaryView.reset();
+    preferredView.sync();
+    secondaryView.sync();
+    errorOnPreferredView = false;
   }
 
   @Override

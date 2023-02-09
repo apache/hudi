@@ -24,8 +24,6 @@ import org.apache.hudi.integ.testsuite.generator.LazyRecordGeneratorIterator;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 
-import java.util.List;
-
 public class DeleteConverter implements Converter<GenericRecord, GenericRecord> {
 
   private final String schemaStr;

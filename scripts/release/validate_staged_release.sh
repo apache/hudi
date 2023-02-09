@@ -78,9 +78,8 @@ pushd $WORK_DIR
 
 # Checkout dist repo
 LOCAL_SVN_DIR=local_svn_dir
-ROOT_SVN_URL=https://dist.apache.org/repos/dist/
+ROOT_SVN_URL=https://dist.apache.org/repos/dist
 REPO_TYPE=${RELEASE_TYPE}
-#RELEASE_REPO=release
 HUDI_REPO=hudi
 
 if [ $RC_NUM == -1 ]; then
@@ -89,17 +88,29 @@ else
     ARTIFACT_SUFFIX=${RELEASE_VERSION}-rc${RC_NUM}
 fi
 
+if [ $RELEASE_TYPE == "release" ]; then
+  ARTIFACT_PREFIX=
+elif [ $RELEASE_TYPE == "dev" ]; then
+  ARTIFACT_PREFIX='hudi-'
+else
+  echo "Unexpected RELEASE_TYPE: $RELEASE_TYPE"
+  exit 1;
+fi
 
 rm -rf $LOCAL_SVN_DIR
 mkdir $LOCAL_SVN_DIR
 cd $LOCAL_SVN_DIR
 
-echo "Downloading from svn co ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO}"
+echo "Current directory: `pwd`"
 
-(bash -c "svn co ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO} $REDIRECT") || (echo -e "\t\t Unable to checkout  ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO} to $REDIRECT. Please run with --verbose to get details\n" && exit -1)
+FULL_SVN_URL=${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO}/${ARTIFACT_PREFIX}${ARTIFACT_SUFFIX}
+
+echo "Downloading from svn co $FULL_SVN_URL"
+
+(bash -c "svn co $FULL_SVN_URL $REDIRECT") || (echo -e "\t\t Unable to checkout  $FULL_SVN_URL to $REDIRECT. Please run with --verbose to get details\n" && exit -1)
 
 echo "Validating hudi-${ARTIFACT_SUFFIX} with release type \"${REPO_TYPE}\""
-cd ${HUDI_REPO}/hudi-${ARTIFACT_SUFFIX}
+cd ${ARTIFACT_PREFIX}${ARTIFACT_SUFFIX}
 $SHASUM hudi-${ARTIFACT_SUFFIX}.src.tgz > got.sha512
 
 echo "Checking Checksum of Source Release"
@@ -111,62 +122,20 @@ curl https://dist.apache.org/repos/dist/release/hudi/KEYS > ../KEYS
 
 # GPG Check
 echo "Checking Signature"
-(bash -c "gpg --import ../KEYS $REDIRECT" && bash -c "gpg --verify hudi-${ARTIFACT_SUFFIX}.src.tgz.asc hudi-${ARTIFACT_SUFFIX}.src.tgz $REDIRECT" && echo -e "\t\tSignature Check - [OK]\n") || (echo -e "\t\tSignature Check - [FAILED] - Run with --verbose to get details\n" && exit -1)
+(bash -c "gpg --import ../KEYS $REDIRECT" && bash -c "gpg --verify hudi-${ARTIFACT_SUFFIX}.src.tgz.asc hudi-${ARTIFACT_SUFFIX}.src.tgz $REDIRECT" && echo -e "\t\tSignature Check - [OK]\n") || (echo -e "\t\tSignature Check - [ERROR]\n\t\t Run with --verbose to get details\n" && exit 1)
 
 # Untar 
-(bash -c "tar -zxf hudi-${ARTIFACT_SUFFIX}.src.tgz $REDIRECT") || (echo -e "\t\t Unable to untar hudi-${ARTIFACT_SUFFIX}.src.tgz . Please run with --verbose to get details\n" && exit -1)
+(bash -c "tar -zxf hudi-${ARTIFACT_SUFFIX}.src.tgz $REDIRECT") || (echo -e "\t\t Unable to untar hudi-${ARTIFACT_SUFFIX}.src.tgz - [ERROR]\n\t\t Please run with --verbose to get details\n" && exit 1)
 cd hudi-${ARTIFACT_SUFFIX}
 
 ### BEGIN: Binary Files Check
-echo "Checking for binary files in source release"
-numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'application/json' | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
-
-if [ "$numBinaryFiles" -gt "0" ]; then
-  echo -e "There were non-text files in source release. Please check below\n"
-  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'application/json' | grep -va 'text/' |  grep -va 'application/xml'
-  exit -1
-fi
-echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
+$CURR_DIR/release/validate_source_binary_files.sh
 ### END: Binary Files Check
 
-### Checking for DISCLAIMER
-echo "Checking for DISCLAIMER"
-disclaimerFile="./DISCLAIMER"
-if [ -f "$disclaimerFile" ]; then
-  echo "DISCLAIMER file should not be present "
-  exit -1
-fi
-echo -e "\t\tDISCLAIMER file exists ? [OK]\n"
-
-### Checking for LICENSE and NOTICE
-echo "Checking for LICENSE and NOTICE"
-licenseFile="./LICENSE"
-noticeFile="./NOTICE"
-if [ ! -f "$licenseFile" ]; then
-  echo "License file missing"
-  exit -1
-fi
-echo -e "\t\tLicense file exists ? [OK]"
-
-if [ ! -f "$noticeFile" ]; then
-  echo "Notice file missing"
-  exit -1
-fi
-echo -e "\t\tNotice file exists ? [OK]\n"
-
-### Licensing Check
-echo "Performing custom Licensing Check "
-numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data'|grep -v '.commit' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
-if [ "$numfilesWithNoLicense" -gt  "0" ]; then
-  echo "There were some source files that did not have Apache License"
-  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
-  exit -1
-fi
-echo -e "\t\tLicensing Check Passed [OK]\n"
+### Checking for DISCLAIMER, LICENSE, NOTICE and source file license
+$CURR_DIR/release/validate_source_copyright.sh
 
 ### Checking for RAT
-echo "Running RAT Check"
-(bash -c "mvn apache-rat:check $REDIRECT") || (echo -e "\t\t Rat Check Failed. Please run with --verbose to get details\n" && exit -1)
-echo -e "\t\tRAT Check Passed [OK]\n"
+$CURR_DIR/release/validate_source_rat.sh
 
 popd

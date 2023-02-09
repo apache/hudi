@@ -21,9 +21,9 @@ package org.apache.hudi.integ;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
-
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -32,11 +32,15 @@ import java.util.List;
 
 /**
  * Goes through steps described in https://hudi.apache.org/docker_demo.html
- *
+ * <p>
  * To run this as a standalone test in the IDE or command line. First bring up the demo setup using
  * `docker/setup_demo.sh` and then run the test class as you would do normally.
  */
 public class ITTestHoodieDemo extends ITTestBase {
+
+  private static final String TRINO_TABLE_CHECK_FILENAME = "trino-table-check.commands";
+  private static final String TRINO_BATCH1_FILENAME = "trino-batch1.commands";
+  private static final String TRINO_BATCH2_FILENAME = "trino-batch2-after-compaction.commands";
 
   private static final String HDFS_DATA_DIR = "/usr/hive/data/input";
   private static final String HDFS_BATCH_PATH1 = HDFS_DATA_DIR + "/batch_1.json";
@@ -44,12 +48,18 @@ public class ITTestHoodieDemo extends ITTestBase {
   private static final String HDFS_PRESTO_INPUT_TABLE_CHECK_PATH = HDFS_DATA_DIR + "/presto-table-check.commands";
   private static final String HDFS_PRESTO_INPUT_BATCH1_PATH = HDFS_DATA_DIR + "/presto-batch1.commands";
   private static final String HDFS_PRESTO_INPUT_BATCH2_PATH = HDFS_DATA_DIR + "/presto-batch2-after-compaction.commands";
+  private static final String HDFS_TRINO_INPUT_TABLE_CHECK_PATH = HDFS_DATA_DIR + "/" + TRINO_TABLE_CHECK_FILENAME;
+  private static final String HDFS_TRINO_INPUT_BATCH1_PATH = HDFS_DATA_DIR + "/" + TRINO_BATCH1_FILENAME;
+  private static final String HDFS_TRINO_INPUT_BATCH2_PATH = HDFS_DATA_DIR + "/" + TRINO_BATCH2_FILENAME;
 
   private static final String INPUT_BATCH_PATH1 = HOODIE_WS_ROOT + "/docker/demo/data/batch_1.json";
   private static final String PRESTO_INPUT_TABLE_CHECK_RELATIVE_PATH = "/docker/demo/presto-table-check.commands";
   private static final String PRESTO_INPUT_BATCH1_RELATIVE_PATH = "/docker/demo/presto-batch1.commands";
   private static final String INPUT_BATCH_PATH2 = HOODIE_WS_ROOT + "/docker/demo/data/batch_2.json";
   private static final String PRESTO_INPUT_BATCH2_RELATIVE_PATH = "/docker/demo/presto-batch2-after-compaction.commands";
+  private static final String TRINO_INPUT_TABLE_CHECK_RELATIVE_PATH = "/docker/demo/" + TRINO_TABLE_CHECK_FILENAME;
+  private static final String TRINO_INPUT_BATCH1_RELATIVE_PATH = "/docker/demo/" + TRINO_BATCH1_FILENAME;
+  private static final String TRINO_INPUT_BATCH2_RELATIVE_PATH = "/docker/demo/" + TRINO_BATCH2_FILENAME;
 
   private static final String COW_BASE_PATH = "/user/hive/warehouse/stock_ticks_cow";
   private static final String MOR_BASE_PATH = "/user/hive/warehouse/stock_ticks_mor";
@@ -82,12 +92,23 @@ public class ITTestHoodieDemo extends ITTestBase {
   private HoodieFileFormat baseFileFormat;
 
   private static String HIVE_SYNC_CMD_FMT =
-      " --enable-hive-sync --hoodie-conf hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000 "
+      " --enable-hive-sync --hoodie-conf hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000/ "
+          + " --hoodie-conf hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor "
           + " --hoodie-conf hoodie.datasource.hive_sync.username=hive "
           + " --hoodie-conf hoodie.datasource.hive_sync.password=hive "
           + " --hoodie-conf hoodie.datasource.hive_sync.partition_fields=%s "
           + " --hoodie-conf hoodie.datasource.hive_sync.database=default "
           + " --hoodie-conf hoodie.datasource.hive_sync.table=%s";
+
+  @AfterEach
+  public void clean() throws Exception {
+    String hdfsCmd = "hdfs dfs -rm -R ";
+    List<String> tablePaths = CollectionUtils.createImmutableList(
+        COW_BASE_PATH, MOR_BASE_PATH, COW_BOOTSTRAPPED_BASE_PATH, MOR_BOOTSTRAPPED_BASE_PATH);
+    for (String tablePath : tablePaths) {
+      executeCommandStringInDocker(ADHOC_1_CONTAINER, hdfsCmd + tablePath, true);
+    }
+  }
 
   @Test
   public void testParquetDemo() throws Exception {
@@ -99,12 +120,14 @@ public class ITTestHoodieDemo extends ITTestBase {
     ingestFirstBatchAndHiveSync();
     testHiveAfterFirstBatch();
     testPrestoAfterFirstBatch();
+    testTrinoAfterFirstBatch();
     testSparkSQLAfterFirstBatch();
 
     // batch 2
     ingestSecondBatchAndHiveSync();
     testHiveAfterSecondBatch();
     testPrestoAfterSecondBatch();
+    testTrinoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
     testIncrementalHiveQueryBeforeCompaction();
     testIncrementalSparkSQLQuery();
@@ -114,6 +137,7 @@ public class ITTestHoodieDemo extends ITTestBase {
 
     testHiveAfterSecondBatchAfterCompaction();
     testPrestoAfterSecondBatchAfterCompaction();
+    testTrinoAfterSecondBatchAfterCompaction();
     testIncrementalHiveQueryAfterCompaction();
   }
 
@@ -122,7 +146,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   public void testHFileDemo() throws Exception {
     baseFileFormat = HoodieFileFormat.HFILE;
 
-    // TODO: Preseto and SparkSQL support for HFile format
+    // TODO: Presto, Trino and SparkSQL support for HFile format
 
     setupDemo();
 
@@ -130,12 +154,14 @@ public class ITTestHoodieDemo extends ITTestBase {
     ingestFirstBatchAndHiveSync();
     testHiveAfterFirstBatch();
     //testPrestoAfterFirstBatch();
+    //testTrinoAfterFirstBatch();
     //testSparkSQLAfterFirstBatch();
 
     // batch 2
     ingestSecondBatchAndHiveSync();
     testHiveAfterSecondBatch();
     //testPrestoAfterSecondBatch();
+    //testTrinoAfterSecondBatch();
     //testSparkSQLAfterSecondBatch();
     testIncrementalHiveQueryBeforeCompaction();
     //testIncrementalSparkSQLQuery();
@@ -144,6 +170,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     scheduleAndRunCompaction();
     testHiveAfterSecondBatchAfterCompaction();
     //testPrestoAfterSecondBatchAfterCompaction();
+    //testTrinoAfterSecondBatchAfterCompaction();
     //testIncrementalHiveQueryAfterCompaction();
   }
 
@@ -151,7 +178,8 @@ public class ITTestHoodieDemo extends ITTestBase {
     List<String> cmds = CollectionUtils.createImmutableList("hdfs dfsadmin -safemode wait",
         "hdfs dfs -mkdir -p " + HDFS_DATA_DIR,
         "hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH1 + " " + HDFS_BATCH_PATH1,
-        "/bin/bash " + DEMO_CONTAINER_SCRIPT);
+        "/bin/bash " + DEMO_CONTAINER_SCRIPT,
+        "mkdir -p " + HDFS_DATA_DIR);
 
     executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
 
@@ -163,12 +191,15 @@ public class ITTestHoodieDemo extends ITTestBase {
     executePrestoCopyCommand(System.getProperty("user.dir") + "/.." + PRESTO_INPUT_TABLE_CHECK_RELATIVE_PATH, HDFS_DATA_DIR);
     executePrestoCopyCommand(System.getProperty("user.dir") + "/.." + PRESTO_INPUT_BATCH1_RELATIVE_PATH, HDFS_DATA_DIR);
     executePrestoCopyCommand(System.getProperty("user.dir") + "/.." + PRESTO_INPUT_BATCH2_RELATIVE_PATH, HDFS_DATA_DIR);
+
+    executeTrinoCopyCommand(System.getProperty("user.dir") + "/.." + TRINO_INPUT_TABLE_CHECK_RELATIVE_PATH, HDFS_DATA_DIR);
+    executeTrinoCopyCommand(System.getProperty("user.dir") + "/.." + TRINO_INPUT_BATCH1_RELATIVE_PATH, HDFS_DATA_DIR);
+    executeTrinoCopyCommand(System.getProperty("user.dir") + "/.." + TRINO_INPUT_BATCH2_RELATIVE_PATH, HDFS_DATA_DIR);
   }
 
   private void ingestFirstBatchAndHiveSync() throws Exception {
     List<String> cmds = CollectionUtils.createImmutableList(
         "spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
             + " --base-file-format " + baseFileFormat.toString()
@@ -184,9 +215,9 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --user hive"
             + " --pass hive"
             + " --jdbc-url jdbc:hive2://hiveserver:10000"
+            + " --partition-value-extractor org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor"
             + " --partitioned-by dt",
         ("spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --base-file-format " + baseFileFormat.toString()
@@ -200,33 +231,33 @@ public class ITTestHoodieDemo extends ITTestBase {
     executeSparkSQLCommand(SPARKSQL_BS_PREP_COMMANDS, true);
     List<String> bootstrapCmds = CollectionUtils.createImmutableList(
         "spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
-        + " --table-type COPY_ON_WRITE "
-        + " --run-bootstrap "
-        + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
-        + " --target-base-path " + COW_BOOTSTRAPPED_BASE_PATH + " --target-table " + COW_BOOTSTRAPPED_TABLE_NAME
-        + " --props /var/demo/config/dfs-source.properties"
-        + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
-        + " --initial-checkpoint-provider"
-        + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
-        + " --hoodie-conf hoodie.bootstrap.base.path=" + BOOTSTRAPPED_SRC_PATH
-        + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
-        + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
-        + " --hoodie-conf hoodie.bootstrap.keygen.class=" + SimpleKeyGenerator.class.getName()
-        + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_BOOTSTRAPPED_TABLE_NAME),
+            + " --table-type COPY_ON_WRITE "
+            + " --run-bootstrap "
+            + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
+            + " --target-base-path " + COW_BOOTSTRAPPED_BASE_PATH + " --target-table " + COW_BOOTSTRAPPED_TABLE_NAME
+            + " --props /var/demo/config/dfs-source.properties"
+            + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
+            + " --initial-checkpoint-provider"
+            + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
+            + " --hoodie-conf hoodie.bootstrap.base.path=" + BOOTSTRAPPED_SRC_PATH
+            + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
+            + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
+            + " --hoodie-conf hoodie.bootstrap.keygen.class=" + SimpleKeyGenerator.class.getName()
+            + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_BOOTSTRAPPED_TABLE_NAME),
         "spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
-        + " --table-type MERGE_ON_READ "
-        + " --run-bootstrap "
-        + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
-        + " --target-base-path " + MOR_BOOTSTRAPPED_BASE_PATH + " --target-table " + MOR_BOOTSTRAPPED_TABLE_NAME
-        + " --props /var/demo/config/dfs-source.properties"
-        + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
-        + " --initial-checkpoint-provider"
-        + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
-        + " --hoodie-conf hoodie.bootstrap.base.path=" + BOOTSTRAPPED_SRC_PATH
-        + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
-        + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
-        + " --hoodie-conf hoodie.bootstrap.keygen.class=" + SimpleKeyGenerator.class.getName()
-        + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_BOOTSTRAPPED_TABLE_NAME));
+            + " --table-type MERGE_ON_READ "
+            + " --run-bootstrap "
+            + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
+            + " --target-base-path " + MOR_BOOTSTRAPPED_BASE_PATH + " --target-table " + MOR_BOOTSTRAPPED_TABLE_NAME
+            + " --props /var/demo/config/dfs-source.properties"
+            + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
+            + " --initial-checkpoint-provider"
+            + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
+            + " --hoodie-conf hoodie.bootstrap.base.path=" + BOOTSTRAPPED_SRC_PATH
+            + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
+            + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
+            + " --hoodie-conf hoodie.bootstrap.keygen.class=" + SimpleKeyGenerator.class.getName()
+            + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_BOOTSTRAPPED_TABLE_NAME));
     executeCommandStringsInDocker(ADHOC_1_CONTAINER, bootstrapCmds);
   }
 
@@ -240,6 +271,10 @@ public class ITTestHoodieDemo extends ITTestBase {
     assertStdOutContains(stdOutErrPair, "| stock_ticks_mor_bs_rt  |");
     assertStdOutContains(stdOutErrPair,
         "|   partition    |\n+----------------+\n| dt=2018-08-31  |\n+----------------+\n", 3);
+
+    // There should have 5 data source tables except stock_ticks_mor_bs_rt.
+    // After [HUDI-2071] has solved, we can inc the number 5 to 6.
+    assertStdOutContains(stdOutErrPair, "'spark.sql.sources.provider'='hudi'", 5);
 
     stdOutErrPair = executeHiveCommandFile(HIVE_BATCH1_COMMANDS);
     assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n+---------+----------------------+\n"
@@ -272,7 +307,6 @@ public class ITTestHoodieDemo extends ITTestBase {
     List<String> cmds = CollectionUtils.createImmutableList(
             ("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH2 + " " + HDFS_BATCH_PATH2),
             ("spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
@@ -281,7 +315,6 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
             + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME)),
             ("spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
@@ -320,6 +353,20 @@ public class ITTestHoodieDemo extends ITTestBase {
         "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"", 2);
   }
 
+  private void testTrinoAfterFirstBatch() throws Exception {
+    Pair<String, String> stdOutErrPair = executeTrinoCommandFile(HDFS_TRINO_INPUT_TABLE_CHECK_PATH);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_cow", 2);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_mor", 4);
+
+    stdOutErrPair = executeTrinoCommandFile(HDFS_TRINO_INPUT_BATCH1_PATH);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:29:00\"", 4);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 2);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"", 2);
+  }
+
   private void testHiveAfterSecondBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_BATCH1_COMMANDS);
     assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n+---------+----------------------+\n"
@@ -346,7 +393,21 @@ public class ITTestHoodieDemo extends ITTestBase {
     assertStdOutContains(stdOutErrPair,
         "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
     assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"",2);
+        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 2);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"");
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"");
+  }
+
+  private void testTrinoAfterSecondBatch() throws Exception {
+    Pair<String, String> stdOutErrPair = executeTrinoCommandFile(HDFS_TRINO_INPUT_BATCH1_PATH);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:29:00\"", 2);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 2);
     assertStdOutContains(stdOutErrPair,
         "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"");
     assertStdOutContains(stdOutErrPair,
@@ -367,6 +428,16 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void testPrestoAfterSecondBatchAfterCompaction() throws Exception {
     Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH2_PATH);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"");
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"");
+  }
+
+  private void testTrinoAfterSecondBatchAfterCompaction() throws Exception {
+    Pair<String, String> stdOutErrPair = executeTrinoCommandFile(HDFS_TRINO_INPUT_BATCH2_PATH);
     assertStdOutContains(stdOutErrPair,
         "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
     assertStdOutContains(stdOutErrPair,
@@ -437,7 +508,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void scheduleAndRunCompaction() throws Exception {
-    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " --cmdfile " + COMPACTION_COMMANDS, true);
-    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " --cmdfile " + COMPACTION_BOOTSTRAP_COMMANDS, true);
+    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " script --file " + COMPACTION_COMMANDS, true);
+    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " script --file " + COMPACTION_BOOTSTRAP_COMMANDS, true);
   }
 }

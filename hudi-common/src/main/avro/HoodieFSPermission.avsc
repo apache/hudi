@@ -28,22 +28,22 @@
       {
         "name":"userAction",
         "type":[ "null", "string" ],
-        "default": "null"
+        "default": null
       },
       {
         "name":"groupAction",
         "type":[ "null", "string" ],
-        "default": "null"
+        "default": null
       },
       {
         "name":"otherAction",
         "type":[ "null", "string" ],
-        "default": "null"
+        "default": null
       },
       {
         "name":"stickyBit",
         "type":[ "null", "boolean" ],
-        "default": "null"
+        "default": null
       }
    ]
 }

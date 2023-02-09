@@ -18,8 +18,6 @@
 
 package org.apache.hudi.exception;
 
-import java.io.Serializable;
-
 /**
  * <p>
  * Exception thrown for Hoodie failures. The root of the exception hierarchy.
@@ -29,7 +27,7 @@ import java.io.Serializable;
  * exception.
  * </p>
  */
-public class HoodieException extends RuntimeException implements Serializable {
+public class HoodieException extends RuntimeException {
 
   public HoodieException() {
     super();

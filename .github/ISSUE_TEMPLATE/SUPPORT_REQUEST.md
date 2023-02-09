@@ -8,7 +8,7 @@ labels: question
 
 **_Tips before filing an issue_**
 
-- Have you gone through our [FAQs](https://cwiki.apache.org/confluence/display/HUDI/FAQ)?
+- Have you gone through our [FAQs](https://hudi.apache.org/learn/faq/)?
 
 - Join the mailing list to engage in conversations and get faster support at dev-subscribe@hudi.apache.org.
 

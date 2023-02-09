@@ -26,7 +26,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 /**
  * This wraps the context needed for an execution of
- * a {@link DagNode#execute(ExecutionContext)}.
+ * a {@link DagNode#execute(ExecutionContext, int)}.
  */
 public class ExecutionContext implements Serializable {
 

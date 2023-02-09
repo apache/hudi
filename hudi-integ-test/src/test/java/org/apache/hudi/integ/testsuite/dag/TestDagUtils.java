@@ -18,16 +18,19 @@
 
 package org.apache.hudi.integ.testsuite.dag;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * A utility class for DAG test.
@@ -41,6 +44,42 @@ public class TestDagUtils {
     ComplexDagGenerator dag = new ComplexDagGenerator();
     String yaml = DagUtils.convertDagToYaml(dag.build());
     System.out.println(yaml);
+  }
+
+  @Test
+  @Disabled
+  // TODO(HUDI-3668): Fix this test
+  public void testConvertDagToYamlHiveQuery() throws Exception {
+    WorkflowDag dag = new HiveSyncDagGenerator().build();
+    DagNode insert1 = (DagNode) dag.getNodeList().get(0);
+    DagNode hiveSync1 = (DagNode)insert1.getChildNodes().get(0);
+    DagNode hiveQuery1 = (DagNode)hiveSync1.getChildNodes().get(0);
+
+    String yaml = DagUtils.convertDagToYaml(dag);
+
+    WorkflowDag dag2 = DagUtils.convertYamlToDag(yaml);
+    DagNode insert2 = (DagNode) dag2.getNodeList().get(0);
+    DagNode hiveSync2 = (DagNode)insert2.getChildNodes().get(0);
+    DagNode hiveQuery2 = (DagNode)hiveSync2.getChildNodes().get(0);
+    assertEquals(hiveQuery1.getConfig().getHiveQueries().get(0),
+        hiveQuery2.getConfig().getHiveQueries().get(0));
+    assertEquals(hiveQuery1.getConfig().getHiveProperties().get(0),
+        hiveQuery2.getConfig().getHiveProperties().get(0));
+  }
+
+  @Test
+  public void testConvertDagToYamlAndBack() throws Exception {
+    final ComplexDagGenerator dag = new ComplexDagGenerator();
+    final WorkflowDag originalWorkflowDag = dag.build();
+    final String yaml = DagUtils.convertDagToYaml(dag.build());
+    final WorkflowDag regeneratedWorkflowDag = DagUtils.convertYamlToDag(yaml);
+
+    final List<DagNode> originalWorkflowDagNodes = originalWorkflowDag.getNodeList();
+    final List<DagNode> regeneratedWorkflowDagNodes = regeneratedWorkflowDag.getNodeList();
+
+    assertEquals(originalWorkflowDagNodes.size(), regeneratedWorkflowDagNodes.size());
+    assertEquals(originalWorkflowDagNodes.get(0).getChildNodes().size(),
+            regeneratedWorkflowDagNodes.get(0).getChildNodes().size());
   }
 
   @Test

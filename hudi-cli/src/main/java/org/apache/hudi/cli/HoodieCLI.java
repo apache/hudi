@@ -44,7 +44,7 @@ public class HoodieCLI {
   protected static HoodieTableMetaClient tableMetadata;
   public static HoodieTableMetaClient syncTableMetadata;
   public static TimelineLayoutVersion layoutVersion;
-  private static TempViewProvider tempViewProvider;
+  public static TempViewProvider tempViewProvider;
 
   /**
    * Enum for CLI state.
@@ -85,8 +85,8 @@ public class HoodieCLI {
   }
 
   public static void refreshTableMetadata() {
-    setTableMetaClient(new HoodieTableMetaClient(HoodieCLI.conf, basePath, false, HoodieCLI.consistencyGuardConfig,
-        Option.of(layoutVersion)));
+    setTableMetaClient(HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(basePath).setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(HoodieCLI.consistencyGuardConfig)
+        .setLayoutVersion(Option.of(layoutVersion)).build());
   }
 
   public static void connectTo(String basePath, Integer layoutVersion) {
@@ -114,17 +114,4 @@ public class HoodieCLI {
 
     return tempViewProvider;
   }
-
-  /**
-   * Close tempViewProvider.
-   * <p/>
-   * For test, avoid multiple SparkContexts.
-   */
-  public static synchronized void closeTempViewProvider() {
-    if (tempViewProvider != null) {
-      tempViewProvider.close();
-      tempViewProvider = null;
-    }
-  }
-
 }

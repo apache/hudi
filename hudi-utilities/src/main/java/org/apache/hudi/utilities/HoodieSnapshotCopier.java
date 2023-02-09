@@ -52,8 +52,12 @@ import java.util.stream.Stream;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
+
 /**
  * Hoodie snapshot copy job which copies latest files from all partitions to another place, for snapshot backup.
+ *
+ * @deprecated Use {@link HoodieSnapshotExporter} instead.
  */
 public class HoodieSnapshotCopier implements Serializable {
 
@@ -72,24 +76,20 @@ public class HoodieSnapshotCopier implements Serializable {
 
     @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
     public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
-
-    @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
-    public Boolean verifyMetadataFileListing = HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE;
   }
 
   public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir,
                        final boolean shouldAssumeDatePartitioning,
-                       final boolean useFileListingFromMetadata,
-                       final boolean verifyMetadataFileListing) throws IOException {
+                       final boolean useFileListingFromMetadata) throws IOException {
     FileSystem fs = FSUtils.getFs(baseDir, jsc.hadoopConfiguration());
     final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
-    final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs.getConf(), baseDir);
+    final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir).build();
     final BaseFileOnlyView fsView = new HoodieTableFileSystemView(tableMetadata,
-        tableMetadata.getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedInstants());
+        tableMetadata.getActiveTimeline().getWriteTimeline().filterCompletedInstants());
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     // Get the latest commit
     Option<HoodieInstant> latestCommit =
-        tableMetadata.getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedInstants().lastInstant();
+        tableMetadata.getActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant();
     if (!latestCommit.isPresent()) {
       LOG.warn("No commits present. Nothing to snapshot");
       return;
@@ -98,7 +98,7 @@ public class HoodieSnapshotCopier implements Serializable {
     LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
         latestCommitTimestamp));
 
-    List<String> partitions = FSUtils.getAllPartitionPaths(context, baseDir, useFileListingFromMetadata, verifyMetadataFileListing, shouldAssumeDatePartitioning);
+    List<String> partitions = FSUtils.getAllPartitionPaths(context, baseDir, useFileListingFromMetadata, shouldAssumeDatePartitioning);
     if (partitions.size() > 0) {
       LOG.info(String.format("The job needs to copy %d partitions.", partitions.size()));
 
@@ -109,7 +109,7 @@ public class HoodieSnapshotCopier implements Serializable {
         fs.delete(new Path(outputDir), true);
       }
 
-      context.setJobStatus(this.getClass().getSimpleName(), "Creating a snapshot");
+      context.setJobStatus(this.getClass().getSimpleName(), "Creating a snapshot: " + baseDir);
 
       List<Tuple2<String, String>> filesToCopy = context.flatMap(partitions, partition -> {
         // Only take latest version files <= latestCommit.
@@ -119,8 +119,8 @@ public class HoodieSnapshotCopier implements Serializable {
         dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
 
         // also need to copy over partition metadata
-        Path partitionMetaFile =
-            new Path(FSUtils.getPartitionPath(baseDir, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
+        Path partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(fs1,
+            FSUtils.getPartitionPath(baseDir, partition)).get();
         if (fs1.exists(partitionMetaFile)) {
           filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
         }
@@ -185,15 +185,13 @@ public class HoodieSnapshotCopier implements Serializable {
         cfg.outputPath));
 
     // Create a spark job to do the snapshot copy
-    SparkConf sparkConf = new SparkConf().setAppName("Hoodie-snapshot-copier");
-    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+    SparkConf sparkConf = buildSparkConf("Hoodie-snapshot-copier", "local[*]");
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     LOG.info("Initializing spark job.");
 
     // Copy
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-    copier.snapshot(jsc, cfg.basePath, cfg.outputPath, cfg.shouldAssumeDatePartitioning, cfg.useFileListingFromMetadata,
-        cfg.verifyMetadataFileListing);
+    copier.snapshot(jsc, cfg.basePath, cfg.outputPath, cfg.shouldAssumeDatePartitioning, cfg.useFileListingFromMetadata);
 
     // Stop the job
     jsc.stop();

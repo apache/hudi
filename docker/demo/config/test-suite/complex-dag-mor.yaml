@@ -15,105 +15,70 @@
 # limitations under the License.
 dag_name: complex-dag-mor.yaml
 dag_rounds: 1
-dag_intermittent_delay_mins: 10
+dag_intermittent_delay_mins: 1
 dag_content:
   first_insert:
     config:
-      record_size: 70000
+      record_size: 1000
       num_partitions_insert: 1
-      repeat_count: 5
+      repeat_count: 1
       num_records_insert: 100
     type: InsertNode
     deps: none
   second_insert:
     config:
-      record_size: 70000
+      record_size: 1000
       num_partitions_insert: 1
-      repeat_count: 5
-      num_records_insert: 100
+      repeat_count: 1
+      num_records_insert: 1000
     deps: first_insert
     type: InsertNode
   third_insert:
     config:
-      record_size: 70000
+      record_size: 1000
       num_partitions_insert: 1
-      repeat_count: 2
+      repeat_count: 1
       num_records_insert: 300
     deps: second_insert
     type: InsertNode
-  first_rollback:
-    config:
-    deps: third_insert
-    type: RollbackNode
-  first_upsert:
-    config:
-      record_size: 70000
-      num_partitions_insert: 1
-      num_records_insert: 300
-      repeat_count: 1
-      num_records_upsert: 100
-      num_partitions_upsert: 10
-    type: UpsertNode
-    deps: first_rollback
   first_hive_sync:
     config:
       queue_name: "adhoc"
       engine: "mr"
     type: HiveSyncNode
-    deps: first_upsert
-  first_hive_query:
+    deps: third_insert
+  first_validate:
     config:
-      queue_name: "adhoc"
-      engine: "mr"
-    type: HiveQueryNode
+    type: ValidateDatasetNode
     deps: first_hive_sync
-  second_upsert:
+  first_upsert:
     config:
-      record_size: 70000
+      record_size: 1000
       num_partitions_insert: 1
       num_records_insert: 300
       repeat_count: 1
       num_records_upsert: 100
-      num_partitions_upsert: 10
+      num_partitions_upsert: 1
     type: UpsertNode
-    deps: first_hive_query
-  second_hive_query:
-    config:
-      queue_name: "adhoc"
-      engine: "mr"
-      hive_queries:
-        query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
-        result1: 0
-        query2: "select count(*) from testdb.table1"
-        result2: 1100
-    type: HiveQueryNode
-    deps: second_upsert
+    deps: first_validate
   first_schedule_compact:
     config:
     type: ScheduleCompactNode
-    deps: second_hive_query
-  third_upsert:
+    deps: first_upsert
+  first_delete:
     config:
-      record_size: 70000
-      num_partitions_insert: 1
-      num_records_insert: 300
-      repeat_count: 1
-      num_records_upsert: 100
-      num_partitions_upsert: 10
-    type: UpsertNode
+      num_partitions_delete: 1
+      num_records_delete: 500
+    type: DeleteNode
     deps: first_schedule_compact
-  first_compact:
-    config:
-    type: CompactNode
-    deps: first_schedule_compact
-  third_hive_query:
+  second_hive_sync:
     config:
       queue_name: "adhoc"
       engine: "mr"
-      hive_queries:
-        query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
-        result1: 0
-        query2: "select count(*) from testdb.table1"
-        result2: 1400
-    type: HiveQueryNode
-    deps: first_compact
+    type: HiveSyncNode
+    deps: first_delete
+  second_validate:
+    config:
+      delete_input_data: true
+    type: ValidateDatasetNode
+    deps: second_hive_sync

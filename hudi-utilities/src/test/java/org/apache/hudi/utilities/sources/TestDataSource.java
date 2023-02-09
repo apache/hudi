@@ -39,11 +39,14 @@ import java.util.stream.Collectors;
 public class TestDataSource extends AbstractBaseTestSource {
 
   private static final Logger LOG = LogManager.getLogger(TestDataSource.class);
+  public static boolean returnEmptyBatch = false;
+  private static int counter = 0;
 
   public TestDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
     initDataGen();
+    returnEmptyBatch = false;
   }
 
   @Override
@@ -54,9 +57,13 @@ public class TestDataSource extends AbstractBaseTestSource {
     LOG.info("Source Limit is set to " + sourceLimit);
 
     // No new data.
-    if (sourceLimit <= 0) {
+    if (sourceLimit <= 0 || returnEmptyBatch) {
+      LOG.warn("Return no new data from Test Data source " + counter + ", source limit " + sourceLimit);
       return new InputBatch<>(Option.empty(), lastCheckpointStr.orElse(null));
+    } else {
+      LOG.warn("Returning valid data from Test Data source " + counter + ", source limit " + sourceLimit);
     }
+    counter++;
 
     List<GenericRecord> records =
         fetchNextBatch(props, (int) sourceLimit, instantTime, DEFAULT_PARTITION_NUM).collect(Collectors.toList());

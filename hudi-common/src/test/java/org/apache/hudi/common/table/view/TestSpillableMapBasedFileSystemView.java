@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
 /**
@@ -29,6 +30,7 @@ public class TestSpillableMapBasedFileSystemView extends TestHoodieTableFileSyst
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
     return new SpillableMapBasedFileSystemView(metaClient, timeline, FileSystemViewStorageConfig.newBuilder()
         // pure disk base View
-        .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).withMaxMemoryForView(0L).build());
+        .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).withMaxMemoryForView(0L).build(),
+        HoodieCommonConfig.newBuilder().build());
   }
 }

@@ -33,9 +33,12 @@ public class WorkloadStat implements Serializable {
 
   private long numUpdates = 0L;
 
+  private HashMap<String, Pair<String, Long>> insertLocationToCount;
+
   private HashMap<String, Pair<String, Long>> updateLocationToCount;
 
   public WorkloadStat() {
+    insertLocationToCount = new HashMap<>();
     updateLocationToCount = new HashMap<>();
   }
 
@@ -43,8 +46,25 @@ public class WorkloadStat implements Serializable {
     return this.numInserts += numInserts;
   }
 
+  public long addInserts(HoodieRecordLocation location, long numInserts) {
+    long accNumInserts = 0;
+    if (insertLocationToCount.containsKey(location.getFileId())) {
+      accNumInserts = insertLocationToCount.get(location.getFileId()).getRight();
+    }
+    insertLocationToCount.put(
+        location.getFileId(),
+        Pair.of(location.getInstantTime(), numInserts + accNumInserts));
+    return this.numInserts += numInserts;
+  }
+
   public long addUpdates(HoodieRecordLocation location, long numUpdates) {
-    updateLocationToCount.put(location.getFileId(), Pair.of(location.getInstantTime(), numUpdates));
+    long accNumUpdates = 0;
+    if (updateLocationToCount.containsKey(location.getFileId())) {
+      accNumUpdates = updateLocationToCount.get(location.getFileId()).getRight();
+    }
+    updateLocationToCount.put(
+        location.getFileId(),
+        Pair.of(location.getInstantTime(), numUpdates + accNumUpdates));
     return this.numUpdates += numUpdates;
   }
 
@@ -58,6 +78,10 @@ public class WorkloadStat implements Serializable {
 
   public HashMap<String, Pair<String, Long>> getUpdateLocationToCount() {
     return updateLocationToCount;
+  }
+
+  public HashMap<String, Pair<String, Long>> getInsertLocationToCount() {
+    return insertLocationToCount;
   }
 
   @Override

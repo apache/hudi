@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Helper class for a bucket's type (INSERT and UPDATE) and its file location.
@@ -29,6 +30,24 @@ public class BucketInfo implements Serializable {
   String fileIdPrefix;
   String partitionPath;
 
+  public BucketInfo(BucketType bucketType, String fileIdPrefix, String partitionPath) {
+    this.bucketType = bucketType;
+    this.fileIdPrefix = fileIdPrefix;
+    this.partitionPath = partitionPath;
+  }
+
+  public BucketType getBucketType() {
+    return bucketType;
+  }
+
+  public String getFileIdPrefix() {
+    return fileIdPrefix;
+  }
+
+  public String getPartitionPath() {
+    return partitionPath;
+  }
+
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("BucketInfo {");
@@ -37,5 +56,24 @@ public class BucketInfo implements Serializable {
     sb.append("partitionPath=").append(partitionPath);
     sb.append('}');
     return sb.toString();
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    BucketInfo that = (BucketInfo) o;
+    return bucketType == that.bucketType
+        && fileIdPrefix.equals(that.fileIdPrefix)
+        && partitionPath.equals(that.partitionPath);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(bucketType, fileIdPrefix, partitionPath);
   }
 }

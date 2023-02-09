@@ -33,10 +33,13 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieHFileUtils;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.CellComparatorImpl;
 import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.KeyValue;
@@ -99,7 +102,10 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     Path indexByFilePath = fileIdIndexPath(metaClient);
     try {
       FileSystem fs = metaClient.getFs();
-      isPresent = fs.exists(indexByPartitionPath) && fs.exists(indexByFilePath);
+      // The metadata table is never bootstrapped, so the bootstrap index is always absent
+      // for the metadata table.  The fs.exists calls are avoided for metadata table.
+      isPresent = !HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString())
+          && fs.exists(indexByPartitionPath) && fs.exists(indexByFilePath);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
@@ -178,9 +184,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
   private static HFile.Reader createReader(String hFilePath, Configuration conf, FileSystem fileSystem) {
     try {
       LOG.info("Opening HFile for reading :" + hFilePath);
-      HFile.Reader reader = HFile.createReader(fileSystem, new HFilePathForReader(hFilePath),
-          new CacheConfig(conf), conf);
-      return reader;
+      return HoodieHFileUtils.createHFileReader(fileSystem, new HFilePathForReader(hFilePath), new CacheConfig(conf), conf);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
@@ -259,7 +263,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
     private HoodieBootstrapIndexInfo fetchBootstrapIndexInfo() throws IOException {
       return TimelineMetadataUtils.deserializeAvroMetadata(
-          partitionIndexReader().loadFileInfo().get(INDEX_INFO_KEY),
+          partitionIndexReader().getHFileInfo().get(INDEX_INFO_KEY),
           HoodieBootstrapIndexInfo.class);
     }
 
@@ -291,14 +295,16 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
     @Override
     public List<String> getIndexedPartitionPaths() {
-      HFileScanner scanner = partitionIndexReader().getScanner(true, true);
-      return getAllKeys(scanner, HFileBootstrapIndex::getPartitionFromKey);
+      try (HFileScanner scanner = partitionIndexReader().getScanner(true, false)) {
+        return getAllKeys(scanner, HFileBootstrapIndex::getPartitionFromKey);
+      }
     }
 
     @Override
     public List<HoodieFileGroupId> getIndexedFileGroupIds() {
-      HFileScanner scanner = fileIdIndexReader().getScanner(true, true);
-      return getAllKeys(scanner, HFileBootstrapIndex::getFileGroupFromKey);
+      try (HFileScanner scanner = fileIdIndexReader().getScanner(true, false)) {
+        return getAllKeys(scanner, HFileBootstrapIndex::getFileGroupFromKey);
+      }
     }
 
     private <T> List<T> getAllKeys(HFileScanner scanner, Function<String, T> converter) {
@@ -306,7 +312,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       try {
         boolean available = scanner.seekTo();
         while (available) {
-          keys.add(converter.apply(getUserKeyFromCellKey(CellUtil.getCellKeyAsString(scanner.getKeyValue()))));
+          keys.add(converter.apply(getUserKeyFromCellKey(CellUtil.getCellKeyAsString(scanner.getCell()))));
           available = scanner.next();
         }
       } catch (IOException ioe) {
@@ -319,7 +325,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     @Override
     public List<BootstrapFileMapping> getSourceFileMappingForPartition(String partition) {
       try {
-        HFileScanner scanner = partitionIndexReader().getScanner(true, true);
+        HFileScanner scanner = partitionIndexReader().getScanner(true, false);
         KeyValue keyValue = new KeyValue(Bytes.toBytes(getPartitionKey(partition)), new byte[0], new byte[0],
             HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, new byte[0]);
         if (scanner.seekTo(keyValue) == 0) {
@@ -352,7 +358,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       List<HoodieFileGroupId> fileGroupIds = new ArrayList<>(ids);
       Collections.sort(fileGroupIds);
       try {
-        HFileScanner scanner = fileIdIndexReader().getScanner(true, true);
+        HFileScanner scanner = fileIdIndexReader().getScanner(true, false);
         for (HoodieFileGroupId fileGroupId : fileGroupIds) {
           KeyValue keyValue = new KeyValue(Bytes.toBytes(getFileGroupKey(fileGroupId)), new byte[0], new byte[0],
               HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, new byte[0]);
@@ -528,13 +534,13 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     @Override
     public void begin() {
       try {
-        HFileContext meta = new HFileContextBuilder().build();
+        HFileContext meta = new HFileContextBuilder().withCellComparator(new HoodieKVComparator()).build();
         this.indexByPartitionWriter = HFile.getWriterFactory(metaClient.getHadoopConf(),
             new CacheConfig(metaClient.getHadoopConf())).withPath(metaClient.getFs(), indexByPartitionPath)
-            .withFileContext(meta).withComparator(new HoodieKVComparator()).create();
+            .withFileContext(meta).create();
         this.indexByFileIdWriter = HFile.getWriterFactory(metaClient.getHadoopConf(),
             new CacheConfig(metaClient.getHadoopConf())).withPath(metaClient.getFs(), indexByFileIdPath)
-            .withFileContext(meta).withComparator(new HoodieKVComparator()).create();
+            .withFileContext(meta).create();
       } catch (IOException ioe) {
         throw new HoodieIOException(ioe.getMessage(), ioe);
       }
@@ -581,6 +587,6 @@ public class HFileBootstrapIndex extends BootstrapIndex {
    * This class is explicitly used as Key Comparator to workaround hard coded
    * legacy format class names inside HBase. Otherwise we will face issues with shading.
    */
-  public static class HoodieKVComparator extends KeyValue.KVComparator {
+  public static class HoodieKVComparator extends CellComparatorImpl {
   }
 }

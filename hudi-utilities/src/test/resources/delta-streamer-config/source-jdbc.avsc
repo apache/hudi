@@ -26,34 +26,42 @@
   },
   {
 	"name": "TIMESTAMP",
-	"type": ["double", "null"]
+	"type": ["null", "double"],
+	"default": null
   },
   {
 	"name": "RIDER",
-	"type": ["string", "null"]
+	"type": ["null", "string"],
+	"default": null
   },
   {
 	"name": "DRIVER",
-	"type": ["string", "null"]
+	"type": ["null" ,"string"],
+	"default": null
   },
   {
 	"name": "BEGIN_LAT",
-	"type": ["double", "null"]
+	"type": ["null", "double"],
+	"default": null
   },
   {
 	"name": "BEGIN_LON",
-	"type": ["double", "null"]
+	"type": ["null", "double"],
+	"default": null
   },
   {
 	"name": "END_LAT",
-	"type": ["double", "null"]
+	"type": ["null", "double"],
+	"default": null
   },
   {
 	"name": "END_LON",
-	"type": ["double", "null"]
+	"type": ["null", "double"],
+	"default": null
   },
   {
 	"name": "FARE",
-	"type": ["double", "null"]
+	"type": ["null", "double"],
+	"default": null
   } ]
 }

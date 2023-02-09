@@ -18,10 +18,12 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.config.DefaultHoodieConfig;
-import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
-import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -30,98 +32,285 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 /**
  * Compaction related config.
  */
 @Immutable
-public class HoodieCompactionConfig extends DefaultHoodieConfig {
+@ConfigClassProperty(name = "Compaction Configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control compaction "
+        + "(merging of log files onto a new base files).")
+public class HoodieCompactionConfig extends HoodieConfig {
 
-  public static final String CLEANER_POLICY_PROP = "hoodie.cleaner.policy";
-  public static final String AUTO_CLEAN_PROP = "hoodie.clean.automatic";
-  public static final String ASYNC_CLEAN_PROP = "hoodie.clean.async";
+  public static final ConfigProperty<String> INLINE_COMPACT = ConfigProperty
+      .key("hoodie.compact.inline")
+      .defaultValue("false")
+      .withDocumentation("When set to true, compaction service is triggered after each write. While being "
+          + " simpler operationally, this adds extra latency on the write path.");
 
-  // Turn on inline compaction - after fw delta commits a inline compaction will be run
-  public static final String INLINE_COMPACT_PROP = "hoodie.compact.inline";
-  // Run a compaction every N delta commits
-  public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = "hoodie.compact.inline.max.delta.commits";
-  public static final String CLEANER_FILE_VERSIONS_RETAINED_PROP = "hoodie.cleaner.fileversions.retained";
-  public static final String CLEANER_COMMITS_RETAINED_PROP = "hoodie.cleaner.commits.retained";
-  public static final String CLEANER_INCREMENTAL_MODE = "hoodie.cleaner.incremental.mode";
-  public static final String MAX_COMMITS_TO_KEEP_PROP = "hoodie.keep.max.commits";
-  public static final String MIN_COMMITS_TO_KEEP_PROP = "hoodie.keep.min.commits";
-  public static final String COMMITS_ARCHIVAL_BATCH_SIZE_PROP = "hoodie.commits.archival.batch";
-  // Set true to clean bootstrap source files when necessary
-  public static final String CLEANER_BOOTSTRAP_BASE_FILE_ENABLED = "hoodie.cleaner.delete.bootstrap.base.file";
-  // Upsert uses this file size to compact new data onto existing files..
-  public static final String PARQUET_SMALL_FILE_LIMIT_BYTES = "hoodie.parquet.small.file.limit";
-  // By default, treat any file <= 100MB as a small file.
-  public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = String.valueOf(104857600);
-  // Hudi will use the previous commit to calculate the estimated record size by totalBytesWritten/totalRecordsWritten.
-  // If the previous commit is too small to make an accurate estimation, Hudi will search commits in the reverse order,
-  // until find a commit has totalBytesWritten larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * RECORD_SIZE_ESTIMATION_THRESHOLD)
-  public static final String RECORD_SIZE_ESTIMATION_THRESHOLD_PROP = "hoodie.record.size.estimation.threshold";
-  public static final String DEFAULT_RECORD_SIZE_ESTIMATION_THRESHOLD = "1.0";
+  public static final ConfigProperty<String> SCHEDULE_INLINE_COMPACT = ConfigProperty
+      .key("hoodie.compact.schedule.inline")
+      .defaultValue("false")
+      .withDocumentation("When set to true, compaction service will be attempted for inline scheduling after each write. Users have to ensure "
+          + "they have a separate job to run async compaction(execution) for the one scheduled by this writer. Users can choose to set both "
+          + "`hoodie.compact.inline` and `hoodie.compact.schedule.inline` to false and have both scheduling and execution triggered by any async process. "
+          + "But if `hoodie.compact.inline` is set to false, and `hoodie.compact.schedule.inline` is set to true, regular writers will schedule compaction inline, "
+          + "but users are expected to trigger async job for execution. If `hoodie.compact.inline` is set to true, regular writers will do both scheduling and "
+          + "execution inline for compaction");
+
+  public static final ConfigProperty<String> INLINE_LOG_COMPACT = ConfigProperty
+      .key("hoodie.log.compaction.inline")
+      .defaultValue("false")
+      .sinceVersion("0.13.0")
+      .withDocumentation("When set to true, logcompaction service is triggered after each write. While being "
+          + " simpler operationally, this adds extra latency on the write path.");
+
+  public static final ConfigProperty<String> INLINE_COMPACT_NUM_DELTA_COMMITS = ConfigProperty
+      .key("hoodie.compact.inline.max.delta.commits")
+      .defaultValue("5")
+      .withDocumentation("Number of delta commits after the last compaction, before scheduling of a new compaction is attempted. "
+          + "This config takes effect only for the compaction triggering strategy based on the number of commits, "
+          + "i.e., NUM_COMMITS, NUM_COMMITS_AFTER_LAST_REQUEST, NUM_AND_TIME, and NUM_OR_TIME.");
+
+  public static final ConfigProperty<String> INLINE_COMPACT_TIME_DELTA_SECONDS = ConfigProperty
+      .key("hoodie.compact.inline.max.delta.seconds")
+      .defaultValue(String.valueOf(60 * 60))
+      .withDocumentation("Number of elapsed seconds after the last compaction, before scheduling a new one. "
+          + "This config takes effect only for the compaction triggering strategy based on the elapsed time, "
+          + "i.e., TIME_ELAPSED, NUM_AND_TIME, and NUM_OR_TIME.");
+
+  public static final ConfigProperty<String> INLINE_COMPACT_TRIGGER_STRATEGY = ConfigProperty
+      .key("hoodie.compact.inline.trigger.strategy")
+      .defaultValue(CompactionTriggerStrategy.NUM_COMMITS.name())
+      .withDocumentation("Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. "
+          + "Valid options: " + Arrays.stream(CompactionTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
+
+  public static final ConfigProperty<String> PARQUET_SMALL_FILE_LIMIT = ConfigProperty
+      .key("hoodie.parquet.small.file.limit")
+      .defaultValue(String.valueOf(104857600))
+      .withDocumentation("During upsert operation, we opportunistically expand existing small files on storage, instead of writing"
+          + " new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage "
+          + " becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file."
+          + " Also note that if this set <= 0, will not try to get small files and directly write new files");
+
+  public static final ConfigProperty<String> RECORD_SIZE_ESTIMATION_THRESHOLD = ConfigProperty
+      .key("hoodie.record.size.estimation.threshold")
+      .defaultValue("1.0")
+      .withDocumentation("We use the previous commits' metadata to calculate the estimated record size and use it "
+          + " to bin pack records into partitions. If the previous commit is too small to make an accurate estimation, "
+          + " Hudi will search commits in the reverse order, until we find a commit that has totalBytesWritten "
+          + " larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * this_threshold)");
+
+  // 500GB of target IO per compaction (both read and write
+  public static final ConfigProperty<String> TARGET_IO_PER_COMPACTION_IN_MB = ConfigProperty
+      .key("hoodie.compaction.target.io")
+      .defaultValue(String.valueOf(500 * 1024))
+      .withDocumentation("Amount of MBs to spend during compaction run for the LogFileSizeBasedCompactionStrategy. "
+          + "This value helps bound ingestion latency while compaction is run inline mode.");
+
+  public static final ConfigProperty<Long> COMPACTION_LOG_FILE_SIZE_THRESHOLD = ConfigProperty
+      .key("hoodie.compaction.logfile.size.threshold")
+      .defaultValue(0L)
+      .withDocumentation("Only if the log file size is greater than the threshold in bytes,"
+          + " the file group will be compacted.");
+
+  public static final ConfigProperty<Long> COMPACTION_LOG_FILE_NUM_THRESHOLD = ConfigProperty
+      .key("hoodie.compaction.logfile.num.threshold")
+      .defaultValue(0L)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Only if the log file num is greater than the threshold,"
+          + " the file group will be compacted.");
+
+  public static final ConfigProperty<String> COMPACTION_STRATEGY = ConfigProperty
+      .key("hoodie.compaction.strategy")
+      .defaultValue(LogFileSizeBasedCompactionStrategy.class.getName())
+      .withDocumentation("Compaction strategy decides which file groups are picked up for "
+          + "compaction during each compaction run. By default. Hudi picks the log file "
+          + "with most accumulated unmerged data");
+
+  public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
+      .key("hoodie.compaction.lazy.block.read")
+      .defaultValue("true")
+      .withDocumentation("When merging the delta log files, this config helps to choose whether the log blocks "
+          + "should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block"
+          + " header) or false for immediate block read (higher memory usage)");
+
+  public static final ConfigProperty<String> COMPACTION_REVERSE_LOG_READ_ENABLE = ConfigProperty
+      .key("hoodie.compaction.reverse.log.read")
+      .defaultValue("false")
+      .withDocumentation("HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. "
+          + "If this config is set to true, the reader reads the logfile in reverse direction, from pos=file_length to pos=0");
+
+  public static final ConfigProperty<String> TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = ConfigProperty
+      .key("hoodie.compaction.daybased.target.partitions")
+      .defaultValue("10")
+      .withDocumentation("Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of "
+          + "latest partitions to compact during a compaction run.");
+
+  public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
+      .key("hoodie.compaction.preserve.commit.metadata")
+      .defaultValue(true)
+      .sinceVersion("0.11.0")
+      .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
   /**
    * Configs related to specific table types.
    */
-  // Number of inserts, that will be put each partition/bucket for writing
-  public static final String COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE = "hoodie.copyonwrite.insert.split.size";
-  // The rationale to pick the insert parallelism is the following. Writing out 100MB files,
-  // with atleast 1kb records, means 100K records per file. we just overprovision to 500K
-  public static final String DEFAULT_COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE = String.valueOf(500000);
-  // Config to control whether we control insert split sizes automatically based on average
-  // record sizes
-  public static final String COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS = "hoodie.copyonwrite.insert.auto.split";
-  // its off by default
-  public static final String DEFAULT_COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS = String.valueOf(true);
-  // This value is used as a guesstimate for the record size, if we can't determine this from
-  // previous commits
-  public static final String COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE = "hoodie.copyonwrite.record.size.estimate";
-  // Used to determine how much more can be packed into a small file, before it exceeds the size
-  // limit.
-  public static final String DEFAULT_COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE = String.valueOf(1024);
-  public static final String CLEANER_PARALLELISM = "hoodie.cleaner.parallelism";
-  public static final String DEFAULT_CLEANER_PARALLELISM = String.valueOf(200);
-  public static final String TARGET_IO_PER_COMPACTION_IN_MB_PROP = "hoodie.compaction.target.io";
-  // 500GB of target IO per compaction (both read and write)
-  public static final String DEFAULT_TARGET_IO_PER_COMPACTION_IN_MB = String.valueOf(500 * 1024);
-  public static final String COMPACTION_STRATEGY_PROP = "hoodie.compaction.strategy";
-  // 200GB of target IO per compaction
-  public static final String DEFAULT_COMPACTION_STRATEGY = LogFileSizeBasedCompactionStrategy.class.getName();
-  // used to merge records written to log file
-  public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
-  public static final String PAYLOAD_CLASS_PROP = "hoodie.compaction.payload.class";
+  public static final ConfigProperty<String> COPY_ON_WRITE_INSERT_SPLIT_SIZE = ConfigProperty
+      .key("hoodie.copyonwrite.insert.split.size")
+      .defaultValue(String.valueOf(500000))
+      .withDocumentation("Number of inserts assigned for each partition/bucket for writing. "
+          + "We based the default on writing out 100MB files, with at least 1kb records (100K records per file), and "
+          + "  over provision to 500K. As long as auto-tuning of splits is turned on, this only affects the first "
+          + "  write, where there is no history to learn record sizes from.");
 
-  // used to choose a trade off between IO vs Memory when performing compaction process
-  // Depending on outputfile_size and memory provided, choose true to avoid OOM for large file
-  // size + small memory
-  public static final String COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP = "hoodie.compaction.lazy.block.read";
-  public static final String DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED = "false";
-  // used to choose whether to enable reverse log reading (reverse log traversal)
-  public static final String COMPACTION_REVERSE_LOG_READ_ENABLED_PROP = "hoodie.compaction.reverse.log.read";
-  public static final String DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED = "false";
-  private static final String DEFAULT_CLEANER_POLICY = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
-  private static final String DEFAULT_AUTO_CLEAN = "true";
-  private static final String DEFAULT_ASYNC_CLEAN = "false";
-  private static final String DEFAULT_INLINE_COMPACT = "false";
-  private static final String DEFAULT_INCREMENTAL_CLEANER = "true";
-  private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "5";
-  private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
-  private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "10";
-  private static final String DEFAULT_MAX_COMMITS_TO_KEEP = "30";
-  private static final String DEFAULT_MIN_COMMITS_TO_KEEP = "20";
-  private static final String DEFAULT_COMMITS_ARCHIVAL_BATCH_SIZE = String.valueOf(10);
-  private static final String DEFAULT_CLEANER_BOOTSTRAP_BASE_FILE_ENABLED = "false";
-  public static final String TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP =
-      "hoodie.compaction.daybased.target.partitions";
-  // 500GB of target IO per compaction (both read and write)
-  public static final String DEFAULT_TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = String.valueOf(10);
+  public static final ConfigProperty<String> COPY_ON_WRITE_AUTO_SPLIT_INSERTS = ConfigProperty
+      .key("hoodie.copyonwrite.insert.auto.split")
+      .defaultValue("true")
+      .withDocumentation("Config to control whether we control insert split sizes automatically based on average"
+          + " record sizes. It's recommended to keep this turned on, since hand tuning is otherwise extremely"
+          + " cumbersome.");
 
-  private HoodieCompactionConfig(Properties props) {
-    super(props);
+  public static final ConfigProperty<String> COPY_ON_WRITE_RECORD_SIZE_ESTIMATE = ConfigProperty
+      .key("hoodie.copyonwrite.record.size.estimate")
+      .defaultValue(String.valueOf(1024))
+      .withDocumentation("The average record size. If not explicitly specified, hudi will compute the "
+          + "record size estimate compute dynamically based on commit metadata. "
+          + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
+
+  public static final ConfigProperty<String> LOG_COMPACTION_BLOCKS_THRESHOLD = ConfigProperty
+      .key("hoodie.log.compaction.blocks.threshold")
+      .defaultValue("5")
+      .sinceVersion("0.13.0")
+      .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value. "
+          + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
+
+  public static final ConfigProperty<String> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
+      .key("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN)
+      .defaultValue("false")
+      .sinceVersion("0.13.0")
+      .withDocumentation("New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. "
+          + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
+
+  /** @deprecated Use {@link #INLINE_COMPACT} and its methods instead */
+  @Deprecated
+  public static final String INLINE_COMPACT_PROP = INLINE_COMPACT.key();
+  /** @deprecated Use {@link #INLINE_COMPACT_NUM_DELTA_COMMITS} and its methods instead */
+  @Deprecated
+  public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = INLINE_COMPACT_NUM_DELTA_COMMITS.key();
+  /** @deprecated Use {@link #INLINE_COMPACT_TIME_DELTA_SECONDS} and its methods instead */
+  @Deprecated
+  public static final String INLINE_COMPACT_TIME_DELTA_SECONDS_PROP = INLINE_COMPACT_TIME_DELTA_SECONDS.key();
+  /** @deprecated Use {@link #INLINE_COMPACT_TRIGGER_STRATEGY} and its methods instead */
+  @Deprecated
+  public static final String INLINE_COMPACT_TRIGGER_STRATEGY_PROP = INLINE_COMPACT_TRIGGER_STRATEGY.key();
+  /**
+   * @deprecated Use {@link #PARQUET_SMALL_FILE_LIMIT} and its methods instead
+   */
+  @Deprecated
+  public static final String PARQUET_SMALL_FILE_LIMIT_BYTES = PARQUET_SMALL_FILE_LIMIT.key();
+  /**
+   * @deprecated Use {@link #PARQUET_SMALL_FILE_LIMIT} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = PARQUET_SMALL_FILE_LIMIT.defaultValue();
+  /**
+   * @deprecated Use {@link #RECORD_SIZE_ESTIMATION_THRESHOLD} and its methods instead
+   */
+  @Deprecated
+  public static final String RECORD_SIZE_ESTIMATION_THRESHOLD_PROP = RECORD_SIZE_ESTIMATION_THRESHOLD.key();
+  /**
+   * @deprecated Use {@link #RECORD_SIZE_ESTIMATION_THRESHOLD} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_RECORD_SIZE_ESTIMATION_THRESHOLD = RECORD_SIZE_ESTIMATION_THRESHOLD.defaultValue();
+  /**
+   * @deprecated Use {@link #COPY_ON_WRITE_INSERT_SPLIT_SIZE} and its methods instead
+   */
+  @Deprecated
+  public static final String COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE = COPY_ON_WRITE_INSERT_SPLIT_SIZE.key();
+  /**
+   * @deprecated Use {@link #COPY_ON_WRITE_INSERT_SPLIT_SIZE} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE = COPY_ON_WRITE_INSERT_SPLIT_SIZE.defaultValue();
+  /**
+   * @deprecated Use {@link #COPY_ON_WRITE_AUTO_SPLIT_INSERTS} and its methods instead
+   */
+  @Deprecated
+  public static final String COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS = COPY_ON_WRITE_AUTO_SPLIT_INSERTS.key();
+  /**
+   * @deprecated Use {@link #COPY_ON_WRITE_AUTO_SPLIT_INSERTS} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS = COPY_ON_WRITE_AUTO_SPLIT_INSERTS.defaultValue();
+  /**
+   * @deprecated Use {@link #COPY_ON_WRITE_RECORD_SIZE_ESTIMATE} and its methods instead
+   */
+  @Deprecated
+  public static final String COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE = COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key();
+  /**
+   * @deprecated Use {@link #COPY_ON_WRITE_RECORD_SIZE_ESTIMATE} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE = COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.defaultValue();
+  /**
+   * @deprecated Use {@link #TARGET_IO_PER_COMPACTION_IN_MB} and its methods instead
+   */
+  @Deprecated
+  public static final String TARGET_IO_PER_COMPACTION_IN_MB_PROP = TARGET_IO_PER_COMPACTION_IN_MB.key();
+  /**
+   * @deprecated Use {@link #TARGET_IO_PER_COMPACTION_IN_MB} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_TARGET_IO_PER_COMPACTION_IN_MB = TARGET_IO_PER_COMPACTION_IN_MB.defaultValue();
+  /**
+   * @deprecated Use {@link #COMPACTION_STRATEGY} and its methods instead
+   */
+  @Deprecated
+  public static final String COMPACTION_STRATEGY_PROP = COMPACTION_STRATEGY.key();
+  /** @deprecated Use {@link #COMPACTION_STRATEGY} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_COMPACTION_STRATEGY = COMPACTION_STRATEGY.defaultValue();
+  /** @deprecated Use {@link #COMPACTION_LAZY_BLOCK_READ_ENABLE} and its methods instead */
+  @Deprecated
+  public static final String COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP = COMPACTION_LAZY_BLOCK_READ_ENABLE.key();
+  /** @deprecated Use {@link #COMPACTION_LAZY_BLOCK_READ_ENABLE} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED = COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue();
+  /** @deprecated Use {@link #COMPACTION_REVERSE_LOG_READ_ENABLE} and its methods instead */
+  @Deprecated
+  public static final String COMPACTION_REVERSE_LOG_READ_ENABLED_PROP = COMPACTION_REVERSE_LOG_READ_ENABLE.key();
+  /** @deprecated Use {@link #COMPACTION_REVERSE_LOG_READ_ENABLE} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED = COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue();
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT} and its methods instead
+   */
+  @Deprecated
+  private static final String DEFAULT_INLINE_COMPACT = INLINE_COMPACT.defaultValue();
+  /** @deprecated Use {@link #INLINE_COMPACT_NUM_DELTA_COMMITS} and its methods instead */
+  @Deprecated
+  private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = INLINE_COMPACT_NUM_DELTA_COMMITS.defaultValue();
+  /** @deprecated Use {@link #INLINE_COMPACT_TIME_DELTA_SECONDS} and its methods instead */
+  @Deprecated
+  private static final String DEFAULT_INLINE_COMPACT_TIME_DELTA_SECONDS = INLINE_COMPACT_TIME_DELTA_SECONDS.defaultValue();
+  /** @deprecated Use {@link #INLINE_COMPACT_TRIGGER_STRATEGY} and its methods instead */
+  @Deprecated
+  private static final String DEFAULT_INLINE_COMPACT_TRIGGER_STRATEGY = INLINE_COMPACT_TRIGGER_STRATEGY.defaultValue();
+  /** @deprecated Use {@link #TARGET_PARTITIONS_PER_DAYBASED_COMPACTION} and its methods instead */
+  @Deprecated
+  public static final String TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP = TARGET_PARTITIONS_PER_DAYBASED_COMPACTION.key();
+  /** @deprecated Use {@link #TARGET_PARTITIONS_PER_DAYBASED_COMPACTION} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = TARGET_PARTITIONS_PER_DAYBASED_COMPACTION.defaultValue();
+
+  private HoodieCompactionConfig() {
+    super();
   }
 
   public static HoodieCompactionConfig.Builder newBuilder() {
@@ -130,205 +319,128 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
   public static class Builder {
 
-    private final Properties props = new Properties();
+    private final HoodieCompactionConfig compactionConfig = new HoodieCompactionConfig();
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
-        this.props.load(reader);
+        this.compactionConfig.getProps().load(reader);
         return this;
       }
     }
 
     public Builder fromProperties(Properties props) {
-      this.props.putAll(props);
-      return this;
-    }
-
-    public Builder withAutoClean(Boolean autoClean) {
-      props.setProperty(AUTO_CLEAN_PROP, String.valueOf(autoClean));
-      return this;
-    }
-
-    public Builder withAsyncClean(Boolean asyncClean) {
-      props.setProperty(ASYNC_CLEAN_PROP, String.valueOf(asyncClean));
-      return this;
-    }
-
-    public Builder withIncrementalCleaningMode(Boolean incrementalCleaningMode) {
-      props.setProperty(CLEANER_INCREMENTAL_MODE, String.valueOf(incrementalCleaningMode));
+      this.compactionConfig.getProps().putAll(props);
       return this;
     }
 
     public Builder withInlineCompaction(Boolean inlineCompaction) {
-      props.setProperty(INLINE_COMPACT_PROP, String.valueOf(inlineCompaction));
+      compactionConfig.setValue(INLINE_COMPACT, String.valueOf(inlineCompaction));
       return this;
     }
 
-    public Builder withCleanerPolicy(HoodieCleaningPolicy policy) {
-      props.setProperty(CLEANER_POLICY_PROP, policy.name());
+    public Builder withScheduleInlineCompaction(Boolean scheduleAsyncCompaction) {
+      compactionConfig.setValue(SCHEDULE_INLINE_COMPACT, String.valueOf(scheduleAsyncCompaction));
       return this;
     }
 
-    public Builder retainFileVersions(int fileVersionsRetained) {
-      props.setProperty(CLEANER_FILE_VERSIONS_RETAINED_PROP, String.valueOf(fileVersionsRetained));
+    public Builder withInlineLogCompaction(Boolean inlineLogCompaction) {
+      compactionConfig.setValue(INLINE_LOG_COMPACT, String.valueOf(inlineLogCompaction));
       return this;
     }
 
-    public Builder retainCommits(int commitsRetained) {
-      props.setProperty(CLEANER_COMMITS_RETAINED_PROP, String.valueOf(commitsRetained));
-      return this;
-    }
-
-    public Builder archiveCommitsWith(int minToKeep, int maxToKeep) {
-      props.setProperty(MIN_COMMITS_TO_KEEP_PROP, String.valueOf(minToKeep));
-      props.setProperty(MAX_COMMITS_TO_KEEP_PROP, String.valueOf(maxToKeep));
+    public Builder withInlineCompactionTriggerStrategy(CompactionTriggerStrategy compactionTriggerStrategy) {
+      compactionConfig.setValue(INLINE_COMPACT_TRIGGER_STRATEGY, compactionTriggerStrategy.name());
       return this;
     }
 
     public Builder compactionSmallFileSize(long smallFileLimitBytes) {
-      props.setProperty(PARQUET_SMALL_FILE_LIMIT_BYTES, String.valueOf(smallFileLimitBytes));
+      compactionConfig.setValue(PARQUET_SMALL_FILE_LIMIT, String.valueOf(smallFileLimitBytes));
       return this;
     }
 
     public Builder compactionRecordSizeEstimateThreshold(double threshold) {
-      props.setProperty(RECORD_SIZE_ESTIMATION_THRESHOLD_PROP, String.valueOf(threshold));
+      compactionConfig.setValue(RECORD_SIZE_ESTIMATION_THRESHOLD, String.valueOf(threshold));
       return this;
     }
 
     public Builder insertSplitSize(int insertSplitSize) {
-      props.setProperty(COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE, String.valueOf(insertSplitSize));
+      compactionConfig.setValue(COPY_ON_WRITE_INSERT_SPLIT_SIZE, String.valueOf(insertSplitSize));
       return this;
     }
 
     public Builder autoTuneInsertSplits(boolean autoTuneInsertSplits) {
-      props.setProperty(COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS, String.valueOf(autoTuneInsertSplits));
+      compactionConfig.setValue(COPY_ON_WRITE_AUTO_SPLIT_INSERTS, String.valueOf(autoTuneInsertSplits));
       return this;
     }
 
     public Builder approxRecordSize(int recordSizeEstimate) {
-      props.setProperty(COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE, String.valueOf(recordSizeEstimate));
-      return this;
-    }
-
-    public Builder withCleanerParallelism(int cleanerParallelism) {
-      props.setProperty(CLEANER_PARALLELISM, String.valueOf(cleanerParallelism));
+      compactionConfig.setValue(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE, String.valueOf(recordSizeEstimate));
       return this;
     }
 
     public Builder withCompactionStrategy(CompactionStrategy compactionStrategy) {
-      props.setProperty(COMPACTION_STRATEGY_PROP, compactionStrategy.getClass().getName());
-      return this;
-    }
-
-    public Builder withPayloadClass(String payloadClassName) {
-      props.setProperty(PAYLOAD_CLASS_PROP, payloadClassName);
+      compactionConfig.setValue(COMPACTION_STRATEGY, compactionStrategy.getClass().getName());
       return this;
     }
 
     public Builder withTargetIOPerCompactionInMB(long targetIOPerCompactionInMB) {
-      props.setProperty(TARGET_IO_PER_COMPACTION_IN_MB_PROP, String.valueOf(targetIOPerCompactionInMB));
+      compactionConfig.setValue(TARGET_IO_PER_COMPACTION_IN_MB, String.valueOf(targetIOPerCompactionInMB));
       return this;
     }
 
     public Builder withMaxNumDeltaCommitsBeforeCompaction(int maxNumDeltaCommitsBeforeCompaction) {
-      props.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, String.valueOf(maxNumDeltaCommitsBeforeCompaction));
+      compactionConfig.setValue(INLINE_COMPACT_NUM_DELTA_COMMITS, String.valueOf(maxNumDeltaCommitsBeforeCompaction));
+      return this;
+    }
+
+    public Builder withMaxDeltaSecondsBeforeCompaction(int maxDeltaSecondsBeforeCompaction) {
+      compactionConfig.setValue(INLINE_COMPACT_TIME_DELTA_SECONDS, String.valueOf(maxDeltaSecondsBeforeCompaction));
       return this;
     }
 
     public Builder withCompactionLazyBlockReadEnabled(Boolean compactionLazyBlockReadEnabled) {
-      props.setProperty(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, String.valueOf(compactionLazyBlockReadEnabled));
+      compactionConfig.setValue(COMPACTION_LAZY_BLOCK_READ_ENABLE, String.valueOf(compactionLazyBlockReadEnabled));
       return this;
     }
 
     public Builder withCompactionReverseLogReadEnabled(Boolean compactionReverseLogReadEnabled) {
-      props.setProperty(COMPACTION_REVERSE_LOG_READ_ENABLED_PROP, String.valueOf(compactionReverseLogReadEnabled));
+      compactionConfig.setValue(COMPACTION_REVERSE_LOG_READ_ENABLE, String.valueOf(compactionReverseLogReadEnabled));
       return this;
     }
 
     public Builder withTargetPartitionsPerDayBasedCompaction(int targetPartitionsPerCompaction) {
-      props.setProperty(TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP, String.valueOf(targetPartitionsPerCompaction));
+      compactionConfig.setValue(TARGET_PARTITIONS_PER_DAYBASED_COMPACTION, String.valueOf(targetPartitionsPerCompaction));
       return this;
     }
 
-    public Builder withCommitsArchivalBatchSize(int batchSize) {
-      props.setProperty(COMMITS_ARCHIVAL_BATCH_SIZE_PROP, String.valueOf(batchSize));
+    public Builder withLogFileSizeThresholdBasedCompaction(long logFileSizeThreshold) {
+      compactionConfig.setValue(COMPACTION_LOG_FILE_SIZE_THRESHOLD, String.valueOf(logFileSizeThreshold));
       return this;
     }
 
-    public Builder withCleanBootstrapBaseFileEnabled(Boolean cleanBootstrapSourceFileEnabled) {
-      props.setProperty(CLEANER_BOOTSTRAP_BASE_FILE_ENABLED, String.valueOf(cleanBootstrapSourceFileEnabled));
+    public Builder withCompactionLogFileNumThreshold(int logFileNumThreshold) {
+      compactionConfig.setValue(COMPACTION_LOG_FILE_NUM_THRESHOLD, String.valueOf(logFileNumThreshold));
+      return this;
+    }
+
+    public Builder withPreserveCommitMetadata(boolean preserveCommitMetadata) {
+      compactionConfig.setValue(PRESERVE_COMMIT_METADATA, String.valueOf(preserveCommitMetadata));
+      return this;
+    }
+
+    public Builder withLogCompactionBlocksThreshold(String logCompactionBlocksThreshold) {
+      compactionConfig.setValue(LOG_COMPACTION_BLOCKS_THRESHOLD, logCompactionBlocksThreshold);
+      return this;
+    }
+
+    public Builder withEnableOptimizedLogBlocksScan(String enableOptimizedLogBlocksScan) {
+      compactionConfig.setValue(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, enableOptimizedLogBlocksScan);
       return this;
     }
 
     public HoodieCompactionConfig build() {
-      HoodieCompactionConfig config = new HoodieCompactionConfig(props);
-      setDefaultOnCondition(props, !props.containsKey(AUTO_CLEAN_PROP), AUTO_CLEAN_PROP, DEFAULT_AUTO_CLEAN);
-      setDefaultOnCondition(props, !props.containsKey(ASYNC_CLEAN_PROP), ASYNC_CLEAN_PROP,
-              DEFAULT_ASYNC_CLEAN);
-      setDefaultOnCondition(props, !props.containsKey(CLEANER_INCREMENTAL_MODE), CLEANER_INCREMENTAL_MODE,
-          DEFAULT_INCREMENTAL_CLEANER);
-      setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_PROP), INLINE_COMPACT_PROP,
-          DEFAULT_INLINE_COMPACT);
-      setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_NUM_DELTA_COMMITS_PROP),
-          INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS);
-      setDefaultOnCondition(props, !props.containsKey(CLEANER_POLICY_PROP), CLEANER_POLICY_PROP,
-          DEFAULT_CLEANER_POLICY);
-      setDefaultOnCondition(props, !props.containsKey(CLEANER_FILE_VERSIONS_RETAINED_PROP),
-          CLEANER_FILE_VERSIONS_RETAINED_PROP, DEFAULT_CLEANER_FILE_VERSIONS_RETAINED);
-      setDefaultOnCondition(props, !props.containsKey(CLEANER_COMMITS_RETAINED_PROP), CLEANER_COMMITS_RETAINED_PROP,
-          DEFAULT_CLEANER_COMMITS_RETAINED);
-      setDefaultOnCondition(props, !props.containsKey(MAX_COMMITS_TO_KEEP_PROP), MAX_COMMITS_TO_KEEP_PROP,
-          DEFAULT_MAX_COMMITS_TO_KEEP);
-      setDefaultOnCondition(props, !props.containsKey(MIN_COMMITS_TO_KEEP_PROP), MIN_COMMITS_TO_KEEP_PROP,
-          DEFAULT_MIN_COMMITS_TO_KEEP);
-      setDefaultOnCondition(props, !props.containsKey(PARQUET_SMALL_FILE_LIMIT_BYTES), PARQUET_SMALL_FILE_LIMIT_BYTES,
-          DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES);
-      setDefaultOnCondition(props, !props.containsKey(RECORD_SIZE_ESTIMATION_THRESHOLD_PROP), RECORD_SIZE_ESTIMATION_THRESHOLD_PROP,
-          DEFAULT_RECORD_SIZE_ESTIMATION_THRESHOLD);
-      setDefaultOnCondition(props, !props.containsKey(COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE),
-          COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE, DEFAULT_COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE);
-      setDefaultOnCondition(props, !props.containsKey(COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS),
-          COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS, DEFAULT_COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS);
-      setDefaultOnCondition(props, !props.containsKey(COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE),
-          COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE, DEFAULT_COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE);
-      setDefaultOnCondition(props, !props.containsKey(CLEANER_PARALLELISM), CLEANER_PARALLELISM,
-          DEFAULT_CLEANER_PARALLELISM);
-      setDefaultOnCondition(props, !props.containsKey(COMPACTION_STRATEGY_PROP), COMPACTION_STRATEGY_PROP,
-          DEFAULT_COMPACTION_STRATEGY);
-      setDefaultOnCondition(props, !props.containsKey(PAYLOAD_CLASS_PROP), PAYLOAD_CLASS_PROP, DEFAULT_PAYLOAD_CLASS);
-      setDefaultOnCondition(props, !props.containsKey(TARGET_IO_PER_COMPACTION_IN_MB_PROP),
-          TARGET_IO_PER_COMPACTION_IN_MB_PROP, DEFAULT_TARGET_IO_PER_COMPACTION_IN_MB);
-      setDefaultOnCondition(props, !props.containsKey(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP),
-          COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED);
-      setDefaultOnCondition(props, !props.containsKey(COMPACTION_REVERSE_LOG_READ_ENABLED_PROP),
-          COMPACTION_REVERSE_LOG_READ_ENABLED_PROP, DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED);
-      setDefaultOnCondition(props, !props.containsKey(TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP),
-          TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP, DEFAULT_TARGET_PARTITIONS_PER_DAYBASED_COMPACTION);
-      setDefaultOnCondition(props, !props.containsKey(COMMITS_ARCHIVAL_BATCH_SIZE_PROP),
-          COMMITS_ARCHIVAL_BATCH_SIZE_PROP, DEFAULT_COMMITS_ARCHIVAL_BATCH_SIZE);
-      setDefaultOnCondition(props, !props.containsKey(CLEANER_BOOTSTRAP_BASE_FILE_ENABLED),
-          CLEANER_BOOTSTRAP_BASE_FILE_ENABLED, DEFAULT_CLEANER_BOOTSTRAP_BASE_FILE_ENABLED);
-
-      HoodieCleaningPolicy.valueOf(props.getProperty(CLEANER_POLICY_PROP));
-
-      // Ensure minInstantsToKeep > cleanerCommitsRetained, otherwise we will archive some
-      // commit instant on timeline, that still has not been cleaned. Could miss some data via incr pull
-      int minInstantsToKeep = Integer.parseInt(props.getProperty(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP));
-      int maxInstantsToKeep = Integer.parseInt(props.getProperty(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP));
-      int cleanerCommitsRetained =
-          Integer.parseInt(props.getProperty(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP));
-      ValidationUtils.checkArgument(maxInstantsToKeep > minInstantsToKeep,
-          String.format(
-              "Increase %s=%d to be greater than %s=%d.",
-              HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP, maxInstantsToKeep,
-              HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP, minInstantsToKeep));
-      ValidationUtils.checkArgument(minInstantsToKeep > cleanerCommitsRetained,
-          String.format(
-              "Increase %s=%d to be greater than %s=%d. Otherwise, there is risk of incremental pull "
-                  + "missing data from few instants.",
-              HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP, minInstantsToKeep,
-              HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP, cleanerCommitsRetained));
-      return config;
+      compactionConfig.setDefaults(HoodieCompactionConfig.class.getName());
+      return compactionConfig;
     }
   }
 }

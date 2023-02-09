@@ -121,28 +121,30 @@ public class DFSPathSelector implements Serializable {
       eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
       // Filter based on checkpoint & input size, if needed
       long currentBytes = 0;
-      long maxModificationTime = Long.MIN_VALUE;
+      long newCheckpointTime = lastCheckpointTime;
       List<FileStatus> filteredFiles = new ArrayList<>();
       for (FileStatus f : eligibleFiles) {
-        if (currentBytes + f.getLen() >= sourceLimit) {
+        if (currentBytes + f.getLen() >= sourceLimit && f.getModificationTime() > newCheckpointTime) {
           // we have enough data, we are done
+          // Also, we've read up to a file with a newer modification time
+          // so that some files with the same modification time won't be skipped in next read
           break;
         }
 
-        maxModificationTime = f.getModificationTime();
+        newCheckpointTime = f.getModificationTime();
         currentBytes += f.getLen();
         filteredFiles.add(f);
       }
 
       // no data to read
       if (filteredFiles.isEmpty()) {
-        return new ImmutablePair<>(Option.empty(), lastCheckpointStr.orElseGet(() -> String.valueOf(Long.MIN_VALUE)));
+        return new ImmutablePair<>(Option.empty(), String.valueOf(newCheckpointTime));
       }
 
       // read the files out.
       String pathStr = filteredFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
 
-      return new ImmutablePair<>(Option.ofNullable(pathStr), String.valueOf(maxModificationTime));
+      return new ImmutablePair<>(Option.ofNullable(pathStr), String.valueOf(newCheckpointTime));
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
     }

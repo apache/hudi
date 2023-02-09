@@ -36,6 +36,10 @@ public class TableNotFoundException extends HoodieException {
     super(getErrorMessage(basePath));
   }
 
+  public TableNotFoundException(String basePath, Throwable t) {
+    super(getErrorMessage(basePath), t);
+  }
+
   private static String getErrorMessage(String basePath) {
     return "Hoodie table not found in path " + basePath;
   }
@@ -50,7 +54,7 @@ public class TableNotFoundException extends HoodieException {
       }
     } catch (FileNotFoundException | IllegalArgumentException e) {
       // if the base path is file:///, then we have a IllegalArgumentException
-      throw new TableNotFoundException(metaPathDir.toString());
+      throw new TableNotFoundException(metaPathDir.toString(), e);
     } catch (IOException e) {
       throw new HoodieIOException("Could not check if " + basePathDir + " is a valid table", e);
     }

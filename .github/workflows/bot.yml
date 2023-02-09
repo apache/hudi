@@ -1,43 +1,161 @@
-#
-# Licensed to the Apache Software Foundation (ASF) under one
-# or more contributor license agreements.  See the NOTICE file
-# distributed with this work for additional information
-# regarding copyright ownership.  The ASF licenses this file
-# to you under the Apache License, Version 2.0 (the
-# "License"); you may not use this file except in compliance
-# with the License.  You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing,
-# software distributed under the License is distributed on an
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied.  See the License for the
-# specific language governing permissions and limitations
-# under the License.
-#
-
-name: CI BOT
+name: Java CI
 
 on:
-  issue_comment:
-    types: [created]
+  push:
+    branches:
+      - master
+      - 'release-*'
+  pull_request:
+    paths-ignore:
+      - '**.bmp'
+      - '**.gif'
+      - '**.jpg'
+      - '**.jpeg'
+      - '**.md'
+      - '**.pdf'
+      - '**.png'
+      - '**.svg'
+    branches:
+      - master
+      - 'release-*'
+env:
+  MVN_ARGS: -e -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
 
 jobs:
-  bot:
+  validate-source:
     runs-on: ubuntu-latest
     steps:
-      - name: clone repository
-        uses: actions/checkout@v2
-
-      - name: bot actions
-        uses: actions/github-script@v1
-        env:
-          PROVIDER : 'apache'
-          REPOSITORY: 'hudi'
-          HUDI_TRAVIS_ORG_TOKEN: ${{ secrets.HUDI_TRAVIS_ORG_TOKEN }}
+      - uses: actions/checkout@v3
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
         with:
-          script: |
-            const path = require('path')
-            const scriptPath = path.resolve('.github/actions/bot/src/action.js')
-            require(scriptPath)({core}, {context}, {github})
+          java-version: '8'
+          distribution: 'adopt'
+          architecture: x64
+      - name: Check Binary Files
+        run: ./scripts/release/validate_source_binary_files.sh
+      - name: Check Copyright
+        run: |
+          ./scripts/release/create_source_directory.sh hudi-tmp-repo
+          cd hudi-tmp-repo
+          ./scripts/release/validate_source_copyright.sh
+      - name: RAT check
+        run: ./scripts/release/validate_source_rat.sh
+
+  test-spark:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.11"
+            sparkProfile: "spark2.4"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark2.4"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.1"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.2"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          architecture: x64
+      - name: Build Project
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark,hudi-spark-datasource/hudi-spark -am -DskipTests=true $MVN_ARGS
+      - name: Quickstart Test
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+      - name: UT - Common & Spark
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
+        run:
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark $MVN_ARGS
+
+  test-flink:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - flinkProfile: "flink1.13"
+          - flinkProfile: "flink1.14"
+          - flinkProfile: "flink1.15"
+          - flinkProfile: "flink1.16"
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          architecture: x64
+      - name: Build Project
+        env:
+          SCALA_PROFILE: 'scala-2.12'
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        run:
+          mvn clean install -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+      - name: Quickstart Test
+        env:
+          SCALA_PROFILE: 'scala-2.12'
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        run:
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+
+  validate-bundles:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - flinkProfile: 'flink1.16'
+            sparkProfile: 'spark3.3'
+          - flinkProfile: 'flink1.15'
+            sparkProfile: 'spark3.3'
+          - flinkProfile: 'flink1.14'
+            sparkProfile: 'spark3.2'
+          - flinkProfile: 'flink1.13'
+            sparkProfile: 'spark3.1'
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          architecture: x64
+      - name: Build Project
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: 'scala-2.12'
+        run: |
+          mvn clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+          # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
+          sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
+          mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
+      - name: IT - Bundle Validation
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: 'scala-2.12'
+        run: |
+          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION

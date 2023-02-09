@@ -46,6 +46,36 @@ public class HoodieWriteMetadata<O> {
   public HoodieWriteMetadata() {
   }
 
+  /**
+   * Clones the write metadata with transformed write statuses.
+   *
+   * @param transformedWriteStatuses transformed write statuses
+   * @param <T>                      type of transformed write statuses
+   * @return Cloned {@link HoodieWriteMetadata<T>} instance
+   */
+  public <T> HoodieWriteMetadata<T> clone(T transformedWriteStatuses) {
+    HoodieWriteMetadata<T> newMetadataInstance = new HoodieWriteMetadata<>();
+    newMetadataInstance.setWriteStatuses(transformedWriteStatuses);
+    if (indexLookupDuration.isPresent()) {
+      newMetadataInstance.setIndexLookupDuration(indexLookupDuration.get());
+    }
+    newMetadataInstance.setCommitted(isCommitted);
+    newMetadataInstance.setCommitMetadata(commitMetadata);
+    if (writeStats.isPresent()) {
+      newMetadataInstance.setWriteStats(writeStats.get());
+    }
+    if (indexUpdateDuration.isPresent()) {
+      newMetadataInstance.setIndexUpdateDuration(indexUpdateDuration.get());
+    }
+    if (finalizeDuration.isPresent()) {
+      newMetadataInstance.setFinalizeDuration(finalizeDuration.get());
+    }
+    if (partitionToReplaceFileIds.isPresent()) {
+      newMetadataInstance.setPartitionToReplaceFileIds(partitionToReplaceFileIds.get());
+    }
+    return newMetadataInstance;
+  }
+
   public O getWriteStatuses() {
     return writeStatuses;
   }

@@ -18,22 +18,44 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-public class FlinkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractWriteHelper<T, List<HoodieRecord<T>>,
+/**
+ * Overrides the {@link #write} method to not look up index and partition the records, because
+ * with {@code org.apache.hudi.operator.partitioner.BucketAssigner}, each hoodie record
+ * is tagged with a bucket ID (partition path + fileID) in streaming way. The FlinkWriteHelper only hands over
+ * the records to the action executor {@link BaseCommitActionExecutor} to execute.
+ *
+ * <p>Computing the records batch locations all at a time is a pressure to the engine,
+ * we should avoid that in streaming system.
+ */
+public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>, R> {
 
   private FlinkWriteHelper() {
+    super(ignored -> -1);
   }
 
   private static class WriteHelperHolder {
@@ -45,22 +67,56 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
   }
 
   @Override
-  public List<HoodieRecord<T>> deduplicateRecords(List<HoodieRecord<T>> records,
-                                                     HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> index,
-                                                     int parallelism) {
-    boolean isIndexingGlobal = index.isGlobal();
-    Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {
-      HoodieKey hoodieKey = record.getKey();
-      // If index used is global, then records are expected to differ in their partitionPath
-      Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
-      return Pair.of(key, record);
-    }).collect(Collectors.groupingBy(Pair::getLeft));
+  public HoodieWriteMetadata<List<WriteStatus>> write(String instantTime, List<HoodieRecord<T>> inputRecords, HoodieEngineContext context,
+                                                      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table, boolean shouldCombine, int configuredShuffleParallelism,
+                                                      BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor, WriteOperationType operationType) {
+    try {
+      Instant lookupBegin = Instant.now();
+      Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
 
-    return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
-      @SuppressWarnings("unchecked")
-      T reducedData = (T) rec1.getData().preCombine(rec2.getData());
-      HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
-      return new HoodieRecord<T>(reducedKey, reducedData);
+      HoodieWriteMetadata<List<WriteStatus>> result = executor.execute(inputRecords);
+      result.setIndexLookupDuration(indexLookupDuration);
+      return result;
+    } catch (Throwable e) {
+      if (e instanceof HoodieUpsertException) {
+        throw (HoodieUpsertException) e;
+      }
+      throw new HoodieUpsertException("Failed to upsert for commit time " + instantTime, e);
+    }
+  }
+
+  @Override
+  protected List<HoodieRecord<T>> tag(List<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context, HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table) {
+    return table.getIndex().tagLocation(HoodieListData.eager(dedupedRecords), context, table).collectAsList();
+  }
+
+  @Override
+  protected List<HoodieRecord<T>> doDeduplicateRecords(
+      List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, TypedProperties props, HoodieRecordMerger merger) {
+    // If index used is global, then records are expected to differ in their partitionPath
+    Map<Object, List<HoodieRecord<T>>> keyedRecords = records.stream()
+        .collect(Collectors.groupingBy(record -> record.getKey().getRecordKey()));
+
+    // caution that the avro schema is not serializable
+    final Schema schema = new Schema.Parser().parse(schemaStr);
+    return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
+      HoodieRecord<T> reducedRecord;
+      try {
+        // Precombine do not need schema and do not return null
+        reducedRecord =  merger.merge(rec1, schema, rec2, schema, props).get().getLeft();
+      } catch (IOException e) {
+        throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
+      }
+      // we cannot allow the user to change the key or partitionPath, since that will affect
+      // everything
+      // so pick it from one of the records.
+      boolean choosePrev = rec1 == reducedRecord;
+      HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
+      HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
+      HoodieRecord<T> hoodieRecord = reducedRecord.newInstance(reducedKey, operation);
+      // reuse the location from the first record.
+      hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
+      return hoodieRecord;
     }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
   }
 }

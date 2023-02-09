@@ -68,7 +68,7 @@ public class TestKeyRangeLookupTree {
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
     for (int i = 0; i < 10; i++) {
-      endKey += 1 + RANDOM.nextInt(100);
+      endKey += 1 + RANDOM.nextInt(50);
       toInsert = new KeyRangeNode(startKey, Long.toString(endKey), UUID.randomUUID().toString());
       updateExpectedMatchesToTest(toInsert);
       keyRangeLookupTree.insert(toInsert);
@@ -77,10 +77,10 @@ public class TestKeyRangeLookupTree {
   }
 
   /**
-   * Tests for many duplicte entries in the tree.
+   * Tests for many duplicate entries in the tree.
    */
   @Test
-  public void testFileGroupLookUpManyDulicateEntries() {
+  public void testFileGroupLookUpManyDuplicateEntries() {
     KeyRangeNode toInsert = new KeyRangeNode(Long.toString(1200), Long.toString(2000), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);

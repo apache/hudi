@@ -196,7 +196,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
   }
 
   /**
-   * If the new seek position is in the buffer, adjust the currentPostion.
+   * If the new seek position is in the buffer, adjust the currentPosition.
    * If the new seek position is outside of the buffer, flush the contents to
    * the file and reload the buffer corresponding to the position.
    *

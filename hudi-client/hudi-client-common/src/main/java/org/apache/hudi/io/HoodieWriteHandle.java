@@ -20,24 +20,27 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.HoodieFileWriter;
-import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -48,54 +51,52 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+
 /**
  * Base class for all write operations logically performed at the file group level.
  */
-public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieIOHandle<T, I, K, O> {
+public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
 
-  protected final Schema writerSchema;
-  protected final Schema writerSchemaWithMetafields;
+  /**
+   * Schema used to write records into data files
+   */
+  protected final Schema writeSchema;
+  protected final Schema writeSchemaWithMetaFields;
+  protected final HoodieRecordMerger recordMerger;
+
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
   protected final String partitionPath;
   protected final String fileId;
   protected final String writeToken;
   protected final TaskContextSupplier taskContextSupplier;
+  // For full schema evolution
+  protected final boolean schemaOnReadEnabled;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, partitionPath, fileId, hoodieTable,
-        getWriterSchemaIncludingAndExcludingMetadataPair(config), taskContextSupplier);
+        Option.empty(), taskContextSupplier);
   }
 
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
-                              HoodieTable<T, I, K, O> hoodieTable, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
+                              HoodieTable<T, I, K, O> hoodieTable, Option<Schema> overriddenSchema,
                               TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable);
+    super(config, Option.of(instantTime), hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
-    this.writerSchema = writerSchemaIncludingAndExcludingMetadataPair.getKey();
-    this.writerSchemaWithMetafields = writerSchemaIncludingAndExcludingMetadataPair.getValue();
-    this.timer = new HoodieTimer().startTimer();
+    this.writeSchema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
+    this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
+    this.timer = HoodieTimer.start();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
-  }
-
-  /**
-   * Returns writer schema pairs containing
-   *   (a) Writer Schema from client
-   *   (b) (a) with hoodie metadata fields.
-   * @param config Write Config
-   * @return
-   */
-  protected static Pair<Schema, Schema> getWriterSchemaIncludingAndExcludingMetadataPair(HoodieWriteConfig config) {
-    Schema originalSchema = new Schema.Parser().parse(config.getSchema());
-    Schema hoodieSchema = HoodieAvroUtils.addMetadataFields(originalSchema);
-    return Pair.of(originalSchema, hoodieSchema);
+    this.schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
+    this.recordMerger = config.getRecordMerger();
   }
 
   /**
@@ -108,13 +109,24 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   public Path makeNewPath(String partitionPath) {
     Path path = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
     try {
-      fs.mkdirs(path); // create a new partition as needed.
+      if (!fs.exists(path)) {
+        fs.mkdirs(path); // create a new partition as needed.
+      }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to make dir " + path, e);
     }
 
-    return new Path(path.toString(), FSUtils.makeDataFileName(instantTime, writeToken, fileId,
+    return new Path(path.toString(), FSUtils.makeBaseFileName(instantTime, writeToken, fileId,
         hoodieTable.getMetaClient().getTableConfig().getBaseFileFormat().getFileExtension()));
+  }
+
+  /**
+   * Make new file path with given file name.
+   */
+  protected Path makeNewFilePath(String partitionPath, String fileName) {
+    String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
+        + fileName).toString();
+    return new Path(config.getBasePath(), relativePath);
   }
 
   /**
@@ -123,12 +135,16 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    * @param partitionPath Partition path
    */
   protected void createMarkerFile(String partitionPath, String dataFileName) {
-    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
-    markerFiles.create(partitionPath, dataFileName, getIOType());
+    WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime)
+        .create(partitionPath, dataFileName, getIOType(), config, fileId, hoodieTable.getMetaClient().getActiveTimeline());
   }
 
-  public Schema getWriterSchemaWithMetafields() {
-    return writerSchemaWithMetafields;
+  public Schema getWriterSchemaWithMetaFields() {
+    return writeSchemaWithMetaFields;
+  }
+
+  public Schema getWriterSchema() {
+    return writeSchema;
   }
 
   /**
@@ -141,32 +157,22 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     return false;
   }
 
+  boolean layoutControlsNumFiles() {
+    return hoodieTable.getStorageLayout().determinesNumFileGroups();
+  }
+
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  public void write(HoodieRecord record, Option<IndexedRecord> insertValue) {
+  protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
     // NO_OP
   }
 
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  public void write(HoodieRecord record, Option<IndexedRecord> avroRecord, Option<Exception> exception) {
-    Option recordMetadata = record.getData().getMetadata();
-    if (exception.isPresent() && exception.get() instanceof Throwable) {
-      // Not throwing exception from here, since we don't want to fail the entire job for a single record
-      writeStatus.markFailure(record, exception.get(), recordMetadata);
-      LOG.error("Error writing record " + record, exception.get());
-    } else {
-      write(record, avroRecord);
-    }
-  }
-
-  /**
-   * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
-   */
-  protected GenericRecord rewriteRecord(GenericRecord record) {
-    return HoodieAvroUtils.rewriteRecord(record, writerSchemaWithMetafields);
+  public void write(HoodieRecord record, Schema schema, TypedProperties props) {
+    doWrite(record, schema, props);
   }
 
   public abstract List<WriteStatus> close();
@@ -182,8 +188,20 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   public abstract IOType getIOType();
 
   @Override
-  protected FileSystem getFileSystem() {
+  public FileSystem getFileSystem() {
     return hoodieTable.getMetaClient().getFs();
+  }
+
+  public HoodieWriteConfig getConfig() {
+    return this.config;
+  }
+
+  public HoodieTableMetaClient getHoodieTableMetaClient() {
+    return hoodieTable.getMetaClient();
+  }
+  
+  public String getFileId() {
+    return this.fileId;
   }
 
   protected int getPartitionId() {
@@ -198,8 +216,51 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     return taskContextSupplier.getAttemptIdSupplier().get();
   }
 
-  protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable,
-      HoodieWriteConfig config, Schema schema, TaskContextSupplier taskContextSupplier) throws IOException {
-    return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, taskContextSupplier);
+  private static Schema getWriteSchema(HoodieWriteConfig config) {
+    return new Schema.Parser().parse(config.getWriteSchema());
+  }
+
+  protected HoodieLogFormat.Writer createLogWriter(
+      Option<FileSlice> fileSlice, String baseCommitTime) throws IOException {
+    return createLogWriter(fileSlice, baseCommitTime, null);
+  }
+
+  protected HoodieLogFormat.Writer createLogWriter(
+      Option<FileSlice> fileSlice, String baseCommitTime, String suffix) throws IOException {
+    Option<HoodieLogFile> latestLogFile = fileSlice.isPresent()
+        ? fileSlice.get().getLatestLogFile()
+        : Option.empty();
+
+    return HoodieLogFormat.newWriterBuilder()
+        .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+        .withFileId(fileId)
+        .overBaseCommit(baseCommitTime)
+        .withLogVersion(latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
+        .withFileSize(latestLogFile.map(HoodieLogFile::getFileSize).orElse(0L))
+        .withSizeThreshold(config.getLogFileMaxSize())
+        .withFs(fs)
+        .withRolloverLogWriteToken(writeToken)
+        .withLogWriteToken(latestLogFile.map(x -> FSUtils.getWriteTokenFromLogPath(x.getPath())).orElse(writeToken))
+        .withSuffix(suffix)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+  }
+
+  protected HoodieLogFormat.Writer createLogWriter(String baseCommitTime, String fileSuffix) {
+    try {
+      return createLogWriter(Option.empty(),baseCommitTime, fileSuffix);
+    } catch (IOException e) {
+      throw new HoodieException("Creating logger writer with fileId: " + fileId + ", "
+          + "base commit time: " + baseCommitTime + ", "
+          + "file suffix: " + fileSuffix + " error");
+    }
+  }
+
+  protected static Option<IndexedRecord> toAvroRecord(HoodieRecord record, Schema writerSchema, TypedProperties props) {
+    try {
+      return record.toIndexedRecord(writerSchema, props).map(HoodieAvroIndexedRecord::getData);
+    } catch (IOException e) {
+      LOG.error("Fail to get indexRecord from " + record, e);
+      return Option.empty();
+    }
   }
 }

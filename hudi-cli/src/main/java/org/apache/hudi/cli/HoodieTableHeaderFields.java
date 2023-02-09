@@ -22,6 +22,7 @@ package org.apache.hudi.cli;
  * Fields of print table header.
  */
 public class HoodieTableHeaderFields {
+  public static final String HEADER_ROW_NO = "No.";
   public static final String HEADER_PARTITION = "Partition";
   public static final String HEADER_INSTANT = "Instant";
   public static final String HEADER_PARTITION_PATH = HEADER_PARTITION + " Path";
@@ -83,6 +84,8 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_HOODIE_PROPERTY = "Property";
   public static final String HEADER_OLD_VALUE = "Old Value";
   public static final String HEADER_NEW_VALUE = "New Value";
+  public static final String HEADER_TEXT_METAFILE_PRESENT = "Text Metafile present ?";
+  public static final String HEADER_BASE_METAFILE_PRESENT = "Base Metafile present ?";
 
   /**
    * Fields of Savepoints.
@@ -126,6 +129,9 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_TOTAL_RECORDS_INSERTED = "Total Records Inserted";
   public static final String HEADER_TOTAL_RECORDS_UPDATED = "Total Records Updated";
   public static final String HEADER_TOTAL_ERRORS = "Total Errors";
+  public static final String HEADER_TOTAL_RECORDS_WRITTEN_COMMIT = "Total Records Written for entire commit";
+  public static final String HEADER_TOTAL_BYTES_WRITTEN_COMMIT = "Total Bytes Written for entire commit";
+  public static final String HEADER_AVG_REC_SIZE_COMMIT = "Avg record size for entire commit";
 
   /**
    * Fields of commit metadata.
@@ -140,4 +146,71 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_TOTAL_ROLLBACK_BLOCKS = "Total Rollback Blocks";
   public static final String HEADER_TOTAL_LOG_RECORDS = "Total Log Records";
   public static final String HEADER_TOTAL_UPDATED_RECORDS_COMPACTED = "Total Updated Records Compacted";
+
+  /**
+   * Fields of Compaction.
+   */
+  public static final String HEADER_INSTANT_BLANK_TIME = "Instant Time";
+  public static final String HEADER_FILE_PATH = "File Path";
+  public static final String HEADER_COMPACTION_INSTANT_TIME = "Compaction " + HEADER_INSTANT_BLANK_TIME;
+  public static final String HEADER_STATE = "State";
+  public static final String HEADER_TOTAL_FILES_TO_BE_COMPACTED = "Total FileIds to be Compacted";
+  public static final String HEADER_EXTRA_METADATA = "Extra Metadata";
+  public static final String HEADER_DATA_FILE_PATH = "Data " + HEADER_FILE_PATH;
+  public static final String HEADER_TOTAL_DELTA_FILES = "Total " + HEADER_DELTA_FILES;
+  public static final String HEADER_METRICS = "getMetrics";
+  public static final String HEADER_BASE_INSTANT_TIME = "Base " + HEADER_INSTANT_BLANK_TIME;
+  public static final String HEADER_BASE_DATA_FILE = "Base Data File";
+  public static final String HEADER_VALID = "Valid";
+  public static final String HEADER_ERROR = "Error";
+  public static final String HEADER_SOURCE_FILE_PATH = "Source " + HEADER_FILE_PATH;
+  public static final String HEADER_DESTINATION_FILE_PATH = "Destination " + HEADER_FILE_PATH;
+  public static final String HEADER_RENAME_EXECUTED = "Rename Executed?";
+  public static final String HEADER_RENAME_SUCCEEDED = "Rename Succeeded?";
+
+  /**
+   * Fields of timeline command output
+   */
+  public static final String HEADER_REQUESTED_TIME = "Requested\nTime";
+  public static final String HEADER_INFLIGHT_TIME = "Inflight\nTime";
+  public static final String HEADER_COMPLETED_TIME = "Completed\nTime";
+  public static final String HEADER_ROLLBACK_INFO = "Rollback Info";
+  public static final String HEADER_MT_PREFIX = "MT\n";
+  public static final String HEADER_MT_ACTION = HEADER_MT_PREFIX + HEADER_ACTION;
+  public static final String HEADER_MT_STATE = HEADER_MT_PREFIX + HEADER_STATE;
+  public static final String HEADER_MT_REQUESTED_TIME = HEADER_MT_PREFIX + HEADER_REQUESTED_TIME;
+  public static final String HEADER_MT_INFLIGHT_TIME = HEADER_MT_PREFIX + HEADER_INFLIGHT_TIME;
+  public static final String HEADER_MT_COMPLETED_TIME = HEADER_MT_PREFIX + HEADER_COMPLETED_TIME;
+
+  public static TableHeader getTableHeader() {
+    return new TableHeader()
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_COMMIT_TIME)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_ADDED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_UPDATED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_PARTITIONS_WRITTEN)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_WRITTEN)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_UPDATE_RECORDS_WRITTEN)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ERRORS);
+  }
+
+  public static TableHeader getTableHeaderWithExtraMetadata() {
+    return new TableHeader()
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_ACTION)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_ID)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PREVIOUS_COMMIT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_NUM_WRITES)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_NUM_INSERTS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_NUM_DELETES)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_NUM_UPDATE_WRITES)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ERRORS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_LOG_BLOCKS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_CORRUPT_LOG_BLOCKS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ROLLBACK_BLOCKS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_LOG_RECORDS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_UPDATED_RECORDS_COMPACTED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN);
+  }
 }

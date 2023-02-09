@@ -18,6 +18,9 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.util.Option;
+
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.FileSplit;
@@ -31,7 +34,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.stubbing.Answer;
 
 import java.io.DataInput;
+import java.io.DataInputStream;
 import java.io.DataOutput;
+import java.io.DataOutputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -54,6 +61,7 @@ public class TestHoodieRealtimeFileSplit {
 
   private HoodieRealtimeFileSplit split;
   private String basePath;
+  private List<HoodieLogFile> deltaLogFiles;
   private List<String> deltaLogPaths;
   private String fileSplitName;
   private FileSplit baseFileSplit;
@@ -62,12 +70,13 @@ public class TestHoodieRealtimeFileSplit {
   @BeforeEach
   public void setUp(@TempDir java.nio.file.Path tempDir) throws Exception {
     basePath = tempDir.toAbsolutePath().toString();
+    deltaLogFiles = Collections.singletonList(new HoodieLogFile(new Path(basePath + "/1.log"), 0L));
     deltaLogPaths = Collections.singletonList(basePath + "/1.log");
     fileSplitName = basePath + "/test.file";
     baseFileSplit = new FileSplit(new Path(fileSplitName), 0, 100, new String[] {});
     maxCommitTime = "10001";
 
-    split = new HoodieRealtimeFileSplit(baseFileSplit, basePath, deltaLogPaths, maxCommitTime);
+    split = new HoodieRealtimeFileSplit(baseFileSplit, basePath, deltaLogFiles, maxCommitTime, false, Option.empty());
   }
 
   @Test
@@ -97,6 +106,7 @@ public class TestHoodieRealtimeFileSplit {
     inorder.verify(out, times(1)).writeInt(eq(deltaLogPaths.size()));
     inorder.verify(out, times(1)).writeInt(eq(deltaLogPaths.get(0).length()));
     inorder.verify(out, times(1)).write(aryEq(deltaLogPaths.get(0).getBytes(StandardCharsets.UTF_8)));
+    inorder.verify(out, times(1)).writeBoolean(false);
     // verify there are no more interactions happened on the mocked object
     inorder.verifyNoMoreInteractions();
   }
@@ -150,5 +160,19 @@ public class TestHoodieRealtimeFileSplit {
     assertEquals(maxCommitTime, read.getMaxCommitTime());
     assertEquals(deltaLogPaths, read.getDeltaLogPaths());
     assertEquals(split.toString(), read.toString());
+  }
+
+  @Test
+  public void testSerDe(@TempDir java.nio.file.Path tempDir) throws IOException {
+    final HoodieRealtimeFileSplit original = split;
+    java.nio.file.Path tempFilePath = tempDir.resolve("tmp.txt");
+    try (DataOutputStream out = new DataOutputStream(new FileOutputStream(tempFilePath.toFile()))) {
+      original.write(out);
+    }
+    HoodieRealtimeFileSplit deserialized = new HoodieRealtimeFileSplit();
+    try (DataInputStream in = new DataInputStream(new FileInputStream(tempFilePath.toFile()))) {
+      deserialized.readFields(in);
+    }
+    assertEquals(original.toString(), deserialized.toString());
   }
 }

@@ -20,6 +20,7 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -52,9 +53,10 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   private byte[] jsonDataCompressed;
   private int dataSize;
   private boolean isDeleted;
+  private Comparable orderingVal;
 
   public RawTripTestPayload(Option<String> jsonData, String rowKey, String partitionPath, String schemaStr,
-      Boolean isDeleted) throws IOException {
+      Boolean isDeleted, Comparable orderingVal) throws IOException {
     if (jsonData.isPresent()) {
       this.jsonDataCompressed = compressData(jsonData.get());
       this.dataSize = jsonData.get().length();
@@ -62,10 +64,11 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.rowKey = rowKey;
     this.partitionPath = partitionPath;
     this.isDeleted = isDeleted;
+    this.orderingVal = orderingVal;
   }
 
   public RawTripTestPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
-    this(Option.of(jsonData), rowKey, partitionPath, schemaStr, false);
+    this(Option.of(jsonData), rowKey, partitionPath, schemaStr, false, 0L);
   }
 
   public RawTripTestPayload(String jsonData) throws IOException {
@@ -77,6 +80,23 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.isDeleted = false;
   }
 
+  /**
+   * @deprecated PLEASE READ THIS CAREFULLY
+   *
+   * Converting properly typed schemas into JSON leads to inevitable information loss, since JSON
+   * encodes only representation of the record (with no schema accompanying it), therefore occasionally
+   * losing nuances of the original data-types provided by the schema (for ex, with 1.23 literal it's
+   * impossible to tell whether original type was Double or Decimal).
+   *
+   * Multiplied by the fact that Spark 2 JSON schema inference has substantial gaps in it (see below),
+   * it's **NOT RECOMMENDED** to use this method. Instead please consider using {@link AvroConversionUtils#createDataframe()}
+   * method accepting list of {@link HoodieRecord} (as produced by the {@link HoodieTestDataGenerator}
+   * to create Spark's {@code Dataframe}s directly.
+   *
+   * REFs
+   * https://medium.com/swlh/notes-about-json-schema-handling-in-spark-sql-be1e7f13839d
+   */
+  @Deprecated
   public static List<String> recordsToStrings(List<HoodieRecord> records) {
     return records.stream().map(RawTripTestPayload::recordToString).filter(Option::isPresent).map(Option::get)
         .collect(Collectors.toList());
@@ -94,13 +114,23 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     }
   }
 
+  public static List<String> deleteRecordsToStrings(List<HoodieKey> records) {
+    return records.stream().map(record -> "{\"_row_key\": \"" + record.getRecordKey() + "\",\"partition\": \"" + record.getPartitionPath() + "\"}")
+        .collect(Collectors.toList());
+  }
+
   public String getPartitionPath() {
     return partitionPath;
   }
 
   @Override
-  public RawTripTestPayload preCombine(RawTripTestPayload another) {
-    return another;
+  public RawTripTestPayload preCombine(RawTripTestPayload oldValue) {
+    if (oldValue.orderingVal.compareTo(orderingVal) > 0) {
+      // pick the payload with greatest ordering value
+      return oldValue;
+    } else {
+      return this;
+    }
   }
 
   @Override
@@ -155,6 +185,14 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   private String unCompressData(byte[] data) throws IOException {
     try (InflaterInputStream iis = new InflaterInputStream(new ByteArrayInputStream(data))) {
       return FileIOUtils.readAsUTFString(iis, dataSize);
+    }
+  }
+
+  public RawTripTestPayload clone() {
+    try {
+      return new RawTripTestPayload(unCompressData(jsonDataCompressed), rowKey, partitionPath, null);
+    } catch (IOException e) {
+      return null;
     }
   }
 

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.savepoint;
 
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -33,9 +32,6 @@ public class SavepointHelpers {
   private static final Logger LOG = LogManager.getLogger(SavepointHelpers.class);
 
   public static void deleteSavepoint(HoodieTable table, String savepointTime) {
-    if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-      throw new UnsupportedOperationException("Savepointing is not supported or MergeOnRead table types");
-    }
     HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
     boolean isSavepointPresent = table.getCompletedSavepointTimeline().containsInstant(savePoint);
     if (!isSavepointPresent) {
@@ -52,7 +48,7 @@ public class SavepointHelpers {
     // Make sure the restore was successful
     table.getMetaClient().reloadActiveTimeline();
     Option<HoodieInstant> lastInstant = table.getActiveTimeline()
-        .getCommitsAndCompactionTimeline()
+        .getWriteTimeline()
         .filterCompletedAndCompactionInstants()
         .lastInstant();
     ValidationUtils.checkArgument(lastInstant.isPresent());

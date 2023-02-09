@@ -18,8 +18,10 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -32,6 +34,7 @@ public class TestStorageSchemes {
   @Test
   public void testStorageSchemes() {
     assertTrue(StorageSchemes.isSchemeSupported("hdfs"));
+    assertTrue(StorageSchemes.isSchemeSupported("afs"));
     assertFalse(StorageSchemes.isSchemeSupported("s2"));
     assertFalse(StorageSchemes.isAppendSupported("s3a"));
     assertFalse(StorageSchemes.isAppendSupported("gs"));
@@ -44,8 +47,35 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAppendSupported("cosn"));
     assertFalse(StorageSchemes.isAppendSupported("dbfs"));
     assertFalse(StorageSchemes.isAppendSupported("cos"));
+    assertTrue(StorageSchemes.isAppendSupported("jfs"));
+    assertFalse(StorageSchemes.isAppendSupported("bos"));
+    assertFalse(StorageSchemes.isAppendSupported("ks3"));
+    assertTrue(StorageSchemes.isAppendSupported("ofs"));
+    assertFalse(StorageSchemes.isAppendSupported("oci"));
+    assertFalse(StorageSchemes.isAppendSupported("tos"));
+    assertTrue(StorageSchemes.isAppendSupported("cfs"));
     assertThrows(IllegalArgumentException.class, () -> {
       StorageSchemes.isAppendSupported("s2");
     }, "Should throw exception for unsupported schemes");
+  }
+
+  @Test
+  public void testConversionToNewSchema() {
+    Path s3TablePath1 = new Path("s3://test.1234/table1");
+    assertEquals(s3TablePath1, HoodieWrapperFileSystem.convertPathWithScheme(s3TablePath1, "s3"));
+
+    Path s3TablePath2 = new Path("s3://1234.test/table1");
+    assertEquals(s3TablePath2, HoodieWrapperFileSystem.convertPathWithScheme(s3TablePath2, "s3"));
+
+    Path s3TablePath3 = new Path("s3://test1234/table1");
+    assertEquals(s3TablePath3, HoodieWrapperFileSystem.convertPathWithScheme(s3TablePath3, "s3"));
+
+    Path hdfsTablePath = new Path("hdfs://sandbox.foo.com:8020/test.1234/table1");
+    assertEquals(hdfsTablePath, HoodieWrapperFileSystem.convertPathWithScheme(hdfsTablePath, "hdfs"));
+
+    Path localTablePath = new Path("file:/var/table1");
+    Path localTablePathNoPrefix = new Path("/var/table1");
+    assertEquals(localTablePath, HoodieWrapperFileSystem.convertPathWithScheme(localTablePath, "file"));
+    assertEquals(localTablePath, HoodieWrapperFileSystem.convertPathWithScheme(localTablePathNoPrefix, "file"));
   }
 }

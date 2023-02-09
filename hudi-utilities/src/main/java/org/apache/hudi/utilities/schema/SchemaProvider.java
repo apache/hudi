@@ -29,7 +29,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.Serializable;
 
 /**
- * Class to provide schema for reading data and also writing into a Hoodie table.
+ * Class to provide schema for reading data and also writing into a Hoodie table,
+ * used by deltastreamer (runs over Spark).
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public abstract class SchemaProvider implements Serializable {
@@ -37,6 +38,10 @@ public abstract class SchemaProvider implements Serializable {
   protected TypedProperties config;
 
   protected JavaSparkContext jssc;
+
+  public SchemaProvider(TypedProperties props) {
+    this(props, null);
+  }
 
   protected SchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     this.config = props;

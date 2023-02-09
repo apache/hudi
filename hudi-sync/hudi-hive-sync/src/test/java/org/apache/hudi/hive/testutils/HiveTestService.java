@@ -18,12 +18,13 @@
 
 package org.apache.hudi.hive.testutils;
 
-import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.hadoop.hive.metastore.IHMSHandler;
@@ -61,61 +62,40 @@ import java.util.concurrent.Executors;
 public class HiveTestService {
 
   private static final Logger LOG = LogManager.getLogger(HiveTestService.class);
+  private static final int CONNECTION_TIMEOUT_MS = 30000;
+  private static final String BIND_HOST = "127.0.0.1";
+  private static final int HS2_THRIFT_PORT = 9999;
+  public static final String HS2_JDBC_URL = String.format("jdbc:hive2://%s:%s/", BIND_HOST, HS2_THRIFT_PORT);
 
-  private static final int CONNECTION_TIMEOUT = 30000;
-
-  /**
-   * Configuration settings.
-   */
-  private Configuration hadoopConf;
-  private String workDir;
-  private String bindIP = "127.0.0.1";
-  private int metastorePort = 9083;
-  private int serverPort = 9999;
-  private boolean clean = true;
-
-  private Map<String, String> sysProps = new HashMap<>();
+  private final Configuration hadoopConf;
+  private final String workDir;
+  private final Map<String, String> sysProps = new HashMap<>();
   private ExecutorService executorService;
   private TServer tServer;
   private HiveServer2 hiveServer;
+  private HiveConf hiveConf;
 
-  public HiveTestService(Configuration configuration) throws IOException {
+  public HiveTestService(Configuration hadoopConf) throws IOException {
     this.workDir = Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath();
-  }
-
-  public Configuration getHadoopConf() {
-    return hadoopConf;
+    this.hadoopConf = hadoopConf;
   }
 
   public HiveServer2 start() throws IOException {
     Objects.requireNonNull(workDir, "The work dir must be set before starting cluster.");
 
-    if (hadoopConf == null) {
-      hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    }
-
     String localHiveLocation = getHiveLocation(workDir);
-    if (clean) {
-      LOG.info("Cleaning Hive cluster data at: " + localHiveLocation + " and starting fresh.");
-      File file = new File(localHiveLocation);
-      FileIOUtils.deleteDirectory(file);
-    }
+    LOG.info("Cleaning Hive cluster data at: " + localHiveLocation + " and starting fresh.");
+    File file = new File(localHiveLocation);
+    FileIOUtils.deleteDirectory(file);
 
-    HiveConf serverConf = configureHive(hadoopConf, localHiveLocation);
+    hiveConf = configureHive(hadoopConf, localHiveLocation);
 
     executorService = Executors.newSingleThreadExecutor();
-    tServer = startMetaStore(bindIP, metastorePort, serverConf);
+    tServer = startMetaStore(hiveConf);
 
-    serverConf.set("hive.in.test", "true");
-    hiveServer = startHiveServer(serverConf);
+    hiveServer = startHiveServer(hiveConf);
 
-    String serverHostname;
-    if (bindIP.equals("0.0.0.0")) {
-      serverHostname = "localhost";
-    } else {
-      serverHostname = bindIP;
-    }
-    if (!waitForServerUp(serverConf, serverHostname, metastorePort, CONNECTION_TIMEOUT)) {
+    if (!waitForServerUp(hiveConf)) {
       throw new IOException("Waiting for startup of standalone server");
     }
 
@@ -145,57 +125,72 @@ public class HiveTestService {
     LOG.info("Hive Minicluster service shut down.");
     tServer = null;
     hiveServer = null;
-    hadoopConf = null;
   }
 
-  private HiveConf configureHive(Configuration conf, String localHiveLocation) throws IOException {
-    conf.set("hive.metastore.local", "false");
-    conf.set(HiveConf.ConfVars.METASTOREURIS.varname, "thrift://" + bindIP + ":" + metastorePort);
-    conf.set(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST.varname, bindIP);
-    conf.setInt(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_PORT.varname, serverPort);
-    // The following line to turn of SASL has no effect since HiveAuthFactory calls
-    // 'new HiveConf()'. This is fixed by https://issues.apache.org/jira/browse/HIVE-6657,
-    // in Hive 0.14.
-    // As a workaround, the property is set in hive-site.xml in this module.
-    // conf.set(HiveConf.ConfVars.HIVE_SERVER2_AUTHENTICATION.varname, "NOSASL");
+  public HiveServer2 getHiveServer() {
+    return hiveServer;
+  }
+
+  public HiveConf getHiveConf() {
+    return hiveConf;
+  }
+
+  public int getHiveServerPort() {
+    return hiveConf.getIntVar(ConfVars.HIVE_SERVER2_THRIFT_PORT);
+  }
+
+  public String getJdbcHive2Url() {
+    return String.format("jdbc:hive2://%s:%s/",
+        hiveConf.getVar(ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST), hiveConf.getIntVar(ConfVars.HIVE_SERVER2_THRIFT_PORT));
+  }
+
+  public HiveConf configureHive(Configuration hadoopConf, String localHiveLocation) throws IOException {
+    hadoopConf.set("hive.metastore.local", "false");
+    hadoopConf.set("datanucleus.schema.autoCreateTables", "true");
+    hadoopConf.set("datanucleus.autoCreateSchema", "true");
+    hadoopConf.set("datanucleus.fixedDatastore", "false");
+    HiveConf conf = new HiveConf(hadoopConf, HiveConf.class);
+    conf.setBoolVar(ConfVars.HIVE_IN_TEST, true);
+    conf.setBoolVar(ConfVars.METASTORE_SCHEMA_VERIFICATION, false);
+    final int hs2ThriftPort = hadoopConf.getInt(ConfVars.HIVE_SERVER2_THRIFT_PORT.varname, HS2_THRIFT_PORT);
+    conf.setIntVar(ConfVars.HIVE_SERVER2_THRIFT_PORT, hs2ThriftPort);
+    conf.setVar(ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST, BIND_HOST);
+    final int metastoreServerPort = hadoopConf.getInt(ConfVars.METASTORE_SERVER_PORT.varname, NetworkTestUtils.nextFreePort());
+    conf.setIntVar(ConfVars.METASTORE_SERVER_PORT, metastoreServerPort);
+    conf.setVar(ConfVars.METASTOREURIS, "thrift://" + BIND_HOST + ":" + metastoreServerPort);
     File localHiveDir = new File(localHiveLocation);
     localHiveDir.mkdirs();
     File metastoreDbDir = new File(localHiveDir, "metastore_db");
-    conf.set(HiveConf.ConfVars.METASTORECONNECTURLKEY.varname,
-        "jdbc:derby:" + metastoreDbDir.getPath() + ";create=true");
+    conf.setVar(ConfVars.METASTORECONNECTURLKEY, "jdbc:derby:" + metastoreDbDir.getPath() + ";create=true");
     File derbyLogFile = new File(localHiveDir, "derby.log");
     derbyLogFile.createNewFile();
     setSystemProperty("derby.stream.error.file", derbyLogFile.getPath());
     setSystemProperty("derby.system.home", localHiveDir.getAbsolutePath());
-    conf.set(HiveConf.ConfVars.METASTOREWAREHOUSE.varname,
-        Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath());
-    conf.set("datanucleus.schema.autoCreateTables", "true");
-    conf.set("hive.metastore.schema.verification", "false");
-    conf.set("datanucleus.autoCreateSchema", "true");
-    conf.set("datanucleus.fixedDatastore", "false");
-    setSystemProperty("derby.stream.error.file", derbyLogFile.getPath());
+    File metastoreWarehouseDir = new File(localHiveDir, "warehouse");
+    metastoreWarehouseDir.mkdir();
+    conf.setVar(ConfVars.METASTOREWAREHOUSE, metastoreWarehouseDir.getAbsolutePath());
 
-    return new HiveConf(conf, this.getClass());
+    return conf;
   }
 
-  private boolean waitForServerUp(HiveConf serverConf, String hostname, int port, int timeout) {
-    long start = System.currentTimeMillis();
+  private boolean waitForServerUp(HiveConf serverConf) {
+    LOG.info("waiting for " + serverConf.getVar(ConfVars.METASTOREURIS));
+    final long start = System.currentTimeMillis();
     while (true) {
       try {
         new HiveMetaStoreClient(serverConf);
         return true;
-      } catch (MetaException e) {
+      } catch (MetaException ignored) {
         // ignore as this is expected
-        LOG.info("server " + hostname + ":" + port + " not up " + e);
       }
 
-      if (System.currentTimeMillis() > start + timeout) {
+      if (System.currentTimeMillis() > start + CONNECTION_TIMEOUT_MS) {
         break;
       }
       try {
-        Thread.sleep(250);
-      } catch (InterruptedException e) {
-        // ignore
+        Thread.sleep(CONNECTION_TIMEOUT_MS / 10);
+      } catch (InterruptedException ignored) {
+        // no op
       }
     }
     return false;
@@ -275,27 +270,20 @@ public class HiveTestService {
     }
   }
 
-  public TServer startMetaStore(String forceBindIP, int port, HiveConf conf) throws IOException {
+  private TServer startMetaStore(HiveConf conf) throws IOException {
     try {
       // Server will create new threads up to max as necessary. After an idle
       // period, it will destory threads to keep the number of threads in the
       // pool to min.
-      int minWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMINTHREADS);
-      int maxWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMAXTHREADS);
-      boolean tcpKeepAlive = conf.getBoolVar(HiveConf.ConfVars.METASTORE_TCP_KEEP_ALIVE);
-      boolean useFramedTransport = conf.getBoolVar(HiveConf.ConfVars.METASTORE_USE_THRIFT_FRAMED_TRANSPORT);
+      String host = conf.getVar(ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST);
+      int port = conf.getIntVar(ConfVars.METASTORE_SERVER_PORT);
+      int minWorkerThreads = conf.getIntVar(ConfVars.METASTORESERVERMINTHREADS);
+      int maxWorkerThreads = conf.getIntVar(ConfVars.METASTORESERVERMAXTHREADS);
+      boolean tcpKeepAlive = conf.getBoolVar(ConfVars.METASTORE_TCP_KEEP_ALIVE);
+      boolean useFramedTransport = conf.getBoolVar(ConfVars.METASTORE_USE_THRIFT_FRAMED_TRANSPORT);
 
-      // don't support SASL yet
-      // boolean useSasl = conf.getBoolVar(HiveConf.ConfVars.METASTORE_USE_THRIFT_SASL);
-
-      TServerTransport serverTransport;
-      if (forceBindIP != null) {
-        InetSocketAddress address = new InetSocketAddress(forceBindIP, port);
-        serverTransport = tcpKeepAlive ? new TServerSocketKeepAlive(address) : new TServerSocket(address);
-
-      } else {
-        serverTransport = tcpKeepAlive ? new TServerSocketKeepAlive(port) : new TServerSocket(port);
-      }
+      InetSocketAddress address = new InetSocketAddress(host, port);
+      TServerTransport serverTransport = tcpKeepAlive ? new TServerSocketKeepAlive(address) : new TServerSocket(address);
 
       TProcessor processor;
       TTransportFactory transFactory;
@@ -303,7 +291,7 @@ public class HiveTestService {
       HiveMetaStore.HMSHandler baseHandler = new HiveMetaStore.HMSHandler("new db based metaserver", conf, false);
       IHMSHandler handler = RetryingHMSHandler.getProxy(conf, baseHandler, true);
 
-      if (conf.getBoolVar(HiveConf.ConfVars.METASTORE_EXECUTE_SET_UGI)) {
+      if (conf.getBoolVar(ConfVars.METASTORE_EXECUTE_SET_UGI)) {
         transFactory = useFramedTransport
             ? new ChainedTTransportFactory(new TFramedTransport.Factory(), new TUGIContainingTransport.Factory())
             : new TUGIContainingTransport.Factory();

@@ -1,0 +1,15 @@
+{
+  "type" : "record",
+  "name" : "Longitude_and_Latitude_Values",
+  "doc" : "A geographical coordinate.",
+  "namespace" : "example.com",
+  "fields" : [ {
+    "name" : "latitude",
+    "doc" : "",
+    "type" : "double"
+  }, {
+    "name" : "longitude",
+    "doc" : "",
+    "type" : "double"
+  } ]
+}

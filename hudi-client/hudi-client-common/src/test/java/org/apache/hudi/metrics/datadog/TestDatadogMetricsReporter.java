@@ -19,9 +19,11 @@
 package org.apache.hudi.metrics.datadog;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 
 import com.codahale.metrics.MetricRegistry;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -42,6 +44,11 @@ public class TestDatadogMetricsReporter {
 
   @Mock
   MetricRegistry registry;
+
+  @AfterEach
+  void shutdownMetrics() {
+    Metrics.shutdown();
+  }
 
   @Test
   public void instantiationShouldFailWhenNoApiKey() {

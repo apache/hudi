@@ -26,9 +26,14 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -38,9 +43,26 @@ import java.util.Map;
 public class CommitUtils {
 
   private static final Logger LOG = LogManager.getLogger(CommitUtils.class);
+  private static final String NULL_SCHEMA_STR = Schema.create(Schema.Type.NULL).toString();
+
+  /**
+   * Gets the commit action type for given write operation and table type.
+   * Use this API when commit action type can differ not only on the basis of table type but also write operation type.
+   * For example, INSERT_OVERWRITE/INSERT_OVERWRITE_TABLE operations have REPLACE commit action type.
+   */
+  public static String getCommitActionType(WriteOperationType operation, HoodieTableType tableType) {
+    if (operation == WriteOperationType.INSERT_OVERWRITE || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
+        || operation == WriteOperationType.DELETE_PARTITION) {
+      return HoodieTimeline.REPLACE_COMMIT_ACTION;
+    } else {
+      return getCommitActionType(tableType);
+    }
+  }
 
   /**
    * Gets the commit action type for given table type.
+   * Note: Use this API only when the commit action type is not dependent on the write operation type.
+   * See {@link CommitUtils#getCommitActionType(WriteOperationType, HoodieTableType)} for more details.
    */
   public static String getCommitActionType(HoodieTableType tableType) {
     switch (tableType) {
@@ -66,7 +88,8 @@ public class CommitUtils {
     if (extraMetadata.isPresent()) {
       extraMetadata.get().forEach(commitMetadata::addMetadata);
     }
-    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaToStoreInCommit);
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, (schemaToStoreInCommit == null || schemaToStoreInCommit.equals(NULL_SCHEMA_STR))
+        ? "" : schemaToStoreInCommit);
     commitMetadata.setOperationType(operationType);
     return commitMetadata;
   }
@@ -76,7 +99,7 @@ public class CommitUtils {
                                                              String commitActionType,
                                                              WriteOperationType operationType) {
     final HoodieCommitMetadata commitMetadata;
-    if (commitActionType == HoodieTimeline.REPLACE_COMMIT_ACTION) {
+    if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(commitActionType)) {
       HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
       replaceMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
       commitMetadata = replaceMetadata;
@@ -90,7 +113,56 @@ public class CommitUtils {
     }
 
     LOG.info("Creating  metadata for " + operationType + " numWriteStats:" + writeStats.size()
-        + "numReplaceFileIds:" + partitionToReplaceFileIds.values().stream().mapToInt(e -> e.size()).sum());
+        + " numReplaceFileIds:" + partitionToReplaceFileIds.values().stream().mapToInt(e -> e.size()).sum());
     return commitMetadata;
+  }
+
+  public static HashMap<String, String> getFileIdWithoutSuffixAndRelativePathsFromSpecificRecord(Map<String, List<org.apache.hudi.avro.model.HoodieWriteStat>>
+                                                                                       partitionToWriteStats) {
+    HashMap<String, String> fileIdToPath = new HashMap<>();
+    // list all partitions paths
+    for (Map.Entry<String, List<org.apache.hudi.avro.model.HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (org.apache.hudi.avro.model.HoodieWriteStat stat : entry.getValue()) {
+        fileIdToPath.put(stat.getFileId(), stat.getPath());
+      }
+    }
+    return fileIdToPath;
+  }
+
+  public static HashMap<String, String> getFileIdWithoutSuffixAndRelativePaths(Map<String, List<HoodieWriteStat>>
+      partitionToWriteStats) {
+    HashMap<String, String> fileIdToPath = new HashMap<>();
+    // list all partitions paths
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat stat : entry.getValue()) {
+        fileIdToPath.put(stat.getFileId(), stat.getPath());
+      }
+    }
+    return fileIdToPath;
+  }
+
+  /**
+   * Process previous commits metadata in the timeline to determine the checkpoint given a checkpoint key.
+   * NOTE: This is very similar in intent to DeltaSync#getLatestCommitMetadataWithValidCheckpointInfo except that
+   *       different deployment models (deltastreamer or spark structured streaming) could have different checkpoint keys.
+   *
+   * @param timeline completed commits in active timeline.
+   * @param checkpointKey the checkpoint key in the extra metadata of the commit.
+   * @return An optional commit metadata with latest checkpoint.
+   */
+  public static Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline, String checkpointKey) {
+    return (Option<HoodieCommitMetadata>) timeline.filterCompletedInstants().getReverseOrderedInstants().map(instant -> {
+      try {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        if (StringUtils.nonEmpty(commitMetadata.getMetadata(checkpointKey))) {
+          return Option.of(commitMetadata);
+        } else {
+          return Option.empty();
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+      }
+    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
   }
 }

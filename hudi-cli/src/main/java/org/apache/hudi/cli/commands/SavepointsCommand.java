@@ -23,23 +23,15 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.index.HoodieIndex;
-
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -47,10 +39,10 @@ import java.util.stream.Collectors;
 /**
  * CLI command to display savepoint options.
  */
-@Component
-public class SavepointsCommand implements CommandMarker {
+@ShellComponent
+public class SavepointsCommand {
 
-  @CliCommand(value = "savepoints show", help = "Show the savepoints")
+  @ShellMethod(key = "savepoints show", value = "Show the savepoints")
   public String showSavepoints() {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getSavePointTimeline().filterCompletedInstants();
@@ -63,24 +55,24 @@ public class SavepointsCommand implements CommandMarker {
     return HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_SAVEPOINT_TIME}, rows);
   }
 
-  @CliCommand(value = "savepoint create", help = "Savepoint a commit")
-  public String savepoint(@CliOption(key = {"commit"}, help = "Commit to savepoint") final String commitTime,
-      @CliOption(key = {"user"}, unspecifiedDefaultValue = "default",
+  @ShellMethod(key = "savepoint create", value = "Savepoint a commit")
+  public String savepoint(
+      @ShellOption(value = {"--commit"}, help = "Commit to savepoint") final String commitTime,
+      @ShellOption(value = {"--user"}, defaultValue = "default",
           help = "User who is creating the savepoint") final String user,
-      @CliOption(key = {"comments"}, unspecifiedDefaultValue = "default",
+      @ShellOption(value = {"--comments"}, defaultValue = "default",
           help = "Comments for creating the savepoint") final String comments,
-      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+      @ShellOption(value = {"--sparkProperties"}, help = "Spark Properties File Path",
+          defaultValue = "") final String sparkPropertiesPath,
+      @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master") String master,
+      @ShellOption(value = "--sparkMemory", defaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory)
       throws Exception {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
 
-    if (!timeline.containsInstant(commitInstant)) {
-      return "Commit " + commitTime + " not found in Commits " + timeline;
+    if (!activeTimeline.getCommitsTimeline().filterCompletedInstants().containsInstant(commitTime)) {
+      return "Commit " + commitTime + " not found in Commits " + activeTimeline;
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
@@ -97,12 +89,15 @@ public class SavepointsCommand implements CommandMarker {
     return String.format("The commit \"%s\" has been savepointed.", commitTime);
   }
 
-  @CliCommand(value = "savepoint rollback", help = "Savepoint a commit")
+  @ShellMethod(key = "savepoint rollback", value = "Savepoint a commit")
   public String rollbackToSavepoint(
-      @CliOption(key = {"savepoint"}, help = "Savepoint to rollback") final String instantTime,
-      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+      @ShellOption(value = {"--savepoint"}, help = "Savepoint to rollback") final String instantTime,
+      @ShellOption(value = {"--sparkProperties"}, help = "Spark Properties File Path",
+          defaultValue = "") final String sparkPropertiesPath,
+      @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master") String master,
+      @ShellOption(value = {"--lazyFailedWritesCleanPolicy"}, help = "True if FailedWriteCleanPolicy is lazy",
+          defaultValue = "false") final String lazyFailedWritesCleanPolicy,
+      @ShellOption(value = "--sparkMemory", defaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory)
       throws Exception {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
@@ -110,16 +105,16 @@ public class SavepointsCommand implements CommandMarker {
       throw new HoodieException("There are no completed instants to run rollback");
     }
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
+    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+    List<HoodieInstant> instants = timeline.getInstantsAsStream().filter(instant -> instant.getTimestamp().equals(instantTime)).collect(Collectors.toList());
 
-    if (!timeline.containsInstant(commitInstant)) {
+    if (instants.isEmpty()) {
       return "Commit " + instantTime + " not found in Commits " + timeline;
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK_TO_SAVEPOINT.toString(), master, sparkMemory,
-        instantTime, metaClient.getBasePath());
+        instantTime, metaClient.getBasePath(), lazyFailedWritesCleanPolicy);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -131,11 +126,13 @@ public class SavepointsCommand implements CommandMarker {
     return String.format("Savepoint \"%s\" rolled back", instantTime);
   }
 
-  @CliCommand(value = "savepoint delete", help = "Delete the savepoint")
-  public String deleteSavepoint(@CliOption(key = {"commit"}, help = "Delete a savepoint") final String instantTime,
-      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+  @ShellMethod(key = "savepoint delete", value = "Delete the savepoint")
+  public String deleteSavepoint(
+      @ShellOption(value = {"--commit"}, help = "Delete a savepoint") final String instantTime,
+      @ShellOption(value = {"--sparkProperties"}, help = "Spark Properties File Path",
+          defaultValue = "") final String sparkPropertiesPath,
+      @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master") String master,
+      @ShellOption(value = "--sparkMemory", defaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory)
       throws Exception {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
@@ -162,11 +159,4 @@ public class SavepointsCommand implements CommandMarker {
     }
     return String.format("Savepoint \"%s\" deleted.", instantTime);
   }
-
-  private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
-    return new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config, false);
-  }
-
 }

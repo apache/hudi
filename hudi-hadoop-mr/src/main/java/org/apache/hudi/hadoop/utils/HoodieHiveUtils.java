@@ -18,9 +18,12 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -37,9 +40,12 @@ public class HoodieHiveUtils {
 
   public static final Logger LOG = LogManager.getLogger(HoodieHiveUtils.class);
 
+  public static final String HOODIE_INCREMENTAL_USE_DATABASE = "hoodie.incremental.use.database";
   public static final String HOODIE_CONSUME_MODE_PATTERN = "hoodie.%s.consume.mode";
   public static final String HOODIE_START_COMMIT_PATTERN = "hoodie.%s.consume.start.timestamp";
   public static final String HOODIE_MAX_COMMIT_PATTERN = "hoodie.%s.consume.max.commits";
+  public static final String HOODIE_CONSUME_PENDING_COMMITS = "hoodie.%s.consume.pending.commits";
+  public static final String HOODIE_CONSUME_COMMIT = "hoodie.%s.consume.commit";
   public static final Set<String> VIRTUAL_COLUMN_NAMES = CollectionUtils.createImmutableSet(
       "INPUT__FILE__NAME", "BLOCK__OFFSET__INSIDE__FILE", "ROW__OFFSET__INSIDE__BLOCK", "RAW__DATA__SIZE",
       "ROW__ID", "GROUPING__ID");
@@ -65,8 +71,16 @@ public class HoodieHiveUtils {
   public static final String DEFAULT_SCAN_MODE = SNAPSHOT_SCAN_MODE;
   public static final int DEFAULT_MAX_COMMITS = 1;
   public static final int MAX_COMMIT_ALL = -1;
-  public static final int DEFAULT_LEVELS_TO_BASEPATH = 3;
   public static final Pattern HOODIE_CONSUME_MODE_PATTERN_STRING = Pattern.compile("hoodie\\.(.*)\\.consume\\.mode");
+  public static final String GLOBALLY_CONSISTENT_READ_TIMESTAMP = "last_replication_timestamp";
+
+  public static boolean shouldIncludePendingCommits(JobConf job, String tableName) {
+    return job.getBoolean(String.format(HOODIE_CONSUME_PENDING_COMMITS, tableName), false);
+  }
+
+  public static Option<String> getMaxCommit(JobConf job, String tableName) {
+    return Option.ofNullable(job.get(String.format(HOODIE_CONSUME_COMMIT, tableName)));
+  }
 
   public static boolean stopAtCompaction(JobContext job, String tableName) {
     String compactionPropName = String.format(HOODIE_STOP_AT_COMPACTION_PATTERN, tableName);
@@ -91,6 +105,13 @@ public class HoodieHiveUtils {
     return job.getConfiguration().get(startCommitTimestampName);
   }
 
+  /**
+   * Gets the n'th parent for the Path. Assumes the path has at-least n components
+   *
+   * @param path
+   * @param n
+   * @return
+   */
   public static Path getNthParent(Path path, int n) {
     Path parent = path;
     for (int i = 0; i < n; i++) {
@@ -99,6 +120,12 @@ public class HoodieHiveUtils {
     return parent;
   }
 
+  /**
+   * Returns a list of tableNames for which hoodie.<tableName>.consume.mode is set to incremental else returns empty List
+   *
+   * @param job
+   * @return
+   */
   public static List<String> getIncrementalTableNames(JobContext job) {
     Map<String, String> tablesModeMap = job.getConfiguration()
         .getValByRegex(HOODIE_CONSUME_MODE_PATTERN_STRING.pattern());
@@ -114,5 +141,9 @@ public class HoodieHiveUtils {
       result = new ArrayList<>();
     }
     return result;
+  }
+
+  public static boolean isIncrementalUseDatabase(Configuration conf) {
+    return conf.getBoolean(HOODIE_INCREMENTAL_USE_DATABASE, false);
   }
 }

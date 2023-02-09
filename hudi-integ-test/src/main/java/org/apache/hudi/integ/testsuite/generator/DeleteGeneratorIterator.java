@@ -21,9 +21,7 @@ package org.apache.hudi.integ.testsuite.generator;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 
 /**
  * Lazy delete record generator.

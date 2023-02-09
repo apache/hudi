@@ -20,53 +20,98 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.index.FlinkHoodieIndex;
+import org.apache.hudi.index.FlinkHoodieIndexFactory;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+
+import org.apache.avro.specific.SpecificRecordBase;
 
 import java.util.List;
 
-public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
-    extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+/**
+ * Impl of a flink hoodie table.
+ */
+public abstract class HoodieFlinkTable<T>
+    extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
+    implements ExplicitWriteHandleTable<T> {
+
   protected HoodieFlinkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(
-        context.getHadoopConf().get(),
-        config.getBasePath(),
-        true,
-        config.getConsistencyGuardConfig(),
-        Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))
-    );
+  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
+            .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
+            .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
     return HoodieFlinkTable.create(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config,
-                                                                           HoodieFlinkEngineContext context,
-                                                                           HoodieTableMetaClient metaClient) {
+  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config,
+                                               HoodieFlinkEngineContext context,
+                                               HoodieTableMetaClient metaClient) {
+    if (config.getSchemaEvolutionEnable()) {
+      setLatestInternalSchema(config, metaClient);
+    }
+    final HoodieFlinkTable<T> hoodieFlinkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        return new HoodieFlinkCopyOnWriteTable<>(config, context, metaClient);
+        hoodieFlinkTable = new HoodieFlinkCopyOnWriteTable<>(config, context, metaClient);
+        break;
       case MERGE_ON_READ:
-        throw new HoodieNotSupportedException("MERGE_ON_READ is not supported yet");
+        hoodieFlinkTable = new HoodieFlinkMergeOnReadTable<>(config, context, metaClient);
+        break;
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
+    return hoodieFlinkTable;
+  }
+
+  public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
+      HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
+    return metadata.clone(metadata.getWriteStatuses().collectAsList());
   }
 
   @Override
-  protected HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return FlinkHoodieIndex.createIndex((HoodieFlinkEngineContext) context, config);
+  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+    return FlinkHoodieIndexFactory.createIndex((HoodieFlinkEngineContext) context, config);
+  }
+
+  /**
+   * Fetch instance of {@link HoodieTableMetadataWriter}.
+   *
+   * @return instance of {@link HoodieTableMetadataWriter}
+   */
+  @Override
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
+                                                                                            Option<T> actionMetadata) {
+    if (config.isMetadataTableEnabled()) {
+      return Option.of(FlinkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
+          context, actionMetadata, Option.of(triggeringInstantTimestamp)));
+    } else {
+      return Option.empty();
+    }
+  }
+
+  private static void setLatestInternalSchema(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+    Option<InternalSchema> internalSchema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata();
+    if (internalSchema.isPresent()) {
+      config.setInternalSchemaString(SerDeHelper.toJson(internalSchema.get()));
+    }
   }
 }

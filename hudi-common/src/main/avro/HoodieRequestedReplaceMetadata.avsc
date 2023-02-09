@@ -23,11 +23,11 @@
      {
          "name":"operationType",
          "type":["null", "string"],
-         "default": ""
+         "default": null
     },
     {
        "name":"clusteringPlan", /* only set if operationType == clustering" */
-       "type":["HoodieClusteringPlan", "null"],
+       "type":["null", "HoodieClusteringPlan"],
        "default": null
     },
     {

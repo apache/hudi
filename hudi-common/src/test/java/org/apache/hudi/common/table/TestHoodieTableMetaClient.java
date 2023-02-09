@@ -25,6 +25,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -47,6 +48,11 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     initMetaClient();
   }
 
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanMetaClient();
+  }
+
   @Test
   public void checkMetadata() {
     assertEquals(HoodieTestUtils.RAW_TRIPS_TEST_NAME, metaClient.getTableConfig().getTableName(),
@@ -54,21 +60,23 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertEquals(basePath, metaClient.getBasePath(), "Basepath should be the one assigned");
     assertEquals(basePath + "/.hoodie", metaClient.getMetaPath(),
         "Metapath should be ${basepath}/.hoodie");
+    assertTrue(metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.TABLE_CHECKSUM.key()));
+    assertTrue(HoodieTableConfig.validateChecksum(metaClient.getTableConfig().getProps()));
   }
 
   @Test
   public void checkSerDe() {
     // check if this object is serialized and de-serialized, we are able to read from the file system
-    HoodieTableMetaClient deseralizedMetaClient =
+    HoodieTableMetaClient deserializedMetaClient =
         HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
-    assertNotNull(deseralizedMetaClient);
-    HoodieActiveTimeline commitTimeline = deseralizedMetaClient.getActiveTimeline();
+    assertNotNull(deserializedMetaClient);
+    HoodieActiveTimeline commitTimeline = deserializedMetaClient.getActiveTimeline();
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     commitTimeline.createNewInstant(instant);
     commitTimeline.saveAsComplete(instant, Option.of("test-detail".getBytes()));
     commitTimeline = commitTimeline.reload();
     HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
-    assertEquals(completedInstant, commitTimeline.getInstants().findFirst().get(),
+    assertEquals(completedInstant, commitTimeline.getInstantsAsStream().findFirst().get(),
         "Commit should be 1 and completed");
     assertArrayEquals("test-detail".getBytes(), commitTimeline.getInstantDetails(completedInstant).get(),
         "Commit value should be \"test-detail\"");
@@ -93,7 +101,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     activeTimeline = activeTimeline.reload();
     activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertFalse(activeCommitTimeline.empty(), "Should be the 1 commit we made");
-    assertEquals(completedInstant, activeCommitTimeline.getInstants().findFirst().get(),
+    assertEquals(completedInstant, activeCommitTimeline.getInstantsAsStream().findFirst().get(),
         "Commit should be 1");
     assertArrayEquals("test-detail".getBytes(), activeCommitTimeline.getInstantDetails(completedInstant).get(),
         "Commit value should be \"test-detail\"");

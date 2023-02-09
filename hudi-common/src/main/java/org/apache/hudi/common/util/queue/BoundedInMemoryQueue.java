@@ -49,7 +49,7 @@ import java.util.function.Function;
  * @param <I> input payload data type
  * @param <O> output payload data type
  */
-public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
+public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Iterable<O> {
 
   /** Interval used for polling records in the queue. **/
   public static final int RECORD_POLL_INTERVAL_SEC = 1;
@@ -78,10 +78,10 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   private final long memoryLimit;
 
   /**
-   * it holds the root cause of the exception in case either queueing records
+   * it holds the root cause of the Throwable in case either queueing records
    * (consuming from inputIterator) fails or thread reading records from queue fails.
    */
-  private final AtomicReference<Exception> hasFailed = new AtomicReference<>(null);
+  private final AtomicReference<Throwable> hasFailed = new AtomicReference<>(null);
 
   /** Used for indicating that all the records from queue are read successfully. **/
   private final AtomicBoolean isReadDone = new AtomicBoolean(false);
@@ -128,14 +128,15 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
    * @param payloadSizeEstimator Payload Size Estimator
    */
   public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction,
-      final SizeEstimator<O> payloadSizeEstimator) {
+                              final SizeEstimator<O> payloadSizeEstimator) {
     this.memoryLimit = memoryLimit;
     this.transformFunction = transformFunction;
     this.payloadSizeEstimator = payloadSizeEstimator;
     this.iterator = new QueueIterator();
   }
 
-  public int size() {
+  @Override
+  public long size() {
     return this.queue.size();
   }
 
@@ -172,8 +173,9 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * Inserts record into queue after applying transformation.
    *
-   * @param t Item to be queueed
+   * @param t Item to be queued
    */
+  @Override
   public void insertRecord(I t) throws Exception {
     // If already closed, throw exception
     if (isWriteDone.get()) {
@@ -203,7 +205,8 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
    * Reader interface but never exposed to outside world as this is a single consumer queue. Reading is done through a
    * singleton iterator for this queue.
    */
-  private Option<O> readNextRecord() {
+  @Override
+  public Option<O> readNextRecord() {
     if (this.isReadDone.get()) {
       return Option.empty();
     }
@@ -222,7 +225,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
         throw new HoodieException(e);
       }
     }
-    // Check one more time here as it is possible producer errored out and closed immediately
+    // Check one more time here as it is possible producer erred out and closed immediately
     throwExceptionIfFailed();
 
     if (newRecord != null && newRecord.isPresent()) {
@@ -237,13 +240,21 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * Puts an empty entry to queue to denote termination.
    */
-  public void close() {
+  @Override
+  public void seal() {
     // done queueing records notifying queue-reader.
     isWriteDone.set(true);
   }
 
+  @Override
+  public void close() {
+    // NOTE: Closing is a no-op to support the 1-sided case, when the queue
+    //       is just populated (for subsequent reading), but never consumed
+  }
+
   private void throwExceptionIfFailed() {
     if (this.hasFailed.get() != null) {
+      close();
       throw new HoodieException("operation has failed", this.hasFailed.get());
     }
   }
@@ -251,11 +262,17 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * API to allow producers and consumer to communicate termination due to failure.
    */
-  public void markAsFailed(Exception e) {
+  @Override
+  public void markAsFailed(Throwable e) {
     this.hasFailed.set(e);
     // release the permits so that if the queueing thread is waiting for permits then it will
     // get it.
     this.rateLimiter.release(RECORD_CACHING_LIMIT + 1);
+  }
+
+  @Override
+  public boolean isEmpty() {
+    return this.queue.size() == 0;
   }
 
   @Override

@@ -18,8 +18,12 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.sync.common.model.PartitionValueExtractor;
+
 import org.junit.jupiter.api.Test;
+
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,5 +38,24 @@ public class TestPartitionValueExtractor {
     assertEquals(hourPartition.extractPartitionValuesInPath("2020/12/20/01"), list);
     assertThrows(IllegalArgumentException.class, () -> hourPartition.extractPartitionValuesInPath("2020/12/20"));
     assertEquals(hourPartition.extractPartitionValuesInPath("update_time=2020/12/20/01"), list);
+  }
+
+  @Test
+  public void testHiveStylePartition() {
+    HiveStylePartitionValueExtractor hiveStylePartition = new HiveStylePartitionValueExtractor();
+    List<String> list = new ArrayList<>();
+    list.add("2021-04-02");
+    assertEquals(hiveStylePartition.extractPartitionValuesInPath("datestr=2021-04-02"), list);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> hiveStylePartition.extractPartitionValuesInPath("2021/04/02"));
+  }
+
+  @Test
+  public void testSinglePartPartition() {
+    PartitionValueExtractor extractor = new SinglePartPartitionValueExtractor();
+    assertEquals(
+        Collections.singletonList("202210-01-20"),
+        extractor.extractPartitionValuesInPath("202210/01/20"));
   }
 }

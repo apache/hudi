@@ -18,11 +18,11 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -38,8 +38,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
    * A COMPACTION action eventually becomes COMMIT when completed. So, when grouping instants
    * for state transitions, this needs to be taken into account
    */
-  private static final Map<String, String> COMPARABLE_ACTIONS =
-      CollectionUtils.createImmutableMap(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION);
+  private static final Map<String, String> COMPARABLE_ACTIONS = createComparableActionsMap();
 
   public static final Comparator<HoodieInstant> ACTION_COMPARATOR =
       Comparator.comparing(instant -> getComparableAction(instant.getAction()));
@@ -68,7 +67,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     // Committed instant
     COMPLETED,
     // Invalid instant
-    INVALID
+    NIL
   }
 
   private State state = State.COMPLETED;
@@ -147,7 +146,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
               : HoodieTimeline.makeCleanerFileName(timestamp);
     } else if (HoodieTimeline.ROLLBACK_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightRollbackFileName(timestamp)
-          : HoodieTimeline.makeRollbackFileName(timestamp);
+          : isRequested() ? HoodieTimeline.makeRequestedRollbackFileName(timestamp)
+              : HoodieTimeline.makeRollbackFileName(timestamp);
     } else if (HoodieTimeline.SAVEPOINT_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightSavePointFileName(timestamp)
           : HoodieTimeline.makeSavePointFileName(timestamp);
@@ -163,15 +163,39 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       } else {
         return HoodieTimeline.makeCommitFileName(timestamp);
       }
+    } else if (HoodieTimeline.LOG_COMPACTION_ACTION.equals(action)) {
+      if (isInflight()) {
+        return HoodieTimeline.makeInflightLogCompactionFileName(timestamp);
+      } else if (isRequested()) {
+        return HoodieTimeline.makeRequestedLogCompactionFileName(timestamp);
+      } else {
+        return HoodieTimeline.makeDeltaFileName(timestamp);
+      }
     } else if (HoodieTimeline.RESTORE_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightRestoreFileName(timestamp)
+          : isRequested() ? HoodieTimeline.makeRequestedRestoreFileName(timestamp)
           : HoodieTimeline.makeRestoreFileName(timestamp);
     } else if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightReplaceFileName(timestamp)
           : isRequested() ? HoodieTimeline.makeRequestedReplaceFileName(timestamp)
           : HoodieTimeline.makeReplaceFileName(timestamp);
+    } else if (HoodieTimeline.INDEXING_ACTION.equals(action)) {
+      return isInflight() ? HoodieTimeline.makeInflightIndexFileName(timestamp)
+          : isRequested() ? HoodieTimeline.makeRequestedIndexFileName(timestamp)
+          : HoodieTimeline.makeIndexCommitFileName(timestamp);
+    } else if (HoodieTimeline.SCHEMA_COMMIT_ACTION.equals(action)) {
+      return isInflight() ? HoodieTimeline.makeInflightSchemaFileName(timestamp)
+          : isRequested() ? HoodieTimeline.makeRequestSchemaFileName(timestamp)
+          : HoodieTimeline.makeSchemaFileName(timestamp);
     }
     throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
+  }
+
+  private static final Map<String, String> createComparableActionsMap() {
+    Map<String, String> comparableMap = new HashMap<>();
+    comparableMap.put(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION);
+    comparableMap.put(HoodieTimeline.LOG_COMPACTION_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION);
+    return comparableMap;
   }
 
   @Override

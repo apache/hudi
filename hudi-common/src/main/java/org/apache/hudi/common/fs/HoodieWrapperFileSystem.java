@@ -21,8 +21,10 @@ package org.apache.hudi.common.fs;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.CachingPath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
@@ -59,6 +61,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
 
+import static org.apache.hudi.common.fs.StorageSchemes.HDFS;
+
 /**
  * HoodieWrapperFileSystem wraps the default file system. It holds state about the open streams in the file system to
  * support getting the written size to each of the open streams.
@@ -67,6 +71,11 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   public static final String HOODIE_SCHEME_PREFIX = "hoodie-";
 
+  private static final String TMP_PATH_POSTFIX = ".tmp";
+
+  /**
+   * Names for metrics.
+   */
   protected enum MetricName {
     create, rename, delete, listStatus, mkdirs, getFileStatus, globStatus, listFiles, read, write
   }
@@ -85,6 +94,11 @@ public class HoodieWrapperFileSystem extends FileSystem {
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
 
+  /**
+   * Checked function interface.
+   *
+   * @param <R> Type of return value.
+   */
   @FunctionalInterface
   public interface CheckedFunction<R> {
     R get() throws IOException;
@@ -96,7 +110,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   protected static <R> R executeFuncWithTimeMetrics(String metricName, Path p, CheckedFunction<R> func) throws IOException {
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     R res = func.get();
 
     Registry registry = getMetricRegistryForPath(p);
@@ -135,13 +149,16 @@ public class HoodieWrapperFileSystem extends FileSystem {
     }
   }
 
-  private static Path convertPathWithScheme(Path oldPath, String newScheme) {
+  public static Path convertPathWithScheme(Path oldPath, String newScheme) {
     URI oldURI = oldPath.toUri();
     URI newURI;
     try {
-      newURI = new URI(newScheme, oldURI.getUserInfo(), oldURI.getHost(), oldURI.getPort(), oldURI.getPath(),
-          oldURI.getQuery(), oldURI.getFragment());
-      return new Path(newURI);
+      newURI = new URI(newScheme,
+                oldURI.getAuthority(),
+                oldURI.getPath(),
+                oldURI.getQuery(),
+                oldURI.getFragment());
+      return new CachingPath(newURI);
     } catch (URISyntaxException e) {
       // TODO - Better Exception handling
       throw new RuntimeException(e);
@@ -983,6 +1000,65 @@ public class HoodieWrapperFileSystem extends FileSystem {
     // When the file is first written, we do not have a track of it
     throw new IllegalArgumentException(
         file.toString() + " does not have a open stream. Cannot get the bytes written on the stream");
+  }
+
+  protected boolean needCreateTempFile() {
+    return HDFS.getScheme().equals(fileSystem.getScheme());
+  }
+
+  /**
+   * Creates a new file with overwrite set to false. This ensures files are created
+   * only once and never rewritten, also, here we take care if the content is not
+   * empty, will first write the content to a temp file if {needCreateTempFile} is
+   * true, and then rename it back after the content is written.
+   *
+   * @param fullPath File Path
+   * @param content Content to be stored
+   */
+  public void createImmutableFileInPath(Path fullPath, Option<byte[]> content)
+      throws HoodieIOException {
+    FSDataOutputStream fsout = null;
+    Path tmpPath = null;
+
+    boolean needTempFile = needCreateTempFile();
+
+    try {
+      if (!content.isPresent()) {
+        fsout = fileSystem.create(fullPath, false);
+      }
+
+      if (content.isPresent() && needTempFile) {
+        Path parent = fullPath.getParent();
+        tmpPath = new Path(parent, fullPath.getName() + TMP_PATH_POSTFIX);
+        fsout = fileSystem.create(tmpPath, false);
+        fsout.write(content.get());
+      }
+
+      if (content.isPresent() && !needTempFile) {
+        fsout = fileSystem.create(fullPath, false);
+        fsout.write(content.get());
+      }
+    } catch (IOException e) {
+      String errorMsg = "Failed to create file" + (tmpPath != null ? tmpPath : fullPath);
+      throw new HoodieIOException(errorMsg, e);
+    } finally {
+      try {
+        if (null != fsout) {
+          fsout.close();
+        }
+      } catch (IOException e) {
+        String errorMsg = "Failed to close file" + (needTempFile ? tmpPath : fullPath);
+        throw new HoodieIOException(errorMsg, e);
+      }
+
+      try {
+        if (null != tmpPath) {
+          fileSystem.rename(tmpPath, fullPath);
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to rename " + tmpPath + " to the target " + fullPath, e);
+      }
+    }
   }
 
   public FileSystem getFileSystem() {

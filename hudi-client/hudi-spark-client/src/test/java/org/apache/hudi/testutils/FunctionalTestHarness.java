@@ -19,12 +19,11 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -39,24 +38,28 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.util.Properties;
 
-import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 
+/**
+ * @deprecated Deprecated. Use {@link SparkClientFunctionalTestHarness} instead.
+ */
 public class FunctionalTestHarness implements SparkProvider, DFSProvider, HoodieMetaClientProvider, HoodieWriteClientProvider {
 
-  private static transient SparkSession spark;
+  protected static transient SparkSession spark;
   private static transient SQLContext sqlContext;
   private static transient JavaSparkContext jsc;
   protected static transient HoodieSparkEngineContext context;
@@ -117,16 +120,18 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
   @Override
   public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException {
-    props.putIfAbsent(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME, PARQUET.toString());
-    props.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, RAW_TRIPS_TEST_NAME);
-    props.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, COPY_ON_WRITE.name());
-    props.putIfAbsent(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
+    props = HoodieTableMetaClient.withPropertyBuilder()
+      .setTableName(RAW_TRIPS_TEST_NAME)
+      .setTableType(COPY_ON_WRITE)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .fromProperties(props)
+      .build();
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
   }
 
   @Override
   public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws IOException {
-    return new SparkRDDWriteClient(context(), cfg, false);
+    return new SparkRDDWriteClient(context(), cfg);
   }
 
   @BeforeEach
@@ -134,8 +139,8 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
     initialized = spark != null && hdfsTestService != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      SparkRDDWriteClient.registerClasses(sparkConf);
-      HoodieReadClient.addHoodieSupport(sparkConf);
+      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
+      SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
       jsc = new JavaSparkContext(spark.sparkContext());
@@ -150,9 +155,19 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
         hdfsTestService.stop();
         hdfsTestService = null;
 
+        jsc.close();
+        jsc = null;
         spark.stop();
         spark = null;
       }));
+    }
+  }
+
+  @AfterEach
+  public synchronized void tearDown() throws Exception {
+    if (spark != null) {
+      spark.stop();
+      spark = null;
     }
   }
 
@@ -164,5 +179,19 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
     for (FileStatus f : fileStatuses) {
       fs.delete(f.getPath(), true);
     }
+    if (hdfsTestService != null) {
+      hdfsTestService.stop();
+      hdfsTestService = null;
+    }
+    if (spark != null) {
+      spark.stop();
+      spark = null;
+    }
+    if (jsc != null) {
+      jsc.close();
+      jsc = null;
+    }
+    sqlContext = null;
+    context = null;
   }
 }
