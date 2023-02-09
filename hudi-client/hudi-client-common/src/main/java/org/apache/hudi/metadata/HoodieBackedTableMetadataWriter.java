@@ -1086,38 +1086,44 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
 
-    List<DirectoryInfo> partitionInfoList = listAllPartitions(dataMetaClient);
-    Map<String, Map<String, Long>> partitionToFilesMap = partitionInfoList.stream()
-        .map(p -> {
-          String partitionName = HoodieTableMetadataUtil.getPartitionIdentifier(p.getRelativePath());
-          return Pair.of(partitionName, p.getFileNameToSizeMap());
-        })
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    // skip file system listing to populate metadata records if its a fresh table.
+    // this is applicable only if the table already has N commits and metadata is enabled at a later point in time.
+    if (createInstantTime.equals(SOLO_COMMIT_TIMESTAMP)) { // SOLO_COMMIT_TIMESTAMP will be the initial commit time in MDT for a fresh table.
+      // If not, last completed commit in data table will be chosen as the initial commit time.
+      LOG.info("Triggering empty Commit to metadata to initialize");
+    } else {
+      List<DirectoryInfo> partitionInfoList = listAllPartitions(dataMetaClient);
+      Map<String, Map<String, Long>> partitionToFilesMap = partitionInfoList.stream()
+          .map(p -> {
+            String partitionName = HoodieTableMetadataUtil.getPartitionIdentifier(p.getRelativePath());
+            return Pair.of(partitionName, p.getFileNameToSizeMap());
+          })
+          .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    int totalDataFilesCount = partitionToFilesMap.values().stream().mapToInt(Map::size).sum();
-    List<String> partitions = new ArrayList<>(partitionToFilesMap.keySet());
+      int totalDataFilesCount = partitionToFilesMap.values().stream().mapToInt(Map::size).sum();
+      List<String> partitions = new ArrayList<>(partitionToFilesMap.keySet());
 
-    if (partitionTypes.contains(MetadataPartitionType.FILES)) {
-      // Record which saves the list of all partitions
-      HoodieRecord allPartitionRecord = HoodieMetadataPayload.createPartitionListRecord(partitions);
-      HoodieData<HoodieRecord> filesPartitionRecords = getFilesPartitionRecords(createInstantTime, partitionInfoList, allPartitionRecord);
-      ValidationUtils.checkState(filesPartitionRecords.count() == (partitions.size() + 1));
-      partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecords);
+      if (partitionTypes.contains(MetadataPartitionType.FILES)) {
+        // Record which saves the list of all partitions
+        HoodieRecord allPartitionRecord = HoodieMetadataPayload.createPartitionListRecord(partitions);
+        HoodieData<HoodieRecord> filesPartitionRecords = getFilesPartitionRecords(createInstantTime, partitionInfoList, allPartitionRecord);
+        ValidationUtils.checkState(filesPartitionRecords.count() == (partitions.size() + 1));
+        partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecords);
+      }
+
+      if (partitionTypes.contains(MetadataPartitionType.BLOOM_FILTERS) && totalDataFilesCount > 0) {
+        final HoodieData<HoodieRecord> recordsRDD = HoodieTableMetadataUtil.convertFilesToBloomFilterRecords(
+            engineContext, Collections.emptyMap(), partitionToFilesMap, getRecordsGenerationParams(), createInstantTime);
+        partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, recordsRDD);
+      }
+
+      if (partitionTypes.contains(MetadataPartitionType.COLUMN_STATS) && totalDataFilesCount > 0) {
+        final HoodieData<HoodieRecord> recordsRDD = HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
+            engineContext, Collections.emptyMap(), partitionToFilesMap, getRecordsGenerationParams());
+        partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, recordsRDD);
+      }
+      LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
     }
-
-    if (partitionTypes.contains(MetadataPartitionType.BLOOM_FILTERS) && totalDataFilesCount > 0) {
-      final HoodieData<HoodieRecord> recordsRDD = HoodieTableMetadataUtil.convertFilesToBloomFilterRecords(
-          engineContext, Collections.emptyMap(), partitionToFilesMap, getRecordsGenerationParams(), createInstantTime);
-      partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, recordsRDD);
-    }
-
-    if (partitionTypes.contains(MetadataPartitionType.COLUMN_STATS) && totalDataFilesCount > 0) {
-      final HoodieData<HoodieRecord> recordsRDD = HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
-          engineContext, Collections.emptyMap(), partitionToFilesMap, getRecordsGenerationParams());
-      partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, recordsRDD);
-    }
-
-    LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
 
     commit(createInstantTime, partitionToRecordsMap, false);
   }

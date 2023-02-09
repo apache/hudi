@@ -30,6 +30,8 @@ import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -297,10 +299,10 @@ public class FlinkOptions extends HoodieConfig {
       .key("read.streaming.skip_compaction")
       .booleanType()
       .defaultValue(false)// default read as batch
-      .withDescription("Whether to skip compaction instants for streaming read,\n"
-          + "there are two cases that this option can be used to avoid reading duplicates:\n"
-          + "1) you are definitely sure that the consumer reads faster than any compaction instants, "
-          + "usually with delta time compaction strategy that is long enough, for e.g, one week;\n"
+      .withDescription("Whether to skip compaction instants and avoid reading compacted base files for streaming read to improve read performance.\n"
+          + "There are two cases that this option can be used to avoid reading duplicates:\n"
+          + "1) you are definitely sure that the consumer reads [faster than/completes before] any compaction instants "
+          + "when " + HoodieCompactionConfig.PRESERVE_COMMIT_METADATA.key() + " is set to false.\n"
           + "2) changelog mode is enabled, this option is a solution to keep data integrity");
 
   // this option is experimental
@@ -308,8 +310,11 @@ public class FlinkOptions extends HoodieConfig {
           .key("read.streaming.skip_clustering")
           .booleanType()
           .defaultValue(false)
-          .withDescription("Whether to skip clustering instants for streaming read,\n"
-              + "to avoid reading duplicates");
+          .withDescription("Whether to skip clustering instants to avoid reading base files of clustering operations for streaming read "
+              + "to improve read performance.\n"
+              + "This option toggled to true to avoid duplicates when: \n"
+              + "1) you are definitely sure that the consumer reads [faster than/completes before] any clustering instants "
+              + "when " + HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.key() + " is set to false.\n");
 
   public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
@@ -438,7 +443,9 @@ public class FlinkOptions extends HoodieConfig {
       .key(HoodieWriteConfig.KEYGENERATOR_TYPE.key())
       .stringType()
       .defaultValue(KeyGeneratorType.SIMPLE.name())
-      .withDescription("Key generator type, that implements will extract the key out of incoming record");
+      .withDescription("Key generator type, that implements will extract the key out of incoming record. "
+          + "**Note** This is being actively worked on. Please use "
+          + "`hoodie.datasource.write.keygenerator.class` instead.");
 
   public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
   public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
@@ -546,6 +553,12 @@ public class FlinkOptions extends HoodieConfig {
       .booleanType()
       .defaultValue(true)
       .withDescription("Whether to sort the inputs by specific fields for bulk insert tasks, default true");
+
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY = ConfigOptions
+          .key("write.bulk_insert.sort_input.by_record_key")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to sort the inputs by record keys for bulk insert tasks, default false");
 
   public static final ConfigOption<Integer> WRITE_SORT_MEMORY = ConfigOptions
       .key("write.sort.memory")

@@ -19,6 +19,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.HoodieClientTestBase
@@ -26,7 +27,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.language.postfixOps
 
@@ -83,7 +84,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       .save(saveDir)
   }
 
-  def upsertData(df: DataFrame, saveDir: String, isCow: Boolean = true, shouldAllowDroppedColumns: Boolean = false): Unit = {
+  def upsertData(df: DataFrame, saveDir: String, isCow: Boolean = true, shouldAllowDroppedColumns: Boolean = false,
+                 enableSchemaValidation: Boolean = HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue().toBoolean): Unit = {
     var opts = if (isCow) {
       commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE")
     } else {
@@ -206,12 +208,18 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testDeleteColumn(isCow: Boolean): Unit = {
+  @CsvSource(value = Array(
+    "COPY_ON_WRITE,true",
+    "COPY_ON_WRITE,false",
+    "MERGE_ON_READ,true",
+    "MERGE_ON_READ,false"
+  ))
+  def testDeleteColumn(tableType: String, schemaValidationEnabled : Boolean): Unit = {
     // test to delete a column
     val tempRecordPath = basePath + "/record_tbl/"
     val _spark = spark
     import _spark.implicits._
+    val isCow = tableType.equals(HoodieTableType.COPY_ON_WRITE.name())
 
     val df1 = Seq((1, 100, "aaa")).toDF("id", "userid", "name")
     val df2 = Seq((2, "bbb")).toDF("id", "name")
@@ -231,10 +239,10 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     // upsert
     assertThrows(classOf[SchemaCompatibilityException]) {
-      upsertData(upsertDf, tempRecordPath, isCow)
+      upsertData(upsertDf, tempRecordPath, isCow, enableSchemaValidation = schemaValidationEnabled)
     }
 
-    upsertData(upsertDf, tempRecordPath, isCow, shouldAllowDroppedColumns = true)
+    upsertData(upsertDf, tempRecordPath, isCow, shouldAllowDroppedColumns = true, enableSchemaValidation = schemaValidationEnabled)
 
     // read out the table
     val readDf = spark.read.format("hudi").load(tempRecordPath)
