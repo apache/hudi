@@ -19,7 +19,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.BaseFileReader
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
 import org.apache.hudi.HoodieBootstrapRelation.validate
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -28,7 +28,7 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
@@ -136,6 +136,17 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       shouldAppendPartitionValuesOverride = Some(true)
     )
 
+    // NOTE: In some case schema of the reader's output (reader's schema) might not match the schema expected by the caller.
+    //       This could occur for ex, when requested schema contains partition columns which might not be persisted w/in the
+    //       data file, but instead would be parsed from the partition path. In that case output of the file-reader will have
+    //       different ordering of the fields than the original required schema (for more details please check out
+    //       [[ParquetFileFormat]] impl). In that case we have to project the rows from the file-reader's schema
+    //       back into the one expected by the caller.
+    //       Meta-fields will be fetched from the skeleton file and therefore we have to strip them from the required
+    //       schema
+    val projectedBootstrapDataFileReader =
+      projectReader(bootstrapDataFileReader, removeMetaFields(requiredSchema.structTypeSchema))
+
     val boostrapSkeletonFileReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       dataSchema = new HoodieTableSchema(skeletonSchema),
@@ -150,7 +161,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       shouldAppendPartitionValuesOverride = Some(false)
     )
 
-    (bootstrapDataFileReader, boostrapSkeletonFileReader)
+    (projectedBootstrapDataFileReader, boostrapSkeletonFileReader)
   }
 
   private def createRegularFileReader(tableSchema: HoodieTableSchema,
@@ -163,7 +174,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       tryPrunePartitionColumns(tableSchema, requiredSchema)
 
     // TODO elaborate (this a normal parquet reader for files not requiring combining w/ skeleton)
-    createBaseFileReader(
+    val regularFileReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       dataSchema = dataSchema,
       partitionSchema = partitionSchema,
@@ -172,6 +183,14 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
+
+    // NOTE: In some case schema of the reader's output (reader's schema) might not match the schema expected by the caller.
+    //       This could occur for ex, when requested schema contains partition columns which might not be persisted w/in the
+    //       data file, but instead would be parsed from the partition path. In that case output of the file-reader will have
+    //       different ordering of the fields than the original required schema (for more details please check out
+    //       [[ParquetFileFormat]] impl). In that case we have to project the rows from the file-reader's schema
+    //       back into the one expected by the caller
+    projectReader(regularFileReader, requiredSchema.structTypeSchema)
   }
 
   override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
