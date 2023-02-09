@@ -73,8 +73,6 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
   def merge(skeletonFileIterator: Iterator[InternalRow], dataFileIterator: Iterator[InternalRow]): Iterator[InternalRow] = {
     new Iterator[InternalRow] {
       private val combinedRow = new JoinedRow()
-      private val combinedSchema: StructType = StructType(bootstrapSkeletonFileReader.schema.fields ++ bootstrapDataFileReader.schema.fields)
-      private val unsafeProjection = generateUnsafeProjection(combinedSchema, requiredSchema.structTypeSchema)
 
       override def hasNext: Boolean = {
         checkState(dataFileIterator.hasNext == skeletonFileIterator.hasNext,
@@ -83,7 +81,7 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
       }
 
       override def next(): InternalRow = {
-        unsafeProjection(combinedRow(skeletonFileIterator.next(), dataFileIterator.next()))
+        combinedRow(skeletonFileIterator.next(), dataFileIterator.next())
       }
     }
   }
