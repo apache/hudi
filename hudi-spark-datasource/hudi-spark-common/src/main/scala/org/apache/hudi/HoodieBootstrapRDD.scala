@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 class HoodieBootstrapRDD(@transient spark: SparkSession,
                          bootstrapDataFileReader: BaseFileReader,
                          bootstrapSkeletonFileReader: BaseFileReader,
-                         nativeFileReader: BaseFileReader,
+                         regularFileReader: BaseFileReader,
                          requiredColumns: Array[String],
                          @transient splits: Seq[HoodieBootstrapSplit])
   extends RDD[InternalRow](spark.sparkContext, Nil) {
@@ -62,8 +62,7 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
           merge(skeletonFileIterator, dataFileIterator)
         }
 
-      case _ =>
-        nativeFileReader.read(bootstrapPartition.split.dataFile)
+      case _ => regularFileReader.read(bootstrapPartition.split.dataFile)
     }
   }
 

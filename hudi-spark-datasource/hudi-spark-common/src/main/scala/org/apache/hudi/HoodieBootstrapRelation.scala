@@ -19,6 +19,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieBootstrapRelation.validate
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -31,7 +32,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-case class HoodieBootstrapSplit(dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile]) extends HoodieFileSplit
+case class HoodieBootstrapSplit(dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile] = None) extends HoodieFileSplit
 
 /**
   * This is Spark relation that can be used for querying metadata/fully bootstrapped query hoodie tables, as well as
@@ -67,27 +68,22 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 
   override val mandatoryFields: Seq[String] = Seq.empty
 
-  // NOTE: Bootstrap relation have to always extract partition values from the partition-path as this is a
-  //       default Spark behavior: Spark by default strips partition-columns from the data schema and does
-  //       NOT persist them in the data files, instead parsing them from partition-paths (on the fly) whenever
-  //       table is queried
-  override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = true
-
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit] = {
     val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
     fileSlices.map { fileSlice =>
       val baseFile = fileSlice.getBaseFile.get()
-      var skeletonFile: Option[PartitionedFile] = Option.empty
-      var dataFile: PartitionedFile = null
 
       if (baseFile.getBootstrapBaseFile.isPresent) {
-        skeletonFile = Option(PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen))
-        dataFile = PartitionedFile(InternalRow.empty, baseFile.getBootstrapBaseFile.get().getPath, 0,
-          baseFile.getBootstrapBaseFile.get().getFileLen)
+        val partitionValues =
+          getPartitionColumnsAsInternalRowInternal(baseFile.getFileStatus, extractPartitionValuesFromPartitionPath = true)
+        val dataFile = PartitionedFile(partitionValues, baseFile.getBootstrapBaseFile.get().getPath, 0, baseFile.getBootstrapBaseFile.get().getFileLen)
+        val skeletonFile = Option(PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen))
+
+        HoodieBootstrapSplit(dataFile, skeletonFile)
       } else {
-        dataFile = PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen)
+        val dataFile = PartitionedFile(getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getPath, 0, baseFile.getFileLen)
+        HoodieBootstrapSplit(dataFile)
       }
-      HoodieBootstrapSplit(dataFile, skeletonFile)
     }
   }
 
@@ -96,44 +92,78 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
                                     filters: Array[Filter]): RDD[InternalRow] = {
-    // NOTE: "Data" schema in here refers to the whole table's schema that doesn't include only partition
-    //       columns, as opposed to data file schema not including any meta-fields columns in case of
-    //       Bootstrap relation
-    val (partitionSchema, dataSchema, requiredDataSchema) = tryPrunePartitionColumns(tableSchema, requiredSchema)
-
-    val dataFileSchema = StructType(dataSchema.structTypeSchema.filterNot(sf => isMetaField(sf.name)))
-    val requiredDataFileSchema = StructType(requiredDataSchema.structTypeSchema.filterNot(sf => isMetaField(sf.name)))
-
     val requiredSkeletonFileSchema =
       StructType(skeletonSchema.filter(f => requestedColumns.exists(col => resolver(f.name, col))))
 
-    validate(requiredDataSchema, requiredDataFileSchema, requiredSkeletonFileSchema)
+    val (bootstrapDataFileReader, bootstrapSkeletonFileReader) =
+      createBootstrapFileReaders(tableSchema, requiredSchema, requiredSkeletonFileSchema, filters)
 
-    val dataReadFunction = createBaseFileReader(
+    // TODO elaborate
+    val regularFileReader = createRegularFileReader(tableSchema, requiredSchema, filters)
+
+    new HoodieBootstrapRDD(sqlContext.sparkSession, bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader,
+      requestedColumns, fileSplits)
+  }
+
+  private def createBootstrapFileReaders(tableSchema: HoodieTableSchema,
+                                         requiredSchema: HoodieTableSchema,
+                                         requiredSkeletonFileSchema: StructType,
+                                         filters: Array[Filter]): (BaseFileReader, BaseFileReader) = {
+    // NOTE: "Data" schema in here refers to the whole table's schema that doesn't include only partition
+    //       columns, as opposed to data file schema not including any meta-fields columns in case of
+    //       Bootstrap relation
+    val (partitionSchema, dataSchema, requiredDataSchema) =
+      tryPrunePartitionColumnsInternal(tableSchema, requiredSchema, extractPartitionValuesFromPartitionPath = true)
+
+    val bootstrapDataFileSchema = StructType(dataSchema.structTypeSchema.filterNot(sf => isMetaField(sf.name)))
+    val requiredBootstrapDataFileSchema = StructType(requiredDataSchema.structTypeSchema.filterNot(sf => isMetaField(sf.name)))
+
+    validate(requiredDataSchema, requiredBootstrapDataFileSchema, requiredSkeletonFileSchema)
+
+    val bootstrapDataFileReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
-      dataSchema = new HoodieTableSchema(dataFileSchema),
+      dataSchema = new HoodieTableSchema(bootstrapDataFileSchema),
       partitionSchema = partitionSchema,
-      requiredDataSchema = new HoodieTableSchema(requiredDataFileSchema),
+      requiredDataSchema = new HoodieTableSchema(requiredBootstrapDataFileSchema),
       // TODO elaborate (we can't filter as we need record sequences to be aligned b/w data and skeleton files)
       filters = if (requiredSkeletonFileSchema.isEmpty) filters else Seq(),
       options = optParams,
-      hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+      hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf(),
+      // NOTE: Bootstrap relation have to always extract partition values from the partition-path as this is a
+      //       default Spark behavior: Spark by default strips partition-columns from the data schema and does
+      //       NOT persist them in the data files, instead parsing them from partition-paths (on the fly) whenever
+      //       table is queried
+      shouldAppendPartitionValuesOverride = Some(true)
     )
 
-    val skeletonReadFunction = createBaseFileReader(
+    val boostrapSkeletonFileReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       dataSchema = new HoodieTableSchema(skeletonSchema),
       // TODO elaborate (we don't want partition-values to be injected by Spark)
       partitionSchema = StructType(Seq.empty),
       requiredDataSchema = new HoodieTableSchema(requiredSkeletonFileSchema),
       // TODO elaborate (we can't filter as we need record sequences to be aligned b/w data and skeleton files)
-      filters = if (requiredDataFileSchema.isEmpty) filters else Seq(),
+      filters = if (requiredBootstrapDataFileSchema.isEmpty) filters else Seq(),
       options = optParams,
-      hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+      hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf(),
+      // TODO elaborate
+      shouldAppendPartitionValuesOverride = Some(false)
     )
 
+    (bootstrapDataFileReader, boostrapSkeletonFileReader)
+  }
+
+  private def createRegularFileReader(tableSchema: HoodieTableSchema,
+                                     requiredSchema: HoodieTableSchema,
+                                     filters: Array[Filter]): BaseFileReader = {
+    // NOTE: "Data" schema in here refers to the whole table's schema that doesn't include only partition
+    //       columns, as opposed to data file schema not including any meta-fields columns in case of
+    //       Bootstrap relation
+    val (partitionSchema, dataSchema, requiredDataSchema) =
+      tryPrunePartitionColumns(tableSchema, requiredSchema)
+
     // TODO elaborate (this a normal parquet reader for files not requiring combining w/ skeleton)
-    val regularReadFunction = createBaseFileReader(
+    createBaseFileReader(
       spark = sqlContext.sparkSession,
       dataSchema = dataSchema,
       partitionSchema = partitionSchema,
@@ -142,9 +172,6 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
-
-    new HoodieBootstrapRDD(sqlContext.sparkSession, dataReadFunction, skeletonReadFunction,
-      regularReadFunction, requiredDataFileSchema, requiredSkeletonFileSchema, requestedColumns, fileSplits)
   }
 
   override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
