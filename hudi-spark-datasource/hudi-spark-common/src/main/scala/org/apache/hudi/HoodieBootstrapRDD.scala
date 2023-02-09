@@ -18,17 +18,17 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.spark.{Partition, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.types.StructType
 
 class HoodieBootstrapRDD(@transient spark: SparkSession,
-                        dataReadFunction: PartitionedFile => Iterator[InternalRow],
-                        skeletonReadFunction: PartitionedFile => Iterator[InternalRow],
-                        regularReadFunction: PartitionedFile => Iterator[InternalRow],
+                        dataReadFunction: BaseFileReader,
+                        skeletonReadFunction: BaseFileReader,
+                        regularReadFunction: BaseFileReader,
                         dataSchema: StructType,
                         skeletonSchema: StructType,
                         requiredColumns: Array[String],
@@ -55,18 +55,18 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
       // It is a bootstrap split. Check both skeleton and data files.
       if (dataSchema.isEmpty) {
         // No data column to fetch, hence fetch only from skeleton file
-        partitionedFileIterator = skeletonReadFunction(bootstrapPartition.split.skeletonFile.get)
+        partitionedFileIterator = skeletonReadFunction.read(bootstrapPartition.split.skeletonFile.get)
       } else if (skeletonSchema.isEmpty) {
         // No metadata column to fetch, hence fetch only from data file
-        partitionedFileIterator = dataReadFunction(bootstrapPartition.split.dataFile)
+        partitionedFileIterator = dataReadFunction.read(bootstrapPartition.split.dataFile)
       } else {
         // Fetch from both data and skeleton file, and merge
-        val dataFileIterator = dataReadFunction(bootstrapPartition.split.dataFile)
-        val skeletonFileIterator = skeletonReadFunction(bootstrapPartition.split.skeletonFile.get)
+        val dataFileIterator = dataReadFunction.read(bootstrapPartition.split.dataFile)
+        val skeletonFileIterator = skeletonReadFunction.read(bootstrapPartition.split.skeletonFile.get)
         partitionedFileIterator = merge(skeletonFileIterator, dataFileIterator)
       }
     } else {
-      partitionedFileIterator = regularReadFunction(bootstrapPartition.split.dataFile)
+      partitionedFileIterator = regularReadFunction.read(bootstrapPartition.split.dataFile)
     }
     partitionedFileIterator
   }

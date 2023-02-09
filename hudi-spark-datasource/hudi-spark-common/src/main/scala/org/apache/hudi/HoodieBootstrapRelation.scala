@@ -103,36 +103,35 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 
     validate(requiredDataSchema, requiredDataFileSchema, requiredSkeletonFileSchema)
 
-    // TODO rebase readers on createBaseFileReader
-
-    val dataReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
-      sparkSession = sqlContext.sparkSession,
-      dataSchema = dataFileSchema,
+    val dataReadFunction = createBaseFileReader(
+      spark = sqlContext.sparkSession,
+      dataSchema = new HoodieTableSchema(dataFileSchema),
       partitionSchema = partitionSchema,
-      requiredSchema = requiredDataFileSchema,
+      requiredDataSchema = new HoodieTableSchema(requiredDataFileSchema),
       // TODO elaborate (we can't filter as we need record sequences to be aligned b/w data and skeleton files)
       filters = if (requiredSkeletonFileSchema.isEmpty) filters else Seq(),
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
 
-    val skeletonReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
-      sparkSession = sqlContext.sparkSession,
-      dataSchema = skeletonSchema,
-      partitionSchema = partitionSchema,
-      requiredSchema = requiredSkeletonFileSchema,
+    val skeletonReadFunction = createBaseFileReader(
+      spark = sqlContext.sparkSession,
+      dataSchema = new HoodieTableSchema(skeletonSchema),
+      // TODO elaborate (we don't want partition-values to be injected by Spark)
+      partitionSchema = StructType(Seq.empty),
+      requiredDataSchema = new HoodieTableSchema(requiredSkeletonFileSchema),
       // TODO elaborate (we can't filter as we need record sequences to be aligned b/w data and skeleton files)
       filters = if (requiredDataFileSchema.isEmpty) filters else Seq(),
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
 
-    // TODO elaborate
-    val regularReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
-      sparkSession = sqlContext.sparkSession,
-      dataSchema = dataSchema.structTypeSchema,
+    // TODO elaborate (this a normal parquet reader for files not requiring combining w/ skeleton)
+    val regularReadFunction = createBaseFileReader(
+      spark = sqlContext.sparkSession,
+      dataSchema = dataSchema,
       partitionSchema = partitionSchema,
-      requiredSchema = requiredDataSchema.structTypeSchema,
+      requiredDataSchema = requiredDataSchema,
       filters = filters,
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
