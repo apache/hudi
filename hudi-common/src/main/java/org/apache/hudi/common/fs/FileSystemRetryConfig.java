@@ -35,6 +35,7 @@ import java.util.Properties;
         groupName = ConfigGroups.Names.WRITE_CLIENT,
         description = "The filesystem retry related config options, to help deal with runtime exception like list/get/put/delete performance issues.")
 public class FileSystemRetryConfig  extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<String> FILESYSTEM_RETRY_ENABLE = ConfigProperty
       .key("hoodie.filesystem.operation.retry.enable")

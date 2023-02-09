@@ -33,6 +33,7 @@ import java.util.Properties;
         "Enables reporting on Hudi metrics using Amazon CloudWatch. "
             + " Hudi publishes metrics on every commit, clean, rollback etc.")
 public class HoodieMetricsCloudWatchConfig extends HoodieConfig {
+  //cfg
 
   public static final String CLOUDWATCH_PREFIX = "hoodie.metrics.cloudwatch";
 

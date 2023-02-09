@@ -252,6 +252,7 @@ public class TimelineServerPerf implements Serializable {
   }
 
   public static class Config implements Serializable {
+    //cli
 
     @Parameter(names = {"--base-path", "-b"}, description = "Base Path", required = true)
     public String basePath = "";

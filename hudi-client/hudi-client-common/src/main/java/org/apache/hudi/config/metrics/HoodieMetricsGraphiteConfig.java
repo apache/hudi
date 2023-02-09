@@ -40,7 +40,7 @@ import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRIC_PREFIX;
     description = "Enables reporting on Hudi metrics using Graphite. "
         + " Hudi publishes metrics on every commit, clean, rollback etc.")
 public class HoodieMetricsGraphiteConfig extends HoodieConfig {
-
+  //cfg
   public static final String GRAPHITE_PREFIX = METRIC_PREFIX + ".graphite";
 
   public static final ConfigProperty<String> GRAPHITE_SERVER_HOST_NAME = ConfigProperty

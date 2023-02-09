@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.sources.helpers;
  * Configs that are common during ingestion across different cloud stores
  */
 public class CloudStoreIngestionConfig {
+  //non HudiConfig
 
   /**
    * How many metadata messages to pull at a time.

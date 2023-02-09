@@ -38,6 +38,7 @@ import java.util.stream.Collectors;
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that control how file metadata is stored by Hudi, for transaction processing and queries.")
 public class FileSystemViewStorageConfig extends HoodieConfig {
+  //cfg
 
   // Property Names
   public static final ConfigProperty<FileSystemViewStorageType> VIEW_TYPE = ConfigProperty

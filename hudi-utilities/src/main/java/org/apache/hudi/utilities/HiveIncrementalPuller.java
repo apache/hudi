@@ -65,6 +65,7 @@ public class HiveIncrementalPuller {
   private static final Logger LOG = LogManager.getLogger(HiveIncrementalPuller.class);
 
   public static class Config implements Serializable {
+    //cli
 
     @Parameter(names = {"--hiveUrl"})
     public String hiveJDBCUrl = "jdbc:hive2://localhost:10014/;transportMode=http;httpPath=hs2";

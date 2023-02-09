@@ -90,6 +90,7 @@ public class SqlSource extends RowSource {
    * Configs supported.
    */
   private static class Config {
+    //non HudiConfig
 
     private static final String SOURCE_SQL = "hoodie.deltastreamer.source.sql.sql.query";
   }

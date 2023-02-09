@@ -36,6 +36,7 @@ import java.util.Properties;
     areCommonConfigs = true,
     description = "")
 public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
+  //cfg
 
   public static final String CALLBACK_PREFIX = "hoodie.write.commit.callback.";
 

@@ -39,6 +39,7 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
    * Configs supported.
    */
   public static class Config {
+    //non HudiConfig
     // The JDBC URL to connect to. The source-specific connection properties may be specified in the URL.
     // e.g., jdbc:postgresql://localhost/test?user=fred&password=secret
     private static final String SOURCE_SCHEMA_JDBC_CONNECTION_URL = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.connection.url";

@@ -102,6 +102,7 @@ public class SqlFileBasedTransformer implements Transformer {
 
   /** Configs supported. */
   private static class Config {
+    //non HudiConfig
 
     private static final String TRANSFORMER_SQL_FILE = "hoodie.deltastreamer.transformer.sql.file";
   }

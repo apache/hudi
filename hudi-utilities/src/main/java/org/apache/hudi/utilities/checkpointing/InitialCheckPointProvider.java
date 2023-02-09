@@ -39,6 +39,7 @@ public abstract class InitialCheckPointProvider {
   protected transient TypedProperties props;
 
   static class Config {
+    //non HudiConfig
     private static String CHECKPOINT_PROVIDER_PATH_PROP = "hoodie.deltastreamer.checkpoint.provider.path";
   }
 

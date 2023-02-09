@@ -44,6 +44,7 @@ public class HoodieIncrSource extends RowSource {
   private static final Logger LOG = LogManager.getLogger(HoodieIncrSource.class);
 
   public static class Config {
+    //non HudiConfig
 
     /**
      * {@value #HOODIE_SRC_BASE_PATH} is the base-path for the source Hoodie table.

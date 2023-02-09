@@ -79,6 +79,7 @@ public class TimelineService {
    * Config for {@code TimelineService} class.
    */
   public static class Config implements Serializable {
+    //cli
 
     @Parameter(names = {"--server-port", "-p"}, description = " Server Port")
     public Integer serverPort = 26754;

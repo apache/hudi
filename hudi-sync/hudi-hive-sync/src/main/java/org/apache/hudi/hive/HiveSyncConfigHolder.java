@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 
 public class HiveSyncConfigHolder {
+  //non HudiConfig
   /*
    * NOTE: below are HIVE SYNC SPECIFIC CONFIGS which should be under HiveSyncConfig.java
    * But since DataSourceOptions.scala references constants to some of these, and HiveSyncConfig.java imports HiveConf,

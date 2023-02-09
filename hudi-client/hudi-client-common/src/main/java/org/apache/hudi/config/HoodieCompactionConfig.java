@@ -45,6 +45,7 @@ import java.util.stream.Collectors;
     description = "Configurations that control compaction "
         + "(merging of log files onto a new base files).")
 public class HoodieCompactionConfig extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<String> INLINE_COMPACT = ConfigProperty
       .key("hoodie.compact.inline")

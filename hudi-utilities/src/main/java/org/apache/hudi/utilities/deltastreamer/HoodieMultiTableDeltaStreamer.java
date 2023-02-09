@@ -259,6 +259,7 @@ public class HoodieMultiTableDeltaStreamer {
   }
 
   public static class Config implements Serializable {
+    //cli
 
     @Parameter(names = {"--base-path-prefix"},
         description = "base path prefix for multi table support via HoodieMultiTableDeltaStreamer class")

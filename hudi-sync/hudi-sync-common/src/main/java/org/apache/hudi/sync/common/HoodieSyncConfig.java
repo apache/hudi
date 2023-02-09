@@ -61,6 +61,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIO
     areCommonConfigs = true,
     description = "")
 public class HoodieSyncConfig extends HoodieConfig {
+  //cfg
 
   private static final Logger LOG = LogManager.getLogger(HoodieSyncConfig.class);
 

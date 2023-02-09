@@ -32,6 +32,7 @@ import java.util.Properties;
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations used by the Hudi Metastore.")
 public class HoodieMetaserverConfig extends HoodieConfig {
+  //cfg
 
   public static final String METASERVER_PREFIX = "hoodie.metaserver";
 

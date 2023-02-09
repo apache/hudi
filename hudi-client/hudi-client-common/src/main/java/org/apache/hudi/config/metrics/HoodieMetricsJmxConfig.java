@@ -40,7 +40,7 @@ import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRIC_PREFIX;
     description = "Enables reporting on Hudi metrics using Jmx. "
                       + " Hudi publishes metrics on every commit, clean, rollback etc.")
 public class HoodieMetricsJmxConfig extends HoodieConfig {
-
+  //cfg
   public static final String JMX_PREFIX = METRIC_PREFIX + ".jmx";
 
   public static final ConfigProperty<String> JMX_HOST_NAME = ConfigProperty

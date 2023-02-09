@@ -45,6 +45,7 @@ public class SqlQueryBasedTransformer implements Transformer {
    * Configs supported.
    */
   static class Config {
+    //non HudiConfig
 
     private static final String TRANSFORMER_SQL = "hoodie.deltastreamer.transformer.sql";
   }

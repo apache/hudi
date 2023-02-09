@@ -38,7 +38,7 @@ import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRIC_PREFIX;
     description = "Enables reporting on Hudi metrics using Prometheus. "
         + " Hudi publishes metrics on every commit, clean, rollback etc.")
 public class HoodieMetricsPrometheusConfig extends HoodieConfig {
-
+  //cfg
   // Prometheus PushGateWay
   public static final String PUSHGATEWAY_PREFIX = METRIC_PREFIX + ".pushgateway";
 

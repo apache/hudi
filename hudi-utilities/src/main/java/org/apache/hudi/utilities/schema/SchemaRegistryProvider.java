@@ -61,6 +61,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
    * Configs supported.
    */
   public static class Config {
+    //non HudiConfig
 
     public static final String SRC_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
     public static final String TARGET_SCHEMA_REGISTRY_URL_PROP =

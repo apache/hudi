@@ -43,6 +43,7 @@ public class HiveSchemaProvider extends SchemaProvider {
    * Configs supported.
    */
   public static class Config {
+    //non HudiConfig
     private static final String SOURCE_SCHEMA_DATABASE_PROP = "hoodie.deltastreamer.schemaprovider.source.schema.hive.database";
     private static final String SOURCE_SCHEMA_TABLE_PROP = "hoodie.deltastreamer.schemaprovider.source.schema.hive.table";
     private static final String TARGET_SCHEMA_DATABASE_PROP = "hoodie.deltastreamer.schemaprovider.target.schema.hive.database";

@@ -71,6 +71,7 @@ public class HiveIncrPullSource extends AvroSource {
    * Configs supported.
    */
   static class Config {
+    //non HudiConfig
 
     private static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.incrpull.root";
   }

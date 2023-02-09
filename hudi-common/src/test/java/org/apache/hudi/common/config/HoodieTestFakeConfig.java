@@ -25,7 +25,6 @@ import java.util.Properties;
  * A config class extending {@link HoodieConfig} for testing only.
  */
 public class HoodieTestFakeConfig extends HoodieConfig {
-
   public static ConfigProperty<String> FAKE_STRING_CONFIG = TestConfigProperty.FAKE_STRING_CONFIG;
   public static ConfigProperty<Integer> FAKE_INTEGER_CONFIG = TestConfigProperty.FAKE_INTEGER_CONFIG;
   public static ConfigProperty<String> FAKE_STRING_CONFIG_NO_DEFAULT_WITH_INFER

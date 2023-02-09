@@ -139,6 +139,7 @@ public class HoodieCompactionAdminTool {
    * Admin Configuration Options.
    */
   public static class Config implements Serializable {
+    //cli
 
     @Parameter(names = {"--operation", "-op"}, description = "Operation", required = true)
     public Operation operation = Operation.VALIDATE;

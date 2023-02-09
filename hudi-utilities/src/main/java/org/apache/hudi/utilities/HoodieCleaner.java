@@ -76,6 +76,7 @@ public class HoodieCleaner {
   }
 
   public static class Config implements Serializable {
+    //cli
 
     @Parameter(names = {"--target-base-path"}, description = "base path for the hoodie table to be cleaner.",
         required = true)

@@ -112,6 +112,7 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
     description = "Configurations that control write behavior on Hudi tables. These can be directly passed down from even "
         + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g DeltaStreamer).")
 public class HoodieWriteConfig extends HoodieConfig {
+  //cfg
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteConfig.class);
   private static final long serialVersionUID = 0L;

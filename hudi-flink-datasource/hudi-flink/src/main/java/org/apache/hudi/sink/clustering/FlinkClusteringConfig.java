@@ -40,6 +40,7 @@ import java.util.Map;
  * Configurations for Hoodie Flink clustering.
  */
 public class FlinkClusteringConfig extends Configuration {
+  //cli
 
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;

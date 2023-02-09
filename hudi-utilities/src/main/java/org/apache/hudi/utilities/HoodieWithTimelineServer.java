@@ -50,6 +50,7 @@ public class HoodieWithTimelineServer implements Serializable {
   }
 
   public static class Config implements Serializable {
+    //cli
 
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = null;

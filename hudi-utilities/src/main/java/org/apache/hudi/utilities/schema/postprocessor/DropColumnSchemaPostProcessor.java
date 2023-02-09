@@ -52,6 +52,7 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
   }
 
   public static class Config {
+    //non HudiConfig
     public static final String DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP =
         "hoodie.deltastreamer.schemaprovider.schema_post_processor.delete.columns";
   }

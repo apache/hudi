@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieConfig;
  * Configs/params used for internal purposes.
  */
 public class HoodieInternalConfig extends HoodieConfig {
+  //cfg
 
   private static final long serialVersionUID = 0L;
 

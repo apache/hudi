@@ -262,6 +262,7 @@ public class JdbcSource extends RowSource {
    * Inner class with config keys.
    */
   protected static class Config {
+    //non HudiConfig
 
     /**
      * {@value #URL} is the jdbc url for the Hoodie datasource.

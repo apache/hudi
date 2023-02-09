@@ -86,6 +86,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
   }
 
   public static class Config {
+    //non HudiConfig
 
     public enum LegacyOperationMode {
       PRE_COMBINING,

@@ -40,6 +40,7 @@ import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_F
     description = "Payload related configs, that can be leveraged to "
         + "control merges based on specific business fields in the data.")
 public class HoodiePayloadConfig extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<String> ORDERING_FIELD = ConfigProperty
       .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)

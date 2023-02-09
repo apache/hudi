@@ -26,6 +26,7 @@ import java.util.Properties;
  * which is in a different package than other lock providers, we use this as a data transfer object in hoodie-common
  */
 public class LockConfiguration implements Serializable {
+  //take a look
 
   public static final String LOCK_PREFIX = "hoodie.write.lock.";
 

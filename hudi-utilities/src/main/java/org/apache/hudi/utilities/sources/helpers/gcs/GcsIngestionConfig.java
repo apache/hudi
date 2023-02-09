@@ -22,7 +22,7 @@ package org.apache.hudi.utilities.sources.helpers.gcs;
  * Config keys and defaults for GCS Ingestion
  */
 public class GcsIngestionConfig {
-
+  //non HudiConfig
   /**
    * The GCP Project Id where the Pubsub Subscription to ingest from resides. Needed to connect
    * to the Pubsub subscription

@@ -29,6 +29,7 @@ import org.apache.flink.configuration.Configuration;
  * Configurations for Hoodie Flink compaction.
  */
 public class FlinkCompactionConfig extends Configuration {
+  //cli
 
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;

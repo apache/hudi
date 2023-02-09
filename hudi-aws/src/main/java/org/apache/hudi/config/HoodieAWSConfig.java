@@ -45,6 +45,7 @@ import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE
         description = "Amazon Web Services configurations to access resources like Amazon DynamoDB (for locks),"
             + " Amazon CloudWatch (metrics).")
 public class HoodieAWSConfig extends HoodieConfig {
+  //cfg
   public static final ConfigProperty<String> AWS_ACCESS_KEY = ConfigProperty
         .key("hoodie.aws.access.key")
         .noDefaultValue()

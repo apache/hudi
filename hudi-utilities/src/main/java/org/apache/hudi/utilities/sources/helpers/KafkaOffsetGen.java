@@ -165,6 +165,7 @@ public class KafkaOffsetGen {
    * Configs to be passed for this source. All standard Kafka consumer configs are also respected
    */
   public static class Config {
+    //non HudiConfig
 
     private static final ConfigProperty<String> KAFKA_TOPIC_NAME = ConfigProperty
             .key("hoodie.deltastreamer.source.kafka.topic")

@@ -49,6 +49,7 @@ import static org.apache.hudi.configuration.FlinkOptions.PARTITION_FORMAT_DAY;
  * Configurations for Hoodie Flink streamer.
  */
 public class FlinkStreamerConfig extends Configuration {
+  //cli
   @Parameter(names = {"--kafka-topic"}, description = "Kafka topic name.", required = true)
   public String kafkaTopic;
 

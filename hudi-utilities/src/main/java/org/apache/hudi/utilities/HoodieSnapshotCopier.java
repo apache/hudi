@@ -64,7 +64,7 @@ public class HoodieSnapshotCopier implements Serializable {
   private static final Logger LOG = LogManager.getLogger(HoodieSnapshotCopier.class);
 
   static class Config implements Serializable {
-
+    //cli
     @Parameter(names = {"--base-path", "-bp"}, description = "Hoodie table base path", required = true)
     String basePath = null;
 

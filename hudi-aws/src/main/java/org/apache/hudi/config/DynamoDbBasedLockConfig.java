@@ -40,6 +40,7 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_PREFIX;
         + " between writers to a Hudi table. Concurrency between Hudi's own table services "
         + " are auto managed internally.")
 public class DynamoDbBasedLockConfig extends HoodieConfig {
+  //cfg
 
   // configs for DynamoDb based locks
   public static final String DYNAMODB_BASED_LOCK_PROPERTY_PREFIX = LOCK_PREFIX + "dynamodb.";

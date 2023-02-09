@@ -33,6 +33,7 @@ public abstract class SchemaPostProcessor implements Serializable {
 
   /** Configs supported. */
   public static class Config {
+    //non HudiConfig
     public static final String SCHEMA_POST_PROCESSOR_PROP =
         "hoodie.deltastreamer.schemaprovider.schema_post_processor";
   }

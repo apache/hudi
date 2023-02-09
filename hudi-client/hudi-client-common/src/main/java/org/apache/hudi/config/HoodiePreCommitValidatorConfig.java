@@ -38,6 +38,7 @@ import java.util.Properties;
     groupName = ConfigGroups.Names.SPARK_DATASOURCE,
     description = "The following set of configurations help validate new data before commits.")
 public class HoodiePreCommitValidatorConfig extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<String> VALIDATOR_CLASS_NAMES = ConfigProperty
       .key("hoodie.precommit.validators")

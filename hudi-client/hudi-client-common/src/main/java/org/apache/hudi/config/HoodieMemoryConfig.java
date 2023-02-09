@@ -39,6 +39,7 @@ import java.util.Properties;
     description = "Controls memory usage for compaction "
         + "and merges, performed internally by Hudi.")
 public class HoodieMemoryConfig extends HoodieConfig {
+  //cfg
 
   // Default max memory fraction during hash-merge, excess spills to disk
   public static final ConfigProperty<String> MAX_MEMORY_FRACTION_FOR_MERGE = ConfigProperty

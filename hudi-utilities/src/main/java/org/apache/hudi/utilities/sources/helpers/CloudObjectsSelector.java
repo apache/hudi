@@ -234,6 +234,7 @@ public class CloudObjectsSelector {
    * Configs supported.
    */
   public static class Config {
+    //non HudiConfig
     private static final String HOODIE_DELTASTREAMER_S3_SOURCE = "hoodie.deltastreamer.s3.source";
     /**
      * {@value #S3_SOURCE_QUEUE_URL} is the queue url for cloud object events.

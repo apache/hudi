@@ -46,6 +46,7 @@ import static org.apache.hudi.client.bootstrap.BootstrapMode.METADATA_ONLY;
         + "The bootstrap operation can flexibly avoid copying data over before you can use Hudi and support running the existing "
         + " writers and new hudi writers in parallel, to validate the migration.")
 public class HoodieBootstrapConfig extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<String> BASE_PATH = ConfigProperty
       .key("hoodie.bootstrap.base.path")

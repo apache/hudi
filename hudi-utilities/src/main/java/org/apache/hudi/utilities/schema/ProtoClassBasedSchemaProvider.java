@@ -39,6 +39,7 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
    * Configs supported.
    */
   public static class Config {
+    //non HudiConfig
     private static final String PROTO_SCHEMA_PROVIDER_PREFIX = "hoodie.deltastreamer.schemaprovider.proto";
     public static final ConfigProperty<String> PROTO_SCHEMA_CLASS_NAME = ConfigProperty.key(PROTO_SCHEMA_PROVIDER_PREFIX + ".class.name")
         .noDefaultValue()

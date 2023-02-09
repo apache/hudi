@@ -38,6 +38,7 @@ import java.util.Properties;
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that control archival.")
 public class HoodieArchivalConfig extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<String> AUTO_ARCHIVE = ConfigProperty
       .key("hoodie.archive.automatic")

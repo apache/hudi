@@ -36,6 +36,7 @@ import java.util.Properties;
         + "(when HBase based indexing is enabled), which tags incoming "
         + "records as either inserts or updates to older records.")
 public class HoodieHBaseIndexConfig extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<String> ZKQUORUM = ConfigProperty
       .key("hoodie.index.hbase.zkquorum")

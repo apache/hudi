@@ -50,6 +50,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_
     groupName = ConfigGroups.Names.META_SYNC,
     description = "Configurations used by the Hudi to sync metadata to Google BigQuery.")
 public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable {
+  //cfg
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_PROJECT_ID = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.project_id")

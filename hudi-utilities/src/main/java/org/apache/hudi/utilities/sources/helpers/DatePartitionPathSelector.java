@@ -78,6 +78,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
 
   /** Configs supported. */
   public static class Config {
+    //non HudiConfig
     public static final String DATE_FORMAT = "hoodie.deltastreamer.source.dfs.datepartitioned.date.format";
     public static final String DEFAULT_DATE_FORMAT = "yyyy-MM-dd";
 

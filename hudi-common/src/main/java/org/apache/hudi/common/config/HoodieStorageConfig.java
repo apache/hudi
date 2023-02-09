@@ -33,6 +33,7 @@ import java.util.Properties;
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that control aspects around writing, sizing, reading base and log files.")
 public class HoodieStorageConfig extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<String> PARQUET_MAX_FILE_SIZE = ConfigProperty
       .key("hoodie.parquet.max.file.size")

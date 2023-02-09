@@ -42,6 +42,7 @@ import java.util.Properties;
     description = "Enables reporting on Hudi metrics. Hudi publishes metrics on "
         + "every commit, clean, rollback etc. The following sections list the supported reporters.")
 public class HoodieMetricsConfig extends HoodieConfig {
+  //cfg
 
   public static final String METRIC_PREFIX = "hoodie.metrics";
 

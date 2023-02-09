@@ -81,6 +81,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
    * Configs to be passed for this processor.
    */
   public static class Config {
+    //non HudiConfig
     public static final ConfigProperty<String> DATABASE_NAME_REGEX_PROP = ConfigProperty
         .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.database.regex")
         .noDefaultValue()

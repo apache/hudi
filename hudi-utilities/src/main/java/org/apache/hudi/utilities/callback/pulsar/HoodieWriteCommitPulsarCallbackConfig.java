@@ -32,6 +32,7 @@ import static org.apache.hudi.config.HoodieWriteCommitCallbackConfig.CALLBACK_PR
     subGroupName = ConfigGroups.SubGroupNames.COMMIT_CALLBACK,
     description = "Controls notifications sent to pulsar, on events happening to a hudi table.")
 public class HoodieWriteCommitPulsarCallbackConfig extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<String> BROKER_SERVICE_URL = ConfigProperty
       .key(CALLBACK_PREFIX + "pulsar.broker.service.url")

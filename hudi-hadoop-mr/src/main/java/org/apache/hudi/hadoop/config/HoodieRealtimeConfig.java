@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop.config;
  * Class to hold props related to Hoodie RealtimeInputFormat and RealtimeRecordReader.
  */
 public final class HoodieRealtimeConfig {
+  //non HudiConfig
 
   // Fraction of mapper/reducer task memory used for compaction of log files
   public static final String COMPACTION_MEMORY_FRACTION_PROP = "compaction.memory.fraction";

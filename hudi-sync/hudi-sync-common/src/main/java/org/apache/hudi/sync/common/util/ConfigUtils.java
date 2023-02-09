@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Properties;
 
 public class ConfigUtils {
+  //non HudiConfig
   /**
    * Config stored in hive serde properties to tell query engine (spark/flink) to
    * read the table as a read-optimized table when this config is true.

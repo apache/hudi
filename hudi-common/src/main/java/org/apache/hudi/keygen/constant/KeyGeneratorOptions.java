@@ -33,6 +33,7 @@ import org.apache.hudi.common.config.HoodieConfig;
         + "This config allows developers to setup the Key generator class that "
         + "will extract these out of incoming records.")
 public class KeyGeneratorOptions extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = ConfigProperty
       .key("hoodie.datasource.write.partitionpath.urlencode")
@@ -104,6 +105,7 @@ public class KeyGeneratorOptions extends HoodieConfig {
    * Supported configs.
    */
   public static class Config {
+    //non HudiConfig
 
     // One value from TimestampType above
     public static final String TIMESTAMP_TYPE_FIELD_PROP = "hoodie.deltastreamer.keygen.timebased.timestamp.type";

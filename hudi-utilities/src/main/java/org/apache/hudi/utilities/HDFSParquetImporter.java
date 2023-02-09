@@ -253,6 +253,7 @@ public class HDFSParquetImporter implements Serializable {
   }
 
   public static class Config implements Serializable {
+    //cli
 
     @Parameter(names = {"--command", "-c"}, description = "Write command Valid values are insert(default)/upsert/bulkinsert",
         validateValueWith = CommandValidator.class)

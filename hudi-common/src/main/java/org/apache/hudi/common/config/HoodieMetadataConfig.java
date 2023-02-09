@@ -40,6 +40,7 @@ import java.util.Properties;
         + "This table maintains the metadata about a given Hudi table (e.g file listings) "
         + " to avoid overhead of accessing cloud storage, during queries.")
 public final class HoodieMetadataConfig extends HoodieConfig {
+  //cfg
 
   public static final String METADATA_PREFIX = "hoodie.metadata";
   public static final String OPTIMIZED_LOG_BLOCKS_SCAN = ".optimized.log.blocks.scan.enable";

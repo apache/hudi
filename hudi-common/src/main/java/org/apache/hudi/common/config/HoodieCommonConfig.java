@@ -33,6 +33,7 @@ import java.util.Properties;
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "The following set of configurations are common across Hudi.")
 public class HoodieCommonConfig extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
       .key("hoodie.schema.on.read.enable")

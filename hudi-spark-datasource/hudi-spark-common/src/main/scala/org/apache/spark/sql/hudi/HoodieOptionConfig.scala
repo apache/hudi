@@ -31,6 +31,7 @@ import org.apache.spark.sql.types.StructType
  * option key and value.
  */
 object HoodieOptionConfig {
+  //non HudiConfig
 
   /**
    * The short name for the value of COW_TABLE_TYPE_OPT_VAL.

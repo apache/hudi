@@ -264,6 +264,7 @@ public class PulsarSource extends RowSource implements Closeable {
   }
 
   public static class Config {
+    //non HudiConfig
     private static final ConfigProperty<String> PULSAR_SOURCE_TOPIC_NAME = ConfigProperty
         .key("hoodie.deltastreamer.source.pulsar.topic")
         .noDefaultValue()

@@ -31,6 +31,7 @@ import java.util.Properties;
  */
 @Immutable
 public class HoodieTableServiceManagerConfig extends HoodieConfig {
+  //cfg
 
   public static final String TABLE_SERVICE_MANAGER_PREFIX = "hoodie.table.service.manager";
 

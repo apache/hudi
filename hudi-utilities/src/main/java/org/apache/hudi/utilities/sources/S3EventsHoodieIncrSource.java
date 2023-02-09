@@ -70,6 +70,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
   private static final Logger LOG = LogManager.getLogger(S3EventsHoodieIncrSource.class);
 
   static class Config {
+    //non HudiConfig
     // control whether we do existence check for files before consuming them
     static final String ENABLE_EXISTS_CHECK = "hoodie.deltastreamer.source.s3incr.check.file.exists";
     static final Boolean DEFAULT_ENABLE_EXISTS_CHECK = false;

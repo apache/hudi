@@ -66,6 +66,7 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
     areCommonConfigs = true,
     description = "")
 public class HoodieIndexConfig extends HoodieConfig {
+  //cfg
 
   private static final Logger LOG = LogManager.getLogger(HoodieIndexConfig.class);
 

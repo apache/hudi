@@ -44,6 +44,7 @@ import java.util.stream.Collectors;
         groupName = ConfigGroups.Names.WRITE_CLIENT,
         description = "Cleaning (reclamation of older/unused file groups/slices).")
 public class HoodieCleanConfig extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<String> AUTO_CLEAN = ConfigProperty
       .key("hoodie.clean.automatic")

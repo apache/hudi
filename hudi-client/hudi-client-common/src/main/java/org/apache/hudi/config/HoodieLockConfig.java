@@ -66,6 +66,7 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
     areCommonConfigs = true,
     description = "")
 public class HoodieLockConfig extends HoodieConfig {
+  //cfg
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS = ConfigProperty
       .key(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY)

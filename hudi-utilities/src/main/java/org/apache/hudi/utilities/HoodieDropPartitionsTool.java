@@ -146,6 +146,7 @@ public class HoodieDropPartitionsTool implements Serializable {
   }
 
   public static class Config implements Serializable {
+    //cli
     @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
     public String basePath = null;
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: "

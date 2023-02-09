@@ -108,6 +108,7 @@ public class HoodieIndexer {
   }
 
   public static class Config implements Serializable {
+    //cli
     @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)

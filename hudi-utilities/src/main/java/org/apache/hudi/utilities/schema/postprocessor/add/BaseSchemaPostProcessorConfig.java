@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
  * Base configs to describe a primitive type column.
  */
 public class BaseSchemaPostProcessorConfig {
+  //non HudiConfig
 
   public static final ConfigProperty<String> SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP = ConfigProperty
       .key("hoodie.deltastreamer.schemaprovider.schema_post_processor.add.column.name")

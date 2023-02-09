@@ -233,6 +233,7 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public static class Config implements Serializable {
+    //cli
     public static final String DEFAULT_DFS_SOURCE_PROPERTIES = "file://" + System.getProperty("user.dir")
         + "/src/test/resources/delta-streamer-config/dfs-source.properties";
 

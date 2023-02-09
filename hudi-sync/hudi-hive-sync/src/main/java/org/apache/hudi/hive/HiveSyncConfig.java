@@ -42,6 +42,7 @@ import java.util.Properties;
     groupName = ConfigGroups.Names.META_SYNC,
     description = "Configurations used by the Hudi to sync metadata to Hive Metastore.")
 public class HiveSyncConfig extends HoodieSyncConfig {
+  //cfg
 
   /*
    * Config constants below are retained here for BWC purpose.

@@ -42,6 +42,7 @@ import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier
     groupName = ConfigGroups.Names.META_SYNC,
     description = "Configurations used by the Hudi to sync metadata to DataHub.")
 public class DataHubSyncConfig extends HoodieSyncConfig {
+  //cfg
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS = ConfigProperty
       .key("hoodie.meta.sync.datahub.dataset.identifier.class")
@@ -93,6 +94,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
   }
 
   public static class DataHubSyncConfigParams {
+    //cli opts
 
     @ParametersDelegate()
     public final HoodieSyncConfigParams hoodieSyncConfigParams = new HoodieSyncConfigParams();

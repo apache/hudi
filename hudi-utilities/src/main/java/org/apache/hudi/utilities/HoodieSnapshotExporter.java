@@ -97,6 +97,7 @@ public class HoodieSnapshotExporter {
   }
 
   public static class Config implements Serializable {
+    //cli
 
     @Parameter(names = {"--source-base-path"}, description = "Base path for the source Hudi dataset to be snapshotted", required = true)
     public String sourceBasePath;

@@ -64,6 +64,7 @@ import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTI
     description = "Flink jobs using the SQL can be configured through the options in WITH clause."
         + " The actual datasource level configs are listed below.")
 public class FlinkOptions extends HoodieConfig {
+  //cfg
   private FlinkOptions() {
   }
 

@@ -40,6 +40,7 @@ import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRIC_PREFIX;
     description = "Enables reporting on Hudi metrics using the Datadog reporter type. "
         + "Hudi publishes metrics on every commit, clean, rollback etc.")
 public class HoodieMetricsDatadogConfig extends HoodieConfig {
+  //cfg
 
   public static final String DATADOG_PREFIX = METRIC_PREFIX + ".datadog";
 
