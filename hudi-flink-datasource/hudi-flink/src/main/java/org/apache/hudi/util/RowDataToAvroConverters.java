@@ -43,6 +43,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.util.DateUtils.normalLocalDateToUTC;
+
 /**
  * Tool class used to convert from {@link RowData} to Avro {@link GenericRecord}.
  *
@@ -166,7 +168,8 @@ public class RowDataToAvroConverters {
 
                 @Override
                 public Object convert(Schema schema, Object object) {
-                  return ((TimestampData) object).toInstant().toEpochMilli();
+                  // write timestamp utc timezone 
+                  return normalLocalDateToUTC((TimestampData) object).toInstant().toEpochMilli();
                 }
               };
         } else if (precision <= 6) {
