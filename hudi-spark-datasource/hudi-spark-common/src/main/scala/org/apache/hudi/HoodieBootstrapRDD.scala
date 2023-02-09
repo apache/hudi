@@ -19,16 +19,20 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.{Partition, TaskContext}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection}
+import org.apache.spark.sql.types.StructType
 
 class HoodieBootstrapRDD(@transient spark: SparkSession,
                          bootstrapDataFileReader: BaseFileReader,
                          bootstrapSkeletonFileReader: BaseFileReader,
                          regularFileReader: BaseFileReader,
-                         requiredColumns: Array[String],
+                         requiredSchema: HoodieTableSchema,
                          @transient splits: Seq[HoodieBootstrapSplit])
   extends RDD[InternalRow](spark.sparkContext, Nil) {
 
@@ -68,31 +72,24 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
 
   def merge(skeletonFileIterator: Iterator[InternalRow], dataFileIterator: Iterator[InternalRow]): Iterator[InternalRow] = {
     new Iterator[InternalRow] {
-      override def hasNext: Boolean = dataFileIterator.hasNext && skeletonFileIterator.hasNext
+      private val combinedRow = new JoinedRow()
+      private val combinedSchema: StructType = StructType(bootstrapSkeletonFileReader.schema.fields ++ bootstrapDataFileReader.schema.fields)
+      private val unsafeProjection = generateUnsafeProjection(combinedSchema, requiredSchema.structTypeSchema)
+
+      override def hasNext: Boolean = {
+        checkState(dataFileIterator.hasNext == skeletonFileIterator.hasNext,
+          "Bootstrap data-file iterator and skeleton-file iterator have to be in-sync!")
+        dataFileIterator.hasNext && skeletonFileIterator.hasNext
+      }
+
       override def next(): InternalRow = {
-        mergeInternalRow(skeletonFileIterator.next(), dataFileIterator.next())
+        combinedRow.withLeft(skeletonFileIterator.next())
+        combinedRow.withRight(dataFileIterator.next())
+
+        unsafeProjection(combinedRow)
       }
+
     }
-  }
-
-  // TODO revisit
-  def mergeInternalRow(skeletonRow: InternalRow, dataRow: InternalRow): InternalRow = {
-    val skeletonArr  = skeletonRow.copy().toSeq(bootstrapSkeletonFileReader.schema)
-    val dataArr = dataRow.copy().toSeq(bootstrapDataFileReader.schema)
-    // We need to return it in the order requested
-    val mergedArr = requiredColumns.map(col => {
-      if (bootstrapSkeletonFileReader.schema.fieldNames.contains(col)) {
-        val idx = bootstrapSkeletonFileReader.schema.fieldIndex(col)
-        skeletonArr(idx)
-      } else {
-        val idx = bootstrapDataFileReader.schema.fieldIndex(col)
-        dataArr(idx)
-      }
-    })
-
-    logDebug("Merged data and skeleton values => " + mergedArr.mkString(","))
-    val mergedRow = InternalRow.fromSeq(mergedArr)
-    mergedRow
   }
 
   override protected def getPartitions: Array[Partition] = {

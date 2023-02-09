@@ -102,7 +102,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
     val regularFileReader = createRegularFileReader(tableSchema, requiredSchema, filters)
 
     new HoodieBootstrapRDD(sqlContext.sparkSession, bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader,
-      requestedColumns, fileSplits)
+      requiredSchema, fileSplits)
   }
 
   private def createBootstrapFileReaders(tableSchema: HoodieTableSchema,
