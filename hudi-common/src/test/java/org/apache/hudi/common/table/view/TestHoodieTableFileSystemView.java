@@ -18,9 +18,6 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieFSPermission;
@@ -31,16 +28,19 @@ import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -50,14 +50,21 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -81,6 +88,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -107,9 +115,15 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void setup() throws IOException {
-    metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH);
+    metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH, false);
     basePath = metaClient.getBasePath();
     refreshFsView();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    closeFsView();
+    cleanMetaClient();
   }
 
   protected void refreshFsView() throws IOException {
@@ -139,6 +153,46 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   @Test
   public void testViewForFileSlicesWithNoBaseFileNonPartitioned() throws Exception {
     testViewForFileSlicesWithNoBaseFile(1, 0, "");
+  }
+
+  @Test
+  public void testCloseHoodieTableFileSystemView() throws Exception {
+    String instantTime1 = "1";
+    String instantTime2 = "2";
+    String clusteringInstantTime3 = "3";
+    String clusteringInstantTime4 = "4";
+
+    // prepare metadata
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
+    List<String> replacedFileIds = new ArrayList<>();
+    replacedFileIds.add("fake_file_id");
+    partitionToReplaceFileIds.put("fake_partition_path", replacedFileIds);
+
+    // prepare Instants
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime2);
+    HoodieInstant clusteringInstant3 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime3);
+    HoodieInstant clusteringInstant4 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime4);
+    HoodieCommitMetadata commitMetadata =
+            CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.CLUSTER, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, instant2, Option.empty());
+    saveAsComplete(commitTimeline, clusteringInstant3, Option.empty());
+    saveAsComplete(commitTimeline, clusteringInstant4, Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    refreshFsView();
+
+    // Now create a scenario where archiving deleted replace commits (requested,inflight and replacecommit)
+    boolean deleteReplaceCommit = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit").delete();
+    boolean deleteReplaceCommitRequested = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit.requested").delete();
+    boolean deleteReplaceCommitInflight = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit.inflight").delete();
+
+    // confirm deleted
+    assertTrue(deleteReplaceCommit && deleteReplaceCommitInflight && deleteReplaceCommitRequested);
+    assertDoesNotThrow(() -> fsView.close());
+
   }
 
   protected void testViewForFileSlicesWithNoBaseFile(int expNumTotalFileSlices, int expNumTotalDataFiles,
@@ -238,6 +292,54 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     testViewForFileSlicesWithAsyncCompaction(false, true, 2, 2, true, testBootstrap);
   }
 
+  @Test
+  protected void testInvalidLogFiles() throws Exception {
+    String partitionPath = "2016/05/01";
+    Paths.get(basePath, partitionPath).toFile().mkdirs();
+    String fileId = UUID.randomUUID().toString();
+
+    String instantTime1 = "1";
+    String deltaInstantTime1 = "2";
+    String deltaInstantTime2 = "3";
+    String fileName1 =
+        FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime1, 0, TEST_WRITE_TOKEN);
+    String fileName2 =
+        FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime1, 1, TEST_WRITE_TOKEN);
+    // create a dummy log file mimicing cloud stores marker files
+    String fileName3 = "_GCS_SYNCABLE_TEMPFILE_" + fileName1;
+    String fileName4 = "_DUMMY_" + fileName1.substring(1, fileName1.length());
+    // this file should not be deduced as a log file.
+
+    Paths.get(basePath, partitionPath, fileName1).toFile().createNewFile();
+    Paths.get(basePath, partitionPath, fileName2).toFile().createNewFile();
+    Paths.get(basePath, partitionPath, fileName3).toFile().createNewFile();
+    Paths.get(basePath, partitionPath, fileName4).toFile().createNewFile();
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
+    HoodieInstant deltaInstant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime1);
+    HoodieInstant deltaInstant3 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime2);
+
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, deltaInstant2, Option.empty());
+    saveAsComplete(commitTimeline, deltaInstant3, Option.empty());
+
+    refreshFsView();
+
+    List<HoodieBaseFile> dataFiles = roView.getLatestBaseFiles().collect(Collectors.toList());
+    assertTrue(dataFiles.isEmpty(), "No data file expected");
+    List<FileSlice> fileSliceList = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
+    assertEquals(1, fileSliceList.size());
+    FileSlice fileSlice = fileSliceList.get(0);
+    assertEquals(fileId, fileSlice.getFileId(), "File-Id must be set correctly");
+    assertFalse(fileSlice.getBaseFile().isPresent(), "Data file for base instant must be present");
+    assertEquals(instantTime1, fileSlice.getBaseInstantTime(), "Base Instant for file-group set correctly");
+    List<HoodieLogFile> logFiles = fileSlice.getLogFiles().collect(Collectors.toList());
+    assertEquals(2, logFiles.size(), "Correct number of log-files shows up in file-slice");
+    assertEquals(fileName2, logFiles.get(0).getFileName(), "Log File Order check");
+    assertEquals(fileName1, logFiles.get(1).getFileName(), "Log File Order check");
+  }
+
   /**
    * Returns all file-slices including uncommitted ones.
    *
@@ -303,10 +405,15 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   protected void testViewForFileSlicesWithAsyncCompaction(boolean skipCreatingDataFile, boolean isCompactionInFlight,
       int expTotalFileSlices, int expTotalDataFiles, boolean includeInvalidAndInflight, boolean testBootstrap)
       throws Exception {
+
+    if (testBootstrap) {
+      metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH, testBootstrap);
+    }
+
     String partitionPath = "2016/05/01";
     new File(basePath + "/" + partitionPath).mkdirs();
     String fileId = UUID.randomUUID().toString();
-    String srcName = "part_0000.parquet";
+    String srcName = "part_0000" + metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
     HoodieFileStatus srcFileStatus = HoodieFileStatus.newBuilder()
         .setPath(HoodiePath.newBuilder().setUri(BOOTSTRAP_SOURCE_PATH + partitionPath + "/" + srcName).build())
         .setLength(256 * 1024 * 1024L)
@@ -327,7 +434,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     String dataFileName = null;
     if (!skipCreatingDataFile) {
-      dataFileName = FSUtils.makeDataFileName(instantTime1, TEST_WRITE_TOKEN, fileId);
+      dataFileName = FSUtils.makeBaseFileName(instantTime1, TEST_WRITE_TOKEN, fileId);
       new File(basePath + "/" + partitionPath + "/" + dataFileName).createNewFile();
     }
     String fileName1 =
@@ -366,7 +473,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       checkExternalFile(srcFileStatus, fileSlice.getBaseFile().get().getBootstrapBaseFile(), testBootstrap);
     }
     String compactionRequestedTime = "4";
-    String compactDataFileName = FSUtils.makeDataFileName(compactionRequestedTime, TEST_WRITE_TOKEN, fileId);
+    String compactDataFileName = FSUtils.makeBaseFileName(compactionRequestedTime, TEST_WRITE_TOKEN, fileId);
     List<Pair<String, FileSlice>> partitionFileSlicesPairs = new ArrayList<>();
     partitionFileSlicesPairs.add(Pair.of(partitionPath, fileSlices.get(0)));
     HoodieCompactionPlan compactionPlan =
@@ -501,12 +608,12 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     final String orphanFileId2 = UUID.randomUUID().toString();
     final String invalidInstantId = "INVALIDTIME";
     String inflightDeltaInstantTime = "7";
-    String orphanDataFileName = FSUtils.makeDataFileName(invalidInstantId, TEST_WRITE_TOKEN, orphanFileId1);
+    String orphanDataFileName = FSUtils.makeBaseFileName(invalidInstantId, TEST_WRITE_TOKEN, orphanFileId1);
     new File(basePath + "/" + partitionPath + "/" + orphanDataFileName).createNewFile();
     String orphanLogFileName =
         FSUtils.makeLogFileName(orphanFileId2, HoodieLogFile.DELTA_EXTENSION, invalidInstantId, 0, TEST_WRITE_TOKEN);
     new File(basePath + "/" + partitionPath + "/" + orphanLogFileName).createNewFile();
-    String inflightDataFileName = FSUtils.makeDataFileName(inflightDeltaInstantTime, TEST_WRITE_TOKEN, inflightFileId1);
+    String inflightDataFileName = FSUtils.makeBaseFileName(inflightDeltaInstantTime, TEST_WRITE_TOKEN, inflightFileId1);
     new File(basePath + "/" + partitionPath + "/" + inflightDataFileName).createNewFile();
     String inflightLogFileName = FSUtils.makeLogFileName(inflightFileId2, HoodieLogFile.DELTA_EXTENSION,
         inflightDeltaInstantTime, 0, TEST_WRITE_TOKEN);
@@ -661,7 +768,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     // Only one commit, but is not safe
     String commitTime1 = "1";
-    String fileName1 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId);
+    String fileName1 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId);
     new File(basePath + "/" + partitionPath + "/" + fileName1).createNewFile();
     refreshFsView();
     assertFalse(roView.getLatestBaseFiles(partitionPath).anyMatch(dfile -> dfile.getFileId().equals(fileId)),
@@ -677,7 +784,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     // Do another commit, but not safe
     String commitTime2 = "2";
-    String fileName2 = FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, fileId);
+    String fileName2 = FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId);
     new File(basePath + "/" + partitionPath + "/" + fileName2).createNewFile();
     refreshFsView();
     assertEquals(fileName1, roView.getLatestBaseFiles(partitionPath)
@@ -711,22 +818,22 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String fileId3 = UUID.randomUUID().toString();
     String fileId4 = UUID.randomUUID().toString();
 
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId1)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId1)).createNewFile();
     new File(fullPartitionPath
         + FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime4, 0, TEST_WRITE_TOKEN))
             .createNewFile();
     new File(fullPartitionPath
         + FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime4, 1, TEST_WRITE_TOKEN))
             .createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId2)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, fileId2)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId2)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)).createNewFile();
     new File(fullPartitionPath
         + FSUtils.makeLogFileName(fileId2, HoodieLogFile.DELTA_EXTENSION, commitTime3, 0, TEST_WRITE_TOKEN))
             .createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId3)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId3)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)).createNewFile();
     new File(fullPartitionPath
         + FSUtils.makeLogFileName(fileId4, HoodieLogFile.DELTA_EXTENSION, commitTime4, 0, TEST_WRITE_TOKEN))
             .createNewFile();
@@ -776,9 +883,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     for (HoodieBaseFile status : dataFileList) {
       filenames.add(status.getFileName());
     }
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId1)));
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)));
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)));
+    assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId1)));
+    assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)));
+    assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)));
 
     filenames = new HashSet<>();
     List<HoodieLogFile> logFilesList = rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime4, true)
@@ -805,12 +912,12 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     }
     if (!isLatestFileSliceOnly) {
       assertEquals(3, dataFiles.size());
-      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1)));
-      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)));
-      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId3)));
+      assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1)));
+      assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)));
+      assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId3)));
     } else {
       assertEquals(1, dataFiles.size());
-      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)));
+      assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)));
     }
 
     logFilesList = rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime3, true)
@@ -836,13 +943,13 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String fileId2 = UUID.randomUUID().toString();
     String fileId3 = UUID.randomUUID().toString();
 
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId1)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId2)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, fileId2)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId3)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId1)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId2)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId3)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)).createNewFile();
 
     new File(basePath + "/.hoodie/" + commitTime1 + ".commit").createNewFile();
     new File(basePath + "/.hoodie/" + commitTime2 + ".commit").createNewFile();
@@ -867,22 +974,22 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       Set<String> expFileNames = new HashSet<>();
       if (fileId.equals(fileId1)) {
         if (!isLatestFileSliceOnly) {
-          expFileNames.add(FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1));
+          expFileNames.add(FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1));
         }
-        expFileNames.add(FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId1));
+        expFileNames.add(FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId1));
         assertEquals(expFileNames, filenames);
       } else if (fileId.equals(fileId2)) {
         if (!isLatestFileSliceOnly) {
-          expFileNames.add(FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId2));
-          expFileNames.add(FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, fileId2));
+          expFileNames.add(FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2));
+          expFileNames.add(FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId2));
         }
-        expFileNames.add(FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId2));
+        expFileNames.add(FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId2));
         assertEquals(expFileNames, filenames);
       } else {
         if (!isLatestFileSliceOnly) {
-          expFileNames.add(FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId3));
+          expFileNames.add(FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId3));
         }
-        expFileNames.add(FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId3));
+        expFileNames.add(FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId3));
         assertEquals(expFileNames, filenames);
       }
     }
@@ -905,21 +1012,21 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String fileId2 = UUID.randomUUID().toString();
     String fileId3 = UUID.randomUUID().toString();
 
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1)).createNewFile();
     new File(fullPartitionPath
         + FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, TEST_WRITE_TOKEN))
             .createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId1)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId1)).createNewFile();
 
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId2)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, fileId2)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId2)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)).createNewFile();
     new File(fullPartitionPath
         + FSUtils.makeLogFileName(fileId2, HoodieLogFile.DELTA_EXTENSION, commitTime3, 0, TEST_WRITE_TOKEN))
             .createNewFile();
 
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId3)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId3)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)).createNewFile();
 
     new File(basePath + "/.hoodie/" + commitTime1 + ".commit").createNewFile();
     new File(basePath + "/.hoodie/" + commitTime2 + ".commit").createNewFile();
@@ -942,10 +1049,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       filenames.add(status.getFileName());
     }
 
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId1)));
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)));
+    assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId1)));
+    assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)));
     if (!isLatestFileSliceOnly) {
-      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId3)));
+      assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId3)));
     }
 
     List<FileSlice> slices =
@@ -986,13 +1093,13 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String fileId2 = UUID.randomUUID().toString();
     String fileId3 = UUID.randomUUID().toString();
 
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId1)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId2)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, fileId2)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId3)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId1)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId2)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId3)).createNewFile();
+    new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)).createNewFile();
 
     new File(basePath + "/.hoodie/" + commitTime1 + ".commit").createNewFile();
     new File(basePath + "/.hoodie/" + commitTime2 + ".commit").createNewFile();
@@ -1012,8 +1119,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       for (HoodieBaseFile status : dataFiles) {
         filenames.add(status.getFileName());
       }
-      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1)));
-      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, fileId2)));
+      assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1)));
+      assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId2)));
     } else {
       assertEquals(0, dataFiles.size());
     }
@@ -1037,30 +1144,30 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String fileId2 = UUID.randomUUID().toString();
     String fileId3 = UUID.randomUUID().toString();
 
-    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1))
+    new File(fullPartitionPath + "/" + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1))
         .createNewFile();
     new File(fullPartitionPath + "/"
         + FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, TEST_WRITE_TOKEN))
             .createNewFile();
-    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId1))
+    new File(fullPartitionPath + "/" + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId1))
         .createNewFile();
     new File(fullPartitionPath + "/"
         + FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime4, 0, TEST_WRITE_TOKEN))
             .createNewFile();
 
-    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId2))
+    new File(fullPartitionPath + "/" + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2))
         .createNewFile();
-    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, fileId2))
+    new File(fullPartitionPath + "/" + FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId2))
         .createNewFile();
     new File(fullPartitionPath + "/"
         + FSUtils.makeLogFileName(fileId2, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, TEST_WRITE_TOKEN))
             .createNewFile();
-    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId2))
+    new File(fullPartitionPath + "/" + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId2))
         .createNewFile();
 
-    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId3))
+    new File(fullPartitionPath + "/" + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId3))
         .createNewFile();
-    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId3))
+    new File(fullPartitionPath + "/" + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId3))
         .createNewFile();
 
     new File(basePath + "/.hoodie/" + commitTime1 + ".commit").createNewFile();
@@ -1107,9 +1214,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     for (HoodieBaseFile status : statuses1) {
       filenames.add(status.getFileName());
     }
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId1)));
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)));
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)));
+    assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId1)));
+    assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)));
+    assertTrue(filenames.contains(FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)));
   }
 
   @Test
@@ -1130,15 +1237,15 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String deltaInstantTime2 = "3";
     String fileId = UUID.randomUUID().toString();
 
-    String dataFileName = FSUtils.makeDataFileName(instantTime1, TEST_WRITE_TOKEN, fileId);
+    String dataFileName = FSUtils.makeBaseFileName(instantTime1, TEST_WRITE_TOKEN, fileId);
     new File(fullPartitionPath1 + dataFileName).createNewFile();
 
     String fileName1 =
         FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime1, 0, TEST_WRITE_TOKEN);
     new File(fullPartitionPath1 + fileName1).createNewFile();
-    new File(fullPartitionPath2 + FSUtils.makeDataFileName(instantTime1, TEST_WRITE_TOKEN, fileId)).createNewFile();
+    new File(fullPartitionPath2 + FSUtils.makeBaseFileName(instantTime1, TEST_WRITE_TOKEN, fileId)).createNewFile();
     new File(fullPartitionPath2 + fileName1).createNewFile();
-    new File(fullPartitionPath3 + FSUtils.makeDataFileName(instantTime1, TEST_WRITE_TOKEN, fileId)).createNewFile();
+    new File(fullPartitionPath3 + FSUtils.makeBaseFileName(instantTime1, TEST_WRITE_TOKEN, fileId)).createNewFile();
     new File(fullPartitionPath3 + fileName1).createNewFile();
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
@@ -1177,7 +1284,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     partitionFileSlicesPairs.add(Pair.of(partitionPath3, fileSlices.get(0)));
 
     String compactionRequestedTime = "2";
-    String compactDataFileName = FSUtils.makeDataFileName(compactionRequestedTime, TEST_WRITE_TOKEN, fileId);
+    String compactDataFileName = FSUtils.makeBaseFileName(compactionRequestedTime, TEST_WRITE_TOKEN, fileId);
     HoodieCompactionPlan compactionPlan =
         CompactionUtils.buildFromFileSlices(partitionFileSlicesPairs, Option.empty(), Option.empty());
 
@@ -1294,8 +1401,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         "No commit, should not find any data file");
     // Only one commit
     String commitTime1 = "1";
-    String fileName1 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
-    String fileName2 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
+    String fileName1 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
+    String fileName2 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
     new File(basePath + "/" + partitionPath1 + "/" + fileName1).createNewFile();
     new File(basePath + "/" + partitionPath1 + "/" + fileName2).createNewFile();
 
@@ -1311,8 +1418,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     // create commit2 - fileId1 is replaced. new file groups fileId3,fileId4 are created.
     String fileId3 = UUID.randomUUID().toString();
     String fileId4 = UUID.randomUUID().toString();
-    String fileName3 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId3);
-    String fileName4 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId4);
+    String fileName3 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId3);
+    String fileName4 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId4);
     new File(basePath + "/" + partitionPath1 + "/" + fileName3).createNewFile();
     new File(basePath + "/" + partitionPath1 + "/" + fileName4).createNewFile();
 
@@ -1348,6 +1455,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         .filter(dfile -> dfile.getFileId().equals(fileId3)).count());
     assertEquals(1, filteredView.getLatestBaseFiles(partitionPath1)
         .filter(dfile -> dfile.getFileId().equals(fileId4)).count());
+    filteredView.close();
 
     // ensure replacedFileGroupsBefore works with all instants
     List<HoodieFileGroup> replacedOnInstant1 = fsView.getReplacedFileGroupsBeforeOrOn("1", partitionPath1).collect(Collectors.toList());
@@ -1389,10 +1497,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     // Only one commit
     String commitTime1 = "1";
-    String fileName1 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
-    String fileName2 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
-    String fileName3 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId3);
-    String fileName4 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId4);
+    String fileName1 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
+    String fileName2 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
+    String fileName3 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId3);
+    String fileName4 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId4);
     new File(basePath + "/" + partitionPath1 + "/" + fileName1).createNewFile();
     new File(basePath + "/" + partitionPath1 + "/" + fileName2).createNewFile();
     new File(basePath + "/" + partitionPath2 + "/" + fileName3).createNewFile();
@@ -1449,9 +1557,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         "No commit, should not find any data file");
     // Only one commit
     String commitTime1 = "1";
-    String fileName1 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
-    String fileName2 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
-    String fileName3 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId3);
+    String fileName1 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
+    String fileName2 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
+    String fileName3 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId3);
     new File(basePath + "/" + partitionPath1 + "/" + fileName1).createNewFile();
     new File(basePath + "/" + partitionPath1 + "/" + fileName2).createNewFile();
     new File(basePath + "/" + partitionPath1 + "/" + fileName3).createNewFile();
@@ -1489,6 +1597,375 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(fileIds.contains(fileId1));
     assertTrue(fileIds.contains(fileId2));
     assertFalse(fileIds.contains(fileId3));
+  }
+
+  /**
+   *
+   * create hoodie table like
+   * .
+   * ├── .hoodie
+   * │   ├── .aux
+   * │   │   └── .bootstrap
+   * │   │       ├── .fileids
+   * │   │       └── .partitions
+   * │   ├── .temp
+   * │   ├── 1.commit
+   * │   ├── 1.commit.requested
+   * │   ├── 1.inflight
+   * │   ├── 2.replacecommit
+   * │   ├── 2.replacecommit.inflight
+   * │   ├── 2.replacecommit.requested
+   * │   ├── 3.commit
+   * │   ├── 3.commit.requested
+   * │   ├── 3.inflight
+   * │   ├── archived
+   * │   └── hoodie.properties
+   * └── 2020
+   *     └── 06
+   *         └── 27
+   *             ├── 5fe477d2-0150-46d4-833c-1e9cc8da9948_1-0-1_3.parquet
+   *             ├── 7e3208c8-fdec-4254-9682-8fff1e51ee8d_1-0-1_2.parquet
+   *             ├── e04b0e2d-1467-46b2-8ea6-f4fe950965a5_1-0-1_1.parquet
+   *             └── f3936b66-b3db-4fc8-a6d0-b1a7559016e6_1-0-1_1.parquet
+   *
+   * First test fsView API with finished clustering:
+   *  1. getLatestBaseFilesBeforeOrOn
+   *  2. getBaseFileOn
+   *  3. getLatestBaseFilesInRange
+   *  4. getAllBaseFiles
+   *  5. getLatestBaseFiles
+   *
+   * Then remove 2.replacecommit, 1.commit, 1.commit.requested, 1.inflight to simulate
+   * pending clustering at the earliest position in the active timeline and test these APIs again.
+   *
+   * @throws IOException
+   */
+  @Test
+  public void testHoodieTableFileSystemViewWithPendingClustering() throws IOException {
+    List<String> latestBaseFilesBeforeOrOn;
+    Option<HoodieBaseFile> baseFileOn;
+    List<String> latestBaseFilesInRange;
+    List<String> allBaseFiles;
+    List<String> latestBaseFiles;
+    List<String> latestBaseFilesPerPartition;
+    String partitionPath = "2020/06/27";
+    new File(basePath + "/" + partitionPath).mkdirs();
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+
+    // will create 5 fileId in partition.
+    // fileId1 and fileId2 will be replaced by fileID3
+    // fileId4 and fileId5 will be committed after clustering finished.
+    String fileId1 = UUID.randomUUID().toString();
+    String fileId2 = UUID.randomUUID().toString();
+    String fileId3 = UUID.randomUUID().toString();
+    String fileId4 = UUID.randomUUID().toString();
+    String fileId5 = UUID.randomUUID().toString();
+
+    assertFalse(roView.getLatestBaseFiles(partitionPath)
+            .anyMatch(dfile -> dfile.getFileId().equals(fileId1)
+                || dfile.getFileId().equals(fileId2)
+                || dfile.getFileId().equals(fileId3)
+                || dfile.getFileId().equals(fileId4)
+                || dfile.getFileId().equals(fileId5)),
+        "No commit, should not find any data file");
+
+    // first insert commit
+    String commitTime1 = "1";
+    String fileName1 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
+    String fileName2 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
+    new File(basePath + "/" + partitionPath + "/" + fileName1).createNewFile();
+    new File(basePath + "/" + partitionPath + "/" + fileName2).createNewFile();
+
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime1);
+
+    // build writeStats
+    HashMap<String, List<String>> partitionToFile1 = new HashMap<>();
+    ArrayList<String> files1 = new ArrayList<>();
+    files1.add(fileId1);
+    files1.add(fileId2);
+    partitionToFile1.put(partitionPath, files1);
+    List<HoodieWriteStat> writeStats1 = buildWriteStats(partitionToFile1, commitTime1);
+
+    HoodieCommitMetadata commitMetadata1 =
+        CommitUtils.buildMetadata(writeStats1, new HashMap<>(), Option.empty(), WriteOperationType.INSERT, "", HoodieTimeline.COMMIT_ACTION);
+    saveAsComplete(commitTimeline, instant1, Option.of(commitMetadata1.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commitTimeline.reload();
+
+    // replace commit
+    String commitTime2 = "2";
+    String fileName3 = FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId3);
+    new File(basePath + "/" + partitionPath + "/" + fileName3).createNewFile();
+
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime2);
+    Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
+    List<String> replacedFileIds = new ArrayList<>();
+    replacedFileIds.add(fileId1);
+    replacedFileIds.add(fileId2);
+    partitionToReplaceFileIds.put(partitionPath, replacedFileIds);
+
+    HashMap<String, List<String>> partitionToFile2 = new HashMap<>();
+    ArrayList<String> files2 = new ArrayList<>();
+    files2.add(fileId3);
+    partitionToFile2.put(partitionPath, files2);
+    List<HoodieWriteStat> writeStats2 = buildWriteStats(partitionToFile2, commitTime2);
+
+    HoodieCommitMetadata commitMetadata2 =
+        CommitUtils.buildMetadata(writeStats2, partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+    saveAsComplete(commitTimeline, instant2, Option.of(commitMetadata2.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    // another insert commit
+    String commitTime3 = "3";
+    String fileName4 = FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId4);
+    new File(basePath + "/" + partitionPath + "/" + fileName4).createNewFile();
+    HoodieInstant instant3 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime3);
+
+    // build writeStats
+    HashMap<String, List<String>> partitionToFile3 = new HashMap<>();
+    ArrayList<String> files3 = new ArrayList<>();
+    files3.add(fileId4);
+    partitionToFile3.put(partitionPath, files3);
+    List<HoodieWriteStat> writeStats3 = buildWriteStats(partitionToFile3, commitTime3);
+    HoodieCommitMetadata commitMetadata3 =
+        CommitUtils.buildMetadata(writeStats3, new HashMap<>(), Option.empty(), WriteOperationType.INSERT, "", HoodieTimeline.COMMIT_ACTION);
+    saveAsComplete(commitTimeline, instant3, Option.of(commitMetadata3.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    metaClient.reloadActiveTimeline();
+    refreshFsView();
+
+    ArrayList<String> commits = new ArrayList<>();
+    commits.add(commitTime1);
+    commits.add(commitTime2);
+    commits.add(commitTime3);
+
+    // do check
+    latestBaseFilesBeforeOrOn = fsView.getLatestBaseFilesBeforeOrOn(partitionPath, commitTime3).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    assertEquals(2, latestBaseFilesBeforeOrOn.size());
+    assertTrue(latestBaseFilesBeforeOrOn.contains(fileId3));
+    assertTrue(latestBaseFilesBeforeOrOn.contains(fileId4));
+
+    // could see fileId3 because clustering is committed.
+    baseFileOn = fsView.getBaseFileOn(partitionPath, commitTime2, fileId3);
+    assertTrue(baseFileOn.isPresent());
+    assertEquals(baseFileOn.get().getFileId(), fileId3);
+
+    latestBaseFilesInRange = fsView.getLatestBaseFilesInRange(commits).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    assertEquals(2, latestBaseFilesInRange.size());
+    assertTrue(latestBaseFilesInRange.contains(fileId3));
+    assertTrue(latestBaseFilesInRange.contains(fileId4));
+
+    allBaseFiles = fsView.getAllBaseFiles(partitionPath).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    assertEquals(2, allBaseFiles.size());
+    assertTrue(allBaseFiles.contains(fileId3));
+    assertTrue(allBaseFiles.contains(fileId4));
+
+    // could see fileId3 because clustering is committed.
+    latestBaseFiles = fsView.getLatestBaseFiles().map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    assertEquals(2, latestBaseFiles.size());
+    assertTrue(allBaseFiles.contains(fileId3));
+    assertTrue(allBaseFiles.contains(fileId4));
+
+    // could see fileId3 because clustering is committed.
+    latestBaseFilesPerPartition = fsView.getLatestBaseFiles(partitionPath).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    assertEquals(2, latestBaseFiles.size());
+    assertTrue(latestBaseFilesPerPartition.contains(fileId3));
+    assertTrue(latestBaseFilesPerPartition.contains(fileId4));
+
+    HoodieWrapperFileSystem fs = metaClient.getFs();
+    fs.delete(new Path(basePath + "/.hoodie", "1.commit"), false);
+    fs.delete(new Path(basePath + "/.hoodie", "1.inflight"), false);
+    fs.delete(new Path(basePath + "/.hoodie", "1.commit.requested"), false);
+    fs.delete(new Path(basePath + "/.hoodie", "2.replacecommit"), false);
+
+    metaClient.reloadActiveTimeline();
+    refreshFsView();
+    // do check after delete some commit file
+    latestBaseFilesBeforeOrOn = fsView.getLatestBaseFilesBeforeOrOn(partitionPath, commitTime3).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    assertEquals(3, latestBaseFilesBeforeOrOn.size());
+    assertTrue(latestBaseFilesBeforeOrOn.contains(fileId1));
+    assertTrue(latestBaseFilesBeforeOrOn.contains(fileId2));
+    assertTrue(latestBaseFilesBeforeOrOn.contains(fileId4));
+
+    // couldn't see fileId3 because clustering is not committed.
+    baseFileOn = fsView.getBaseFileOn(partitionPath, commitTime2, fileId3);
+    assertFalse(baseFileOn.isPresent());
+
+    latestBaseFilesInRange = fsView.getLatestBaseFilesInRange(commits).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    assertEquals(3, latestBaseFilesInRange.size());
+    assertTrue(latestBaseFilesInRange.contains(fileId1));
+    assertTrue(latestBaseFilesInRange.contains(fileId2));
+    assertTrue(latestBaseFilesInRange.contains(fileId4));
+
+    allBaseFiles = fsView.getAllBaseFiles(partitionPath).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    assertEquals(3, allBaseFiles.size());
+    assertTrue(allBaseFiles.contains(fileId1));
+    assertTrue(allBaseFiles.contains(fileId2));
+    assertTrue(allBaseFiles.contains(fileId4));
+
+    // couldn't see fileId3 because clustering is not committed.
+    latestBaseFiles = fsView.getLatestBaseFiles().map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    assertEquals(3, latestBaseFiles.size());
+    assertTrue(allBaseFiles.contains(fileId1));
+    assertTrue(allBaseFiles.contains(fileId2));
+    assertTrue(allBaseFiles.contains(fileId4));
+
+    // couldn't see fileId3 because clustering is not committed.
+    latestBaseFilesPerPartition = fsView.getLatestBaseFiles(partitionPath).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    assertEquals(3, latestBaseFiles.size());
+    assertTrue(latestBaseFilesPerPartition.contains(fileId1));
+    assertTrue(latestBaseFilesPerPartition.contains(fileId2));
+    assertTrue(latestBaseFilesPerPartition.contains(fileId4));
+  }
+
+
+  // Generate Hoodie WriteStat For Given Partition
+  private List<HoodieWriteStat> buildWriteStats(HashMap<String, List<String>> partitionToFileIds, String commitTime) {
+    HashMap<String, List<Pair<String, Integer>>> maps = new HashMap<>();
+    for (String partition : partitionToFileIds.keySet()) {
+      List<Pair<String, Integer>> list = partitionToFileIds.get(partition).stream().map(fileId -> new ImmutablePair<String, Integer>(fileId, 0)).collect(Collectors.toList());
+      maps.put(partition, list);
+    }
+    return HoodieTestTable.generateHoodieWriteStatForPartition(maps, commitTime, false);
+  }
+
+  @Test
+  public void testPendingMajorAndMinorCompactionOperations() throws Exception {
+    String partitionPath = "2020/06/27";
+    new File(basePath + "/" + partitionPath).mkdirs();
+
+    // Generate 2 fileIds
+    String fileId1 = UUID.randomUUID().toString();
+    String fileId2 = UUID.randomUUID().toString();
+
+    // This is used for verifying file system view after every commit.
+    FileSystemViewExpectedState expectedState = new FileSystemViewExpectedState();
+
+    // First delta commit on partitionPath which creates 2 log files.
+    String commitTime1 = "001";
+    String logFileName1 = FSUtils.makeLogFileName(fileId1, HoodieFileFormat.HOODIE_LOG.getFileExtension(), commitTime1, 1, TEST_WRITE_TOKEN);
+    String logFileName2 = FSUtils.makeLogFileName(fileId2, HoodieFileFormat.HOODIE_LOG.getFileExtension(), commitTime1, 1, TEST_WRITE_TOKEN);
+    new File(basePath + "/" + partitionPath + "/" + logFileName1).createNewFile();
+    new File(basePath + "/" + partitionPath + "/" + logFileName2).createNewFile();
+    expectedState.logFilesCurrentlyPresent.add(logFileName1);
+    expectedState.logFilesCurrentlyPresent.add(logFileName2);
+
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat(partitionPath, getHoodieWriteStat(partitionPath, fileId1, logFileName1));
+    commitMetadata.addWriteStat(partitionPath, getHoodieWriteStat(partitionPath, fileId2, logFileName2));
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, commitTime1);
+    saveAsComplete(commitTimeline, instant1, Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    SyncableFileSystemView fileSystemView = getFileSystemView(metaClient.reloadActiveTimeline(), true);
+
+    // Verify file system view after 1st commit.
+    verifyFileSystemView(partitionPath, expectedState, fileSystemView);
+
+    // Second ingestion commit on partitionPath1
+    // First delta commit on partitionPath1 which creates 2 log files.
+    String commitTime2 = "002";
+    String logFileName3 = FSUtils.makeLogFileName(fileId1, HoodieFileFormat.HOODIE_LOG.getFileExtension(), commitTime1, 2, TEST_WRITE_TOKEN);
+    new File(basePath + "/" + partitionPath + "/" + logFileName3).createNewFile();
+    expectedState.logFilesCurrentlyPresent.add(logFileName3);
+
+    commitTimeline = metaClient.getActiveTimeline();
+    commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat(partitionPath, getHoodieWriteStat(partitionPath, fileId1, logFileName3));
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, commitTime2);
+
+    saveAsComplete(commitTimeline, instant2, Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    // Verify file system view after 2nd commit.
+    verifyFileSystemView(partitionPath, expectedState, fileSystemView);
+
+    // Create compaction commit
+    List<HoodieLogFile> logFiles = Stream.of(
+        basePath + "/" + partitionPath + "/" + logFileName1, basePath + "/" + partitionPath + "/" + logFileName3)
+        .map(HoodieLogFile::new)
+        .collect(Collectors.toList());
+    CompactionOperation compactionOperation = new CompactionOperation(Option.empty(), partitionPath, logFiles, Collections.emptyMap());
+    HoodieCompactionPlan compactionPlan = getHoodieCompactionPlan(Collections.singletonList(compactionOperation));
+    expectedState.pendingCompactionFgIdsCurrentlyPresent.add(fileId1);
+
+    String commitTime3 = "003";
+    HoodieInstant compactionInstant =
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, commitTime3);
+    HoodieInstant compactionRequested = HoodieTimeline.getCompactionRequestedInstant(compactionInstant.getTimestamp());
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionRequested,
+        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+    metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(compactionRequested);
+
+    // Verify file system view after 3rd commit which is compaction.requested.
+    verifyFileSystemView(partitionPath, expectedState, fileSystemView);
+
+
+    // Create log compaction commit
+    logFiles = Collections.singletonList(new HoodieLogFile(basePath + "/" + partitionPath + "/" + logFileName2));
+    CompactionOperation logCompactionOperation = new CompactionOperation(Option.empty(), partitionPath, logFiles, Collections.emptyMap());
+    HoodieCompactionPlan logCompactionPlan = getHoodieCompactionPlan(Collections.singletonList(logCompactionOperation));
+    expectedState.pendingLogCompactionFgIdsCurrentlyPresent.add(fileId2);
+
+    String commitTime4 = "004";
+    HoodieInstant logCompactionInstant =
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, commitTime4);
+    HoodieInstant logCompactionRequested = HoodieTimeline.getLogCompactionRequestedInstant(logCompactionInstant.getTimestamp());
+    metaClient.getActiveTimeline().saveToLogCompactionRequested(logCompactionRequested,
+        TimelineMetadataUtils.serializeCompactionPlan(logCompactionPlan));
+    metaClient.getActiveTimeline().transitionLogCompactionRequestedToInflight(logCompactionRequested);
+
+    // Verify file system view after 4th commit which is logcompaction.requested.
+    verifyFileSystemView(partitionPath, expectedState, fileSystemView);
+
+    fileSystemView.close();
+  }
+
+  private HoodieCompactionPlan getHoodieCompactionPlan(List<CompactionOperation> operations) {
+    return HoodieCompactionPlan.newBuilder()
+        .setOperations(operations.stream()
+            .map(CompactionUtils::buildHoodieCompactionOperation)
+            .collect(Collectors.toList()))
+        .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION).build();
+  }
+
+  private HoodieWriteStat getHoodieWriteStat(String partitionPath, String fileId, String relativeFilePath) {
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setFileId(fileId);
+    writeStat.setPath(partitionPath + "/" + relativeFilePath);
+    writeStat.setPartitionPath(partitionPath);
+    return writeStat;
+  }
+
+  static class FileSystemViewExpectedState {
+    Set<String> logFilesCurrentlyPresent = new HashSet<>();
+    Set<String> baseFilesCurrentlyPresent = new HashSet<>();
+    Set<String> pendingCompactionFgIdsCurrentlyPresent = new HashSet<>();
+    Set<String> pendingLogCompactionFgIdsCurrentlyPresent = new HashSet<>();
+  }
+
+  /**
+   * Used to verify fils system view on various file systems.
+   */
+  protected void verifyFileSystemView(String partitionPath, FileSystemViewExpectedState expectedState,
+                                      SyncableFileSystemView tableFileSystemView) {
+    tableFileSystemView.sync();
+    // Verify base files
+    assertEquals(expectedState.baseFilesCurrentlyPresent,tableFileSystemView.getLatestBaseFiles(partitionPath)
+        .map(HoodieBaseFile::getFileName)
+        .collect(Collectors.toSet()));
+
+    // Verify log files
+    assertEquals(expectedState.logFilesCurrentlyPresent, tableFileSystemView.getAllFileSlices(partitionPath)
+        .flatMap(FileSlice::getLogFiles)
+        .map(logFile -> logFile.getPath().getName())
+        .collect(Collectors.toSet()));
+    // Verify file groups part of pending compaction operations
+    assertEquals(expectedState.pendingCompactionFgIdsCurrentlyPresent, tableFileSystemView.getPendingCompactionOperations()
+        .map(pair -> pair.getValue().getFileGroupId().getFileId())
+        .collect(Collectors.toSet()));
+
+    // Verify file groups part of pending log compaction operations
+    assertEquals(expectedState.pendingLogCompactionFgIdsCurrentlyPresent, tableFileSystemView.getPendingLogCompactionOperations()
+        .map(pair -> pair.getValue().getFileGroupId().getFileId())
+        .collect(Collectors.toSet()));
   }
 
   @Override

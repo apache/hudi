@@ -27,8 +27,8 @@ public class HoodieDependentSystemUnavailableException extends HoodieException {
 
   public static final String HBASE = "HBASE";
 
-  public HoodieDependentSystemUnavailableException(String system, String connectURL) {
-    super(getLogMessage(system, connectURL));
+  public HoodieDependentSystemUnavailableException(String system, String connectURL, Throwable t) {
+    super(getLogMessage(system, connectURL), t);
   }
 
   private static String getLogMessage(String system, String connectURL) {

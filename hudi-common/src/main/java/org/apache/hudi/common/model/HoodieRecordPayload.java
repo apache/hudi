@@ -18,13 +18,12 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -42,18 +41,34 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    */
   @Deprecated
   @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
-  T preCombine(T another);
+  T preCombine(T oldValue);
 
   /**
-   * When more than one HoodieRecord have the same HoodieKey, this function combines them before attempting to insert/upsert by taking in a property map.
+   * When more than one HoodieRecord have the same HoodieKey in the incoming batch, this function combines them before attempting to insert/upsert by taking in a property map.
    * Implementation can leverage the property to decide their business logic to do preCombine.
-   * @param another instance of another {@link HoodieRecordPayload} to be combined with.
+   *
+   * @param oldValue   instance of the old {@link HoodieRecordPayload} to be combined with.
    * @param properties Payload related properties. For example pass the ordering field(s) name to extract from value in storage.
+   *
    * @return the combined value
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
-  default T preCombine(T another, Properties properties) {
-    return preCombine(another);
+  default T preCombine(T oldValue, Properties properties) {
+    return preCombine(oldValue);
+  }
+
+  /**
+   * When more than one HoodieRecord have the same HoodieKey in the incoming batch, this function combines them before attempting to insert/upsert by taking in a schema.
+   * Implementation can leverage the schema to decide their business logic to do preCombine.
+   *
+   * @param oldValue   instance of the old {@link HoodieRecordPayload} to be combined with.
+   * @param schema     Payload related schema. For example use schema to overwrite old instance for specified fields that doesn't equal to default value.
+   * @param properties Payload related properties. For example pass the ordering field(s) name to extract from value in storage.
+   * @return the combined value
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  default T preCombine(T oldValue, Schema schema, Properties properties) {
+    return preCombine(oldValue, properties);
   }
 
   /**
@@ -111,5 +126,17 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   default Option<Map<String, String>> getMetadata() {
     return Option.empty();
+  }
+
+  /**
+   * This method can be used to extract the ordering value of the payload for combining/merging,
+   * or 0 if no value is specified which means natural order(arrival time is used).
+   *
+   * @return the ordering value
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  default Comparable<?> getOrderingValue() {
+    // default natural order
+    return 0;
   }
 }

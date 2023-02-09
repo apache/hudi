@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,6 +29,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -59,6 +61,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    * PartitionPath + File-Id to pending compaction instant time.
    */
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction;
+
+  /**
+   * PartitionPath + File-Id to pending compaction instant time.
+   */
+  protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingLogCompaction;
 
   /**
    * PartitionPath + File-Id to bootstrap base File (Index Only bootstrapped).
@@ -114,11 +121,22 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   @Override
   protected void resetViewState() {
-    this.fgIdToPendingCompaction = null;
-    this.partitionToFileGroupsMap = null;
-    this.fgIdToBootstrapBaseFile = null;
-    this.fgIdToReplaceInstants = null;
-    this.fgIdToPendingClustering = null;
+    // do not nullify the members to avoid NPE.
+
+    // there are two cases that #resetViewState is called:
+    // 1. when #sync is invoked, the view clear the state through calling #resetViewState,
+    // then re-initialize the view;
+    // 2. when #close is invoked.
+    // (see AbstractTableFileSystemView for details.)
+
+    // for the 1st case, we better do not nullify the members when #resetViewState
+    // because there is possibility that this in-memory view is a backend view under TimelineServer,
+    // and many methods in the RequestHandler is not thread safe, when performRefreshCheck flag in ViewHandler
+    // is set as false, the view does not perform refresh check, if #sync is called just before and the members
+    // are nullified, the methods that use these members would throw NPE.
+
+    // actually there is no need to nullify the members here for 1st case, the members are assigned with new values
+    // when calling #init, for 2nd case, the #close method already nullify the members.
   }
 
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
@@ -128,6 +146,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fileIdToPendingCompaction) {
     return fileIdToPendingCompaction;
+  }
+
+  protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingLogCompactionMap(
+      Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fileIdToPendingLogCompaction) {
+    return fileIdToPendingLogCompaction;
   }
 
   protected Map<HoodieFileGroupId, BootstrapBaseFileMapping> createFileIdToBootstrapBaseFileMap(
@@ -201,6 +224,39 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
+  protected boolean isPendingLogCompactionScheduledForFileId(HoodieFileGroupId fgId) {
+    return fgIdToPendingLogCompaction.containsKey(fgId);
+  }
+
+  @Override
+  protected void resetPendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
+    // Build fileId to Pending Log Compaction Instants
+    this.fgIdToPendingLogCompaction = createFileIdToPendingLogCompactionMap(operations.map(entry ->
+        Pair.of(entry.getValue().getFileGroupId(), Pair.of(entry.getKey(), entry.getValue()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
+  }
+
+  @Override
+  protected void addPendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
+    operations.forEach(opInstantPair -> {
+      ValidationUtils.checkArgument(!fgIdToPendingLogCompaction.containsKey(opInstantPair.getValue().getFileGroupId()),
+          "Duplicate FileGroupId found in pending log compaction operations. FgId :"
+              + opInstantPair.getValue().getFileGroupId());
+      fgIdToPendingLogCompaction.put(opInstantPair.getValue().getFileGroupId(),
+          Pair.of(opInstantPair.getKey(), opInstantPair.getValue()));
+    });
+  }
+
+  @Override
+  protected void removePendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
+    operations.forEach(opInstantPair -> {
+      ValidationUtils.checkArgument(fgIdToPendingLogCompaction.containsKey(opInstantPair.getValue().getFileGroupId()),
+          "Trying to remove a FileGroupId which is not found in pending log compaction operations. FgId :"
+              + opInstantPair.getValue().getFileGroupId());
+      fgIdToPendingLogCompaction.remove(opInstantPair.getValue().getFileGroupId());
+    });
+  }
+
+  @Override
   protected boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId) {
     return fgIdToPendingClustering.containsKey(fgId);
   }
@@ -260,6 +316,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   @Override
   Stream<Pair<String, CompactionOperation>> fetchPendingCompactionOperations() {
     return fgIdToPendingCompaction.values().stream();
+  }
+
+  @Override
+  Stream<Pair<String, CompactionOperation>> fetchPendingLogCompactionOperations() {
+    return fgIdToPendingLogCompaction.values().stream();
 
   }
 
@@ -311,13 +372,18 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
+  protected Option<Pair<String, CompactionOperation>> getPendingLogCompactionOperationWithInstant(HoodieFileGroupId fgId) {
+    return Option.ofNullable(fgIdToPendingLogCompaction.get(fgId));
+  }
+
+  @Override
   protected boolean isPartitionAvailableInStore(String partitionPath) {
     return partitionToFileGroupsMap.containsKey(partitionPath);
   }
 
   @Override
   protected void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups) {
-    LOG.info("Adding file-groups for partition :" + partitionPath + ", #FileGroups=" + fileGroups.size());
+    LOG.debug("Adding file-groups for partition :" + partitionPath + ", #FileGroups=" + fileGroups.size());
     List<HoodieFileGroup> newList = new ArrayList<>(fileGroups);
     partitionToFileGroupsMap.put(partitionPath, newList);
   }
@@ -347,14 +413,28 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     return Option.ofNullable(fgIdToReplaceInstants.get(fileGroupId));
   }
 
+  /**
+   * Get the latest file slices for a given partition including the inflight ones.
+   *
+   * @param partitionPath
+   * @return Stream of latest {@link FileSlice} in the partition path.
+   */
+  public Stream<FileSlice> fetchLatestFileSlicesIncludingInflight(String partitionPath) {
+    return fetchAllStoredFileGroups(partitionPath)
+        .map(HoodieFileGroup::getLatestFileSlicesIncludingInflight)
+        .filter(Option::isPresent)
+        .map(Option::get);
+  }
+
   @Override
   public void close() {
+    super.close();
+    this.fgIdToPendingCompaction = null;
+    this.partitionToFileGroupsMap = null;
+    this.fgIdToBootstrapBaseFile = null;
+    this.fgIdToReplaceInstants = null;
+    this.fgIdToPendingClustering = null;
     closed = true;
-    super.reset();
-    partitionToFileGroupsMap = null;
-    fgIdToPendingCompaction = null;
-    fgIdToBootstrapBaseFile = null;
-    fgIdToReplaceInstants = null;
   }
 
   @Override

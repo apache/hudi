@@ -75,11 +75,17 @@ public class SampleTestRecord implements Serializable {
   private String[] stringArray;
 
   public SampleTestRecord(String instantTime, int recordNumber, String fileId) {
-    this._hoodie_commit_time = instantTime;
-    this._hoodie_record_key = "key" + recordNumber;
-    this._hoodie_partition_path = instantTime;
-    this._hoodie_file_name = fileId;
-    this._hoodie_commit_seqno = instantTime + recordNumber;
+    this(instantTime, recordNumber, fileId, true);
+  }
+
+  public SampleTestRecord(String instantTime, int recordNumber, String fileId, boolean populateMetaFields) {
+    if (populateMetaFields) {
+      this._hoodie_commit_time = instantTime;
+      this._hoodie_record_key = "key" + recordNumber;
+      this._hoodie_partition_path = instantTime;
+      this._hoodie_file_name = fileId;
+      this._hoodie_commit_seqno = instantTime + recordNumber;
+    }
 
     String commitTimeSuffix = "@" + instantTime;
     int commitHashCode = instantTime.hashCode();

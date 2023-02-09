@@ -18,13 +18,24 @@
 
 package org.apache.hudi.common.model;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 /**
  * Hoodie file format.
  */
 public enum HoodieFileFormat {
   PARQUET(".parquet"),
   HOODIE_LOG(".log"),
-  HFILE(".hfile");
+  HFILE(".hfile"),
+  ORC(".orc");
+
+  public static final Set<String> BASE_FILE_EXTENSIONS = Arrays.stream(HoodieFileFormat.values())
+      .map(HoodieFileFormat::getFileExtension)
+      .filter(x -> !x.equals(HoodieFileFormat.HOODIE_LOG.getFileExtension()))
+      .collect(Collectors.toCollection(HashSet::new));
 
   private final String extension;
 

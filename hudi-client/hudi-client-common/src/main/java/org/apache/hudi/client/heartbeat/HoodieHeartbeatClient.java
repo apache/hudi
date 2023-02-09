@@ -18,18 +18,19 @@
 
 package org.apache.hudi.client.heartbeat;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieHeartbeatException;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import javax.annotation.concurrent.NotThreadSafe;
-import java.io.File;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Serializable;
@@ -38,9 +39,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeartbeatTime;
 
 /**
  * This class creates heartbeat for hudi client. This heartbeat is used to ascertain whether the running job is or not.
@@ -168,7 +171,6 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     ValidationUtils.checkArgument(heartbeat == null || !heartbeat.isHeartbeatStopped(), "Cannot restart a stopped heartbeat for " + instantTime);
     if (heartbeat != null && heartbeat.isHeartbeatStarted()) {
       // heartbeat already started, NO_OP
-      return;
     } else {
       Heartbeat newHeartbeat = new Heartbeat();
       newHeartbeat.setHeartbeatStarted(true);
@@ -204,21 +206,11 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
    * @throws HoodieException
    */
   public void stop() throws HoodieException {
-    instantToHeartbeatMap.values().stream().forEach(heartbeat -> stop(heartbeat.getInstantTime()));
-  }
-
-  public static Long getLastHeartbeatTime(FileSystem fs, String basePath, String instantTime) throws IOException {
-    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + File.separator + instantTime);
-    if (fs.exists(heartbeatFilePath)) {
-      return fs.getFileStatus(heartbeatFilePath).getModificationTime();
-    } else {
-      // NOTE : This can happen when a writer is upgraded to use lazy cleaning and the last write had failed
-      return 0L;
-    }
+    instantToHeartbeatMap.values().forEach(heartbeat -> stop(heartbeat.getInstantTime()));
   }
 
   public static Boolean heartbeatExists(FileSystem fs, String basePath, String instantTime) throws IOException {
-    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + File.separator + instantTime);
+    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
     if (fs.exists(heartbeatFilePath)) {
       return true;
     }
@@ -256,7 +248,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     try {
       Long newHeartbeatTime = System.currentTimeMillis();
       OutputStream outputStream =
-          this.fs.create(new Path(heartbeatFolderPath + File.separator + instantTime), true);
+          this.fs.create(new Path(heartbeatFolderPath + Path.SEPARATOR + instantTime), true);
       outputStream.close();
       Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
       if (heartbeat.getLastHeartbeatTime() != null && isHeartbeatExpired(instantTime)) {

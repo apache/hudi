@@ -18,6 +18,11 @@
 
 package org.apache.hudi.common.model;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -27,19 +32,29 @@ import java.util.Objects;
  * - recordKey : a recordKey that acts as primary key for a record.
  * - partitionPath : the partition path of a record.
  */
-public class HoodieKey implements Serializable {
+public final class HoodieKey implements Serializable, KryoSerializable {
 
-  private final String recordKey;
+  private String recordKey;
+  private String partitionPath;
 
-  private final String partitionPath;
+  // Required for serializer
+  public HoodieKey() {}
 
   public HoodieKey(String recordKey, String partitionPath) {
     this.recordKey = recordKey;
     this.partitionPath = partitionPath;
   }
 
+  public void setRecordKey(String recordKey) {
+    this.recordKey = recordKey;
+  }
+
   public String getRecordKey() {
     return recordKey;
+  }
+
+  public void setPartitionPath(String partitionPath) {
+    this.partitionPath = partitionPath;
   }
 
   public String getPartitionPath() {
@@ -70,5 +85,17 @@ public class HoodieKey implements Serializable {
     sb.append(" partitionPath=").append(partitionPath);
     sb.append('}');
     return sb.toString();
+  }
+
+  @Override
+  public void write(Kryo kryo, Output output) {
+    output.writeString(recordKey);
+    output.writeString(partitionPath);
+  }
+
+  @Override
+  public void read(Kryo kryo, Input input) {
+    this.recordKey = input.readString();
+    this.partitionPath = input.readString();
   }
 }

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.metrics;
 
-import java.io.Closeable;
-
 /**
  * Interface for implementing a Reporter.
  */
@@ -34,8 +32,6 @@ public abstract class MetricsReporter {
    * Deterministically push out metrics.
    */
   public abstract void report();
-
-  public abstract Closeable getReporter();
 
   /**
    * Stop this reporter. Should be used to stop channels, streams and release resources.

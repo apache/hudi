@@ -33,9 +33,14 @@ import java.util.Set;
 public class WorkloadProfile implements Serializable {
 
   /**
-   * Computed workload profile.
+   * Computed workload stats.
    */
-  protected final HashMap<String, WorkloadStat> partitionPathStatMap;
+  protected final HashMap<String, WorkloadStat> inputPartitionPathStatMap;
+
+  /**
+   * Execution/Output workload stats
+   */
+  protected final HashMap<String, WorkloadStat> outputPartitionPathStatMap;
 
   /**
    * Global workloadStat.
@@ -47,13 +52,21 @@ public class WorkloadProfile implements Serializable {
    */
   private WriteOperationType operationType;
 
+  private final boolean hasOutputWorkLoadStats;
+
   public WorkloadProfile(Pair<HashMap<String, WorkloadStat>, WorkloadStat> profile) {
-    this.partitionPathStatMap = profile.getLeft();
-    this.globalStat = profile.getRight();
+    this(profile, false);
   }
 
-  public WorkloadProfile(Pair<HashMap<String, WorkloadStat>, WorkloadStat> profile, WriteOperationType operationType) {
-    this(profile);
+  public WorkloadProfile(Pair<HashMap<String, WorkloadStat>, WorkloadStat> profile, boolean hasOutputWorkLoadStats) {
+    this.inputPartitionPathStatMap = profile.getLeft();
+    this.globalStat = profile.getRight();
+    this.outputPartitionPathStatMap = new HashMap<>();
+    this.hasOutputWorkLoadStats = hasOutputWorkLoadStats;
+  }
+
+  public WorkloadProfile(Pair<HashMap<String, WorkloadStat>, WorkloadStat> profile, WriteOperationType operationType, boolean hasOutputWorkLoadStats) {
+    this(profile, hasOutputWorkLoadStats);
     this.operationType = operationType;
   }
 
@@ -62,15 +75,37 @@ public class WorkloadProfile implements Serializable {
   }
 
   public Set<String> getPartitionPaths() {
-    return partitionPathStatMap.keySet();
+    return inputPartitionPathStatMap.keySet();
   }
 
-  public HashMap<String, WorkloadStat> getPartitionPathStatMap() {
-    return partitionPathStatMap;
+  public Set<String> getOutputPartitionPaths() {
+    return hasOutputWorkLoadStats ? outputPartitionPathStatMap.keySet() : inputPartitionPathStatMap.keySet();
+  }
+
+  public HashMap<String, WorkloadStat> getInputPartitionPathStatMap() {
+    return inputPartitionPathStatMap;
+  }
+
+  public HashMap<String, WorkloadStat> getOutputPartitionPathStatMap() {
+    return outputPartitionPathStatMap;
+  }
+
+  public boolean hasOutputWorkLoadStats() {
+    return hasOutputWorkLoadStats;
+  }
+
+  public void updateOutputPartitionPathStatMap(String partitionPath, WorkloadStat workloadStat) {
+    if (hasOutputWorkLoadStats) {
+      outputPartitionPathStatMap.put(partitionPath, workloadStat);
+    }
   }
 
   public WorkloadStat getWorkloadStat(String partitionPath) {
-    return partitionPathStatMap.get(partitionPath);
+    return inputPartitionPathStatMap.get(partitionPath);
+  }
+
+  public WorkloadStat getOutputWorkloadStat(String partitionPath) {
+    return hasOutputWorkLoadStats ? outputPartitionPathStatMap.get(partitionPath) : inputPartitionPathStatMap.get(partitionPath);
   }
 
   public WriteOperationType getOperationType() {
@@ -81,7 +116,8 @@ public class WorkloadProfile implements Serializable {
   public String toString() {
     final StringBuilder sb = new StringBuilder("WorkloadProfile {");
     sb.append("globalStat=").append(globalStat).append(", ");
-    sb.append("partitionStat=").append(partitionPathStatMap).append(", ");
+    sb.append("InputPartitionStat=").append(inputPartitionPathStatMap).append(", ");
+    sb.append("OutputPartitionStat=").append(outputPartitionPathStatMap).append(", ");
     sb.append("operationType=").append(operationType);
     sb.append('}');
     return sb.toString();

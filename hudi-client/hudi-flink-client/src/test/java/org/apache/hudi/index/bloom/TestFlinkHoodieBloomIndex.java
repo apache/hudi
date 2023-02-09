@@ -21,6 +21,10 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.data.HoodieListPairData;
+import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,7 +33,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.HoodieKeyLookupHandle;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
@@ -49,8 +53,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
-
-import scala.Tuple2;
 
 import static java.util.Arrays.asList;
 import static java.util.UUID.randomUUID;
@@ -92,6 +94,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
   private HoodieWriteConfig makeConfig(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withEngineType(EngineType.FLINK)
         .withIndexConfig(HoodieIndexConfig.newBuilder().bloomIndexPruneByRanges(rangePruning)
             .bloomIndexTreebasedFilter(treeFiltering).bloomIndexBucketizedChecking(bucketizedChecking)
             .bloomIndexKeysPerBucket(2).build())
@@ -102,7 +105,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
   @MethodSource("configParams")
   public void testLoadInvolvedFiles(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
-    FlinkHoodieBloomIndex index = new FlinkHoodieBloomIndex(config);
+    HoodieBloomIndex index = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
     HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
@@ -115,22 +118,22 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     RawTripTestPayload rowChange1 =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record1 =
-        new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 =
         new RawTripTestPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record2 =
-        new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
     RawTripTestPayload rowChange3 =
         new RawTripTestPayload("{\"_row_key\":\"002\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record3 =
-        new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
+        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
     RawTripTestPayload rowChange4 =
         new RawTripTestPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record4 =
-        new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     List<String> partitions = asList("2016/01/21", "2016/04/01", "2015/03/12");
-    List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
@@ -140,25 +143,25 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         .withInserts("2015/03/12", "4", record2, record3, record4);
     metaClient.reloadActiveTimeline();
 
-    filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     assertEquals(4, filesList.size());
 
     if (rangePruning) {
       // these files will not have the key ranges
-      assertNull(filesList.get(0)._2().getMaxRecordKey());
-      assertNull(filesList.get(0)._2().getMinRecordKey());
-      assertFalse(filesList.get(1)._2().hasKeyRanges());
-      assertNotNull(filesList.get(2)._2().getMaxRecordKey());
-      assertNotNull(filesList.get(2)._2().getMinRecordKey());
-      assertTrue(filesList.get(3)._2().hasKeyRanges());
+      assertNull(filesList.get(0).getRight().getMaxRecordKey());
+      assertNull(filesList.get(0).getRight().getMinRecordKey());
+      assertFalse(filesList.get(1).getRight().hasKeyRanges());
+      assertNotNull(filesList.get(2).getRight().getMaxRecordKey());
+      assertNotNull(filesList.get(2).getRight().getMinRecordKey());
+      assertTrue(filesList.get(3).getRight().hasKeyRanges());
 
       // no longer sorted, but should have same files.
 
-      List<Tuple2<String, BloomIndexFileInfo>> expected =
-          asList(new Tuple2<>("2016/04/01", new BloomIndexFileInfo("2")),
-              new Tuple2<>("2015/03/12", new BloomIndexFileInfo("1")),
-              new Tuple2<>("2015/03/12", new BloomIndexFileInfo("3", "000", "000")),
-              new Tuple2<>("2015/03/12", new BloomIndexFileInfo("4", "001", "003")));
+      List<Pair<String, BloomIndexFileInfo>> expected =
+          asList(Pair.of("2016/04/01", new BloomIndexFileInfo("2")),
+              Pair.of("2015/03/12", new BloomIndexFileInfo("1")),
+              Pair.of("2015/03/12", new BloomIndexFileInfo("3", "000", "000")),
+              Pair.of("2015/03/12", new BloomIndexFileInfo("4", "001", "003")));
       assertEquals(expected, filesList);
     }
   }
@@ -167,7 +170,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
   @MethodSource("configParams")
   public void testRangePruning(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
-    FlinkHoodieBloomIndex index = new FlinkHoodieBloomIndex(config);
+    HoodieBloomIndex index = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
     partitionToFileIndexInfo.put("2017/10/22",
@@ -176,20 +179,22 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
             new BloomIndexFileInfo("f5", "009", "010")));
 
     Map<String, List<String>> partitionRecordKeyMap = new HashMap<>();
-    asList(new Tuple2<>("2017/10/22", "003"), new Tuple2<>("2017/10/22", "002"),
-            new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/22", "004"))
-            .forEach(t -> {
-              List<String> recordKeyList = partitionRecordKeyMap.getOrDefault(t._1, new ArrayList<>());
-              recordKeyList.add(t._2);
-              partitionRecordKeyMap.put(t._1, recordKeyList);
-            });
+    asList(Pair.of("2017/10/22", "003"), Pair.of("2017/10/22", "002"),
+        Pair.of("2017/10/22", "005"), Pair.of("2017/10/22", "004"))
+        .forEach(t -> {
+          List<String> recordKeyList = partitionRecordKeyMap.getOrDefault(t.getLeft(), new ArrayList<>());
+          recordKeyList.add(t.getRight());
+          partitionRecordKeyMap.put(t.getLeft(), recordKeyList);
+        });
 
-    List<scala.Tuple2<String, HoodieKey>> comparisonKeyList =
-        index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, partitionRecordKeyMap);
+    List<Pair<HoodieFileGroupId, String>> comparisonKeyList =
+        index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieListPairData.lazy(partitionRecordKeyMap)).collectAsList();
 
     assertEquals(10, comparisonKeyList.size());
     java.util.Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
-        .collect(java.util.stream.Collectors.groupingBy(t -> t._2.getRecordKey(), java.util.stream.Collectors.mapping(t -> t._1, java.util.stream.Collectors.toList())));
+        .collect(
+            java.util.stream.Collectors.groupingBy(t -> t.getRight(),
+              java.util.stream.Collectors.mapping(t -> t.getLeft().getFileId(), java.util.stream.Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
     assertEquals(new java.util.HashSet<>(asList("f1", "f3", "f4")), new java.util.HashSet<>(recordKeyToFileComps.get("002")));
@@ -212,18 +217,18 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":32}";
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieRecord record1 =
-        new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieRecord record2 =
-        new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
     RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
     HoodieRecord record3 =
-        new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
+        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
     RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
     HoodieRecord record4 =
-        new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
-    // We write record1, record2 to a parquet file, but the bloom filter contains (record1,
+    // We write record1, record2 to a base file, but the bloom filter contains (record1,
     // record2, record3).
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record3.getRecordKey());
@@ -242,9 +247,8 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieFlinkTable table = HoodieFlinkTable.create(config, context, metaClient);
-    HoodieKeyLookupHandle keyHandle = new HoodieKeyLookupHandle<>(config, table, Pair.of(partition, fileId));
-    List<String> results = keyHandle.checkCandidatesAgainstFile(hadoopConf, uuids,
-        new Path(java.nio.file.Paths.get(basePath, partition, filename).toString()));
+    List<String> results = HoodieIndexUtils.filterKeysFromFile(
+        new Path(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
         || results.get(1).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
@@ -266,10 +270,10 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     HoodieFlinkTable table = HoodieFlinkTable.create(config, context, metaClient);
 
     // Let's tag
-    FlinkHoodieBloomIndex bloomIndex = new FlinkHoodieBloomIndex(config);
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
 
     assertDoesNotThrow(() -> {
-      bloomIndex.tagLocation(records, context, table);
+      tagLocation(bloomIndex, records, table);
     }, "EmptyList should not result in IllegalArgumentException: Positive number of slices required");
   }
 
@@ -287,16 +291,16 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     String recordStr4 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieRecord record1 =
-        new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieRecord record2 =
-        new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
     RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
     HoodieRecord record3 =
-        new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
+        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
     RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
     HoodieRecord record4 =
-        new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
     List<HoodieRecord> records = asList(record1, record2, record3, record4);
 
     // Also create the metadata and config
@@ -305,15 +309,15 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Let's tag
-    FlinkHoodieBloomIndex bloomIndex = new FlinkHoodieBloomIndex(config);
-    List<HoodieRecord> taggedRecords = bloomIndex.tagLocation(records, context, hoodieTable);
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
+    List<HoodieRecord> taggedRecords = tagLocation(bloomIndex, records, hoodieTable);
 
     // Should not find any files
     for (HoodieRecord record : taggedRecords) {
       assertFalse(record.isCurrentLocationKnown());
     }
 
-    // We create three parquet file, each having one record. (two different partitions)
+    // We create three base file, each having one record. (two different partitions)
     String fileId1 = testTable.addCommit("001").getFileIdWithInserts("2016/01/31", record1);
     String fileId2 = testTable.addCommit("002").getFileIdWithInserts("2016/01/31", record2);
     String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
@@ -321,7 +325,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     metaClient.reloadActiveTimeline();
 
     // We do the tag again
-    taggedRecords = bloomIndex.tagLocation(records, context, HoodieFlinkTable.create(config, context, metaClient));
+    taggedRecords = tagLocation(bloomIndex, records, HoodieFlinkTable.create(config, context, metaClient));
 
     // Check results
     for (HoodieRecord record : taggedRecords) {
@@ -355,15 +359,15 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         + "\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieKey key1 = new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath());
-    HoodieRecord record1 = new HoodieRecord(key1, rowChange1);
+    HoodieRecord record1 = new HoodieAvroRecord(key1, rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieKey key2 = new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath());
-    HoodieRecord record2 = new HoodieRecord(key2, rowChange2);
+    HoodieRecord record2 = new HoodieAvroRecord(key2, rowChange2);
     RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
     HoodieKey key3 = new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath());
     RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
     HoodieKey key4 = new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath());
-    HoodieRecord record4 = new HoodieRecord(key4, rowChange4);
+    HoodieRecord record4 = new HoodieAvroRecord(key4, rowChange4);
     List<HoodieKey> keys = asList(key1, key2, key3, key4);
 
     // Also create the metadata and config
@@ -372,22 +376,22 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Let's tag
-    FlinkHoodieBloomIndex bloomIndex = new FlinkHoodieBloomIndex(config);
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
     List<HoodieRecord> toTagRecords = new ArrayList<>();
-    toTagRecords.add(new HoodieRecord(record4.getKey(), null));
-    List<HoodieRecord> taggedRecords = bloomIndex.tagLocation(toTagRecords, context, hoodieTable);
+    toTagRecords.add(new HoodieAvroRecord(record4.getKey(), null));
+    List<HoodieRecord> taggedRecords = tagLocation(bloomIndex, toTagRecords, hoodieTable);
     Map<HoodieKey, Option<Pair<String, String>>> recordLocations = new HashMap<>();
     for (HoodieRecord taggedRecord : taggedRecords) {
       recordLocations.put(taggedRecord.getKey(), taggedRecord.isCurrentLocationKnown()
-                ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
-                : Option.empty());
+          ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
+          : Option.empty());
     }
     // Should not find any files
     for (Option<Pair<String, String>> record : recordLocations.values()) {
       assertTrue(!record.isPresent());
     }
 
-    // We create three parquet file, each having one record. (two different partitions)
+    // We create three base file, each having one record. (two different partitions)
     String fileId1 = testTable.addCommit("001").getFileIdWithInserts("2016/01/31", record1);
     String fileId2 = testTable.addCommit("002").getFileIdWithInserts("2016/01/31", record2);
     String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
@@ -397,15 +401,15 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
     List<HoodieRecord> toTagRecords1 = new ArrayList<>();
     for (HoodieKey key : keys) {
-      taggedRecords.add(new HoodieRecord(key, null));
+      taggedRecords.add(new HoodieAvroRecord(key, null));
     }
 
-    taggedRecords = bloomIndex.tagLocation(toTagRecords1, context, hoodieTable);
+    taggedRecords = tagLocation(bloomIndex, toTagRecords1, hoodieTable);
     recordLocations.clear();
     for (HoodieRecord taggedRecord : taggedRecords) {
       recordLocations.put(taggedRecord.getKey(), taggedRecord.isCurrentLocationKnown()
-                ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
-                : Option.empty());
+          ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
+          : Option.empty());
     }
 
     // Check results
@@ -435,11 +439,11 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
 
-    // We write record1 to a parquet file, using a bloom filter having both records
+    // We write record1 to a base file, using a bloom filter having both records
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    HoodieRecord record1 = new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+    HoodieRecord record1 = new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    HoodieRecord record2 = new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+    HoodieRecord record2 = new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
 
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record2.getRecordKey());
@@ -454,8 +458,8 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieFlinkTable.create(config, context, metaClient);
 
-    FlinkHoodieBloomIndex bloomIndex = new FlinkHoodieBloomIndex(config);
-    List<HoodieRecord> taggedRecords = bloomIndex.tagLocation(records, context, table);
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
+    List<HoodieRecord> taggedRecords = tagLocation(bloomIndex, records, table);
 
     // Check results
     for (HoodieRecord record : taggedRecords) {

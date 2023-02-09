@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -33,20 +32,20 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import java.util.List;
 import java.util.Map;
 
-public class JavaBulkInsertCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseJavaCommitActionExecutor<T> {
+public class JavaBulkInsertCommitActionExecutor<T> extends BaseJavaCommitActionExecutor<T> {
 
   private final List<HoodieRecord<T>> inputRecords;
-  private final Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner;
+  private final Option<BulkInsertPartitioner> bulkInsertPartitioner;
 
   public JavaBulkInsertCommitActionExecutor(HoodieJavaEngineContext context, HoodieWriteConfig config, HoodieTable table,
                                             String instantTime, List<HoodieRecord<T>> inputRecords,
-                                            Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
+                                            Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     this(context, config, table, instantTime, inputRecords, bulkInsertPartitioner, Option.empty());
   }
 
   public JavaBulkInsertCommitActionExecutor(HoodieJavaEngineContext context, HoodieWriteConfig config, HoodieTable table,
                                             String instantTime, List<HoodieRecord<T>> inputRecords,
-                                            Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner,
+                                            Option<BulkInsertPartitioner> bulkInsertPartitioner,
                                             Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, WriteOperationType.BULK_INSERT, extraMetadata);
     this.inputRecords = inputRecords;

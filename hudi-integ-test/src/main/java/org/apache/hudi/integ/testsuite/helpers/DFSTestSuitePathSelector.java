@@ -38,7 +38,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -74,10 +73,10 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
       // Say input data is as follow input/1, input/2, input/5 since 3,4 was rolled back and 5 is new generated data
       // checkpoint from the latest commit metadata will be 2 since 3,4 has been rolled back. We need to set the
       // next batch id correctly as 5 instead of 3
-      Optional<String> correctBatchIdDueToRollback = Arrays.stream(fileStatuses)
+      Option<String> correctBatchIdDueToRollback = Option.fromJavaOptional(Arrays.stream(fileStatuses)
           .map(f -> f.getPath().toString().split("/")[f.getPath().toString().split("/").length - 1])
           .filter(bid1 -> Integer.parseInt(bid1) > lastBatchId)
-          .min((bid1, bid2) -> Integer.min(Integer.parseInt(bid1), Integer.parseInt(bid2)));
+          .min((bid1, bid2) -> Integer.min(Integer.parseInt(bid1), Integer.parseInt(bid2))));
       if (correctBatchIdDueToRollback.isPresent() && Integer.parseInt(correctBatchIdDueToRollback.get()) > nextBatchId) {
         nextBatchId = Integer.parseInt(correctBatchIdDueToRollback.get());
       }

@@ -19,31 +19,40 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterFactory;
-import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.io.api.Binary;
+import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.OriginalType;
+import org.apache.parquet.schema.PrimitiveType;
+
+import javax.annotation.Nonnull;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -51,22 +60,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Utility functions involving with parquet.
  */
-public class ParquetUtils {
+public class ParquetUtils extends BaseFileUtils {
 
-  /**
-   * Read the rowKey list from the given parquet file.
-   *
-   * @param filePath      The parquet file path.
-   * @param configuration configuration to build fs object
-   * @return Set Set of row keys
-   */
-  public static Set<String> readRowKeysFromParquet(Configuration configuration, Path filePath) {
-    return filterParquetRowKeys(configuration, filePath, new HashSet<>());
-  }
+  private static final Logger LOG = LogManager.getLogger(ParquetUtils.class);
 
   /**
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
@@ -77,8 +80,20 @@ public class ParquetUtils {
    * @param filter        record keys filter
    * @return Set Set of row keys matching candidateRecordKeys
    */
-  public static Set<String> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
+  @Override
+  public Set<String> filterRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
     return filterParquetRowKeys(configuration, filePath, filter, HoodieAvroUtils.getRecordKeySchema());
+  }
+
+  public static ParquetMetadata readMetadata(Configuration conf, Path parquetFilePath) {
+    ParquetMetadata footer;
+    try {
+      // TODO(vc): Should we use the parallel reading version here?
+      footer = ParquetFileReader.readFooter(FSUtils.getFs(parquetFilePath.toString(), conf).getConf(), parquetFilePath);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath, e);
+    }
+    return footer;
   }
 
   /**
@@ -128,53 +143,72 @@ public class ParquetUtils {
    * @param configuration configuration to build fs object
    * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
    */
-  public static List<HoodieKey> fetchRecordKeyPartitionPathFromParquet(Configuration configuration, Path filePath) {
-    List<HoodieKey> hoodieKeys = new ArrayList<>();
-    try {
-      if (!filePath.getFileSystem(configuration).exists(filePath)) {
-        return new ArrayList<>();
-      }
+  @Override
+  public List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath) {
+    return fetchHoodieKeys(configuration, filePath, Option.empty());
+  }
 
+  @Override
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath) {
+    return getHoodieKeyIterator(configuration, filePath, Option.empty());
+  }
+
+  /**
+   * Returns a closable iterator for reading the given parquet file.
+   *
+   * @param configuration configuration to build fs object
+   * @param filePath      The parquet file path
+   * @param keyGeneratorOpt instance of KeyGenerator
+   *
+   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the parquet file
+   */
+  @Override
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    try {
       Configuration conf = new Configuration(configuration);
       conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
-      Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
+      Schema readSchema = keyGeneratorOpt.map(keyGenerator -> {
+        List<String> fields = new ArrayList<>();
+        fields.addAll(keyGenerator.getRecordKeyFieldNames());
+        fields.addAll(keyGenerator.getPartitionPathFields());
+        return HoodieAvroUtils.getSchemaForFields(readAvroSchema(conf, filePath), fields);
+      })
+          .orElse(HoodieAvroUtils.getRecordKeyPartitionPathSchema());
       AvroReadSupport.setAvroReadSchema(conf, readSchema);
       AvroReadSupport.setRequestedProjection(conf, readSchema);
-      ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build();
-      Object obj = reader.read();
-      while (obj != null) {
-        if (obj instanceof GenericRecord) {
-          String recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-          String partitionPath = ((GenericRecord) obj).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-          hoodieKeys.add(new HoodieKey(recordKey, partitionPath));
-          obj = reader.read();
-        }
-      }
+      ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(filePath).withConf(conf).build();
+      return HoodieKeyIterator.getInstance(new ParquetReaderIterator<>(reader), keyGeneratorOpt);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
     }
-    return hoodieKeys;
   }
 
-  public static ParquetMetadata readMetadata(Configuration conf, Path parquetFilePath) {
-    ParquetMetadata footer;
-    try {
-      // TODO(vc): Should we use the parallel reading version here?
-      footer = ParquetFileReader.readFooter(FSUtils.getFs(parquetFilePath.toString(), conf).getConf(), parquetFilePath);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath, e);
+  /**
+   * Fetch {@link HoodieKey}s from the given parquet file.
+   *
+   * @param configuration   configuration to build fs object
+   * @param filePath        The parquet file path.
+   * @param keyGeneratorOpt instance of KeyGenerator.
+   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   */
+  @Override
+  public List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    List<HoodieKey> hoodieKeys = new ArrayList<>();
+    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, keyGeneratorOpt)) {
+      iterator.forEachRemaining(hoodieKeys::add);
+      return hoodieKeys;
     }
-    return footer;
   }
 
   /**
    * Get the schema of the given parquet file.
    */
-  public static MessageType readSchema(Configuration configuration, Path parquetFilePath) {
+  public MessageType readSchema(Configuration configuration, Path parquetFilePath) {
     return readMetadata(configuration, parquetFilePath).getFileMetaData().getSchema();
   }
 
-  private static Map<String, String> readParquetFooter(Configuration configuration, boolean required,
+  @Override
+  public Map<String, String> readFooter(Configuration configuration, boolean required,
                                                        Path parquetFilePath, String... footerNames) {
     Map<String, String> footerVals = new HashMap<>();
     ParquetMetadata footer = readMetadata(configuration, parquetFilePath);
@@ -190,56 +224,24 @@ public class ParquetUtils {
     return footerVals;
   }
 
-  public static Schema readAvroSchema(Configuration configuration, Path parquetFilePath) {
-    return new AvroSchemaConverter(configuration).convert(readSchema(configuration, parquetFilePath));
+  @Override
+  public Schema readAvroSchema(Configuration conf, Path parquetFilePath) {
+    MessageType parquetSchema = readSchema(conf, parquetFilePath);
+    return new AvroSchemaConverter(conf).convert(parquetSchema);
   }
 
-  /**
-   * Read out the bloom filter from the parquet file meta data.
-   */
-  public static BloomFilter readBloomFilterFromParquetMetadata(Configuration configuration, Path parquetFilePath) {
-    Map<String, String> footerVals =
-        readParquetFooter(configuration, false, parquetFilePath,
-            HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-            HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-            HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE);
-    String footerVal = footerVals.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
-    if (null == footerVal) {
-      // We use old style key "com.uber.hoodie.bloomfilter"
-      footerVal = footerVals.get(HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
-    }
-    BloomFilter toReturn = null;
-    if (footerVal != null) {
-      if (footerVals.containsKey(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE)) {
-        toReturn = BloomFilterFactory.fromString(footerVal,
-            footerVals.get(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE));
-      } else {
-        toReturn = BloomFilterFactory.fromString(footerVal, BloomFilterTypeCode.SIMPLE.name());
-      }
-    }
-    return toReturn;
-  }
-
-  public static String[] readMinMaxRecordKeys(Configuration configuration, Path parquetFilePath) {
-    Map<String, String> minMaxKeys = readParquetFooter(configuration, true, parquetFilePath,
-        HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER, HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER);
-    if (minMaxKeys.size() != 2) {
-      throw new HoodieException(
-          String.format("Could not read min/max record key out of footer correctly from %s. read) : %s",
-              parquetFilePath, minMaxKeys));
-    }
-    return new String[] {minMaxKeys.get(HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER),
-        minMaxKeys.get(HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER)};
+  @Override
+  public HoodieFileFormat getFormat() {
+    return HoodieFileFormat.PARQUET;
   }
 
   /**
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    */
-  public static List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath) {
-    ParquetReader reader = null;
+  @Override
+  public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath) {
     List<GenericRecord> records = new ArrayList<>();
-    try {
-      reader = AvroParquetReader.builder(filePath).withConf(configuration).build();
+    try (ParquetReader reader = AvroParquetReader.builder(filePath).withConf(configuration).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
@@ -250,25 +252,24 @@ public class ParquetUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read avro records from Parquet " + filePath, e);
 
-    } finally {
-      if (reader != null) {
-        try {
-          reader.close();
-        } catch (IOException e) {
-          // ignore
-        }
-      }
     }
     return records;
+  }
+
+  @Override
+  public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath, Schema schema) {
+    AvroReadSupport.setAvroReadSchema(configuration, schema);
+    return readAvroRecords(configuration, filePath);
   }
 
   /**
    * Returns the number of records in the parquet file.
    *
-   * @param conf Configuration
+   * @param conf            Configuration
    * @param parquetFilePath path of the file
    */
-  public static long getRowCount(Configuration conf, Path parquetFilePath) {
+  @Override
+  public long getRowCount(Configuration conf, Path parquetFilePath) {
     ParquetMetadata footer;
     long rowCount = 0;
     footer = readMetadata(conf, parquetFilePath);
@@ -289,6 +290,210 @@ public class ParquetUtils {
     @Override
     public Boolean apply(String recordKey) {
       return candidateKeys.contains(recordKey);
+    }
+  }
+
+  /**
+   * Parse min/max statistics stored in parquet footers for all columns.
+   */
+  @SuppressWarnings("rawtype")
+  public List<HoodieColumnRangeMetadata<Comparable>> readRangeFromParquetMetadata(
+      @Nonnull Configuration conf,
+      @Nonnull Path parquetFilePath,
+      @Nonnull List<String> cols
+  ) {
+    ParquetMetadata metadata = readMetadata(conf, parquetFilePath);
+
+    // NOTE: This collector has to have fully specialized generic type params since
+    //       Java 1.8 struggles to infer them
+    Collector<HoodieColumnRangeMetadata<Comparable>, ?, Map<String, List<HoodieColumnRangeMetadata<Comparable>>>> groupingByCollector =
+        Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName);
+
+    // Collect stats from all individual Parquet blocks
+    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap =
+        (Map<String, List<HoodieColumnRangeMetadata<Comparable>>>) metadata.getBlocks().stream().sequential()
+          .flatMap(blockMetaData ->
+              blockMetaData.getColumns().stream()
+                .filter(f -> cols.contains(f.getPath().toDotString()))
+                .map(columnChunkMetaData -> {
+                  Statistics stats = columnChunkMetaData.getStatistics();
+                  return HoodieColumnRangeMetadata.<Comparable>create(
+                      parquetFilePath.getName(),
+                      columnChunkMetaData.getPath().toDotString(),
+                      convertToNativeJavaType(
+                          columnChunkMetaData.getPrimitiveType(),
+                          stats.genericGetMin()),
+                      convertToNativeJavaType(
+                          columnChunkMetaData.getPrimitiveType(),
+                          stats.genericGetMax()),
+                      // NOTE: In case when column contains only nulls Parquet won't be creating
+                      //       stats for it instead returning stubbed (empty) object. In that case
+                      //       we have to equate number of nulls to the value count ourselves
+                      stats.isEmpty() ? columnChunkMetaData.getValueCount() : stats.getNumNulls(),
+                      columnChunkMetaData.getValueCount(),
+                      columnChunkMetaData.getTotalSize(),
+                      columnChunkMetaData.getTotalUncompressedSize());
+                })
+          )
+          .collect(groupingByCollector);
+
+    // Combine those into file-level statistics
+    // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer
+    // expression type correctly)
+    Stream<HoodieColumnRangeMetadata<Comparable>> stream = columnToStatsListMap.values()
+        .stream()
+        .map(this::getColumnRangeInFile);
+
+    return stream.collect(Collectors.toList());
+  }
+
+  private <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInFile(
+      @Nonnull List<HoodieColumnRangeMetadata<T>> blockRanges
+  ) {
+    if (blockRanges.size() == 1) {
+      // only one block in parquet file. we can just return that range.
+      return blockRanges.get(0);
+    }
+
+    // there are multiple blocks. Compute min(block_mins) and max(block_maxs)
+    return blockRanges.stream()
+        .sequential()
+        .reduce(this::combineRanges).get();
+  }
+
+  private <T extends Comparable<T>> HoodieColumnRangeMetadata<T> combineRanges(
+      HoodieColumnRangeMetadata<T> one,
+      HoodieColumnRangeMetadata<T> another
+  ) {
+    final T minValue;
+    final T maxValue;
+    if (one.getMinValue() != null && another.getMinValue() != null) {
+      minValue = one.getMinValue().compareTo(another.getMinValue()) < 0 ? one.getMinValue() : another.getMinValue();
+    } else if (one.getMinValue() == null) {
+      minValue = another.getMinValue();
+    } else {
+      minValue = one.getMinValue();
+    }
+
+    if (one.getMaxValue() != null && another.getMaxValue() != null) {
+      maxValue = one.getMaxValue().compareTo(another.getMaxValue()) < 0 ? another.getMaxValue() : one.getMaxValue();
+    } else if (one.getMaxValue() == null) {
+      maxValue = another.getMaxValue();
+    } else {
+      maxValue = one.getMaxValue();
+    }
+
+    return HoodieColumnRangeMetadata.create(
+        one.getFilePath(),
+        one.getColumnName(), minValue, maxValue,
+        one.getNullCount() + another.getNullCount(),
+        one.getValueCount() + another.getValueCount(),
+        one.getTotalSize() + another.getTotalSize(),
+        one.getTotalUncompressedSize() + another.getTotalUncompressedSize());
+  }
+
+  private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val) {
+    if (val == null) {
+      return null;
+    }
+
+    if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {
+      return extractDecimal(val, primitiveType.getDecimalMetadata());
+    } else if (primitiveType.getOriginalType() == OriginalType.DATE) {
+      // NOTE: This is a workaround to address race-condition in using
+      //       {@code SimpleDataFormat} concurrently (w/in {@code DateStringifier})
+      // TODO cleanup after Parquet upgrade to 1.12
+      synchronized (primitiveType.stringifier()) {
+        // Date logical type is implemented as a signed INT32
+        // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
+        return java.sql.Date.valueOf(
+            primitiveType.stringifier().stringify((Integer) val)
+        );
+      }
+    } else if (primitiveType.getOriginalType() == OriginalType.UTF8) {
+      // NOTE: UTF8 type designates a byte array that should be interpreted as a
+      // UTF-8 encoded character string
+      // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
+      return ((Binary) val).toStringUsingUTF8();
+    } else if (primitiveType.getPrimitiveTypeName() == PrimitiveType.PrimitiveTypeName.BINARY) {
+      // NOTE: `getBytes` access makes a copy of the underlying byte buffer
+      return ((Binary) val).toByteBuffer();
+    }
+
+    return val;
+  }
+
+  @Nonnull
+  private static BigDecimal extractDecimal(Object val, DecimalMetadata decimalMetadata) {
+    // In Parquet, Decimal could be represented as either of
+    //    1. INT32 (for 1 <= precision <= 9)
+    //    2. INT64 (for 1 <= precision <= 18)
+    //    3. FIXED_LEN_BYTE_ARRAY (precision is limited by the array size. Length n can store <= floor(log_10(2^(8*n - 1) - 1)) base-10 digits)
+    //    4. BINARY (precision is not limited)
+    // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#DECIMAL
+    int scale = decimalMetadata.getScale();
+    if (val == null) {
+      return null;
+    } else if (val instanceof Integer) {
+      return BigDecimal.valueOf((Integer) val, scale);
+    } else if (val instanceof Long) {
+      return BigDecimal.valueOf((Long) val, scale);
+    } else if (val instanceof Binary) {
+      // NOTE: Unscaled number is stored in BE format (most significant byte is 0th)
+      return new BigDecimal(new BigInteger(((Binary) val).getBytesUnsafe()), scale);
+    } else {
+      throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", val.getClass().getName()));
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  //  Inner Class
+  // -------------------------------------------------------------------------
+
+  /**
+   * An iterator that can apply the given function {@code func} to transform records
+   * from the underneath record iterator to hoodie keys.
+   */
+  private static class HoodieKeyIterator implements ClosableIterator<HoodieKey> {
+    private final ClosableIterator<GenericRecord> nestedItr;
+    private final Function<GenericRecord, HoodieKey> func;
+
+    public static HoodieKeyIterator getInstance(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
+      return new HoodieKeyIterator(nestedItr, keyGenerator);
+    }
+
+    private HoodieKeyIterator(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
+      this.nestedItr = nestedItr;
+      if (keyGenerator.isPresent()) {
+        this.func = retVal -> {
+          String recordKey = keyGenerator.get().getRecordKey(retVal);
+          String partitionPath = keyGenerator.get().getPartitionPath(retVal);
+          return new HoodieKey(recordKey, partitionPath);
+        };
+      } else {
+        this.func = retVal -> {
+          String recordKey = retVal.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          String partitionPath = retVal.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          return new HoodieKey(recordKey, partitionPath);
+        };
+      }
+    }
+
+    @Override
+    public void close() {
+      if (this.nestedItr != null) {
+        this.nestedItr.close();
+      }
+    }
+
+    @Override
+    public boolean hasNext() {
+      return this.nestedItr.hasNext();
+    }
+
+    @Override
+    public HoodieKey next() {
+      return this.func.apply(this.nestedItr.next());
     }
   }
 }

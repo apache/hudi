@@ -18,7 +18,6 @@
 #
 
 import fileinput
-import sys
 import os
 
 for line in fileinput.input():

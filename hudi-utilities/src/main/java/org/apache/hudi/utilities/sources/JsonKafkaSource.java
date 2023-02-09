@@ -19,15 +19,15 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
-import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
+import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
 
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -35,40 +35,46 @@ import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 
+import java.io.IOException;
+
 /**
  * Read json kafka data.
  */
-public class JsonKafkaSource extends JsonSource {
-
-  private static final Logger LOG = LogManager.getLogger(JsonKafkaSource.class);
-
-  private final KafkaOffsetGen offsetGen;
-
-  private final HoodieDeltaStreamerMetrics metrics;
+public class JsonKafkaSource extends KafkaSource<String> {
 
   public JsonKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
                          SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
-    super(properties, sparkContext, sparkSession, schemaProvider);
-    this.metrics = metrics;
-    properties.put("key.deserializer", StringDeserializer.class);
-    properties.put("value.deserializer", StringDeserializer.class);
-    offsetGen = new KafkaOffsetGen(properties);
+    super(properties, sparkContext, sparkSession, schemaProvider, SourceType.JSON, metrics);
+    properties.put("key.deserializer", StringDeserializer.class.getName());
+    properties.put("value.deserializer", StringDeserializer.class.getName());
+    this.offsetGen = new KafkaOffsetGen(props);
   }
 
   @Override
-  protected InputBatch<JavaRDD<String>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
-    OffsetRange[] offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
-    long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
-    LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
-    if (totalNewMsgs <= 0) {
-      return new InputBatch<>(Option.empty(), CheckpointUtils.offsetsToStr(offsetRanges));
-    }
-    JavaRDD<String> newDataRDD = toRDD(offsetRanges);
-    return new InputBatch<>(Option.of(newDataRDD), CheckpointUtils.offsetsToStr(offsetRanges));
+  JavaRDD<String> toRDD(OffsetRange[] offsetRanges) {
+    JavaRDD<String> jsonStringRDD = KafkaUtils.createRDD(sparkContext,
+            offsetGen.getKafkaParams(),
+            offsetRanges,
+            LocationStrategies.PreferConsistent())
+        .filter(x -> !StringUtils.isNullOrEmpty((String) x.value()))
+        .map(x -> x.value().toString());
+    return postProcess(jsonStringRDD);
   }
 
-  private JavaRDD<String> toRDD(OffsetRange[] offsetRanges) {
-    return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-            LocationStrategies.PreferConsistent()).map(x -> (String) x.value());
+  private JavaRDD<String> postProcess(JavaRDD<String> jsonStringRDD) {
+    String postProcessorClassName = this.props.getString(KafkaOffsetGen.Config.JSON_KAFKA_PROCESSOR_CLASS_OPT.key(), null);
+    // no processor, do nothing
+    if (StringUtils.isNullOrEmpty(postProcessorClassName)) {
+      return jsonStringRDD;
+    }
+
+    JsonKafkaSourcePostProcessor processor;
+    try {
+      processor = UtilHelpers.createJsonKafkaSourcePostProcessor(postProcessorClassName, this.props);
+    } catch (IOException e) {
+      throw new HoodieSourcePostProcessException("Could not init " + postProcessorClassName, e);
+    }
+
+    return processor.process(jsonStringRDD);
   }
 }

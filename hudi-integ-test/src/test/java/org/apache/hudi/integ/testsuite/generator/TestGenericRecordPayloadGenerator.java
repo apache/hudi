@@ -57,8 +57,8 @@ public class TestGenericRecordPayloadGenerator {
   @Test
   public void testComplexPayload() throws IOException {
     Schema schema = new Schema.Parser().parse(UtilitiesTestBase.Helpers
-        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.." +
-            COMPLEX_SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
+        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.."
+            + COMPLEX_SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
     GenericRecordFullPayloadGenerator payloadGenerator = new GenericRecordFullPayloadGenerator(schema);
     GenericRecord record = payloadGenerator.getNewPayload();
     // The generated payload should validate with the provided schema
@@ -68,8 +68,8 @@ public class TestGenericRecordPayloadGenerator {
   @Test
   public void testComplexPartialPayload() throws IOException {
     Schema schema = new Schema.Parser().parse(UtilitiesTestBase.Helpers
-        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.." +
-            COMPLEX_SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
+        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.."
+            + COMPLEX_SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
     GenericRecordPartialPayloadGenerator payloadGenerator = new GenericRecordPartialPayloadGenerator(schema);
     IntStream.range(0, 10).forEach(a -> {
       GenericRecord record = payloadGenerator.getNewPayload();
@@ -124,8 +124,8 @@ public class TestGenericRecordPayloadGenerator {
   @Test
   public void testComplexPayloadWithLargeMinSize() throws Exception {
     Schema schema = new Schema.Parser().parse(UtilitiesTestBase.Helpers
-        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.." +
-            COMPLEX_SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
+        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.."
+            + COMPLEX_SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
     int minPayloadSize = 10000;
     GenericRecordFullPayloadGenerator payloadGenerator = new GenericRecordFullPayloadGenerator(
         schema, minPayloadSize);
@@ -144,9 +144,8 @@ public class TestGenericRecordPayloadGenerator {
     List<Long> insertTimeStamps = new ArrayList<>();
     List<Long> updateTimeStamps = new ArrayList<>();
     List<GenericRecord> records = new ArrayList<>();
-    Long startMillis = System.currentTimeMillis() - TimeUnit.MILLISECONDS
-        .convert(GenericRecordFullPayloadGenerator.DEFAULT_NUM_DATE_PARTITIONS, TimeUnit.DAYS);
-
+    Long startSeconds = 0L;
+    Long endSeconds = TimeUnit.SECONDS.convert(10, TimeUnit.DAYS);
     // Generate 10 new records
     IntStream.range(0, 10).forEach(a -> {
       GenericRecord record = payloadGenerator.getNewPayloadWithTimestamp("timestamp");
@@ -165,7 +164,6 @@ public class TestGenericRecordPayloadGenerator {
     assertTrue(insertRowKeys.containsAll(updateRowKeys));
     // The timestamp field for the insert payloads should not all match with the update payloads
     assertFalse(insertTimeStamps.containsAll(updateTimeStamps));
-    Long currentMillis = System.currentTimeMillis();
-    assertTrue(insertTimeStamps.stream().allMatch(t -> t >= startMillis  && t <= currentMillis));
+    assertTrue(insertTimeStamps.stream().allMatch(t -> t >= startSeconds  && t <= endSeconds));
   }
 }

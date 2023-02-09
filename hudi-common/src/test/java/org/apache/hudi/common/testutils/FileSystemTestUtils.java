@@ -18,15 +18,15 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.fs.inline.InMemoryFileSystem;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 
 import java.io.File;
 import java.io.IOException;
@@ -75,7 +75,11 @@ public class FileSystemTestUtils {
   }
 
   public static List<FileStatus> listRecursive(FileSystem fs, Path path) throws IOException {
-    RemoteIterator<LocatedFileStatus> itr = fs.listFiles(path, true);
+    return listFiles(fs, path, true);
+  }
+
+  public static List<FileStatus> listFiles(FileSystem fs, Path path, boolean recursive) throws IOException {
+    RemoteIterator<LocatedFileStatus> itr = fs.listFiles(path, recursive);
     List<FileStatus> statuses = new ArrayList<>();
     while (itr.hasNext()) {
       statuses.add(itr.next());

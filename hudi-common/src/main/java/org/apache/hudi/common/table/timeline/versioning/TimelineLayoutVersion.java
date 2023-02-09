@@ -34,7 +34,7 @@ public class TimelineLayoutVersion implements Serializable, Comparable<TimelineL
   public static final Integer CURR_VERSION = VERSION_1;
   public static final TimelineLayoutVersion CURR_LAYOUT_VERSION = new TimelineLayoutVersion(CURR_VERSION);
 
-  private Integer version;
+  private final Integer version;
 
   public TimelineLayoutVersion(Integer version) {
     ValidationUtils.checkArgument(version <= CURR_VERSION);

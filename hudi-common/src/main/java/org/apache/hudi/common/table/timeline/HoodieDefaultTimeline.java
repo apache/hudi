@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieException;
 import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -34,7 +35,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.Collections.reverse;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 
 /**
  * HoodieDefaultTimeline is a default implementation of the HoodieTimeline. It provides methods to inspect a
@@ -75,91 +76,174 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    *
    * @deprecated
    */
-  public HoodieDefaultTimeline() {}
+  public HoodieDefaultTimeline() {
+  }
 
   @Override
   public HoodieTimeline filterInflights() {
-    return new HoodieDefaultTimeline(instants.stream().filter(HoodieInstant::isInflight), details);
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(HoodieInstant::isInflight), details);
   }
 
   @Override
   public HoodieTimeline filterInflightsAndRequested() {
     return new HoodieDefaultTimeline(
-        instants.stream().filter(i -> i.getState().equals(State.REQUESTED) || i.getState().equals(State.INFLIGHT)),
+        getInstantsAsStream().filter(i -> i.getState().equals(State.REQUESTED) || i.getState().equals(State.INFLIGHT)),
         details);
   }
 
   @Override
   public HoodieTimeline filterPendingExcludingCompaction() {
-    return new HoodieDefaultTimeline(instants.stream().filter(instant -> (!instant.isCompleted())
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(instant -> (!instant.isCompleted())
             && (!instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION))), details);
   }
 
   @Override
+  public HoodieTimeline filterPendingExcludingLogCompaction() {
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(instant -> (!instant.isCompleted())
+        && (!instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION))), details);
+  }
+
+  //TODO: Use a better naming convention for this.
+  @Override
+  public HoodieTimeline filterPendingExcludingMajorAndMinorCompaction() {
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(instant -> (!instant.isCompleted())
+        && (!instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
+        || !instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION))), details);
+  }
+
+  @Override
   public HoodieTimeline filterCompletedInstants() {
-    return new HoodieDefaultTimeline(instants.stream().filter(HoodieInstant::isCompleted), details);
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(HoodieInstant::isCompleted), details);
   }
 
   @Override
   public HoodieTimeline filterCompletedAndCompactionInstants() {
-    return new HoodieDefaultTimeline(instants.stream().filter(s -> s.isCompleted()
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> s.isCompleted()
             || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)), details);
   }
 
   @Override
+  public HoodieTimeline filterCompletedOrMajorOrMinorCompactionInstants() {
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> s.isCompleted()
+        || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION) || s.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION)), details);
+  }
+
+  @Override
+  public HoodieDefaultTimeline filterCompletedInstantsOrRewriteTimeline() {
+    Set<String> validActions = CollectionUtils.createSet(COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> s.isCompleted() || validActions.contains(s.getAction())), details);
+  }
+
+  @Override
   public HoodieDefaultTimeline getWriteTimeline() {
-    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
-    return new HoodieDefaultTimeline(instants.stream().filter(s -> validActions.contains(s.getAction())), details);
+    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> validActions.contains(s.getAction())), details);
+  }
+
+  @Override
+  public HoodieTimeline getContiguousCompletedWriteTimeline() {
+    Option<HoodieInstant> earliestPending = getWriteTimeline().filterInflightsAndRequested().firstInstant();
+    if (earliestPending.isPresent()) {
+      return getWriteTimeline().filterCompletedInstants()
+          .filter(instant -> compareTimestamps(instant.getTimestamp(), LESSER_THAN, earliestPending.get().getTimestamp()));
+    }
+    return getWriteTimeline().filterCompletedInstants();
   }
 
   @Override
   public HoodieTimeline getCompletedReplaceTimeline() {
     return new HoodieDefaultTimeline(
-        instants.stream().filter(s -> s.getAction().equals(REPLACE_COMMIT_ACTION)).filter(s -> s.isCompleted()), details);
+        getInstantsAsStream().filter(s -> s.getAction().equals(REPLACE_COMMIT_ACTION)).filter(HoodieInstant::isCompleted), details);
   }
 
   @Override
   public HoodieTimeline filterPendingReplaceTimeline() {
-    return new HoodieDefaultTimeline(instants.stream().filter(
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(
         s -> s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) && !s.isCompleted()), details);
+  }
+
+  @Override
+  public HoodieTimeline filterPendingRollbackTimeline() {
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(
+        s -> s.getAction().equals(HoodieTimeline.ROLLBACK_ACTION) && !s.isCompleted()), details);
   }
 
   @Override
   public HoodieTimeline filterPendingCompactionTimeline() {
     return new HoodieDefaultTimeline(
-        instants.stream().filter(s -> s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)), details);
+        getInstantsAsStream().filter(s -> s.getAction().equals(HoodieTimeline.COMPACTION_ACTION) && !s.isCompleted()), details);
+  }
+
+  @Override
+  public HoodieTimeline filterPendingLogCompactionTimeline() {
+    return new HoodieDefaultTimeline(
+        getInstantsAsStream().filter(s -> s.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION) && !s.isCompleted()), details);
+  }
+
+  /**
+   * Compaction and logcompaction operation on MOR table is called major and minor compaction respectively.
+   */
+  @Override
+  public HoodieTimeline filterPendingMajorOrMinorCompactionTimeline() {
+    return new HoodieDefaultTimeline(
+        getInstantsAsStream().filter(s -> s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
+            || s.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION)
+            && !s.isCompleted()), details);
   }
 
   @Override
   public HoodieDefaultTimeline findInstantsInRange(String startTs, String endTs) {
     return new HoodieDefaultTimeline(
-        instants.stream().filter(s -> HoodieTimeline.isInRange(s.getTimestamp(), startTs, endTs)), details);
+        getInstantsAsStream().filter(s -> HoodieTimeline.isInRange(s.getTimestamp(), startTs, endTs)), details);
   }
 
   @Override
   public HoodieDefaultTimeline findInstantsAfter(String instantTime, int numCommits) {
-    return new HoodieDefaultTimeline(instants.stream()
-        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, instantTime)).limit(numCommits),
+    return new HoodieDefaultTimeline(getInstantsAsStream()
+        .filter(s -> compareTimestamps(s.getTimestamp(), GREATER_THAN, instantTime)).limit(numCommits),
         details);
   }
 
   @Override
+  public HoodieTimeline findInstantsAfter(String instantTime) {
+    return new HoodieDefaultTimeline(getInstantsAsStream()
+        .filter(s -> compareTimestamps(s.getTimestamp(), GREATER_THAN, instantTime)), details);
+  }
+
+  @Override
   public HoodieDefaultTimeline findInstantsAfterOrEquals(String commitTime, int numCommits) {
-    return new HoodieDefaultTimeline(instants.stream()
-        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, commitTime))
+    return new HoodieDefaultTimeline(getInstantsAsStream()
+        .filter(s -> compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, commitTime))
         .limit(numCommits), details);
   }
 
   @Override
   public HoodieDefaultTimeline findInstantsBefore(String instantTime) {
-    return new HoodieDefaultTimeline(instants.stream()
-            .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantTime)),
+    return new HoodieDefaultTimeline(getInstantsAsStream()
+            .filter(s -> compareTimestamps(s.getTimestamp(), LESSER_THAN, instantTime)),
             details);
   }
 
   @Override
+  public HoodieDefaultTimeline findInstantsBeforeOrEquals(String instantTime) {
+    return new HoodieDefaultTimeline(getInstantsAsStream()
+        .filter(s -> compareTimestamps(s.getTimestamp(), LESSER_THAN_OR_EQUALS, instantTime)),
+        details);
+  }
+
+  @Override
   public HoodieTimeline filter(Predicate<HoodieInstant> filter) {
-    return new HoodieDefaultTimeline(instants.stream().filter(filter), details);
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(filter), details);
+  }
+
+  @Override
+  public HoodieTimeline filterPendingIndexTimeline() {
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> s.getAction().equals(INDEXING_ACTION) && !s.isCompleted()), details);
+  }
+
+  @Override
+  public HoodieTimeline filterCompletedIndexTimeline() {
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> s.getAction().equals(INDEXING_ACTION) && s.isCompleted()), details);
   }
 
   /**
@@ -170,18 +254,20 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   /**
-   * Get all instants (commits, delta commits, compaction, clean, savepoint, rollback) that result in actions,
+   * Get all instants (commits, delta commits, compaction, clean, savepoint, rollback, replace commits, index) that result in actions,
    * in the active timeline.
    */
   public HoodieTimeline getAllCommitsTimeline() {
     return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION,
-            CLEAN_ACTION, COMPACTION_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION, REPLACE_COMMIT_ACTION));
+        CLEAN_ACTION, COMPACTION_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION, REPLACE_COMMIT_ACTION, INDEXING_ACTION,
+        LOG_COMPACTION_ACTION));
   }
 
   /**
    * Get only pure commits (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getCommitTimeline() {
+    //TODO: Make sure this change does not break existing functionality.
     return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION));
   }
 
@@ -199,7 +285,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    * @param actions actions allowed in the timeline
    */
   public HoodieTimeline getTimelineOfActions(Set<String> actions) {
-    return new HoodieDefaultTimeline(getInstants().filter(s -> actions.contains(s.getAction())),
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> actions.contains(s.getAction())),
             (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
   }
 
@@ -216,7 +302,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    */
   public HoodieTimeline getRollbackTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(ROLLBACK_ACTION),
-            (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
+  }
+
+  /**
+   * Get only the rollback and restore action (inflight and completed) in the active timeline.
+   */
+  public HoodieTimeline getRollbackAndRestoreTimeline() {
+    return  getTimelineOfActions(CollectionUtils.createSet(ROLLBACK_ACTION, RESTORE_ACTION));
   }
 
   /**
@@ -236,22 +329,28 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   protected Stream<HoodieInstant> filterInstantsByAction(String action) {
-    return getInstants().filter(s -> s.getAction().equals(action));
+    return getInstantsAsStream().filter(s -> s.getAction().equals(action));
   }
 
   @Override
   public boolean empty() {
-    return !instants.stream().findFirst().isPresent();
+    return getInstants().isEmpty();
   }
 
   @Override
   public int countInstants() {
-    return instants.size();
+    return getInstants().size();
   }
 
   @Override
   public Option<HoodieInstant> firstInstant() {
-    return Option.fromJavaOptional(instants.stream().findFirst());
+    return Option.fromJavaOptional(getInstantsAsStream().findFirst());
+  }
+
+  @Override
+  public Option<HoodieInstant> firstInstant(String action, State state) {
+    return Option.fromJavaOptional(getInstantsAsStream()
+        .filter(s -> action.equals(s.getAction()) && state.equals(s.getState())).findFirst());
   }
 
   @Override
@@ -259,7 +358,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     if (empty() || n >= countInstants()) {
       return Option.empty();
     }
-    return Option.of(instants.get(n));
+    return Option.of(getInstants().get(n));
   }
 
   @Override
@@ -277,17 +376,17 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public boolean containsInstant(HoodieInstant instant) {
-    return instants.stream().anyMatch(s -> s.equals(instant));
+    return getInstantsAsStream().anyMatch(s -> s.equals(instant));
   }
 
   @Override
   public boolean containsInstant(String ts) {
-    return instants.stream().anyMatch(s -> s.getTimestamp().equals(ts));
+    return getInstantsAsStream().anyMatch(s -> s.getTimestamp().equals(ts));
   }
 
   @Override
   public boolean containsOrBeforeTimelineStarts(String instant) {
-    return instants.stream().anyMatch(s -> s.getTimestamp().equals(instant)) || isBeforeTimelineStarts(instant);
+    return getInstantsAsStream().anyMatch(s -> s.getTimestamp().equals(instant)) || isBeforeTimelineStarts(instant);
   }
 
   @Override
@@ -296,31 +395,71 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public Stream<HoodieInstant> getInstants() {
+  public Stream<HoodieInstant> getInstantsAsStream() {
     return instants.stream();
+  }
+
+  @Override
+  public List<HoodieInstant> getInstants() {
+    return new ArrayList<>(instants);
   }
 
   @Override
   public Stream<HoodieInstant> getReverseOrderedInstants() {
-    List<HoodieInstant> instants = getInstants().collect(Collectors.toList());
-    reverse(instants);
-    return instants.stream();
+    return getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed());
   }
 
   @Override
   public boolean isBeforeTimelineStarts(String instant) {
-    Option<HoodieInstant> firstCommit = firstInstant();
-    return firstCommit.isPresent()
-        && HoodieTimeline.compareTimestamps(instant, LESSER_THAN, firstCommit.get().getTimestamp());
+    Option<HoodieInstant> firstNonSavepointCommit = getFirstNonSavepointCommit();
+    return firstNonSavepointCommit.isPresent()
+        && compareTimestamps(instant, LESSER_THAN, firstNonSavepointCommit.get().getTimestamp());
   }
 
+  public Option<HoodieInstant> getFirstNonSavepointCommit() {
+    Option<HoodieInstant> firstCommit = firstInstant();
+    Set<String> savepointTimestamps = getInstantsAsStream()
+        .filter(entry -> entry.getAction().equals(HoodieTimeline.SAVEPOINT_ACTION))
+        .map(HoodieInstant::getTimestamp)
+        .collect(Collectors.toSet());
+    Option<HoodieInstant> firstNonSavepointCommit = firstCommit;
+    if (!savepointTimestamps.isEmpty()) {
+      // There are chances that there could be holes in the timeline due to archival and savepoint interplay.
+      // So, the first non-savepoint commit is considered as beginning of the active timeline.
+      firstNonSavepointCommit = Option.fromJavaOptional(getInstantsAsStream()
+          .filter(entry -> !savepointTimestamps.contains(entry.getTimestamp()))
+          .findFirst());
+    }
+    return firstNonSavepointCommit;
+  }
+  
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return details.apply(instant);
   }
 
   @Override
+  public boolean isEmpty(HoodieInstant instant) {
+    return getInstantDetails(instant).get().length == 0;
+  }
+
+  @Override
   public String toString() {
-    return this.getClass().getName() + ": " + instants.stream().map(Object::toString).collect(Collectors.joining(","));
+    return this.getClass().getName() + ": " + getInstantsAsStream().map(Object::toString).collect(Collectors.joining(","));
+  }
+
+  /**
+   * Merge this timeline with the given timeline.
+   */
+  public HoodieDefaultTimeline mergeTimeline(HoodieDefaultTimeline timeline) {
+    Stream<HoodieInstant> instantStream = Stream.concat(getInstantsAsStream(), timeline.getInstantsAsStream()).sorted();
+    Function<HoodieInstant, Option<byte[]>> details = instant -> {
+      if (getInstantsAsStream().anyMatch(i -> i.equals(instant))) {
+        return this.getInstantDetails(instant);
+      } else {
+        return timeline.getInstantDetails(instant);
+      }
+    };
+    return new HoodieDefaultTimeline(instantStream, details);
   }
 }

@@ -28,7 +28,6 @@ import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 
-import java.io.Closeable;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -79,11 +78,6 @@ public class DatadogMetricsReporter extends MetricsReporter {
   @Override
   public void report() {
     reporter.report();
-  }
-
-  @Override
-  public Closeable getReporter() {
-    return reporter;
   }
 
   @Override

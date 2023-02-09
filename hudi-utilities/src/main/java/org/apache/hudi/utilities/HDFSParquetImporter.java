@@ -25,13 +25,14 @@ import org.apache.hudi.common.HoodieJsonPayload;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 
 import com.beust.jcommander.IValueValidator;
 import com.beust.jcommander.JCommander;
@@ -65,6 +66,9 @@ import scala.Tuple2;
 
 /**
  * Loads data from Parquet Sources.
+ *
+ * @deprecated This utility is deprecated in 0.10.0 and will be removed in 0.11.0. Use {@link HoodieDeltaStreamer.Config#runBootstrap} instead.
+ * @see HoodieDeltaStreamer
  */
 public class HDFSParquetImporter implements Serializable {
 
@@ -103,13 +107,13 @@ public class HDFSParquetImporter implements Serializable {
   }
 
   private boolean isUpsert() {
-    return "upsert".equals(cfg.command.toLowerCase());
+    return "upsert".equalsIgnoreCase(cfg.command);
   }
 
   public int dataImport(JavaSparkContext jsc, int retry) {
     this.fs = FSUtils.getFs(cfg.targetPath, jsc.hadoopConfiguration());
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
-        : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+        : UtilHelpers.readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps(true);
     LOG.info("Starting data import with configs : " + props.toString());
     int ret = -1;
     try {
@@ -135,16 +139,17 @@ public class HDFSParquetImporter implements Serializable {
 
       if (!fs.exists(new Path(cfg.targetPath))) {
         // Initialize target hoodie table.
-        Properties properties = new Properties();
-        properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, cfg.tableName);
-        properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, cfg.tableType);
+        Properties properties = HoodieTableMetaClient.withPropertyBuilder()
+            .setTableName(cfg.tableName)
+            .setTableType(cfg.tableType)
+            .build();
         HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), cfg.targetPath, properties);
       }
 
       // Get schema.
       String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
 
-      SparkRDDWriteClient client =
+      SparkRDDWriteClient<HoodieRecordPayload> client =
           UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr, cfg.parallelism, Option.empty(), props);
 
       JavaRDD<HoodieRecord<HoodieRecordPayload>> hoodieRecords = buildHoodieRecordsForImport(jsc, schemaStr);
@@ -169,7 +174,7 @@ public class HDFSParquetImporter implements Serializable {
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
-    context.setJobStatus(this.getClass().getSimpleName(), "Build records for import");
+    context.setJobStatus(this.getClass().getSimpleName(), "Build records for import: " + cfg.tableName);
     return jsc.newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class, GenericRecord.class,
             job.getConfiguration())
         // To reduce large number of tasks.
@@ -193,7 +198,7 @@ public class HDFSParquetImporter implements Serializable {
               LOG.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
             }
           }
-          return new HoodieRecord<>(new HoodieKey(rowField.toString(), partitionPath),
+          return new HoodieAvroRecord<>(new HoodieKey(rowField.toString(), partitionPath),
               new HoodieJsonPayload(genericRecord.toString()));
         });
   }
@@ -206,7 +211,7 @@ public class HDFSParquetImporter implements Serializable {
    * @param hoodieRecords Hoodie Records
    * @param <T> Type
    */
-  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(SparkRDDWriteClient client, String instantTime,
+  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(SparkRDDWriteClient<T> client, String instantTime,
                                                                       JavaRDD<HoodieRecord<T>> hoodieRecords) {
     switch (cfg.command.toLowerCase()) {
       case "upsert": {

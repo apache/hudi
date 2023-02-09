@@ -33,6 +33,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -40,6 +41,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.utilities.sources.helpers.DFSPathSelector.Config.ROOT_INPUT_PATH_PROP;
 import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.CURRENT_DATE;
+import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DATE_FORMAT;
 import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DATE_PARTITION_DEPTH;
 import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.LOOKBACK_DAYS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -78,11 +80,11 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   /*
    * Create Date partitions with some files under each of the leaf Dirs.
    */
-  public List<Path> createDatePartitionsWithFiles(List<Path> leafDirs, boolean hiveStyle)
+  public List<Path> createDatePartitionsWithFiles(List<Path> leafDirs, boolean hiveStyle, String dateFormat)
       throws IOException {
     List<Path> allFiles = new ArrayList<>();
     for (Path path : leafDirs) {
-      List<Path> datePartitions = generateDatePartitionsUnder(path, hiveStyle);
+      List<Path> datePartitions = generateDatePartitionsUnder(path, hiveStyle, dateFormat);
       for (Path datePartition : datePartitions) {
         allFiles.addAll(createRandomFilesUnder(datePartition));
       }
@@ -126,11 +128,12 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   /*
    * Generate date based partitions under a parent dir with or without hivestyle formatting.
    */
-  private List<Path> generateDatePartitionsUnder(Path parent, boolean hiveStyle) throws IOException {
+  private List<Path> generateDatePartitionsUnder(Path parent, boolean hiveStyle, String dateFormat) throws IOException {
+    DateTimeFormatter formatter = DateTimeFormatter.ofPattern(dateFormat);
     List<Path> datePartitions = new ArrayList<>();
     String prefix = (hiveStyle ? "dt=" : "");
     for (int i = 0; i < 5; i++) {
-      Path child = new Path(parent, prefix + totalDates.get(i).toString());
+      Path child = new Path(parent, prefix + formatter.format(totalDates.get(i)));
       fs.mkdirs(child);
       datePartitions.add(child);
     }
@@ -155,9 +158,10 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   }
 
   private static TypedProperties getProps(
-      String basePath, int datePartitionDepth, int numDaysToList, String currentDate) {
+      String basePath, String dateFormat, int datePartitionDepth, int numDaysToList, String currentDate) {
     TypedProperties properties = new TypedProperties();
     properties.put(ROOT_INPUT_PATH_PROP, basePath);
+    properties.put(DATE_FORMAT, dateFormat);
     properties.put(DATE_PARTITION_DEPTH, "" + datePartitionDepth);
     properties.put(LOOKBACK_DAYS, "" + numDaysToList);
     properties.put(CURRENT_DATE, currentDate);
@@ -172,14 +176,14 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   private static Stream<Arguments> configParams() {
     Object[][] data =
         new Object[][] {
-          {"table1", 0, 2, "2020-07-25", true, 1},
-          {"table2", 0, 2, "2020-07-25", false, 1},
-          {"table3", 1, 3, "2020-07-25", true, 4},
-          {"table4", 1, 3, "2020-07-25", false, 4},
-          {"table5", 2, 1, "2020-07-25", true, 10},
-          {"table6", 2, 1, "2020-07-25", false, 10},
-          {"table7", 3, 2, "2020-07-25", true, 75},
-          {"table8", 3, 2, "2020-07-25", false, 75}
+          {"table1", "yyyyMMdd", 0, 2, "2020-07-25", true, 1},
+          {"table2", "yyyyMMdd", 0, 2, "2020-07-25", false, 1},
+          {"table3", "yyyyMMMdd", 1, 3, "2020-07-25", true, 4},
+          {"table4", "yyyyMMMdd", 1, 3, "2020-07-25", false, 4},
+          {"table5", "yyyy-MM-dd", 2, 1, "2020-07-25", true, 10},
+          {"table6", "yyyy-MM-dd", 2, 1, "2020-07-25", false, 10},
+          {"table7", "yyyy-MMM-dd", 3, 2, "2020-07-25", true, 75},
+          {"table8", "yyyy-MMM-dd", 3, 2, "2020-07-25", false, 75}
         };
     return Stream.of(data).map(Arguments::of);
   }
@@ -188,13 +192,14 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   @MethodSource("configParams")
   public void testPruneDatePartitionPaths(
       String tableName,
+      String dateFormat,
       int datePartitionDepth,
       int numPrevDaysToList,
       String currentDate,
       boolean isHiveStylePartition,
       int expectedNumFiles)
       throws IOException {
-    TypedProperties props = getProps(basePath + "/" + tableName, datePartitionDepth, numPrevDaysToList, currentDate);
+    TypedProperties props = getProps(basePath + "/" + tableName, dateFormat, datePartitionDepth, numPrevDaysToList, currentDate);
     DatePartitionPathSelector pathSelector = new DatePartitionPathSelector(props, jsc.hadoopConfiguration());
 
     Path root = new Path(props.getString(ROOT_INPUT_PATH_PROP));
@@ -203,10 +208,9 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
     // Create parent dir
     List<Path> leafDirs = new ArrayList<>();
     createParentDirsBeforeDatePartitions(root, generateRandomStrings(), totalDepthBeforeDatePartitions, leafDirs);
-    createDatePartitionsWithFiles(leafDirs, isHiveStylePartition);
+    createDatePartitionsWithFiles(leafDirs, isHiveStylePartition, dateFormat);
 
-    List<String> paths = pathSelector.pruneDatePartitionPaths(context, fs, root.toString());
-
-    assertEquals(expectedNumFiles, pathSelector.pruneDatePartitionPaths(context, fs, root.toString()).size());
+    List<String> paths = pathSelector.pruneDatePartitionPaths(context, fs, root.toString(), LocalDate.parse(currentDate));
+    assertEquals(expectedNumFiles, paths.size());
   }
 }

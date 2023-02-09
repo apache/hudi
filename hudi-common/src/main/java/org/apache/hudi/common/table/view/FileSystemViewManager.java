@@ -18,13 +18,16 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Functions.Function2;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -57,6 +60,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class FileSystemViewManager {
   private static final Logger LOG = LogManager.getLogger(FileSystemViewManager.class);
+
+  private static final String HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS = "org.apache.hudi.common.table.view.HoodieMetaserverFileSystemView";
 
   private final SerializableConfiguration conf;
   // The View Storage config used to store file-system views
@@ -145,10 +150,10 @@ public class FileSystemViewManager {
    * @return
    */
   private static SpillableMapBasedFileSystemView createSpillableMapBasedFileSystemView(SerializableConfiguration conf,
-      FileSystemViewStorageConfig viewConf, HoodieTableMetaClient metaClient) {
+      FileSystemViewStorageConfig viewConf, HoodieTableMetaClient metaClient, HoodieCommonConfig commonConfig) {
     LOG.info("Creating SpillableMap based view for basePath " + metaClient.getBasePath());
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    return new SpillableMapBasedFileSystemView(metaClient, timeline, viewConf);
+    return new SpillableMapBasedFileSystemView(metaClient, timeline, viewConf, commonConfig);
   }
 
   /**
@@ -159,24 +164,41 @@ public class FileSystemViewManager {
                                                                         HoodieTableMetaClient metaClient, SerializableSupplier<HoodieTableMetadata> metadataSupplier) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    if (metadataConfig.useFileListingMetadata()) {
+    if (metadataConfig.enabled()) {
       ValidationUtils.checkArgument(metadataSupplier != null, "Metadata supplier is null. Cannot instantiate metadata file system view");
-      return new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
+      return new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(),
           metadataSupplier.get());
+    }
+    if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
+      return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
+          new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetaserverConfig.class},
+          metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetaserverConfig());
     }
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
   }
 
   public static HoodieTableFileSystemView createInMemoryFileSystemView(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient,
                                                                        HoodieMetadataConfig metadataConfig) {
-    LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
-    if (metadataConfig.useFileListingMetadata()) {
-      return new HoodieMetadataFileSystemView(engineContext, metaClient,
-          metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-          metadataConfig);
-    }
-    return new HoodieTableFileSystemView(metaClient,
+    
+    return createInMemoryFileSystemViewWithTimeline(engineContext, metaClient, metadataConfig,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+    
+  }
+  
+  public static HoodieTableFileSystemView createInMemoryFileSystemViewWithTimeline(HoodieEngineContext engineContext,
+                                                                                   HoodieTableMetaClient metaClient,
+                                                                                   HoodieMetadataConfig metadataConfig,
+                                                                                   HoodieTimeline timeline) {
+    LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
+    if (metadataConfig.enabled()) {
+      return new HoodieMetadataFileSystemView(engineContext, metaClient, timeline, metadataConfig);
+    }
+    if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
+      return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
+          new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetadataConfig.class},
+          metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetaserverConfig());
+    }
+    return new HoodieTableFileSystemView(metaClient, timeline);
   }
 
   /**
@@ -192,22 +214,23 @@ public class FileSystemViewManager {
     LOG.info("Creating remote view for basePath " + metaClient.getBasePath() + ". Server="
         + viewConf.getRemoteViewServerHost() + ":" + viewConf.getRemoteViewServerPort() + ", Timeout="
         + viewConf.getRemoteTimelineClientTimeoutSecs());
-    return new RemoteHoodieTableFileSystemView(viewConf.getRemoteViewServerHost(), viewConf.getRemoteViewServerPort(),
-        metaClient, viewConf.getRemoteTimelineClientTimeoutSecs());
-  }
-
-  public static FileSystemViewManager createViewManager(final HoodieEngineContext context,
-                                                        final HoodieMetadataConfig metadataConfig,
-                                                        final FileSystemViewStorageConfig config) {
-    return createViewManager(context, metadataConfig, config, (SerializableSupplier<HoodieTableMetadata>) null);
+    return new RemoteHoodieTableFileSystemView(metaClient, viewConf);
   }
 
   public static FileSystemViewManager createViewManager(final HoodieEngineContext context,
                                                         final HoodieMetadataConfig metadataConfig,
                                                         final FileSystemViewStorageConfig config,
+                                                        final HoodieCommonConfig commonConfig) {
+    return createViewManager(context, metadataConfig, config, commonConfig, (SerializableSupplier<HoodieTableMetadata>) null);
+  }
+
+  public static FileSystemViewManager createViewManager(final HoodieEngineContext context,
+                                                        final HoodieMetadataConfig metadataConfig,
+                                                        final FileSystemViewStorageConfig config,
+                                                        final HoodieCommonConfig commonConfig,
                                                         final String basePath) {
-    return createViewManager(context, metadataConfig, config,
-        () -> HoodieTableMetadata.create(context, metadataConfig, basePath, config.getSpillableDir()));
+    return createViewManager(context, metadataConfig, config, commonConfig,
+        () -> HoodieTableMetadata.create(context, metadataConfig, basePath, config.getSpillableDir(), true));
   }
 
   /**
@@ -217,6 +240,7 @@ public class FileSystemViewManager {
   public static FileSystemViewManager createViewManager(final HoodieEngineContext context,
                                                         final HoodieMetadataConfig metadataConfig,
                                                         final FileSystemViewStorageConfig config,
+                                                        final HoodieCommonConfig commonConfig,
                                                         final SerializableSupplier<HoodieTableMetadata> metadataSupplier) {
     LOG.info("Creating View Manager with storage type :" + config.getStorageType());
     final SerializableConfiguration conf = context.getHadoopConf();
@@ -228,7 +252,7 @@ public class FileSystemViewManager {
       case SPILLABLE_DISK:
         LOG.info("Creating Spillable Disk based Table View");
         return new FileSystemViewManager(context, config,
-            (metaClient, viewConf) -> createSpillableMapBasedFileSystemView(conf, viewConf, metaClient));
+            (metaClient, viewConf) -> createSpillableMapBasedFileSystemView(conf, viewConf, metaClient, commonConfig));
       case MEMORY:
         LOG.info("Creating in-memory based Table View");
         return new FileSystemViewManager(context, config,
@@ -251,7 +275,7 @@ public class FileSystemViewManager {
               secondaryView = createRocksDBBasedFileSystemView(conf, viewConfig, metaClient);
               break;
             case SPILLABLE_DISK:
-              secondaryView = createSpillableMapBasedFileSystemView(conf, viewConfig, metaClient);
+              secondaryView = createSpillableMapBasedFileSystemView(conf, viewConfig, metaClient, commonConfig);
               break;
             default:
               throw new IllegalArgumentException("Secondary Storage type can only be in-memory or spillable. Was :"

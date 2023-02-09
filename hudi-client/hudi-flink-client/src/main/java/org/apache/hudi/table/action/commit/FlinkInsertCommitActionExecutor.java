@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieWriteHandle;
@@ -30,7 +29,10 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
 
-public class FlinkInsertCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseFlinkCommitActionExecutor<T> {
+/**
+ * Flink insert commit action executor.
+ */
+public class FlinkInsertCommitActionExecutor<T> extends BaseFlinkCommitActionExecutor<T> {
 
   private List<HoodieRecord<T>> inputRecords;
 
@@ -47,6 +49,6 @@ public class FlinkInsertCommitActionExecutor<T extends HoodieRecordPayload<T>> e
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     return FlinkWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
-        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, false);
+        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
   }
 }

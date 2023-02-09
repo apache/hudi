@@ -56,6 +56,8 @@ public interface HoodieLogFormat {
 
   String UNKNOWN_WRITE_TOKEN = "1-0-1";
 
+  String DEFAULT_WRITE_TOKEN = "0-0-0";
+
   /**
    * Writer interface to allow appending block to this file format.
    */
@@ -139,6 +141,8 @@ public interface HoodieLogFormat {
     private Path parentPath;
     // Log File Write Token
     private String logWriteToken;
+    // optional file suffix
+    private String suffix;
     // Rollover Log file write token
     private String rolloverLogWriteToken;
 
@@ -159,6 +163,11 @@ public interface HoodieLogFormat {
 
     public WriterBuilder withLogWriteToken(String logWriteToken) {
       this.logWriteToken = logWriteToken;
+      return this;
+    }
+
+    public WriterBuilder withSuffix(String suffix) {
+      this.suffix = suffix;
       return this;
     }
 
@@ -248,6 +257,14 @@ public interface HoodieLogFormat {
         logWriteToken = rolloverLogWriteToken;
       }
 
+      if (suffix != null) {
+        // A little hacky to simplify the file name concatenation:
+        // patch the write token with an optional suffix
+        // instead of adding a new extension
+        logWriteToken = logWriteToken + suffix;
+        rolloverLogWriteToken = rolloverLogWriteToken + suffix;
+      }
+
       Path logPath = new Path(parentPath,
           FSUtils.makeLogFileName(logFileId, fileExtension, instantTime, logVersion, logWriteToken));
       LOG.info("HoodieLogFile on path " + logPath);
@@ -272,7 +289,7 @@ public interface HoodieLogFormat {
 
   static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema)
       throws IOException {
-    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false, false);
+    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false);
   }
 
   static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema,

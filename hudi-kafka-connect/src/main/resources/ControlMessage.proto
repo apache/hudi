@@ -1,0 +1,65 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "org.apache.hudi.connect";
+option java_outer_classname = "ConnectControl";
+
+package connect;
+
+message ControlMessage {
+  uint32 protocolVersion = 1;
+  EventType type = 2;
+  string topic_name = 3;
+  EntityType sender_type = 4;
+  uint32 sender_partition = 5;
+  EntityType receiver_type = 6;
+  uint32 receiver_partition = 7;
+  string commitTime = 8;
+  oneof payload {
+    CoordinatorInfo coordinator_info = 9;
+    ParticipantInfo participant_info = 10;
+  }
+
+  message CoordinatorInfo {
+    map<int32, int64> globalKafkaCommitOffsets = 1;
+  }
+
+  message ParticipantInfo {
+    ConnectWriteStatus writeStatus = 1;
+    uint64 kafkaOffset = 2;
+  }
+
+  message ConnectWriteStatus {
+    bytes serializedWriteStatus = 1;
+  }
+
+  enum EventType {
+    START_COMMIT = 0;
+    END_COMMIT = 1;
+    ACK_COMMIT = 2;
+    WRITE_STATUS = 3;
+  }
+
+  enum EntityType {
+    COORDINATOR = 0;
+    PARTICIPANT = 1;
+  }
+}

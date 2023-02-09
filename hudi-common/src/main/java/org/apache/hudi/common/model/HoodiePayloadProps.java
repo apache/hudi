@@ -18,15 +18,45 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.avro.Schema;
+
+import java.util.Properties;
+
 /**
  * Holds payload properties that implementation of {@link HoodieRecordPayload} can leverage.
  * Since both payload classes and HoodiePayloadConfig needs to access these props, storing it here in hudi-common.
  */
 public class HoodiePayloadProps {
 
-  // payload ordering field. This could be used to merge incoming record with that in storage. Implementations of
-  // {@link HoodieRecordPayload} can leverage if required.
-  public static final String PAYLOAD_ORDERING_FIELD_PROP = "hoodie.payload.ordering.field";
-  public static String DEFAULT_PAYLOAD_ORDERING_FIELD_VAL = "ts";
+  /**
+   * Property for payload ordering field; to be used to merge incoming record with that in storage.
+   * Implementations of {@link HoodieRecordPayload} can leverage if required.
+   *
+   * @see DefaultHoodieRecordPayload
+   */
+  public static final String PAYLOAD_ORDERING_FIELD_PROP_KEY = "hoodie.payload.ordering.field";
 
+  /**
+   * Property for payload event time field; to be used to extract source event time info.
+   *
+   * @see DefaultHoodieRecordPayload
+   */
+  public static final String PAYLOAD_EVENT_TIME_FIELD_PROP_KEY = "hoodie.payload.event.time.field";
+
+  /**
+   * A runtime config pass to the {@link HoodieRecordPayload#getInsertValue(Schema, Properties)}
+   * to tell if the current record is a update record or insert record for mor table.
+   */
+  public static final String PAYLOAD_IS_UPDATE_RECORD_FOR_MOR = "hoodie.is.update.record.for.mor";
+
+  /** @deprecated Use {@link #PAYLOAD_ORDERING_FIELD_PROP_KEY} */
+  @Deprecated
+  public static final String PAYLOAD_ORDERING_FIELD_PROP = PAYLOAD_ORDERING_FIELD_PROP_KEY;
+  @Deprecated
+  public static String DEFAULT_PAYLOAD_ORDERING_FIELD_VAL = "ts";
+  /** @deprecated Use {@link #PAYLOAD_EVENT_TIME_FIELD_PROP_KEY} */
+  @Deprecated
+  public static final String PAYLOAD_EVENT_TIME_FIELD_PROP = PAYLOAD_EVENT_TIME_FIELD_PROP_KEY;
+  @Deprecated
+  public static String DEFAULT_PAYLOAD_EVENT_TIME_FIELD_VAL = "ts";
 }

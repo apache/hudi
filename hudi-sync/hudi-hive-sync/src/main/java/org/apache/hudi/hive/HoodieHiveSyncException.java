@@ -20,10 +20,6 @@ package org.apache.hudi.hive;
 
 public class HoodieHiveSyncException extends RuntimeException {
 
-  public HoodieHiveSyncException() {
-    super();
-  }
-
   public HoodieHiveSyncException(String message) {
     super(message);
   }
@@ -32,11 +28,4 @@ public class HoodieHiveSyncException extends RuntimeException {
     super(message, t);
   }
 
-  public HoodieHiveSyncException(Throwable t) {
-    super(t);
-  }
-
-  protected static String format(String message, Object... args) {
-    return String.format(String.valueOf(message), (Object[]) args);
-  }
 }

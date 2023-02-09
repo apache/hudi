@@ -18,35 +18,43 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.avro.Schema;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ClosableIterator;
+
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.Set;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.util.Option;
+/**
+ * Hudi's File Reader interface providing common set of APIs to fetch
+ *
+ * <ul>
+ *   <li>{@link HoodieRecord}s</li>
+ *   <li>Metadata (statistics, bloom-filters, etc)</li>
+ * </ul>
+ *
+ * from a file persisted in storage.
+ *
+ * @param <T> target engine-specific representation of the raw data ({@code IndexedRecord} for Avro,
+ *           {@code InternalRow} for Spark, etc)
+ */
+public interface HoodieFileReader<T> extends AutoCloseable {
 
-public interface HoodieFileReader<R extends IndexedRecord> {
+  String[] readMinMaxRecordKeys();
 
-  public String[] readMinMaxRecordKeys();
+  BloomFilter readBloomFilter();
 
-  public BloomFilter readBloomFilter();
+  Set<String> filterRowKeys(Set<String> candidateRowKeys);
 
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys);
+  ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
 
-  public Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;
+  default ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema readerSchema) throws IOException {
+    return getRecordIterator(readerSchema, readerSchema);
+  }
 
-  default Iterator<R> getRecordIterator() throws IOException {
+  default ClosableIterator<HoodieRecord<T>> getRecordIterator() throws IOException {
     return getRecordIterator(getSchema());
-  }
-
-  default Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  default Option<R> getRecordByKey(String key) throws IOException {
-    return getRecordByKey(key, getSchema());
   }
 
   Schema getSchema();

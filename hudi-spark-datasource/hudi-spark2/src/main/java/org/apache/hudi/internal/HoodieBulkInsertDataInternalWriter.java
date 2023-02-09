@@ -20,6 +20,7 @@ package org.apache.hudi.internal;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.BulkInsertDataInternalWriterHelper;
 
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.sources.v2.writer.DataWriter;
@@ -36,10 +37,10 @@ public class HoodieBulkInsertDataInternalWriter implements DataWriter<InternalRo
   private final BulkInsertDataInternalWriterHelper bulkInsertWriterHelper;
 
   public HoodieBulkInsertDataInternalWriter(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
-      String instantTime, int taskPartitionId, long taskId, long taskEpochId,
-      StructType structType) {
+                                            String instantTime, int taskPartitionId, long taskId, long taskEpochId,
+                                            StructType structType, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
     this.bulkInsertWriterHelper = new BulkInsertDataInternalWriterHelper(hoodieTable,
-        writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType);
+        writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted);
   }
 
   @Override
