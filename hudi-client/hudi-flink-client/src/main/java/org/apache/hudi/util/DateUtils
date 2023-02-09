@@ -1,0 +1,26 @@
+package org.apache.hudi.util;
+
+import org.apache.flink.table.data.TimestampData;
+
+import java.util.Calendar;
+
+/**
+ * @ClassName DateUtils
+ * @Description convert date
+ * @Author ltz
+ * @Date 2023/2/9 13:28
+ * @Verion 1.0
+ **/
+public class DateUtils {
+
+    public static TimestampData normalLocalDateToUTC(TimestampData timestampData) {
+        Calendar calendar= Calendar.getInstance();
+        calendar.setTimeInMillis(timestampData.toTimestamp().getTime());
+        /** obtain time offset  */
+        int zoneOffset = calendar.get(java.util.Calendar.ZONE_OFFSET);
+        /** obtain Daylight Saving Time offset*/
+        int dstOffset = calendar.get(java.util.Calendar.DST_OFFSET);
+        /** local delete offset  */
+        return TimestampData.fromEpochMillis(timestampData.getMillisecond() - zoneOffset - dstOffset);
+    }
+}
