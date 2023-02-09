@@ -18,10 +18,14 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.utils.TestConfigurations;
 
@@ -31,8 +35,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -57,6 +64,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
         .conf(conf)
         .path(new Path(basePath))
         .rowType(TestConfigurations.ROW_TYPE)
+        .skipClustering(true)
         .build();
 
     HoodieInstant commit1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "1");
@@ -93,4 +101,38 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     assertEquals(3, instantRange4.size());
   }
 
+  @Test
+  void testFilterInstantsByCondition() throws IOException {
+    HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient, true);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+            .conf(conf)
+            .path(new Path(basePath))
+            .rowType(TestConfigurations.ROW_TYPE)
+            .build();
+
+    HoodieInstant commit1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "1");
+    HoodieInstant commit2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "2");
+    HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "3");
+    timeline.createNewInstant(commit1);
+    timeline.createNewInstant(commit2);
+    timeline.createNewInstant(commit3);
+    commit3 = timeline.transitionReplaceRequestedToInflight(commit3, Option.empty());
+    HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(
+            new ArrayList<>(),
+            new HashMap<>(),
+            Option.empty(),
+            WriteOperationType.CLUSTER,
+            "",
+            HoodieTimeline.REPLACE_COMMIT_ACTION);
+    timeline.transitionReplaceInflightToComplete(
+            HoodieTimeline.getReplaceCommitInflightInstant(commit3.getTimestamp()),
+            Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    timeline = timeline.reload();
+
+    conf.set(FlinkOptions.READ_END_COMMIT, "3");
+    HoodieTimeline resTimeline = iis.filterInstantsByCondition(timeline);
+    // will not filter cluster commit by default
+    assertEquals(3, resTimeline.getInstants().size());
+  }
 }
