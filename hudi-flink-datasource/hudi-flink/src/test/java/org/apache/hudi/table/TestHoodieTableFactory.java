@@ -178,6 +178,36 @@ public class TestHoodieTableFactory {
   }
 
   @Test
+  void testTableTypeCheck() {
+    ResolvedSchema schema = SchemaBuilder.instance()
+            .field("f0", DataTypes.INT().notNull())
+            .field("f1", DataTypes.VARCHAR(20))
+            .field("f2", DataTypes.TIMESTAMP(3))
+            .field("ts", DataTypes.TIMESTAMP(3))
+            .primaryKey("f0")
+            .build();
+
+    // Table type unset. The default value will be ok
+    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema, "f2");
+    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
+
+    // Invalid table type will throw exception
+    this.conf.set(FlinkOptions.TABLE_TYPE, "INVALID_TABLE_TYPE");
+    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema, "f2");
+    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
+
+    // Valid table type will be ok
+    this.conf.set(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
+    final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
+
+    // Valid table type will be ok
+    this.conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
+    final MockContext sourceContext4 = MockContext.getInstance(this.conf, schema, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext4));
+  }
+
+  @Test
   void testSupplementTableConfig() throws Exception {
     String tablePath = new File(tempFile.getAbsolutePath(), "dummy").getAbsolutePath();
     // add pk and pre-combine key to table config
