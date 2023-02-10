@@ -189,7 +189,7 @@ public class TestHoodieTableFactory {
 
     // Table type unset. The default value will be ok
     final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema, "f2");
-    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
 
     // Invalid table type will throw exception
     this.conf.set(FlinkOptions.TABLE_TYPE, "INVALID_TABLE_TYPE");
