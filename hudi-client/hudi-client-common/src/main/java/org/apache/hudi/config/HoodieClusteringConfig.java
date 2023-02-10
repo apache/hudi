@@ -47,7 +47,7 @@ import java.util.Properties;
     description = "Configurations that control the clustering table service in hudi, "
         + "which optimizes the storage layout for better query performance by sorting and sizing data files.")
 public class HoodieClusteringConfig extends HoodieConfig {
-  //cfg
+  // Configs for Clustering operations
 
   // Any strategy specific params can be saved with this prefix
   public static final String CLUSTERING_STRATEGY_PARAM_PREFIX = "hoodie.clustering.plan.strategy.";
@@ -91,6 +91,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("End partition used to filter partition (inclusive), only effective when the filter mode '"
           + PLAN_PARTITION_FILTER_MODE + "' is " + ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
 
+  // Ethan: Should this be aligned with default parquet base file size?
   public static final ConfigProperty<String> PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.limit")
       .defaultValue(String.valueOf(300 * 1024 * 1024L))
@@ -109,6 +110,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Partitions to run clustering");
 
+  // Ethan: enum instead of class name to determine strategy type?  So this can be engine-agnostic
   public static final ConfigProperty<String> PLAN_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.plan.strategy.class")
       .defaultValue(SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY)
@@ -132,18 +134,21 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Turn on inline clustering - clustering will be run after each write operation is complete")
       .withAlternatives("hoodie.datasource.clustering.inline.enable");
 
+  // Ethan: this can apply to both inline or aysnc clustering.  Rename it for better readability.
   public static final ConfigProperty<String> INLINE_CLUSTERING_MAX_COMMITS = ConfigProperty
       .key("hoodie.clustering.inline.max.commits")
       .defaultValue("4")
       .sinceVersion("0.7.0")
       .withDocumentation("Config to control frequency of clustering planning");
 
+  // Ethan: should be merged with inline one
   public static final ConfigProperty<String> ASYNC_CLUSTERING_MAX_COMMITS = ConfigProperty
       .key("hoodie.clustering.async.max.commits")
       .defaultValue("4")
       .sinceVersion("0.9.0")
       .withDocumentation("Config to control frequency of async clustering");
 
+  // Ethan: better docs or configs for daybased strategy (to read code and figure this out)
   public static final ConfigProperty<String> PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.skipfromlatest.partitions")
       .defaultValue("0")
@@ -163,6 +168,9 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, "
           + "which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour.");
 
+  // Ethan: all these fine-tuning knobs can be simplified if we have a config to indicate the purpose:
+  // increase file size only, or sorting is also required.  And we derive a better defaults for these
+  // without having to ask users to configure them
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
       .defaultValue(String.valueOf(2 * 1024 * 1024 * 1024L))
@@ -202,6 +210,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Determines how to handle updates, deletes to file groups that are under clustering."
           + " Default strategy just rejects the update");
 
+  // Ethan: these configs of inline, async, schedule, execute can be merged into one mode config:
+  // e.g., none, schedule_only, schedule_and_execute, etc.
   public static final ConfigProperty<String> SCHEDULE_INLINE_CLUSTERING = ConfigProperty
       .key("hoodie.clustering.schedule.inline")
       .defaultValue("false")
@@ -219,6 +229,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Enable running of clustering service, asynchronously as inserts happen on the table.")
       .withAlternatives("hoodie.datasource.clustering.async.enable");
 
+  // Ethan: this should be removed.  User should not tweak this to corrupt the hoodie_commit_time meta field.
   public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
       .key("hoodie.clustering.preserve.commit.metadata")
       .defaultValue(true)

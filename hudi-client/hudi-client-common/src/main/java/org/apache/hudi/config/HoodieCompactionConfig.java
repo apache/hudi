@@ -45,8 +45,25 @@ import java.util.stream.Collectors;
     description = "Configurations that control compaction "
         + "(merging of log files onto a new base files).")
 public class HoodieCompactionConfig extends HoodieConfig {
-  //cfg
+  // Configs for compaction
 
+  // Ethan: Similar to clustering, the compaction configs should be straightened up to be more concise
+  // Sth more intuitive like:
+  // hoodie.compact.schedule.mode -> [inline|async|disabled] // how to schedule compaction plan
+  // hoodie.compact.execute.mode -> [inline|async|disabled] // how to execute compaction plan
+  // // compaction parameters should be independent of inline/async
+  // hoodie.compact.trigger.strategy
+  // hoodie.compact.max.delta.seconds
+  // hoodie.compact.max.delta.commits
+  // ...
+  // instead of many configs that overlap with each other
+  // hoodie.compact.schedule.inline
+  // hoodie.compact.inline
+  // hoodie.datasource.compaction.async.enable
+  // // these are reused for inline/async
+  // hoodie.compact.inline.trigger.strategy
+  // hoodie.compact.inline.max.delta.seconds
+  // hoodie.compact.inline.max.delta.commits
   public static final ConfigProperty<String> INLINE_COMPACT = ConfigProperty
       .key("hoodie.compact.inline")
       .defaultValue("false")
@@ -90,6 +107,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. "
           + "Valid options: " + Arrays.stream(CompactionTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
 
+  // Ethan: add unit to the config name
   public static final ConfigProperty<String> PARQUET_SMALL_FILE_LIMIT = ConfigProperty
       .key("hoodie.parquet.small.file.limit")
       .defaultValue(String.valueOf(104857600))
@@ -133,6 +151,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "compaction during each compaction run. By default. Hudi picks the log file "
           + "with most accumulated unmerged data");
 
+  // Ethan: this seems to be internal
   public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.lazy.block.read")
       .defaultValue("true")
@@ -140,6 +159,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block"
           + " header) or false for immediate block read (higher memory usage)");
 
+  // Ethan: this seems to be internal
   public static final ConfigProperty<String> COMPACTION_REVERSE_LOG_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.reverse.log.read")
       .defaultValue("false")
@@ -152,6 +172,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of "
           + "latest partitions to compact during a compaction run.");
 
+  // Ethan: this should be remove.  Not to be tweaked by user.
   public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
       .key("hoodie.compaction.preserve.commit.metadata")
       .defaultValue(true)
@@ -161,6 +182,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   /**
    * Configs related to specific table types.
    */
+  // Ethan: add unit to config name
   public static final ConfigProperty<String> COPY_ON_WRITE_INSERT_SPLIT_SIZE = ConfigProperty
       .key("hoodie.copyonwrite.insert.split.size")
       .defaultValue(String.valueOf(500000))
@@ -176,6 +198,9 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + " record sizes. It's recommended to keep this turned on, since hand tuning is otherwise extremely"
           + " cumbersome.");
 
+  // Ethan: Should this be removed?  This should only be used by the first batch.  For first batch,
+  // maybe we can give a better estimate from the input, instead of taking input from the user which
+  // might not be good either
   public static final ConfigProperty<String> COPY_ON_WRITE_RECORD_SIZE_ESTIMATE = ConfigProperty
       .key("hoodie.copyonwrite.record.size.estimate")
       .defaultValue(String.valueOf(1024))
@@ -197,6 +222,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. "
           + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
 
+  // Ethan: These deprecated configs should be removed.  Similar in other classes
   /** @deprecated Use {@link #INLINE_COMPACT} and its methods instead */
   @Deprecated
   public static final String INLINE_COMPACT_PROP = INLINE_COMPACT.key();
