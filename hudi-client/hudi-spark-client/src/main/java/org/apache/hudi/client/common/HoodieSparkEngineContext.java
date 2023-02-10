@@ -43,6 +43,7 @@ import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.sql.SQLContext;
 import scala.Tuple2;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -187,7 +188,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   @Override
   public void putCachedDataIds(String basePath, String instantTime, int... ids) {
     Pair<String, String> key = Pair.of(basePath, instantTime);
-    cachedRdds.putIfAbsent(key, Collections.emptyList());
+    cachedRdds.putIfAbsent(key, new ArrayList<>());
     for (int id : ids) {
       cachedRdds.get(key).add(id);
     }
