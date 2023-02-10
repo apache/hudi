@@ -129,55 +129,13 @@ echo "Checking Signature"
 cd hudi-${ARTIFACT_SUFFIX}
 
 ### BEGIN: Binary Files Check
-echo "Checking for binary files in source release"
-numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "release/" | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
-
-if [ "$numBinaryFiles" -gt "0" ]; then
-  echo -e "There were non-text files in source release. [ERROR]\n Please check below\n"
-  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "release/release_guide" | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' |  grep -va 'application/xml'
-  exit 1
-fi
-echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
+$CURR_DIR/release/validate_source_binary_files.sh
 ### END: Binary Files Check
 
-### Checking for DISCLAIMER
-echo "Checking for DISCLAIMER"
-disclaimerFile="./DISCLAIMER"
-if [ -f "$disclaimerFile" ]; then
-  echo "DISCLAIMER file should not be present [ERROR]"
-  exit 1
-fi
-echo -e "\t\tDISCLAIMER file exists ? [OK]\n"
-
-### Checking for LICENSE and NOTICE
-echo "Checking for LICENSE and NOTICE"
-licenseFile="./LICENSE"
-noticeFile="./NOTICE"
-if [ ! -f "$licenseFile" ]; then
-  echo "License file missing [ERROR]"
-  exit 1
-fi
-echo -e "\t\tLicense file exists ? [OK]"
-
-if [ ! -f "$noticeFile" ]; then
-  echo "Notice file missing [ERROR]"
-  exit 1
-fi
-echo -e "\t\tNotice file exists ? [OK]\n"
-
-### Licensing Check
-echo "Performing custom Licensing Check "
-numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.jpg' | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'banner.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
-if [ "$numfilesWithNoLicense" -gt  "0" ]; then
-  echo "There were some source files that did not have Apache License [ERROR]"
-  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.jpg' | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'banner.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
-  exit 1
-fi
-echo -e "\t\tLicensing Check Passed [OK]\n"
+### Checking for DISCLAIMER, LICENSE, NOTICE and source file license
+$CURR_DIR/release/validate_source_copyright.sh
 
 ### Checking for RAT
-echo "Running RAT Check"
-(bash -c "mvn apache-rat:check -DdeployArtifacts=true $REDIRECT") || (echo -e "\t\t Rat Check Failed. [ERROR]\n\t\t Please run with --verbose to get details\n" && exit 1)
-echo -e "\t\tRAT Check Passed [OK]\n"
+$CURR_DIR/release/validate_source_rat.sh
 
 popd

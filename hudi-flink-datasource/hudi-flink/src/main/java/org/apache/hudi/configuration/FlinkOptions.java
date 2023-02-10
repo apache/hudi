@@ -30,6 +30,8 @@ import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -297,10 +299,10 @@ public class FlinkOptions extends HoodieConfig {
       .key("read.streaming.skip_compaction")
       .booleanType()
       .defaultValue(false)// default read as batch
-      .withDescription("Whether to skip compaction instants for streaming read,\n"
-          + "there are two cases that this option can be used to avoid reading duplicates:\n"
-          + "1) you are definitely sure that the consumer reads faster than any compaction instants, "
-          + "usually with delta time compaction strategy that is long enough, for e.g, one week;\n"
+      .withDescription("Whether to skip compaction instants and avoid reading compacted base files for streaming read to improve read performance.\n"
+          + "There are two cases that this option can be used to avoid reading duplicates:\n"
+          + "1) you are definitely sure that the consumer reads [faster than/completes before] any compaction instants "
+          + "when " + HoodieCompactionConfig.PRESERVE_COMMIT_METADATA.key() + " is set to false.\n"
           + "2) changelog mode is enabled, this option is a solution to keep data integrity");
 
   // this option is experimental
@@ -308,8 +310,11 @@ public class FlinkOptions extends HoodieConfig {
           .key("read.streaming.skip_clustering")
           .booleanType()
           .defaultValue(false)
-          .withDescription("Whether to skip clustering instants for streaming read,\n"
-              + "to avoid reading duplicates");
+          .withDescription("Whether to skip clustering instants to avoid reading base files of clustering operations for streaming read "
+              + "to improve read performance.\n"
+              + "This option toggled to true to avoid duplicates when: \n"
+              + "1) you are definitely sure that the consumer reads [faster than/completes before] any clustering instants "
+              + "when " + HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.key() + " is set to false.\n");
 
   public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
