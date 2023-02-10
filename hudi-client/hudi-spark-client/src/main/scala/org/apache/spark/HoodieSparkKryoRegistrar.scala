@@ -46,7 +46,6 @@ import org.apache.spark.serializer.KryoRegistrator
  */
 class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegistrator {
 
-  // TODO(HUDI-5760) avoid using Kryo for serialization here
   override def registerClasses(kryo: Kryo): Unit = {
     ///////////////////////////////////////////////////////////////////////////
     // NOTE: DO NOT REORDER REGISTRATIONS

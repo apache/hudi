@@ -97,6 +97,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     }
   }
 
+  // TODO(HUDI-5760) avoid using Kryo for serialization here
   private static DeleteRecord[] deserialize(int version, byte[] data) {
     if (version == 1) {
       // legacy version
