@@ -232,6 +232,8 @@ public class HiveSchemaUtil {
         return field.append("DATE").toString();
       } else if (supportTimestamp && originalType == OriginalType.TIMESTAMP_MICROS) {
         return field.append("TIMESTAMP").toString();
+      } else if (supportTimestamp && originalType == OriginalType.TIMESTAMP_MILLIS) {
+        return field.append("TIMESTAMP_LTZ").toString();
       }
 
       // TODO - fix the method naming here

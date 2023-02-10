@@ -83,6 +83,7 @@ public class TestHoodieHiveCatalog {
           .field("age", DataTypes.INT())
           .field("par1", DataTypes.STRING())
           .field("ts", DataTypes.BIGINT())
+          .field("update_time", DataTypes.TIMESTAMP_LTZ())
           .primaryKey("uuid")
           .build();
   List<String> partitions = Collections.singletonList("par1");
@@ -132,7 +133,8 @@ public class TestHoodieHiveCatalog {
         + "uuid:int,"
         + "name:string,"
         + "age:int,"
-        + "ts:bigint";
+        + "ts:bigint,"
+        + "update_time:timestamp";
     assertEquals(expectedFieldSchema, fieldSchema);
     String partitionSchema = hiveTable.getPartitionKeys().stream()
         .map(f -> f.getName() + ":" + f.getType())
