@@ -69,6 +69,7 @@ import org.apache.parquet.hadoop.ParquetReader;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -356,6 +357,13 @@ public class TestData {
       // DISORDER DELETE
       deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 22,
           TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
+  );
+
+  public static List<RowData> DATA_SET_SOURCE_INSERT_UTCTIMEZONE = Arrays.asList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Julian"), 53,
+          TimestampData.fromInstant(Instant.parse("1970-01-01T10:00:03Z")), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
+          TimestampData.fromInstant(Instant.parse("1970-01-01T10:00:02Z")), StringData.fromString("par1"))
   );
 
   public static List<RowData> dataSetInsert(int... ids) {

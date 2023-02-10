@@ -1694,7 +1694,7 @@ public class ITTestHoodieDataSource {
   }
 
   @Test
-  void testBulkInsertWithUtcTimezoneRead() {
+  void testBulkInsertReadUTCTimeZone() {
     TableEnvironment tableEnv = batchTableEnv;
 
     String hoodieTableDDL = sql("t1")
@@ -1713,67 +1713,38 @@ public class ITTestHoodieDataSource {
 
     execInsertSql(tableEnv, insertInto);
 
-    List<Row> result = CollectionUtil.iterableToList(
+    List<Row> rows = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(result, "["
-        + "+I[id1, Julian, 53, 1970-01-01T10:00:03, par1], "
-        + "+I[id2, Stephen, 33, 1970-01-01T10:00:02, par1]]", 4);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_UTCTIMEZONE);
   }
 
   @ParameterizedTest
   @EnumSource(value = ExecMode.class)
-  void testWriteAndWithoutUtcTimezoneReadParMiddle(ExecMode execMode) throws Exception {
-    boolean streaming = execMode == ExecMode.STREAM;
-    String hoodieTableDDL = "create table t1(\n"
-        + "  uuid varchar(20),\n"
-        + "  name varchar(10),\n"
-        + "  age int,\n"
-        + "  `partition` varchar(20),\n" // test streaming read with partition field in the middle
-        + "  ts timestamp(3),\n"
-        + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
-        + ")\n"
-        + "PARTITIONED BY (`partition`)\n"
-        + "with (\n"
-        + "  'connector' = 'hudi',\n"
-        + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
-        + "  'read.utc-timezone' = 'true' ,\n"
-        + "  'read.streaming.enabled' = '" + streaming + "'\n"
-        + ")";
+  void testWriteReadTimestampMillisUTCTimeZone(ExecMode execMode) throws Exception {
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.UTC_TIMEZONE, true)
+        .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 values\n"
-        + "('id1','Danny',23,'par1',TIMESTAMP '1970-01-01 08:00:01'),\n"
-        + "('id2','Stephen',33,'par1',TIMESTAMP '1970-01-01 08:00:02'),\n"
-        + "('id3','Julian',53,'par2',TIMESTAMP '1970-01-01 08:00:03'),\n"
-        + "('id4','Fabian',31,'par2',TIMESTAMP '1970-01-01 08:00:04'),\n"
-        + "('id5','Sophia',18,'par3',TIMESTAMP '1970-01-01 08:00:05'),\n"
-        + "('id6','Emma',20,'par3',TIMESTAMP '1970-01-01 08:00:06'),\n"
-        + "('id7','Bob',44,'par4',TIMESTAMP '1970-01-01 08:00:07'),\n"
-        + "('id8','Han',56,'par4',TIMESTAMP '1970-01-01 08:00:08')";
+        + "('id1','Julian',53,TIMESTAMP '1970-01-01 18:00:03','par1'),\n"
+        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 18:00:02','par1')";
     execInsertSql(streamTableEnv, insertInto);
 
-    final String expected = "["
-        + "+I[id1, Danny, 23, par1, 1970-01-01T00:00:01], "
-        + "+I[id2, Stephen, 33, par1, 1970-01-01T00:00:02], "
-        + "+I[id3, Julian, 53, par2, 1970-01-01T00:00:03], "
-        + "+I[id4, Fabian, 31, par2, 1970-01-01T00:00:04], "
-        + "+I[id5, Sophia, 18, par3, 1970-01-01T00:00:05], "
-        + "+I[id6, Emma, 20, par3, 1970-01-01T00:00:06], "
-        + "+I[id7, Bob, 44, par4, 1970-01-01T00:00:07], "
-        + "+I[id8, Han, 56, par4, 1970-01-01T00:00:08]]";
 
     List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
 
-    assertRowsEquals(result, expected);
+    assertRowsEquals(result, TestData.DATA_SET_SOURCE_INSERT_UTCTIMEZONE);
 
     // insert another batch of data
     execInsertSql(streamTableEnv, insertInto);
     List<Row> result2 = execSelectSql(streamTableEnv, "select * from t1", execMode);
-    assertRowsEquals(result2, expected);
+    assertRowsEquals(result2, TestData.DATA_SET_SOURCE_INSERT_UTCTIMEZONE);
   }
 
   @ParameterizedTest
   @EnumSource(value = ExecMode.class)
-  void testWriteAndWithoutUtcTimezoneReadWithTimestampMicros(ExecMode execMode) throws Exception {
+  void testWriteReadTimestampMicrosUTCTimeZone(ExecMode execMode) throws Exception {
     boolean streaming = execMode == ExecMode.STREAM;
     String hoodieTableDDL = sql("t1")
         .field("id int")
