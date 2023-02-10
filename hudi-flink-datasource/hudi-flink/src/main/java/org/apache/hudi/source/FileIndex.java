@@ -21,13 +21,12 @@ package org.apache.hudi.source;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.stats.ColumnStatsIndices;
-import org.apache.hudi.source.stats.ExpressionEvaluator;
 import org.apache.hudi.util.DataTypeUtils;
-import org.apache.hudi.util.ExpressionUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -67,6 +66,7 @@ public class FileIndex {
   private List<String> partitionPaths;      // cache of partition paths
   private List<ResolvedExpression> filters; // push down filters
   private final boolean tableExists;
+  private Option<DataPruner> dataPrunerOpt; // utility to do data skipping, which is lazy initialized
 
   private FileIndex(Path path, Configuration conf, RowType rowType) {
     this.path = path;
@@ -213,24 +213,17 @@ public class FileIndex {
    */
   @Nullable
   private Set<String> candidateFilesInMetadataTable(FileStatus[] allFileStatus) {
-    // NOTE: Data Skipping is only effective when it references columns that are indexed w/in
-    //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
-    //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
-    //          CSI only contains stats for top-level columns, in this case for "struct")
-    //          - Any expression not directly referencing top-level column (for ex, sub-queries, since there's
-    //          nothing CSI in particular could be applied for)
-    if (!metadataConfig.enabled() || !dataSkippingEnabled) {
-      validateConfig();
+    // initialize data skipper if it's not initialized yet
+    if (this.dataPrunerOpt == null) {
+      DataPruner dataPruner = initializeDataPruner();
+      this.dataPrunerOpt = Option.ofNullable(dataPruner);
+    }
+    if (!this.dataPrunerOpt.isPresent()) {
       return null;
     }
-    if (this.filters == null || this.filters.size() == 0) {
-      return null;
-    }
-    String[] referencedCols = ExpressionUtils.referencedColumns(filters);
-    if (referencedCols.length == 0) {
-      return null;
-    }
+    DataPruner dataPruner = this.dataPrunerOpt.get();
     try {
+      String[] referencedCols = dataPruner.getReferencedCols();
       final List<RowData> colStats = ColumnStatsIndices.readColumnStatsIndex(path.toString(), metadataConfig, referencedCols);
       final Pair<List<RowData>, String[]> colStatsTable = ColumnStatsIndices.transposeColumnStatsIndex(colStats, referencedCols, rowType);
       List<RowData> transposedColStats = colStatsTable.getLeft();
@@ -245,7 +238,7 @@ public class FileIndex {
           .map(row -> row.getString(0).toString())
           .collect(Collectors.toSet());
       Set<String> candidateFileNames = transposedColStats.stream().parallel()
-          .filter(row -> ExpressionEvaluator.filterExprs(filters, row, queryFields))
+          .filter(row -> dataPruner.test(row, queryFields))
           .map(row -> row.getString(0).toString())
           .collect(Collectors.toSet());
 
@@ -302,5 +295,19 @@ public class FileIndex {
   @VisibleForTesting
   public List<ResolvedExpression> getFilters() {
     return filters;
+  }
+
+  private DataPruner initializeDataPruner() {
+    // NOTE: Data Skipping is only effective when it references columns that are indexed w/in
+    //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
+    //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
+    //          CSI only contains stats for top-level columns, in this case for "struct")
+    //          - Any expression not directly referencing top-level column (for ex, sub-queries, since there's
+    //          nothing CSI in particular could be applied for)
+    if (!metadataConfig.enabled() || !dataSkippingEnabled) {
+      validateConfig();
+      return null;
+    }
+    return DataPruner.newInstance(this.filters);
   }
 }
