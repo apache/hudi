@@ -40,6 +40,7 @@ import java.util.Properties;
 public class HoodieArchivalConfig extends HoodieConfig {
   //cfg
 
+  // Ethan: Should we remove this?  Archive should always be enabled?
   public static final ConfigProperty<String> AUTO_ARCHIVE = ConfigProperty
       .key("hoodie.archive.automatic")
       .defaultValue("true")
@@ -47,6 +48,7 @@ public class HoodieArchivalConfig extends HoodieConfig {
           + " to archive commits if we cross a maximum value of commits."
           + " It's recommended to enable this, to ensure number of active commits is bounded.");
 
+  // Ethan: Is Async archive tested?
   public static final ConfigProperty<String> ASYNC_ARCHIVE = ConfigProperty
       .key("hoodie.archive.async")
       .defaultValue("false")
@@ -61,11 +63,13 @@ public class HoodieArchivalConfig extends HoodieConfig {
           + " keep the metadata overhead constant, even as the table size grows."
           + " This config controls the maximum number of instants to retain in the active timeline. ");
 
+  // Ethan: Can we use Spark parallelism or auto-derive the configs and remove this?
   public static final ConfigProperty<Integer> DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.archive.delete.parallelism")
       .defaultValue(100)
       .withDocumentation("Parallelism for deleting archived hoodie commits.");
 
+  // Ethan: pick one of "hoodie.keep.min.commits" and "hoodie.keep.max.commits" only?
   public static final ConfigProperty<String> MIN_COMMITS_TO_KEEP = ConfigProperty
       .key("hoodie.keep.min.commits")
       .defaultValue("20")
@@ -94,6 +98,7 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .withDocumentation("When enable, hoodie will auto merge several small archive files into larger one. It's"
           + " useful when storage scheme doesn't support append operation.");
 
+  // Ethan: Once this is well tested, we should remove the feature flag
   public static final ConfigProperty<Boolean> ARCHIVE_BEYOND_SAVEPOINT = ConfigProperty
       .key("hoodie.archive.beyond.savepoint")
       .defaultValue(false)

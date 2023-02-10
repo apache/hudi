@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 
 import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -41,11 +42,12 @@ import java.util.stream.Collectors;
  */
 @Immutable
 @ConfigClassProperty(name = "Clean Configs",
-        groupName = ConfigGroups.Names.WRITE_CLIENT,
-        description = "Cleaning (reclamation of older/unused file groups/slices).")
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Cleaning (reclamation of older/unused file groups/slices).")
 public class HoodieCleanConfig extends HoodieConfig {
-  //cfg
+  // Configs for Clean action
 
+  // Ethan: should we standardize on `.enable` instead of `.automatic`?
   public static final ConfigProperty<String> AUTO_CLEAN = ConfigProperty
       .key("hoodie.clean.automatic")
       .defaultValue("true")
@@ -59,12 +61,16 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation("Only applies when " + AUTO_CLEAN.key() + " is turned on. "
           + "When turned on runs cleaner async with writing, which can speed up overall write performance.");
 
+  // Ethan: when either "hoodie.cleaner.commits.retained", "hoodie.cleaner.hours.retained",
+  // or "hoodie.cleaner.fileversions.retained" is set, should we automatically use the
+  // corresponding clean policy?
   public static final ConfigProperty<String> CLEANER_COMMITS_RETAINED = ConfigProperty
       .key("hoodie.cleaner.commits.retained")
       .defaultValue("10")
       .withDocumentation("Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits "
           + "(scheduled). This also directly translates into how much data retention the table supports for incremental queries.");
 
+  // Ethan: same here
   public static final ConfigProperty<String> CLEANER_HOURS_RETAINED = ConfigProperty.key("hoodie.cleaner.hours.retained")
       .defaultValue("24")
       .withDocumentation("Number of hours for which commits need to be retained. This config provides a more flexible option as"
@@ -85,11 +91,13 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation("Controls how cleaning is scheduled. Valid options: "
           + Arrays.stream(CleaningTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
 
+  // Ethan: "hoodie.clean.trigger.max.commits" is what this means
   public static final ConfigProperty<String> CLEAN_MAX_COMMITS = ConfigProperty
       .key("hoodie.clean.max.commits")
       .defaultValue("1")
       .withDocumentation("Number of commits after the last clean operation, before scheduling of a new clean is attempted.");
 
+  // Ethan: same here
   public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED = ConfigProperty
       .key("hoodie.cleaner.fileversions.retained")
       .defaultValue("3")
@@ -103,6 +111,7 @@ public class HoodieCleanConfig extends HoodieConfig {
           + " in the timeline, since the last cleaner run. This is much more efficient than obtaining listings for the full"
           + " table for each planning (even with a metadata table).");
 
+  // Ethan: this should be an internal config, based on concurrency control mode.  Should not be tweaked by user.
   public static final ConfigProperty<String> FAILED_WRITES_CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy.failed.writes")
       .defaultValue(HoodieFailedWritesCleaningPolicy.EAGER.name())
@@ -118,11 +127,13 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "failed writes to re-claim space. Choose to perform this rollback of failed writes eagerly before "
           + "every writer starts (only supported for single writer) or lazily by the cleaner (required for multi-writers)");
 
+  // Ethan: same here.  Can we reuse Spark parallelism or derive automatically?
   public static final ConfigProperty<String> CLEANER_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.cleaner.parallelism")
       .defaultValue("200")
       .withDocumentation("Parallelism for the cleaning operation. Increase this if cleaning becomes slow.");
 
+  // Ethan: wondering if this is still needed.
   public static final ConfigProperty<Boolean> ALLOW_MULTIPLE_CLEANS = ConfigProperty
       .key("hoodie.clean.allow.multiple")
       .defaultValue(true)
@@ -130,6 +141,7 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation("Allows scheduling/executing multiple cleans by enabling this config. If users prefer to strictly ensure clean requests should be mutually exclusive, "
           + ".i.e. a 2nd clean will not be scheduled if another clean is not yet completed to avoid repeat cleaning of same files, they might want to disable this config.");
 
+  // Ethan: should the default behavior be deleting original parquet files and then we can remove this config?
   public static final ConfigProperty<String> CLEANER_BOOTSTRAP_BASE_FILE_ENABLE = ConfigProperty
       .key("hoodie.cleaner.delete.bootstrap.base.file")
       .defaultValue("false")

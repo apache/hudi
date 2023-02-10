@@ -40,11 +40,13 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_PREFIX;
         + " between writers to a Hudi table. Concurrency between Hudi's own table services "
         + " are auto managed internally.")
 public class DynamoDbBasedLockConfig extends HoodieConfig {
-  //cfg
+  // Config for DynamoDB based lock provider
 
   // configs for DynamoDb based locks
   public static final String DYNAMODB_BASED_LOCK_PROPERTY_PREFIX = LOCK_PREFIX + "dynamodb.";
 
+  // Ethan: Can we provide a default value here that is less likely to collide,
+  // So this config also becomes optional?
   public static final ConfigProperty<String> DYNAMODB_LOCK_TABLE_NAME = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table")
       .noDefaultValue()
@@ -79,6 +81,7 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
       .withDocumentation("For DynamoDB based lock provider, the region used in endpoint for Amazon DynamoDB service."
                          + " Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1");
 
+  // Ethan: Need to confirm these are good defaults for cost
   public static final ConfigProperty<String> DYNAMODB_LOCK_BILLING_MODE = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "billing_mode")
       .defaultValue(BillingMode.PAY_PER_REQUEST.name())
@@ -97,16 +100,18 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("For DynamoDB based lock provider, write capacity units when using PROVISIONED billing mode");
 
+  // Ethan: 10 min.  Is this timeout too long?
   public static final ConfigProperty<String> DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table_creation_timeout")
       .defaultValue(String.valueOf(10 * 60 * 1000))
       .sinceVersion("0.10.0")
       .withDocumentation("For DynamoDB based lock provider, the maximum number of milliseconds to wait for creating DynamoDB table");
 
+  // Ethan: Move the infer logic here
   public static final ConfigProperty<String> DYNAMODB_ENDPOINT_URL = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "endpoint_url")
       .noDefaultValue()
       .sinceVersion("0.10.1")
       .withDocumentation("For DynamoDB based lock provider, the url endpoint used for Amazon DynamoDB service."
-                         + " Useful for development with a local dynamodb instance.");
+          + " Useful for development with a local dynamodb instance.");
 }

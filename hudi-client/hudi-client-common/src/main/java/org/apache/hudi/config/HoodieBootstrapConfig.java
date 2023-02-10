@@ -46,7 +46,7 @@ import static org.apache.hudi.client.bootstrap.BootstrapMode.METADATA_ONLY;
         + "The bootstrap operation can flexibly avoid copying data over before you can use Hudi and support running the existing "
         + " writers and new hudi writers in parallel, to validate the migration.")
 public class HoodieBootstrapConfig extends HoodieConfig {
-  //cfg
+  // Configs for Bootstrap feature
 
   public static final ConfigProperty<String> BASE_PATH = ConfigProperty
       .key("hoodie.bootstrap.base.path")
@@ -75,24 +75,28 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .sinceVersion("0.6.0")
       .withDocumentation("Class to use for reading the bootstrap dataset partitions/files, for Bootstrap mode FULL_RECORD");
 
+  // Ethan: can this be aligned with key gen for write (no need for a separate bootstrap key gen config)?
   public static final ConfigProperty<String> KEYGEN_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.keygen.class")
       .noDefaultValue()
       .sinceVersion("0.6.0")
       .withDocumentation("Key generator implementation to be used for generating keys from the bootstrapped dataset");
 
+  // Ethan: similar here
   public static final ConfigProperty<String> KEYGEN_TYPE = ConfigProperty
       .key("hoodie.bootstrap.keygen.type")
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .sinceVersion("0.9.0")
       .withDocumentation("Type of build-in key generator, currently support SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE");
 
+  // Ethan: better default translator: if seeing hive-style partitioning, automatically parse the partition value?
   public static final ConfigProperty<String> PARTITION_PATH_TRANSLATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.partitionpath.translator.class")
       .defaultValue(IdentityBootstrapPartitionPathTranslator.class.getName())
       .sinceVersion("0.6.0")
       .withDocumentation("Translates the partition paths from the bootstrapped data into how is laid out as a Hudi table.");
 
+  // Ethan: can this be aligned with Spark parallelism?
   public static final ConfigProperty<String> PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.bootstrap.parallelism")
       .defaultValue("1500")

@@ -23,11 +23,12 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
+import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
 
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_BILLING_MODE;
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY;
@@ -41,21 +42,23 @@ import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE
  */
 @Immutable
 @ConfigClassProperty(name = "Amazon Web Services Configs",
-        groupName = ConfigGroups.Names.AWS,
-        description = "Amazon Web Services configurations to access resources like Amazon DynamoDB (for locks),"
-            + " Amazon CloudWatch (metrics).")
+    groupName = ConfigGroups.Names.AWS,
+    description = "Amazon Web Services configurations to access resources like Amazon DynamoDB (for locks),"
+        + " Amazon CloudWatch (metrics).")
 public class HoodieAWSConfig extends HoodieConfig {
-  //cfg
+  // AWS Access Configs
+
+  // Ethan: These configs should only be necessary if no environmental variables are not set (to confirm with code)
   public static final ConfigProperty<String> AWS_ACCESS_KEY = ConfigProperty
-        .key("hoodie.aws.access.key")
-        .noDefaultValue()
-        .sinceVersion("0.10.0")
-        .withDocumentation("AWS access key id");
+      .key("hoodie.aws.access.key")
+      .noDefaultValue()
+      .sinceVersion("0.10.0")
+      .withDocumentation("AWS access key id");
 
   public static final ConfigProperty<String> AWS_SECRET_KEY = ConfigProperty
-        .key("hoodie.aws.secret.key")
-        .noDefaultValue()
-        .sinceVersion("0.10.0")
+      .key("hoodie.aws.secret.key")
+      .noDefaultValue()
+      .sinceVersion("0.10.0")
         .withDocumentation("AWS secret key");
 
   public static final ConfigProperty<String> AWS_SESSION_TOKEN = ConfigProperty
