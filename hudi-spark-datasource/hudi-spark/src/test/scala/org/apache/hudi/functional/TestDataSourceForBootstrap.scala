@@ -161,7 +161,7 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecords, hoodieROViewDF1WithBasePath.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF1WithBasePath.filter(s"timestamp == $updateTimestamp").count())
 
-    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = false, isHiveStylePartitioned = false)
+    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = false, isHiveStylePartitioned = true)
   }
 
   @ParameterizedTest
@@ -261,8 +261,10 @@ class TestDataSourceForBootstrap {
       .mode(SaveMode.Overwrite)
       .save(srcPath)
 
-    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++
-      Map(DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr")
+    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++ Map(
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
+    )
 
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
@@ -319,7 +321,7 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecords, hoodieROViewDF4.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF4.filter(s"timestamp == $updateTimestamp").count())
 
-    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime3, isPartitioned = true, isHiveStylePartitioned = false)
+    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime3, isPartitioned = true, isHiveStylePartitioned = true)
   }
 
   @ParameterizedTest
@@ -336,8 +338,10 @@ class TestDataSourceForBootstrap {
       .mode(SaveMode.Overwrite)
       .save(srcPath)
 
-    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++
-      Map(DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr")
+    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++ Map(
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
+    )
 
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
@@ -401,8 +405,10 @@ class TestDataSourceForBootstrap {
       .mode(SaveMode.Overwrite)
       .save(srcPath)
 
-    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++
-      Map(DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr")
+    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++ Map(
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
+    )
 
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
@@ -485,8 +491,10 @@ class TestDataSourceForBootstrap {
       .mode(SaveMode.Overwrite)
       .save(srcPath)
 
-    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++
-      Map(DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr")
+    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++ Map(
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
+    )
 
     // Perform bootstrap
     val bootstrapDF = spark.emptyDataFrame
@@ -532,7 +540,7 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecords, hoodieROViewDF2.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF2.filter(s"timestamp == $updateTimestamp").count())
 
-    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = true, isHiveStylePartitioned = false)
+    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = true, isHiveStylePartitioned = true)
   }
 
   def runMetadataBootstrapAndVerifyCommit(tableType: String,
