@@ -205,8 +205,8 @@ public class RowDataKeyGen implements Serializable {
   }
 
   private static Object getTimestampValue(boolean consistentLogicalTimestampEnabled, Object value) {
-    if(!consistentLogicalTimestampEnabled) {
-      if(value instanceof TimestampData) {
+    if (!consistentLogicalTimestampEnabled) {
+      if (value instanceof TimestampData) {
         TimestampData timestampData = (TimestampData) value;
         value = timestampData.toTimestamp().toInstant().toEpochMilli();
       }

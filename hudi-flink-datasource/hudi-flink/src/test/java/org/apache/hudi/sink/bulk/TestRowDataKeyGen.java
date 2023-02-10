@@ -195,7 +195,7 @@ public class TestRowDataKeyGen {
     conf.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid,ts");
     conf.setString(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
     final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
-        TimestampData.fromTimestamp(new Timestamp(1675841687000l)), StringData.fromString("par1"));
+        TimestampData.fromTimestamp(new Timestamp(1675841687000L)), StringData.fromString("par1"));
     final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
 
     assertThat(keyGen1.getRecordKey(rowData1), is("uuid:id1,ts:2023-02-08T15:34:47"));
