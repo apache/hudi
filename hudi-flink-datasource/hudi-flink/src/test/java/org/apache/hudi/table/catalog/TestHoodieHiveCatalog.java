@@ -150,7 +150,7 @@ public class TestHoodieHiveCatalog {
     String tableSchema = table1.getUnresolvedSchema().getColumns().stream()
         .map(Schema.UnresolvedColumn::toString)
         .collect(Collectors.joining(","));
-    String expectedTableSchema = "`uuid` INT NOT NULL,`name` STRING,`age` INT,`par1` STRING,`ts` BIGINT";
+    String expectedTableSchema = "`uuid` INT NOT NULL,`name` STRING,`age` INT,`par1` STRING,`ts` BIGINT,`update_time` TIMESTAMP_LTZ(6)";
     assertEquals(expectedTableSchema, tableSchema);
     assertEquals(Collections.singletonList("uuid"), table1.getUnresolvedSchema().getPrimaryKey().get().getColumnNames());
     assertEquals(Collections.singletonList("par1"), ((CatalogTable) table1).getPartitionKeys());
