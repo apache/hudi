@@ -20,6 +20,7 @@ package org.apache.spark.sql.avro
 import org.apache.avro.LogicalTypes.{Date, Decimal, TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
+import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.types.Decimal.minBytesForPrecision
 import org.apache.spark.sql.types._
@@ -202,7 +203,12 @@ private[sql] object SchemaConverters {
           st.foreach { f =>
             val fieldAvroType =
               toAvroType(f.dataType, f.nullable, f.name, childNameSpace)
-            fieldsAssembler.name(f.name).`type`(fieldAvroType).noDefault()
+            val fieldBuilder = fieldsAssembler.name(f.name).`type`(fieldAvroType)
+            if (isNullable(fieldAvroType)) {
+              fieldBuilder.withDefault(null)
+            } else {
+              fieldBuilder.noDefault()
+            }
           }
           fieldsAssembler.endRecord()
         }
@@ -212,7 +218,7 @@ private[sql] object SchemaConverters {
     }
 
     if (nullable && catalystType != NullType && schema.getType != Schema.Type.UNION) {
-      Schema.createUnion(schema, nullSchema)
+      Schema.createUnion(nullSchema, schema)
     } else {
       schema
     }
