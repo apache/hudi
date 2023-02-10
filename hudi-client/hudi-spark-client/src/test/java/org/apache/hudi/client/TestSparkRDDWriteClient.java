@@ -1,0 +1,88 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.hudi.client;
+
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.storage.StorageLevel;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
+
+  @Test
+  void testWriteClientReleaseResourcesShouldOnlyUnpersistRelevantRdds() throws IOException {
+    final HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE);
+    final HoodieWriteConfig writeConfig = getConfigBuilder(true)
+        .withPath(metaClient.getBasePathV2().toString())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
+
+    String instant0 = getCommitTimeAtUTC(0);
+    List<GenericRecord> extraRecords0 = dataGen.generateGenericRecords(10);
+    JavaRDD persistedRdd0 = jsc().parallelize(extraRecords0, 2).persist(StorageLevel.MEMORY_AND_DISK());
+    context().putCachedDataIds(writeConfig.getBasePath(), instant0, persistedRdd0.id());
+
+    String instant1 = getCommitTimeAtUTC(1);
+    List<GenericRecord> extraRecords1 = dataGen.generateGenericRecords(10);
+    JavaRDD persistedRdd1 = jsc().parallelize(extraRecords1, 2).persist(StorageLevel.MEMORY_AND_DISK());
+    context().putCachedDataIds(writeConfig.getBasePath(), instant1, persistedRdd1.id());
+
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
+    List<HoodieRecord> records = dataGen.generateInserts(instant1, 10);
+    JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 2);
+    writeClient.startCommitWithTime(instant1);
+    List<WriteStatus> writeStatuses = writeClient.insert(writeRecords, instant1).collect();
+    assertNoWriteErrors(writeStatuses);
+    writeClient.releaseResources(instant1);
+    writeClient.close();
+
+    assertEquals(Collections.singletonList(persistedRdd0.id()),
+        context().getCachedDataIds(writeConfig.getBasePath(), instant0),
+        "RDDs cached for " + instant0 + " should be retained.");
+    assertEquals(Collections.emptyList(),
+        context().getCachedDataIds(writeConfig.getBasePath(), instant1),
+        "RDDs cached for " + instant1 + " should be cleared.");
+    assertTrue(jsc().getPersistentRDDs().containsKey(persistedRdd0.id()),
+        "RDDs cached for " + instant0 + " should be retained.");
+    assertFalse(jsc().getPersistentRDDs().containsKey(persistedRdd1.id()),
+        "RDDs cached for " + instant1 + " should be cleared.");
+    assertFalse(jsc().getPersistentRDDs().containsKey(writeRecords.id()),
+        "RDDs cached for " + instant1 + " should be cleared.");
+  }
+}

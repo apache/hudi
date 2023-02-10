@@ -153,6 +153,7 @@ import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getNextCommitTime;
 import static org.apache.hudi.metadata.HoodieBackedTableMetadataWriter.METADATA_COMPACTION_TIME_SUFFIX;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
@@ -1393,20 +1394,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // A regular commit should get synced
     doWriteOperation(testTable, "00000014");
     validateMetadata(testTable, emptyList(), true);
-  }
-
-  /**
-   * Fetches next commit time in seconds from current one.
-   *
-   * @param curCommitTime current commit time.
-   * @return the next valid commit time.
-   */
-  private Long getNextCommitTime(long curCommitTime) {
-    if ((curCommitTime + 1) % 1000000000000L >= 60) { // max seconds is 60 and hence
-      return Long.parseLong(HoodieActiveTimeline.createNewInstantTime());
-    } else {
-      return curCommitTime + 1;
-    }
   }
 
   @ParameterizedTest
