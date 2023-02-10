@@ -381,12 +381,18 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
-  protected void releaseResources() {
+  protected void releaseResources(String instantTime) {
     // If we do not explicitly release the resource, spark will automatically manage the resource and clean it up automatically
     // see: https://spark.apache.org/docs/latest/rdd-programming-guide.html#removing-data
     if (config.areReleaseResourceEnabled()) {
-      ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
-          .forEach(JavaRDD::unpersist);
+      HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) context;
+      Map<Integer, JavaRDD<?>> allCachedRdds = sparkEngineContext.getJavaSparkContext().getPersistentRDDs();
+      List<Integer> cachedRdds = sparkEngineContext.removeCachedDataIds(basePath, instantTime);
+      for (int id : cachedRdds) {
+        if (allCachedRdds.containsKey(id)) {
+          allCachedRdds.get(id).unpersist();
+        }
+      }
     }
   }
 }

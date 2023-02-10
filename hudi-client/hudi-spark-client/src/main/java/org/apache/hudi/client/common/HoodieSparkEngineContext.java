@@ -43,10 +43,12 @@ import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.sql.SQLContext;
 import scala.Tuple2;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -58,6 +60,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   private static final Logger LOG = LogManager.getLogger(HoodieSparkEngineContext.class);
   private final JavaSparkContext javaSparkContext;
   private final SQLContext sqlContext;
+  private final Map<Pair<String, String>, List<Integer>> cachedRdds = new ConcurrentHashMap<>();
 
   public HoodieSparkEngineContext(JavaSparkContext jsc) {
     this(jsc, SQLContext.getOrCreate(jsc.sc()));
@@ -179,5 +182,24 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   @Override
   public void setJobStatus(String activeModule, String activityDescription) {
     javaSparkContext.setJobGroup(activeModule, activityDescription);
+  }
+
+  @Override
+  public void putCachedDataIds(String basePath, String instantTime, int... ids) {
+    Pair<String, String> key = Pair.of(basePath, instantTime);
+    cachedRdds.putIfAbsent(key, Collections.emptyList());
+    for (int id : ids) {
+      cachedRdds.get(key).add(id);
+    }
+  }
+
+  @Override
+  public List<Integer> getCachedDataIds(String basePath, String instantTime) {
+    return cachedRdds.get(Pair.of(basePath, instantTime));
+  }
+
+  @Override
+  public List<Integer> removeCachedDataIds(String basePath, String instantTime) {
+    return cachedRdds.remove(Pair.of(basePath, instantTime));
   }
 }

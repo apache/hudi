@@ -152,6 +152,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
     if (inputRDD.getStorageLevel() == StorageLevel.NONE()) {
       inputRDD.persist(StorageLevel.MEMORY_AND_DISK_SER());
+      context.putCachedDataIds(config.getBasePath(), instantTime, inputRDD.id());
     } else {
       LOG.info("RDD PreppedRecords was persisted at: " + inputRDD.getStorageLevel());
     }
@@ -259,6 +260,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
     // RDD actions that are performed after updating the index.
     writeStatuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE));
+    context.putCachedDataIds(config.getBasePath(), instantTime, writeStatuses.getId());
     Instant indexStartTime = Instant.now();
     // Update the index back
     HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);

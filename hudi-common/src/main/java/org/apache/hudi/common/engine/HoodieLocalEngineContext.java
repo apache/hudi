@@ -144,4 +144,19 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   public void setJobStatus(String activeModule, String activityDescription) {
     // no operation for now
   }
+
+  @Override
+  public void putCachedDataIds(String basePath, String instantTime, int... ids) {
+    // no operation for now
+  }
+
+  @Override
+  public List<Integer> getCachedDataIds(String basePath, String instantTime) {
+    return Collections.emptyList();
+  }
+
+  @Override
+  public List<Integer> removeCachedDataIds(String basePath, String instantTime) {
+    return Collections.emptyList();
+  }
 }

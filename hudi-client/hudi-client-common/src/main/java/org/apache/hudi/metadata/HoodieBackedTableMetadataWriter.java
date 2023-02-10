@@ -298,7 +298,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withFinalizeWriteParallelism(parallelism)
         .withAllowMultiWriteOnSameInstant(true)
         .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-        .withPopulateMetaFields(HoodieMetadataConfig.POPULATE_META_FIELDS.defaultValue());
+        .withPopulateMetaFields(HoodieMetadataConfig.POPULATE_META_FIELDS.defaultValue())
+        .withReleaseResourceEnabled(writeConfig.areReleaseResourceEnabled());
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();

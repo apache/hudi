@@ -51,6 +51,11 @@ import java.util.List;
 public interface HoodieData<T> extends Serializable {
 
   /**
+   * Get the {@link HoodieData}'s unique non-negative identifier. -1 indicates invalid id.
+   */
+  int getId();
+
+  /**
    * Persists the data w/ provided {@code level} (if applicable)
    */
   void persist(String level);

@@ -91,6 +91,11 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   }
 
   @Override
+  public int getId() {
+    return -1;
+  }
+
+  @Override
   public void persist(String level) {
     // No OP
   }

@@ -82,6 +82,11 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
   }
 
   @Override
+  public int getId() {
+    return rddData.id();
+  }
+
+  @Override
   public void persist(String level) {
     rddData.persist(StorageLevel.fromString(level));
   }
