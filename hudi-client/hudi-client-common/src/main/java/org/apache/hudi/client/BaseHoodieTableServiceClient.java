@@ -782,10 +782,14 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
       }
     }).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
-    // Double check whether the heartbeat-expired instant is an inflight instant
-    metaClient.reloadActiveTimeline();
-    HoodieTimeline latestInflightTimeline = getInflightTimelineExcludeCompactionAndClustering(metaClient);
-    return expiredInstants.stream().filter(latestInflightTimeline::containsInstant).collect(Collectors.toList());
+    if (!expiredInstants.isEmpty()) {
+      // Double check whether the heartbeat-expired instant is an inflight instant
+      metaClient.reloadActiveTimeline();
+      HoodieTimeline latestInflightTimeline = getInflightTimelineExcludeCompactionAndClustering(metaClient);
+      return expiredInstants.stream().filter(latestInflightTimeline::containsInstant).collect(Collectors.toList());
+    } else {
+      return Collections.emptyList();
+    }
   }
 
   /**
