@@ -128,7 +128,16 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       return;
     }
 
-    if (events.stream().anyMatch(CompactionCommitEvent::isFailed)) {
+    // here we should take the write errors under consideration
+    // as some write errors might cause data loss when clustering
+    List<WriteStatus> statuses = events.stream()
+        .filter(event -> !event.isFailed())
+        .map(CompactionCommitEvent::getWriteStatuses)
+        .flatMap(Collection::stream)
+        .collect(Collectors.toList());
+    boolean hasErrors = events.stream().anyMatch(CompactionCommitEvent::isFailed)
+        || statuses.stream().anyMatch(WriteStatus::hasErrors);
+    if (hasErrors && !this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
       try {
         // handle failure case
         CompactionUtil.rollbackCompaction(table, instant);
@@ -140,7 +149,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     }
 
     try {
-      doCommit(instant, events);
+      doCommit(instant, statuses);
     } catch (Throwable throwable) {
       // make it fail-safe
       LOG.error("Error while committing compaction instant: " + instant, throwable);
@@ -151,12 +160,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   }
 
   @SuppressWarnings("unchecked")
-  private void doCommit(String instant, Collection<CompactionCommitEvent> events) throws IOException {
-    List<WriteStatus> statuses = events.stream()
-        .map(CompactionCommitEvent::getWriteStatuses)
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
-
+  private void doCommit(String instant, List<WriteStatus> statuses) throws IOException {
     HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
         table, instant, HoodieListData.eager(statuses), writeClient.getConfig().getSchema());
 

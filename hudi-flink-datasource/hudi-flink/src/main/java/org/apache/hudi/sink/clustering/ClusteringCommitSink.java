@@ -119,7 +119,16 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
       return;
     }
 
-    if (events.stream().anyMatch(ClusteringCommitEvent::isFailed)) {
+    // here we should take the write errors under consideration
+    // as some write errors might cause data loss when clustering
+    List<WriteStatus> statuses = events.stream()
+        .filter(event -> !event.isFailed())
+        .map(ClusteringCommitEvent::getWriteStatuses)
+        .flatMap(Collection::stream)
+        .collect(Collectors.toList());
+    boolean hasErrors = events.stream().anyMatch(ClusteringCommitEvent::isFailed)
+        || statuses.stream().anyMatch(WriteStatus::hasErrors);
+    if (hasErrors && !this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
       try {
         // handle failure case
         ClusteringUtil.rollbackClustering(table, writeClient, instant);
@@ -131,7 +140,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     }
 
     try {
-      doCommit(instant, clusteringPlan, events);
+      doCommit(instant, clusteringPlan, statuses);
     } catch (Throwable throwable) {
       // make it fail-safe
       LOG.error("Error while committing clustering instant: " + instant, throwable);
@@ -141,12 +150,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     }
   }
 
-  private void doCommit(String instant, HoodieClusteringPlan clusteringPlan, List<ClusteringCommitEvent> events) {
-    List<WriteStatus> statuses = events.stream()
-        .map(ClusteringCommitEvent::getWriteStatuses)
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
-
+  private void doCommit(String instant, HoodieClusteringPlan clusteringPlan, List<WriteStatus> statuses) {
     HoodieWriteMetadata<List<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
     writeMetadata.setWriteStatuses(statuses);
     writeMetadata.setWriteStats(statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()));
