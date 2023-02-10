@@ -221,6 +221,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(false)
       .withDocumentation("When set to true, will not write the partition columns into hudi. By default, false.");
 
+  public static final ConfigProperty<Boolean> AUTO_GEN_RECORD_KEYS = ConfigProperty
+      .key("hoodie.datasource.write.recordkey.autogen")
+      .defaultValue(false)
+      .withDocumentation("TODO");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
@@ -669,6 +674,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public Boolean shouldDropPartitionColumns() {
     return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
+  }
+
+  public Boolean shouldAutoGenRecordKeys() {
+    return getBooleanOrDefault(AUTO_GEN_RECORD_KEYS);
   }
 
   /**
