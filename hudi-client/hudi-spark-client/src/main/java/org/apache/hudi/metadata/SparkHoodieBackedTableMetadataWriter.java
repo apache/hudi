@@ -89,8 +89,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     return new SparkHoodieBackedTableMetadataWriter(
         conf, writeConfig, failedWritesCleaningPolicy, context, actionMetadata, inflightInstantTimestamp);
   }
-
-
+  
   public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {
     return create(conf, writeConfig, context, Option.empty(), Option.empty());

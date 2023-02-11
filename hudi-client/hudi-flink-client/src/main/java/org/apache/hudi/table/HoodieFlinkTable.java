@@ -99,7 +99,7 @@ public abstract class HoodieFlinkTable<T>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(
+  protected <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
       Option<T> actionMetadata) {

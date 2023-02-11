@@ -90,7 +90,7 @@ public abstract class HoodieSparkTable<T>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  public <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(
+  protected <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
       Option<R> actionMetadata) {

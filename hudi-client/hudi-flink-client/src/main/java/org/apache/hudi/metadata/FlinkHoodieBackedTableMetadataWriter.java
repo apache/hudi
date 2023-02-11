@@ -66,6 +66,15 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
                                                                                 HoodieWriteConfig writeConfig,
+                                                                                HoodieEngineContext context,
+                                                                                Option<T> actionMetadata,
+                                                                                Option<String> inFlightInstantTimestamp) {
+    return new FlinkHoodieBackedTableMetadataWriter(
+        conf, writeConfig, EAGER, context, actionMetadata, inFlightInstantTimestamp);
+  }
+
+  public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
+                                                                                HoodieWriteConfig writeConfig,
                                                                                 HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                                                 HoodieEngineContext context,
                                                                                 Option<T> actionMetadata,

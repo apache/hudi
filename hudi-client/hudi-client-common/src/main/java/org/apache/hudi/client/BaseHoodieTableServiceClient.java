@@ -683,7 +683,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   protected List<String> getFailedIndexingCommitsToRollback(HoodieTableMetaClient metaClient) {
     Stream<HoodieInstant> inflightInstantsStream = metaClient.getCommitsTimeline()
         .filter(instant -> !instant.isCompleted()
-            && isDeltaCommitFromIndexing(instant.getTimestamp()))
+            && isIndexingCommit(instant.getTimestamp()))
         .getInstantsAsStream();
     return inflightInstantsStream.filter(instant -> {
       try {
@@ -744,7 +744,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
           if (curInstantTime.isPresent()) {
             return !entry.equals(curInstantTime.get());
           } else {
-            return !isDeltaCommitFromIndexing(entry);
+            return !isIndexingCommit(entry);
           }
         }).collect(Collectors.toList());
       }
@@ -860,7 +860,16 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     }
   }
 
-  private boolean isDeltaCommitFromIndexing(String instantTime) {
+  /**
+   * Checks if a delta commit in metadata table is written by async indexer.
+   * <p>
+   * TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks in the
+   *  metadata table is landed.
+   *
+   * @param instantTime Instant time to check.
+   * @return {@code true} if from async indexer; {@code false} otherwise.
+   */
+  private boolean isIndexingCommit(String instantTime) {
     return instantTime.length() == MILLIS_INSTANT_ID_LENGTH + METADATA_INDEXER_TIME_SUFFIX.length()
         && instantTime.endsWith(METADATA_INDEXER_TIME_SUFFIX);
   }

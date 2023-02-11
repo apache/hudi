@@ -102,6 +102,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.isSchemaCompatible;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
+import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.LAZY;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
@@ -898,6 +899,24 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     }
   }
 
+  /**
+   * Gets the metadata writer for async indexer.
+   *
+   * @param triggeringInstantTimestamp The instant that is triggering this metadata write.
+   * @return An instance of {@link HoodieTableMetadataWriter}.
+   */
+  public Option<HoodieTableMetadataWriter> getIndexingMetadataWriter(String triggeringInstantTimestamp) {
+    return getMetadataWriter(triggeringInstantTimestamp, LAZY, Option.empty());
+  }
+
+  /**
+   * Gets the metadata writer for regular writes.
+   *
+   * @param triggeringInstantTimestamp The instant that is triggering this metadata write.
+   * @param actionMetadata             Optional action metadata.
+   * @param <R>                        Action metadata type.
+   * @return An instance of {@link HoodieTableMetadataWriter}.
+   */
   public <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp, Option<R> actionMetadata) {
     return getMetadataWriter(triggeringInstantTimestamp, EAGER, actionMetadata);
@@ -917,7 +936,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @return instance of {@link HoodieTableMetadataWriter}
    */
-  public <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(
+  protected <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
       Option<R> actionMetadata) {
