@@ -267,21 +267,13 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                   acc ++= Seq(colStatRecord.getMinValue, colStatRecord.getMaxValue, colStatRecord.getNullCount)
                 case None =>
                   // NOTE: This could occur in either of the following cases:
-                  //    1. Column is not indexed in Column Stats Index: in this case we won't be returning
-                  //       any statistics for such column (ie all stats will be null)
-                  //    2. Particular file does not have this particular column (which is indexed by Column Stats Index):
+                  //    1. Particular file does not have this particular column (which is indexed by Column Stats Index):
                   //       in this case we're assuming missing column to essentially contain exclusively
                   //       null values, we set min/max values as null and null-count to be equal to value-count (this
                   //       behavior is consistent with reading non-existent columns from Parquet)
                   //
                   // This is a way to determine current column's index without explicit iteration (we're adding 3 stats / column)
-                  val idx = acc.length / 3
-                  val colName = sortedTargetColumns(idx)
-                  val indexed = indexedColumns.contains(colName)
-
-                  val nullCount = if (indexed) valueCount else null
-
-                  acc ++= Seq(null, null, nullCount)
+                  acc ++= Seq(null, null, valueCount)
               }
           }
 
