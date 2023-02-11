@@ -33,6 +33,7 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertFalse
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 
 class TestCreateTable extends HoodieSparkSqlTestBase {
 
@@ -1035,5 +1036,32 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
        """.stripMargin)
     checkKeyGenerator("org.apache.hudi.keygen.ComplexKeyGenerator", tableName)
     spark.sql(s"drop table $tableName")
+  }
+
+  test("Test CTAS not de-duplicating (by default)") {
+    withRecordType() {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |CREATE TABLE $tableName USING hudi
+             | LOCATION '${tmp.getCanonicalPath}/$tableName'
+             | TBLPROPERTIES (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | AS SELECT * FROM (
+             |  SELECT 1 as id, 'a1' as name, 10 as price, 1000 as ts
+             |  UNION ALL
+             |  SELECT 1 as id, 'a1' as name, 11 as price, 1001 as ts
+             | )
+       """.stripMargin)
+
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(1, "a1", 11.0, 1001)
+        )
+      }
+    }
   }
 }

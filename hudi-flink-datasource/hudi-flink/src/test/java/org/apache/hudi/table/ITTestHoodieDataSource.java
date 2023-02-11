@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
 import org.apache.hudi.table.catalog.HoodieHiveCatalog;
@@ -357,6 +358,36 @@ public class ITTestHoodieDataSource {
     final String query = String.format("select * from t1/*+ options('read.start-commit'='%s')*/", instant);
     List<Row> rows = execSelectSql(streamTableEnv, query, 10);
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT);
+  }
+
+  @Test
+  void testAppendWriteWithClusteringBatchRead() throws Exception {
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source", 4);
+    streamTableEnv.executeSql(createSource);
+
+    String hoodieTableDDL = sql("t1")
+            .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+            .option(FlinkOptions.OPERATION, "insert")
+            .option(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED,true)
+            .option(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true)
+            .option(FlinkOptions.CLUSTERING_DELTA_COMMITS,2)
+            .option(FlinkOptions.CLUSTERING_TASKS, 1)
+            .option(FlinkOptions.CLEAN_RETAIN_COMMITS, 1)
+            .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    streamTableEnv.getConfig().getConfiguration()
+            .setBoolean("table.dynamic-table-options.enabled", true);
+    final String query = String.format("select * from t1/*+ options('read.start-commit'='%s')*/",
+            FlinkOptions.START_COMMIT_EARLIEST);
+
+    List<Row> rows = CollectionUtil.iterableToList(() -> streamTableEnv.sqlQuery(query).execute().collect());
+    // batch read will not lose data when cleaned clustered files.
+    assertRowsEquals(rows, CollectionUtils.combine(TestData.DATA_SET_SOURCE_INSERT_FIRST_COMMIT,
+        TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT));
   }
 
   @Test
@@ -1064,6 +1095,32 @@ public class ITTestHoodieDataSource {
         + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
         + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+  }
+
+  @Test
+  void testBulkInsertWithSortByRecordKey() {
+    TableEnvironment tableEnv = batchTableEnv;
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, "bulk_insert")
+        .option(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_INPUT, true)
+        .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, true)
+        .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, true)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    final String insertInto = "insert into t1 values\n"
+        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"
+        + "('id1','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par1')";
+
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, "["
+        + "+I[id1, Julian, 53, 1970-01-01T00:00:03, par1], "
+        + "+I[id2, Stephen, 33, 1970-01-01T00:00:02, par1]]", 4);
   }
 
   @Test

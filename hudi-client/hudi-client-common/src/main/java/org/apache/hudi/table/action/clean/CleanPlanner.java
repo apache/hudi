@@ -30,7 +30,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -364,13 +363,10 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
                 deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
               }
             });
-            if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
-                || hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
-              // 1. If merge on read, then clean the log files for the commits as well;
-              // 2. If change log capture is enabled, clean the log files no matter the table type is mor or cow.
-              deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-                  .collect(Collectors.toList()));
-            }
+            // clean the log files for the commits, which contain cdc log files in cdc scenario
+            // and normal log files for mor tables.
+            deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+                .collect(Collectors.toList()));
           }
         }
       }

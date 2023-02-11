@@ -245,7 +245,7 @@ public class HoodieCDCLogger implements Closeable {
   private CDCTransformer getTransformer() {
     if (cdcSupplementalLoggingMode == data_before_after) {
       return (operation, recordKey, oldRecord, newRecord) ->
-          HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), commitTime, removeCommitMetadata(oldRecord), newRecord);
+          HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), commitTime, removeCommitMetadata(oldRecord), removeCommitMetadata(newRecord));
     } else if (cdcSupplementalLoggingMode == data_before) {
       return (operation, recordKey, oldRecord, newRecord) ->
           HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), recordKey, removeCommitMetadata(oldRecord));

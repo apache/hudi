@@ -68,10 +68,12 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     "false|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key"
   ), delimiter = '|')
   def testCopyOnWriteStorage(isMetadataEnabled: Boolean, keyGenClass: String, recordKeys: String): Unit = {
-    var options: Map[String, String] = commonOpts +
-      (HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled)) +
-      (DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> keyGenClass) +
-      (DataSourceWriteOptions.RECORDKEY_FIELD.key() -> recordKeys)
+    var options: Map[String, String] = commonOpts ++ Map(
+      HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled),
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> keyGenClass,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeys,
+      HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true")
+
     val isTimestampBasedKeyGen: Boolean = classOf[TimestampBasedKeyGenerator].getName.equals(keyGenClass)
     if (isTimestampBasedKeyGen) {
       options += DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "_row_key"

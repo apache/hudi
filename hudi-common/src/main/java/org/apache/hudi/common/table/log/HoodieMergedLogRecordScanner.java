@@ -47,7 +47,6 @@ import org.apache.log4j.Logger;
 import javax.annotation.concurrent.NotThreadSafe;
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -215,7 +214,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   public Map<String, HoodieRecord> getRecords() {
-    return Collections.unmodifiableMap(records);
+    return records;
   }
 
   public HoodieRecordType getRecordType() {
