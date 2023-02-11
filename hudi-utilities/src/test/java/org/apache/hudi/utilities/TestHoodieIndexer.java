@@ -21,8 +21,11 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -30,10 +33,13 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -57,6 +63,9 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.reload;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS;
+import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES;
+import static org.apache.hudi.metadata.HoodieBackedTableMetadataWriter.METADATA_INDEXER_TIME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
@@ -149,23 +158,75 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   }
 
   @Test
-  public void testIndexerWithWriter() {
+  public void testIndexerWithWriter() throws IOException {
     // Test the case where the indexer is running, i.e., the delta commit in the metadata table
     // is inflight, while the regular writer is updating metadata table.
     // The delta commit from the indexer should not be rolled back.
     String tableName = "indexer_with_writer";
-    // enable files and bloom_filters on the regular write client
+    // Enable files and bloom_filters on the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder =
         getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
-    upsertToTable(metadataConfigBuilder.build(), tableName);
+    HoodieMetadataConfig metadataConfig = metadataConfigBuilder.build();
+    upsertToTable(metadataConfig, tableName);
 
-    // validate table config
+    // Validate table config
     assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
     assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
 
+    // Run async indexer, creating a new indexing instant in the data table and a new delta commit
+    // in the metadata table, with the suffix "004"
     scheduleAndExecuteIndexing(COLUMN_STATS, tableName);
-    // metaClient.getActiveTimeline().filter(i -> i.getAction())
-    // metaClient.getActiveTimeline().revertToInflight();
+
+    HoodieInstant indexingInstant = metaClient.getActiveTimeline()
+        .filter(i -> HoodieTimeline.INDEXING_ACTION.equals(i.getAction()))
+        .getInstants().get(0);
+    HoodieIndexPlan indexPlan = TimelineMetadataUtils.deserializeIndexPlan(
+        metaClient.getActiveTimeline().readIndexPlanAsBytes(indexingInstant).get());
+    String indexUptoInstantTime = indexPlan.getIndexPartitionInfos().get(0).getIndexUptoInstant();
+    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
+        context(), metadataConfig, metaClient.getBasePathV2().toString(),
+        getWriteConfigBuilder(basePath(), tableName).build().getSpillableMapBasePath());
+    HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
+    String mdtCommitTime = indexUptoInstantTime + METADATA_INDEXER_TIME_SUFFIX;
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtCommitTime));
+
+    // Reverts both instants to inflight state, to simulate inflight indexing instants
+    metaClient.getActiveTimeline().revertToInflight(indexingInstant);
+    metaClient = reload(metaClient);
+
+    HoodieInstant mdtIndexingCommit = metadataMetaClient.getActiveTimeline()
+        .filter(i -> i.getTimestamp().equals(mdtCommitTime))
+        .getInstants().get(0);
+    metadataMetaClient.getActiveTimeline().revertToInflight(mdtIndexingCommit);
+    metadataMetaClient = reload(metadataMetaClient);
+    // Simulate heartbeats for ongoing write from async indexer in the metadata table
+    HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(
+        metadataMetaClient.getFs(), metadataMetaClient.getBasePathV2().toString(),
+        CLIENT_HEARTBEAT_INTERVAL_IN_MS.defaultValue().longValue(),
+        CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES.defaultValue());
+    heartbeatClient.start(mdtCommitTime);
+
+    upsertToTable(metadataConfig, tableName);
+    metaClient = reload(metaClient);
+    metadataMetaClient = reload(metadataMetaClient);
+    // The delta commit from async indexer in metadata table should not be rolled back
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtIndexingCommit.getTimestamp()));
+    assertTrue(metadataMetaClient.getActiveTimeline().getRollbackTimeline().empty());
+
+    // Simulate heartbeat timeout
+    heartbeatClient.stop(mdtCommitTime);
+    upsertToTable(metadataConfig, tableName);
+    metaClient = reload(metaClient);
+    metadataMetaClient = reload(metadataMetaClient);
+    // The delta commit from async indexer in metadata table should be rolled back now
+    assertFalse(metadataMetaClient.getActiveTimeline().containsInstant(mdtIndexingCommit.getTimestamp()));
+    assertEquals(1, metadataMetaClient.getActiveTimeline().getRollbackTimeline().countInstants());
+    HoodieInstant rollbackInstant = metadataMetaClient.getActiveTimeline()
+        .getRollbackTimeline().firstInstant().get();
+    HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
+        metadataMetaClient.getActiveTimeline().readRollbackInfoAsBytes(rollbackInstant).get());
+    assertEquals(mdtCommitTime, rollbackMetadata.getInstantsRollback()
+        .stream().findFirst().get().getCommitTime());
   }
 
   private static Stream<Arguments> colStatsFileGroupCountParams() {

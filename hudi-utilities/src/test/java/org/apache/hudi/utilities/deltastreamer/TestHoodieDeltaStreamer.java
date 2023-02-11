@@ -140,6 +140,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE;
 import static org.apache.hudi.config.metrics.HoodieMetricsConfig.TURN_METRICS_ON;
+import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
@@ -425,6 +426,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
       int numIndexCommits = timeline.countInstants();
       assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
+      Dataset<Row> df = sparkSession.read().format("hudi").load(getMetadataTableBasePath(tablePath));
+      Row[] collect = (Row[]) df.collect();
+      df.count();
     }
 
     static void assertNoReplaceCommits(String tablePath, FileSystem fs) {

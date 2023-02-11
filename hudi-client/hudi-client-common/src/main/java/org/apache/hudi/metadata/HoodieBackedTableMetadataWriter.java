@@ -93,6 +93,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
@@ -147,6 +148,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   protected <T extends SpecificRecordBase> HoodieBackedTableMetadataWriter(Configuration hadoopConf,
                                                                            HoodieWriteConfig writeConfig,
+                                                                           HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                                            HoodieEngineContext engineContext,
                                                                            Option<T> actionMetadata,
                                                                            Option<String> inflightInstantTimestamp) {
@@ -158,7 +160,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     if (writeConfig.isMetadataTableEnabled()) {
       this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
-      this.metadataWriteConfig = createMetadataWriteConfig(writeConfig);
+      this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
       enabled = true;
 
       // Inline compaction and auto clean is required as we dont expose this table outside
@@ -185,7 +187,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   public HoodieBackedTableMetadataWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig,
                                          HoodieEngineContext engineContext) {
-    this(hadoopConf, writeConfig, engineContext, Option.empty(), Option.empty());
+    this(hadoopConf, writeConfig, EAGER, engineContext, Option.empty(), Option.empty());
   }
 
   /**
@@ -236,11 +238,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected abstract void initRegistry();
 
   /**
-   * Create a {@code HoodieWriteConfig} to use for the Metadata Table.
+   * Create a {@code HoodieWriteConfig} to use for the Metadata Table.  This is used by async
+   * indexer only.
    *
-   * @param writeConfig {@code HoodieWriteConfig} of the main dataset writer
+   * @param writeConfig                {@code HoodieWriteConfig} of the main dataset writer
+   * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    */
-  private HoodieWriteConfig createMetadataWriteConfig(HoodieWriteConfig writeConfig) {
+  private HoodieWriteConfig createMetadataWriteConfig(
+      HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     int parallelism = writeConfig.getMetadataInsertParallelism();
 
     int minCommitsToKeep = Math.max(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMinCommitsToKeep());
@@ -272,7 +277,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
             .retainCommits(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED.defaultValue())
             .build())
         // we will trigger archive manually, to ensure only regular writer invokes it
@@ -879,10 +884,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     inflightIndexes.addAll(indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
     dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightIndexes));
     HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
-
-    ValidationUtils.checkState(
-        metadataMetaClient.getActiveTimeline().containsInstant(indexUptoInstantTime),
-        "Cannot find instant " + indexUptoInstantTime + " in the metadata table for the indexer!");
     initialCommit(indexUptoInstantTime + METADATA_INDEXER_TIME_SUFFIX, partitionTypes);
   }
 
