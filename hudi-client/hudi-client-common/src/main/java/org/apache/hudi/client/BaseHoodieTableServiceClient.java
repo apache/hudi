@@ -671,16 +671,16 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    *
    * @return {@code true} if rollback happens; {@code false} otherwise.
    */
-  protected boolean lazyRollbackFailedIndexing() {
+  protected boolean rollbackFailedIndexingCommits() {
     HoodieTable table = createTable(config, hadoopConf);
-    List<String> instantsToRollback = getFailedIndexingToRollback(table.getMetaClient());
+    List<String> instantsToRollback = getFailedIndexingCommitsToRollback(table.getMetaClient());
     Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
     instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
     rollbackFailedWrites(pendingRollbacks);
     return !pendingRollbacks.isEmpty();
   }
 
-  protected List<String> getFailedIndexingToRollback(HoodieTableMetaClient metaClient) {
+  protected List<String> getFailedIndexingCommitsToRollback(HoodieTableMetaClient metaClient) {
     Stream<HoodieInstant> inflightInstantsStream = metaClient.getCommitsTimeline()
         .filter(instant -> !instant.isCompleted()
             && isDeltaCommitFromIndexing(instant.getTimestamp()))
@@ -692,11 +692,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
         throw new HoodieException("Failed to check heartbeat for instant " + instant, io);
       }
     }).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
-  }
-
-  protected boolean isDeltaCommitFromIndexing(String instantTime) {
-    return instantTime.length() == MILLIS_INSTANT_ID_LENGTH + METADATA_INDEXER_TIME_SUFFIX.length()
-        && instantTime.endsWith(METADATA_INDEXER_TIME_SUFFIX);
   }
 
   /**
@@ -863,6 +858,11 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
         LOG.info("Not supported delegate to table service manager, tableServiceType : " + tableServiceType.getAction());
         return Option.empty();
     }
+  }
+
+  private boolean isDeltaCommitFromIndexing(String instantTime) {
+    return instantTime.length() == MILLIS_INSTANT_ID_LENGTH + METADATA_INDEXER_TIME_SUFFIX.length()
+        && instantTime.endsWith(METADATA_INDEXER_TIME_SUFFIX);
   }
 
   @Override

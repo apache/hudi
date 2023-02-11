@@ -1288,7 +1288,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return {@code true} if rollback happens; {@code false} otherwise.
    */
   public boolean lazyRollbackFailedIndexing() {
-    return tableServiceClient.lazyRollbackFailedIndexing();
+    return tableServiceClient.rollbackFailedIndexingCommits();
   }
 
   /**
