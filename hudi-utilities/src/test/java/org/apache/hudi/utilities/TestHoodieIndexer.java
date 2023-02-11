@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -123,7 +124,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
-    initializeWriteClient(metadataConfigBuilder.build(), tableName);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
 
     // validate table config
     assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
@@ -138,13 +139,33 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(false, false).withMetadataIndexBloomFilter(true);
-    initializeWriteClient(metadataConfigBuilder.build(), tableName);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
 
     // validate table config
     assertFalse(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
 
     // build indexer config which has only files enabled
     indexMetadataPartitionsAndAssert(FILES, Collections.emptyList(), Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName);
+  }
+
+  @Test
+  public void testIndexerWithWriter() {
+    // Test the case where the indexer is running, i.e., the delta commit in the metadata table
+    // is inflight, while the regular writer is updating metadata table.
+    // The delta commit from the indexer should not be rolled back.
+    String tableName = "indexer_with_writer";
+    // enable files and bloom_filters on the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder =
+        getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
+
+    // validate table config
+    assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
+    assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
+
+    scheduleAndExecuteIndexing(COLUMN_STATS, tableName);
+    // metaClient.getActiveTimeline().filter(i -> i.getAction())
+    // metaClient.getActiveTimeline().revertToInflight();
   }
 
   private static Stream<Arguments> colStatsFileGroupCountParams() {
@@ -163,7 +184,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(false, false).withMetadataIndexBloomFilter(true);
-    initializeWriteClient(metadataConfigBuilder.build(), tableName);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
 
     // validate table config
     assertFalse(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
@@ -190,7 +211,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(false, false);
-    initializeWriteClient(metadataConfigBuilder.build(), tableName);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
     // validate table config
     assertFalse(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
 
@@ -227,12 +248,12 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertEquals(partitionFileSlices.size(), HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.defaultValue());
   }
 
-  private void initializeWriteClient(HoodieMetadataConfig metadataConfig, String tableName) {
+  private void upsertToTable(HoodieMetadataConfig metadataConfig, String tableName) {
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath(), tableName);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfig).build();
     // do one upsert with synchronous metadata update
     SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
-    String instant = "0001";
+    String instant = HoodieActiveTimeline.createNewInstantTime();
     writeClient.startCommitWithTime(instant);
     List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
     JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
@@ -240,8 +261,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertNoWriteErrors(statuses);
   }
 
-  private void indexMetadataPartitionsAndAssert(MetadataPartitionType partitionTypeToIndex, List<MetadataPartitionType> alreadyCompletedPartitions, List<MetadataPartitionType> nonExistantPartitions,
-                                                String tableName) {
+  private void scheduleAndExecuteIndexing(MetadataPartitionType partitionTypeToIndex, String tableName) {
     HoodieIndexer.Config config = new HoodieIndexer.Config();
     String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
     config.basePath = basePath();
@@ -258,6 +278,13 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
     // validate table config
     metaClient = reload(metaClient);
+  }
+
+  private void indexMetadataPartitionsAndAssert(MetadataPartitionType partitionTypeToIndex, List<MetadataPartitionType> alreadyCompletedPartitions, List<MetadataPartitionType> nonExistantPartitions,
+                                                String tableName) {
+    scheduleAndExecuteIndexing(partitionTypeToIndex, tableName);
+
+    // validate table config
     Set<String> completedPartitions = metaClient.getTableConfig().getMetadataPartitions();
     assertTrue(completedPartitions.contains(partitionTypeToIndex.getPartitionPath()));
     alreadyCompletedPartitions.forEach(entry -> assertTrue(completedPartitions.contains(entry.getPartitionPath())));
@@ -277,7 +304,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
-    String instant = "0001";
+    String instant = HoodieActiveTimeline.createNewInstantTime();
     writeClient.startCommitWithTime(instant);
     List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
     JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
@@ -331,7 +358,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
-    String instant = "0001";
+    String instant = HoodieActiveTimeline.createNewInstantTime();
     writeClient.startCommitWithTime(instant);
     List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
     JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);

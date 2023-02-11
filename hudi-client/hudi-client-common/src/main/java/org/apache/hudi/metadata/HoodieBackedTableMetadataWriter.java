@@ -879,7 +879,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     inflightIndexes.addAll(indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
     dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightIndexes));
     HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
-    initialCommit(indexUptoInstantTime, partitionTypes);
+
+    String commitInstantTime =
+        metadataMetaClient.getActiveTimeline().containsInstant(indexUptoInstantTime)
+            ? indexUptoInstantTime + METADATA_INDEXER_TIME_SUFFIX : indexUptoInstantTime;
+    initialCommit(commitInstantTime, partitionTypes);
   }
 
   /**
@@ -1130,10 +1134,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
     }
 
-    String commitInstantTime =
-        metadataMetaClient.getActiveTimeline().containsInstant(createInstantTime)
-            ? createInstantTime + METADATA_INDEXER_TIME_SUFFIX : createInstantTime;
-    commit(commitInstantTime, partitionToRecordsMap, false);
+    commit(createInstantTime, partitionToRecordsMap, false);
   }
 
   private HoodieData<HoodieRecord> getFilesPartitionRecords(String createInstantTime, List<DirectoryInfo> partitionInfoList, HoodieRecord allPartitionRecord) {
