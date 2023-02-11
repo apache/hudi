@@ -159,10 +159,10 @@ public class RowDataKeyGen implements Serializable {
       // for e.g, fileId + auto inc integer
       return EMPTY_RECORDKEY_PLACEHOLDER;
     } else if (this.simpleRecordKey) {
-      return getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0],consistentLogicalTimestampEnabled);
+      return getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);
     } else {
       Object[] keyValues = this.recordKeyProjection.projectAsValues(rowData);
-      return getRecordKey(keyValues, this.recordKeyFields,consistentLogicalTimestampEnabled);
+      return getRecordKey(keyValues, this.recordKeyFields, consistentLogicalTimestampEnabled);
     }
   }
 
@@ -179,7 +179,7 @@ public class RowDataKeyGen implements Serializable {
   }
 
   // reference: org.apache.hudi.keygen.KeyGenUtils.getRecordPartitionPath
-  private static String getRecordKey(Object[] keyValues, String[] keyFields,boolean consistentLogicalTimestampEnabled) {
+  private static String getRecordKey(Object[] keyValues, String[] keyFields, boolean consistentLogicalTimestampEnabled) {
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
     for (int i = 0; i < keyValues.length; i++) {
