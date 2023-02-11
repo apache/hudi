@@ -18,7 +18,6 @@
 
 package org.apache.hudi.source.stats;
 
-import org.apache.hudi.adapter.TestCallExpressions;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.table.api.DataTypes;
@@ -28,8 +27,8 @@ import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
-import org.apache.flink.table.functions.BuiltInFunctionDefinition;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
+import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
@@ -363,7 +362,7 @@ public class TestExpressionEvaluator {
     ValueLiteralExpression nullLiteral = new ValueLiteralExpression(null, DataTypes.INT());
     RowData indexRow = intIndexRow(11, 13);
     RowType.RowField[] queryFields = queryFields(2);
-    BuiltInFunctionDefinition[] funDefs = new BuiltInFunctionDefinition[] {
+    FunctionDefinition[] funDefs = new FunctionDefinition[] {
         BuiltInFunctionDefinitions.EQUALS,
         BuiltInFunctionDefinitions.NOT_EQUALS,
         BuiltInFunctionDefinitions.LESS_THAN,
@@ -371,9 +370,9 @@ public class TestExpressionEvaluator {
         BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL,
         BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL,
         BuiltInFunctionDefinitions.IN};
-    for (BuiltInFunctionDefinition funDef : funDefs) {
+    for (FunctionDefinition funDef : funDefs) {
       CallExpression expr =
-          TestCallExpressions.permanent(
+          new CallExpression(
               funDef,
               Arrays.asList(ref, nullLiteral),
               DataTypes.BOOLEAN());
