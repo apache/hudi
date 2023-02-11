@@ -113,6 +113,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadataWriter.class);
 
   public static final String METADATA_COMPACTION_TIME_SUFFIX = "001";
+  // This suffix used by the delta commits from async indexer (`HoodieIndexer`),
+  // when the `indexUptoInstantTime` already exists in the metadata table,
+  // to avoid collision.
+  public static final String METADATA_INDEXER_TIME_SUFFIX = "004";
 
   // Virtual keys support for metadata table. This Field is
   // from the metadata payload schema.
@@ -1069,6 +1073,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
     writeClient.clean(instantTime + "002");
+    writeClient.lazyRollbackFailedIndexing();
   }
 
   /**
@@ -1125,7 +1130,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
     }
 
-    commit(createInstantTime, partitionToRecordsMap, false);
+    String commitInstantTime =
+        metadataMetaClient.getActiveTimeline().containsInstant(createInstantTime)
+            ? createInstantTime + METADATA_INDEXER_TIME_SUFFIX : createInstantTime;
+    commit(commitInstantTime, partitionToRecordsMap, false);
   }
 
   private HoodieData<HoodieRecord> getFilesPartitionRecords(String createInstantTime, List<DirectoryInfo> partitionInfoList, HoodieRecord allPartitionRecord) {

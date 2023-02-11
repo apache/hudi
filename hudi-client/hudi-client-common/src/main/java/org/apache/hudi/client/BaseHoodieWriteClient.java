@@ -1280,7 +1280,20 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
+   * Rolls back the failed delta commits corresponding to the indexing action.
+   * <p>
+   * TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks
+   *  in the metadata table is landed.
+   *
+   * @return {@code true} if rollback happens; {@code false} otherwise.
+   */
+  public boolean lazyRollbackFailedIndexing() {
+    return tableServiceClient.lazyRollbackFailedIndexing();
+  }
+
+  /**
    * Rollback failed writes if any.
+   *
    * @return true if rollback happened. false otherwise.
    */
   public boolean rollbackFailedWrites() {
