@@ -139,12 +139,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   /**
    * Hudi backed table metadata writer.
    *
-   * @param hadoopConf               - Hadoop configuration to use for the metadata writer
-   * @param writeConfig              - Writer config
-   * @param engineContext            - Engine context
-   * @param actionMetadata           - Optional action metadata to help decide initialize operations
-   * @param <T>                      - Action metadata types extending Avro generated SpecificRecordBase
-   * @param inflightInstantTimestamp - Timestamp of any instant in progress
+   * @param hadoopConf                 Hadoop configuration to use for the metadata writer
+   * @param writeConfig                Writer config
+   * @param failedWritesCleaningPolicy Cleaning policy on failed writes
+   * @param engineContext              Engine context
+   * @param actionMetadata             Optional action metadata to help decide initialize operations
+   * @param <T>                        Action metadata types extending Avro generated SpecificRecordBase
+   * @param inflightInstantTimestamp   Timestamp of any instant in progress
    */
   protected <T extends SpecificRecordBase> HoodieBackedTableMetadataWriter(Configuration hadoopConf,
                                                                            HoodieWriteConfig writeConfig,
