@@ -277,8 +277,7 @@ public class FlinkOptions extends HoodieConfig {
       .booleanType()
       .defaultValue(false)
       .withDescription("Use UTC timezone or local timezone to the conversion between epoch"
-          + " time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x"
-          + " use UTC timezone, by default true");
+          + " time and LocalDateTime. Hive 0.x/1.x/2.x/3.x use local timezone. ");
 
   public static final ConfigOption<Boolean> READ_AS_STREAMING = ConfigOptions
       .key("read.streaming.enabled")
