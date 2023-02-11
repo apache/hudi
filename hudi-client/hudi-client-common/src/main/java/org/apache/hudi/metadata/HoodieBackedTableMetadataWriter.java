@@ -880,10 +880,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightIndexes));
     HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
 
-    String commitInstantTime =
-        metadataMetaClient.getActiveTimeline().containsInstant(indexUptoInstantTime)
-            ? indexUptoInstantTime + METADATA_INDEXER_TIME_SUFFIX : indexUptoInstantTime;
-    initialCommit(commitInstantTime, partitionTypes);
+    ValidationUtils.checkState(
+        metadataMetaClient.getActiveTimeline().containsInstant(indexUptoInstantTime),
+        "Cannot find instant " + indexUptoInstantTime + " in the metadata table for the indexer!");
+    initialCommit(indexUptoInstantTime + METADATA_INDEXER_TIME_SUFFIX, partitionTypes);
   }
 
   /**
