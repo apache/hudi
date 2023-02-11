@@ -126,8 +126,8 @@ public class HoodieIndexer {
     public String indexTypes = null;
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" to generate an indexing plan; "
         + "Set \"execute\" to execute the indexing plan at the given instant, which means --instant-time is required here; "
-        + "Set \"scheduleandExecute\" to generate an indexing plan first and execute that plan immediately;"
-        + "Set \"dropindex\" to drop the index types specified in --index-types;")
+        + "Set \"scheduleAndExecute\" to generate an indexing plan first and execute that plan immediately;"
+        + "Set \"dropIndex\" to drop the index types specified in --index-types;")
     public String runningMode = null;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;

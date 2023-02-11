@@ -236,21 +236,25 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // If the format can not record the operation field, nullify the DELETE payload manually.
       boolean nullifyPayload = HoodieOperation.isDelete(hoodieRecord.getOperation()) && !config.allowOperationMetadataField();
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
-      Option<HoodieRecord> finalRecord = nullifyPayload ? Option.empty() : Option.of(hoodieRecord);
+
+      Option<HoodieRecord> finalRecordOpt = nullifyPayload ? Option.empty() : Option.of(hoodieRecord);
       // Check for delete
-      if (finalRecord.isPresent() && !finalRecord.get().isDelete(schema, recordProperties)) {
-        // Check for ignore ExpressionPayload
-        if (finalRecord.get().shouldIgnore(schema, recordProperties)) {
-          return finalRecord;
+      if (finalRecordOpt.isPresent() && !finalRecordOpt.get().isDelete(schema, recordProperties)) {
+        HoodieRecord finalRecord = finalRecordOpt.get();
+        // Check if the record should be ignored (special case for [[ExpressionPayload]])
+        if (finalRecord.shouldIgnore(schema, recordProperties)) {
+          return finalRecordOpt;
         }
-        // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        HoodieRecord rewrittenRecord = schemaOnReadEnabled ? finalRecord.get().rewriteRecordWithNewSchema(schema, recordProperties, writeSchemaWithMetaFields)
-            : finalRecord.get().rewriteRecord(schema, recordProperties, writeSchemaWithMetaFields);
+
+        // Prepend meta-fields into the record
+        MetadataValues metadataValues = populateMetadataFields(finalRecord);
+        HoodieRecord populatedRecord =
+            finalRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
+
         // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
         //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
         //       it since these records will be put into the recordList(List).
-        HoodieRecord populatedRecord = populateMetadataFields(rewrittenRecord.copy(), writeSchemaWithMetaFields, recordProperties);
-        finalRecord = Option.of(populatedRecord);
+        finalRecordOpt = Option.of(populatedRecord.copy());
         if (isUpdateRecord || isLogCompaction) {
           updatedRecordsWritten++;
         } else {
@@ -258,7 +262,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         }
         recordsWritten++;
       } else {
-        finalRecord = Option.empty();
+        finalRecordOpt = Option.empty();
         recordsDeleted++;
       }
 
@@ -267,7 +271,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // part of marking
       // record successful.
       hoodieRecord.deflate();
-      return finalRecord;
+      return finalRecordOpt;
     } catch (Exception e) {
       LOG.error("Error writing record  " + hoodieRecord, e);
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);
@@ -275,7 +279,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     return Option.empty();
   }
 
-  private HoodieRecord populateMetadataFields(HoodieRecord<T> hoodieRecord, Schema schema, Properties prop) throws IOException {
+  private MetadataValues populateMetadataFields(HoodieRecord<T> hoodieRecord) {
     MetadataValues metadataValues = new MetadataValues();
     if (config.populateMetaFields()) {
       String seqId =
@@ -292,7 +296,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       metadataValues.setOperation(hoodieRecord.getOperation().getName());
     }
 
-    return hoodieRecord.updateMetadataValues(schema, prop, metadataValues);
+    return metadataValues;
   }
 
   private void initNewStatus() {

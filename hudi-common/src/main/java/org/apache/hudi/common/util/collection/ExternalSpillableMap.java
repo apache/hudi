@@ -202,10 +202,13 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   @Override
   public R put(T key, R value) {
     if (this.currentInMemoryMapSize >= maxInMemorySizeInBytes || inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
-      this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 
-        + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
+      long tmpEstimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9
+          + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
+      if (this.estimatedPayloadSize != tmpEstimatedPayloadSize) {
+        LOG.info("Update Estimated Payload size to => " + this.estimatedPayloadSize);
+      }
+      this.estimatedPayloadSize = tmpEstimatedPayloadSize;
       this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
-      LOG.info("Update Estimated Payload size to => " + this.estimatedPayloadSize);
     }
 
     if (this.currentInMemoryMapSize < maxInMemorySizeInBytes || inMemoryMap.containsKey(key)) {

@@ -617,7 +617,8 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
         CreateHoodieTableCommand(table, ignoreIfExists)
       // Rewrite the DropTableCommand to DropHoodieTableCommand
       case DropTableCommand(tableName, ifExists, false, purge)
-        if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
+        if sparkSession.sessionState.catalog.tableExists(tableName)
+          && sparkAdapter.isHoodieTable(tableName, sparkSession) =>
         DropHoodieTableCommand(tableName, ifExists, false, purge)
       // Rewrite the AlterTableDropPartitionCommand to AlterHoodieTableDropPartitionCommand
       case AlterTableDropPartitionCommand(tableName, specs, ifExists, purge, retainData)

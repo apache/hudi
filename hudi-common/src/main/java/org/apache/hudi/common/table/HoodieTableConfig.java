@@ -20,8 +20,6 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
-import org.apache.hudi.common.config.ConfigClassProperty;
-import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
@@ -75,14 +73,6 @@ import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.
  * @see HoodieTableMetaClient
  * @since 0.3.0
  */
-@ConfigClassProperty(name = "Table Configurations",
-    groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that persist across writes and read on a Hudi table "
-        + " like  base, log file formats, table name, creation schema, table version layouts. "
-        + " Configurations are loaded from hoodie.properties, these properties are usually set during "
-        + "initializing a path as hoodie base path and rarely changes during "
-        + "the lifetime of the table. Writers/Queries' configurations are validated against these "
-        + " each time for compatibility.")
 public class HoodieTableConfig extends HoodieConfig {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
@@ -140,7 +130,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> CDC_SUPPLEMENTAL_LOGGING_MODE = ConfigProperty
       .key("hoodie.table.cdc.supplemental.logging.mode")
-      .defaultValue(op_key_only.name())
+      .defaultValue(data_before_after.name())
       .withValidValues(
           op_key_only.name(),
           data_before.name(),

@@ -76,7 +76,11 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static int bucketIdFromFileId(String fileId) {
-    return Integer.parseInt(fileId.substring(0, 8));
+    return Integer.parseInt(bucketIdStrFromFileId(fileId));
+  }
+
+  public static String bucketIdStrFromFileId(String fileId) {
+    return fileId.substring(0, 8);
   }
 
   public static String bucketIdStr(int n) {
