@@ -387,8 +387,8 @@ public class SparkRDDWriteClient<T> extends
     if (config.areReleaseResourceEnabled()) {
       HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) context;
       Map<Integer, JavaRDD<?>> allCachedRdds = sparkEngineContext.getJavaSparkContext().getPersistentRDDs();
-      List<Integer> cachedRdds = sparkEngineContext.removeCachedDataIds(basePath, instantTime);
-      for (int id : cachedRdds) {
+      List<Integer> dataIds = sparkEngineContext.removeCachedDataIds(basePath, instantTime);
+      for (int id : dataIds) {
         if (allCachedRdds.containsKey(id)) {
           allCachedRdds.get(id).unpersist();
         }

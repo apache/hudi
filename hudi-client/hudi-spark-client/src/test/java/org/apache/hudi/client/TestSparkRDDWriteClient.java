@@ -24,17 +24,24 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.storage.StorageLevel;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -44,11 +51,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
-  @Test
-  void testWriteClientReleaseResourcesShouldOnlyUnpersistRelevantRdds() throws IOException {
-    final HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE);
+  static Stream<Arguments> testWriteClientReleaseResourcesShouldOnlyUnpersistRelevantRdds() {
+    return Stream.of(
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, true),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, true),
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, false),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, false)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource
+  void testWriteClientReleaseResourcesShouldOnlyUnpersistRelevantRdds(HoodieTableType tableType, boolean shouldReleaseResource) throws IOException {
+    final HoodieTableMetaClient metaClient = getHoodieMetaClient(hadoopConf(), URI.create(basePath()).getPath(), tableType, new Properties());
     final HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withPath(metaClient.getBasePathV2().toString())
+        .withAutoCommit(false)
+        .withReleaseResourceEnabled(shouldReleaseResource)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
@@ -69,20 +88,36 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     writeClient.startCommitWithTime(instant1);
     List<WriteStatus> writeStatuses = writeClient.insert(writeRecords, instant1).collect();
     assertNoWriteErrors(writeStatuses);
-    writeClient.releaseResources(instant1);
+    writeClient.commitStats(instant1, writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(), metaClient.getCommitActionType());
     writeClient.close();
 
-    assertEquals(Collections.singletonList(persistedRdd0.id()),
-        context().getCachedDataIds(writeConfig.getBasePath(), instant0),
-        "RDDs cached for " + instant0 + " should be retained.");
-    assertEquals(Collections.emptyList(),
-        context().getCachedDataIds(writeConfig.getBasePath(), instant1),
-        "RDDs cached for " + instant1 + " should be cleared.");
-    assertTrue(jsc().getPersistentRDDs().containsKey(persistedRdd0.id()),
-        "RDDs cached for " + instant0 + " should be retained.");
-    assertFalse(jsc().getPersistentRDDs().containsKey(persistedRdd1.id()),
-        "RDDs cached for " + instant1 + " should be cleared.");
-    assertFalse(jsc().getPersistentRDDs().containsKey(writeRecords.id()),
-        "RDDs cached for " + instant1 + " should be cleared.");
+    if (shouldReleaseResource) {
+      assertEquals(Collections.singletonList(persistedRdd0.id()),
+          context().getCachedDataIds(writeConfig.getBasePath(), instant0),
+          "RDDs cached for " + instant0 + " should be retained.");
+      assertEquals(Collections.emptyList(),
+          context().getCachedDataIds(writeConfig.getBasePath(), instant1),
+          "RDDs cached for " + instant1 + " should be cleared.");
+      assertTrue(jsc().getPersistentRDDs().containsKey(persistedRdd0.id()),
+          "RDDs cached for " + instant0 + " should be retained.");
+      assertFalse(jsc().getPersistentRDDs().containsKey(persistedRdd1.id()),
+          "RDDs cached for " + instant1 + " should be cleared.");
+      assertFalse(jsc().getPersistentRDDs().containsKey(writeRecords.id()),
+          "RDDs cached for " + instant1 + " should be cleared.");
+    } else {
+      assertEquals(Collections.singletonList(persistedRdd0.id()),
+          context().getCachedDataIds(writeConfig.getBasePath(), instant0),
+          "RDDs cached for " + instant0 + " should be retained.");
+      assertEquals(3,
+          context().getCachedDataIds(writeConfig.getBasePath(), instant1).size(),
+          "RDDs cached for " + instant1 + " should be retained.");
+      assertTrue(jsc().getPersistentRDDs().containsKey(persistedRdd0.id()),
+          "RDDs cached for " + instant0 + " should be retained.");
+      assertTrue(jsc().getPersistentRDDs().containsKey(persistedRdd1.id()),
+          "RDDs cached for " + instant1 + " should be retained.");
+      assertTrue(jsc().getPersistentRDDs().containsKey(writeRecords.id()),
+          "RDDs cached for " + instant1 + " should be retained.");
+    }
   }
 }
