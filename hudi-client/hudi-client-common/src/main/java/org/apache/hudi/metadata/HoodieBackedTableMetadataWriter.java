@@ -268,7 +268,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .retainCommits(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED.defaultValue())
             .build())
         // we will trigger archive manually, to ensure only regular writer invokes it

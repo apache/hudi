@@ -386,6 +386,46 @@ public class TestHoodieWriteConfig {
   }
 
   @Test
+  public void testMetadataConfigsSetByUser() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).build())
+        .build();
+    assertMetadataConfigs(writeConfig, false, false, HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.defaultValue(),
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.defaultValue());
+
+    // explicitly enable by user.
+    props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    props.setProperty(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    props.setProperty(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key(),"true");
+
+    writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).build())
+        .build();
+    assertMetadataConfigs(writeConfig, true, true, true, true);
+
+    // explicitly disable by user
+    props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    props.setProperty(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "false");
+    props.setProperty(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key(),"false");
+
+    writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).build())
+        .build();
+    assertMetadataConfigs(writeConfig, false, false, false, false);
+  }
+
+  private void assertMetadataConfigs(HoodieWriteConfig writeConfig, boolean colStatsByUser, boolean bloomFilterByUser, boolean colStatsValue, boolean bloomFilterValue) {
+    assertEquals(writeConfig.isMetadataColumnStatsIndexEnabledByUser(), colStatsByUser);
+    assertEquals(writeConfig.isMetadataBloomFilterIndexEnabledByUser(), bloomFilterByUser);
+    assertEquals(writeConfig.isMetadataColumnStatsIndexEnabled(), colStatsValue);
+    assertEquals(writeConfig.isMetadataBloomFilterIndexEnabled(), bloomFilterByUser);
+  }
+
+  @Test
   public void testConsistentBucketIndexInvalidClusteringConfig() {
     Properties props = new Properties();
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");

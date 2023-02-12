@@ -138,8 +138,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
 import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE;
 import static org.apache.hudi.config.metrics.HoodieMetricsConfig.TURN_METRICS_ON;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
@@ -1185,6 +1187,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
       return true;
     });
+    // Verify that col stats partition is fully built out and is part of tableConfig entry tracking fully built out metadata partitions
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tableBasePath).build();
+    assertTrue(metaClient.getFs().exists(new Path(tableBasePath + "/" + METADATA_TABLE_FOLDER_PATH + "/" + PARTITION_NAME_COLUMN_STATS)));
+    assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(PARTITION_NAME_COLUMN_STATS));
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
