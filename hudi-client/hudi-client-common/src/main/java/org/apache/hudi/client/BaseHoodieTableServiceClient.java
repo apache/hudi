@@ -48,6 +48,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -71,6 +72,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
 
 public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient implements RunsTableService {
 
@@ -660,7 +662,40 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   }
 
   /**
+   * Rolls back the failed delta commits corresponding to the indexing action.
+   * Such delta commits are identified based on the suffix `METADATA_INDEXER_TIME_SUFFIX` ("004").
+   * <p>
+   * TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks
+   *  in the metadata table is landed.
+   *
+   * @return {@code true} if rollback happens; {@code false} otherwise.
+   */
+  protected boolean rollbackFailedIndexingCommits() {
+    HoodieTable table = createTable(config, hadoopConf);
+    List<String> instantsToRollback = getFailedIndexingCommitsToRollback(table.getMetaClient());
+    Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
+    instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
+    rollbackFailedWrites(pendingRollbacks);
+    return !pendingRollbacks.isEmpty();
+  }
+
+  protected List<String> getFailedIndexingCommitsToRollback(HoodieTableMetaClient metaClient) {
+    Stream<HoodieInstant> inflightInstantsStream = metaClient.getCommitsTimeline()
+        .filter(instant -> !instant.isCompleted()
+            && isIndexingCommit(instant.getTimestamp()))
+        .getInstantsAsStream();
+    return inflightInstantsStream.filter(instant -> {
+      try {
+        return heartbeatClient.isHeartbeatExpired(instant.getTimestamp());
+      } catch (IOException io) {
+        throw new HoodieException("Failed to check heartbeat for instant " + instant, io);
+      }
+    }).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+  }
+
+  /**
    * Rollback all failed writes.
+   *
    * @return true if rollback was triggered. false otherwise.
    */
   protected Boolean rollbackFailedWrites() {
@@ -699,6 +734,19 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     Stream<HoodieInstant> inflightInstantsStream = getInflightTimelineExcludeCompactionAndClustering(metaClient)
         .getReverseOrderedInstants();
     if (cleaningPolicy.isEager()) {
+      // Metadata table uses eager cleaning policy, but we need to exclude inflight delta commits
+      // from the async indexer (`HoodieIndexer`).
+      // TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks in the
+      //  metadata table is landed.
+      if (HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString())) {
+        return inflightInstantsStream.map(HoodieInstant::getTimestamp).filter(entry -> {
+          if (curInstantTime.isPresent()) {
+            return !entry.equals(curInstantTime.get());
+          } else {
+            return !isIndexingCommit(entry);
+          }
+        }).collect(Collectors.toList());
+      }
       return inflightInstantsStream.map(HoodieInstant::getTimestamp).filter(entry -> {
         if (curInstantTime.isPresent()) {
           return !entry.equals(curInstantTime.get());
