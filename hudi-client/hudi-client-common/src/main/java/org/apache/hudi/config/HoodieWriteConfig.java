@@ -1778,8 +1778,22 @@ public class HoodieWriteConfig extends HoodieConfig {
     return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled();
   }
 
+  /**
+   * @returns true if the config is explicitly set to true by the user. disregards any default value set from within code.
+   */
+  public boolean isMetadataBloomFilterIndexEnabledByUser() {
+    return isMetadataTableEnabled() && getProps().getBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER_BY_USER);
+  }
+
   public boolean isMetadataColumnStatsIndexEnabled() {
     return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
+  }
+
+  /**
+   * @returns true if the config is explicitly set to true by the user. disregards any default value set from within code.
+   */
+  public boolean isMetadataColumnStatsIndexEnabledByUser() {
+    return isMetadataTableEnabled() && getProps().getBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS_BY_USER);
   }
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
@@ -2893,6 +2907,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieWriteCommitCallbackConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isPayloadConfigSet,
           HoodiePayloadConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
+      setMetadataConfigsSetByUser();
       writeConfig.setDefaultOnCondition(!isMetadataConfigSet,
           HoodieMetadataConfig.newBuilder().withEngineType(engineType).fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isPreCommitValidationConfigSet,
@@ -2909,6 +2924,19 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
+    }
+
+    /**
+     * We need to track explicit value set for enabling/disabling metadata partitions disregarding default value set by the code.
+     * This method assists in tracking such values.
+     */
+    private void setMetadataConfigsSetByUser() {
+      writeConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS_BY_USER,
+          Boolean.toString(writeConfig.getProps().containsKey(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key())
+              && writeConfig.getProps().getBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key())));
+      writeConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER_BY_USER,
+          Boolean.toString(writeConfig.getProps().containsKey(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key())
+              && writeConfig.getProps().getBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key())));
     }
 
     private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {

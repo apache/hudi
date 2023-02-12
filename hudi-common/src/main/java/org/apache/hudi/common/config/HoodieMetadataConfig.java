@@ -148,6 +148,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "metadata table will have a partition to store the bloom filter index and will be "
           + "used during the index lookups.");
 
+  // internal property to track whether explicit value set by the use to enable/disable bloom filter partition in metadata table.
+  public static final String ENABLE_METADATA_INDEX_BLOOM_FILTER_BY_USER = ENABLE_METADATA_INDEX_BLOOM_FILTER.key() + ".by.user";
+
   public static final ConfigProperty<Integer> METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.file.group.count")
       .defaultValue(4)
@@ -169,6 +172,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Enable indexing column ranges of user data files under metadata table key lookups. When "
           + "enabled, metadata table will have a partition to store the column ranges and will be "
           + "used for pruning files during the index lookups.");
+
+  // internal property to track whether explicit value set by the use to enable/disable col stats partition in metadata table.
+  public static final String ENABLE_METADATA_INDEX_COLUMN_STATS_BY_USER = ENABLE_METADATA_INDEX_COLUMN_STATS.key() + ".by.user";
 
   public static final ConfigProperty<Integer> METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.file.group.count")
