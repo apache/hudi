@@ -27,8 +27,10 @@ import org.apache.hudi.common.testutils.{HadoopMapRedUtils, HoodieTestDataGenera
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils, HoodieUnsafeRDD}
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
+import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.{Dataset, HoodieUnsafeUtils, Row, SaveMode}
@@ -54,6 +56,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     //       non-partitioned makes it much more likely just a single file will be written
     DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName
   )
+
+  override def conf: SparkConf = conf(getSparkSqlConf)
 
   @Disabled("Currently disabled b/c of the fallback to HadoopFsRelation")
   @Test
