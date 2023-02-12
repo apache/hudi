@@ -94,6 +94,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.convertValueForSpecificDataTypes;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
@@ -110,6 +111,11 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_FILES = "files";
   public static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
   public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
+
+  // This suffix used by the delta commits from async indexer (`HoodieIndexer`),
+  // when the `indexUptoInstantTime` already exists in the metadata table,
+  // to avoid collision.
+  public static final String METADATA_INDEXER_TIME_SUFFIX = "004";
 
   /**
    * Returns whether the files partition of metadata table is ready for read.
@@ -1379,5 +1385,19 @@ public class HoodieTableMetadataUtil {
     Set<String> inflightAndCompletedPartitions = getInflightMetadataPartitions(tableConfig);
     inflightAndCompletedPartitions.addAll(tableConfig.getMetadataPartitions());
     return inflightAndCompletedPartitions;
+  }
+
+  /**
+   * Checks if a delta commit in metadata table is written by async indexer.
+   * <p>
+   * TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks in the
+   *  metadata table is landed.
+   *
+   * @param instantTime Instant time to check.
+   * @return {@code true} if from async indexer; {@code false} otherwise.
+   */
+  public static boolean isIndexingCommit(String instantTime) {
+    return instantTime.length() == MILLIS_INSTANT_ID_LENGTH + METADATA_INDEXER_TIME_SUFFIX.length()
+        && instantTime.endsWith(METADATA_INDEXER_TIME_SUFFIX);
   }
 }

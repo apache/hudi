@@ -71,9 +71,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
-import static org.apache.hudi.metadata.HoodieBackedTableMetadataWriter.METADATA_INDEXER_TIME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
 
 public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient implements RunsTableService {
 
@@ -858,20 +857,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
         LOG.info("Not supported delegate to table service manager, tableServiceType : " + tableServiceType.getAction());
         return Option.empty();
     }
-  }
-
-  /**
-   * Checks if a delta commit in metadata table is written by async indexer.
-   * <p>
-   * TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks in the
-   *  metadata table is landed.
-   *
-   * @param instantTime Instant time to check.
-   * @return {@code true} if from async indexer; {@code false} otherwise.
-   */
-  private boolean isIndexingCommit(String instantTime) {
-    return instantTime.length() == MILLIS_INSTANT_ID_LENGTH + METADATA_INDEXER_TIME_SUFFIX.length()
-        && instantTime.endsWith(METADATA_INDEXER_TIME_SUFFIX);
   }
 
   @Override

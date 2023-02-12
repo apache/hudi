@@ -101,6 +101,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.METADATA_INDEXER_TIME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 
@@ -114,10 +115,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadataWriter.class);
 
   public static final String METADATA_COMPACTION_TIME_SUFFIX = "001";
-  // This suffix used by the delta commits from async indexer (`HoodieIndexer`),
-  // when the `indexUptoInstantTime` already exists in the metadata table,
-  // to avoid collision.
-  public static final String METADATA_INDEXER_TIME_SUFFIX = "004";
 
   // Virtual keys support for metadata table. This Field is
   // from the metadata payload schema.
