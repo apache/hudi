@@ -1010,6 +1010,11 @@ public class DeltaSync implements Serializable, Closeable {
     if (embeddedTimelineService.isPresent()) {
       embeddedTimelineService.get().stop();
     }
+
+    if (metrics != null) {
+      metrics.shutdown();
+    }
+
   }
 
   public FileSystem getFs() {
@@ -1026,6 +1031,10 @@ public class DeltaSync implements Serializable, Closeable {
 
   public Option<HoodieTimeline> getCommitTimelineOpt() {
     return commitTimelineOpt;
+  }
+
+  public HoodieDeltaStreamerMetrics getMetrics() {
+    return metrics;
   }
 
   /**
