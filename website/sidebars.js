@@ -53,6 +53,7 @@ module.exports = {
                     type: 'category',
                     label: 'Syncing to Catalogs',
                     items: [
+                        'meta_sync_overview',
                         'syncing_aws_glue_data_catalog',
                         'syncing_datahub',
                         'syncing_metastore',
