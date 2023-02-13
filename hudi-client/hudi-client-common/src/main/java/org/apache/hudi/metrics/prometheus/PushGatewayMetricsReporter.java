@@ -85,9 +85,9 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
   }
 
   private static Map<String, String> parseLabels(String labels) {
-   return Pattern.compile("\\s*,\\s*")
-       .splitAsStream(labels.trim())
-       .map(s -> s.split(":", 2))
-       .collect(Collectors.toMap(a -> a[0], a -> (a.length > 1) ? a[1] : ""));
+    return Pattern.compile("\\s*,\\s*")
+        .splitAsStream(labels.trim())
+        .map(s -> s.split(":", 2))
+        .collect(Collectors.toMap(a -> a[0], a -> (a.length > 1) ? a[1] : ""));
   }
 }
