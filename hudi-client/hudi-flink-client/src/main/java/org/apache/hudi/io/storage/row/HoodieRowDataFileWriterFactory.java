@@ -65,8 +65,10 @@ public class HoodieRowDataFileWriterFactory {
         writeConfig.getBloomFilterFPP(),
         writeConfig.getDynamicBloomFilterMaxNumEntries(),
         writeConfig.getBloomFilterType());
+
+    boolean utcTimestamp = writeConfig.getBooleanOrDefault(HoodieWriteConfig.WRITE_BULK_INSERT_UTC_TIMEZONE);
     HoodieRowDataParquetWriteSupport writeSupport =
-        new HoodieRowDataParquetWriteSupport(table.getHadoopConf(), rowType, filter);
+        new HoodieRowDataParquetWriteSupport(table.getHadoopConf(), rowType, filter, utcTimestamp);
     return new HoodieRowDataParquetWriter(
         path, new HoodieParquetConfig<>(
         writeSupport,

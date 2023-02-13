@@ -76,4 +76,14 @@ public class TestSQL {
       + "('id6','Emma',20,DATE '1970-01-01'),\n"
       + "('id7','Bob',44,DATE '1970-01-01'),\n"
       + "('id8','Han',56,DATE '1970-01-01')";
+
+  public static final String INSERT_TIMESTAMPMILLIS_T1 = "insert into t1 values\n"
+      + "('id1','Julian',53,TIMESTAMP '1970-01-01 18:00:03','par1'),\n"
+      + "('id2','Stephen',33,TIMESTAMP '1970-01-01 18:00:02','par1')";
+
+  public static final String INSERT_TIMESTAMPMICROS_T1 = "insert into t1 values\n"
+      + "(1,'Danny',TIMESTAMP '2021-12-01 09:02:01.100001'),\n"
+      + "(2,'Stephen',TIMESTAMP '2021-12-02 11:04:02.200002'),\n"
+      + "(3,'Julian',TIMESTAMP '2021-12-03 21:14:03.300003'),\n"
+      + "(4,'Fabian',TIMESTAMP '2021-12-04 21:16:04.400004')";
 }

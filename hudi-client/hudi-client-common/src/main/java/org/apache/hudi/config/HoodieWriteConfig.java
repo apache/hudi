@@ -614,6 +614,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to enable commit conflict checking or not during early "
           + "conflict detection.");
 
+  public static final ConfigProperty<Boolean> WRITE_BULK_INSERT_UTC_TIMEZONE = ConfigProperty
+      .key("hoodie.bulk_insert.write.utc-timezone")
+      .defaultValue(false)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Whether to use UTC timezone to the conversion between epoch for bulk insert tasks.\n"
+          + "By default false use local timezone  ");
+
+
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -2855,6 +2863,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withEarlyConflictDetectionStrategy(String className) {
       writeConfig.setValue(EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withwriteBulkInsertUtcTimeZone(Boolean utcTimestamp) {
+      writeConfig.setValue(WRITE_BULK_INSERT_UTC_TIMEZONE, String.valueOf(utcTimestamp));
       return this;
     }
 

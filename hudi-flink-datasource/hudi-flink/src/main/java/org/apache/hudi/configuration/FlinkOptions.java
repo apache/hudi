@@ -272,12 +272,19 @@ public class FlinkOptions extends HoodieConfig {
           + "2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the\n"
           + "   log file records(combines the two records with same key for base and log file records), then read the left log file records");
 
-  public static final ConfigOption<Boolean> UTC_TIMEZONE = ConfigOptions
+  public static final ConfigOption<Boolean> READ_UTC_TIMEZONE = ConfigOptions
       .key("read.utc-timezone")
       .booleanType()
       .defaultValue(false)
       .withDescription("Use UTC timezone or local timezone to the conversion between epoch"
           + " time and LocalDateTime. Hive 0.x/1.x/2.x/3.x use local timezone. ");
+
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_UTC_TIMEZONE = ConfigOptions
+      .key("bulk_insert.write.utc-timezone")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to use UTC timezone to the conversion between epoch for bulk insert tasks.\n"
+         + "By default false use local timezone  ");
 
   public static final ConfigOption<Boolean> READ_AS_STREAMING = ConfigOptions
       .key("read.streaming.enabled")

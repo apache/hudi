@@ -215,9 +215,8 @@ public class FlinkStreamerConfig extends Configuration {
   public String sourceAvroSchema = "";
 
   @Parameter(names = {"--utc-timezone"}, description = "Use UTC timezone or local timezone to the conversion between epoch"
-      + " time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x"
-      + " use UTC timezone, by default true")
-  public Boolean utcTimezone = true;
+      + " time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone.")
+  public Boolean utcTimezone = false;
 
   @Parameter(names = {"--write-partition-url-encode"}, description = "Whether to encode the partition path url, default false")
   public Boolean writePartitionUrlEncode = false;
@@ -440,7 +439,7 @@ public class FlinkStreamerConfig extends Configuration {
       conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH, config.sourceAvroSchemaPath);
     }
     conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, config.sourceAvroSchema);
-    conf.setBoolean(FlinkOptions.UTC_TIMEZONE, config.utcTimezone);
+    conf.setBoolean(FlinkOptions.READ_UTC_TIMEZONE, config.utcTimezone);
     conf.setBoolean(FlinkOptions.URL_ENCODE_PARTITIONING, config.writePartitionUrlEncode);
     conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, config.hiveStylePartitioning);
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, config.writeTaskMaxSize);

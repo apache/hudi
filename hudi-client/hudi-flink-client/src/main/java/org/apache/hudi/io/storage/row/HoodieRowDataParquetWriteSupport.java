@@ -39,8 +39,8 @@ public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport
   private final Configuration hadoopConf;
   private final Option<HoodieBloomFilterWriteSupport<String>> bloomFilterWriteSupportOpt;
 
-  public HoodieRowDataParquetWriteSupport(Configuration conf, RowType rowType, BloomFilter bloomFilter) {
-    super(rowType);
+  public HoodieRowDataParquetWriteSupport(Configuration conf, RowType rowType, BloomFilter bloomFilter, boolean utcTimestamp) {
+    super(rowType, utcTimestamp);
     this.hadoopConf = new Configuration(conf);
     this.bloomFilterWriteSupportOpt = Option.ofNullable(bloomFilter)
         .map(HoodieBloomFilterRowDataWriteSupport::new);

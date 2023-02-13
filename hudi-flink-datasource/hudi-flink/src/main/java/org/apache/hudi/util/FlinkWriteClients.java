@@ -218,7 +218,8 @@ public class FlinkWriteClients {
             .withAutoCommit(false)
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
             .withProps(flinkConf2TypedProperties(conf))
-            .withSchema(getSourceSchema(conf).toString());
+            .withSchema(getSourceSchema(conf).toString())
+            .withwriteBulkInsertUtcTimeZone(conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_UTC_TIMEZONE));
 
     if (conf.getBoolean(FlinkOptions.METADATA_ENABLED)) {
       builder.withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);

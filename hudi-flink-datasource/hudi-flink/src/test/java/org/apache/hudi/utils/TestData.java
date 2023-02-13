@@ -359,6 +359,13 @@ public class TestData {
           TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
   );
 
+  public static List<RowData> DATA_SET_SOURCE_INSERT_WITHOUT_UTCTIMEZONE = Arrays.asList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Julian"), 53,
+          TimestampData.fromInstant(Instant.parse("1970-01-01T18:00:03Z")), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
+          TimestampData.fromInstant(Instant.parse("1970-01-01T18:00:02Z")), StringData.fromString("par1"))
+  );
+
   public static List<RowData> DATA_SET_SOURCE_INSERT_UTCTIMEZONE = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Julian"), 53,
           TimestampData.fromInstant(Instant.parse("1970-01-01T10:00:03Z")), StringData.fromString("par1")),

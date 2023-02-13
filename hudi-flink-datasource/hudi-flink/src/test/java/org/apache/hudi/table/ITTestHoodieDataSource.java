@@ -1703,19 +1703,16 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_INPUT, true)
         .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, true)
         .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, true)
-        .option(FlinkOptions.UTC_TIMEZONE, true)
+        .option(FlinkOptions.READ_UTC_TIMEZONE, true)
+        .option(FlinkOptions.WRITE_BULK_INSERT_UTC_TIMEZONE, true)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
-    final String insertInto = "insert into t1 values\n"
-        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 18:00:02','par1'),\n"
-        + "('id1','Julian',53,TIMESTAMP '1970-01-01 18:00:03','par1')";
-
-    execInsertSql(tableEnv, insertInto);
+    execInsertSql(tableEnv, TestSQL.INSERT_TIMESTAMPMILLIS_T1);
 
     List<Row> rows = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_UTCTIMEZONE);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_WITHOUT_UTCTIMEZONE);
   }
 
   @ParameterizedTest
@@ -1723,21 +1720,17 @@ public class ITTestHoodieDataSource {
   void testWriteReadTimestampMillisUTCTimeZone(ExecMode execMode) throws Exception {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .option(FlinkOptions.UTC_TIMEZONE, true)
+        .option(FlinkOptions.READ_UTC_TIMEZONE, true)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
-    String insertInto = "insert into t1 values\n"
-        + "('id1','Julian',53,TIMESTAMP '1970-01-01 18:00:03','par1'),\n"
-        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 18:00:02','par1')";
-    execInsertSql(streamTableEnv, insertInto);
-
+    execInsertSql(streamTableEnv, TestSQL.INSERT_TIMESTAMPMILLIS_T1);
 
     List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
 
     assertRowsEquals(result, TestData.DATA_SET_SOURCE_INSERT_UTCTIMEZONE);
 
     // insert another batch of data
-    execInsertSql(streamTableEnv, insertInto);
+    execInsertSql(streamTableEnv, TestSQL.INSERT_TIMESTAMPMILLIS_T1);
     List<Row> result2 = execSelectSql(streamTableEnv, "select * from t1", execMode);
     assertRowsEquals(result2, TestData.DATA_SET_SOURCE_INSERT_UTCTIMEZONE);
   }
@@ -1754,15 +1747,10 @@ public class ITTestHoodieDataSource {
         .noPartition()
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.READ_AS_STREAMING, streaming)
-        .option(FlinkOptions.UTC_TIMEZONE, true)
+        .option(FlinkOptions.READ_UTC_TIMEZONE, true)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
-    String insertInto = "insert into t1 values\n"
-        + "(1,'Danny',TIMESTAMP '2021-12-01 09:02:01.100001'),\n"
-        + "(2,'Stephen',TIMESTAMP '2021-12-02 11:04:02.200002'),\n"
-        + "(3,'Julian',TIMESTAMP '2021-12-03 21:14:03.300003'),\n"
-        + "(4,'Fabian',TIMESTAMP '2021-12-04 21:16:04.400004')";
-    execInsertSql(streamTableEnv, insertInto);
+    execInsertSql(streamTableEnv, TestSQL.INSERT_TIMESTAMPMICROS_T1);
 
     final String expected = "["
         + "+I[1, Danny, 2021-12-01T01:02:01.100001], "
@@ -1774,7 +1762,7 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result, expected);
 
     // insert another batch of data
-    execInsertSql(streamTableEnv, insertInto);
+    execInsertSql(streamTableEnv, TestSQL.INSERT_TIMESTAMPMICROS_T1);
     List<Row> result2 = execSelectSql(streamTableEnv, "select * from t1", execMode);
     assertRowsEquals(result2, expected);
   }
