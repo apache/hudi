@@ -2086,6 +2086,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_JOBNAME);
   }
 
+  public String getPushGatewayLabels() {
+    return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_LABELS);
+  }
+
   public boolean getPushGatewayRandomJobNameSuffix() {
     return getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX);
   }

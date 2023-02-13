@@ -72,6 +72,12 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
       .sinceVersion("0.6.0")
       .withDocumentation("Name of the push gateway job.");
 
+  public static final ConfigProperty<String> PUSHGATEWAY_LABELS = ConfigProperty
+      .key(PUSHGATEWAY_PREFIX + ".report.labels")
+      .defaultValue("")
+      .sinceVersion("0.14.0")
+      .withDocumentation("Label for the metrics emitted to the Pushgateway. Labels can be specified with key:value pairs separated by commas");
+
   public static final ConfigProperty<Boolean> PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".random.job.name.suffix")
       .defaultValue(true)

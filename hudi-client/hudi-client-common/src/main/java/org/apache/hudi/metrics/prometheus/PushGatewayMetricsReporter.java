@@ -24,8 +24,11 @@ import org.apache.hudi.metrics.MetricsReporter;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class PushGatewayMetricsReporter extends MetricsReporter {
 
@@ -33,6 +36,7 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
   private final int periodSeconds;
   private final boolean deleteShutdown;
   private final String configuredJobName;
+  private final Map<String, String> configuredLabels;
   private final boolean randomSuffix;
 
   public PushGatewayMetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
@@ -42,6 +46,7 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
     periodSeconds = config.getPushGatewayReportPeriodSeconds();
     deleteShutdown = config.getPushGatewayDeleteOnShutdown();
     configuredJobName = config.getPushGatewayJobName();
+    configuredLabels = parseLabels(config.getPushGatewayLabels());
     randomSuffix = config.getPushGatewayRandomJobNameSuffix();
 
     pushGatewayReporter = new PushGatewayReporter(
@@ -50,6 +55,7 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
         TimeUnit.SECONDS,
         TimeUnit.SECONDS,
         getJobName(),
+        configuredLabels,
         serverHost,
         serverPort,
         deleteShutdown);
@@ -76,5 +82,12 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
       return configuredJobName + random.nextLong();
     }
     return configuredJobName;
+  }
+
+  private static Map<String, String> parseLabels(String labels) {
+   return Pattern.compile("\\s*,\\s*")
+       .splitAsStream(labels.trim())
+       .map(s -> s.split(":", 2))
+       .collect(Collectors.toMap(a -> a[0], a -> (a.length > 1) ? a[1] : ""));
   }
 }
