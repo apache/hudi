@@ -119,16 +119,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
       return;
     }
 
-    // here we should take the write errors under consideration
-    // as some write errors might cause data loss when clustering
-    List<WriteStatus> statuses = events.stream()
-        .filter(event -> !event.isFailed())
-        .map(ClusteringCommitEvent::getWriteStatuses)
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
-    boolean hasWriteErrorsNotIgnored = !this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)
-        && statuses.stream().anyMatch(WriteStatus::hasErrors);
-    if (events.stream().anyMatch(ClusteringCommitEvent::isFailed) || hasWriteErrorsNotIgnored) {
+    if (events.stream().anyMatch(ClusteringCommitEvent::isFailed)) {
       try {
         // handle failure case
         ClusteringUtil.rollbackClustering(table, writeClient, instant);
@@ -140,7 +131,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     }
 
     try {
-      doCommit(instant, clusteringPlan, statuses);
+      doCommit(instant, clusteringPlan, events);
     } catch (Throwable throwable) {
       // make it fail-safe
       LOG.error("Error while committing clustering instant: " + instant, throwable);
@@ -150,7 +141,23 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     }
   }
 
-  private void doCommit(String instant, HoodieClusteringPlan clusteringPlan, List<WriteStatus> statuses) {
+  private void doCommit(String instant, HoodieClusteringPlan clusteringPlan, List<ClusteringCommitEvent> events) {
+    List<WriteStatus> statuses = events.stream()
+        .map(ClusteringCommitEvent::getWriteStatuses)
+        .flatMap(Collection::stream)
+        .collect(Collectors.toList());
+
+    long numErrorRecords = statuses.stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
+
+    if (numErrorRecords > 0 && !this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
+      // handle failure case
+      LOG.error("Got {} error records during clustering of instant {},\n"
+          + "option '{}' is configured as false,"
+          + "rolls back the clustering", numErrorRecords, instant, FlinkOptions.IGNORE_FAILED.key());
+      ClusteringUtil.rollbackClustering(table, writeClient, instant);
+      return;
+    }
+
     HoodieWriteMetadata<List<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
     writeMetadata.setWriteStatuses(statuses);
     writeMetadata.setWriteStats(statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()));
