@@ -229,7 +229,7 @@ public class OptionsResolver {
   }
 
   /**
-   * Returns whether the query is incremental.
+   * Returns whether consistent value will be generated for a logical timestamp type column.
    */
   public static boolean isConsistentLogicalTimestampEnabled(Configuration conf) {
     return conf.getBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
