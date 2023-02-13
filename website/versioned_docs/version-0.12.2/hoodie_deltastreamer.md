@@ -357,7 +357,7 @@ A high level overview of the same is provided below.
    3. Start the GcsEventsSource using the `HoodieDeltaStreamer` utility with --source-class parameter as 
 `org.apache.hudi.utilities.sources.GcsEventsSource` and hoodie.deltastreamer.source.cloud.meta.ack=true, and path related
    configs as described in the detailed guide mentiond above.
-5. Start the GcsEventsSource using the `HoodieDeltaStreamer` utility with --source-class parameter as 
+4. Start the GcsEventsSource using the `HoodieDeltaStreamer` utility with --source-class parameter as 
 `org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource` and other parameters as mentioned in the detailed guide above.
 
 ### JDBC Source
