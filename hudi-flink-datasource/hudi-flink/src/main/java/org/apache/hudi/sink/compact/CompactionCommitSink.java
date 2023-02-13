@@ -135,9 +135,9 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
         .map(CompactionCommitEvent::getWriteStatuses)
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
-    boolean hasErrors = events.stream().anyMatch(CompactionCommitEvent::isFailed)
-        || statuses.stream().anyMatch(WriteStatus::hasErrors);
-    if (hasErrors && !this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
+    boolean hasWriteErrorsNotIgnored = !this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)
+        && statuses.stream().anyMatch(WriteStatus::hasErrors);
+    if (events.stream().anyMatch(CompactionCommitEvent::isFailed) || hasWriteErrorsNotIgnored) {
       try {
         // handle failure case
         CompactionUtil.rollbackCompaction(table, instant);

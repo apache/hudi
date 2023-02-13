@@ -126,9 +126,9 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
         .map(ClusteringCommitEvent::getWriteStatuses)
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
-    boolean hasErrors = events.stream().anyMatch(ClusteringCommitEvent::isFailed)
-        || statuses.stream().anyMatch(WriteStatus::hasErrors);
-    if (hasErrors && !this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
+    boolean hasWriteErrorsNotIgnored = !this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)
+        && statuses.stream().anyMatch(WriteStatus::hasErrors);
+    if (events.stream().anyMatch(ClusteringCommitEvent::isFailed) || hasWriteErrorsNotIgnored) {
       try {
         // handle failure case
         ClusteringUtil.rollbackClustering(table, writeClient, instant);
