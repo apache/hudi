@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -42,15 +43,18 @@ public class TestJsonUtils {
         java.util.Date.from(Instant.ofEpochSecond(1))
     );
 
-    assertEquals("["
-            + "\"1970-01-01T00:00:01Z\","
-            + "\"1970-01-01\","
-            + "\"00:00:01\","
-            + "\"1970-01-01T00:00:01\","
-            + "\"1970-01-01\","
-            + "\"00:00:01\","
-            + "\"1970-01-01T00:00:01.000+00:00\","
-            + "\"1970-01-01T00:00:01.000+00:00\"]",
-        JsonUtils.toString(dateTimeObjs));
+    List<String> actual = dateTimeObjs.stream().map(JsonUtils::toString).collect(Collectors.toList());
+    List<String> expected = Arrays.asList(
+        "\"1970-01-01T00:00:01Z\"",
+        "\"1970-01-01\"",
+        "\"00:00:01\"",
+        "\"1970-01-01T00:00:01\"",
+        "\"1970-01-01\"",
+        "\"00:00:01\"",
+        "\"1970-01-01T00:00:01.000+0000\"",
+        "\"1970-01-01T00:00:01.000+0000\""
+    );
+
+    assertEquals(expected, actual);
   }
 }

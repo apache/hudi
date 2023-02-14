@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.databind.util.StdDateFormat;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
@@ -43,7 +44,14 @@ public class JsonUtils {
   static {
     registerModules(MAPPER);
 
+    // We're writing out dates as their string representations instead of (int) timestamps
     MAPPER.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    // NOTE: This is necessary to make sure that w/ Jackson >= 2.11 colon is not infixed
+    //       into the timezone value ("+00:00" as opposed to "+0000" before 2.11)
+    //       While Jackson is able to parse both of these formats, we keep it as false
+    //       to make sure metadata produced by Hudi stays consistent across Jackson versions
+    MAPPER.setDateFormat(StdDateFormat.instance.withColonInTimeZone(false));
+
     MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     // We need to exclude custom getters, setters and creators which can use member fields
     // to derive new fields, so that they are not included in the serialization
