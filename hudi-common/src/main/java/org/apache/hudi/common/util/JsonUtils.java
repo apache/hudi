@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.util;
 
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
@@ -26,15 +28,22 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * Utils for JSON serialization and deserialization.
  */
 public class JsonUtils {
 
+  private static final Logger LOG = LogManager.getLogger(ReflectionUtils.class);
+
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   static {
+    registerModules(MAPPER);
+
+    MAPPER.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     // We need to exclude custom getters, setters and creators which can use member fields
     // to derive new fields, so that they are not included in the serialization
@@ -55,6 +64,17 @@ public class JsonUtils {
     } catch (JsonProcessingException e) {
       throw new HoodieIOException(
           "Fail to convert the class: " + value.getClass().getName() + " to Json String", e);
+    }
+  }
+
+  private static void registerModules(ObjectMapper mapper) {
+    // NOTE: Registering [[JavaTimeModule]] is required for Jackson >= 2.11 (Spark >= 3.3)
+    SimpleModule javaTimeModule =
+        ReflectionUtils.newInstanceNoThrow("com.fasterxml.jackson.datatype.jsr310.JavaTimeModule");
+    if (javaTimeModule != null) {
+      mapper.registerModules(javaTimeModule);
+    } else {
+      LOG.info("No 'JavaTimeModule' could be located in the classpath");
     }
   }
 }

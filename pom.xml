@@ -848,6 +848,12 @@
         <artifactId>jackson-datatype-guava</artifactId>
         <version>${fasterxml.version}</version>
       </dependency>
+      <!-- This one is necessary to support Java 8 Date/Time types (required for Jackson >= 2.13) -->
+      <dependency>
+        <groupId>com.fasterxml.jackson.datatype</groupId>
+        <artifactId>jackson-datatype-jsr310</artifactId>
+        <version>${fasterxml.version}</version>
+      </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.module</groupId>
         <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
