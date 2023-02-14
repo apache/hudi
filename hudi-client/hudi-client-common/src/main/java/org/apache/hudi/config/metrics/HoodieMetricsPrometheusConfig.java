@@ -211,6 +211,11 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withPushgatewayLabels(String pushGatewayLabels) {
+      hoodieMetricsPrometheusConfig.setValue(PUSHGATEWAY_LABELS, pushGatewayLabels);
+      return this;
+    }
+
     public HoodieMetricsPrometheusConfig.Builder withPrometheusPortNum(int prometheusPortNum) {
       hoodieMetricsPrometheusConfig.setValue(PROMETHEUS_PORT_NUM, String.valueOf(prometheusPortNum));
       return this;
