@@ -17,10 +17,14 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hudi.DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.timeline.HoodieInstant
@@ -34,6 +38,7 @@ import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.keygen._
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
@@ -140,6 +145,94 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
 
     spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
+  }
+
+  @Test
+  def testInferPartitionBy(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, Map())
+      // Insert Operation
+      val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+      val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+      val commonOptsNoPreCombine = Map(
+        "hoodie.insert.shuffle.parallelism" -> "4",
+        "hoodie.upsert.shuffle.parallelism" -> "4",
+        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+      ) ++ writeOpts
+
+      inputDF.write.partitionBy("partition").format("hudi")
+        .options(commonOptsNoPreCombine)
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
+
+    val snapshot0 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+    snapshot0.cache()
+    assertEquals(100, snapshot0.count())
+
+    // triggering 2nd batch to ensure table config validation does not fail.
+    inputDF.write.partitionBy("partition").format("hudi")
+      .options(commonOptsNoPreCombine)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // verify partition cols
+    assertTrue(snapshot0.filter("_hoodie_partition_path = '" + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'").count() > 0)
+    assertTrue(snapshot0.filter("_hoodie_partition_path = '" + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH + "'").count() > 0)
+    assertTrue(snapshot0.filter("_hoodie_partition_path = '" + HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH + "'").count() > 0)
+    val fs = new Path(basePath).getFileSystem(new Configuration())
+    assertTrue(fs.exists(new Path(basePath + "/" + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
+    assertTrue(fs.exists(new Path(basePath + "/" + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)))
+    assertTrue(fs.exists(new Path(basePath + "/" + HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)))
+
+    // try w/ multi field partition paths
+    // generate two batches of df w/ diff partition path values.
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    val records2 = recordsToStrings(dataGen.generateInserts("000", 200)).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    // hard code the value for rider and fare so that we can verify the partitions paths with hudi
+    val toInsertDf = inputDF1.withColumn("fare",lit(100)).withColumn("rider",lit("rider-123"))
+      .union(inputDF2.withColumn("fare",lit(200)).withColumn("rider",lit("rider-456")))
+
+    toInsertDf.write.partitionBy("fare","rider").format("hudi")
+      .options(commonOptsNoPreCombine)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val snapshot1 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+    snapshot1.cache()
+    assertEquals(300, snapshot1.count())
+
+    var partitionPaths = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), HoodieMetadataConfig.newBuilder().build(), basePath)
+    assertTrue(partitionPaths.contains("100/rider-123"))
+    assertTrue(partitionPaths.contains("200/rider-456"))
+
+    // verify partition cols
+    assertEquals(snapshot1.filter("_hoodie_partition_path = '100/rider-123'").count(), 100)
+    assertEquals(snapshot1.filter("_hoodie_partition_path = '200/rider-456'").count(), 200)
+
+    // triggering 2nd batch to ensure table config validation does not fail.
+    toInsertDf.write.partitionBy("fare","rider").format("hudi")
+      .options(commonOptsNoPreCombine)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // incase of non partitioned dataset, inference should not happen.
+    toInsertDf.write.partitionBy("fare","rider").format("hudi")
+      .options(commonOptsNoPreCombine)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(KEYGENERATOR_CLASS_NAME.key(), classOf[NonpartitionedKeyGenerator].getName)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    partitionPaths = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), HoodieMetadataConfig.newBuilder().build(), basePath)
+    assertEquals(partitionPaths.length, 1)
+    assertEquals(partitionPaths.get(0), "")
   }
 
   @Test
@@ -805,7 +898,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testSparkPartitionByWithCustomKeyGenerator(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(recordType)
 
     // Without fieldType, the default is SIMPLE
     var writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, writeOpts)
@@ -861,8 +954,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
   @Test
   def testSparkPartitionByWithSimpleKeyGenerator() {
-    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
-
+    val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(HoodieRecordType.AVRO)
     // Use the `driver` field as the partition key
     var writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName, writeOpts)
     writer.partitionBy("driver")
@@ -887,8 +979,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testSparkPartitionByWithComplexKeyGenerator(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
-
+    val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(recordType)
     // Use the `driver` field as the partition key
     var writer = getDataFrameWriter(classOf[ComplexKeyGenerator].getName, writeOpts)
     writer.partitionBy("driver")
@@ -912,7 +1003,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testSparkPartitionByWithTimestampBasedKeyGenerator(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(recordType)
 
     val writer = getDataFrameWriter(classOf[TimestampBasedKeyGenerator].getName, writeOpts)
     writer.partitionBy("current_ts")
@@ -931,8 +1022,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testSparkPartitionByWithGlobalDeleteKeyGenerator(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
-
+    val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(recordType)
     val writer = getDataFrameWriter(classOf[GlobalDeleteKeyGenerator].getName, writeOpts)
     writer.partitionBy("driver")
       .mode(SaveMode.Overwrite)
@@ -947,8 +1037,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testSparkPartitionByWithNonpartitionedKeyGenerator(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
-
+    val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(recordType)
     // Empty string column
     var writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName, writeOpts)
     writer.partitionBy("")
@@ -1332,6 +1421,14 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       case HoodieRecordType.SPARK => (opt ++ sparkOpts, sparkOpts ++ fileIndexOpt)
       case _ => (opt, fileIndexOpt)
     }
+  }
+
+  def getWriterReaderOptsLessPartitionPath(recordType: HoodieRecordType,
+                          opt: Map[String, String] = commonOpts,
+                          enableFileIndex: Boolean = DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.defaultValue()):
+  (Map[String, String], Map[String, String]) = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, opt, enableFileIndex)
+    (writeOpts.-(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()), readOpts)
   }
 
   def getPathForReader(basePath: String, useGlobbing: Boolean, partitionPathLevel: Int): String = {
