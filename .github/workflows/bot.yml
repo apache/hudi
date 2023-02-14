@@ -93,10 +93,10 @@ jobs:
         uses: dorny/test-reporter@v1.6.0
         if: success() || failure()
         with:
-          artifact: test-results
-          name: JEST Tests
-          path: '*.xml'
+          name: Maven Tests
+          path: target/surefire-reports/*.xml
           reporter: java-junit
+          fail-on-error: true
 
 
   test-flink:
