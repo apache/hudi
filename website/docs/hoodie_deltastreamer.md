@@ -390,22 +390,22 @@ Insert code sample from this blog: https://hudi.apache.org/blog/2021/08/23/s3-ev
 
 ### GCS Events
 Google Cloud Storage (GCS) service provides an event notification mechanism which will post notifications when certain
-events happen in your GCS bucket. You can read more at [Pubsub Notifications](https://cloud.google.com/storage/docs/pubsub-notifications/).
-GCS will put these events in a Cloud Pubsub topic. Apache Hudi provides a GcsEventsSource that can read from Cloud Pubsub
+events happen in your GCS bucket. You can read more at [Pub/Sub Notifications](https://cloud.google.com/storage/docs/pubsub-notifications/).
+GCS will put these events in a Cloud Pub/Sub topic. Apache Hudi provides a GcsEventsSource that can read from Cloud Pub/Sub
 to trigger/processing of new or changed data as soon as it is available on GCS.
 
 #### Setup
 A detailed guide on [How to use the system](https://docs.google.com/document/d/1VfvtdvhXw6oEHPgZ_4Be2rkPxIzE0kBCNUiVDsXnSAA/edit#heading=h.tpmqk5oj0crt) is available.
 A high level overview of the same is provided below.
-1. Configure Cloud Storage Pubsub Notifications for the bucket. Follow Google’s documentation here: [https://cloud.google.com/storage/docs/reporting-changes](reporting changes)
-2. Create a Pubsub subscription corresponding to the topic
-3. Note the GCS Project Id, the GCS Subscription Id and use them for the following Hoodie configurations:
+1. Configure Cloud Storage Pub/Sub Notifications for the bucket. Follow Google’s documentation here: [https://cloud.google.com/storage/docs/reporting-changes](reporting changes)
+2. Create a Pub/Sub subscription corresponding to the topic
+3. Note the GCP Project Id, the Pub/Sub Subscription Id and use them for the following Hoodie configurations:
    1. hoodie.deltastreamer.source.gcs.project.id=GCP_PROJECT_ID
    2. hoodie.deltastreamer.source.gcs.subscription.id=SUSBCRIPTION_ID
-   3. Start the GcsEventsSource using the `HoodieDeltaStreamer` utility with --source-class parameter as
+   3. Start the `GcsEventsSource` using the `HoodieDeltaStreamer` utility with --source-class parameter as
       `org.apache.hudi.utilities.sources.GcsEventsSource` and hoodie.deltastreamer.source.cloud.meta.ack=true, and path related
       configs as described in the detailed guide mentiond above.
-4. Start the GcsEventsSource using the `HoodieDeltaStreamer` utility with --source-class parameter as
+4. Start the `GcsEventsHoodieIncrSource` using the `HoodieDeltaStreamer` utility with --source-class parameter as
    `org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource` and other parameters as mentioned in the detailed guide above.
 
 ### JDBC Source
