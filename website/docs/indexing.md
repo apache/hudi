@@ -27,6 +27,13 @@ Currently, Hudi supports the following indexing options.
 - **HBase Index:** Manages the index mapping in an external Apache HBase table.
 - **Bring your own implementation:** You can extend this [public API](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/index/HoodieIndex.java) 
 to implement custom indexing.
+- **Bucket Index:** An efficient and light weight index where file groups are located based on hash of record keys. Index look up is O(1), since there 
+is no index lookup latency. But users might need to allocate the number of buckets per partition upfront as it needs to be statically allocated. This index 
+type is best suited for small to medium scale dataset where data is evenly distributed across all partitions and total data per partition is known upfront
+to some ballpark estimate. This index type is also available with Flink writes. 
+- **Consistent Hashing Index:** This is an advanced version of the Bucket Index, where the buckets could scale up or shrink down based on the load per 
+partition. Users have to declare configurations like min buckets, max buckets and how dynamic scale up and shrink down of buckets will happen. This index 
+is available only with MOR table and has some limitations. Please check 0.13.0 release highlights[ADD link] for more details. 
 
 Writers can pick one of these options using `hoodie.index.type` config option. Additionally, a custom index implementation can also be employed
 using `hoodie.index.class` and supplying a subclass of `SparkHoodieIndex` (for Apache Spark writers)
