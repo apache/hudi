@@ -417,7 +417,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangesMetadataMap =
           collectColumnRangeMetadata(indexedRecords, fieldsToIndex, stat.getPath());
 
-      stat.putRecordsStats(columnRangesMetadataMap);
+      stat.mergeRecordsStats(columnRangesMetadataMap);
     }
 
     resetWriteCounts();
