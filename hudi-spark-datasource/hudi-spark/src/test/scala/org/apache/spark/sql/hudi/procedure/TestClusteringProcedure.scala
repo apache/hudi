@@ -42,6 +42,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call run_clustering Procedure By Table") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
+        throw new RuntimeException("fake issue")
         val tableName = generateTableName
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
         spark.sql(
