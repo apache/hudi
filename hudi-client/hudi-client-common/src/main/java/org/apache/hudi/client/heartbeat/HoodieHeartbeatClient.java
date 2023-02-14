@@ -84,7 +84,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     private Boolean isHeartbeatStopped = false;
     private Long lastHeartbeatTime;
     private Integer numHeartbeats = 0;
-    private Timer timer = new Timer();
+    private Timer timer = new Timer(true);
 
     public String getInstantTime() {
       return instantTime;
