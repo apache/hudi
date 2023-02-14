@@ -89,6 +89,15 @@ jobs:
         if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark $MVN_ARGS
+      - name: Test Report
+        uses: dorny/test-reporter@v1.6.0
+        if: success() || failure()
+        with:
+          artifact: test-results
+          name: JEST Tests
+          path: '*.xml'
+          reporter: java-junit
+
 
   test-flink:
     runs-on: ubuntu-latest
