@@ -65,6 +65,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -329,9 +330,15 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
               .toJmxHost(writeConfig.getJmxHost())
               .build());
           break;
+        case PROMETHEUS_PUSHGATEWAY:
+          HoodieMetricsPrometheusConfig prometheusConfig = HoodieMetricsPrometheusConfig.newBuilder()
+              .withPushgatewayJobname(String.format("%s-metadata", writeConfig.getPushGatewayJobName()))
+              .withPushgatewayHostName(writeConfig.getPushGatewayHost())
+              .withPushgatewayPortNum(writeConfig.getPushGatewayPort()).build();
+          builder.withProps(prometheusConfig.getProps());
+          break;
         case DATADOG:
         case PROMETHEUS:
-        case PROMETHEUS_PUSHGATEWAY:
         case CONSOLE:
         case INMEMORY:
         case CLOUDWATCH:
