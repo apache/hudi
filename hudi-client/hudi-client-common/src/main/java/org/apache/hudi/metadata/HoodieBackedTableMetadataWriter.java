@@ -332,7 +332,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           break;
         case PROMETHEUS_PUSHGATEWAY:
           HoodieMetricsPrometheusConfig prometheusConfig = HoodieMetricsPrometheusConfig.newBuilder()
-              .withPushgatewayJobname(String.format("%s-metadata", writeConfig.getPushGatewayJobName()))
+              .withPushgatewayJobname(writeConfig.getPushGatewayJobName())
+              .withPushgatewayRandomJobnameSuffix(writeConfig.getPushGatewayRandomJobNameSuffix())
+              .withPushgatewayLabels(writeConfig.getPushGatewayLabels())
+              .withPushgatewayReportPeriodInSeconds(String.valueOf(writeConfig.getPushGatewayReportPeriodSeconds()))
               .withPushgatewayHostName(writeConfig.getPushGatewayHost())
               .withPushgatewayPortNum(writeConfig.getPushGatewayPort()).build();
           builder.withProps(prometheusConfig.getProps());
