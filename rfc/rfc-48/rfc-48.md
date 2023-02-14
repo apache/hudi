@@ -14,7 +14,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-# RFC-46: Optimize Record Payload handling
+# RFC-48: Log compaction support for MOR tables
 
 ## Proposers
 
