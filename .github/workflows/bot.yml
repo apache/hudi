@@ -90,7 +90,7 @@ jobs:
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark $MVN_ARGS
       - name: Test Report
-        uses: dorny/test-reporter@v1.6.0
+        uses: dorny/test-reporter@v1
         if: success() || failure()
         with:
           name: Maven Tests
