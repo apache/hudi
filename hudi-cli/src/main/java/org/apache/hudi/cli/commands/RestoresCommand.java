@@ -53,11 +53,11 @@ public class RestoresCommand {
           @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
           @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
                   defaultValue = "false") final boolean headerOnly,
-          @ShellOption(value = {"--inflight"}, help = "Also list restores that are in flight",
-                  defaultValue = "false") final boolean showInFlight) {
+          @ShellOption(value = {"--includeInflights"}, help = "Also list restores that are in flight",
+                  defaultValue = "false") final boolean includeInflights) {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    List<HoodieInstant> restoreInstants = getRestoreInstants(activeTimeline, showInFlight);
+    List<HoodieInstant> restoreInstants = getRestoreInstants(activeTimeline, includeInflights);
 
     final List<Comparable[]> outputRows = new ArrayList<>();
     for (HoodieInstant restoreInstant : restoreInstants) {
