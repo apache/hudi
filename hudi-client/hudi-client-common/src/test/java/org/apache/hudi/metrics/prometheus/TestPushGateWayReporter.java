@@ -56,6 +56,7 @@ public class TestPushGateWayReporter {
     when(config.getPushGatewayDeleteOnShutdown()).thenReturn(true);
     when(config.getPushGatewayJobName()).thenReturn("foo");
     when(config.getPushGatewayRandomJobNameSuffix()).thenReturn(false);
+    when(config.getPushGatewayLabels()).thenReturn("hudi:prometheus");
 
     assertDoesNotThrow(() -> {
       new HoodieMetrics(config);
