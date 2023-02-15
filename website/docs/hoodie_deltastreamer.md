@@ -389,24 +389,104 @@ to trigger/processing of new or changed data as soon as it is available on S3.
 Insert code sample from this blog: https://hudi.apache.org/blog/2021/08/23/s3-events-source/#configuration-and-setup
 
 ### GCS Events
+
 Google Cloud Storage (GCS) service provides an event notification mechanism which will post notifications when certain
-events happen in your GCS bucket. You can read more at [Pub/Sub Notifications](https://cloud.google.com/storage/docs/pubsub-notifications/).
-GCS will put these events in a Cloud Pub/Sub topic. Apache Hudi provides a GcsEventsSource that can read from Cloud Pub/Sub
-to trigger/processing of new or changed data as soon as it is available on GCS.
+events happen in your GCS bucket. You can read more
+at [Pub/Sub Notifications](https://cloud.google.com/storage/docs/pubsub-notifications/). GCS will put these events in a
+Cloud Pub/Sub topic. Apache Hudi provides a GcsEventsSource that can read from Cloud Pub/Sub to trigger/processing of
+new or changed data as soon as it is available on GCS. The architecture is very similar to that
+of [S3 events sources](https://hudi.apache.org/blog/2021/08/23/s3-events-source).
 
 #### Setup
-A detailed guide on [How to use the system](https://docs.google.com/document/d/1VfvtdvhXw6oEHPgZ_4Be2rkPxIzE0kBCNUiVDsXnSAA/edit#heading=h.tpmqk5oj0crt) is available.
-A high level overview of the same is provided below.
-1. Configure Cloud Storage Pub/Sub Notifications for the bucket. Follow Google’s documentation here: [https://cloud.google.com/storage/docs/reporting-changes](reporting changes)
-2. Create a Pub/Sub subscription corresponding to the topic
+
+1. Configure Cloud Storage Pub/Sub notifications for the bucket. Follow Google’s
+   documentation [here](https://cloud.google.com/storage/docs/reporting-changes).
+2. Create a Pub/Sub subscription corresponding to the topic.
 3. Note the GCP Project Id, the Pub/Sub Subscription Id and use them for the following Hoodie configurations:
-   1. hoodie.deltastreamer.source.gcs.project.id=GCP_PROJECT_ID
-   2. hoodie.deltastreamer.source.gcs.subscription.id=SUSBCRIPTION_ID
+   1. `hoodie.deltastreamer.source.gcs.project.id=GCP_PROJECT_ID`
+   2. `hoodie.deltastreamer.source.gcs.subscription.id=SUBSCRIPTION_ID`
    3. Start the `GcsEventsSource` using the `HoodieDeltaStreamer` utility with --source-class parameter as
-      `org.apache.hudi.utilities.sources.GcsEventsSource` and hoodie.deltastreamer.source.cloud.meta.ack=true, and path related
-      configs as described in the detailed guide mentiond above.
+      `org.apache.hudi.utilities.sources.GcsEventsSource` and `hoodie.deltastreamer.source.cloud.meta.ack=true`, and
+      path related configs as described in the detailed guide mentiond above.
 4. Start the `GcsEventsHoodieIncrSource` using the `HoodieDeltaStreamer` utility with --source-class parameter as
-   `org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource` and other parameters as mentioned in the detailed guide above.
+   `org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource` and other parameters as mentioned in the detailed guide
+   above.
+
+Below are sample `spark-submit` commands for the two sources. Note that apart from hudi-utilities-bundle, you also need
+to provide [hudi-gcp-bundle](https://mvnrepository.com/artifact/org.apache.hudi/hudi-gcp-bundle) for GCP Pub/Sub and GCS
+connector dependencies.
+
+<details>
+  <summary>GcsEventsSource</summary>
+<p>
+
+```bash
+spark-submit \
+--jars "/path/to/hudi-utilities-bundle_2.12-0.13.0.jar,/path/to/hudi-gcp-bundle-0.13.0.jar" \
+--driver-memory 4g \
+--executor-memory 4g \
+--class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
+/path/to/hudi-utilities-bundle_2.12-0.13.0.jar \
+--source-class org.apache.hudi.utilities.sources.GcsEventsSource \
+--op INSERT \
+--hoodie-conf hoodie.datasource.write.recordkey.field=id \
+--source-ordering-field timeCreated \
+--hoodie-conf hoodie.index.type=GLOBAL_BLOOM \
+--filter-dupes \
+--allow-commit-on-no-checkpoint-change \
+--hoodie-conf hoodie.datasource.write.insert.drop.duplicates=true \
+--hoodie-conf hoodie.combine.before.insert=true \
+--hoodie-conf hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.SimpleKeyGenerator \
+--hoodie-conf hoodie.datasource.write.partitionpath.field=bucket \
+--hoodie-conf hoodie.deltastreamer.source.gcs.project.id=GCP_PROJECT_ID \
+--hoodie-conf hoodie.deltastreamer.source.gcs.subscription.id=SUSBCRIPTION_ID  \
+--hoodie-conf hoodie.deltastreamer.source.cloud.meta.ack=true \
+--target-base-path /base/path/of/event/metadata/table \
+--target-table gcs_meta_hive \
+--continuous \
+--source-limit 100 \
+--min-sync-interval-seconds 100
+```
+
+</p>
+</details>
+
+<details>
+  <summary>GcsEventsHoodieIncrSource</summary>
+<p>
+
+```bash
+spark-submit \
+ --jars "/path/to/hudi-utilities-bundle_2.12-0.13.0.jar,/path/to/hudi-gcp-bundle-0.13.0.jar" \
+ --conf spark.hadoop.fs.gs.impl=com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem \
+ --conf spark.hadoop.fs.AbstractFileSystem.gs.impl=com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS \
+ --driver-memory 4g \
+ --executor-memory 4g \
+ --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
+/path/to/hudi-utilities-bundle_2.12-0.13.0.jar \
+ --source-class org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource \
+ --op INSERT \
+ --hoodie-conf hoodie.deltastreamer.source.hoodieincr.file.format=parquet \
+ --hoodie-conf hoodie.deltastreamer.source.cloud.data.select.file.extension=jsonl \
+ --hoodie-conf hoodie.deltastreamer.source.cloud.data.datafile.format=json \
+ --hoodie-conf hoodie.datasource.write.recordkey.field=id \
+ --hoodie-conf hoodie.datasource.write.partitionpath.field= \
+ --hoodie-conf hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.ComplexKeyGenerator \
+ --hoodie-conf hoodie.deltastreamer.source.hoodieincr.path=/base/path/of/event/metadata/table \
+ --hoodie-conf hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT
+ --hoodie-conf hoodie.datasource.write.insert.drop.duplicates=true \
+ --hoodie-conf hoodie.combine.before.insert=true \
+ --filter-dupes \
+ --source-ordering-field id \
+ --target-base-path /base/path/of/data/table \
+ --target-table gcs_data_hive \
+ --continuous \
+ --source-limit 100 \
+ --min-sync-interval-seconds 60
+```
+
+</p>
+</details>
 
 ### JDBC Source
 Hudi can read from a JDBC source with a full fetch of a table, or Hudi can even read incrementally with checkpointing from a JDBC source.
