@@ -17,7 +17,11 @@ In sections, below we will discuss specific setup to access different query type
 The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi tables can be queried via the Spark datasource with a simple `spark.read.parquet`.
 See the [Spark Quick Start](/docs/quick-start-guide) for more examples of Spark datasource reading queries. 
 
-To setup Spark for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#Spark-DataSource) page.
+**Setup**
+
+If your Spark environment does not have the Hudi jars installed, add `hudi-spark-bundle_2.11-<hudi.version>.jar` to the
+classpath of drivers and executors using `--jars` option. Alternatively, hudi-spark-bundle can also fetched via the
+--packages options (e.g: --packages org.apache.hudi:hudi-spark-bundle_2.11:0.13.0).
 
 ### Snapshot query {#spark-snap-query}
 Retrieve the data table at the present point in time.
@@ -205,7 +209,19 @@ And for these use cases you should test the stability first.
 | `hoodie.metadata.index.column.stats.column.list` | `false` | N/A | Columns(separated by comma) to collect the column statistics  |
 
 ## Hive
-To setup Hive for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#hive) page.
+
+In order for Hive to recognize Hudi tables and query correctly,
+
+- the HiveServer2 needs to be provided with the `hudi-hadoop-mr-bundle-<hudi.version>.jar` in
+  its [aux jars path](https://www.cloudera.com/documentation/enterprise/5-6-x/topics/cm_mc_hive_udf.html#concept_nc3_mms_lr)
+  . This will ensure the input format classes with its dependencies are available for query planning & execution.
+- For MERGE_ON_READ tables, additionally the bundle needs to be put on the hadoop/hive installation across the cluster,
+  so that queries can pick up the custom RecordReader as well.
+
+In addition to setup above, for beeline cli access, the `hive.input.format` variable needs to be set to the fully
+qualified path name of the inputformat `org.apache.hudi.hadoop.HoodieParquetInputFormat`. For Tez, additionally
+the `hive.tez.input.format` needs to be set to `org.apache.hadoop.hive.ql.io.HiveInputFormat`. Then proceed to query the
+table like any other Hive table.
 
 ### Incremental query
 `HiveIncrementalPuller` allows incrementally extracting changes from large fact/dimension tables via HiveQL, combining the benefits of Hive (reliably process complex SQL queries) and
@@ -246,10 +262,87 @@ would ensure Map Reduce execution is chosen for a Hive query, which combines par
 separated) and calls InputFormat.listStatus() only once with all those partitions.
 
 ## PrestoDB
-To setup PrestoDB for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#prestodb) page.
+
+PrestoDB is a popular query engine, providing interactive query performance. One can use both Hive or Hudi connector (
+Presto version 0.275 onwards) for querying Hudi tables. Both connectors currently support snapshot querying on
+COPY_ON_WRITE tables, and snapshot and read optimized queries on MERGE_ON_READ Hudi tables.
+
+Since PrestoDB-Hudi integration has evolved over time, the installation instructions for PrestoDB would vary based on
+versions. Please check the below table for query types supported and installation instructions for different versions of
+PrestoDB.
+
+| **PrestoDB Version** | **Installation description** | **Query types supported** |
+|----------------------|------------------------------|---------------------------|
+| < 0.233              | Requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
+| > = 0.233             | No action needed. Hudi (0.5.1-incubating) is a compile time dependency. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
+| > = 0.240             | No action needed. Hudi 0.5.3 version is a compile time dependency. | Snapshot querying on both COW and MOR tables. |
+| > = 0.268             | No action needed. Hudi 0.9.0 version is a compile time dependency. | Snapshot querying on bootstrap tables. |
+| > = 0.272             | No action needed. Hudi 0.10.1 version is a compile time dependency. | File listing optimizations. Improved query performance. |
+| > = 0.275             | No action needed. Hudi 0.11.0 version is a compile time dependency. | All of the above. Native Hudi connector that is on par with Hive connector. |
+
+To learn more about the usage of Hudi connector, please
+checkout [prestodb documentation](https://prestodb.io/docs/current/connector/hudi.html).
+
+:::note Incremental queries and point in time queries are not supported either through the Hive connector or Hudi
+connector. However, it is in our roadmap and you can track the development
+under [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-3210).
+
+There is a known issue ([HUDI-4290](https://issues.apache.org/jira/browse/HUDI-4290)) for a clustered Hudi table. Presto
+query using version 0.272 or later may contain duplicates in results if clustering is enabled. This issue has been fixed
+in Hudi version 0.12.0 and we need to upgrade `hudi-presto-bundle`
+in presto to version 0.12.0. It is tracked in [HUDI-4605](https://issues.apache.org/jira/browse/HUDI-4605).
+:::
+
+### Presto Environment
+
+1. Configure Presto according to
+   the [Presto configuration document](https://prestodb.io/docs/current/installation/deployment.html).
+2. Configure hive catalog in ` /presto-server-0.2xxx/etc/catalog/hive.properties` as follows:
+
+```properties
+connector.name=hive-hadoop2
+hive.metastore.uri=thrift://xxx.xxx.xxx.xxx:9083
+hive.config.resources=.../hadoop-2.x/etc/hadoop/core-site.xml,.../hadoop-2.x/etc/hadoop/hdfs-site.xml
+```
+
+3. Alternatively, configure hudi catalog in ` /presto-server-0.2xxx/etc/catalog/hudi.properties` as follows:
+
+```properties
+connector.name=hudi
+hive.metastore.uri=thrift://xxx.xxx.xxx.xxx:9083
+hive.config.resources=.../hadoop-2.x/etc/hadoop/core-site.xml,.../hadoop-2.x/etc/hadoop/hdfs-site.xml
+```
+
+### Query
+
+Beginning query by connecting hive metastore with presto client. The presto client connection command is as follows:
+
+```bash
+# The presto client connection command where <catalog_name> is either hudi or hive,
+# and <schema_name> is the database name used in hive sync.
+./presto --server xxx.xxx.xxx.xxx:9999 --catalog <catalog_name> --schema <schema_name>
+```
 
 ## Trino
-To setup Trino for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#trino) page.
+
+Just like PrestoDB, there are two ways to query Hudi tables using Trino i.e. either using Hive connector or the native
+Hudi connector. If you're on Trino version **398** or higher, it is recommended to use the Hudi connector. To learn more
+about the usage of Hudi connector, please check out
+the [connector documentation](https://trino.io/docs/current/connector/hudi.html). Both the connectors are on par in
+terms of query support, i.e. 'Snapshot' queries for Copy-On-Write tables and
+'Read Optimized' queries for Merge-On-Read tables.
+
+:::note
+[Trino](https://trino.io/) (formerly PrestoSQL) was forked off of PrestoDB a few years ago. Hudi supports 'Snapshot'
+queries for Copy-On-Write tables and 'Read Optimized' queries for Merge-On-Read tables. This is through the initial
+input format based integration in PrestoDB (pre forking). This approach has known performance limitations with very
+large tables, which has been since fixed on PrestoDB. We recommend using the new Hudi connector in Trino (released since
+Trino version 398).
+:::
+
+To query Hudi tables on Trino using the Hive connector, place
+the [hudi-trino-bundle](https://mvnrepository.com/artifact/org.apache.hudi/hudi-trino-bundle) jar into the Hive
+connector installation `<trino_install>/plugin/hive`.
 
 ## Impala (3.4 or later)
 
@@ -282,13 +375,51 @@ REFRESH database.table_name
 ```
 
 ## Redshift Spectrum
-To set up Redshift Spectrum for querying Hudi, see the [Query Engine Setup](/docs/next/query_engine_setup#redshift-spectrum) page.
 
-## Doris 
-To set up Doris for querying Hudi, see the [Query Engine Setup](/docs/next/query_engine_setup#doris) page.
+Copy on Write Tables in Apache Hudi versions 0.5.2, 0.6.0, 0.7.0, 0.8.0, 0.9.0, 0.10.x and 0.11.x can be queried
+via Amazon Redshift Spectrum external tables. To be able to query Hudi versions 0.10.0 and above please try latest
+versions of Redshift.
+:::note Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supported when you use an Apache
+Hive metastore as the external catalog.
+:::
+
+Please refer
+to [Redshift Spectrum Integration with Apache Hudi](https://docs.aws.amazon.com/redshift/latest/dg/c-spectrum-external-tables.html#c-spectrum-column-mapping-hudi)
+for more details.
+
+## Doris
+
+Copy on Write Tables in Hudi version 0.10.0 can be queried via Doris external tables starting from Doris version 1.1.
+Please refer
+to [Doris Hudi external table](https://doris.apache.org/docs/ecosystem/external-table/hudi-external-table/ )
+for more details on the setup.
+
+:::note The current default supported version of Hudi is 0.10.0 and has not been tested in other versions. More versions
+will be supported in the future.
+:::
 
 ## StarRocks
-To set up StarRocks for querying Hudi, see the [Query Engine Setup](/docs/next/query_engine_setup#starrocks) page.
+
+Copy on Write tables in Apache Hudi 0.10.0 and above can be queried via StarRocks external tables from StarRocks version
+2.2.0. Only snapshot queries are supported currently. In future releases Merge on Read tables will also be supported.
+Please refer
+to [StarRocks Hudi external table](https://docs.starrocks.io/en-us/latest/using_starrocks/External_table#hudi-external-table)
+for more details on the setup.
+
+## ClickHouse
+
+[ClickHouse](https://clickhouse.com/docs/en/intro) is a column-oriented database for online analytical processing. It
+provides a read-only integration with Copy on Write Hudi tables in Amazon S3. To query such Hudi tables, first we need
+to create a table in Clickhouse
+using `Hudi` [table function](https://clickhouse.com/docs/en/sql-reference/table-functions/hudi).
+
+```
+CREATE TABLE hudi_table
+    ENGINE = Hudi(s3_base_path, [aws_access_key_id, aws_secret_access_key,])
+```
+
+Please refer [Clickhouse docs](https://clickhouse.com/docs/en/engines/table-engines/integrations/hudi/) for more
+details.
 
 ## Support Matrix
 
@@ -308,6 +439,7 @@ Following tables show whether a given query is supported on specific query engin
 | **Redshift Spectrum** |Y|N|
 | **Doris**             |Y|N|
 | **StarRocks**         |Y|N|
+| **ClickHouse**         |Y|N|
 
 
 
@@ -324,4 +456,7 @@ Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 |**PrestoDB**|Y|N|Y|
 |**Trino**|N|N|Y|
 |**Impala**|N|N|Y|
-
+| **Redshift Spectrum** |N|N|N|
+| **Doris**             |N|N|N|
+| **StarRocks**         |N|N|N|
+| **ClickHouse**         |N|N|N|
