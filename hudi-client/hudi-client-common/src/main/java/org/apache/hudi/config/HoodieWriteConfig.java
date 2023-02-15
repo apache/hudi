@@ -128,10 +128,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
 
   public static final ConfigProperty<String> SPARK_WRITE_STORAGE_LEVEL_VALUE = ConfigProperty
-          .key("hoodie.spark.write.storage.level")
-          .defaultValue("MEMORY_AND_DISK_SER")
-          .withDocumentation("Determine what level of persistence is used to cache write RDDs. "
-                  + "Refer to org.apache.spark.storage.StorageLevel for different values");
+       .key("hoodie.spark.write.storage.level")
+       .defaultValue("MEMORY_AND_DISK_SER")
+       .withDocumentation("Determine what level of persistence is used to cache write RDDs. "
+          + "Refer to org.apache.spark.storage.StorageLevel for different values");
+
   public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
       .defaultValue("ts")
@@ -1072,6 +1073,10 @@ public class HoodieWriteConfig extends HoodieConfig {
       return getString(WRITE_SCHEMA_OVERRIDE);
     }
     return getSchema();
+  }
+
+  public String getSparkWriteStorageLevel() {
+    return getString(SPARK_WRITE_STORAGE_LEVEL_VALUE);
   }
 
   public String getInternalSchema() {
