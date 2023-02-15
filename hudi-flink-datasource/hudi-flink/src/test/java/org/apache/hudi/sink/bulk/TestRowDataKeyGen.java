@@ -34,6 +34,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.sql.Timestamp;
+import java.util.TimeZone;
 
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.utils.TestData.insertRow;
@@ -191,6 +192,8 @@ public class TestRowDataKeyGen {
 
   @Test
   void testRecoredKeyContainsTimestamp() {
+    TimeZone timeZone = TimeZone.getTimeZone("GMT+8");
+    TimeZone.setDefault(timeZone);
     Configuration conf = TestConfigurations.getDefaultConf("path1");
     conf.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid,ts");
     conf.setString(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
