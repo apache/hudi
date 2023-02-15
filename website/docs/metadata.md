@@ -41,11 +41,14 @@ table is disabled by default, and you can turn it on by setting the same config 
 If you turn off the metadata table after enabling, be sure to wait for a few commits so that the metadata table is fully
 cleaned up, before re-enabling the metadata table again.
 
-The multi-modal index is introduced in 0.11.0 release.  They are disabled by default.  You can choose to enable bloom
-filter index by setting `hoodie.metadata.index.bloom.filter.enable` to `true` and enable column stats index by setting
-`hoodie.metadata.index.column.stats.enable` to `true`, when metadata table is enabled.  In 0.11.0 release, data skipping
-to improve queries in Spark now relies on the column stats index in metadata table.  The enabling of metadata table and
-column stats index is prerequisite to enabling data skipping with `hoodie.enable.data.skipping`.
+The [multi-modal index](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi) is
+introduced in 0.11.0 release. They are disabled by default. You can choose to enable bloom filter index by
+setting `hoodie.metadata.index.bloom.filter.enable` to `true` and enable column stats index by setting
+`hoodie.metadata.index.column.stats.enable` to `true`, when metadata table is enabled. In 0.11.0 release, data skipping
+to improve queries in Spark now relies on the column stats index in metadata table. The enabling of metadata table and
+column stats index is prerequisite to enabling data skipping with `hoodie.enable.data.skipping`. Moreover, the metadata
+indexes can be built asynchronously without blocking regular ingestion writers.
+Checkout [asynchronous metadata indexing](/docs/metadata_indexing) docs for more details.
 
 ## Deployment considerations
 To ensure that Metadata Table stays up to date, all write operations on the same Hudi table need additional configurations
