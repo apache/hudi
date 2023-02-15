@@ -176,19 +176,33 @@ public class ReflectionUtils {
   }
 
   /**
-   * Check if the clazz has the target constructor or not.
+   * Check if the class has the target constructor or not.
    *
    * When catch {@link HoodieException} from {@link #loadClass}, it's inconvenient to say if the exception was thrown
    * due to the instantiation's own logic or missing constructor.
    *
    * TODO: ReflectionUtils should throw a specific exception to indicate Reflection problem.
    */
-  public static boolean hasConstructor(String clazz, Class<?>[] constructorArgTypes) {
+  public static boolean hasConstructor(String className, Class<?>[] constructorArgTypes) {
     try {
-      getClass(clazz).getConstructor(constructorArgTypes);
+      getClass(className).getConstructor(constructorArgTypes);
       return true;
     } catch (NoSuchMethodException e) {
-      LOG.warn("Unable to instantiate class " + clazz, e);
+      LOG.info(String.format("No ctor found in class '%s'", className));
+      return false;
+    }
+  }
+
+  /**
+   * Checks whether target class has a method w/ {@code methodName} and list of arguments
+   * designated by {@code paramTypes}
+   */
+  public static boolean hasMethod(Class<?> klass, String methodName, Class<?>... paramTypes) {
+    try {
+      klass.getMethod(methodName, paramTypes);
+      return true;
+    } catch (NoSuchMethodException e) {
+      LOG.info(String.format("No method %s found in class '%s'", methodName, klass.getName()));
       return false;
     }
   }
@@ -257,17 +271,31 @@ public class ReflectionUtils {
   }
 
   /**
-   * Invoke a static method of a class.
-   * @return the return value of the method
+   * Invokes a non-static method of a class on provided object
+   */
+  public static <O, R> R invokeMethod(O obj, String methodName, Object[] args, Class<?>... paramTypes) {
+    Class<?> klass = obj.getClass();
+    try {
+      Method method = klass.getMethod(methodName, paramTypes);
+      return (R) method.invoke(obj, args);
+    } catch (NoSuchMethodException e) {
+      throw new HoodieException(String.format("Unable to find the method '%s' of the class '%s'",  methodName, klass.getName()), e);
+    } catch (InvocationTargetException | IllegalAccessException e) {
+      throw new HoodieException(String.format("Unable to invoke the method '%s' of the class '%s'",  methodName, klass.getName()), e);
+    }
+  }
+
+  /**
+   * Invokes a static method of a class
    */
   public static Object invokeStaticMethod(String clazz, String methodName, Object[] args, Class<?>... parametersType) {
     try {
       Method method = getClass(clazz).getMethod(methodName, parametersType);
       return method.invoke(null, args);
     } catch (NoSuchMethodException e) {
-      throw new HoodieException(String.format("Unable to find the method %s of the class %s ",  methodName, clazz), e);
+      throw new HoodieException(String.format("Unable to find the method '%s' of the class '%s'",  methodName, clazz), e);
     } catch (InvocationTargetException | IllegalAccessException e) {
-      throw new HoodieException(String.format("Unable to invoke the methond %s of the class %s ",  methodName, clazz), e);
+      throw new HoodieException(String.format("Unable to invoke the method '%s' of the class '%s'",  methodName, clazz), e);
     }
   }
 

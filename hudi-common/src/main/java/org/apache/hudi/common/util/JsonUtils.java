@@ -50,7 +50,7 @@ public class JsonUtils {
     //       into the timezone value ("+00:00" as opposed to "+0000" before 2.11)
     //       While Jackson is able to parse both of these formats, we keep it as false
     //       to make sure metadata produced by Hudi stays consistent across Jackson versions
-    MAPPER.setDateFormat(StdDateFormat.instance.withColonInTimeZone(false));
+    configureColonInTimezone(MAPPER);
 
     MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     // We need to exclude custom getters, setters and creators which can use member fields
@@ -72,6 +72,16 @@ public class JsonUtils {
     } catch (JsonProcessingException e) {
       throw new HoodieIOException(
           "Fail to convert the class: " + value.getClass().getName() + " to Json String", e);
+    }
+  }
+
+  private static void configureColonInTimezone(ObjectMapper mapper) {
+    if (ReflectionUtils.hasMethod(StdDateFormat.class, "withColonInTimeZone", boolean.class)) {
+      // NOTE: We have to rely on reflection here since this method has only been introduced in
+      //       Jackson >= 2.10
+      StdDateFormat dateFormat =
+          ReflectionUtils.invokeMethod(StdDateFormat.instance, "withColonInTimeZone", new Object[] { false }, boolean.class);
+      mapper.setDateFormat(dateFormat);
     }
   }
 
