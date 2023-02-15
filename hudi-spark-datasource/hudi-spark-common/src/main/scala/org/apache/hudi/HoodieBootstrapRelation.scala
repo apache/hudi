@@ -98,7 +98,6 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
     val (bootstrapDataFileReader, bootstrapSkeletonFileReader) =
       createBootstrapFileReaders(tableSchema, requiredSchema, requiredSkeletonFileSchema, filters)
 
-    // TODO elaborate
     val regularFileReader = createRegularFileReader(tableSchema, requiredSchema, filters)
 
     new HoodieBootstrapRDD(sqlContext.sparkSession, bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader,
@@ -125,7 +124,8 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       dataSchema = new HoodieTableSchema(bootstrapDataFileSchema),
       partitionSchema = partitionSchema,
       requiredDataSchema = new HoodieTableSchema(requiredBootstrapDataFileSchema),
-      // TODO elaborate (we can't filter as we need record sequences to be aligned b/w data and skeleton files)
+      // NOTE: For bootstrapped files we can't apply any filtering in case we'd need to merge it with
+      //       a skeleton-file as we rely on matching ordering of the records across bootstrap- and skeleton-files
       filters = if (requiredSkeletonFileSchema.isEmpty) filters else Seq(),
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf(),
@@ -150,14 +150,17 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
     val boostrapSkeletonFileReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       dataSchema = new HoodieTableSchema(skeletonSchema),
-      // TODO elaborate (we don't want partition-values to be injected by Spark)
+      // NOTE: Here we specify partition-schema as empty since we don't need Spark to inject partition-values
+      //       parsed from the partition-path
       partitionSchema = StructType(Seq.empty),
       requiredDataSchema = new HoodieTableSchema(requiredSkeletonFileSchema),
-      // TODO elaborate (we can't filter as we need record sequences to be aligned b/w data and skeleton files)
+      // NOTE: For bootstrapped files we can't apply any filtering in case we'd need to merge it with
+      //       a skeleton-file as we rely on matching ordering of the records across bootstrap- and skeleton-files
       filters = if (requiredBootstrapDataFileSchema.isEmpty) filters else Seq(),
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf(),
-      // TODO elaborate
+      // NOTE: We override Spark to avoid injecting partition values into the records read from
+      //       skeleton-file
       shouldAppendPartitionValuesOverride = Some(false)
     )
 
@@ -173,7 +176,9 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
     val (partitionSchema, dataSchema, requiredDataSchema) =
       tryPrunePartitionColumns(tableSchema, requiredSchema)
 
-    // TODO elaborate (this a normal parquet reader for files not requiring combining w/ skeleton)
+    // NOTE: Bootstrapped table allows Hudi created file-slices to be co-located w/ the "bootstrapped"
+    //       ones (ie persisted by Spark). Therefore to be able to read the data from Bootstrapped
+    //       table we also need to create regular file-reader to read file-slices created by Hudi
     val regularFileReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       dataSchema = dataSchema,

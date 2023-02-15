@@ -201,7 +201,6 @@ class TestDataSourceForBootstrap {
     // check marked directory clean up
     assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
 
-    // TODO(HUDI-5602) troubleshoot
     val expectedDF = bootstrapMode match {
       case "METADATA_ONLY" =>
         sort(sourceDF)
