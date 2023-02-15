@@ -213,7 +213,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     // NOTE: This is a trick to avoid pulling all of [[ColumnStatsIndexSupport]] object into the lambdas'
     //       closures below
     val indexedColumns = this.indexedColumns
-    val sortedTargetColumns = sortedTargetColumnsSet.filter(indexedColumns.contains(_)).toSeq
+    val indexedTargetColumns = sortedTargetColumnsSet.filter(indexedColumns.contains(_)).toSeq
 
     // Here we perform complex transformation which requires us to modify the layout of the rows
     // of the dataset, and therefore we rely on low-level RDD API to avoid incurring encoding/decoding
@@ -257,7 +257,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
         // to align existing column-stats for individual file with the list of expected ones for the
         // whole transposed projection (a superset of all files)
         val columnRecordsMap = columnRecordsSeq.map(r => (r.getColumnName, r)).toMap
-        val alignedColStatRecordsSeq = sortedTargetColumns.map(columnRecordsMap.get)
+        val alignedColStatRecordsSeq = indexedTargetColumns.map(columnRecordsMap.get)
 
         val coalescedRowValuesSeq =
           alignedColStatRecordsSeq.foldLeft(ListBuffer[Any](fileName, valueCount)) {
@@ -283,7 +283,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     // NOTE: It's crucial to maintain appropriate ordering of the columns
     //       matching table layout: hence, we cherry-pick individual columns
     //       instead of simply filtering in the ones we're interested in the schema
-    val indexSchema = composeIndexSchema(sortedTargetColumns, tableSchema)
+    val indexSchema = composeIndexSchema(indexedTargetColumns, indexedColumns, tableSchema)
     (transposedRows, indexSchema)
   }
 
@@ -374,14 +374,14 @@ object ColumnStatsIndexSupport {
   /**
    * @VisibleForTesting
    */
-  def composeIndexSchema(targetColumnNames: Seq[String], tableSchema: StructType): StructType = {
+  def composeIndexSchema(targetColumnNames: Seq[String], indexedColumns: Set[String], tableSchema: StructType): StructType = {
     val fileNameField = StructField(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME, StringType, nullable = true, Metadata.empty)
     val valueCountField = StructField(HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT, LongType, nullable = true, Metadata.empty)
 
-    val targetFields = targetColumnNames.map(colName => tableSchema.fields.find(f => f.name == colName).get)
+    val indexedTargetFields = targetColumnNames.filter(indexedColumns.contains(_)).map(colName => tableSchema.fields.find(f => f.name == colName).get)
 
     StructType(
-      targetFields.foldLeft(Seq(fileNameField, valueCountField)) {
+      indexedTargetFields.foldLeft(Seq(fileNameField, valueCountField)) {
         case (acc, field) =>
           acc ++ Seq(
             composeColumnStatStructType(field.name, HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE, field.dataType),

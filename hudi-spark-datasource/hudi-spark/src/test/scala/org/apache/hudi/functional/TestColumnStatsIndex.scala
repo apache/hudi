@@ -247,8 +247,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       // We have to include "c1", since we sort the expected outputs by this column
       val requestedColumns = Seq("c4", "c1")
 
-      val realIndexColumns = requestedColumns.filter(targetColumnsToIndex.contains(_))
-      val expectedColStatsSchema = composeIndexSchema(realIndexColumns.sorted, sourceTableSchema)
+      val expectedColStatsSchema = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex.toSet, sourceTableSchema)
       // Match against expected column stats table
       val expectedColStatsIndexTableDf =
         spark.read
@@ -257,7 +256,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       // Collect Column Stats manually (reading individual Parquet files)
       val manualColStatsTableDF =
-        buildColumnStatsTableManually(basePath, realIndexColumns, targetColumnsToIndex, expectedColStatsSchema)
+        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
 
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
@@ -301,8 +300,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       val requestedColumns = sourceTableSchema.fieldNames
 
-      val realIndexColumns = requestedColumns.filter(targetColumnsToIndex.contains(_))
-      val expectedColStatsSchema = composeIndexSchema(realIndexColumns.sorted, sourceTableSchema)
+      val expectedColStatsSchema = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex.toSet, sourceTableSchema)
       val expectedColStatsIndexUpdatedDF =
         spark.read
           .schema(expectedColStatsSchema)
@@ -310,7 +308,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       // Collect Column Stats manually (reading individual Parquet files)
       val manualUpdatedColStatsTableDF =
-        buildColumnStatsTableManually(basePath, realIndexColumns, targetColumnsToIndex, expectedColStatsSchema)
+        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
 
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
@@ -517,6 +515,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
           s"sum(1) AS valueCount" +:
             df.columns
               .filter(col => includedCols.contains(col))
+              .filter(col => indexedCols.contains(col))
               .flatMap(col => {
                 val minColName = s"${col}_minValue"
                 val maxColName = s"${col}_maxValue"
@@ -552,7 +551,15 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
-    val expectedColStatsSchema = composeIndexSchema(sourceTableSchema.fieldNames, sourceTableSchema)
+    val indexedColumns: Set[String] = {
+      val customIndexedColumns = metadataConfig.getColumnsEnabledForColumnStatsIndex
+      if (customIndexedColumns.isEmpty) {
+        sourceTableSchema.fieldNames.toSet
+      } else {
+        customIndexedColumns.asScala.toSet
+      }
+    }
+    val expectedColStatsSchema = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
     val validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue")
 
     columnStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory) { transposedColStatsDF =>

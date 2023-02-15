@@ -238,6 +238,7 @@ public class ColumnStatsIndexHelper {
 
     StructType indexSchema = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
         JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSeq(),
+        JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSet(),
         StructType$.MODULE$.apply(orderedColumnSchemas)
     );
 
