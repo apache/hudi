@@ -25,8 +25,9 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 
-import com.amazonaws.regions.RegionUtils;
-import com.amazonaws.services.dynamodbv2.model.BillingMode;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.regions.RegionMetadata;
+import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_PREFIX;
 
@@ -64,19 +65,21 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
                          + "Each Hudi dataset should has it's unique key so concurrent writers could refer to the same partition key."
                          + " By default we use the Hudi table name specified to be the partition key");
 
-  public static final ConfigProperty<String> DYNAMODB_LOCK_REGION = ConfigProperty
-      .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "region")
-      .defaultValue("us-east-1")
-      .sinceVersion("0.10.0")
-      .withInferFunction(cfg -> {
-        String regionFromEnv = System.getenv("AWS_REGION");
-        if (regionFromEnv != null) {
-          return Option.of(RegionUtils.getRegion(regionFromEnv).getName());
-        }
-        return Option.empty();
-      })
-      .withDocumentation("For DynamoDB based lock provider, the region used in endpoint for Amazon DynamoDB service."
-                         + " Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1");
+  public static final ConfigProperty<String> DYNAMODB_LOCK_REGION =
+      ConfigProperty.key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "region")
+          .defaultValue("us-east-1")
+          .sinceVersion("0.10.0")
+          .withInferFunction(
+              cfg -> {
+                String regionFromEnv = System.getenv("AWS_REGION");
+                if (regionFromEnv != null) {
+                  return Option.of(RegionMetadata.of(Region.of(regionFromEnv)).id());
+                }
+                return Option.empty();
+              })
+          .withDocumentation(
+              "For DynamoDB based lock provider, the region used in endpoint for Amazon DynamoDB service."
+                  + " Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_BILLING_MODE = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "billing_mode")

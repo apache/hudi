@@ -153,6 +153,10 @@
                   <include>commons-codec:commons-codec</include>
                   <include>commons-io:commons-io</include>
                   <include>org.openjdk.jol:jol-core</include>
+                  <include>org.apache.hudi:hudi-aws</include>
+                  <include>software.amazon.awssdk:*</include>
+                  <include>org.apache.httpcomponents:httpclient</include>
+                  <include>org.apache.httpcomponents:httpcore</include>
                 </includes>
               </artifactSet>
               <relocations combine.children="append">
@@ -218,6 +222,10 @@
                 <relocation>
                   <pattern>org.openjdk.jol.</pattern>
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.httpcomponents.</pattern>
+                  <shadedPattern>org.apache.hudi.aws.org.apache.httpcomponents.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>

@@ -136,6 +136,18 @@
       <artifactId>hudi-aws</artifactId>
       <version>${project.version}</version>
     </dependency>
+
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+      <version>${aws.sdk.httpclient.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpcore</artifactId>
+      <version>${aws.sdk.httpcore.version}</version>
+    </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-gcp</artifactId>
@@ -456,6 +468,14 @@
       <scope>test</scope>
     </dependency>
 
+    <!-- AWS Services -->
+    <!-- https://mvnrepository.com/artifact/software.amazon.awssdk/aws-java-sdk-sqs -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>sqs</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
+    
     <!-- Hive - Test -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
