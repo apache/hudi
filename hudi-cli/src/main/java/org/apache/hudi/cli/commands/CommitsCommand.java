@@ -324,41 +324,45 @@ public class CommitsCommand {
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
           defaultValue = "false") final boolean headerOnly,
-      @ShellOption(value = {"includeArchivedTimeline"}, help = "Include archived commits as well",
-              defaultValue = "false") final boolean includeArchivedTimeline)
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
+              defaultValue = "false") final boolean includeArchivedTimeline,
+      @ShellOption(value = {"--nearestMatch"}, help = "If commit not found, show the immediate next and " +
+              "previous commits", defaultValue = "false") final boolean nearestMatch)
       throws Exception {
 
     HoodieDefaultTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
     HoodieTimeline timeline = defaultTimeline.getCommitsTimeline().filterCompletedInstants();
 
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_ACTION)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_ID)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_PREVIOUS_COMMIT)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_UPDATED)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_WRITTEN)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ERRORS)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_SIZE);
+
+    List<Comparable[]> rows = new ArrayList<>();
+
     Option<HoodieInstant> hoodieInstantOption = getCommitForInstant(timeline, instantTime);
     Option<HoodieCommitMetadata> commitMetadataOptional = getHoodieCommitMetadata(timeline, hoodieInstantOption);
+    if (commitMetadataOptional.isPresent()) {
+      HoodieCommitMetadata meta = commitMetadataOptional.get();
+      populateRowWithFileInfoFromCommitMetadata(hoodieInstantOption, rows, meta);
+      return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending,
+              limit, headerOnly, rows, exportTableName);
+    }
 
-    if (!commitMetadataOptional.isPresent()) {
+    if (!nearestMatch) {
       return "Commit " + instantTime + " not found in Commits " + timeline;
     }
 
-    HoodieCommitMetadata meta = commitMetadataOptional.get();
-    List<Comparable[]> rows = new ArrayList<>();
-    for (Map.Entry<String, List<HoodieWriteStat>> entry : meta.getPartitionToWriteStats().entrySet()) {
-      String action = hoodieInstantOption.get().getAction();
-      String path = entry.getKey();
-      List<HoodieWriteStat> stats = entry.getValue();
-      for (HoodieWriteStat stat : stats) {
-        rows.add(new Comparable[] {action, path, stat.getFileId(), stat.getPrevCommit(), stat.getNumUpdateWrites(),
-            stat.getNumWrites(), stat.getTotalWriteBytes(), stat.getTotalWriteErrors(), stat.getFileSizeInBytes()});
-      }
-    }
+    findNearestMatchingCommits(instantTime, timeline, rows);
 
-    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_ACTION)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_ID)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PREVIOUS_COMMIT)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_UPDATED)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_WRITTEN)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ERRORS)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_SIZE);
+    if (rows.isEmpty()) {
+      return "No matching commit or neighboring commit found for " + instantTime + " in Commits " + timeline;
+    }
 
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending,
         limit, headerOnly, rows, exportTableName);
@@ -416,5 +420,38 @@ public class CommitsCommand {
       return Option.of(TimelineUtils.getCommitMetadata(hoodieInstant.get(), timeline));
     }
     return Option.empty();
+  }
+
+  private void findNearestMatchingCommits(String instantTime, HoodieTimeline timeline, List<Comparable[]> rows)
+          throws IOException {
+    List<HoodieInstant> instantsAfter = timeline.findInstantsAfter(instantTime, 1).getInstants();
+    if (!instantsAfter.isEmpty()) {
+      addInstantToRow(timeline, rows, Option.of(instantsAfter.get(0)));
+    }
+
+    List<HoodieInstant> instantsBefore = timeline.findInstantsBefore(instantTime, 1).getInstants();
+    if (!instantsBefore.isEmpty()) {
+      addInstantToRow(timeline, rows, Option.of(instantsBefore.get(0)));
+    }
+  }
+
+  private void addInstantToRow(HoodieTimeline timeline, List<Comparable[]> rows, Option<HoodieInstant> beforeInstantOpt) throws IOException {
+    Option<HoodieCommitMetadata> commitMetaOpt = getHoodieCommitMetadata(timeline, beforeInstantOpt);
+    if (commitMetaOpt.isPresent()) {
+      populateRowWithFileInfoFromCommitMetadata(beforeInstantOpt, rows, commitMetaOpt.get());
+    }
+  }
+
+  private void populateRowWithFileInfoFromCommitMetadata(Option<HoodieInstant> hoodieInstantOption,
+                                                                List<Comparable[]> rows, HoodieCommitMetadata meta) {
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : meta.getPartitionToWriteStats().entrySet()) {
+      String action = hoodieInstantOption.get().getAction();
+      String path = entry.getKey();
+      List<HoodieWriteStat> stats = entry.getValue();
+      for (HoodieWriteStat stat : stats) {
+        rows.add(new Comparable[] {action, path, stat.getFileId(), stat.getPrevCommit(), stat.getNumUpdateWrites(),
+                stat.getNumWrites(), stat.getTotalWriteBytes(), stat.getTotalWriteErrors(), stat.getFileSizeInBytes()});
+      }
+    }
   }
 }
