@@ -226,12 +226,6 @@
       <groupId>com.fasterxml.jackson.module</groupId>
       <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
     </dependency>
-    <!-- NOTE: This is only added in tests, since Spark's own bundle will include this jar -->
-    <dependency>
-      <groupId>com.fasterxml.jackson.datatype</groupId>
-      <artifactId>jackson-datatype-jsr310</artifactId>
-      <scope>test</scope>
-    </dependency>
 
     <!-- Avro -->
     <dependency>

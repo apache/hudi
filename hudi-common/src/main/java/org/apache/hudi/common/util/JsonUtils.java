@@ -20,7 +20,6 @@
 package org.apache.hudi.common.util;
 
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.util.StdDateFormat;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
@@ -28,6 +27,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -87,12 +87,6 @@ public class JsonUtils {
 
   private static void registerModules(ObjectMapper mapper) {
     // NOTE: Registering [[JavaTimeModule]] is required for Jackson >= 2.11 (Spark >= 3.3)
-    SimpleModule javaTimeModule =
-        ReflectionUtils.newInstanceNoThrow("com.fasterxml.jackson.datatype.jsr310.JavaTimeModule");
-    if (javaTimeModule != null) {
-      mapper.registerModules(javaTimeModule);
-    } else {
-      LOG.info("No 'JavaTimeModule' could be located in the classpath");
-    }
+    mapper.registerModules(new JavaTimeModule());
   }
 }
