@@ -39,6 +39,8 @@ import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
+import org.apache.hadoop.hive.ql.metadata.DefaultStorageHandler;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -290,6 +292,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       Map<String, String> sparkSerdeProperties = SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, config.getString(META_SYNC_BASE_PATH));
       tableProperties.putAll(sparkTableProperties);
       serdeProperties.putAll(sparkSerdeProperties);
+    }
+    if (!tableProperties.containsKey(hive_metastoreConstants.META_TABLE_STORAGE)) {
+      tableProperties.put(hive_metastoreConstants.META_TABLE_STORAGE, DefaultStorageHandler.class.getName());
     }
     boolean schemaChanged = false;
     // Check and sync schema

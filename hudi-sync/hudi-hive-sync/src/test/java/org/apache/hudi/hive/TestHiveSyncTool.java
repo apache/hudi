@@ -439,7 +439,8 @@ public class TestHiveSyncTool {
             + "{\"name\":\"favorite_number\",\"type\":\"integer\",\"nullable\":false,\"metadata\":{}},"
             + "{\"name\":\"favorite_color\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}},"
             + "{\"name\":\"datestr\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}]}\n"
-            + "spark.sql.sources.schema.partCol.0\tdatestr\n";
+            + "spark.sql.sources.schema.partCol.0\tdatestr\n"
+            + "storage_handler\torg.apache.hadoop.hive.ql.metadata.DefaultStorageHandler\n";
       } else {
         return "spark.sql.sources.provider\thudi\n"
             + "spark.sql.sources.schema.numPartCols\t1\n"
@@ -449,10 +450,11 @@ public class TestHiveSyncTool {
             + "\"nullable\":false,\"metadata\":{}},{\"name\":\"favorite_color\",\"type\":\"string\",\"nullable\":false,"
             + "\"metadata\":{}}]}\n"
             + "{\"name\":\"datestr\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}]}\n"
-            + "spark.sql.sources.schema.partCol.0\tdatestr\n";
+            + "spark.sql.sources.schema.partCol.0\tdatestr\n"
+            + "storage_handler\torg.apache.hadoop.hive.ql.metadata.DefaultStorageHandler\n";
       }
     } else {
-      return "";
+      return "storage_handler\torg.apache.hadoop.hive.ql.metadata.DefaultStorageHandler\n";
     }
   }
 
