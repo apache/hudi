@@ -791,6 +791,11 @@ object HoodieSparkSqlWriter {
     val writeConfig = DataSourceUtils.createHoodieConfig(writerSchemaStr, path, tblName, mapAsJavaMap(opts))
     val populateMetaFields = hoodieConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS)
 
+    // init table
+    val jssc = new JavaSparkContext(sqlContext.sparkContext)
+    val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jssc), writeConfig)
+    client.initTable(WriteOperationType.BULK_INSERT, org.apache.hudi.common.util.Option.of(instantTime))
+
     val bulkInsertPartitionerRows: BulkInsertPartitioner[Dataset[Row]] = if (populateMetaFields) {
       val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
       if (userDefinedBulkInsertPartitionerOpt.isPresent) {

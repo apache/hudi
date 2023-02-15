@@ -1196,7 +1196,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return table;
   }
 
-  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
+  public final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
     return initTable(operationType, instantTime, config.isMetadataTableEnabled());
   }
 
