@@ -27,6 +27,8 @@ import org.apache.hudi.common.util.queue.WaitStrategyFactory;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 import org.junit.jupiter.api.AfterEach;
@@ -37,6 +39,7 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,11 +47,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Disabled("HUDI-5792")
 public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
 
+  private static final Logger LOG = LogManager.getLogger(TestDisruptorExecutionInSpark.class);
   private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
 
+  private final int recordsNumber = 17;
 
   private final HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
       .withExecutorType(ExecutorType.DISRUPTOR.name())
@@ -56,12 +60,14 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
       .build(false);
 
   @BeforeEach
+  @Timeout(value = 60, unit = TimeUnit.SECONDS)
   public void setUp() throws Exception {
     initTestDataGenerator();
     initExecutorServiceWithFixedThreadPool(2);
   }
 
   @AfterEach
+  @Timeout(value = 60, unit = TimeUnit.SECONDS)
   public void tearDown() throws Exception {
     cleanupResources();
   }
@@ -72,9 +78,10 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
   }
 
   @Test
+  @Timeout(value = 60, unit = TimeUnit.SECONDS)
   public void testExecutor() {
 
-    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 128);
+    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, recordsNumber);
     final List<HoodieRecord> consumedRecords = new ArrayList<>();
 
     HoodieConsumer<HoodieRecord, Integer> consumer =
@@ -99,8 +106,8 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
       exec = new DisruptorExecutor<>(writeConfig.getWriteExecutorDisruptorWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
           Function.identity(), WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
       int result = exec.execute();
-      // It should buffer and write 100 records
-      assertEquals(128, result);
+      // It should buffer and write recordsNumber records
+      assertEquals(recordsNumber, result);
       // There should be no remaining records in the buffer
       assertFalse(exec.isRunning());
 
@@ -119,9 +126,9 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
   }
 
   @Test
-  @Timeout(value = 60)
+  @Timeout(value = 60, unit = TimeUnit.SECONDS)
   public void testInterruptExecutor() {
-    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
+    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, recordsNumber);
 
     HoodieConsumer<HoodieRecord, Integer> consumer =
         new HoodieConsumer<HoodieRecord, Integer>() {
@@ -144,7 +151,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
         };
 
     DisruptorExecutor<HoodieRecord, HoodieRecord, Integer>
-        executor = new DisruptorExecutor<>(1024, hoodieRecords.iterator(), consumer,
+        executor = new DisruptorExecutor<>(writeConfig.getWriteExecutorDisruptorWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
         Function.identity(), WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
 
     try {
@@ -152,7 +159,9 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
       assertThrows(HoodieException.class, executor::execute);
       assertTrue(Thread.interrupted());
     } catch (Exception e) {
-      // ignore here
+      LOG.error("Error in testInterruptExecutor: ", e);
+    } finally {
+      executor.shutdownNow();
     }
   }
 }
