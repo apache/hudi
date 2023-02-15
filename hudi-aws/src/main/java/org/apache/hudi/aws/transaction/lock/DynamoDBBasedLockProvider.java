@@ -18,23 +18,22 @@
 
 package org.apache.hudi.aws.transaction.lock;
 
-import com.amazonaws.client.builder.AwsClientBuilder;
-import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.dynamodbv2.AcquireLockOptions;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions;
 import com.amazonaws.services.dynamodbv2.LockItem;
-import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
-import com.amazonaws.services.dynamodbv2.model.BillingMode;
-import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
-import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
-import com.amazonaws.services.dynamodbv2.model.KeyType;
 import com.amazonaws.services.dynamodbv2.model.LockNotGrantedException;
-import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
-import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
-import com.amazonaws.services.dynamodbv2.util.TableUtils;
+
+import org.apache.hudi.aws.utils.DynamoTableUtils;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
+import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest;
+import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
+import software.amazon.awssdk.services.dynamodb.model.KeyType;
+import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput;
+import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.common.config.LockConfiguration;
@@ -48,6 +47,7 @@ import org.apache.hudi.exception.HoodieLockException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -77,7 +77,7 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     this(lockConfiguration, conf, null);
   }
 
-  public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf, AmazonDynamoDB dynamoDB) {
+  public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf, DynamoDbClient dynamoDB) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;
     this.tableName = lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key());
@@ -154,45 +154,48 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     return lock;
   }
 
-  private AmazonDynamoDB getDynamoDBClient() {
+  private DynamoDbClient getDynamoDBClient() {
     String region = this.lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION.key());
     String endpointURL = this.lockConfiguration.getConfig().containsKey(DynamoDbBasedLockConfig.DYNAMODB_ENDPOINT_URL.key())
                           ? this.lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_ENDPOINT_URL.key())
-                          : RegionUtils.getRegion(region).getServiceEndpoint(AmazonDynamoDB.ENDPOINT_PREFIX);
-    AwsClientBuilder.EndpointConfiguration dynamodbEndpoint =
-            new AwsClientBuilder.EndpointConfiguration(endpointURL, region);
-    return AmazonDynamoDBClientBuilder.standard()
-            .withEndpointConfiguration(dynamodbEndpoint)
-            .withCredentials(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(lockConfiguration.getConfig()))
+                          : DynamoDbClient.serviceMetadata().endpointFor(Region.of(region)).toString();
+    return DynamoDbClient.builder()
+            .endpointOverride(URI.create(endpointURL))
+            .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(lockConfiguration.getConfig()))
             .build();
   }
 
-  private void createLockTableInDynamoDB(AmazonDynamoDB dynamoDB, String tableName) {
+  private void createLockTableInDynamoDB(DynamoDbClient dynamoDB, String tableName) {
     String billingMode = lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_BILLING_MODE.key());
-    KeySchemaElement partitionKeyElement = new KeySchemaElement();
-    partitionKeyElement.setAttributeName(DYNAMODB_ATTRIBUTE_NAME);
-    partitionKeyElement.setKeyType(KeyType.HASH);
+    KeySchemaElement partitionKeyElement = KeySchemaElement
+            .builder()
+            .attributeName(DYNAMODB_ATTRIBUTE_NAME)
+            .keyType(KeyType.HASH)
+            .build();
 
     List<KeySchemaElement> keySchema = new ArrayList<>();
     keySchema.add(partitionKeyElement);
 
     Collection<AttributeDefinition> attributeDefinitions = new ArrayList<>();
-    attributeDefinitions.add(new AttributeDefinition().withAttributeName(DYNAMODB_ATTRIBUTE_NAME).withAttributeType(ScalarAttributeType.S));
-
-    CreateTableRequest createTableRequest = new CreateTableRequest(tableName, keySchema);
-    createTableRequest.setAttributeDefinitions(attributeDefinitions);
-    createTableRequest.setBillingMode(billingMode);
+    attributeDefinitions.add(AttributeDefinition.builder().attributeName(DYNAMODB_ATTRIBUTE_NAME).attributeType(ScalarAttributeType.S).build());
+    CreateTableRequest.Builder createTableRequestBuilder = CreateTableRequest.builder();
     if (billingMode.equals(BillingMode.PROVISIONED.name())) {
-      createTableRequest.setProvisionedThroughput(new ProvisionedThroughput()
-              .withReadCapacityUnits(Long.parseLong(lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_CAPACITY.key())))
-              .withWriteCapacityUnits(Long.parseLong(lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY.key()))));
+      createTableRequestBuilder.provisionedThroughput(ProvisionedThroughput.builder()
+              .readCapacityUnits(Long.parseLong(lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_CAPACITY.key())))
+              .writeCapacityUnits(Long.parseLong(lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY.key())))
+              .build());
     }
-    dynamoDB.createTable(createTableRequest);
+    createTableRequestBuilder.tableName(tableName)
+            .keySchema(keySchema)
+            .attributeDefinitions(attributeDefinitions)
+            .billingMode(billingMode);
+    dynamoDB.createTable(createTableRequestBuilder.build());
 
     LOG.info("Creating dynamoDB table " + tableName + ", waiting for table to be active");
     try {
-      TableUtils.waitUntilActive(dynamoDB, tableName, Integer.parseInt(lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT.key())), 20 * 1000);
-    } catch (TableUtils.TableNeverTransitionedToStateException e) {
+
+      DynamoTableUtils.waitUntilActive(dynamoDB, tableName, Integer.parseInt(lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT.key())), 20 * 1000);
+    } catch (DynamoTableUtils.TableNeverTransitionedToStateException e) {
       throw new HoodieLockException("Created dynamoDB table never transits to active", e);
     } catch (InterruptedException e) {
       throw new HoodieLockException("Thread interrupted while waiting for dynamoDB table to turn active", e);

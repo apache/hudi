@@ -24,8 +24,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.S3EventsMetaSelector;
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.Message;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
@@ -47,7 +47,7 @@ public class S3EventsSource extends RowSource implements Closeable {
 
   private final S3EventsMetaSelector pathSelector;
   private final List<Message> processedMessages = new ArrayList<>();
-  AmazonSQS sqs;
+  SqsClient sqs;
 
   public S3EventsSource(
       TypedProperties props,
@@ -84,7 +84,7 @@ public class S3EventsSource extends RowSource implements Closeable {
   @Override
   public void close() throws IOException {
     // close resource
-    this.sqs.shutdown();
+    this.sqs.close();
   }
 
   @Override

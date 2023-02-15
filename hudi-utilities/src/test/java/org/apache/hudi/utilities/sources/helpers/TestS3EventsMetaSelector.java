@@ -26,10 +26,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
-import com.amazonaws.services.sqs.model.Message;
 import org.apache.hadoop.fs.Path;
 import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
@@ -40,9 +36,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesResponse;
+import software.amazon.awssdk.services.sqs.model.Message;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_REGION;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
@@ -59,7 +61,7 @@ public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
   String sqsUrl;
 
   @Mock
-  AmazonSQS sqs;
+  SqsClient sqs;
 
   @Mock
   private S3EventsMetaSelector s3EventsMetaSelector;
@@ -114,10 +116,13 @@ public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
   @Test
   public void testEventsFromQueueNoMessages() {
     S3EventsMetaSelector selector = new S3EventsMetaSelector(props);
+    Map<String, String> attribute = new HashMap<>();
+    attribute.put(SQS_ATTR_APPROX_MESSAGES, "0");
     when(sqs.getQueueAttributes(any(GetQueueAttributesRequest.class)))
         .thenReturn(
-            new GetQueueAttributesResult()
-                .addAttributesEntry(SQS_ATTR_APPROX_MESSAGES, "0"));
+            GetQueueAttributesResponse.builder()
+                .attributesWithStrings(attribute)
+                .build());
 
     List<Message> processed = new ArrayList<>();
     Pair<List<String>, String> eventFromQueue =

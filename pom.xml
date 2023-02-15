@@ -128,6 +128,10 @@
     <orc.flink.version>1.5.6</orc.flink.version>
     <airlift.version>0.16</airlift.version>
     <prometheus.version>0.8.0</prometheus.version>
+    <aws.sdk.httpclient.version>4.5.13</aws.sdk.httpclient.version>
+    <aws.sdk.httpcore.version>4.4.13</aws.sdk.httpcore.version>
+    <commons.httpclient.version>4.5.9</commons.httpclient.version>
+    <commons.httpcore.version>4.4.11</commons.httpcore.version>
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
     <spark2.version>2.4.4</spark2.version>
@@ -205,10 +209,9 @@
     <zk-curator.version>2.7.1</zk-curator.version>
     <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.7</antlr.version>
-    <aws.sdk.version>1.12.22</aws.sdk.version>
+    <aws.sdk.version>2.18.40</aws.sdk.version>
     <proto.version>3.21.5</proto.version>
     <protoc.version>3.21.5</protoc.version>
-    <dynamodb.lockclient.version>1.1.0</dynamodb.lockclient.version>
     <zookeeper.version>3.5.7</zookeeper.version>
     <openjdk.jol.version>0.16</openjdk.jol.version>
     <google.cloud.pubsub.version>1.120.0</google.cloud.pubsub.version>
@@ -271,7 +274,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
-        <version>3.0.0</version>
+        <version>3.1.0</version>
         <dependencies>
           <dependency>
             <groupId>com.puppycrawl.tools</groupId>

@@ -18,11 +18,11 @@
 
 package org.apache.hudi.aws.cloudwatch;
 
-import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsync;
-import com.amazonaws.services.cloudwatch.model.Dimension;
-import com.amazonaws.services.cloudwatch.model.MetricDatum;
-import com.amazonaws.services.cloudwatch.model.PutMetricDataRequest;
-import com.amazonaws.services.cloudwatch.model.PutMetricDataResult;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
+import software.amazon.awssdk.services.cloudwatch.model.Dimension;
+import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
+import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataRequest;
+import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataResponse;
 import com.codahale.metrics.Clock;
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.ExponentiallyDecayingReservoir;
@@ -67,10 +67,10 @@ public class TestCloudWatchReporter {
   MetricRegistry metricRegistry;
 
   @Mock
-  AmazonCloudWatchAsync cloudWatchAsync;
+  CloudWatchAsyncClient cloudWatchAsync;
 
   @Mock
-  CompletableFuture<PutMetricDataResult> cloudWatchFuture;
+  CompletableFuture<PutMetricDataResponse> cloudWatchFuture;
 
   @Captor
   ArgumentCaptor<PutMetricDataRequest> putMetricDataRequestCaptor;
@@ -89,7 +89,7 @@ public class TestCloudWatchReporter {
         .convertDurationsTo(TimeUnit.MILLISECONDS)
         .build(cloudWatchAsync);
 
-    Mockito.when(cloudWatchAsync.putMetricDataAsync(ArgumentMatchers.any())).thenReturn(cloudWatchFuture);
+    Mockito.when(cloudWatchAsync.putMetricData((PutMetricDataRequest) ArgumentMatchers.any())).thenReturn(cloudWatchFuture);
   }
 
   @Test
@@ -130,52 +130,54 @@ public class TestCloudWatchReporter {
 
     // Since there are 6 metrics in total, and max datums per request is 2 we would expect 3 calls to CloudWatch
     // with 2 datums in each
-    Mockito.verify(cloudWatchAsync, Mockito.times(3)).putMetricDataAsync(putMetricDataRequestCaptor.capture());
-    Assertions.assertEquals(NAMESPACE, putMetricDataRequestCaptor.getValue().getNamespace());
+    Mockito.verify(cloudWatchAsync, Mockito.times(3)).putMetricData(putMetricDataRequestCaptor.capture());
+    Assertions.assertEquals(NAMESPACE, putMetricDataRequestCaptor.getValue().namespace());
 
     List<PutMetricDataRequest> putMetricDataRequests = putMetricDataRequestCaptor.getAllValues();
-    putMetricDataRequests.forEach(request -> assertEquals(2, request.getMetricData().size()));
+    putMetricDataRequests.forEach(request -> assertEquals(2, request.metricData().size()));
 
-    List<MetricDatum> metricDataBatch1 = putMetricDataRequests.get(0).getMetricData();
-    assertEquals(PREFIX + ".gauge1", metricDataBatch1.get(0).getMetricName());
-    assertEquals(Double.valueOf(gauge1.getValue()), metricDataBatch1.get(0).getValue());
-    assertDimensions(metricDataBatch1.get(0).getDimensions(), DIMENSION_GAUGE_TYPE_VALUE);
+    List<MetricDatum> metricDataBatch1 = putMetricDataRequests.get(0).metricData();
+    assertEquals(PREFIX + ".gauge1", metricDataBatch1.get(0).metricName());
+    assertEquals(Double.valueOf(gauge1.getValue()), metricDataBatch1.get(0).value());
+    assertDimensions(metricDataBatch1.get(0).dimensions(), DIMENSION_GAUGE_TYPE_VALUE);
 
-    assertEquals(PREFIX + ".gauge2", metricDataBatch1.get(1).getMetricName());
-    assertEquals(gauge2.getValue(), metricDataBatch1.get(1).getValue());
-    assertDimensions(metricDataBatch1.get(1).getDimensions(), DIMENSION_GAUGE_TYPE_VALUE);
+    assertEquals(PREFIX + ".gauge2", metricDataBatch1.get(1).metricName());
+    assertEquals(gauge2.getValue(), metricDataBatch1.get(1).value());
+    assertDimensions(metricDataBatch1.get(1).dimensions(), DIMENSION_GAUGE_TYPE_VALUE);
 
-    List<MetricDatum> metricDataBatch2 = putMetricDataRequests.get(1).getMetricData();
-    assertEquals(PREFIX + ".counter1", metricDataBatch2.get(0).getMetricName());
-    assertEquals(counter1.getCount(), metricDataBatch2.get(0).getValue().longValue());
-    assertDimensions(metricDataBatch2.get(0).getDimensions(), DIMENSION_COUNT_TYPE_VALUE);
+    List<MetricDatum> metricDataBatch2 = putMetricDataRequests.get(1).metricData();
+    assertEquals(PREFIX + ".counter1", metricDataBatch2.get(0).metricName());
+    assertEquals(counter1.getCount(), metricDataBatch2.get(0).value().longValue());
+    assertDimensions(metricDataBatch2.get(0).dimensions(), DIMENSION_COUNT_TYPE_VALUE);
 
-    assertEquals(PREFIX + ".histogram1", metricDataBatch2.get(1).getMetricName());
-    assertEquals(histogram1.getCount(), metricDataBatch2.get(1).getValue().longValue());
-    assertDimensions(metricDataBatch2.get(1).getDimensions(), DIMENSION_COUNT_TYPE_VALUE);
+    assertEquals(PREFIX + ".histogram1", metricDataBatch2.get(1).metricName());
+    assertEquals(histogram1.getCount(), metricDataBatch2.get(1).value().longValue());
+    assertDimensions(metricDataBatch2.get(1).dimensions(), DIMENSION_COUNT_TYPE_VALUE);
 
-    List<MetricDatum> metricDataBatch3 = putMetricDataRequests.get(2).getMetricData();
-    assertEquals(PREFIX + ".meter1", metricDataBatch3.get(0).getMetricName());
-    assertEquals(meter1.getCount(), metricDataBatch3.get(0).getValue().longValue());
-    assertDimensions(metricDataBatch3.get(0).getDimensions(), DIMENSION_COUNT_TYPE_VALUE);
+    List<MetricDatum> metricDataBatch3 = putMetricDataRequests.get(2).metricData();
+    assertEquals(PREFIX + ".meter1", metricDataBatch3.get(0).metricName());
+    assertEquals(meter1.getCount(), metricDataBatch3.get(0).value().longValue());
+    assertDimensions(metricDataBatch3.get(0).dimensions(), DIMENSION_COUNT_TYPE_VALUE);
 
-    assertEquals(PREFIX + ".timer1", metricDataBatch3.get(1).getMetricName());
-    assertEquals(timer1.getCount(), metricDataBatch3.get(1).getValue().longValue());
-    assertDimensions(metricDataBatch3.get(1).getDimensions(), DIMENSION_COUNT_TYPE_VALUE);
+    assertEquals(PREFIX + ".timer1", metricDataBatch3.get(1).metricName());
+    assertEquals(timer1.getCount(), metricDataBatch3.get(1).value().longValue());
+    assertDimensions(metricDataBatch3.get(1).dimensions(), DIMENSION_COUNT_TYPE_VALUE);
 
     reporter.stop();
-    Mockito.verify(cloudWatchAsync).shutdown();
+    Mockito.verify(cloudWatchAsync).close();
   }
 
   private void assertDimensions(List<Dimension> actualDimensions, String metricTypeDimensionVal) {
     assertEquals(2, actualDimensions.size());
 
-    Dimension expectedTableNameDimension = new Dimension()
-        .withName(DIMENSION_TABLE_NAME_KEY)
-        .withValue(TABLE_NAME);
-    Dimension expectedMetricTypeDimension = new Dimension()
-        .withName(DIMENSION_METRIC_TYPE_KEY)
-        .withValue(metricTypeDimensionVal);
+    Dimension expectedTableNameDimension = Dimension.builder()
+        .name(DIMENSION_TABLE_NAME_KEY)
+        .value(TABLE_NAME)
+        .build();
+    Dimension expectedMetricTypeDimension = Dimension.builder()
+        .name(DIMENSION_METRIC_TYPE_KEY)
+        .value(metricTypeDimensionVal)
+        .build();
 
     assertEquals(expectedTableNameDimension, actualDimensions.get(0));
     assertEquals(expectedMetricTypeDimension, actualDimensions.get(1));

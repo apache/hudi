@@ -25,8 +25,8 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.Message;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -83,7 +83,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
    * @param processedMessages array of processed messages to add more messages
    * @return the filtered list of valid S3 events in SQS.
    */
-  protected List<Map<String, Object>> getValidEvents(AmazonSQS sqs, List<Message> processedMessages) throws IOException {
+  protected List<Map<String, Object>> getValidEvents(SqsClient sqs, List<Message> processedMessages) throws IOException {
     List<Message> messages =
         getMessagesToProcess(
             sqs,
@@ -99,7 +99,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
                                                                     List<Message> messages) throws IOException {
     List<Map<String, Object>> validEvents = new ArrayList<>();
     for (Message message : messages) {
-      JSONObject messageBody = new JSONObject(message.getBody());
+      JSONObject messageBody = new JSONObject(message.body());
       Map<String, Object> messageMap;
       ObjectMapper mapper = new ObjectMapper();
       if (messageBody.has(SQS_MODEL_MESSAGE)) {
@@ -135,7 +135,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
    * @param lastCheckpointStr The last checkpoint instant string, empty if first run.
    * @return A pair of dataset of event records and the next checkpoint instant string.
    */
-  public Pair<List<String>, String> getNextEventsFromQueue(AmazonSQS sqs,
+  public Pair<List<String>, String> getNextEventsFromQueue(SqsClient sqs,
                                                            Option<String> lastCheckpointStr,
                                                            List<Message> processedMessages) {
     processedMessages.clear();
