@@ -24,5 +24,6 @@ package org.apache.hudi.table.action.cluster;
 public enum ClusteringPlanPartitionFilterMode {
   NONE,
   RECENT_DAYS,
-  SELECTED_PARTITIONS
+  SELECTED_PARTITIONS,
+  DAY_ROLLING
 }

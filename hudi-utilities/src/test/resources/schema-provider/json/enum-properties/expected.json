@@ -1,0 +1,24 @@
+{
+  "type" : "record",
+  "name" : "my_example",
+  "namespace" : "my_example.com",
+  "doc" : "User info",
+  "fields" : [ {
+    "name" : "name",
+    "type" : "string",
+    "doc" : ""
+  }, {
+    "name" : "gender",
+    "type" : {
+      "type" : "enum",
+      "name" : "gender",
+      "symbols" : [ "Male", "Female" ]
+    },
+    "doc" : "the gender"
+  }, {
+    "name" : "address",
+    "type" : [ "null", "string" ],
+    "doc" : "",
+    "default" : null
+  } ]
+}

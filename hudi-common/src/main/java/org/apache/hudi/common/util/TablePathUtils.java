@@ -17,17 +17,21 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 
+/**
+ * Utils for table path.
+ */
 public class TablePathUtils {
 
   private static final Logger LOG = LogManager.getLogger(TablePathUtils.class);
@@ -42,6 +46,10 @@ public class TablePathUtils {
     } catch (IOException ioe) {
       throw new HoodieException("Error checking Hoodie metadata folder for " + path, ioe);
     }
+  }
+
+  public static boolean isHoodieTablePath(FileSystem fs, Path path) {
+    return hasTableMetadataFolder(fs, path);
   }
 
   public static Option<Path> getTablePath(FileSystem fs, Path path) throws HoodieException, IOException {

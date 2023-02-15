@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.conf.Configuration;
@@ -68,16 +69,18 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthority;
+
 /**
  * Utility functions related to accessing the file storage.
  */
 public class FSUtils {
 
   private static final Logger LOG = LogManager.getLogger(FSUtils.class);
-  // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1
-  private static final Pattern LOG_FILE_PATTERN =
-      Pattern.compile("\\.(.*)_(.*)\\.(.*)\\.([0-9]*)(_(([0-9]*)-([0-9]*)-([0-9]*)))?");
-  private static final String LOG_FILE_PREFIX = ".";
+  // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1_1-0-1
+  // Archive log files are of this pattern - .commits_.archive.1_1-0-1
+  public static final Pattern LOG_FILE_PATTERN =
+      Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
   private static final long MIN_CLEAN_TO_KEEP = 10;
   private static final long MIN_ROLLBACK_TO_KEEP = 10;
@@ -216,8 +219,8 @@ public class FSUtils {
    * Given a base partition and a partition path, return relative path of partition path to the base path.
    */
   public static String getRelativePartitionPath(Path basePath, Path fullPartitionPath) {
-    basePath = Path.getPathWithoutSchemeAndAuthority(basePath);
-    fullPartitionPath = Path.getPathWithoutSchemeAndAuthority(fullPartitionPath);
+    basePath = getPathWithoutSchemeAndAuthority(basePath);
+    fullPartitionPath = getPathWithoutSchemeAndAuthority(fullPartitionPath);
 
     String fullPartitionPathStr = fullPartitionPath.toString();
 
@@ -319,10 +322,9 @@ public class FSUtils {
   public static Map<String, FileStatus[]> getFilesInPartitions(HoodieEngineContext engineContext,
                                                                HoodieMetadataConfig metadataConfig,
                                                                String basePathStr,
-                                                               String[] partitionPaths,
-                                                               String spillableMapPath) {
+                                                               String[] partitionPaths) {
     try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
-        spillableMapPath, true)) {
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true)) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {
       throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);
@@ -448,11 +450,24 @@ public class FSUtils {
    * Get the last part of the file name in the log file and convert to int.
    */
   public static int getFileVersionFromLog(Path logPath) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
+    return getFileVersionFromLog(logPath.getName());
+  }
+
+  public static int getFileVersionFromLog(String logFileName) {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(logFileName);
     if (!matcher.find()) {
-      throw new InvalidHoodiePathException(logPath, "LogFile");
+      throw new HoodieIOException("Invalid log file name: " + logFileName);
     }
     return Integer.parseInt(matcher.group(4));
+  }
+
+  public static String getSuffixFromLogPath(Path path) {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+    if (!matcher.find()) {
+      throw new InvalidHoodiePathException(path, "LogFile");
+    }
+    String val = matcher.group(10);
+    return val == null ? "" : val;
   }
 
   public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
@@ -460,7 +475,7 @@ public class FSUtils {
     String suffix = (writeToken == null)
         ? String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version)
         : String.format("%s_%s%s.%d_%s", fileId, baseCommitTime, logFileExtension, version, writeToken);
-    return LOG_FILE_PREFIX + suffix;
+    return HoodieLogFile.LOG_FILE_PREFIX + suffix;
   }
 
   public static boolean isBaseFile(Path path) {
@@ -607,12 +622,12 @@ public class FSUtils {
     String properPartitionPath = partitionPath.startsWith("/")
         ? partitionPath.substring(1)
         : partitionPath;
-    return getPartitionPath(new Path(basePath), properPartitionPath);
+    return getPartitionPath(new CachingPath(basePath), properPartitionPath);
   }
 
   public static Path getPartitionPath(Path basePath, String partitionPath) {
-    // FOr non-partitioned table, return only base-path
-    return StringUtils.isNullOrEmpty(partitionPath) ? basePath : new Path(basePath, partitionPath);
+    // For non-partitioned table, return only base-path
+    return StringUtils.isNullOrEmpty(partitionPath) ? basePath : new CachingPath(basePath, partitionPath);
   }
 
   /**
@@ -648,6 +663,14 @@ public class FSUtils {
    */
   public static boolean isGCSFileSystem(FileSystem fs) {
     return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
+  }
+
+  /**
+   * Chdfs will throw {@code IOException} instead of {@code EOFException}. It will cause error in isBlockCorrupted().
+   * Wrapped by {@code BoundedFsDataInputStream}, to check whether the desired offset is out of the file size in advance.
+   */
+  public static boolean isCHDFileSystem(FileSystem fs) {
+    return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
   }
 
   public static Configuration registerFileSystem(Path file, Configuration conf) {
@@ -754,6 +777,10 @@ public class FSUtils {
     if (subPaths.size() > 0) {
       SerializableConfiguration conf = new SerializableConfiguration(fs.getConf());
       int actualParallelism = Math.min(subPaths.size(), parallelism);
+
+      hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),
+          "Parallel listing paths " + String.join(",", subPaths));
+
       result = hoodieEngineContext.mapToPair(subPaths,
           subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
           actualParallelism);
@@ -826,6 +853,12 @@ public class FSUtils {
     return result;
   }
 
+  /**
+   * Serializable function interface.
+   *
+   * @param <T> Input value type.
+   * @param <R> Output value type.
+   */
   public interface SerializableFunction<T, R> extends Function<T, R>, Serializable {
   }
 

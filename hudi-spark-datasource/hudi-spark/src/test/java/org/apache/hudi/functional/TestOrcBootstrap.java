@@ -19,7 +19,9 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
@@ -49,7 +51,6 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
-import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -73,7 +74,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
-import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.DataTypes;
 import org.junit.jupiter.api.AfterEach;
@@ -108,9 +108,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("functional")
 public class TestOrcBootstrap extends HoodieClientTestBase {
 
-
-  public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,double,double,double,double,"
-      + "struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
   @TempDir
   public java.nio.file.Path tmpFolder;
 
@@ -119,13 +116,9 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
   private HoodieParquetInputFormat roInputFormat;
   private JobConf roJobConf;
 
-  private HoodieParquetRealtimeInputFormat rtInputFormat;
-  private JobConf rtJobConf;
-  private SparkSession spark;
-
   @BeforeEach
   public void setUp() throws Exception {
-    bootstrapBasePath = tmpFolder.toAbsolutePath().toString() + "/data";
+    bootstrapBasePath = tmpFolder.toAbsolutePath() + "/data";
     initPath();
     initSparkContexts();
     initTestDataGenerator();
@@ -185,6 +178,11 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
   }
 
   private void testBootstrapCommon(boolean partitioned, boolean deltaCommit, EffectiveMode mode) throws Exception {
+    // NOTE: Hudi doesn't support Orc in Spark < 3.0
+    //       Please check HUDI-4496 for more details
+    if (!HoodieSparkUtils.gteqSpark3_0()) {
+      return;
+    }
 
     if (deltaCommit) {
       metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, bootstrapBasePath, HoodieFileFormat.ORC);
@@ -245,7 +243,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
             .withBootstrapModeSelector(bootstrapModeSelectorClass).build())
         .build();
 
-    SparkRDDWriteClientOverride client = new SparkRDDWriteClientOverride(context, config);
+    SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
     client.bootstrap(Option.empty());
     checkBootstrapResults(totalRecords, schema, bootstrapCommitInstantTs, checkNumRawFiles, numInstantsAfterBootstrap,
         numInstantsAfterBootstrap, timestamp, timestamp, deltaCommit, bootstrapInstants, true);
@@ -256,7 +254,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     } else {
       FileCreateUtils.deleteCommit(metaClient.getBasePath(), bootstrapCommitInstantTs);
     }
-    client.rollbackFailedBootstrap();
+    client.getTableServiceClient().rollbackFailedBootstrap();
     metaClient.reloadActiveTimeline();
     assertEquals(0, metaClient.getCommitsTimeline().countInstants());
     assertEquals(0L, BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(), basePath, context)
@@ -264,9 +262,10 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
 
     BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
     assertFalse(index.useIndex());
+    client.close();
 
     // Run bootstrap again
-    client = new SparkRDDWriteClientOverride(context, config);
+    client = new SparkRDDWriteClient(context, config);
     client.bootstrap(Option.empty());
 
     metaClient.reloadActiveTimeline();
@@ -300,6 +299,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
           numInstantsAfterBootstrap + 2, 2, updateTimestamp, updateTimestamp, !deltaCommit,
           Arrays.asList(compactionInstant.get()), !config.isPreserveHoodieCommitMetadataForCompaction());
     }
+    client.close();
   }
 
   @Test
@@ -379,7 +379,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
 
     @Override
     public JavaRDD<HoodieRecord> generateInputRecords(String tableName, String sourceBasePath,
-                                                      List<Pair<String, List<HoodieFileStatus>>> partitionPaths) {
+                                                      List<Pair<String, List<HoodieFileStatus>>> partitionPaths,  HoodieWriteConfig config) {
       String[] filePaths = partitionPaths.stream().map(Pair::getValue)
           .flatMap(f -> f.stream().map(fs -> FileStatusUtils.toPath(fs.getPath()).toString()))
           .toArray(String[]::new);

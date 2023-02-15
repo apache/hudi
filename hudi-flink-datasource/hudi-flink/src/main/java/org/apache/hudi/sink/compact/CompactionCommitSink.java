@@ -30,7 +30,7 @@ import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.util.CompactionUtil;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.configuration.Configuration;
 import org.slf4j.Logger;
@@ -91,7 +91,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     if (writeClient == null) {
-      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+      this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     }
     this.commitBuffer = new HashMap<>();
     this.compactionPlanCache = new HashMap<>();
@@ -118,7 +118,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       try {
         return CompactionUtils.getCompactionPlan(
             this.writeClient.getHoodieTable().getMetaClient(), instant);
-      } catch (IOException e) {
+      } catch (Exception e) {
         throw new HoodieException(e);
       }
     });
@@ -156,6 +156,17 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
         .map(CompactionCommitEvent::getWriteStatuses)
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
+
+    long numErrorRecords = statuses.stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
+
+    if (numErrorRecords > 0 && !this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
+      // handle failure case
+      LOG.error("Got {} error records during compaction of instant {},\n"
+          + "option '{}' is configured as false,"
+          + "rolls back the compaction", numErrorRecords, instant, FlinkOptions.IGNORE_FAILED.key());
+      CompactionUtil.rollbackCompaction(table, instant);
+      return;
+    }
 
     HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
         table, instant, HoodieListData.eager(statuses), writeClient.getConfig().getSchema());

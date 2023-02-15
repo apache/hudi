@@ -20,21 +20,23 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -249,11 +251,16 @@ public class TestHoodieAvroUtils {
     rec.put("non_pii_col", "val1");
     rec.put("pii_col", "val2");
     rec.put("timestamp", 3.5);
-    GenericRecord rec1 = HoodieAvroUtils.removeFields(rec, Arrays.asList("pii_col"));
+    GenericRecord rec1 = HoodieAvroUtils.removeFields(rec, Collections.singleton("pii_col"));
     assertEquals("key1", rec1.get("_row_key"));
     assertEquals("val1", rec1.get("non_pii_col"));
     assertEquals(3.5, rec1.get("timestamp"));
-    assertNull(rec1.get("pii_col"));
+    if (HoodieAvroUtils.gteqAvro1_10()) {
+      GenericRecord finalRec1 = rec1;
+      assertThrows(AvroRuntimeException.class, () -> finalRec1.get("pii_col"));
+    } else {
+      assertNull(rec1.get("pii_col"));
+    }
     assertEquals(expectedSchema, rec1.getSchema());
 
     // non-partitioned table test with empty list of fields.
@@ -262,7 +269,7 @@ public class TestHoodieAvroUtils {
         + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
         + "{\"name\": \"pii_col\", \"type\": \"string\"}]},";
     expectedSchema = new Schema.Parser().parse(schemaStr);
-    rec1 = HoodieAvroUtils.removeFields(rec, Arrays.asList(""));
+    rec1 = HoodieAvroUtils.removeFields(rec, Collections.singleton(""));
     assertEquals(expectedSchema, rec1.getSchema());
   }
 
@@ -287,19 +294,58 @@ public class TestHoodieAvroUtils {
     assertNull(rowKeyNotExist);
 
     // Field does not exist
-    try {
-      HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", false, false);
-    } catch (Exception e) {
-      assertEquals("fake_key(Part -fake_key) field not found in record. Acceptable fields were :[timestamp, _row_key, non_pii_col, pii_col]",
-          e.getMessage());
-    }
+    assertEquals("fake_key(Part -fake_key) field not found in record. Acceptable fields were :[timestamp, _row_key, non_pii_col, pii_col]",
+        assertThrows(HoodieException.class, () ->
+            HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", false, false)).getMessage());
 
-    // Field exist while value not
-    try {
-      HoodieAvroUtils.getNestedFieldVal(rec, "timestamp", false, false);
-    } catch (Exception e) {
-      assertEquals("The value of timestamp can not be null", e.getMessage());
-    }
+    // Field exists while value not
+    assertNull(HoodieAvroUtils.getNestedFieldVal(rec, "timestamp", false, false));
+  }
+
+  @Test
+  public void testGetNestedFieldValWithNestedField() {
+    Schema nestedSchema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD);
+    GenericRecord rec = new GenericData.Record(nestedSchema);
+
+    // test get .
+    assertEquals(". field not found in record. Acceptable fields were :[firstname, lastname, student]",
+        assertThrows(HoodieException.class, () ->
+            HoodieAvroUtils.getNestedFieldVal(rec, ".", false, false)).getMessage());
+
+    // test get fake_key
+    assertEquals("fake_key(Part -fake_key) field not found in record. Acceptable fields were :[firstname, lastname, student]",
+        assertThrows(HoodieException.class, () ->
+            HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", false, false)).getMessage());
+
+    // test get student(null)
+    assertNull(HoodieAvroUtils.getNestedFieldVal(rec, "student", false, false));
+
+    // test get student
+    GenericRecord studentRecord = new GenericData.Record(rec.getSchema().getField("student").schema());
+    studentRecord.put("firstname", "person");
+    rec.put("student", studentRecord);
+    assertEquals(studentRecord, HoodieAvroUtils.getNestedFieldVal(rec, "student", false, false));
+
+    // test get student.fake_key
+    assertEquals("student.fake_key(Part -fake_key) field not found in record. Acceptable fields were :[firstname, lastname]",
+        assertThrows(HoodieException.class, () ->
+            HoodieAvroUtils.getNestedFieldVal(rec, "student.fake_key", false, false)).getMessage());
+
+    // test get student.firstname
+    assertEquals("person", HoodieAvroUtils.getNestedFieldVal(rec, "student.firstname", false, false));
+
+    // test get student.lastname(null)
+    assertNull(HoodieAvroUtils.getNestedFieldVal(rec, "student.lastname", false, false));
+
+    // test get student.firstname.fake_key
+    assertEquals("Cannot find a record at part value :firstname",
+        assertThrows(HoodieException.class, () ->
+            HoodieAvroUtils.getNestedFieldVal(rec, "student.firstname.fake_key", false, false)).getMessage());
+
+    // test get student.lastname(null).fake_key
+    assertEquals("Cannot find a record at part value :lastname",
+        assertThrows(HoodieException.class, () ->
+            HoodieAvroUtils.getNestedFieldVal(rec, "student.lastname.fake_key", false, false)).getMessage());
   }
 
   @Test

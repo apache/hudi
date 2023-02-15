@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -32,7 +31,7 @@ import java.util.List;
  * HoodieTable that need to pass in the
  * {@link org.apache.hudi.io.HoodieWriteHandle} explicitly.
  */
-public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
+public interface ExplicitWriteHandleTable<T> {
   /**
    * Upsert a batch of new records into Hoodie table at the supplied instantTime.
    *
@@ -79,7 +78,7 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
    * @param context     HoodieEngineContext
    * @param writeHandle The write handle
    * @param instantTime Instant Time for the action
-   * @param keys   {@link List} of {@link HoodieKey}s to be deleted
+   * @param keys        {@link List} of {@link HoodieKey}s to be deleted
    * @return HoodieWriteMetadata
    */
   HoodieWriteMetadata<List<WriteStatus>> delete(
@@ -96,9 +95,9 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
    * <p>Specifies the write handle explicitly in order to have fine grained control with
    * the underneath file.
    *
-   * @param context    HoodieEngineContext
-   * @param instantTime Instant Time for the action
-   * @param preppedRecords  hoodieRecords to upsert
+   * @param context        HoodieEngineContext
+   * @param instantTime    Instant Time for the action
+   * @param preppedRecords hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
   HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(
@@ -115,9 +114,9 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
    * <p>Specifies the write handle explicitly in order to have fine grained control with
    * the underneath file.
    *
-   * @param context    HoodieEngineContext
-   * @param instantTime Instant Time for the action
-   * @param preppedRecords  hoodieRecords to upsert
+   * @param context        HoodieEngineContext
+   * @param instantTime    Instant Time for the action
+   * @param preppedRecords hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
   HoodieWriteMetadata<List<WriteStatus>> insertPrepped(
@@ -130,10 +129,10 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
    * Replaces all the existing records and inserts the specified new records into Hoodie table at the supplied instantTime,
    * for the partition paths contained in input records.
    *
-   * @param context HoodieEngineContext
+   * @param context     HoodieEngineContext
    * @param writeHandle The write handle
    * @param instantTime Instant time for the replace action
-   * @param records input records
+   * @param records     input records
    * @return HoodieWriteMetadata
    */
   HoodieWriteMetadata<List<WriteStatus>> insertOverwrite(
@@ -146,10 +145,10 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
    * Deletes all the existing records of the Hoodie table and inserts the specified new records into Hoodie table at the supplied instantTime,
    * for the partition paths contained in input records.
    *
-   * @param context HoodieEngineContext
+   * @param context     HoodieEngineContext
    * @param writeHandle The write handle
    * @param instantTime Instant time for the replace action
-   * @param records input records
+   * @param records     input records
    * @return HoodieWriteMetadata
    */
   HoodieWriteMetadata<List<WriteStatus>> insertOverwriteTable(

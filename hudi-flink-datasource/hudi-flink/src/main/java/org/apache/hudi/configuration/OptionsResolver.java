@@ -18,14 +18,21 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.format.FilePathUtils;
 
+import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -116,7 +123,7 @@ public class OptionsResolver {
   }
 
   public static boolean isBucketIndexType(Configuration conf) {
-    return conf.getString(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name());
+    return conf.getString(FlinkOptions.INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name());
   }
 
   /**
@@ -125,8 +132,9 @@ public class OptionsResolver {
    * @return true if the source is read as streaming with changelog mode enabled
    */
   public static boolean emitChangelog(Configuration conf) {
-    return conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
-        && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
+    return conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)
+        || conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && conf.getBoolean(FlinkOptions.CDC_ENABLED)
+        || isIncrementalQuery(conf) && conf.getBoolean(FlinkOptions.CDC_ENABLED);
   }
 
   /**
@@ -188,5 +196,57 @@ public class OptionsResolver {
   public static boolean isSpecificStartCommit(Configuration conf) {
     return conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent()
         && !conf.get(FlinkOptions.READ_START_COMMIT).equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST);
+  }
+
+  /**
+   * Returns true if there are no explicit start and end commits.
+   */
+  public static boolean hasNoSpecificReadCommits(Configuration conf) {
+    return !conf.contains(FlinkOptions.READ_START_COMMIT) && !conf.contains(FlinkOptions.READ_END_COMMIT);
+  }
+
+  /**
+   * Returns the supplemental logging mode.
+   */
+  public static HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode(Configuration conf) {
+    String mode = conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE);
+    return HoodieCDCSupplementalLoggingMode.valueOf(mode);
+  }
+
+  /**
+   * Returns whether comprehensive schema evolution enabled.
+   */
+  public static boolean isSchemaEvolutionEnabled(Configuration conf) {
+    return conf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue());
+  }
+
+  /**
+   * Returns whether the query is incremental.
+   */
+  public static boolean isIncrementalQuery(Configuration conf) {
+    return conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent() || conf.getOptional(FlinkOptions.READ_END_COMMIT).isPresent();
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  /**
+   * Returns all the config options with the given class {@code clazz}.
+   */
+  public static List<ConfigOption<?>> allOptions(Class<?> clazz) {
+    Field[] declaredFields = clazz.getDeclaredFields();
+    List<ConfigOption<?>> options = new ArrayList<>();
+    for (Field field : declaredFields) {
+      if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
+          && field.getType().equals(ConfigOption.class)) {
+        try {
+          options.add((ConfigOption<?>) field.get(ConfigOption.class));
+        } catch (IllegalAccessException e) {
+          throw new HoodieException("Error while fetching static config option", e);
+        }
+      }
+    }
+    return options;
   }
 }

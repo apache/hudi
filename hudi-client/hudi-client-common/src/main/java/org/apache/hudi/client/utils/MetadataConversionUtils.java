@@ -33,10 +33,10 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -118,6 +118,12 @@ public class MetadataConversionUtils {
         archivedMetaWrapper.setActionType(ActionType.compaction.name());
         break;
       }
+      case HoodieTimeline.LOG_COMPACTION_ACTION: {
+        HoodieCompactionPlan plan = CompactionUtils.getLogCompactionPlan(metaClient, hoodieInstant.getTimestamp());
+        archivedMetaWrapper.setHoodieCompactionPlan(plan);
+        archivedMetaWrapper.setActionType(ActionType.logcompaction.name());
+        break;
+      }
       default: {
         throw new UnsupportedOperationException("Action not fully supported yet");
       }
@@ -187,16 +193,8 @@ public class MetadataConversionUtils {
   }
 
   public static Option<HoodieCommitMetadata> getHoodieCommitMetadata(HoodieTableMetaClient metaClient, HoodieInstant hoodieInstant) throws IOException {
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-
-    if (hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
-      return Option.of(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant).get(),
-          HoodieReplaceCommitMetadata.class));
-    }
-    return Option.of(HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant).get(),
-        HoodieCommitMetadata.class));
-
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    return Option.of(TimelineUtils.getCommitMetadata(hoodieInstant, timeline));
   }
 
   public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(

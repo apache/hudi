@@ -27,11 +27,14 @@ import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 
 import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
+import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
 import com.amazonaws.services.sqs.model.Message;
 import org.apache.hadoop.fs.Path;
 import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
@@ -43,8 +46,12 @@ import java.util.List;
 
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_REGION;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS_ATTR_APPROX_MESSAGES;
 import static org.apache.hudi.utilities.sources.helpers.TestCloudObjectsSelector.REGION_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
 
@@ -82,7 +89,8 @@ public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
     S3EventsMetaSelector selector = (S3EventsMetaSelector) ReflectionUtils.loadClass(clazz.getName(), props);
     // setup s3 record
     String bucket = "test-bucket";
-    String key = "part-foo-bar.snappy.parquet";
+    String key = "part%3Dpart%2Bpart%24part%A3part%23part%26part%3Fpart%7Epart%25.snappy.parquet";
+    String keyRes = "part=part+part$part£part#part&part?part~part%.snappy.parquet";
     Path path = new Path(bucket, key);
     CloudObjectTestUtils.setMessagesInQueue(sqs, path);
 
@@ -95,11 +103,28 @@ public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
     assertEquals(1, eventFromQueue.getLeft().size());
     assertEquals(1, processed.size());
     assertEquals(
-        key,
+        keyRes,
         new JSONObject(eventFromQueue.getLeft().get(0))
             .getJSONObject("s3")
             .getJSONObject("object")
             .getString("key"));
     assertEquals("1627376736755", eventFromQueue.getRight());
+  }
+
+  @Test
+  public void testEventsFromQueueNoMessages() {
+    S3EventsMetaSelector selector = new S3EventsMetaSelector(props);
+    when(sqs.getQueueAttributes(any(GetQueueAttributesRequest.class)))
+        .thenReturn(
+            new GetQueueAttributesResult()
+                .addAttributesEntry(SQS_ATTR_APPROX_MESSAGES, "0"));
+
+    List<Message> processed = new ArrayList<>();
+    Pair<List<String>, String> eventFromQueue =
+        selector.getNextEventsFromQueue(sqs, Option.empty(), processed);
+
+    assertEquals(0, eventFromQueue.getLeft().size());
+    assertEquals(0, processed.size());
+    assertNull(eventFromQueue.getRight());
   }
 }

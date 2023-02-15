@@ -34,6 +34,7 @@ import java.util
 import java.util.Locale
 import java.util.function.Supplier
 
+import scala.collection.JavaConverters._
 class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
@@ -45,7 +46,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     ProcedureParameter.optional(6, "partition_path_field", DataTypes.StringType, ""),
     ProcedureParameter.optional(7, "bootstrap_index_class", DataTypes.StringType, "org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex"),
     ProcedureParameter.optional(8, "selector_class", DataTypes.StringType, "org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector"),
-    ProcedureParameter.optional(9, "key_generator_glass", DataTypes.StringType, "org.apache.hudi.keygen.SimpleKeyGenerator"),
+    ProcedureParameter.optional(9, "key_generator_class", DataTypes.StringType, "org.apache.hudi.keygen.SimpleKeyGenerator"),
     ProcedureParameter.optional(10, "full_bootstrap_input_provider", DataTypes.StringType, "org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider"),
     ProcedureParameter.optional(11, "schema_provider_class", DataTypes.StringType, ""),
     ProcedureParameter.optional(12, "payload_class", DataTypes.StringType, "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"),
@@ -117,6 +118,8 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     cfg.setEnableHiveSync(enableHiveSync)
     cfg.setBootstrapOverwrite(bootstrapOverwrite)
 
+    // add session bootstrap conf
+    properties.putAll(spark.sqlContext.conf.getAllConfs.asJava)
     try {
       new BootstrapExecutorUtils(cfg, jsc, fs, jsc.hadoopConfiguration, properties).execute()
     } catch {

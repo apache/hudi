@@ -30,6 +30,8 @@ import com.amazonaws.services.glue.AWSGlueClientBuilder;
 import com.amazonaws.services.glue.model.AlreadyExistsException;
 import com.amazonaws.services.glue.model.BatchCreatePartitionRequest;
 import com.amazonaws.services.glue.model.BatchCreatePartitionResult;
+import com.amazonaws.services.glue.model.BatchDeletePartitionRequest;
+import com.amazonaws.services.glue.model.BatchDeletePartitionResult;
 import com.amazonaws.services.glue.model.BatchUpdatePartitionRequest;
 import com.amazonaws.services.glue.model.BatchUpdatePartitionRequestEntry;
 import com.amazonaws.services.glue.model.BatchUpdatePartitionResult;
@@ -45,6 +47,7 @@ import com.amazonaws.services.glue.model.GetPartitionsRequest;
 import com.amazonaws.services.glue.model.GetPartitionsResult;
 import com.amazonaws.services.glue.model.GetTableRequest;
 import com.amazonaws.services.glue.model.PartitionInput;
+import com.amazonaws.services.glue.model.PartitionValueList;
 import com.amazonaws.services.glue.model.SerDeInfo;
 import com.amazonaws.services.glue.model.StorageDescriptor;
 import com.amazonaws.services.glue.model.Table;
@@ -138,8 +141,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
         BatchCreatePartitionResult result = awsGlue.batchCreatePartition(request);
         if (CollectionUtils.nonEmpty(result.getErrors())) {
-          throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
+          if (result.getErrors().stream().allMatch((error) -> "AlreadyExistsException".equals(error.getErrorDetail().getErrorCode()))) {
+            LOG.warn("Partitions already exist in glue: " + result.getErrors());
+          } else {
+            throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
               + " with error(s): " + result.getErrors());
+          }
         }
         Thread.sleep(BATCH_REQUEST_SLEEP_MILLIS);
       }
@@ -162,7 +169,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         StorageDescriptor partitionSd = sd.clone();
         String fullPartitionPath = FSUtils.getPartitionPath(getBasePath(), partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-        sd.setLocation(fullPartitionPath);
+        partitionSd.setLocation(fullPartitionPath);
         PartitionInput partitionInput = new PartitionInput().withValues(partitionValues).withStorageDescriptor(partitionSd);
         return new BatchUpdatePartitionRequestEntry().withPartitionInput(partitionInput).withPartitionValueList(partitionValues);
       }).collect(Collectors.toList());
@@ -185,7 +192,35 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void dropPartitions(String tableName, List<String> partitionsToDrop) {
-    throw new UnsupportedOperationException("Not support dropPartitionsToTable yet.");
+    if (CollectionUtils.isNullOrEmpty(partitionsToDrop)) {
+      LOG.info("No partitions to drop for " + tableName);
+      return;
+    }
+    LOG.info("Drop " + partitionsToDrop.size() + "partition(s) in table " + tableId(databaseName, tableName));
+    try {
+      for (List<String> batch : CollectionUtils.batches(partitionsToDrop, MAX_PARTITIONS_PER_REQUEST)) {
+
+        List<PartitionValueList> partitionValueLists = batch.stream().map(partition -> {
+          PartitionValueList partitionValueList = new PartitionValueList();
+          partitionValueList.setValues(partitionValueExtractor.extractPartitionValuesInPath(partition));
+          return partitionValueList;
+        }).collect(Collectors.toList());
+
+        BatchDeletePartitionRequest batchDeletePartitionRequest = new BatchDeletePartitionRequest()
+            .withDatabaseName(databaseName)
+            .withTableName(tableName)
+            .withPartitionsToDelete(partitionValueLists);
+
+        BatchDeletePartitionResult result = awsGlue.batchDeletePartition(batchDeletePartitionRequest);
+        if (CollectionUtils.nonEmpty(result.getErrors())) {
+          throw new HoodieGlueSyncException("Fail to drop partitions to " + tableId(databaseName, tableName)
+              + " with error(s): " + result.getErrors());
+        }
+        Thread.sleep(BATCH_REQUEST_SLEEP_MILLIS);
+      }
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Fail to drop partitions to " + tableId(databaseName, tableName), e);
+    }
   }
 
   /**

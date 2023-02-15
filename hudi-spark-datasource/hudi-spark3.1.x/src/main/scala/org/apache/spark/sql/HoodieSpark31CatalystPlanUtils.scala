@@ -18,8 +18,11 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.execution.command.AlterTableRecoverPartitionsCommand
+import org.apache.spark.sql.types.StructType
 
 object HoodieSpark31CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
@@ -27,5 +30,21 @@ object HoodieSpark31CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
   override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
     throw new IllegalStateException(s"Should not call getRelationTimeTravel for Spark <= 3.2.x")
+  }
+
+  override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema = ProjectionOverSchema(schema)
+
+  override def isRepairTable(plan: LogicalPlan): Boolean = {
+    plan.isInstanceOf[AlterTableRecoverPartitionsCommand]
+  }
+
+  override def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)] = {
+    plan match {
+      // For Spark >= 3.2.x, AlterTableRecoverPartitionsCommand was renamed RepairTableCommand, and added two new
+      // parameters: enableAddPartitions and enableDropPartitions. By setting them to true and false, can restore
+      // AlterTableRecoverPartitionsCommand's behavior
+      case c: AlterTableRecoverPartitionsCommand =>
+        Some((c.tableName, true, false, c.cmd))
+    }
   }
 }

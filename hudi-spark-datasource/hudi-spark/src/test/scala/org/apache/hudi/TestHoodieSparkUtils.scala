@@ -91,6 +91,8 @@ class TestHoodieSparkUtils {
       .appName("Hoodie Datasource test")
       .master("local[2]")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+      .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
       .getOrCreate
 
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -127,6 +129,8 @@ class TestHoodieSparkUtils {
       .appName("Hoodie Datasource test")
       .master("local[2]")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+      .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
       .getOrCreate
 
     val innerStruct1 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
@@ -196,7 +200,11 @@ class TestHoodieSparkUtils {
       fail("createRdd should fail, because records don't have a column which is not nullable in the passed in schema")
     } catch {
       case e: Exception =>
-        assertTrue(e.getMessage.contains("null of string in field new_nested_col of test_namespace.test_struct_name.nullableInnerStruct of union"))
+        if (HoodieSparkUtils.gteqSpark3_3) {
+          assertTrue(e.getMessage.contains("null value for (non-nullable) string at test_struct_name.nullableInnerStruct[nullableInnerStruct].new_nested_col"))
+        } else {
+          assertTrue(e.getMessage.contains("null of string in field new_nested_col of test_namespace.test_struct_name.nullableInnerStruct of union"))
+        }
     }
     spark.stop()
   }

@@ -24,8 +24,11 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
+import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
@@ -33,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.source.stats.ExpressionEvaluator.Evaluator.bindCall;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -54,7 +58,7 @@ public class TestExpressionEvaluator {
       DataTypes.FIELD("f_time", DataTypes.TIME(3)),
       DataTypes.FIELD("f_date", DataTypes.DATE()),
       DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3))
-      ).notNull();
+  ).notNull();
   private static final DataType INDEX_ROW_DATA_TYPE = DataTypes.ROW(
       DataTypes.FIELD("file_name", DataTypes.STRING()),
       DataTypes.FIELD("value_cnt", DataTypes.BIGINT()),
@@ -104,7 +108,7 @@ public class TestExpressionEvaluator {
     assertFalse(equalTo.eval(), "12 <> null");
 
     equalTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    assertFalse(equalTo.eval(), "null <> null");
+    assertFalse(equalTo.eval(), "It is not possible to test for NULL values with '=' operator");
   }
 
   @Test
@@ -140,7 +144,7 @@ public class TestExpressionEvaluator {
     assertTrue(notEqualTo.eval(), "12 <> null");
 
     notEqualTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    assertTrue(notEqualTo.eval(), "null <> null");
+    assertFalse(notEqualTo.eval(), "It is not possible to test for NULL values with '<>' operator");
   }
 
   @Test
@@ -206,7 +210,7 @@ public class TestExpressionEvaluator {
     assertFalse(lessThan.eval(), "12 <> null");
 
     lessThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    assertFalse(lessThan.eval(), "null <> null");
+    assertFalse(lessThan.eval(), "It is not possible to test for NULL values with '<' operator");
   }
 
   @Test
@@ -242,7 +246,7 @@ public class TestExpressionEvaluator {
     assertFalse(greaterThan.eval(), "12 <> null");
 
     greaterThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    assertFalse(greaterThan.eval(), "null <> null");
+    assertFalse(greaterThan.eval(), "It is not possible to test for NULL values with '>' operator");
   }
 
   @Test
@@ -278,7 +282,7 @@ public class TestExpressionEvaluator {
     assertFalse(lessThanOrEqual.eval(), "12 <> null");
 
     lessThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    assertFalse(lessThanOrEqual.eval(), "null <> null");
+    assertFalse(lessThanOrEqual.eval(), "It is not possible to test for NULL values with '<=' operator");
   }
 
   @Test
@@ -314,7 +318,7 @@ public class TestExpressionEvaluator {
     assertFalse(greaterThanOrEqual.eval(), "12 <> null");
 
     greaterThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
-    assertFalse(greaterThanOrEqual.eval(), "null <> null");
+    assertFalse(greaterThanOrEqual.eval(), "It is not possible to test for NULL values with '>=' operator");
   }
 
   @Test
@@ -349,7 +353,32 @@ public class TestExpressionEvaluator {
     assertFalse(in.eval(), "12 <> null");
 
     in.bindVals((Object) null);
-    assertFalse(in.eval(), "null <> null");
+    assertFalse(in.eval(), "It is not possible to test for NULL values with 'in' operator");
+  }
+
+  @Test
+  void testAlwaysFalse() {
+    FieldReferenceExpression ref = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
+    ValueLiteralExpression nullLiteral = new ValueLiteralExpression(null, DataTypes.INT());
+    RowData indexRow = intIndexRow(11, 13);
+    RowType.RowField[] queryFields = queryFields(2);
+    FunctionDefinition[] funDefs = new FunctionDefinition[] {
+        BuiltInFunctionDefinitions.EQUALS,
+        BuiltInFunctionDefinitions.NOT_EQUALS,
+        BuiltInFunctionDefinitions.LESS_THAN,
+        BuiltInFunctionDefinitions.GREATER_THAN,
+        BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL,
+        BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL,
+        BuiltInFunctionDefinitions.IN};
+    for (FunctionDefinition funDef : funDefs) {
+      CallExpression expr =
+          new CallExpression(
+              funDef,
+              Arrays.asList(ref, nullLiteral),
+              DataTypes.BOOLEAN());
+      // always return false if the literal value is null
+      assertFalse(bindCall(expr, indexRow, queryFields).eval());
+    }
   }
 
   private static RowData intIndexRow(Integer minVal, Integer maxVal) {

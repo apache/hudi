@@ -48,6 +48,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
+
 /**
  * Given a path is a part of - Hoodie table = accepts ONLY the latest version of each path - Non-Hoodie table = then
  * always accept
@@ -183,8 +185,17 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 
-          fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
-              metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
+          if (getConf().get(TIMESTAMP_AS_OF.key()) != null) {
+            // Build FileSystemViewManager with specified time, it's necessary to set this config when you may
+            // access old version files. For example, in spark side, using "hoodie.datasource.read.paths"
+            // which contains old version files, if not specify this value, these files will be filtered.
+            fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext,
+                metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()),
+                metaClient.getActiveTimeline().filterCompletedInstants().findInstantsBeforeOrEquals(getConf().get(TIMESTAMP_AS_OF.key())));
+          } else {
+            fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
+                metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
+          }
           String partition = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());
           // populate the cache

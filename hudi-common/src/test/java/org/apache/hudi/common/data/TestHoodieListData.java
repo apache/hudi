@@ -29,6 +29,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,5 +64,12 @@ class TestHoodieListData {
     // we still can dereference its parent (multiple times)
     assertEquals(3, originalListData.count());
     assertEquals(sourceList, originalListData.collectAsList());
+  }
+
+  @Test
+  public void testGetNumPartitions() {
+    HoodieData<Integer> listData = HoodieListData.eager(
+        IntStream.rangeClosed(0, 100).boxed().collect(Collectors.toList()));
+    assertEquals(1, listData.getNumPartitions());
   }
 }

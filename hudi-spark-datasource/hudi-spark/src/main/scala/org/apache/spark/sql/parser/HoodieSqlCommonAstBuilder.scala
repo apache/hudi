@@ -27,7 +27,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
-import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface, ParserUtils}
+import org.apache.spark.sql.catalyst.parser.{ParserInterface, ParserUtils}
 import org.apache.spark.sql.catalyst.plans.logical._
 
 import java.util.Locale
@@ -92,13 +92,14 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
   }
 
   override def visitCall(ctx: CallContext): LogicalPlan = withOrigin(ctx) {
-    if (ctx.callArgument().isEmpty) {
-      throw new ParseException(s"Procedures arguments is empty", ctx)
+    if (ctx.callArgumentList() == null || ctx.callArgumentList().callArgument() == null || ctx.callArgumentList().callArgument().size() == 0) {
+      val name: Seq[String] = ctx.multipartIdentifier().parts.asScala.map(_.getText)
+      CallCommand(name, Seq())
+    } else {
+      val name: Seq[String] = ctx.multipartIdentifier().parts.asScala.map(_.getText)
+      val args: Seq[CallArgument] = ctx.callArgumentList().callArgument().asScala.map(typedVisit[CallArgument])
+      CallCommand(name, args)
     }
-
-    val name: Seq[String] = ctx.multipartIdentifier().parts.asScala.map(_.getText)
-    val args: Seq[CallArgument] = ctx.callArgument().asScala.map(typedVisit[CallArgument])
-    CallCommand(name, args)
   }
 
   /**
@@ -167,9 +168,9 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
     }
 
     val columns = ctx.columns.multipartIdentifierProperty.asScala
-        .map(_.multipartIdentifier).map(typedVisit[Seq[String]]).toSeq
+      .map(_.multipartIdentifier).map(typedVisit[Seq[String]]).toSeq
     val columnsProperties = ctx.columns.multipartIdentifierProperty.asScala
-        .map(x => (Option(x.options).map(visitPropertyKeyValues).getOrElse(Map.empty))).toSeq
+      .map(x => (Option(x.options).map(visitPropertyKeyValues).getOrElse(Map.empty))).toSeq
     val options = Option(ctx.indexOptions).map(visitPropertyKeyValues).getOrElse(Map.empty)
 
     CreateIndex(
@@ -223,7 +224,7 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
    * This should be called through [[visitPropertyKeyValues]] or [[visitPropertyKeys]].
    */
   override def visitPropertyList(
-      ctx: PropertyListContext): Map[String, String] = withOrigin(ctx) {
+                                  ctx: PropertyListContext): Map[String, String] = withOrigin(ctx) {
     val properties = ctx.property.asScala.map { property =>
       val key = visitPropertyKey(property.key)
       val value = visitPropertyValue(property.value)

@@ -20,11 +20,11 @@ package org.apache.hudi.table.action.clean;
 
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -37,6 +37,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -45,7 +46,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
+import static org.apache.hudi.common.util.MapUtils.nonEmpty;
+
+public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
 
   private static final Logger LOG = LogManager.getLogger(CleanPlanner.class);
 
@@ -64,11 +67,16 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     Option<HoodieInstant> lastCleanInstant = table.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
     HoodieTimeline commitTimeline = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
 
-    String latestCleanTs;
-    int numCommits = 0;
-    if (lastCleanInstant.isPresent()) {
-      latestCleanTs = lastCleanInstant.get().getTimestamp();
-      numCommits = commitTimeline.findInstantsAfter(latestCleanTs).countInstants();
+    int numCommits;
+    if (lastCleanInstant.isPresent() && !table.getActiveTimeline().isEmpty(lastCleanInstant.get())) {
+      try {
+        HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
+            .deserializeHoodieCleanMetadata(table.getActiveTimeline().getInstantDetails(lastCleanInstant.get()).get());
+        String lastCompletedCommitTimestamp = cleanMetadata.getLastCompletedCommitTimestamp();
+        numCommits = commitTimeline.findInstantsAfter(lastCompletedCommitTimestamp).countInstants();
+      } catch (IOException e) {
+        throw new HoodieIOException("Parsing of last clean instant " + lastCleanInstant.get() + " failed", e);
+      }
     } else {
       numCommits = commitTimeline.countInstants();
     }
@@ -123,6 +131,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
       return new HoodieCleanerPlan(earliestInstant
           .map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
+          planner.getLastCompletedCommitTimestamp(),
           config.getCleanerPolicy().name(), CollectionUtils.createImmutableMap(),
           CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete);
     } catch (IOException e) {
@@ -139,8 +148,8 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
    */
   protected Option<HoodieCleanerPlan> requestClean(String startCleanTime) {
     final HoodieCleanerPlan cleanerPlan = requestClean(context);
-    if ((cleanerPlan.getFilePathsToBeDeletedPerPartition() != null)
-        && !cleanerPlan.getFilePathsToBeDeletedPerPartition().isEmpty()
+    Option<HoodieCleanerPlan> option = Option.empty();
+    if (nonEmpty(cleanerPlan.getFilePathsToBeDeletedPerPartition())
         && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0) {
       // Only create cleaner plan which does some work
       final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
@@ -152,9 +161,10 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
         LOG.error("Got exception when saving cleaner requested file", e);
         throw new HoodieIOException(e.getMessage(), e);
       }
-      return Option.of(cleanerPlan);
+      option = Option.of(cleanerPlan);
     }
-    return Option.empty();
+
+    return option;
   }
 
   @Override

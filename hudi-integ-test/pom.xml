@@ -21,7 +21,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.13.0-SNAPSHOT</version>
+    <version>0.14.0-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>hudi-integ-test</artifactId>
@@ -166,8 +166,7 @@
     <!-- Logging -->
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-core</artifactId>
-      <scope>compile</scope>
+      <artifactId>log4j-1.2-api</artifactId>
     </dependency>
 
     <!-- Hoodie - Import -->
@@ -445,7 +444,6 @@
     <dockerCompose.envFile>${project.basedir}/compose_env</dockerCompose.envFile>
     <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark244.yml</dockerCompose.file>
     <docker.compose.skip>${skipITs}</docker.compose.skip>
-    <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
   </properties>
 

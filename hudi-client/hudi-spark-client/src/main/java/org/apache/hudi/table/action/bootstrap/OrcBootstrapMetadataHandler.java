@@ -18,12 +18,12 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.OrcReaderIterator;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
@@ -46,6 +46,8 @@ import org.apache.orc.TypeDescription;
 
 import java.io.IOException;
 
+import static org.apache.hudi.io.HoodieBootstrapHandle.METADATA_BOOTSTRAP_RECORD_SCHEMA;
+
 class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   private static final Logger LOG = LogManager.getLogger(OrcBootstrapMetadataHandler.class);
 
@@ -63,6 +65,10 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   @Override
   void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle, Path sourceFilePath, KeyGeneratorInterface keyGenerator,
                         String partitionPath, Schema avroSchema) throws Exception {
+    // TODO support spark orc reader
+    if (config.getRecordMerger().getRecordType() == HoodieRecordType.SPARK) {
+      throw new UnsupportedOperationException();
+    }
     BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void> wrapper = null;
     Reader orcReader = OrcFile.createReader(sourceFilePath, OrcFile.readerOptions(table.getHadoopConf()));
     TypeDescription orcSchema = orcReader.getSchema();
@@ -70,7 +76,7 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
       wrapper = new BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
           new OrcReaderIterator(reader, avroSchema, orcSchema), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
         String recKey = keyGenerator.getKey(inp).getRecordKey();
-        GenericRecord gr = new GenericData.Record(HoodieAvroUtils.RECORD_KEY_SCHEMA);
+        GenericRecord gr = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA);
         gr.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recKey);
         BootstrapRecordPayload payload = new BootstrapRecordPayload(gr);
         HoodieRecord rec = new HoodieAvroRecord(new HoodieKey(recKey, partitionPath), payload);

@@ -32,6 +32,7 @@ import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.TimestampType;
 
 import javax.validation.constraints.NotNull;
 
@@ -39,6 +40,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Tool to evaluate the {@link org.apache.flink.table.expressions.ResolvedExpression}s.
@@ -117,16 +119,6 @@ public class ExpressionEvaluator {
         return ((Or) evaluator).bindEvaluator(evaluator1, evaluator2);
       }
 
-      // handle IN specifically
-      if (BuiltInFunctionDefinitions.IN.equals(funDef)) {
-        ValidationUtils.checkState(normalized, "The IN expression expects to be normalized");
-        evaluator = In.getInstance();
-        FieldReferenceExpression rExpr = (FieldReferenceExpression) childExprs.get(0);
-        evaluator.bindFieldReference(rExpr);
-        ((In) evaluator).bindVals(getInLiteralVals(childExprs));
-        return evaluator.bindColStats(indexRow, queryFields, rExpr);
-      }
-
       // handle unary operators
       if (BuiltInFunctionDefinitions.IS_NULL.equals(funDef)) {
         FieldReferenceExpression rExpr = (FieldReferenceExpression) childExprs.get(0);
@@ -138,6 +130,25 @@ public class ExpressionEvaluator {
         return IsNotNull.getInstance()
             .bindFieldReference(rExpr)
             .bindColStats(indexRow, queryFields, rExpr);
+      }
+
+      boolean hasNullLiteral =
+          childExprs.stream().anyMatch(e ->
+             e instanceof ValueLiteralExpression
+                 && ExpressionUtils.getValueFromLiteral((ValueLiteralExpression) e) == null);
+      if (hasNullLiteral) {
+        evaluator = AlwaysFalse.getInstance();
+        return evaluator;
+      }
+
+      // handle IN specifically
+      if (BuiltInFunctionDefinitions.IN.equals(funDef)) {
+        ValidationUtils.checkState(normalized, "The IN expression expects to be normalized");
+        evaluator = In.getInstance();
+        FieldReferenceExpression rExpr = (FieldReferenceExpression) childExprs.get(0);
+        evaluator.bindFieldReference(rExpr);
+        ((In) evaluator).bindVals(getInLiteralVals(childExprs));
+        return evaluator.bindColStats(indexRow, queryFields, rExpr);
       }
 
       // handle binary operators
@@ -205,37 +216,51 @@ public class ExpressionEvaluator {
     public abstract boolean eval();
   }
 
+  public abstract static class NullFalseEvaluator extends Evaluator {
+
+    @Override
+    public final boolean eval() {
+      if (this.val == null) {
+        return false;
+      } else {
+        return eval(this.val);
+      }
+    }
+
+    protected abstract boolean eval(@NotNull Object val);
+  }
+
   /**
    * To evaluate = expr.
    */
-  public static class EqualTo extends Evaluator {
+  public static class EqualTo extends NullFalseEvaluator {
 
     public static EqualTo getInstance() {
       return new EqualTo();
     }
 
     @Override
-    public boolean eval() {
-      if (this.minVal == null || this.maxVal == null || this.val == null) {
+    protected boolean eval(@NotNull Object val) {
+      if (this.minVal == null || this.maxVal == null) {
         return false;
       }
-      if (compare(this.minVal, this.val, this.type) > 0) {
+      if (compare(this.minVal, val, this.type) > 0) {
         return false;
       }
-      return compare(this.maxVal, this.val, this.type) >= 0;
+      return compare(this.maxVal, val, this.type) >= 0;
     }
   }
 
   /**
    * To evaluate <> expr.
    */
-  public static class NotEqualTo extends Evaluator {
+  public static class NotEqualTo extends NullFalseEvaluator {
     public static NotEqualTo getInstance() {
       return new NotEqualTo();
     }
 
     @Override
-    public boolean eval() {
+    protected boolean eval(@NotNull Object val) {
       // because the bounds are not necessarily a min or max value, this cannot be answered using
       // them. notEq(col, X) with (X, Y) doesn't guarantee that X is a value in col.
       return true;
@@ -274,68 +299,68 @@ public class ExpressionEvaluator {
   /**
    * To evaluate < expr.
    */
-  public static class LessThan extends Evaluator {
+  public static class LessThan extends NullFalseEvaluator {
     public static LessThan getInstance() {
       return new LessThan();
     }
 
     @Override
-    public boolean eval() {
+    public boolean eval(@NotNull Object val) {
       if (this.minVal == null) {
         return false;
       }
-      return compare(this.minVal, this.val, this.type) < 0;
+      return compare(this.minVal, val, this.type) < 0;
     }
   }
 
   /**
    * To evaluate > expr.
    */
-  public static class GreaterThan extends Evaluator {
+  public static class GreaterThan extends NullFalseEvaluator {
     public static GreaterThan getInstance() {
       return new GreaterThan();
     }
 
     @Override
-    public boolean eval() {
+    protected boolean eval(@NotNull Object val) {
       if (this.maxVal == null) {
         return false;
       }
-      return compare(this.maxVal, this.val, this.type) > 0;
+      return compare(this.maxVal, val, this.type) > 0;
     }
   }
 
   /**
    * To evaluate <= expr.
    */
-  public static class LessThanOrEqual extends Evaluator {
+  public static class LessThanOrEqual extends NullFalseEvaluator {
     public static LessThanOrEqual getInstance() {
       return new LessThanOrEqual();
     }
 
     @Override
-    public boolean eval() {
+    protected boolean eval(@NotNull Object val) {
       if (this.minVal == null) {
         return false;
       }
-      return compare(this.minVal, this.val, this.type) <= 0;
+      return compare(this.minVal, val, this.type) <= 0;
     }
   }
 
   /**
    * To evaluate >= expr.
    */
-  public static class GreaterThanOrEqual extends Evaluator {
+  public static class GreaterThanOrEqual extends NullFalseEvaluator {
     public static GreaterThanOrEqual getInstance() {
       return new GreaterThanOrEqual();
     }
 
     @Override
-    public boolean eval() {
+    protected boolean eval(@NotNull Object val) {
       if (this.maxVal == null) {
         return false;
       }
-      return compare(this.maxVal, this.val, this.type) >= 0;
+      return compare(this.maxVal, val, this.type) >= 0;
     }
   }
 
@@ -351,6 +376,9 @@ public class ExpressionEvaluator {
 
     @Override
     public boolean eval() {
+      if (Arrays.stream(vals).anyMatch(Objects::isNull)) {
+        return false;
+      }
       if (this.minVal == null) {
         return false; // values are all null and literalSet cannot contain null.
       }
@@ -378,7 +406,30 @@ public class ExpressionEvaluator {
     }
   }
 
+  // A special evaluator which is not possible to match any condition
+  public static class AlwaysFalse extends Evaluator {
+
+    public static AlwaysFalse getInstance() {
+      return new AlwaysFalse();
+    }
+
+    @Override
+    public Evaluator bindColStats(
+        RowData indexRow,
+        RowType.RowField[] queryFields,
+        FieldReferenceExpression expr) {
+      // this no need to do anything
+      return this;
+    }
+
+    @Override
+    public boolean eval() {
+      return false;
+    }
+  }
+
   // component predicate
+
   /**
    * To evaluate NOT expr.
    */
@@ -522,6 +573,8 @@ public class ExpressionEvaluator {
       //       manually encoding corresponding values as int and long w/in the Column Stats Index and
       //       here we have to decode those back into corresponding logical representation.
       case TIMESTAMP_WITHOUT_TIME_ZONE:
+        TimestampType tsType = (TimestampType) colType;
+        return indexRow.getTimestamp(pos, tsType.getPrecision()).getMillisecond();
       case TIME_WITHOUT_TIME_ZONE:
       case DATE:
         return indexRow.getLong(pos);

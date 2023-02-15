@@ -17,19 +17,21 @@
 
 package org.apache.spark.sql.catalyst.catalog
 
-import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
-import org.apache.hudi.keygen.ComplexKeyGenerator
+import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieOptionConfig
+import org.apache.spark.sql.hudi.HoodieOptionConfig._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -190,12 +192,18 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     } else {
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(finalSchema, false, recordName, namespace)
+      val partitionColumns = if (table.partitionColumnNames.isEmpty) {
+        null
+      } else {
+        table.partitionColumnNames.mkString(",")
+      }
+
       HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
         .setDatabaseName(catalogDatabaseName)
         .setTableName(table.identifier.table)
         .setTableCreateSchema(schema.toString())
-        .setPartitionFields(table.partitionColumnNames.mkString(","))
+        .setPartitionFields(partitionColumns)
         .initTable(hadoopConf, tableLocation)
     }
   }
@@ -209,20 +217,21 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   private def parseSchemaAndConfigs(): (StructType, Map[String, String]) = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap
     val globalTableConfigs = mappingSparkDatasourceConfigsToTableConfigs(globalProps)
-    val globalSqlOptions = HoodieOptionConfig.mappingTableConfigToSqlOption(globalTableConfigs)
+    val globalSqlOptions = mapTableConfigsToSqlOptions(globalTableConfigs)
 
-    val sqlOptions = HoodieOptionConfig.withDefaultSqlOptions(globalSqlOptions ++ catalogProperties)
+    val sqlOptions = withDefaultSqlOptions(globalSqlOptions ++
+      mapDataSourceWriteOptionsToSqlOptions(catalogProperties) ++ catalogProperties)
 
     // get final schema and parameters
     val (finalSchema, tableConfigs) = (table.tableType, hoodieTableExists) match {
       case (CatalogTableType.EXTERNAL, true) =>
         val existingTableConfig = tableConfig.getProps.asScala.toMap
         val currentTableConfig = globalTableConfigs ++ existingTableConfig
-        val catalogTableProps = HoodieOptionConfig.mappingSqlOptionToTableConfig(catalogProperties)
+        val catalogTableProps = mapSqlOptionsToTableConfigs(catalogProperties)
         validateTableConfig(spark, catalogTableProps, convertMapToHoodieConfig(existingTableConfig))
 
         val options = extraTableConfig(hoodieTableExists, currentTableConfig) ++
-          HoodieOptionConfig.mappingSqlOptionToTableConfig(sqlOptions) ++ currentTableConfig
+          mapSqlOptionsToTableConfigs(sqlOptions) ++ currentTableConfig
 
         val schemaFromMetaOpt = loadTableSchemaByMetaClient()
         val schema = if (schemaFromMetaOpt.nonEmpty) {
@@ -236,11 +245,11 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         (schema, options)
 
       case (_, false) =>
-        ValidationUtils.checkArgument(table.schema.nonEmpty,
+        checkArgument(table.schema.nonEmpty,
           s"Missing schema for Create Table: $catalogTableName")
         val schema = table.schema
         val options = extraTableConfig(tableExists = false, globalTableConfigs) ++
-          HoodieOptionConfig.mappingSqlOptionToTableConfig(sqlOptions)
+          mapSqlOptionsToTableConfigs(sqlOptions)
         (addMetaFields(schema), options)
 
       case (CatalogTableType.MANAGED, true) =>
@@ -248,7 +257,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
           s". The associated location('$tableLocation') already exists.")
     }
     HoodieOptionConfig.validateTable(spark, finalSchema,
-      HoodieOptionConfig.mappingTableConfigToSqlOption(tableConfigs))
+      mapTableConfigsToSqlOptions(tableConfigs))
 
     val resolver = spark.sessionState.conf.resolver
     val dataSchema = finalSchema.filterNot { f =>
@@ -271,16 +280,16 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) =
           String.valueOf(isHiveStyledPartitioning(allPartitionPaths, table))
       }
-      if (originTableConfig.contains(HoodieTableConfig.URL_ENCODE_PARTITIONING.key)) {
-        extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) =
-          originTableConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key)
+      if (originTableConfig.contains(URL_ENCODE_PARTITIONING.key)) {
+        extraConfig(URL_ENCODE_PARTITIONING.key) =
+          originTableConfig(URL_ENCODE_PARTITIONING.key)
       } else {
-        extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) =
+        extraConfig(URL_ENCODE_PARTITIONING.key) =
           String.valueOf(isUrlEncodeEnabled(allPartitionPaths, table))
       }
     } else {
       extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) = "true"
-      extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) = HoodieTableConfig.URL_ENCODE_PARTITIONING.defaultValue()
+      extraConfig(URL_ENCODE_PARTITIONING.key) = URL_ENCODE_PARTITIONING.defaultValue()
     }
 
     if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
@@ -288,7 +297,10 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(
           originTableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
     } else {
-      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = classOf[ComplexKeyGenerator].getCanonicalName
+      val primaryKeys = table.properties.getOrElse(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName, table.storage.properties.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName)).toString
+      val partitions = table.partitionColumnNames.mkString(",")
+      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
+        DataSourceOptionsHelper.inferKeyGenClazz(primaryKeys, partitions)
     }
     extraConfig.toMap
   }

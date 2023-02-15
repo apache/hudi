@@ -18,19 +18,27 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.util.Functions.Function1;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -45,7 +53,6 @@ import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
-import org.apache.hudi.utilities.schema.ChainedSchemaPostProcessor;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
@@ -53,17 +60,12 @@ import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
+import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -110,6 +112,15 @@ public class UtilHelpers {
   public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
 
   private static final Logger LOG = LogManager.getLogger(UtilHelpers.class);
+
+  public static HoodieRecordMerger createRecordMerger(Properties props) {
+    List<String> recordMergerImplClasses = ConfigUtils.split2List(props.getProperty(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(),
+        HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue()));
+    HoodieRecordMerger recordMerger = HoodieRecordUtils.createRecordMerger(null, EngineType.SPARK, recordMergerImplClasses,
+        props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue()));
+
+    return recordMerger;
+  }
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
       SparkSession sparkSession, SchemaProvider schemaProvider,
@@ -229,7 +240,8 @@ public class UtilHelpers {
   public static TypedProperties buildProperties(List<String> props) {
     TypedProperties properties = DFSPropertiesConfiguration.getGlobalProps();
     props.forEach(x -> {
-      String[] kv = x.split("=");
+      // Some values may contain '=', such as the partition path
+      String[] kv = x.split("=", 2);
       ValidationUtils.checkArgument(kv.length == 2);
       properties.setProperty(kv[0], kv[1]);
     });
@@ -237,7 +249,7 @@ public class UtilHelpers {
   }
 
   public static void validateAndAddProperties(String[] configs, SparkLauncher sparkLauncher) {
-    Arrays.stream(configs).filter(config -> config.contains("=") && config.split("=").length == 2).forEach(sparkLauncher::addAppArgs);
+    Arrays.stream(configs).filter(config -> config.contains("=") && config.split("=", 2).length == 2).forEach(sparkLauncher::addAppArgs);
   }
 
   /**
@@ -275,6 +287,8 @@ public class UtilHelpers {
     sparkConf.set("spark.ui.port", "8090");
     sparkConf.setIfMissing("spark.driver.maxResultSize", "2g");
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+    sparkConf.set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar");
+    sparkConf.set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
     sparkConf.set("spark.hadoop.mapred.output.compress", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
@@ -282,7 +296,27 @@ public class UtilHelpers {
     sparkConf.set("spark.driver.allowMultipleContexts", "true");
 
     additionalConfigs.forEach(sparkConf::set);
-    return SparkRDDWriteClient.registerClasses(sparkConf);
+    return sparkConf;
+  }
+
+  private static SparkConf buildSparkConf(String appName, Map<String, String> additionalConfigs) {
+    final SparkConf sparkConf = new SparkConf().setAppName(appName);
+    sparkConf.set("spark.ui.port", "8090");
+    sparkConf.setIfMissing("spark.driver.maxResultSize", "2g");
+    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+    sparkConf.set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar");
+    sparkConf.set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
+    sparkConf.set("spark.hadoop.mapred.output.compress", "true");
+    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
+    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
+    sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
+
+    additionalConfigs.forEach(sparkConf::set);
+    return sparkConf;
+  }
+
+  public static JavaSparkContext buildSparkContext(String appName, Map<String, String> configs) {
+    return new JavaSparkContext(buildSparkConf(appName, configs));
   }
 
   public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, Map<String, String> configs) {
@@ -478,46 +512,22 @@ public class UtilHelpers {
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
 
-  /**
-   * Create latest schema provider for Target schema.
-   *
-   * @param structType spark data type of incoming batch.
-   * @param jssc instance of {@link JavaSparkContext}.
-   * @param fs instance of {@link FileSystem}.
-   * @param basePath base path of the table.
-   * @return the schema provider where target schema refers to latest schema(either incoming schema or table schema).
-   */
-  public static SchemaProvider createLatestSchemaProvider(StructType structType,
-      JavaSparkContext jssc, FileSystem fs, String basePath) {
-    SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
-    Schema writeSchema = rowSchemaProvider.getTargetSchema();
-    Schema latestTableSchema = writeSchema;
-
+  public static Option<Schema> getLatestTableSchema(JavaSparkContext jssc, FileSystem fs, String basePath) {
     try {
       if (FSUtils.isTableExists(basePath, fs)) {
-        HoodieTableMetaClient tableMetaClient = HoodieTableMetaClient.builder().setConf(jssc.sc().hadoopConfiguration()).setBasePath(basePath).build();
-        TableSchemaResolver
-            tableSchemaResolver = new TableSchemaResolver(tableMetaClient);
-        latestTableSchema = tableSchemaResolver.getLatestSchema(writeSchema, true, (Function1<Schema, Schema>) v1 -> AvroConversionUtils.convertStructTypeToAvroSchema(
-            AvroConversionUtils.convertAvroSchemaToStructType(v1), RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME,
-            RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE));
+        HoodieTableMetaClient tableMetaClient = HoodieTableMetaClient.builder()
+            .setConf(jssc.sc().hadoopConfiguration())
+            .setBasePath(basePath)
+            .build();
+        TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(tableMetaClient);
+
+        return tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false);
       }
-    } catch (IOException e) {
-      LOG.warn("Could not fetch table schema. Falling back to writer schema");
+    } catch (Exception e) {
+      LOG.warn("Failed to fetch latest table's schema", e);
     }
 
-    final Schema finalLatestTableSchema = latestTableSchema;
-    return new SchemaProvider(new TypedProperties()) {
-      @Override
-      public Schema getSourceSchema() {
-        return rowSchemaProvider.getSourceSchema();
-      }
-
-      @Override
-      public Schema getTargetSchema() {
-        return finalLatestTableSchema;
-      }
-    };
+    return Option.empty();
   }
 
   public static HoodieTableMetaClient createMetaClient(

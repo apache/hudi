@@ -18,12 +18,15 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.hadoop.hive.conf.HiveConf;
 
 import java.io.IOException;
 
-/** Test utils for Hoodie catalog. */
+/**
+ * Test utils for Hoodie catalog.
+ */
 public class HoodieCatalogTestUtils {
   private static final String HIVE_WAREHOUSE_URI_FORMAT =
       "jdbc:derby:;databaseName=%s;create=true";
@@ -32,16 +35,23 @@ public class HoodieCatalogTestUtils {
 
   private static final org.junit.rules.TemporaryFolder TEMPORARY_FOLDER = new org.junit.rules.TemporaryFolder();
 
-  /** Create a HiveCatalog with an embedded Hive Metastore. */
+  /**
+   * Create a HiveCatalog with an embedded Hive Metastore.
+   */
   public static HoodieHiveCatalog createHiveCatalog() {
     return createHiveCatalog(TEST_CATALOG_NAME);
   }
 
   public static HoodieHiveCatalog createHiveCatalog(String name) {
+    return createHiveCatalog(name, false);
+  }
+
+  public static HoodieHiveCatalog createHiveCatalog(String name, boolean external) {
+    Configuration options = new Configuration();
+    options.setBoolean(CatalogOptions.TABLE_EXTERNAL, external);
     return new HoodieHiveCatalog(
         name,
-        null,
-        null,
+        options,
         createHiveConf(),
         true);
   }

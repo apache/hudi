@@ -32,14 +32,14 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.exec.vector.BytesColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 import org.apache.orc.OrcFile;
 import org.apache.orc.OrcProto.UserMetadataItem;
 import org.apache.orc.Reader;
 import org.apache.orc.Reader.Options;
 import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
-import org.apache.orc.storage.ql.exec.vector.BytesColumnVector;
-import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -51,6 +51,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.BinaryUtil.toBytes;
 
 /**
  * Utility functions for ORC files.
@@ -238,8 +240,7 @@ public class OrcUtils extends BaseFileUtils {
     try (Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf))) {
       if (reader.hasMetadataValue("orc.avro.schema")) {
         ByteBuffer metadataValue = reader.getMetadataValue("orc.avro.schema");
-        byte[] bytes = new byte[metadataValue.remaining()];
-        metadataValue.get(bytes);
+        byte[] bytes = toBytes(metadataValue);
         return new Schema.Parser().parse(new String(bytes));
       } else {
         TypeDescription orcSchema = reader.getSchema();

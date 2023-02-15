@@ -20,6 +20,7 @@ package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
@@ -29,6 +30,7 @@ import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.common.StatsSetupConst;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.Database;
@@ -47,12 +49,15 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
@@ -75,7 +80,14 @@ public class HMSDDLExecutor implements DDLExecutor {
   public HMSDDLExecutor(HiveSyncConfig syncConfig) throws HiveException, MetaException {
     this.syncConfig = syncConfig;
     this.databaseName = syncConfig.getStringOrDefault(META_SYNC_DATABASE_NAME);
-    this.client = Hive.get(syncConfig.getHiveConf()).getMSC();
+    HiveConf hiveConf = syncConfig.getHiveConf();
+    IMetaStoreClient tempMetaStoreClient;
+    try {
+      tempMetaStoreClient = ((Hive) Hive.class.getMethod("getWithoutRegisterFns", HiveConf.class).invoke(null, hiveConf)).getMSC();
+    } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
+      tempMetaStoreClient = Hive.get(hiveConf).getMSC();
+    }
+    this.client = tempMetaStoreClient;
     try {
       this.partitionValueExtractor =
           (PartitionValueExtractor) Class.forName(syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
@@ -192,18 +204,23 @@ public class HMSDDLExecutor implements DDLExecutor {
     LOG.info("Adding partitions " + partitionsToAdd.size() + " to table " + tableName);
     try {
       StorageDescriptor sd = client.getTable(databaseName, tableName).getSd();
-      List<Partition> partitionList = partitionsToAdd.stream().map(partition -> {
-        StorageDescriptor partitionSd = new StorageDescriptor();
-        partitionSd.setCols(sd.getCols());
-        partitionSd.setInputFormat(sd.getInputFormat());
-        partitionSd.setOutputFormat(sd.getOutputFormat());
-        partitionSd.setSerdeInfo(sd.getSerdeInfo());
-        String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.getString(META_SYNC_BASE_PATH), partition).toString();
-        List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-        partitionSd.setLocation(fullPartitionPath);
-        return new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null);
-      }).collect(Collectors.toList());
-      client.add_partitions(partitionList, true, false);
+      int batchSyncPartitionNum = syncConfig.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+      for (List<String> batch : CollectionUtils.batches(partitionsToAdd, batchSyncPartitionNum)) {
+        List<Partition> partitionList = new ArrayList<>();
+        batch.forEach(x -> {
+          StorageDescriptor partitionSd = new StorageDescriptor();
+          partitionSd.setCols(sd.getCols());
+          partitionSd.setInputFormat(sd.getInputFormat());
+          partitionSd.setOutputFormat(sd.getOutputFormat());
+          partitionSd.setSerdeInfo(sd.getSerdeInfo());
+          String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.getString(META_SYNC_BASE_PATH), x).toString();
+          List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(x);
+          partitionSd.setLocation(fullPartitionPath);
+          partitionList.add(new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null));
+        });
+        client.add_partitions(partitionList, true, false);
+        LOG.info("HMSDDLExecutor add a batch partitions done: " + partitionList.size());
+      }
     } catch (TException e) {
       LOG.error(databaseName + "." + tableName + " add partition failed", e);
       throw new HoodieHiveSyncException(databaseName + "." + tableName + " add partition failed", e);

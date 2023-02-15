@@ -42,7 +42,7 @@ import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.util.FlinkTables;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
@@ -125,7 +125,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     }
 
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
-    this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf, true);
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, true);
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.ckpMetadata = CkpMetadata.getInstance(hoodieTable.getMetaClient().getFs(), this.writeConfig.getBasePath());
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
@@ -160,7 +160,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     int readyTaskNum = 1;
     while (taskNum != readyTaskNum) {
       try {
-        readyTaskNum = aggregateManager.updateGlobalAggregate(BootstrapAggFunction.NAME, taskID, new BootstrapAggFunction());
+        readyTaskNum = aggregateManager.updateGlobalAggregate(BootstrapAggFunction.NAME + conf.getString(FlinkOptions.TABLE_NAME), taskID, new BootstrapAggFunction());
         LOG.info("Waiting for other bootstrap tasks to complete, taskId = {}.", taskID);
 
         TimeUnit.SECONDS.sleep(5);

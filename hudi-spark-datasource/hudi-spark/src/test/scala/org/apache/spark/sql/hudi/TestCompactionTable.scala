@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi
 class TestCompactionTable extends HoodieSparkSqlTestBase {
 
   test("Test compaction table") {
-    withTempDir {tmp =>
+    withRecordType()(withTempDir {tmp =>
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -58,7 +58,7 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
         Seq(3, "a3", 10.0, 1000),
         Seq(4, "a4", 10.0, 1000)
       )
-      assertResult(1)(spark.sql(s"show compaction on $tableName").collect().length)
+      assertResult(2)(spark.sql(s"show compaction on $tableName").collect().length)
       spark.sql(s"run compaction on $tableName at ${timestamps(0)}")
       checkAnswer(s"select id, name, price, ts from $tableName order by id")(
         Seq(1, "a1", 11.0, 1000),
@@ -66,12 +66,12 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
         Seq(3, "a3", 10.0, 1000),
         Seq(4, "a4", 10.0, 1000)
       )
-      assertResult(0)(spark.sql(s"show compaction on $tableName").collect().length)
-    }
+      assertResult(2)(spark.sql(s"show compaction on $tableName").collect().length)
+    })
   }
 
   test("Test compaction path") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -119,11 +119,11 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
         Seq(2, "a2", 12.0, 1000),
         Seq(3, "a3", 10.0, 1000)
       )
-      assertResult(0)(spark.sql(s"show compaction on '${tmp.getCanonicalPath}'").collect().length)
+      assertResult(2)(spark.sql(s"show compaction on '${tmp.getCanonicalPath}'").collect().length)
 
       checkException(s"run compaction on '${tmp.getCanonicalPath}' at 12345")(
         s"Compaction instant: 12345 is not found in ${tmp.getCanonicalPath}, Available pending compaction instants are:  "
       )
-    }
+    })
   }
 }

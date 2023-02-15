@@ -19,11 +19,11 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -37,6 +37,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -49,6 +50,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Flink hoodie writable table.
+ */
 public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   private static final Logger LOG = LogManager.getLogger(HoodieFlinkWriteableTestTable.class);
 
@@ -57,7 +61,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   }
 
   public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
-    return new HoodieFlinkWriteableTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient, schema, filter);
+    return new HoodieFlinkWriteableTestTable(metaClient.getBasePathV2().toString(), metaClient.getRawFs(), metaClient, schema, filter);
   }
 
   public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema) {
@@ -141,7 +145,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
           LOG.warn("Failed to convert record " + r.toString(), e);
           return null;
         }
-      }).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      }).map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
       return Pair.of(partitionPath, logWriter.getLogFile());
     }
   }

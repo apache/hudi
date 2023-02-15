@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -70,7 +69,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I, K, O, R>
+public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     extends BaseActionExecutor<T, I, K, O, R> {
 
   private static final Logger LOG = LogManager.getLogger(BaseCommitActionExecutor.class);
@@ -91,7 +90,8 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     this.taskContextSupplier = context.getTaskContextSupplier();
     // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link BaseHoodieWriteClient}.
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
-    this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
+    this.lastCompletedTxn = txnManager.isOptimisticConcurrencyControlEnabled() 
+        ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient()) : Option.empty();
     this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(table.getMetaClient());
     this.pendingInflightAndRequestedInstants.remove(instantTime);
     if (!table.getStorageLayout().writeOperationSupported(operationType)) {
@@ -156,7 +156,6 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     return  table.getMetaClient().getCommitActionType();
   }
 
-
   /**
    * Check if any validators are configured and run those validations. If any of the validations fail, throws HoodieValidationException.
    */
@@ -166,7 +165,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     }
     throw new HoodieIOException("Precommit validation not implemented for all engines yet");
   }
-  
+
   protected void commitOnAutoCommit(HoodieWriteMetadata result) {
     // validate commit action before committing result
     runPrecommitValidators(result);
@@ -249,7 +248,6 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     HoodieData<WriteStatus> statuses = updateIndex(writeStatusList, writeMetadata);
     writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collectAsList());
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
-    validateWriteResult(clusteringPlan, writeMetadata);
     commitOnAutoCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
@@ -262,7 +260,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   private HoodieData<WriteStatus> updateIndex(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     Instant indexStartTime = Instant.now();
     // Update the index back
-    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
+    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     return statuses;

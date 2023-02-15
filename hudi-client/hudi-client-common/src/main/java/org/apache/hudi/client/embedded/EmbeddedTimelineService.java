@@ -89,6 +89,17 @@ public class EmbeddedTimelineService {
           .markerParallelism(writeConfig.getMarkersDeleteParallelism());
     }
 
+    if (writeConfig.isEarlyConflictDetectionEnable()) {
+      timelineServiceConfBuilder.earlyConflictDetectionEnable(true)
+          .earlyConflictDetectionStrategy(writeConfig.getEarlyConflictDetectionStrategyClassName())
+          .earlyConflictDetectionCheckCommitConflict(writeConfig.earlyConflictDetectionCheckCommitConflict())
+          .asyncConflictDetectorInitialDelayMs(writeConfig.getAsyncConflictDetectorInitialDelayMs())
+          .asyncConflictDetectorPeriodMs(writeConfig.getAsyncConflictDetectorPeriodMs())
+          .earlyConflictDetectionMaxAllowableHeartbeatIntervalInMs(
+              writeConfig.getHoodieClientHeartbeatIntervalInMs()
+                  * writeConfig.getHoodieClientHeartbeatTolerableMisses());
+    }
+
     server = new TimelineService(context, hadoopConf.newCopy(), timelineServiceConfBuilder.build(),
         FSUtils.getFs(basePath, hadoopConf.newCopy()), viewManager);
     serverPort = server.startService();
@@ -117,6 +128,11 @@ public class EmbeddedTimelineService {
         .withRemoteServerHost(hostAddr)
         .withRemoteServerPort(serverPort)
         .withRemoteTimelineClientTimeoutSecs(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientTimeoutSecs())
+        .withRemoteTimelineClientRetry(writeConfig.getClientSpecifiedViewStorageConfig().isRemoteTimelineClientRetryEnabled())
+        .withRemoteTimelineClientMaxRetryNumbers(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientMaxRetryNumbers())
+        .withRemoteTimelineInitialRetryIntervalMs(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineInitialRetryIntervalMs())
+        .withRemoteTimelineClientMaxRetryIntervalMs(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientMaxRetryIntervalMs())
+        .withRemoteTimelineClientRetryExceptions(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientRetryExceptions())
         .build();
   }
 

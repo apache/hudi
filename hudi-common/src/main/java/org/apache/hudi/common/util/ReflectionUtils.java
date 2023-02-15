@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.log4j.LogManager;
@@ -27,6 +26,7 @@ import org.apache.log4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -66,18 +66,6 @@ public class ReflectionUtils {
       return (T) getClass(className).newInstance();
     } catch (InstantiationException | IllegalAccessException e) {
       throw new HoodieException("Could not load class " + className, e);
-    }
-  }
-
-  /**
-   * Instantiate a given class with a generic record payload.
-   */
-  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, Object[] payloadArgs,
-      Class<?>... constructorArgTypes) {
-    try {
-      return (T) getClass(recordPayloadClass).getConstructor(constructorArgTypes).newInstance(payloadArgs);
-    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-      throw new HoodieException("Unable to instantiate payload class ", e);
     }
   }
 
@@ -179,5 +167,38 @@ public class ReflectionUtils {
    */
   public static boolean isSameClass(Comparable<?> v, Comparable<?> o) {
     return v.getClass() == o.getClass();
+  }
+
+  /**
+   * Invoke a static method of a class.
+   * @param clazz
+   * @param methodName
+   * @param args
+   * @param parametersType
+   * @return the return value of the method
+   */
+  public static Object invokeStaticMethod(String clazz, String methodName, Object[] args, Class<?>... parametersType) {
+    try {
+      Method method = Class.forName(clazz).getMethod(methodName, parametersType);
+      return method.invoke(null, args);
+    } catch (ClassNotFoundException e) {
+      throw new HoodieException("Unable to find the class " + clazz, e);
+    } catch (NoSuchMethodException e) {
+      throw new HoodieException(String.format("Unable to find the method %s of the class %s ",  methodName, clazz), e);
+    } catch (InvocationTargetException | IllegalAccessException e) {
+      throw new HoodieException(String.format("Unable to invoke the methond %s of the class %s ",  methodName, clazz), e);
+    }
+  }
+
+  /**
+   * Checks if the given class with the name is a subclass of another class.
+   *
+   * @param aClazzName Class name.
+   * @param superClazz Super class to check.
+   * @return {@code true} if {@code aClazzName} is a subclass of {@code superClazz};
+   * {@code false} otherwise.
+   */
+  public static boolean isSubClass(String aClazzName, Class<?> superClazz) {
+    return superClazz.isAssignableFrom(getClass(aClazzName));
   }
 }

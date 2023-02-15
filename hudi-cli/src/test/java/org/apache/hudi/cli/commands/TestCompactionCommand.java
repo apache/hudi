@@ -49,7 +49,9 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -69,7 +71,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Test Cases for {@link CompactionCommand}.
  */
 @Tag("functional")
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
 public class TestCompactionCommand extends CLIFunctionalTestHarness {
+
+  @Autowired
+  private Shell shell;
 
   private String tableName;
   private String tablePath;
@@ -106,8 +112,8 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
 
     HoodieCLI.getTableMetaClient().reloadActiveTimeline();
 
-    CommandResult cr = shell().executeCommand("compactions show all");
-    System.out.println(cr.getResult().toString());
+    Object result = shell.evaluate(() -> "compactions show all");
+    System.out.println(result.toString());
 
     TableHeader header = new TableHeader().addTableHeaderField("Compaction Instant Time").addTableHeaderField("State")
         .addTableHeaderField("Total FileIds to be Compacted");
@@ -121,7 +127,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
       rows.add(new Comparable[] {instant, "REQUESTED", fileIds.get(instant)});
     });
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-    assertEquals(expected, cr.getResult().toString());
+    assertEquals(expected, result.toString());
   }
 
   /**
@@ -138,8 +144,8 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
 
     HoodieCLI.getTableMetaClient().reloadActiveTimeline();
 
-    CommandResult cr = shell().executeCommand("compaction show --instant 001");
-    System.out.println(cr.getResult().toString());
+    Object result = shell.evaluate(() -> "compaction show --instant 001");
+    System.out.println(result.toString());
   }
 
   private void generateCompactionInstances() throws IOException {
@@ -188,7 +194,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
 
     generateArchive();
 
-    CommandResult cr = shell().executeCommand("compactions showarchived --startTs 001 --endTs 005");
+    Object result = shell.evaluate(() -> "compactions showarchived --startTs 001 --endTs 005");
 
     // generate result
     Map<String, Integer> fileMap = new HashMap<>();
@@ -203,7 +209,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     String expected = HoodiePrintHelper.print(header, fieldNameToConverterMap, "", false, -1, false, rows);
 
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -222,13 +228,13 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
 
     generateArchive();
 
-    CommandResult cr = shell().executeCommand("compaction showarchived --instant " + instance);
+    Object result = shell.evaluate(() -> "compaction showarchived --instant " + instance);
 
     // generate expected
-    String expected = new CompactionCommand().printCompaction(plan, "", false, -1, false);
+    String expected = CompactionCommand.printCompaction(plan, "", false, -1, false, null);
 
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 }

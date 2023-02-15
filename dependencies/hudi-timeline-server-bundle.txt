@@ -77,12 +77,8 @@ htrace-core/org.apache.htrace/3.1.0-incubating//htrace-core-3.1.0-incubating.jar
 httpclient/org.apache.httpcomponents/4.4.1//httpclient-4.4.1.jar
 httpcore/org.apache.httpcomponents/4.4.1//httpcore-4.4.1.jar
 jackson-annotations/com.fasterxml.jackson.core/2.6.7//jackson-annotations-2.6.7.jar
-jackson-core-asl/org.codehaus.jackson/1.9.13//jackson-core-asl-1.9.13.jar
 jackson-core/com.fasterxml.jackson.core/2.6.7//jackson-core-2.6.7.jar
 jackson-databind/com.fasterxml.jackson.core/2.6.7.3//jackson-databind-2.6.7.3.jar
-jackson-jaxrs/org.codehaus.jackson/1.9.13//jackson-jaxrs-1.9.13.jar
-jackson-mapper-asl/org.codehaus.jackson/1.9.13//jackson-mapper-asl-1.9.13.jar
-jackson-xc/org.codehaus.jackson/1.9.13//jackson-xc-1.9.13.jar
 jamon-runtime/org.jamon/2.4.1//jamon-runtime-2.4.1.jar
 java-xmlbuilder/com.jamesmurty.utils/0.4//java-xmlbuilder-0.4.jar
 javalin/io.javalin/2.8.0//javalin-2.8.0.jar

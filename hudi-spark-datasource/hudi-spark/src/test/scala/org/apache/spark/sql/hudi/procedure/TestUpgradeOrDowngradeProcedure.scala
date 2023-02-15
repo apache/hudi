@@ -87,10 +87,11 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
     val propertyFile = new Path(metaClient.getMetaPath + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE)
     // Load the properties and verify
     val fsDataInputStream = metaClient.getFs.open(propertyFile)
-    val hoodieConfig = HoodieConfig.create(fsDataInputStream)
+    val config = new HoodieConfig
+    config.getProps.load(fsDataInputStream)
     fsDataInputStream.close()
     assertResult(Integer.toString(versionCode)) {
-      hoodieConfig.getString(HoodieTableConfig.VERSION)
+      config.getString(HoodieTableConfig.VERSION)
     }
   }
 }

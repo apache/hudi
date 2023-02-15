@@ -83,6 +83,18 @@ public class HoodieMetricsConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("");
 
+  public static final ConfigProperty<Boolean> LOCK_METRICS_ENABLE = ConfigProperty
+      .key(METRIC_PREFIX + ".lock.enable")
+      .defaultValue(false)
+      .withInferFunction(cfg -> {
+        if (cfg.contains(TURN_METRICS_ON)) {
+          return Option.of(cfg.getBoolean(TURN_METRICS_ON));
+        }
+        return Option.empty();
+      })
+      .sinceVersion("0.13.0")
+      .withDocumentation("Enable metrics for locking infra. Useful when operating in multiwriter mode");
+
   /**
    * @deprecated Use {@link #TURN_METRICS_ON} and its methods instead
    */
@@ -160,6 +172,11 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
     public Builder withExecutorMetrics(boolean enable) {
       hoodieMetricsConfig.setValue(EXECUTOR_METRICS_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withLockingMetrics(boolean enable) {
+      hoodieMetricsConfig.setValue(LOCK_METRICS_ENABLE, String.valueOf(enable));
       return this;
     }
 

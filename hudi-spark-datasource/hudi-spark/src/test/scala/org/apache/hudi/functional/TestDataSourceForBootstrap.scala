@@ -21,19 +21,24 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.keygen.SimpleKeyGenerator
+import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort}
+import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{col, lit}
-import org.apache.spark.sql.{SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+
 import java.time.Instant
 import java.util.Collections
-
 import scala.collection.JavaConverters._
 
 class TestDataSourceForBootstrap {
@@ -63,12 +68,14 @@ class TestDataSourceForBootstrap {
   val originalVerificationVal: String = "driver_0"
   val updatedVerificationVal: String = "driver_update"
 
-  @BeforeEach def initialize(@TempDir tempDir: java.nio.file.Path) {
-    spark = SparkSession.builder
-      .appName("Hoodie Datasource test")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .getOrCreate
+  /**
+   * TODO rebase onto existing test base-class to avoid duplication
+   */
+  @BeforeEach
+  def initialize(@TempDir tempDir: java.nio.file.Path) {
+    val sparkConf = HoodieClientTestUtils.getSparkConfForTest(getClass.getSimpleName)
+
+    spark = SparkSession.builder.config(sparkConf).getOrCreate
     basePath = tempDir.toAbsolutePath.toString + "/base"
     srcPath = tempDir.toAbsolutePath.toString + "/src"
     fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
@@ -102,19 +109,23 @@ class TestDataSourceForBootstrap {
       .save(srcPath)
 
     // Perform bootstrap
+    val bootstrapKeygenClass = classOf[NonpartitionedKeyGenerator].getName
+    val options = commonOpts.-(DataSourceWriteOptions.PARTITIONPATH_FIELD.key)
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
       DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
-      extraOpts = Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+      extraOpts = options ++ Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> bootstrapKeygenClass),
+      bootstrapKeygenClass = bootstrapKeygenClass
     )
     // check marked directory clean up
     assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
 
     // Read bootstrapped table and verify count using glob path
     val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
-    assertEquals(numRecords, hoodieROViewDF1.count())
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
+
     // Read bootstrapped table and verify count using Hudi file index
     val hoodieROViewDF2 = spark.read.format("hudi").load(basePath)
-    assertEquals(numRecords, hoodieROViewDF2.count())
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF2)).collectAsList())
 
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
@@ -123,10 +134,10 @@ class TestDataSourceForBootstrap {
 
     updateDF.write
       .format("hudi")
-      .options(commonOpts)
+      .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, bootstrapKeygenClass)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -145,8 +156,9 @@ class TestDataSourceForBootstrap {
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = false, isHiveStylePartitioned = false)
   }
 
-  @Test
-  def testMetadataBootstrapCOWHiveStylePartitioned(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("METADATA_ONLY", "FULL_RECORD"))
+  def testMetadataBootstrapCOWHiveStylePartitioned(bootstrapMode: String): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
@@ -160,21 +172,36 @@ class TestDataSourceForBootstrap {
       .mode(SaveMode.Overwrite)
       .save(srcPath)
 
+    val readOpts = commonOpts ++ Map(
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr",
+        DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+        HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.key -> bootstrapMode
+    )
+
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
       DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
-      Some("datestr"),
-      Map(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true"))
+      readOpts,
+      classOf[SimpleKeyGenerator].getName)
 
     // check marked directory clean up
     assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
 
+    // TODO(HUDI-5602) troubleshoot
+    val expectedDF = bootstrapMode match {
+      case "METADATA_ONLY" =>
+        sort(sourceDF).withColumn("datestr", lit(null))
+      case "FULL_RECORD" =>
+        sort(sourceDF)
+    }
+
     // Read bootstrapped table and verify count
-    val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
-    assertEquals(numRecords, hoodieROViewDF1.count())
+    val hoodieROViewDF1 = spark.read.options(readOpts).format("hudi").load(basePath + "/*")
+    assertEquals(expectedDF.collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
+
     // Read bootstrapped table and verify count using Hudi file index
-    val hoodieROViewDF2 = spark.read.format("hudi").load(basePath)
-    assertEquals(numRecords, hoodieROViewDF2.count())
+    val hoodieROViewDF2 = spark.read.options(readOpts).format("hudi").load(basePath)
+    assertEquals(expectedDF.collectAsList(), sort(dropMetaCols(hoodieROViewDF2)).collectAsList())
 
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
@@ -227,14 +254,17 @@ class TestDataSourceForBootstrap {
 
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
-      DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, Some("datestr"))
+      DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+      commonOpts.updated(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr"),
+      classOf[SimpleKeyGenerator].getName)
 
     // Read bootstrapped table and verify count using glob path
     val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
-    assertEquals(numRecords, hoodieROViewDF1.count())
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
+
     // Read with base path using Hudi file index
     val hoodieROViewWithBasePathDF1 = spark.read.format("hudi").load(basePath)
-    assertEquals(numRecords, hoodieROViewWithBasePathDF1.count())
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewWithBasePathDF1)).collectAsList())
 
     // Perform upsert based on the written bootstrap table
     val updateDf1 = hoodieROViewDF1.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
@@ -302,7 +332,9 @@ class TestDataSourceForBootstrap {
 
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
-      DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, Some("datestr"))
+      DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      commonOpts.updated(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr"),
+      classOf[SimpleKeyGenerator].getName)
 
     // Read bootstrapped table and verify count
     val hoodieROViewDF1 = spark.read.format("hudi")
@@ -367,20 +399,25 @@ class TestDataSourceForBootstrap {
 
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
-      DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, Some("datestr"))
+      DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      commonOpts.updated(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr"),
+      classOf[SimpleKeyGenerator].getName)
 
     // Read bootstrapped table and verify count
     val hoodieROViewDF1 = spark.read.format("hudi")
                             .option(DataSourceReadOptions.QUERY_TYPE.key,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
                             .load(basePath + "/*")
-    assertEquals(numRecords, hoodieROViewDF1.count())
+
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
+
     // Read bootstrapped table without "*"
     val hoodieROViewDFWithBasePath = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key,
         DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(basePath)
-    assertEquals(numRecords, hoodieROViewDFWithBasePath.count())
+
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDFWithBasePath)).collectAsList())
 
     // Perform upsert based on the written bootstrap table
     val updateDf1 = hoodieROViewDF1.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
@@ -466,10 +503,10 @@ class TestDataSourceForBootstrap {
 
     // Read bootstrapped table and verify count
     val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
-    assertEquals(numRecords, hoodieROViewDF1.count())
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
 
     val hoodieROViewDFWithBasePath = spark.read.format("hudi").load(basePath)
-    assertEquals(numRecords, hoodieROViewDFWithBasePath.count())
+    assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDFWithBasePath)).collectAsList())
 
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
@@ -497,23 +534,25 @@ class TestDataSourceForBootstrap {
   }
 
   def runMetadataBootstrapAndVerifyCommit(tableType: String,
-                                          partitionColumns: Option[String] = None,
-                                          extraOpts: Map[String, String] = Map.empty): String = {
+                                          extraOpts: Map[String, String] = Map.empty,
+                                          bootstrapKeygenClass: String): String = {
     val bootstrapDF = spark.emptyDataFrame
     bootstrapDF.write
       .format("hudi")
-      .options(commonOpts)
       .options(extraOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, partitionColumns.getOrElse(""))
       .option(HoodieBootstrapConfig.BASE_PATH.key, srcPath)
-      .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+      .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, bootstrapKeygenClass)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
     val commitInstantTime1: String = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    assertEquals(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, commitInstantTime1)
+    val expectedBootstrapInstant =
+      if ("FULL_RECORD".equals(extraOpts.getOrElse(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.key, HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.defaultValue)))
+        HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS
+      else HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS
+    assertEquals(expectedBootstrapInstant, commitInstantTime1)
     commitInstantTime1
   }
 
@@ -528,7 +567,7 @@ class TestDataSourceForBootstrap {
       .load(basePath)
 
     assertEquals(numRecords, hoodieIncViewDF1.count())
-    var countsPerCommit = hoodieIncViewDF1.groupBy("_hoodie_commit_time").count().collect();
+    var countsPerCommit = hoodieIncViewDF1.groupBy("_hoodie_commit_time").count().collect()
     assertEquals(1, countsPerCommit.length)
     assertEquals(bootstrapCommitInstantTime, countsPerCommit(0).get(0))
 
@@ -537,10 +576,10 @@ class TestDataSourceForBootstrap {
     val hoodieIncViewDF2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, bootstrapCommitInstantTime)
-      .load(basePath);
+      .load(basePath)
 
     assertEquals(numRecordsUpdate, hoodieIncViewDF2.count())
-    countsPerCommit = hoodieIncViewDF2.groupBy("_hoodie_commit_time").count().collect();
+    countsPerCommit = hoodieIncViewDF2.groupBy("_hoodie_commit_time").count().collect()
     assertEquals(1, countsPerCommit.length)
     assertEquals(latestCommitInstantTime, countsPerCommit(0).get(0))
 
@@ -557,4 +596,13 @@ class TestDataSourceForBootstrap {
         hoodieIncViewDF3.count())
     }
   }
+}
+
+object TestDataSourceForBootstrap {
+
+  def sort(df: DataFrame) = df.sort("_row_key")
+
+  def dropMetaCols(df: DataFrame) =
+    df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
+
 }

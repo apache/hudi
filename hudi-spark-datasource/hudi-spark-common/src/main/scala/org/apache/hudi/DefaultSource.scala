@@ -19,23 +19,27 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
+import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
+import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieRecord, WriteConcurrencyMode}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
-import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
+import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 
+import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
 /**
@@ -106,53 +110,15 @@ class DefaultSource extends RelationProvider
     }
     log.info("Obtained hudi table path: " + tablePath)
 
-    val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
-    val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
-    val tableType = metaClient.getTableType
-    val queryType = parameters(QUERY_TYPE.key)
-    // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
-    //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
-    //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
-    //       from the table itself
-    val userSchema = if (isUsingHiveCatalog(sqlContext.sparkSession)) {
-      None
-    } else {
-      Option(schema)
-    }
+    val metaClient = HoodieTableMetaClient.builder().setMetaserverConfig(parameters.asJava)
+      .setConf(fs.getConf).setBasePath(tablePath).build()
 
-    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
-
-    if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
-      new EmptyRelation(sqlContext, metaClient)
-    } else {
-      (tableType, queryType, isBootstrappedTable) match {
-        case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
-             (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
-             (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
-
-        case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
-
-        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          new MergeOnReadSnapshotRelation(sqlContext, parameters, userSchema, globPaths, metaClient)
-
-        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new MergeOnReadIncrementalRelation(sqlContext, parameters, userSchema, metaClient)
-
-        case (_, _, true) =>
-          new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
-
-        case (_, _, _) =>
-          throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
-            s"isBootstrappedTable: $isBootstrappedTable ")
-      }
-    }
+    DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
   }
 
   def getValidCommits(metaClient: HoodieTableMetaClient): String = {
     metaClient
-      .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstants.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
+      .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
   }
 
   /**
@@ -179,9 +145,15 @@ class DefaultSource extends RelationProvider
 
     if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
       HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, dfWithoutMetaCols)
+      HoodieSparkSqlWriter.cleanup()
     } else {
-      HoodieSparkSqlWriter.write(sqlContext, mode, optParams, dfWithoutMetaCols)
+      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, dfWithoutMetaCols)
+      HoodieSparkSqlWriter.cleanup()
+      if (!success) {
+        throw new HoodieException("Write to Hudi failed")
+      }
     }
+
     new HoodieEmptyRelation(sqlContext, dfWithoutMetaCols.schema)
   }
 
@@ -189,11 +161,21 @@ class DefaultSource extends RelationProvider
                           optParams: Map[String, String],
                           partitionColumns: Seq[String],
                           outputMode: OutputMode): Sink = {
+    validateMultiWriterConfigs(optParams)
     new HoodieStreamingSink(
       sqlContext,
       optParams,
       partitionColumns,
       outputMode)
+  }
+
+  def validateMultiWriterConfigs(options: Map[String, String]) : Unit = {
+    if (WriteConcurrencyMode.valueOf(options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
+      WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL) {
+      // ensure some valid value is set for identifier
+      checkState(options.contains(STREAMING_CHECKPOINT_IDENTIFIER.key()), "For multi-writer scenarios, please set "
+        + STREAMING_CHECKPOINT_IDENTIFIER.key() + ". Each writer should set different values for this identifier")
+    }
   }
 
   override def shortName(): String = "hudi_v1"
@@ -208,16 +190,8 @@ class DefaultSource extends RelationProvider
     }
     val metaClient = HoodieTableMetaClient.builder().setConf(
       sqlContext.sparkSession.sessionState.newHadoopConf()).setBasePath(path.get).build()
-    val schemaResolver = new TableSchemaResolver(metaClient)
-    val sqlSchema =
-      try {
-        val avroSchema = schemaResolver.getTableAvroSchema
-        AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
-      } catch {
-        case _: Exception =>
-          require(schema.isDefined, "Fail to resolve source schema")
-          schema.get
-      }
+
+    val sqlSchema = DefaultSource.resolveSchema(metaClient, parameters, schema)
     (shortName(), sqlSchema)
   }
 
@@ -226,7 +200,74 @@ class DefaultSource extends RelationProvider
                             schema: Option[StructType],
                             providerName: String,
                             parameters: Map[String, String]): Source = {
-    new HoodieStreamSource(sqlContext, metadataPath, schema, parameters)
+    val offsetRangeLimit = parameters.getOrElse(START_OFFSET.key(), START_OFFSET.defaultValue()) match {
+      case offset if offset.equalsIgnoreCase("earliest") =>
+        HoodieEarliestOffsetRangeLimit
+      case offset if offset.equalsIgnoreCase("latest") =>
+        HoodieLatestOffsetRangeLimit
+      case instantTime =>
+        HoodieSpecifiedOffsetRangeLimit(instantTime)
+    }
+
+    new HoodieStreamSource(sqlContext, metadataPath, schema, parameters, offsetRangeLimit)
+  }
+}
+
+object DefaultSource {
+
+  private val log = LogManager.getLogger(classOf[DefaultSource])
+
+  def createRelation(sqlContext: SQLContext,
+                     metaClient: HoodieTableMetaClient,
+                     schema: StructType,
+                     globPaths: Seq[Path],
+                     parameters: Map[String, String]): BaseRelation = {
+    val tableType = metaClient.getTableType
+    val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
+    val queryType = parameters(QUERY_TYPE.key)
+    val isCdcQuery = queryType == QUERY_TYPE_INCREMENTAL_OPT_VAL &&
+      parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
+
+    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
+
+    // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
+    //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
+    //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
+    //       from the table itself
+    val userSchema = if (isUsingHiveCatalog(sqlContext.sparkSession)) {
+      None
+    } else {
+      Option(schema)
+    }
+
+    if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
+      new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
+    } else if (isCdcQuery) {
+      CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
+    } else {
+      (tableType, queryType, isBootstrappedTable) match {
+        case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
+             (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
+             (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
+          resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+
+        case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
+          new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+
+        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
+          new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
+
+        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
+          new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
+
+        case (_, _, true) =>
+          new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+
+        case (_, _, _) =>
+          throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
+            s"isBootstrappedTable: $isBootstrappedTable ")
+      }
+    }
   }
 
   private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,
@@ -245,6 +286,27 @@ class DefaultSource extends RelationProvider
       baseRelation
     } else {
       baseRelation.toHadoopFsRelation
+    }
+  }
+
+  private def resolveSchema(metaClient: HoodieTableMetaClient,
+                            parameters: Map[String, String],
+                            schema: Option[StructType]): StructType = {
+    val isCdcQuery = CDCRelation.isCDCEnabled(metaClient) &&
+      parameters.get(QUERY_TYPE.key).contains(QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
+      parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
+    if (isCdcQuery) {
+      CDCRelation.FULL_CDC_SPARK_SCHEMA
+    } else {
+      val schemaResolver = new TableSchemaResolver(metaClient)
+      try {
+        val avroSchema = schemaResolver.getTableAvroSchema
+        AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
+      } catch {
+        case _: Exception =>
+          require(schema.isDefined, "Fail to resolve source schema")
+          schema.get
+      }
     }
   }
 }

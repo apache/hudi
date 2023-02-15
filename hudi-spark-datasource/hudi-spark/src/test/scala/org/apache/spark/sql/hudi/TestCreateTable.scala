@@ -19,19 +19,21 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types._
-
 import org.junit.jupiter.api.Assertions.assertFalse
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 
 class TestCreateTable extends HoodieSparkSqlTestBase {
 
@@ -137,7 +139,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertResult("dt")(tableConfig(HoodieTableConfig.PARTITION_FIELDS.key))
     assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
     assertResult("ts")(tableConfig(HoodieTableConfig.PRECOMBINE_FIELD.key))
-    assertResult(classOf[ComplexKeyGenerator].getCanonicalName)(tableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+    assertResult(classOf[SimpleKeyGenerator].getCanonicalName)(tableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
     assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
     assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
     assertFalse(tableConfig.contains(OPERATION.key()))
@@ -299,6 +301,10 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | AS
              | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
        """.stripMargin)
+
+        assertResult(WriteOperationType.BULK_INSERT) {
+          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName1").getOperationType
+        }
         checkAnswer(s"select id, name, price, ts from $tableName1")(
           Seq(1, "a1", 10.0, 1000)
         )
@@ -318,6 +324,10 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt
          """.stripMargin
         )
+
+        assertResult(WriteOperationType.BULK_INSERT) {
+          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName2").getOperationType
+        }
         checkAnswer(s"select id, name, price, dt from $tableName2")(
           Seq(1, "a1", 10, "2021-04-01")
         )
@@ -356,9 +366,14 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | price
          """.stripMargin
         )
+
+        assertResult(WriteOperationType.BULK_INSERT) {
+          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName3").getOperationType
+        }
         checkAnswer(s"select id, name, price, cast(dt as string) from $tableName3")(
           Seq(1, "a1", 10, "2021-05-06 00:00:00")
         )
+
         // Create table with date type partition
         val tableName4 = generateTableName
         spark.sql(
@@ -375,6 +390,10 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | price
          """.stripMargin
         )
+
+        assertResult(WriteOperationType.BULK_INSERT) {
+          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName4").getOperationType
+        }
         checkAnswer(s"select id, name, price, cast(dt as string) from $tableName4")(
           Seq(1, "a1", 10, "2021-05-06")
         )
@@ -720,6 +739,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "day,hh")
+          .option(URL_ENCODE_PARTITIONING.key, "true")
           .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
@@ -745,11 +765,13 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
 
+        val escapedPathPart = escapePathName(day)
+
         // Test insert into
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, '$day', 12)")
         checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
-          Seq("id:1", s"$day/12", 1, "a1", 10, 1000, day, 12),
-          Seq("id:2", s"$day/12", 2, "a2", 10, 1000, day, 12)
+          Seq("id:1", s"$escapedPathPart/12", 1, "a1", 10, 1000, day, 12),
+          Seq("id:2", s"$escapedPathPart/12", 2, "a2", 10, 1000, day, 12)
         )
         // Test merge into
         spark.sql(
@@ -760,19 +782,19 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |when matched then update set *
              |""".stripMargin)
         checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
-          Seq("id:1", s"$day/12", 1, "a1", 11, 1001, day, 12),
-          Seq("id:2", s"$day/12", 2, "a2", 10, 1000, day, 12)
+          Seq("id:1", s"$escapedPathPart/12", 1, "a1", 11, 1001, day, 12),
+          Seq("id:2", s"$escapedPathPart/12", 2, "a2", 10, 1000, day, 12)
         )
         // Test update
         spark.sql(s"update $tableName set value = value + 1 where id = 2")
         checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
-          Seq("id:1", s"$day/12", 1, "a1", 11, 1001, day, 12),
-          Seq("id:2", s"$day/12", 2, "a2", 11, 1000, day, 12)
+          Seq("id:1", s"$escapedPathPart/12", 1, "a1", 11, 1001, day, 12),
+          Seq("id:2", s"$escapedPathPart/12", 2, "a2", 11, 1000, day, 12)
         )
         // Test delete
         spark.sql(s"delete from $tableName where id = 1")
         checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
-          Seq("id:2", s"$day/12", 2, "a2", 11, 1000, day, 12)
+          Seq("id:2", s"$escapedPathPart/12", 2, "a2", 11, 1000, day, 12)
         )
       }
     }
@@ -943,5 +965,103 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     )(table.schema.fields)
 
     spark.sql("use default")
+  }
+
+  test("Test Infer KegGenClazz") {
+    def checkKeyGenerator(targetGenerator: String, tableName: String) = {
+      val tablePath = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).location.getPath
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tablePath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      val realKeyGenerator =
+        metaClient.getTableConfig.getProps.asScala.toMap.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key).get
+      assertResult(targetGenerator)(realKeyGenerator)
+    }
+
+    val tableName = generateTableName
+
+    // Test Nonpartitioned table
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         | ) using hudi
+         | comment "This is a simple hudi table"
+         | tblproperties (
+         |   primaryKey = 'id',
+         |   preCombineField = 'ts'
+         | )
+       """.stripMargin)
+    checkKeyGenerator("org.apache.hudi.keygen.NonpartitionedKeyGenerator", tableName)
+    spark.sql(s"drop table $tableName")
+
+    // Test single partitioned table
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         | ) using hudi
+         | comment "This is a simple hudi table"
+         | partitioned by (ts)
+         | tblproperties (
+         |   primaryKey = 'id',
+         |   preCombineField = 'ts'
+         | )
+       """.stripMargin)
+    checkKeyGenerator("org.apache.hudi.keygen.SimpleKeyGenerator", tableName)
+    spark.sql(s"drop table $tableName")
+
+    // Test single partitioned dual record keys table
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         | ) using hudi
+         | comment "This is a simple hudi table"
+         | partitioned by (ts)
+         | tblproperties (
+         |   primaryKey = 'id,name',
+         |   preCombineField = 'ts'
+         | )
+       """.stripMargin)
+    checkKeyGenerator("org.apache.hudi.keygen.ComplexKeyGenerator", tableName)
+    spark.sql(s"drop table $tableName")
+  }
+
+  test("Test CTAS not de-duplicating (by default)") {
+    withRecordType() {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |CREATE TABLE $tableName USING hudi
+             | LOCATION '${tmp.getCanonicalPath}/$tableName'
+             | TBLPROPERTIES (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | AS SELECT * FROM (
+             |  SELECT 1 as id, 'a1' as name, 10 as price, 1000 as ts
+             |  UNION ALL
+             |  SELECT 1 as id, 'a1' as name, 11 as price, 1001 as ts
+             | )
+       """.stripMargin)
+
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(1, "a1", 11.0, 1001)
+        )
+      }
+    }
   }
 }

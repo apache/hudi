@@ -42,16 +42,40 @@ import java.util.stream.StreamSupport;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
+/**
+ * Utils for Java Collection.
+ */
 public class CollectionUtils {
 
-  public static final Properties EMPTY_PROPERTIES = new Properties();
+  private static final Properties EMPTY_PROPERTIES = new Properties();
+
+  /**
+   * Returns an empty {@code Properties} instance. The props instance is a singleton,
+   * it should not be modified in any case.
+   */
+  public static Properties emptyProps() {
+    return EMPTY_PROPERTIES;
+  }
 
   public static boolean isNullOrEmpty(Collection<?> c) {
     return Objects.isNull(c) || c.isEmpty();
   }
 
+  public static boolean isNullOrEmpty(Map<?, ?> m) {
+    return Objects.isNull(m) || m.isEmpty();
+  }
+
   public static boolean nonEmpty(Collection<?> c) {
     return !isNullOrEmpty(c);
+  }
+
+  /**
+   * Makes a copy of provided {@link Properties} object
+   */
+  public static Properties copy(Properties props) {
+    Properties copy = new Properties();
+    copy.putAll(props);
+    return copy;
   }
 
   /**
@@ -94,7 +118,6 @@ public class CollectionUtils {
     return combined;
   }
 
-
   /**
    * Combines provided {@link List}s into one, returning new instance of {@link ArrayList}
    */
@@ -132,9 +155,18 @@ public class CollectionUtils {
   }
 
   /**
+   * Zip two lists into a Map. Will throw Exception if the size is different between these two lists.
+   */
+  public static <K, V> Map<K, V> zipToMap(List<K> keys, List<V> values) {
+    checkArgument(keys.size() == values.size(),
+        "keys' size must be equal with the values' size");
+    return IntStream.range(0, keys.size()).boxed().collect(Collectors.toMap(keys::get, values::get));
+  }
+
+  /**
    * Returns difference b/w {@code one} {@link Set} of elements and {@code another}
    */
-  public static <E> Set<E> diff(Set<E> one, Set<E> another) {
+  public static <E> Set<E> diffSet(Set<E> one, Set<E> another) {
     Set<E> diff = new HashSet<>(one);
     diff.removeAll(another);
     return diff;
@@ -143,10 +175,10 @@ public class CollectionUtils {
   /**
    * Returns difference b/w {@code one} {@link List} of elements and {@code another}
    *
-   * NOTE: This is less optimal counterpart to {@link #diff(Set, Set)}, accepting {@link List}
+   * NOTE: This is less optimal counterpart to {@link #diff(Collection, Collection)}, accepting {@link List}
    *       as a holding collection to support duplicate elements use-cases
    */
-  public static <E> List<E> diff(List<E> one, List<E> another) {
+  public static <E> List<E> diff(Collection<E> one, Collection<E> another) {
     List<E> diff = new ArrayList<>(one);
     diff.removeAll(another);
     return diff;
@@ -218,6 +250,15 @@ public class CollectionUtils {
   }
 
   @SafeVarargs
+  public static <K,V> HashMap<K, V> createHashMap(final Pair<K, V>... elements) {
+    HashMap<K,V> map = new HashMap<>();
+    for (Pair<K,V> pair: elements) {
+      map.put(pair.getLeft(), pair.getRight());
+    }
+    return map;
+  }
+
+  @SafeVarargs
   public static <T> Set<T> createImmutableSet(final T... elements) {
     return Collections.unmodifiableSet(createSet(elements));
   }
@@ -244,4 +285,5 @@ public class CollectionUtils {
   private static Object checkElementNotNull(Object element, int index) {
     return Objects.requireNonNull(element, "Element is null at index " + index);
   }
+
 }

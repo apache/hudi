@@ -27,7 +27,6 @@ import com.codahale.metrics.graphite.GraphiteReporter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 
@@ -76,11 +75,6 @@ public class MetricsGraphiteReporter extends MetricsReporter {
     } else {
       LOG.error("Cannot report metrics as the graphiteReporter is null.");
     }
-  }
-
-  @Override
-  public Closeable getReporter() {
-    return graphiteReporter;
   }
 
   private GraphiteReporter createGraphiteReport() {
