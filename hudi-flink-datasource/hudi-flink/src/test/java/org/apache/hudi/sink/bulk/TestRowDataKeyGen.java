@@ -192,16 +192,15 @@ public class TestRowDataKeyGen {
 
   @Test
   void testRecoredKeyContainsTimestamp() {
-    TimeZone timeZone = TimeZone.getTimeZone("GMT+8");
-    TimeZone.setDefault(timeZone);
     Configuration conf = TestConfigurations.getDefaultConf("path1");
     conf.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid,ts");
     conf.setString(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
+    Timestamp ts = new Timestamp(1675841687000L);
     final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
-        TimestampData.fromTimestamp(new Timestamp(1675841687000L)), StringData.fromString("par1"));
+        TimestampData.fromTimestamp(ts), StringData.fromString("par1"));
     final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
 
-    assertThat(keyGen1.getRecordKey(rowData1), is("uuid:id1,ts:2023-02-08T15:34:47"));
+    assertThat(keyGen1.getRecordKey(rowData1), is("uuid:id1,ts:"+ts.toLocalDateTime().toString()));
 
     conf.setString(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "false");
     final RowDataKeyGen keyGen2 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
