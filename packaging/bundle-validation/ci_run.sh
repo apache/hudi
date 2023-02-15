@@ -27,8 +27,8 @@
 # This is to run by GitHub Actions CI tasks from the project root directory
 # and it contains the CI environment-specific variables.
 
-HUDI_VERSION=0.13.0-rc2
-REPO_BASE_URL=https://repository.apache.org/content/repositories/orgapachehudi-1112/org/apache/hudi
+HUDI_VERSION=0.13.0-rc3
+REPO_BASE_URL=https://repository.apache.org/content/repositories/orgapachehudi-1117/org/apache/hudi
 
 echo "Validating $HUDI_VERSION bundles"
 
