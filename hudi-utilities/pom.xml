@@ -450,6 +450,14 @@
       <scope>test</scope>
     </dependency>
 
+    <!-- AWS Services -->
+    <!-- https://mvnrepository.com/artifact/software.amazon.awssdk/aws-java-sdk-sqs -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>sqs</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
+    
     <!-- Hive - Test -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
