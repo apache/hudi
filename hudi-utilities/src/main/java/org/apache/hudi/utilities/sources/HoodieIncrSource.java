@@ -37,6 +37,8 @@ import org.apache.spark.sql.SparkSession;
 
 import java.util.Collections;
 
+import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
+
 public class HoodieIncrSource extends RowSource {
 
   private static final Logger LOG = LogManager.getLogger(HoodieIncrSource.class);
@@ -89,6 +91,12 @@ public class HoodieIncrSource extends RowSource {
      */
     static final String SOURCE_FILE_FORMAT = "hoodie.deltastreamer.source.hoodieincr.file.format";
     static final String DEFAULT_SOURCE_FILE_FORMAT = "parquet";
+
+    /**
+     * Drops all meta fields from the source hudi table while ingesting into sink hudi table.
+     */
+    static final String HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE = "hoodie.deltastreamer.source.hoodieincr.drop.all.meta.fields.from.source";
+    public static final Boolean DEFAULT_HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE = false;
   }
 
   public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
@@ -153,8 +161,19 @@ public class HoodieIncrSource extends RowSource {
               queryTypeAndInstantEndpts.getRight().getRight()));
     }
 
-    // Remove Hoodie meta columns
-    final Dataset<Row> src = source.drop(HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new));
+    HoodieRecord.HoodieRecordType recordType = createRecordMerger(props).getRecordType();
+
+    boolean shouldDropMetaFields = props.getBoolean(Config.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE,
+        Config.DEFAULT_HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE)
+        // NOTE: In case when Spark native [[RecordMerger]] is used, we have to make sure
+        //       all meta-fields have been properly cleaned up from the incoming dataset
+        //
+        || recordType == HoodieRecord.HoodieRecordType.SPARK;
+
+    // Remove Hoodie meta columns except partition path from input source
+    String[] colsToDrop = shouldDropMetaFields ? HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new) :
+        HoodieRecord.HOODIE_META_COLUMNS.stream().filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new);
+    final Dataset<Row> src = source.drop(colsToDrop);
     return Pair.of(Option.of(src), queryTypeAndInstantEndpts.getRight().getRight());
   }
 }

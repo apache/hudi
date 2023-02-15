@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.common.util.Option;
 
 import javax.annotation.concurrent.Immutable;
 import java.io.File;
@@ -80,11 +79,7 @@ public class HoodieMemoryConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> SPILLABLE_MAP_BASE_PATH = ConfigProperty
       .key("hoodie.memory.spillable.map.path")
-      .defaultValue("/tmp/")
-      .withInferFunction(cfg -> {
-        String[] localDirs = FileIOUtils.getConfiguredLocalDirs();
-        return (localDirs != null && localDirs.length > 0) ? Option.of(localDirs[0]) : Option.empty();
-      })
+      .noDefaultValue()
       .withDocumentation("Default file path for spillable map");
 
   public static final ConfigProperty<Double> WRITESTATUS_FAILURE_FRACTION = ConfigProperty
@@ -121,9 +116,9 @@ public class HoodieMemoryConfig extends HoodieConfig {
   /** @deprecated Use {@link #SPILLABLE_MAP_BASE_PATH} and its methods instead */
   @Deprecated
   public static final String SPILLABLE_MAP_BASE_PATH_PROP = SPILLABLE_MAP_BASE_PATH.key();
-  /** @deprecated Use {@link #SPILLABLE_MAP_BASE_PATH} and its methods instead */
+  /** @deprecated Use getDefaultSpillableMapBasePath() instead */
   @Deprecated
-  public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = SPILLABLE_MAP_BASE_PATH.defaultValue();
+  public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = getDefaultSpillableMapBasePath();
   /** @deprecated Use {@link #WRITESTATUS_FAILURE_FRACTION} and its methods instead */
   @Deprecated
   public static final String WRITESTATUS_FAILURE_FRACTION_PROP = WRITESTATUS_FAILURE_FRACTION.key();
@@ -133,6 +128,11 @@ public class HoodieMemoryConfig extends HoodieConfig {
 
   private HoodieMemoryConfig() {
     super();
+  }
+
+  public static String getDefaultSpillableMapBasePath() {
+    String[] localDirs = FileIOUtils.getConfiguredLocalDirs();
+    return (localDirs != null && localDirs.length > 0) ? localDirs[0] : "/tmp/";
   }
 
   public static HoodieMemoryConfig.Builder newBuilder() {

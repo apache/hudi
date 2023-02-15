@@ -519,6 +519,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected void postCommit(HoodieTable table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
     try {
+      context.setJobStatus(this.getClass().getSimpleName(),"Cleaning up marker directories for commit " + instantTime + " in table "
+          + config.getTableName());
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
@@ -1216,7 +1218,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           throw new HoodieIOException("Latest commit does not have any schema in commit metadata");
         }
       } else {
-        throw new HoodieIOException("Deletes issued without any prior commits");
+        LOG.warn("None rows are deleted because the table is empty");
       }
     } catch (IOException e) {
       throw new HoodieIOException("IOException thrown while reading last commit metadata", e);
@@ -1278,7 +1280,20 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
+   * Rolls back the failed delta commits corresponding to the indexing action.
+   * <p>
+   * TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks
+   *  in the metadata table is landed.
+   *
+   * @return {@code true} if rollback happens; {@code false} otherwise.
+   */
+  public boolean lazyRollbackFailedIndexing() {
+    return tableServiceClient.rollbackFailedIndexingCommits();
+  }
+
+  /**
    * Rollback failed writes if any.
+   *
    * @return true if rollback happened. false otherwise.
    */
   public boolean rollbackFailedWrites() {

@@ -25,8 +25,9 @@ import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAv
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.AvroSchemaUtils.{isCompatibleProjectionOf, isSchemaCompatible}
-import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
+import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible}
+import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config.{ConfigProperty, HoodieCommonConfig, HoodieConfig, HoodieMetadataConfig, TypedProperties}
@@ -85,6 +86,14 @@ object HoodieSparkSqlWriter {
   val CANONICALIZE_NULLABLE: ConfigProperty[Boolean] =
     ConfigProperty.key("hoodie.internal.write.schema.canonicalize.nullable")
       .defaultValue(true)
+
+  /**
+   * For merge into from spark-sql, we need some special handling. for eg, schema validation should be disabled
+   * for writes from merge into. This config is used for internal purposes.
+   */
+  val SQL_MERGE_INTO_WRITES: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.internal.sql.merge.into.writes")
+      .defaultValue(false)
 
   private val log = LogManager.getLogger(getClass)
   private var tableExists: Boolean = false
@@ -230,31 +239,6 @@ object HoodieSparkSqlWriter {
         }
       }
 
-      // NOTE: Target writer's schema is deduced based on
-      //         - Source's schema
-      //         - Existing table's schema (including its Hudi's [[InternalSchema]] representation)
-      val writerSchema = deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, parameters)
-
-      validateSchemaForHoodieIsDeleted(writerSchema)
-
-      // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING THIS
-      //       We have to register w/ Kryo all of the Avro schemas that might potentially be used to decode
-      //       records into Avro format. Otherwise, Kryo wouldn't be able to apply an optimization allowing
-      //       it to avoid the need to ser/de the whole schema along _every_ Avro record
-      val targetAvroSchemas = sourceSchema +: writerSchema +: latestTableSchemaOpt.toSeq
-      registerAvroSchemasWithKryo(sparkContext, targetAvroSchemas: _*)
-
-      log.info(s"Registered Avro schemas: ${targetAvroSchemas.map(_.toString(true)).mkString("\n")}")
-
-      // Short-circuit if bulk_insert via row is enabled.
-      // scalastyle:off
-      if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
-        val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, hoodieConfig, df, tblName,
-          basePath, path, instantTime, writerSchema, tableConfig.isTablePartitioned)
-        return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
-      }
-      // scalastyle:on
-
       val (writeResult, writeClient: SparkRDDWriteClient[_]) =
         operation match {
           case WriteOperationType.DELETE =>
@@ -312,8 +296,24 @@ object HoodieSparkSqlWriter {
             client.startCommitWithTime(instantTime, commitActionType)
             val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
             (writeStatuses, client)
+
+          // Here all other (than DELETE, DELETE_PARTITION) write operations are handled
           case _ =>
-            // Here all other (than DELETE, DELETE_PARTITION) write operations are handled
+            // NOTE: Target writer's schema is deduced based on
+            //         - Source's schema
+            //         - Existing table's schema (including its Hudi's [[InternalSchema]] representation)
+            val writerSchema = deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, parameters)
+
+            validateSchemaForHoodieIsDeleted(writerSchema)
+
+            // Short-circuit if bulk_insert via row is enabled.
+            // scalastyle:off
+            if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
+              val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, hoodieConfig, df, tblName,
+                basePath, path, instantTime, writerSchema, tableConfig.isTablePartitioned)
+              return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
+            }
+            // scalastyle:on
 
             // Check whether partition columns should be persisted w/in the data-files, or should
             // be instead omitted from them and simply encoded into the partition path (which is Spark's
@@ -404,18 +404,28 @@ object HoodieSparkSqlWriter {
       // writer's schema. No additional handling is required
       case None => sourceSchema
       // Otherwise, we need to make sure we reconcile incoming and latest table schemas
-      case Some(latestTableSchema) =>
+      case Some(latestTableSchemaWithMetaFields) =>
+        // NOTE: Meta-fields will be unconditionally injected by Hudi writing handles, for the sake of
+        //       deducing proper writer schema we're stripping them to make sure we can perform proper
+        //       analysis
+        val latestTableSchema = removeMetadataFields(latestTableSchemaWithMetaFields)
         // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
         // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
         // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
         // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
         val shouldCanonicalizeNullable = opts.getOrDefault(CANONICALIZE_NULLABLE.key,
           CANONICALIZE_NULLABLE.defaultValue.toString).toBoolean
+        val mergeIntoWrites = opts.getOrDefault(SQL_MERGE_INTO_WRITES.key(),
+          SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
+
         val canonicalizedSourceSchema = if (shouldCanonicalizeNullable) {
           AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
         } else {
           sourceSchema
         }
+
+        val allowAutoEvolutionColumnDrop = opts.getOrDefault(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key,
+          HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.defaultValue).toBoolean
 
         if (shouldReconcileSchema) {
           internalSchemaOpt match {
@@ -428,7 +438,8 @@ object HoodieSparkSqlWriter {
             case None =>
               // In case schema reconciliation is enabled we will employ (legacy) reconciliation
               // strategy to produce target writer's schema (see definition below)
-              val (reconciledSchema, isCompatible) = reconcileSchemasLegacy(latestTableSchema, canonicalizedSourceSchema)
+              val (reconciledSchema, isCompatible) =
+                reconcileSchemasLegacy(latestTableSchema, canonicalizedSourceSchema)
 
               // NOTE: In some cases we need to relax constraint of incoming dataset's schema to be compatible
               //       w/ the table's one and allow schemas to diverge. This is required in cases where
@@ -455,17 +466,38 @@ object HoodieSparkSqlWriter {
           //       w/ the table's one and allow schemas to diverge. This is required in cases where
           //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
           //       only incoming dataset's projection has to match the table's schema, and not the whole one
-          if (!shouldValidateSchemasCompatibility || AvroSchemaUtils.isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema)) {
+
+          if (mergeIntoWrites) {
+            // if its merge into writes, do not check for projection nor schema compatability. Writers down the line will
+            // take care of it.
             canonicalizedSourceSchema
           } else {
-            log.error(
-              s"""Incoming batch schema is not compatible with the table's one.
-                 |Incoming schema ${sourceSchema.toString(true)}
-                 |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
-                 |Table's schema ${latestTableSchema.toString(true)}
-                 |""".stripMargin)
-            throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
-          }
+            if (!shouldValidateSchemasCompatibility) {
+              // if no validation is enabled, check for col drop
+              // if col drop is allowed, go ahead. if not, check for projection, so that we do not allow dropping cols
+              if (allowAutoEvolutionColumnDrop || canProject(latestTableSchema, canonicalizedSourceSchema)) {
+                canonicalizedSourceSchema
+              } else {
+                log.error(
+                  s"""Incoming batch schema is not compatible with the table's one.
+                   |Incoming schema ${sourceSchema.toString(true)}
+                   |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
+                   |Table's schema ${latestTableSchema.toString(true)}
+                   |""".stripMargin)
+                throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
+              }
+            } else if (isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema, allowAutoEvolutionColumnDrop)) {
+                canonicalizedSourceSchema
+            } else {
+                log.error(
+                s"""Incoming batch schema is not compatible with the table's one.
+                   |Incoming schema ${sourceSchema.toString(true)}
+                   |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
+                   |Table's schema ${latestTableSchema.toString(true)}
+                   |""".stripMargin)
+                throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
+              }
+            }
         }
     }
   }
@@ -550,14 +582,18 @@ object HoodieSparkSqlWriter {
     // the other one (schema A contains schema B, if schema B is a projection of A). This enables us,
     // to always "extend" the schema during schema evolution and hence never lose the data (when, for ex
     // existing column is being dropped in a new batch)
+    //
+    // NOTE: By default Hudi doesn't allow automatic schema evolution to drop the columns from the target
+    //       table. However, when schema reconciliation is turned on, we would allow columns to be dropped
+    //       in the incoming batch (as these would be reconciled in anyway)
     if (isCompatibleProjectionOf(tableSchema, newSchema)) {
       // Picking table schema as a writer schema we need to validate that we'd be able to
       // rewrite incoming batch's data (written in new schema) into it
-      (tableSchema, isSchemaCompatible(newSchema, tableSchema))
+      (tableSchema, isSchemaCompatible(newSchema, tableSchema, true))
     } else {
       // Picking new schema as a writer schema we need to validate that we'd be able to
       // rewrite table's data into it
-      (newSchema, isSchemaCompatible(tableSchema, newSchema))
+      (newSchema, isSchemaCompatible(tableSchema, newSchema, true))
     }
   }
 

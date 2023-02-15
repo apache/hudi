@@ -66,14 +66,7 @@ mkdir -p ${RELEASE_DIR}
 git clone ${HUDI_DIR} ${CLONE_DIR}
 cd ${CLONE_DIR}
 
-rsync -a \
-  --exclude ".git" --exclude ".gitignore" --exclude ".gitattributes" --exclude ".travis.yml" \
-  --exclude ".github" --exclude "target" \
-  --exclude ".idea" --exclude "*.iml" --exclude ".DS_Store" --exclude "build-target" \
-  --exclude "docs/content" --exclude ".rubydeps" \
-  --exclude "rfc" \
-  --exclude "docker/images" \
-  . hudi-$RELEASE_VERSION
+$CURR_DIR/release/create_source_directory.sh hudi-$RELEASE_VERSION
 
 tar czf ${RELEASE_DIR}/hudi-${RELEASE_VERSION}.src.tgz hudi-$RELEASE_VERSION
 gpg --armor --detach-sig ${RELEASE_DIR}/hudi-${RELEASE_VERSION}.src.tgz
