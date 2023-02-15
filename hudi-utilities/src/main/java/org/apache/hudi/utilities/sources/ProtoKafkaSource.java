@@ -63,6 +63,9 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
   @Override
   JavaRDD<Message> toRDD(OffsetRange[] offsetRanges) {
     ProtoDeserializer deserializer = new ProtoDeserializer(className);
+    if (shouldAppendKafkaOffsets()) {
+      throw new HoodieException("Appending kafka offsets to ProtoKafkaSource is not supported");
+    }
     return KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
         LocationStrategies.PreferConsistent()).map(obj -> deserializer.parse(obj.value()));
   }

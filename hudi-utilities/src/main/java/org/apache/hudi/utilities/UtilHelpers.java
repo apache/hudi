@@ -59,6 +59,7 @@ import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
+import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessorDisableSource;
 import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor;
 import org.apache.hudi.utilities.sources.Source;
@@ -498,12 +499,15 @@ public class UtilHelpers {
     String schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, null);
     boolean enableSparkAvroPostProcessor = Boolean.parseBoolean(cfg.getString(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE, "true"));
 
-    if (transformerClassNames != null && !transformerClassNames.isEmpty()
-        && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
-      schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();
+    if (transformerClassNames != null && !transformerClassNames.isEmpty() && enableSparkAvroPostProcessor) {
+      if (!StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
+        schemaPostProcessorClass = schemaPostProcessorClass + "," + SparkAvroPostProcessor.class.getName();
+      } else {
+        schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();
+      }
     }
 
-    return new SchemaProviderWithPostProcessor(provider,
+    return new SchemaProviderWithPostProcessorDisableSource(provider,
         Option.ofNullable(createSchemaPostProcessor(schemaPostProcessorClass, cfg, jssc)));
   }
 

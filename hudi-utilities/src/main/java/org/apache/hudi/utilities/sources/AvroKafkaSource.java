@@ -29,6 +29,7 @@ import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.log4j.LogManager;
@@ -77,16 +78,33 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
 
   @Override
   JavaRDD<GenericRecord> toRDD(OffsetRange[] offsetRanges) {
+    JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD;
     if (deserializerClassName.equals(ByteArrayDeserializer.class.getName())) {
       if (schemaProvider == null) {
         throw new HoodieException("Please provide a valid schema provider class when use ByteArrayDeserializer!");
       }
-      AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceSchema());
-      return KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-              LocationStrategies.PreferConsistent()).map(obj -> convertor.fromAvroBinary(obj.value()));
+      AvroConvertor convertor = getAvroConverter(true);
+      kafkaRDD = KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
+          LocationStrategies.PreferConsistent()).map(obj ->
+          new ConsumerRecord<>(obj.topic(), obj.partition(), obj.offset(),
+              obj.key(), convertor.fromAvroBinary(obj.value())));
     } else {
-      return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-              LocationStrategies.PreferConsistent()).map(obj -> (GenericRecord) obj.value());
+      kafkaRDD = KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
+          LocationStrategies.PreferConsistent());
+    }
+    return processForKafkaOffsets(kafkaRDD);
+  }
+
+  protected JavaRDD<GenericRecord> processForKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {
+    if (shouldAppendKafkaOffsets())  {
+      if (schemaProvider == null) {
+        throw new HoodieException("Needed schema provider class for appendingKafkaOffsets");
+      }
+      AvroConvertor convertor = getAvroConverter(false);
+      return kafkaRDD.map(convertor::withKafkaFieldsAppended);
+    } else {
+      return kafkaRDD.map(consumerRecord -> (GenericRecord) consumerRecord.value());
     }
   }
+
 }

@@ -27,6 +27,9 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -36,6 +39,12 @@ import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 
 import java.io.IOException;
+import java.util.LinkedList;
+import java.util.List;
+
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
 
 /**
  * Read json kafka data.
@@ -52,13 +61,30 @@ public class JsonKafkaSource extends KafkaSource<String> {
 
   @Override
   JavaRDD<String> toRDD(OffsetRange[] offsetRanges) {
-    JavaRDD<String> jsonStringRDD = KafkaUtils.createRDD(sparkContext,
+    JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD = KafkaUtils.createRDD(sparkContext,
             offsetGen.getKafkaParams(),
             offsetRanges,
             LocationStrategies.PreferConsistent())
-        .filter(x -> !StringUtils.isNullOrEmpty((String) x.value()))
-        .map(x -> x.value().toString());
-    return postProcess(jsonStringRDD);
+        .filter(x -> !StringUtils.isNullOrEmpty((String) x.value()));
+
+    JavaRDD<String> result = shouldAppendKafkaOffsets() ? kafkaRDD.mapPartitions(partitionIterator -> {
+      List<String> stringList = new LinkedList<>();
+      ObjectMapper om = new ObjectMapper();
+      partitionIterator.forEachRemaining(consumerRecord -> {
+        String record = consumerRecord.value().toString();
+        try {
+          ObjectNode jsonNode = (ObjectNode) om.readTree(record);
+          jsonNode.put(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
+          jsonNode.put(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
+          jsonNode.put(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
+          stringList.add(om.writeValueAsString(jsonNode));
+        } catch (Throwable e) {
+          stringList.add(record);
+        }
+      });
+      return stringList.iterator();
+    }) : kafkaRDD.map(consumerRecord -> (String) consumerRecord.value());
+    return postProcess(result);
   }
 
   private JavaRDD<String> postProcess(JavaRDD<String> jsonStringRDD) {
