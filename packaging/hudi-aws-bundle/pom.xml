@@ -83,6 +83,7 @@
                                     <include>com.amazonaws:aws-java-sdk-dynamodb</include>
                                     <include>com.amazonaws:aws-java-sdk-core</include>
                                     <include>com.amazonaws:aws-java-sdk-glue</include>
+                                    <include>com.github.ben-manes.caffeine:caffeine</include>
                                     <include>io.dropwizard.metrics:metrics-core</include>
                                     <include>com.beust:jcommander</include>
                                     <include>commons-io:commons-io</include>

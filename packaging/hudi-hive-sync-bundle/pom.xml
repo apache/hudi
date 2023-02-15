@@ -71,6 +71,7 @@
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
 
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>com.beust:jcommander</include>
                   <include>org.apache.avro:avro</include>
                   <include>org.apache.parquet:parquet-avro</include>

@@ -97,6 +97,8 @@
                   <include>com.esotericsoftware:minlog</include>
                   <include>org.objenesis:objenesis</include>
 
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
+
                   <!-- cli related dependencies -->
                   <include>com.fasterxml:classmate</include>
                   <include>com.fasterxml.woodstox:woodstox-core</include>

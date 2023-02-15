@@ -156,6 +156,7 @@
                       -->
                       <include>org.apache.hudi:hudi-common</include>
                       <include>org.apache.hudi:hudi-timeline-service</include>
+                      <include>com.github.ben-manes.caffeine:caffeine</include>
                       <include>org.mortbay.jetty:jetty</include>
                       <include>org.mortbay.jetty:jetty-util</include>
                       <include>io.javalin:javalin</include>

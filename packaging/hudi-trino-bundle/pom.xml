@@ -75,6 +75,7 @@
                   <include>com.esotericsoftware:minlog</include>
                   <include>org.objenesis:objenesis</include>
 
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
                   <include>org.codehaus.jackson:*</include>
