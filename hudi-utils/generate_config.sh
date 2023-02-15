@@ -17,7 +17,7 @@
 # limitations under the License.
 #
 
-VERSION=0.13.0
+VERSION=0.14.0
 
 JARS=(
 "$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.11/$VERSION-SNAPSHOT/hudi-utilities-bundle_2.11-$VERSION-SNAPSHOT.jar"
