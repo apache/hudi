@@ -81,7 +81,7 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
     boolean delete = false;
     if (insertRecord instanceof GenericRecord) {
       GenericRecord record = (GenericRecord) insertRecord;
-      Object value = HoodieAvroUtils.getFieldVal(record, DebeziumConstants.FLATTENED_OP_COL_NAME);
+      Object value = HoodieAvroUtils.getNestedFieldVal(record, DebeziumConstants.FLATTENED_OP_COL_NAME, true, true);
       delete = value != null && value.toString().equalsIgnoreCase(DebeziumConstants.DELETE_OP);
     }
 

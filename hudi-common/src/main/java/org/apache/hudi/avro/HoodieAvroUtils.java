@@ -415,7 +415,7 @@ public class HoodieAvroUtils {
 
   // TODO Unify the logical of rewriteRecordWithMetadata and rewriteEvolutionRecordWithMetadata, and delete this function.
   public static GenericRecord rewriteEvolutionRecordWithMetadata(GenericRecord genericRecord, Schema newSchema, String fileName) {
-    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(genericRecord, newSchema, new HashMap<>());
+    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(genericRecord, newSchema, new HashMap<>(), false);
     // do not preserve FILENAME_METADATA_FIELD
     newRecord.put(HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
     return newRecord;
@@ -770,9 +770,13 @@ public class HoodieAvroUtils {
     return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);
   }
 
-  // TODO java-doc
   public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema) {
-    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.emptyMap());
+    return rewriteRecordWithNewSchema(oldRecord, newSchema, false);
+  }
+
+  // TODO java-doc
+  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, boolean validate) {
+    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.emptyMap(), validate);
   }
 
   /**

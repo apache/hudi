@@ -103,7 +103,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
         val transform: GenericRecord => GenericRecord =
           if (sameSchema) identity
           else {
-            HoodieAvroUtils.rewriteRecordDeep(_, readerAvroSchema)
+            HoodieAvroUtils.rewriteRecordDeep(_, readerAvroSchema, true)
           }
 
         // Since caller might request to get records in a different ("evolved") schema, we will be rewriting from
