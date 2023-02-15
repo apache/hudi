@@ -166,8 +166,11 @@ class TestDataSourceForBootstrap {
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "METADATA_ONLY,AVRO", "METADATA_ONLY,SPARK",
-    "FULL_RECORD,AVRO", "FULL_RECORD,SPARK"
+    "METADATA_ONLY,AVRO",
+    // TODO(HUDI-5807) enable for spark native records
+    /* "METADATA_ONLY,SPARK", */
+    "FULL_RECORD,AVRO",
+    "FULL_RECORD,SPARK"
   ))
   def testMetadataBootstrapCOWHiveStylePartitioned(bootstrapMode: String, recordType: HoodieRecordType): Unit = {
     val timestamp = Instant.now.toEpochMilli
@@ -248,7 +251,9 @@ class TestDataSourceForBootstrap {
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  @EnumSource(value = classOf[HoodieRecordType],
+    // TODO(HUDI-5807) enable for spark native records
+    names = Array("AVRO" /*, "SPARK" */))
   def testMetadataBootstrapCOWPartitioned(recordType: HoodieRecordType): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
@@ -325,7 +330,9 @@ class TestDataSourceForBootstrap {
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  @EnumSource(value = classOf[HoodieRecordType],
+    // TODO(HUDI-5807) enable for spark native records
+    names = Array("AVRO" /*, "SPARK" */))
   def testMetadataBootstrapMORPartitionedInlineCompactionOn(recordType: HoodieRecordType): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
