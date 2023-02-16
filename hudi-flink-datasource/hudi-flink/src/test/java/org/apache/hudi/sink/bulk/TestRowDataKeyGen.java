@@ -165,4 +165,24 @@ public class TestRowDataKeyGen {
     assertThat(keyGen2.getPartitionPath(rowData2), is("dt=" + expectedPartition2));
     assertThat(keyGen2.getPartitionPath(rowData3), is("dt=" + expectedPartition3));
   }
+
+  @Test
+  void testPrimaryKeylessWrite() {
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    conf.setString(FlinkOptions.RECORD_KEY_FIELD, "");
+    final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
+    final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    assertThat(keyGen1.getRecordKey(rowData1), is("__empty__"));
+
+    // null record key and partition path
+    final RowData rowData2 = insertRow(TestConfigurations.ROW_TYPE, null, StringData.fromString("Danny"), 23,
+        TimestampData.fromEpochMillis(1), null);
+    assertThat(keyGen1.getRecordKey(rowData2), is("__empty__"));
+
+    // empty record key and partition path
+    final RowData rowData3 = insertRow(StringData.fromString(""), StringData.fromString("Danny"), 23,
+        TimestampData.fromEpochMillis(1), StringData.fromString(""));
+    assertThat(keyGen1.getRecordKey(rowData3), is("__empty__"));
+  }
 }

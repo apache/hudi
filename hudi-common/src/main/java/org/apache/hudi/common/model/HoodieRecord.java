@@ -112,7 +112,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public static int COMMIT_TIME_METADATA_FIELD_ORD = HOODIE_META_COLUMNS_NAME_TO_POS.get(COMMIT_TIME_METADATA_FIELD);
   public static int COMMIT_SEQNO_METADATA_FIELD_ORD = HOODIE_META_COLUMNS_NAME_TO_POS.get(COMMIT_SEQNO_METADATA_FIELD);
 
-
   /**
    * Identifies the record across the table.
    */
@@ -356,24 +355,20 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public abstract HoodieRecord joinWith(HoodieRecord other, Schema targetSchema);
 
   /**
-   * Rewrite record into new schema(add meta columns)
+   * Rewrites record into new target schema containing Hudi-specific meta-fields
+   *
+   * NOTE: This operation is idempotent
    */
-  public abstract HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException;
+  public abstract HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props);
 
   /**
    * Support schema evolution.
    */
-  public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException;
+  public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols);
 
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema) throws IOException {
+  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema) {
     return rewriteRecordWithNewSchema(recordSchema, props, newSchema, Collections.emptyMap());
   }
-
-  /**
-   * This method could change in the future.
-   * @temporary
-   */
-  public abstract HoodieRecord updateMetadataValues(Schema recordSchema, Properties props, MetadataValues metadataValues) throws IOException;
 
   public abstract boolean isDelete(Schema recordSchema, Properties props) throws IOException;
 
@@ -391,6 +386,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
 
   public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
     return instantTime + "_" + partitionId + "_" + recordIndex;
+  }
+
+  protected static boolean hasMetaFields(Schema schema) {
+    return schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) != null;
   }
 
   /**
@@ -438,3 +437,4 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     AVRO, SPARK
   }
 }
+

@@ -51,6 +51,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -77,11 +78,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private static final Logger LOG = LogManager.getLogger(BaseHoodieTableFileIndex.class);
 
   private final String[] partitionColumns;
-
   private final String[] hashPartitionColumns;
-
   private final int hashPartitionNum;
-
+  
   protected final HoodieMetadataConfig metadataConfig;
 
   private final Option<String> specifiedQueryInstant;
@@ -131,8 +130,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.partitionColumns = metaClient.getTableConfig().getPartitionFields()
         .orElse(new String[0]);
     this.hashPartitionColumns = metaClient.getTableConfig().getHashPartitionFields()
-            .orElse(new String[0]);
+        .orElse(new String[0]);
     this.hashPartitionNum = Integer.parseInt((metaClient.getTableConfig().getHashPartitionNum()));
+    
     this.metadataConfig = HoodieMetadataConfig.newBuilder()
         .fromProperties(configProperties)
         .enable(configProperties.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS)
@@ -202,7 +202,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   protected String[] getHashPartitionColumns() {
     return hashPartitionColumns;
   }
-
+  
   protected List<Path> getQueryPaths() {
     return queryPaths;
   }
@@ -291,7 +291,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths) {
     List<String> matchedPartitionPaths;
     try {
-      matchedPartitionPaths = tableMetadata.getPartitionPathsWithPrefixes(relativePartitionPaths);
+      matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
     } catch (IOException e) {
       throw new HoodieIOException("Error fetching partition paths", e);
     }
@@ -356,7 +356,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             .collect(Collectors.toMap(Pair::getKey, p -> p.getRight().get()));
 
     Set<Path> missingPartitionPaths =
-        CollectionUtils.diff(partitionPaths, cachedPartitionPaths.keySet());
+        CollectionUtils.diffSet(new HashSet<>(partitionPaths), cachedPartitionPaths.keySet());
 
     // NOTE: We're constructing a mapping of absolute form of the partition-path into
     //       its relative one, such that we don't need to reconstruct these again later on

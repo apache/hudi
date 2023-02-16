@@ -27,6 +27,8 @@ import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.function.Function;
 
@@ -38,17 +40,20 @@ import java.util.function.Function;
  */
 public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
+  private static final Logger LOG = LogManager.getLogger(DisruptorMessageQueue.class);
+
   private final Disruptor<HoodieDisruptorEvent> queue;
   private final Function<I, O> transformFunction;
   private final RingBuffer<HoodieDisruptorEvent> ringBuffer;
 
   private boolean isShutdown = false;
+  private boolean isStarted = false;
 
-  public DisruptorMessageQueue(Option<Integer> bufferSize, Function<I, O> transformFunction, Option<String> waitStrategyName, int totalProducers, Runnable preExecuteRunnable) {
-    WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyName);
+  public DisruptorMessageQueue(int bufferSize, Function<I, O> transformFunction, String waitStrategyId, int totalProducers, Runnable preExecuteRunnable) {
+    WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyId);
     CustomizedThreadFactory threadFactory = new CustomizedThreadFactory("disruptor", true, preExecuteRunnable);
 
-    this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize.get(), threadFactory, totalProducers > 1 ? ProducerType.MULTI : ProducerType.SINGLE, waitStrategy);
+    this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize, threadFactory, totalProducers > 1 ? ProducerType.MULTI : ProducerType.SINGLE, waitStrategy);
     this.ringBuffer = queue.getRingBuffer();
     this.transformFunction = transformFunction;
   }
@@ -60,6 +65,10 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
   @Override
   public void insertRecord(I value) throws Exception {
+    if (!isStarted) {
+      throw new HoodieException("Can't insert into the queue since the queue is not started yet");
+    }
+
     if (isShutdown) {
       throw new HoodieException("Can't insert into the queue after it had already been closed");
     }
@@ -92,19 +101,29 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     synchronized (this) {
       if (!isShutdown) {
         isShutdown = true;
+        isStarted = false;
         queue.shutdown();
       }
     }
   }
 
-  protected void setHandlers(HoodieConsumer consumer) {
+  protected void setHandlers(HoodieConsumer<O, ?> consumer) {
     queue.handleEventsWith((event, sequence, endOfBatch) -> {
-      consumer.consume(event.get());
+      try {
+        consumer.consume(event.get());
+      } catch (Exception e) {
+        LOG.error("Failed consuming records", e);
+      }
     });
   }
 
   protected void start() {
-    queue.start();
+    synchronized (this) {
+      if (!isStarted) {
+        queue.start();
+        isStarted = true;
+      }
+    }
   }
 
   /**

@@ -28,13 +28,13 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -46,7 +46,9 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -399,7 +401,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         }).flatMap(Collection::stream);
   }
 
-  private Stream<HoodieInstant> getCommitInstantsToArchive() {
+  private Stream<HoodieInstant> getCommitInstantsToArchive() throws IOException {
     // TODO (na) : Add a way to return actions associated with a timeline and then merge/unify
     // with logic above to avoid Stream.concat
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
@@ -432,6 +434,11 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               table.getActiveTimeline(), config.getInlineCompactDeltaCommitMax())
               : Option.empty();
 
+      // The clustering commit instant can not be archived unless we ensure that the replaced files have been cleaned,
+      // without the replaced files metadata on the timeline, the fs view would expose duplicates for readers.
+      Option<HoodieInstant> oldestInstantToRetainForClustering =
+          ClusteringUtils.getOldestInstantToRetainForClustering(table.getActiveTimeline(), table.getMetaClient());
+
       // Actually do the commits
       Stream<HoodieInstant> instantToArchiveStream = commitTimeline.getInstantsAsStream()
           .filter(s -> {
@@ -444,7 +451,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               return !(firstSavepoint.isPresent() && compareTimestamps(firstSavepoint.get().getTimestamp(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
             }
           }).filter(s -> {
-            // Ensure commits >= oldest pending compaction commit is retained
+            // Ensure commits >= the oldest pending compaction commit is retained
             return oldestPendingCompactionAndReplaceInstant
                 .map(instant -> compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
                 .orElse(true);
@@ -461,6 +468,10 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               oldestInstantToRetainForCompaction.map(instantToRetain ->
                       compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
                   .orElse(true)
+          ).filter(s ->
+              oldestInstantToRetainForClustering.map(instantToRetain ->
+                      HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
+                  .orElse(true)
           );
       return instantToArchiveStream.limit(commitTimeline.countInstants() - minInstantsToKeep);
     } else {
@@ -468,9 +479,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
-  private Stream<HoodieInstant> getInstantsToArchive() {
+  private Stream<HoodieInstant> getInstantsToArchive() throws IOException {
     Stream<HoodieInstant> instants = Stream.concat(getCleanInstantsToArchive(), getCommitInstantsToArchive());
-    if (config.isMetastoreEnabled()) {
+    if (config.isMetaserverEnabled()) {
       return Stream.empty();
     }
 
@@ -504,24 +515,27 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           .setBasePath(HoodieTableMetadata.getDatasetBasePath(config.getBasePath()))
           .setConf(metaClient.getHadoopConf())
           .build();
-      Option<HoodieInstant> earliestActiveDatasetCommit = dataMetaClient.getActiveTimeline().firstInstant();
+      Option<HoodieInstant> qualifiedEarliestInstant =
+          TimelineUtils.getEarliestInstantForMetadataArchival(
+              dataMetaClient.getActiveTimeline(), config.shouldArchiveBeyondSavepoint());
 
-      if (config.shouldArchiveBeyondSavepoint()) {
-        // There are chances that there could be holes in the timeline due to archival and savepoint interplay.
-        // So, the first non-savepoint commit in the data timeline is considered as beginning of the active timeline.
-        Option<HoodieInstant> firstNonSavepointCommit = dataMetaClient.getActiveTimeline().getFirstNonSavepointCommit();
-        if (firstNonSavepointCommit.isPresent()) {
-          String firstNonSavepointCommitTime = firstNonSavepointCommit.get().getTimestamp();
-          instants = instants.filter(instant ->
-              compareTimestamps(instant.getTimestamp(), LESSER_THAN, firstNonSavepointCommitTime));
-        }
-      } else {
-        // Do not archive the commits that live in data set active timeline.
-        // This is required by metadata table, see HoodieTableMetadataUtil#processRollbackMetadata for details.
-        if (earliestActiveDatasetCommit.isPresent()) {
-          instants = instants.filter(instant ->
-              compareTimestamps(instant.getTimestamp(), HoodieTimeline.LESSER_THAN, earliestActiveDatasetCommit.get().getTimestamp()));
-        }
+      // Do not archive the instants after the earliest commit (COMMIT, DELTA_COMMIT, and
+      // REPLACE_COMMIT only, considering non-savepoint commit only if enabling archive
+      // beyond savepoint) and the earliest inflight instant (all actions).
+      // This is required by metadata table, see HoodieTableMetadataUtil#processRollbackMetadata
+      // for details.
+      // Note that we cannot blindly use the earliest instant of all actions, because CLEAN and
+      // ROLLBACK instants are archived separately apart from commits (check
+      // HoodieTimelineArchiver#getCleanInstantsToArchive).  If we do so, a very old completed
+      // CLEAN or ROLLBACK instant can block the archive of metadata table timeline and causes
+      // the active timeline of metadata table to be extremely long, leading to performance issues
+      // for loading the timeline.
+      if (qualifiedEarliestInstant.isPresent()) {
+        instants = instants.filter(instant ->
+            compareTimestamps(
+                instant.getTimestamp(),
+                HoodieTimeline.LESSER_THAN,
+                qualifiedEarliestInstant.get().getTimestamp()));
       }
     }
 

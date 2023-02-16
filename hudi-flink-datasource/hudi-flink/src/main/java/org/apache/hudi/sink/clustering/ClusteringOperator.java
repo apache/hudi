@@ -63,6 +63,7 @@ import org.apache.flink.runtime.memory.MemoryManager;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
+import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.table.data.RowData;
@@ -142,6 +143,12 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     // override max parquet file size in conf
     this.conf.setLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(),
         this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES));
+
+    // target size should larger than small file limit
+    this.conf.setLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT.key(),
+        this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES) > this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT)
+          ? this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT)
+            : this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES));
   }
 
   @Override
@@ -173,6 +180,11 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   }
 
   @Override
+  public void processLatencyMarker(LatencyMarker latencyMarker) {
+    // no need to propagate the latencyMarker
+  }
+
+  @Override
   public void processElement(StreamRecord<ClusteringPlanEvent> element) throws Exception {
     ClusteringPlanEvent event = element.getValue();
     final String instantTime = event.getClusteringInstantTime();
@@ -195,7 +207,6 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
       this.executor.close();
     }
     if (this.writeClient != null) {
-      this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
       this.writeClient = null;
     }

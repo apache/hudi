@@ -60,7 +60,7 @@ public class FlinkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
     try {
       final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
       bufferedIteratorExecutor = ExecutorFactory.create(hoodieConfig, inputItr, getExplicitInsertHandler(),
-          getCloningTransformer(schema, hoodieConfig));
+          getTransformer(schema, hoodieConfig));
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
       checkState(result != null && !result.isEmpty());
       return result;

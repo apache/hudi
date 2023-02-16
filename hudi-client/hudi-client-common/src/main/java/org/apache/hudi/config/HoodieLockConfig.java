@@ -17,6 +17,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.index.HoodieIndex;
 
 import java.io.File;
 import java.io.FileReader;
@@ -58,11 +60,11 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
 /**
  * Hoodie Configs for Locks.
  */
-@ConfigClassProperty(name = "Locks Configurations",
+@ConfigClassProperty(name = "Common Lock Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configs that control locking mechanisms required for concurrency control "
-        + " between writers to a Hudi table. Concurrency between Hudi's own table services "
-        + " are auto managed internally.")
+    subGroupName = ConfigGroups.SubGroupNames.LOCK,
+    areCommonConfigs = true,
+    description = "")
 public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS = ConfigProperty
@@ -81,7 +83,7 @@ public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS = ConfigProperty
       .key(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY)
-      .defaultValue(String.valueOf(10000L))
+      .defaultValue(String.valueOf(5000L))
       .sinceVersion("0.8.0")
       .withDocumentation("Amount of time to wait between retries on the lock provider by the lock manager");
 
@@ -93,7 +95,7 @@ public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_CLIENT_NUM_RETRIES = ConfigProperty
       .key(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY)
-      .defaultValue(String.valueOf(10))
+      .defaultValue(String.valueOf(50))
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum number of times to retry to acquire lock additionally from the lock manager.");
 
@@ -185,6 +187,13 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key(LOCK_PREFIX + "conflict.resolution.strategy")
       .defaultValue(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
+      .withInferFunction(hoodieConfig -> {
+        if (HoodieIndex.IndexType.BUCKET.name().equalsIgnoreCase(hoodieConfig.getStringOrDefault(HoodieIndexConfig.INDEX_TYPE, null))) {
+          return Option.of(BucketIndexConcurrentFileWritesConflictResolutionStrategy.class.getName());
+        } else {
+          return Option.of(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
+        }
+      })
       .sinceVersion("0.8.0")
       .withDocumentation("Lock provider class name, this should be subclass of "
           + "org.apache.hudi.client.transaction.ConflictResolutionStrategy");

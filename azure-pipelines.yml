@@ -19,7 +19,7 @@ trigger:
       - '*'  # must quote since "*" is a YAML reserved character; we want a string
 
 pool:
-  vmImage: 'ubuntu-18.04'
+  vmImage: 'ubuntu-22.04'
 
 parameters:
   - name: job1Modules
@@ -31,6 +31,7 @@ parameters:
       - 'hudi-flink-datasource/hudi-flink1.13.x'
       - 'hudi-flink-datasource/hudi-flink1.14.x'
       - 'hudi-flink-datasource/hudi-flink1.15.x'
+      - 'hudi-flink-datasource/hudi-flink1.16.x'
   - name: job2Modules
     type: object
     default:
@@ -58,6 +59,7 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink1.13.x'
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
+      - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
       - '!hudi-spark-datasource/hudi-spark2'
@@ -78,11 +80,12 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink1.13.x'
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
+      - '!hudi-flink-datasource/hudi-flink1.16.x'
 
 variables:
-  BUILD_PROFILES: '-Dscala-2.11 -Dspark2.4 -Dflink1.14'
+  BUILD_PROFILES: '-Dscala-2.11 -Dspark2.4 -Dflink1.16'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
-  MVN_OPTS_INSTALL: '-DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
+  MVN_OPTS_INSTALL: '-Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   SPARK_VERSION: '2.4.4'
   HADOOP_VERSION: '2.7'
@@ -114,7 +117,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB1_MODULES),hudi-client/hudi-spark-client
-              publishJUnitResults: false
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
@@ -123,7 +126,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB1_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -147,7 +150,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -171,7 +174,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB3_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -195,7 +198,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
@@ -204,7 +207,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -228,7 +231,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test
-              publishJUnitResults: false
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: AzureCLI@2

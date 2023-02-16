@@ -19,13 +19,15 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
+import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieRecord, WriteConcurrencyMode}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
 import org.apache.log4j.LogManager
@@ -36,6 +38,8 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
+
+import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
 /**
@@ -73,7 +77,7 @@ class DefaultSource extends RelationProvider
                               schema: StructType): BaseRelation = {
     val path = optParams.get("path")
     val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
-    val changeParams =scala.collection.mutable.Map.empty ++ optParams
+
     if (path.isEmpty && readPathsStr.isEmpty) {
       throw new HoodieException(s"'path' or '$READ_PATHS' or both must be specified.")
     }
@@ -106,7 +110,8 @@ class DefaultSource extends RelationProvider
     }
     log.info("Obtained hudi table path: " + tablePath)
 
-    val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
+    val metaClient = HoodieTableMetaClient.builder().setMetaserverConfig(parameters.asJava)
+      .setConf(fs.getConf).setBasePath(tablePath).build()
 
     DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
   }
@@ -137,9 +142,9 @@ class DefaultSource extends RelationProvider
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
    val dropColList = HoodieRecord.HOODIE_META_COLUMNS.asScala.:+ (HoodieRecord.HASH_PARTITION_FIELD)
-   //val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
    val dfWithoutMetaCols = df.drop(dropColList:_*)
-   if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
+
+    if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
       HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, dfWithoutMetaCols)
       HoodieSparkSqlWriter.cleanup()
     } else {
@@ -157,11 +162,21 @@ class DefaultSource extends RelationProvider
                           optParams: Map[String, String],
                           partitionColumns: Seq[String],
                           outputMode: OutputMode): Sink = {
+    validateMultiWriterConfigs(optParams)
     new HoodieStreamingSink(
       sqlContext,
       optParams,
       partitionColumns,
       outputMode)
+  }
+
+  def validateMultiWriterConfigs(options: Map[String, String]) : Unit = {
+    if (WriteConcurrencyMode.valueOf(options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
+      WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL) {
+      // ensure some valid value is set for identifier
+      checkState(options.contains(STREAMING_CHECKPOINT_IDENTIFIER.key()), "For multi-writer scenarios, please set "
+        + STREAMING_CHECKPOINT_IDENTIFIER.key() + ". Each writer should set different values for this identifier")
+    }
   }
 
   override def shortName(): String = "hudi_v1"
@@ -241,10 +256,10 @@ object DefaultSource {
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          new MergeOnReadSnapshotRelation(sqlContext, parameters, userSchema, globPaths, metaClient)
+          new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new MergeOnReadIncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+          new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
 
         case (_, _, true) =>
           new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)

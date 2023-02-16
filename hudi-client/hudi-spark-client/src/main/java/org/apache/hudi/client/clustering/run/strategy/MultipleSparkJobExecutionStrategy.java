@@ -293,7 +293,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
               .withBufferSize(config.getMaxDFSStreamBufferSize())
               .withSpillableMapBasePath(config.getSpillableMapBasePath())
               .withPartition(clusteringOp.getPartitionPath())
-              .withUseScanV2(config.useScanV2ForLogRecordReader())
+              .withOptimizedLogBlocksScan(config.enableOptimizedLogBlocksScan())
               .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
               .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
               .withRecordMerger(config.getRecordMerger())

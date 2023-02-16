@@ -18,12 +18,6 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
 /**
  * Types of {@link org.apache.hudi.common.util.queue.HoodieExecutor}.
  */
@@ -46,12 +40,5 @@ public enum ExecutorType {
    * The disadvantage is that the executor is a single-write-single-read model, cannot support functions such as speed limit
    * and can not de-coupe the network read (shuffle read) and network write (writing objects/files to storage) anymore.
    */
-  SIMPLE;
-
-  public static List<String> getNames() {
-    List<String> names = new ArrayList<>(ExecutorType.values().length);
-    Arrays.stream(KeyGeneratorType.values())
-        .forEach(x -> names.add(x.name()));
-    return names;
-  }
+  SIMPLE
 }

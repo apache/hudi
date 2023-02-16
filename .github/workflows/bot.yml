@@ -6,13 +6,42 @@ on:
       - master
       - 'release-*'
   pull_request:
+    paths-ignore:
+      - '**.bmp'
+      - '**.gif'
+      - '**.jpg'
+      - '**.jpeg'
+      - '**.md'
+      - '**.pdf'
+      - '**.png'
+      - '**.svg'
     branches:
       - master
       - 'release-*'
 env:
-  MVN_ARGS: -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
+  MVN_ARGS: -e -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
 
 jobs:
+  validate-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          architecture: x64
+      - name: Check Binary Files
+        run: ./scripts/release/validate_source_binary_files.sh
+      - name: Check Copyright
+        run: |
+          ./scripts/release/create_source_directory.sh hudi-tmp-repo
+          cd hudi-tmp-repo
+          ./scripts/release/validate_source_copyright.sh
+      - name: RAT check
+        run: ./scripts/release/validate_source_rat.sh
+
   test-spark:
     runs-on: ubuntu-latest
     strategy:
@@ -69,6 +98,7 @@ jobs:
           - flinkProfile: "flink1.13"
           - flinkProfile: "flink1.14"
           - flinkProfile: "flink1.15"
+          - flinkProfile: "flink1.16"
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -95,6 +125,8 @@ jobs:
     strategy:
       matrix:
         include:
+          - flinkProfile: 'flink1.16'
+            sparkProfile: 'spark3.3'
           - flinkProfile: 'flink1.15'
             sparkProfile: 'spark3.3'
           - flinkProfile: 'flink1.14'
@@ -115,8 +147,10 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: 'scala-2.12'
         run: |
-          mvn clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
-          mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+          mvn clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+          # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
+          sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
+          mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
       - name: IT - Bundle Validation
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -125,4 +159,3 @@ jobs:
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
-

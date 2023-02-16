@@ -60,15 +60,15 @@ public class KeyGeneratorOptions extends HoodieConfig {
           + "Actual value ontained by invoking .toString()");
 
   public static final ConfigProperty<Integer> HASH_PARTITION_NUM = ConfigProperty
-          .key("hoodie.datasource.write.hash.partition.num")
-          .defaultValue(256)
-          .withDocumentation("Determine the number of hash partitions in the hudi table");
+      .key("hoodie.datasource.write.hash.partition.num")
+      .defaultValue(256)
+      .withDocumentation("Determine the number of hash partitions in the hudi table");
 
   public static final ConfigProperty<String> HASH_PARTITION_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.hash.partition.field")
       .noDefaultValue()
       .withDocumentation("Hash partition field. Use its value to generate the hash value of the hash partition field. ");
-
+      
   public static final ConfigProperty<String> KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled")
       .defaultValue("false")
@@ -133,4 +133,3 @@ public class KeyGeneratorOptions extends HoodieConfig {
     public static final String DATE_TIME_PARSER_PROP = "hoodie.deltastreamer.keygen.datetime.parser.class";
   }
 }
-

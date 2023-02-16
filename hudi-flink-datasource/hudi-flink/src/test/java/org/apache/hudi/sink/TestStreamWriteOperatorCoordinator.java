@@ -166,6 +166,22 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
+  public void testRecommitWithPartialUncommittedEvents() {
+    final CompletableFuture<byte[]> future = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(1, future);
+    String instant = coordinator.getInstant();
+    String lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
+    assertNull(lastCompleted, "Returns early for empty write results");
+    WriteMetadataEvent event1 = createOperatorEvent(0, instant, "par1", false, 0.2);
+    event1.setBootstrap(true);
+    WriteMetadataEvent event2 = WriteMetadataEvent.emptyBootstrap(1);
+    coordinator.handleEventFromOperator(0, event1);
+    coordinator.handleEventFromOperator(1, event2);
+    lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
+    assertThat("Recommits the instant with partial uncommitted events", lastCompleted, is(instant));
+  }
+
+  @Test
   public void testHiveSyncInvoked() throws Exception {
     // reset
     reset();

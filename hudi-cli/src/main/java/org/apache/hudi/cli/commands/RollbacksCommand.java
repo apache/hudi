@@ -25,15 +25,15 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
+
 import org.apache.spark.launcher.SparkLauncher;
+
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -59,7 +59,7 @@ public class RollbacksCommand {
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
           defaultValue = "false") final boolean headerOnly) {
-    HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.getTableMetaClient());
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline rollback = activeTimeline.getRollbackTimeline().filterCompletedInstants();
 
     final List<Comparable[]> rows = new ArrayList<>();
@@ -97,7 +97,7 @@ public class RollbacksCommand {
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
               defaultValue = "false") final boolean headerOnly)
       throws IOException {
-    HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.getTableMetaClient());
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     final List<Comparable[]> rows = new ArrayList<>();
     HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
         activeTimeline.getInstantDetails(new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
@@ -153,15 +153,5 @@ public class RollbacksCommand {
       return "Commit " + instantTime + " failed to roll back";
     }
     return "Commit " + instantTime + " rolled back";
-  }
-
-  /**
-   * An Active timeline containing only rollbacks.
-   */
-  public static class RollbackTimeline extends HoodieActiveTimeline {
-
-    public RollbackTimeline(HoodieTableMetaClient metaClient) {
-      super(metaClient, CollectionUtils.createImmutableSet(HoodieTimeline.ROLLBACK_EXTENSION));
-    }
   }
 }

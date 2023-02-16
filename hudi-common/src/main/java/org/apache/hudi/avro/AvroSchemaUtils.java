@@ -20,6 +20,7 @@ package org.apache.hudi.avro;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaCompatibility;
 
 import java.util.List;
 import java.util.Objects;
@@ -36,10 +37,10 @@ public class AvroSchemaUtils {
   private AvroSchemaUtils() {}
 
   /**
-   * See {@link #isSchemaCompatible(Schema, Schema, boolean)} doc for more details
+   * See {@link #isSchemaCompatible(Schema, Schema, boolean, boolean)} doc for more details
    */
-  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema) {
-    return isSchemaCompatible(prevSchema, newSchema, true);
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean allowProjection) {
+    return isSchemaCompatible(prevSchema, newSchema, true, allowProjection);
   }
 
   /**
@@ -50,13 +51,34 @@ public class AvroSchemaUtils {
    * @param newSchema new instance of the schema
    * @param checkNaming controls whether schemas fully-qualified names should be checked
    */
-  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean checkNaming) {
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean checkNaming, boolean allowProjection) {
     // NOTE: We're establishing compatibility of the {@code prevSchema} and {@code newSchema}
     //       as following: {@code newSchema} is considered compatible to {@code prevSchema},
     //       iff data written using {@code prevSchema} could be read by {@code newSchema}
+
+    // In case schema projection is not allowed, new schema has to have all the same fields as the
+    // old schema
+    if (!allowProjection) {
+      if (!canProject(prevSchema, newSchema)) {
+        return false;
+      }
+    }
+
     AvroSchemaCompatibility.SchemaPairCompatibility result =
         AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema, checkNaming);
     return result.getType() == AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+  }
+
+  /**
+   * Check that each field in the prevSchema can be populated in the newSchema
+   * @param prevSchema prev schema.
+   * @param newSchema new schema
+   * @return true if prev schema is a projection of new schema.
+   */
+  public static boolean canProject(Schema prevSchema, Schema newSchema) {
+    return prevSchema.getFields().stream()
+        .map(oldSchemaField -> SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField))
+        .noneMatch(Objects::isNull);
   }
 
   /**
@@ -88,7 +110,7 @@ public class AvroSchemaUtils {
   private static boolean isAtomicSchemasCompatible(Schema oneAtomicType, Schema anotherAtomicType) {
     // NOTE: Checking for compatibility of atomic types, we should ignore their
     //       corresponding fully-qualified names (as irrelevant)
-    return isSchemaCompatible(oneAtomicType, anotherAtomicType, false);
+    return isSchemaCompatible(oneAtomicType, anotherAtomicType, false, true);
   }
 
   /**

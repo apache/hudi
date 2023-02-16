@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordPayload, HoodieTableType, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieRecordPayload, HoodieTableType, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -42,6 +42,7 @@ import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.BooleanType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -68,7 +69,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
   val sparkOpts = Map(
-    HoodieWriteConfig.MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
+    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
   )
 
@@ -427,6 +428,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testPrunedFiltered(recordType: HoodieRecordType) {
+
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     // First Operation:
@@ -1241,6 +1243,62 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     assertEquals(
       1000L,
       roDf.where(col(recordKeyField) === 0).select(dataField).collect()(0).getLong(0))
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "AVRO, AVRO, END_MAP",
+    "AVRO, SPARK, END_MAP",
+    "SPARK, AVRO, END_MAP",
+    "AVRO, AVRO, END_ARRAY",
+    "AVRO, SPARK, END_ARRAY",
+    "SPARK, AVRO, END_ARRAY"))
+  def testRecordTypeCompatibilityWithParquetLog(readType: HoodieRecordType,
+                                                writeType: HoodieRecordType,
+                                                transformMode: String): Unit = {
+    def transform(sourceDF: DataFrame, transformed: String): DataFrame = {
+      transformed match {
+        case "END_MAP" => sourceDF
+          .withColumn("obj_ids", array(lit("wk_tenant_id")))
+          .withColumn("obj_maps", map(lit("wk_tenant_id"), col("obj_ids")))
+        case "END_ARRAY" => sourceDF
+          .withColumn("obj_maps", map(lit("wk_tenant_id"), lit("wk_tenant_id")))
+          .withColumn("obj_ids", array(col("obj_maps")))
+      }
+    }
+
+    var (_, readOpts) = getWriterReaderOpts(readType)
+    var (writeOpts, _) = getWriterReaderOpts(writeType)
+    readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet")
+    writeOpts = writeOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet")
+    val records = dataGen.generateInserts("001", 10)
+
+    // End with array
+    val inputDF1 = transform(spark.read.json(
+      spark.sparkContext.parallelize(recordsToStrings(records).asScala, 2))
+      .withColumn("wk_tenant_id", lit("wk_tenant_id"))
+      .withColumn("ref_id", lit("wk_tenant_id")), transformMode)
+    inputDF1.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      // CanIndexLogFile=true
+      .option(HoodieIndexConfig.INDEX_TYPE_PROP, IndexType.INMEMORY.name())
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .load(basePath + "/*/*/*/*")
+
+    def sort(df: DataFrame): DataFrame = df.sort("_row_key")
+
+    val inputRows = sort(inputDF1).collectAsList()
+    val readRows = sort(snapshotDF1.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)).collectAsList()
+
+    assertEquals(inputRows, readRows)
   }
 
   def getWriterReaderOpts(recordType: HoodieRecordType,

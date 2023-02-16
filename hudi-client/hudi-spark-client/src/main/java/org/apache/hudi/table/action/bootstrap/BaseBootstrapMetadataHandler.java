@@ -34,7 +34,6 @@ import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.avro.AvroReadSupport;
 
 import java.io.IOException;
 import java.util.List;
@@ -62,10 +61,10 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
           .map(HoodieAvroUtils::getRootLevelFieldName)
           .collect(Collectors.toList());
       Schema recordKeySchema = HoodieAvroUtils.generateProjectionSchema(avroSchema, recordKeyColumns);
-      LOG.info("Schema to be used for reading record Keys :" + recordKeySchema);
-      AvroReadSupport.setAvroReadSchema(table.getHadoopConf(), recordKeySchema);
-      AvroReadSupport.setRequestedProjection(table.getHadoopConf(), recordKeySchema);
-      executeBootstrap(bootstrapHandle, sourceFilePath, keyGenerator, partitionPath, avroSchema);
+
+      LOG.info("Schema to be used for reading record keys: " + recordKeySchema);
+
+      executeBootstrap(bootstrapHandle, sourceFilePath, keyGenerator, partitionPath, recordKeySchema);
     } catch (Exception e) {
       throw new HoodieException(e.getMessage(), e);
     }

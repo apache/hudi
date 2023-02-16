@@ -71,8 +71,10 @@ import java.io.FileFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -364,6 +366,19 @@ public class TestData {
     return inserts;
   }
 
+  public static List<RowData> dataSetUpsert(int... ids) {
+    List<RowData> inserts = new ArrayList<>();
+    Arrays.stream(ids).forEach(i -> {
+      inserts.add(
+          updateBeforeRow(StringData.fromString("id" + i), StringData.fromString("Danny"), 23,
+              TimestampData.fromEpochMillis(i), StringData.fromString("par1")));
+      inserts.add(
+          updateAfterRow(StringData.fromString("id" + i), StringData.fromString("Danny"), 23,
+              TimestampData.fromEpochMillis(i), StringData.fromString("par1")));
+    });
+    return inserts;
+  }
+
   public static List<RowData> filterOddRows(List<RowData> rows) {
     return filterRowsByIndexPredicate(rows, i -> i % 2 != 0);
   }
@@ -555,6 +570,16 @@ public class TestData {
   public static void assertRowDataEquals(List<RowData> rows, List<RowData> expected) {
     String rowsString = rowDataToString(rows);
     assertThat(rowsString, is(rowDataToString(expected)));
+  }
+
+  /**
+   * Assert that expected and actual collection of rows are equal regardless of the order.
+   *
+   * @param expected expected row collection
+   * @param actual actual row collection
+   */
+  public static void assertRowsEqualsUnordered(Collection<Row> expected, Collection<Row> actual) {
+    assertEquals(new HashSet<>(expected), new HashSet<>(actual));
   }
 
   /**
@@ -907,5 +932,52 @@ public class TestData {
     BinaryRowData rowData = insertRow(fields);
     rowData.setRowKind(RowKind.UPDATE_AFTER);
     return rowData;
+  }
+
+  /**
+   * Creates row with specified field values.
+   * <p>This method is used to define row in convenient way such as:
+   *
+   * <pre> {@code
+   * row(1, array("abc1", "def1"), map("abc1", 1, "def1", 3), row(1, "abc1"))
+   * }</pre>
+   */
+  public static Row row(Object... values) {
+    return Row.of(values);
+  }
+
+  /**
+   * Creates array with specified values.
+   * <p>This method is used to define row in convenient way such as:
+   *
+   * <pre> {@code
+   * row(1, array("abc1", "def1"), map("abc1", 1, "def1", 3), row(1, "abc1"))
+   * }</pre>
+   */
+  @SafeVarargs
+  public static <T> T[] array(T... values) {
+    return values;
+  }
+
+  /**
+   * Creates map with specified keys and values.
+   * <p>This method is used to define row in convenient way such as:
+   *
+   * <pre> {@code
+   * row(1, array("abc1", "def1"), map("abc1", 1, "def1", 3), row(1, "abc1"))
+   * }</pre>
+   *
+   * <p>NOTE: be careful of the order of keys and values. If you make
+   * a mistake, {@link ClassCastException} will occur later than the
+   * creation of the map due to type erasure.
+   */
+  public static <K, V> Map<K, V> map(Object... kwargs) {
+    HashMap<Object, Object> map = new HashMap<>();
+    for (int i = 0; i < kwargs.length; i += 2) {
+      map.put(kwargs[i], kwargs[i + 1]);
+    }
+    @SuppressWarnings("unchecked")
+    Map<K, V> resultMap = (Map<K, V>) map;
+    return resultMap;
   }
 }

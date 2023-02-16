@@ -19,6 +19,8 @@
 
 package org.apache.hudi.sync.datahub.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -28,11 +30,17 @@ import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParametersDelegate;
 import datahub.client.rest.RestEmitter;
 
+import javax.annotation.concurrent.Immutable;
+
 import java.util.Properties;
 
 import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_DATAHUB_ENV;
 import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME;
 
+@Immutable
+@ConfigClassProperty(name = "DataHub Sync Configs",
+    groupName = ConfigGroups.Names.META_SYNC,
+    description = "Configurations used by the Hudi to sync metadata to DataHub.")
 public class DataHubSyncConfig extends HoodieSyncConfig {
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS = ConfigProperty
@@ -56,15 +64,15 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .withDocumentation("Pluggable class to supply a DataHub REST emitter to connect to the DataHub instance. This overwrites other emitter configs.");
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_DATAPLATFORM_NAME = ConfigProperty
-          .key("hoodie.meta.sync.datahub.dataplatform.name")
-          .defaultValue(DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME)
-          .withDocumentation("String used to represent Hudi when creating its corresponding DataPlatform entity "
-                  + "within Datahub");
+      .key("hoodie.meta.sync.datahub.dataplatform.name")
+      .defaultValue(DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME)
+      .withDocumentation("String used to represent Hudi when creating its corresponding DataPlatform entity "
+          + "within Datahub");
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_DATASET_ENV = ConfigProperty
-          .key("hoodie.meta.sync.datahub.dataset.env")
-          .defaultValue(DEFAULT_DATAHUB_ENV.name())
-          .withDocumentation("Environment to use when pushing entities to Datahub");
+      .key("hoodie.meta.sync.datahub.dataset.env")
+      .defaultValue(DEFAULT_DATAHUB_ENV.name())
+      .withDocumentation("Environment to use when pushing entities to Datahub");
 
   public final HoodieDataHubDatasetIdentifier datasetIdentifier;
 
@@ -102,7 +110,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     public String emitterSupplierClass;
 
     @Parameter(names = {"--data-platform-name"}, description = "String used to represent Hudi when creating its "
-            + "corresponding DataPlatform entity within Datahub")
+        + "corresponding DataPlatform entity within Datahub")
     public String dataPlatformName;
 
     @Parameter(names = {"--dataset-env"}, description = "Which Datahub Environment to use when pushing entities")

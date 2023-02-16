@@ -20,8 +20,6 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
-import org.apache.hudi.common.config.ConfigClassProperty;
-import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
@@ -64,6 +62,9 @@ import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before;
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before_after;
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.op_key_only;
 
 /**
  * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are loaded from hoodie.properties, these properties are usually set during
@@ -72,14 +73,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * @see HoodieTableMetaClient
  * @since 0.3.0
  */
-@ConfigClassProperty(name = "Table Configurations",
-    groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that persist across writes and read on a Hudi table "
-        + " like  base, log file formats, table name, creation schema, table version layouts. "
-        + " Configurations are loaded from hoodie.properties, these properties are usually set during "
-        + "initializing a path as hoodie base path and rarely changes during "
-        + "the lifetime of the table. Writers/Queries' configurations are validated against these "
-        + " each time for compatibility.")
 public class HoodieTableConfig extends HoodieConfig {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
@@ -124,15 +117,15 @@ public class HoodieTableConfig extends HoodieConfig {
           + "the partition path, by invoking toString()");
 
   public static final ConfigProperty<String> HASH_PARTITION_NUM = ConfigProperty
-          .key("hoodie.table.hash.partition.num")
-          .defaultValue("256")
-          .withDocumentation("Determine the number of hash partitions in the hudi table");
+      .key("hoodie.table.hash.partition.num")
+      .defaultValue("256")
+      .withDocumentation("Determine the number of hash partitions in the hudi table");
 
   public static final ConfigProperty<String> HASH_PARTITION_FIELDS = ConfigProperty
           .key("hoodie.table.hash.partition.fields")
           .noDefaultValue()
           .withDocumentation("Hash partition field. Use its value to generate the hash value of the hash partition field. ");
-
+          
   public static final ConfigProperty<String> RECORDKEY_FIELDS = ConfigProperty
       .key("hoodie.table.recordkey.fields")
       .noDefaultValue()
@@ -142,18 +135,20 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> CDC_ENABLED = ConfigProperty
       .key("hoodie.table.cdc.enabled")
       .defaultValue(false)
+      .sinceVersion("0.13.0")
       .withDocumentation("When enable, persist the change data if necessary, and can be queried as a CDC query mode.");
 
   public static final ConfigProperty<String> CDC_SUPPLEMENTAL_LOGGING_MODE = ConfigProperty
       .key("hoodie.table.cdc.supplemental.logging.mode")
-      .defaultValue(HoodieCDCSupplementalLoggingMode.OP_KEY.getValue())
+      .defaultValue(data_before_after.name())
       .withValidValues(
-          HoodieCDCSupplementalLoggingMode.OP_KEY.getValue(),
-          HoodieCDCSupplementalLoggingMode.WITH_BEFORE.getValue(),
-          HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER.getValue())
-      .withDocumentation("When 'cdc_op_key' persist the 'op' and the record key only,"
-          + " when 'cdc_data_before' persist the additional 'before' image ,"
-          + " and when 'cdc_data_before_after', persist the 'before' and 'after' at the same time.");
+          op_key_only.name(),
+          data_before.name(),
+          data_before_after.name())
+      .sinceVersion("0.13.0")
+      .withDocumentation("Setting 'op_key_only' persists the 'op' and the record key only, "
+          + "setting 'data_before' persists the additional 'before' image, "
+          + "and setting 'data_before_after' persists the additional 'before' and 'after' images.");
 
   public static final ConfigProperty<String> CREATE_SCHEMA = ConfigProperty
       .key("hoodie.table.create.schema")
@@ -183,10 +178,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
-  public static final ConfigProperty<String> MERGER_STRATEGY = ConfigProperty
-      .key("hoodie.compaction.merger.strategy")
+  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
+      .key("hoodie.compaction.record.merger.strategy")
       .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
-      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.merger.impls which has the same merger strategy id");
+      .sinceVersion("0.13.0")
+      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
       .key("hoodie.archivelog.folder")
@@ -271,11 +267,12 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> SECONDARY_INDEXES_METADATA = ConfigProperty
       .key("hoodie.table.secondary.indexes.metadata")
       .noDefaultValue()
+      .sinceVersion("0.13.0")
       .withDocumentation("The metadata of secondary indexes");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
-  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String mergerStrategyId) {
+  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String recordMergerStrategyId) {
     super();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
@@ -287,9 +284,9 @@ public class HoodieTableConfig extends HoodieConfig {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
         needStore = true;
       }
-      if (contains(MERGER_STRATEGY) && payloadClassName != null
-          && !getString(MERGER_STRATEGY).equals(mergerStrategyId)) {
-        setValue(MERGER_STRATEGY, mergerStrategyId);
+      if (contains(RECORD_MERGER_STRATEGY) && payloadClassName != null
+          && !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId)) {
+        setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
         needStore = true;
       }
       if (needStore) {
@@ -459,7 +456,7 @@ public class HoodieTableConfig extends HoodieConfig {
       hoodieConfig.setDefaultValue(TYPE);
       if (hoodieConfig.getString(TYPE).equals(HoodieTableType.MERGE_ON_READ.name())) {
         hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME);
-        hoodieConfig.setDefaultValue(MERGER_STRATEGY);
+        hoodieConfig.setDefaultValue(RECORD_MERGER_STRATEGY);
       }
       hoodieConfig.setDefaultValue(ARCHIVELOG_FOLDER);
       if (!hoodieConfig.contains(TIMELINE_LAYOUT_VERSION)) {
@@ -532,8 +529,8 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
-  public String getMergerStrategy() {
-    return getStringOrDefault(MERGER_STRATEGY);
+  public String getRecordMergerStrategy() {
+    return getStringOrDefault(RECORD_MERGER_STRATEGY);
   }
 
   public String getPreCombineField() {
@@ -568,7 +565,7 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     return HASH_PARTITION_NUM.defaultValue();
   }
-
+  
   public boolean isTablePartitioned() {
     return getPartitionFields().map(pfs -> pfs.length > 0).orElse(false);
   }
@@ -680,7 +677,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public HoodieCDCSupplementalLoggingMode cdcSupplementalLoggingMode() {
-    return HoodieCDCSupplementalLoggingMode.parse(getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE));
+    return HoodieCDCSupplementalLoggingMode.valueOf(getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE));
   }
 
   public String getKeyGeneratorClassName() {

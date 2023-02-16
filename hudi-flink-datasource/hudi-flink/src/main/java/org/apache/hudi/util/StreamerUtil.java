@@ -21,6 +21,7 @@ package org.apache.hudi.util;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -188,6 +189,7 @@ public class StreamerUtil {
           .setTableCreateSchema(conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA))
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
+          .setDatabaseName(conf.getString(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
           .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
           .setPreCombineField(OptionsResolver.getPreCombineField(conf))
@@ -280,6 +282,22 @@ public class StreamerUtil {
    */
   public static HoodieTableMetaClient createMetaClient(Configuration conf) {
     return createMetaClient(conf.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(conf));
+  }
+
+  /**
+   * Returns the table config or empty if the table does not exist.
+   */
+  public static Option<HoodieTableConfig> getTableConfig(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
+    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
+    Path metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    try {
+      if (fs.exists(metaPath)) {
+        return Option.of(new HoodieTableConfig(fs, metaPath.toString(), null, null));
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Get table config error", e);
+    }
+    return Option.empty();
   }
 
   /**

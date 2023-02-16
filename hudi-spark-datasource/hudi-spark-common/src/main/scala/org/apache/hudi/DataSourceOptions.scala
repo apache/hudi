@@ -19,12 +19,12 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.common.config.{ConfigProperty, DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
+import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -67,6 +67,7 @@ object DataSourceReadOptions {
     .key("hoodie.datasource.query.incremental.format")
     .defaultValue(INCREMENTAL_FORMAT_LATEST_STATE_VAL)
     .withValidValues(INCREMENTAL_FORMAT_LATEST_STATE_VAL, INCREMENTAL_FORMAT_CDC_VAL)
+    .sinceVersion("0.13.0")
     .withDocumentation("This config is used alone with the 'incremental' query type." +
       "When set to 'latest_state', it returns the latest records' values." +
       "When set to 'cdc', it returns the cdc data.")
@@ -98,6 +99,7 @@ object DataSourceReadOptions {
   val START_OFFSET: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.streaming.startOffset")
     .defaultValue("earliest")
+    .sinceVersion("0.13.0")
     .withDocumentation("Start offset to pull data from hoodie streaming source. allow earliest, latest, and " +
       "specified start instant time")
 
@@ -154,7 +156,7 @@ object DataSourceReadOptions {
   val FILE_INDEX_LISTING_MODE_LAZY = "lazy"
 
   val FILE_INDEX_LISTING_MODE_OVERRIDE: ConfigProperty[String] =
-    ConfigProperty.key("hoodie.datasource.read.file.index.listing.mode.override")
+    ConfigProperty.key("hoodie.datasource.read.file.index.listing.mode")
       .defaultValue(FILE_INDEX_LISTING_MODE_LAZY)
       .withValidValues(FILE_INDEX_LISTING_MODE_LAZY, FILE_INDEX_LISTING_MODE_EAGER)
       .sinceVersion("0.13.0")
@@ -343,12 +345,12 @@ object DataSourceWriteOptions {
    * HoodieMerger will replace the payload to process the merge of data
    * and provide the same capabilities as the payload
    */
-  val MERGER_IMPLS = HoodieWriteConfig.MERGER_IMPLS
+  val RECORD_MERGER_IMPLS = HoodieWriteConfig.RECORD_MERGER_IMPLS
 
   /**
    * Id of merger strategy
    */
-  val MERGER_STRATEGY = HoodieWriteConfig.MERGER_STRATEGY
+  val RECORD_MERGER_STRATEGY = HoodieWriteConfig.RECORD_MERGER_STRATEGY
 
   /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value
@@ -360,9 +362,9 @@ object DataSourceWriteOptions {
 
   /**
    * Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`. Actual
+   * value obtained by invoking .toString()
    */
   val PARTITIONPATH_FIELD = KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME
-
   /**
     * Determine the number of hash partitions in the hudi table
     */
@@ -455,7 +457,7 @@ object DataSourceWriteOptions {
 
   val STREAMING_CHECKPOINT_IDENTIFIER: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.streaming.checkpoint.identifier")
-    .noDefaultValue()
+    .defaultValue("default_single_writer")
     .sinceVersion("0.13.0")
     .withDocumentation("A stream identifier used for HUDI to fetch the right checkpoint(`batch id` to be more specific) "
       + "corresponding this writer. Please note that keep the identifier an unique value for different writer "
@@ -469,17 +471,6 @@ object DataSourceWriteOptions {
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
 
   val RECONCILE_SCHEMA: ConfigProperty[Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
-
-  // NOTE: This is an internal config that is not exposed to the public
-  private[hudi] val CANONICALIZE_SCHEMA: ConfigProperty[Boolean] =
-    ConfigProperty.key("hoodie.datasource.write.schema.canonicalize")
-      .defaultValue(true)
-      .sinceVersion("0.13.0")
-      .withDocumentation("Controls whether incoming batch's schema's nullability constraints should be canonicalized "
-        + "relative to the table's schema. For ex, in case field A is marked as null-able in table's schema, but is marked "
-        + "as non-null in the incoming batch, w/o canonicalization such write might fail as we won't be able to read existing "
-        + "null records from the table (for updating, for ex). Note, that this config has only effect when "
-        + "'hoodie.datasource.write.reconcile.schema' is set to false.")
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
