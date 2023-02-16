@@ -10,6 +10,17 @@ last_modified_at:
 Apache Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing. In a data lake/warehouse, one of the key trade-offs is between ingestion speed and query performance. Data ingestion typically prefers small files to improve parallelism and make data available to queries as soon as possible. However, query performance degrades poorly with a lot of small files. Also, during ingestion, data is typically co-located based on arrival time. However, the query engines perform better when the data frequently queried is co-located together. In most architectures each of these systems tend to add optimizations independently to improve performance which hits limitations due to un-optimized data layouts. This doc introduces a new kind of table service called clustering [[RFC-19]](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+19+Clustering+data+for+freshness+and+query+performance) to reorganize data for improved query performance without compromising on ingestion speed.
 <!--truncate-->
 
+## How is compaction different from clustering?
+
+Hudi is modeled like a log-structured storage engine with multiple versions of the data.
+Particularly, [Merge-On-Read](/docs/table_types#merge-on-read-table)
+tables in Hudi store data using a combination of base file in columnar format and row-based delta logs that contain
+updates. Compaction is a way to merge the delta logs with base files to produce the latest file slices with the most
+recent snapshot of data. Compaction helps to keep the query performance in check (larger delta log files would incur
+longer merge times on query side). On the other hand, clustering is a data layout optimization technique. One can stitch
+together small files into larger files using clustering. Additionally, data can be clustered by sort key so that queries
+can take advantage of data locality.
+
 ## Clustering Architecture
 
 At a high level, Hudi provides different operations such as insert/upsert/bulk_insert through it’s write client API to be able to write data to a Hudi table. To be able to choose a trade-off between file size and ingestion speed, Hudi provides a knob `hoodie.parquet.small.file.limit` to be able to configure the smallest allowable file size. Users are able to configure the small file [soft limit](https://hudi.apache.org/docs/configurations/#hoodieparquetsmallfilelimit) to `0` to force new data to go into a new set of filegroups or set it to a higher value to ensure new data gets “padded” to existing files until it meets that limit that adds to ingestion latencies.
@@ -51,45 +62,32 @@ NOTE: Clustering can only be scheduled for tables / partitions not receiving any
 ![Clustering example](/assets/images/blog/clustering/example_perf_improvement.png)
 _Figure: Illustrating query performance improvements by clustering_
 
-### Setting up clustering
-Inline clustering can be setup easily using spark dataframe options. See sample below
+## Clustering Usecases
 
-```scala
-import org.apache.hudi.QuickstartUtils._
-import scala.collection.JavaConversions._
-import org.apache.spark.sql.SaveMode._
-import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.config.HoodieWriteConfig._
+### Batching small files
 
+As mentioned in the intro, streaming ingestion generally results in smaller files in your data lake. But having lot of
+such small files could bring down your query latency. From our experience supporting community users, there are quite a
+few users who are using Hudi just for small file handling capabilities. So, you could employ clustering to batch a lot
+of such small files into larger ones.
 
-val df =  //generate data frame
-df.write.format("org.apache.hudi").
-        options(getQuickstartWriteConfigs).
-        option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-        option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-        option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-        option(TABLE_NAME, "tableName").
-        option("hoodie.parquet.small.file.limit", "0").
-        option("hoodie.clustering.inline", "true").
-        option("hoodie.clustering.inline.max.commits", "4").
-        option("hoodie.clustering.plan.strategy.target.file.max.bytes", "1073741824").
-        option("hoodie.clustering.plan.strategy.small.file.limit", "629145600").
-        option("hoodie.clustering.plan.strategy.sort.columns", "column1,column2"). //optional, if sorting is needed as part of rewriting data
-        mode(Append).
-        save("dfs://location");
-```
+![Batching small files](/assets/images/clustering_small_files.gif)
 
-## Async Clustering - Strategies
-For more advanced usecases, async clustering pipeline can also be setup. See an example [here](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+19+Clustering+data+for+freshness+and+query+performance#RFC19Clusteringdataforfreshnessandqueryperformance-SetupforAsyncclusteringJob).
+### Cluster by sort key
+
+Another classic problem in data lake is the arrival time vs event time problem. Generally you write data based on
+arrival time, while query predicates do not sit well with it. With clustering, you can re-write your data by sorting
+based on query predicates and so, your data skipping will be very efficient and your query can ignore scanning lot of
+unnecessary data.
+
+![Batching small files](/assets/images/clustering_sort.gif)
+
+## Clustering Strategies
 
 On a high level, clustering creates a plan based on a configurable strategy, groups eligible files based on specific
-criteria and then executes the plan. Hudi supports [multi-writers](https://hudi.apache.org/docs/concurrency_control#enabling-multi-writing) which provides
-snapshot isolation between multiple table services, thus allowing writers to continue with ingestion while clustering
-runs in the background.
-
-As mentioned before, clustering plan as well as execution depends on configurable strategy. These strategies can be
-broadly classified into three types: clustering plan strategy, execution strategy and update strategy.
+criteria and then executes the plan. As mentioned before, clustering plan as well as execution depends on configurable
+strategy. These strategies can be broadly classified into three types: clustering plan strategy, execution strategy and
+update strategy.
 
 ### Plan Strategy
 
@@ -150,13 +148,52 @@ We discussed the critical strategy configurations. All other configurations rela
 listed [here](/docs/configurations/#Clustering-Configs). Out of this list, a few
 configurations that will be very useful are:
 
+## Inline clustering
+
+Inline clustering happens synchronously with the regular ingestion writer, which means the next round of ingestion
+cannot proceed until the clustering is complete. Inline clustering can be setup easily using spark dataframe options.
+See sample below
+
+```scala
+import org.apache.hudi.QuickstartUtils._
+import scala.collection.JavaConversions._
+import org.apache.spark.sql.SaveMode._
+import org.apache.hudi.DataSourceReadOptions._
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.config.HoodieWriteConfig._
+
+
+val df =  //generate data frame
+df.write.format("org.apache.hudi").
+        options(getQuickstartWriteConfigs).
+        option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+        option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+        option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+        option(TABLE_NAME, "tableName").
+        option("hoodie.parquet.small.file.limit", "0").
+        option("hoodie.clustering.inline", "true").
+        option("hoodie.clustering.inline.max.commits", "4").
+        option("hoodie.clustering.plan.strategy.target.file.max.bytes", "1073741824").
+        option("hoodie.clustering.plan.strategy.small.file.limit", "629145600").
+        option("hoodie.clustering.plan.strategy.sort.columns", "column1,column2"). //optional, if sorting is needed as part of rewriting data
+        mode(Append).
+        save("dfs://location");
+```
+
+## Async Clustering
+
+Async clustering runs the clustering table service in the background without blocking the regular ingestions writers.
+Hudi supports [multi-writers](https://hudi.apache.org/docs/concurrency_control#enabling-multi-writing) which provides
+snapshot isolation between multiple table services, thus allowing writers to continue with ingestion while clustering
+runs in the background.
+
 |  Config key  | Remarks | Default |
 |  -----------  | -------  | ------- |
 | `hoodie.clustering.async.enabled` | Enable running of clustering service, asynchronously as writes happen on the table. | False |
 | `hoodie.clustering.async.max.commits` | Control frequency of async clustering by specifying after how many commits clustering should be triggered. | 4 |
 | `hoodie.clustering.preserve.commit.metadata` | When rewriting data, preserves existing _hoodie_commit_time. This means users can run incremental queries on clustered data without any side-effects. | False |
 
-## Asynchronous Clustering
+## Setup Asynchronous Clustering
 Users can leverage [HoodieClusteringJob](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+19+Clustering+data+for+freshness+and+query+performance#RFC19Clusteringdataforfreshnessandqueryperformance-SetupforAsyncclusteringJob)
 to setup 2-step asynchronous clustering.
 
