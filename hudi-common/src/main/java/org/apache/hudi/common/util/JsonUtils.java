@@ -29,15 +29,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
  * Utils for JSON serialization and deserialization.
  */
 public class JsonUtils {
-
-  private static final Logger LOG = LogManager.getLogger(ReflectionUtils.class);
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
