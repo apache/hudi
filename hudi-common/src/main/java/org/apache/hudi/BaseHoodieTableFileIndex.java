@@ -78,6 +78,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   private final String[] partitionColumns;
 
+  private final String[] hashPartitionColumns;
+
+  private final int hashPartitionNum;
+
   protected final HoodieMetadataConfig metadataConfig;
 
   private final Option<String> specifiedQueryInstant;
@@ -126,7 +130,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                                   boolean shouldListLazily) {
     this.partitionColumns = metaClient.getTableConfig().getPartitionFields()
         .orElse(new String[0]);
-
+    this.hashPartitionColumns = metaClient.getTableConfig().getHashPartitionFields()
+            .orElse(new String[0]);
+    this.hashPartitionNum = Integer.parseInt((metaClient.getTableConfig().getHashPartitionNum()));
     this.metadataConfig = HoodieMetadataConfig.newBuilder()
         .fromProperties(configProperties)
         .enable(configProperties.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS)
@@ -187,6 +193,14 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   protected String[] getPartitionColumns() {
     return partitionColumns;
+  }
+
+  protected int getHashPartitionNum() {
+    return hashPartitionNum;
+  }
+
+  protected String[] getHashPartitionColumns() {
+    return hashPartitionColumns;
   }
 
   protected List<Path> getQueryPaths() {

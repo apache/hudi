@@ -18,7 +18,6 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
-
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
 import org.apache.hudi.cdc.CDCRelation
@@ -29,9 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
-
 import org.apache.log4j.LogManager
-
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
@@ -39,7 +36,6 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
-
 import scala.collection.JavaConverters._
 
 /**
@@ -77,7 +73,7 @@ class DefaultSource extends RelationProvider
                               schema: StructType): BaseRelation = {
     val path = optParams.get("path")
     val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
-
+    val changeParams =scala.collection.mutable.Map.empty ++ optParams
     if (path.isEmpty && readPathsStr.isEmpty) {
       throw new HoodieException(s"'path' or '$READ_PATHS' or both must be specified.")
     }
@@ -140,9 +136,10 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
-    val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
-
-    if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
+   val dropColList = HoodieRecord.HOODIE_META_COLUMNS.asScala.:+ (HoodieRecord.HASH_PARTITION_FIELD)
+   //val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
+   val dfWithoutMetaCols = df.drop(dropColList:_*)
+   if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
       HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, dfWithoutMetaCols)
       HoodieSparkSqlWriter.cleanup()
     } else {

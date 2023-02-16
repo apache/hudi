@@ -25,7 +25,7 @@ import org.apache.hudi.SparkHoodieTableFileIndex._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.hadoop.CachingPath
@@ -35,10 +35,11 @@ import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, GreaterThanOrEqual, InterpretedPredicate, LessThanOrEqual}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
+import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
@@ -182,6 +183,43 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     listMatchingPartitionPaths(predicates)
   }
 
+  private def getHashPartitionColVals(predicates: Seq[Expression]) : Option[Seq[Any]] = {
+    val hashPartitionCols = getHashPartitionColumns
+    if(hashPartitionCols.size == 0) {
+      Option.empty
+    }else{
+      val columnValuesMap = extractEqualityPredicatesLiteralValues(predicates)
+      val nonEmptyHashPartitionCol = hashPartitionCols.filter(colName => columnValuesMap.contains(colName))
+      if(nonEmptyHashPartitionCol.size != hashPartitionCols.size)  {
+        logInfo(s"Not enough hash partition predicates provided. Hash partition fields are (${hashPartitionCols.mkString(",")}) ")
+        Option.empty
+      }else{
+        Some(nonEmptyHashPartitionCol.map(colName => (columnValuesMap(colName).get)))
+      }
+    }
+
+  }
+//  def genEqualToExpression(colName: String,
+//                                       value: Expression,
+//                                       targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
+//    val valueExpr = targetExprBuilder.apply(col(colName).expr)
+//    EqualTo(valueExpr, value)
+//  }
+
+  protected def createHashPartionFilter(predicates: Seq[Expression]) : Option[Expression] = {
+        val hashPartitionColValsOption = getHashPartitionColVals(predicates)
+        if(hashPartitionColValsOption.isEmpty){
+          Option.empty
+        }else{
+          val hashPartitionColVals = hashPartitionColValsOption.get
+          val getHashPartitionValue = (cols: Seq[Any], num : Int) => ((cols.filter(_ != null).mkString.trim.hashCode & Integer.MAX_VALUE) % num).toString
+          val hashPartitionNum = getHashPartitionNum
+          val hashPartitionValue = getHashPartitionValue(hashPartitionColVals, hashPartitionNum)
+          val attr = AttributeReference(HoodieRecord.HASH_PARTITION_FIELD, StringType, nullable = true)()
+          val dataFilter = EqualTo(attr, lit(hashPartitionValue).expr)
+          Some(dataFilter)
+        }
+  }
   /**
    * Prune the partition by the filter.This implementation is fork from
    * org.apache.spark.sql.execution.datasources.PartitioningAwareFileIndex#prunePartitions.
@@ -228,7 +266,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
             val index = partitionSchema.indexWhere(a.name == _.name)
             BoundReference(index, partitionSchema(index).dataType, nullable = true)
         })
-
         val prunedPartitionPaths = partitionPaths.filter {
           partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.values))
         }
@@ -422,7 +459,6 @@ object SparkHoodieTableFileIndex {
         Seq((attr.name, Some(e.eval(EmptyRow))))
       case EqualTo(e: Expression, attr: AttributeReference) if e.foldable =>
         Seq((attr.name, Some(e.eval(EmptyRow))))
-
       case _ => Seq.empty
     }.toMap
   }

@@ -52,6 +52,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public static final String FILENAME_METADATA_FIELD = HoodieMetadataField.FILENAME_METADATA_FIELD.getFieldName();
   public static final String OPERATION_METADATA_FIELD = HoodieMetadataField.OPERATION_METADATA_FIELD.getFieldName();
   public static final String HOODIE_IS_DELETED_FIELD = "_hoodie_is_deleted";
+  public static final String HASH_PARTITION_FIELD = "_hoodie_hash_partition";
 
   public enum HoodieMetadataField {
     COMMIT_TIME_METADATA_FIELD("_hoodie_commit_time"),
@@ -110,6 +111,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public static int FILENAME_META_FIELD_ORD = HOODIE_META_COLUMNS_NAME_TO_POS.get(FILENAME_METADATA_FIELD);
   public static int COMMIT_TIME_METADATA_FIELD_ORD = HOODIE_META_COLUMNS_NAME_TO_POS.get(COMMIT_TIME_METADATA_FIELD);
   public static int COMMIT_SEQNO_METADATA_FIELD_ORD = HOODIE_META_COLUMNS_NAME_TO_POS.get(COMMIT_SEQNO_METADATA_FIELD);
+
 
   /**
    * Identifies the record across the table.
