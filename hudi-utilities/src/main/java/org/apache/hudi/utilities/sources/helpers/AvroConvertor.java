@@ -28,6 +28,10 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.io.Serializable;
 
+import scala.util.Either;
+import scala.util.Left;
+import scala.util.Right;
+
 /**
  * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy fields to circumvent issues around
  * serializing these objects from driver to executors
@@ -85,6 +89,16 @@ public class AvroConvertor implements Serializable {
     initSchema();
     initJsonConvertor();
     return jsonConverter.convert(json, schema);
+  }
+
+  public Either<GenericRecord,String> fromJsonWithError(String json) {
+    GenericRecord genericRecord;
+    try {
+      genericRecord = fromJson(json);
+    } catch (Exception e) {
+      return new Right(json);
+    }
+    return new Left(genericRecord);
   }
 
   public Schema getSchema() {

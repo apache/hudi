@@ -34,13 +34,24 @@ import com.google.protobuf.Message;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.Closeable;
 import java.io.IOException;
 
+import java.util.Arrays;
+import java.util.stream.Collectors;
+
+import scala.util.Either;
+
+
+import static org.apache.hudi.utilities.deltastreamer.BaseQuarantineTableWriter.QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
@@ -51,8 +62,53 @@ public final class SourceFormatAdapter implements Closeable {
 
   private final Source source;
 
+  private Option<BaseQuarantineTableWriter> quarantineTableWriterInterface = Option.empty();
+
   public SourceFormatAdapter(Source source) {
     this.source = source;
+  }
+
+  public SourceFormatAdapter(Source source, Option<BaseQuarantineTableWriter> quarantineTableWriterInterface) {
+    this.quarantineTableWriterInterface = quarantineTableWriterInterface;
+    this.source = source;
+  }
+
+  /**
+   * transform input rdd of json string to generic records with support for adding error events to quarantine table
+   * @param inputBatch
+   * @return
+   */
+  private JavaRDD<GenericRecord> transformJsonToGenericRdd(InputBatch<JavaRDD<String>> inputBatch) {
+    AvroConvertor convertor = new AvroConvertor(inputBatch.getSchemaProvider().getSourceSchema());
+    return inputBatch.getBatch().map(rdd -> {
+      if (quarantineTableWriterInterface.isPresent()) {
+        JavaRDD<Either<GenericRecord,String>> javaRDD = rdd.map(convertor::fromJsonWithError);
+        quarantineTableWriterInterface.get().addErrorEvents(javaRDD.filter(x -> x.isRight()).map(x ->
+            new QuarantineJsonEvent(x.right().get(), QuarantineEvent.QuarantineReason.JSON_AVRO_DESERIALIZATION_FAILURE)));
+        return javaRDD.filter(x -> x.isLeft()).map(x -> x.left().get());
+      } else {
+        return rdd.map(convertor::fromJson);
+      }
+    }).orElse(null);
+  }
+
+  /**
+   * transform datasets with error events when quarantine table is enabled
+   * @param eventsRow
+   * @return
+   */
+  public Option<Dataset<Row>> transformDatasetWithQuarantineEvents(Option<Dataset<Row>> eventsRow) {
+    return eventsRow.map(dataset -> {
+          if (quarantineTableWriterInterface.isPresent() && Arrays.stream(dataset.columns()).collect(Collectors.toList())
+              .contains(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME)) {
+            quarantineTableWriterInterface.get().addErrorEvents(dataset.filter(new Column(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME).isNotNull())
+                .select(new Column(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME)).toJavaRDD().map(ev ->
+                    new QuarantineJsonEvent(ev.getString(0), QuarantineEvent.QuarantineReason.JSON_ROW_DESERIALIZATION_FAILURE)));
+            return dataset.filter(new Column(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).drop(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME);
+          }
+          return dataset;
+        }
+    );
   }
 
   /**
@@ -64,23 +120,22 @@ public final class SourceFormatAdapter implements Closeable {
         return ((Source<JavaRDD<GenericRecord>>) source).fetchNext(lastCkptStr, sourceLimit);
       case JSON: {
         InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCkptStr, sourceLimit);
-        AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
-        return new InputBatch<>(Option.ofNullable(r.getBatch().map(rdd -> rdd.map(convertor::fromJson)).orElse(null)),
-            r.getCheckpointForNextBatch(), r.getSchemaProvider());
+        JavaRDD<GenericRecord> eventsRdd = transformJsonToGenericRdd(r);
+        return new InputBatch<>(Option.ofNullable(eventsRdd),r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       case ROW: {
         InputBatch<Dataset<Row>> r = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(
             rdd -> {
-              SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
-              return ((originalProvider instanceof FilebasedSchemaProvider) || (originalProvider instanceof SchemaRegistryProvider))
-                  // If the source schema is specified through Avro schema,
-                  // pass in the schema for the Row-to-Avro conversion
-                  // to avoid nullability mismatch between Avro schema and Row schema
-                  ? HoodieSparkUtils.createRdd(rdd, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, true,
-                  org.apache.hudi.common.util.Option.ofNullable(r.getSchemaProvider().getSourceSchema())
-              ).toJavaRDD() : HoodieSparkUtils.createRdd(rdd,
-                  HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, false, Option.empty()).toJavaRDD();
+                SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
+                return (originalProvider instanceof FilebasedSchemaProvider || (originalProvider instanceof SchemaRegistryProvider))
+                    // If the source schema is specified through Avro schema,
+                    // pass in the schema for the Row-to-Avro conversion
+                    // to avoid nullability mismatch between Avro schema and Row schema
+                    ? HoodieSparkUtils.createRdd(rdd, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, true,
+                    org.apache.hudi.common.util.Option.ofNullable(r.getSchemaProvider().getSourceSchema())
+                ).toJavaRDD() : HoodieSparkUtils.createRdd(rdd,
+                    HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, false, Option.empty()).toJavaRDD();
             })
             .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
@@ -101,7 +156,9 @@ public final class SourceFormatAdapter implements Closeable {
   public InputBatch<Dataset<Row>> fetchNewDataInRowFormat(Option<String> lastCkptStr, long sourceLimit) {
     switch (source.getSourceType()) {
       case ROW:
-        return ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<Dataset<Row>> datasetInputBatch = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
+        return new InputBatch<>(transformDatasetWithQuarantineEvents(datasetInputBatch.getBatch()),
+            datasetInputBatch.getCheckpointForNextBatch(), datasetInputBatch.getSchemaProvider());
       case AVRO: {
         InputBatch<JavaRDD<GenericRecord>> r = ((Source<JavaRDD<GenericRecord>>) source).fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
@@ -118,11 +175,23 @@ public final class SourceFormatAdapter implements Closeable {
       case JSON: {
         InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
-        StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema);
-        return new InputBatch<>(
-            Option.ofNullable(
-                r.getBatch().map(rdd -> source.getSparkSession().read().schema(dataType).json(rdd)).orElse(null)),
-            r.getCheckpointForNextBatch(), r.getSchemaProvider());
+        if (quarantineTableWriterInterface.isPresent()) {
+          StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema)
+              .add(new StructField(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME, DataTypes.StringType, true, Metadata.empty()));
+          Option<Dataset<Row>> dataset = r.getBatch().map(rdd -> source.getSparkSession().read()
+              .option("mode", "PERMISSIVE").option("columnNameOfCorruptRecord", QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME).schema(dataType)
+              .json(rdd));
+          Option<Dataset<Row>> eventsDataset = transformDatasetWithQuarantineEvents(dataset);
+          return new InputBatch<>(
+              eventsDataset,
+              r.getCheckpointForNextBatch(), r.getSchemaProvider());
+        } else {
+          StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema);
+          return new InputBatch<>(
+              Option.ofNullable(
+                  r.getBatch().map(rdd -> source.getSparkSession().read().schema(dataType).json(rdd)).orElse(null)),
+              r.getCheckpointForNextBatch(), r.getSchemaProvider());
+        }
       }
       case PROTO: {
         InputBatch<JavaRDD<Message>> r = ((Source<JavaRDD<Message>>) source).fetchNext(lastCkptStr, sourceLimit);

@@ -19,24 +19,39 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.utilities.deltastreamer.BaseQuarantineTableWriter;
+import org.apache.hudi.utilities.deltastreamer.QuarantineJsonEvent;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
+import static org.apache.hudi.config.HoodieQuarantineTableConfig.QUARANTINE_TABLE_BASE_PATH;
+import static org.apache.hudi.config.HoodieQuarantineTableConfig.QUARANTINE_TARGET_TABLE;
+import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET;
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecords;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -174,5 +189,128 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   void sendMessagesToKafka(String topic, int count, int numPartitions) {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", count)));
+  }
+
+  @Test
+  public void testErrorEventsForDataInRowForamt() throws IOException {
+    // topic setup.
+    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInRowForamt";
+
+    testUtils.createTopic(topic, 2);
+    List<TopicPartition> topicPartitions = new ArrayList<>();
+    TopicPartition topicPartition0 = new TopicPartition(topic, 0);
+    topicPartitions.add(topicPartition0);
+    TopicPartition topicPartition1 = new TopicPartition(topic, 1);
+    topicPartitions.add(topicPartition1);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(topic, new String[]{"error_event1", "error_event2"});
+
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
+    props.put(QUARANTINE_TABLE_BASE_PATH.key(),"/tmp/qurantine_table_test/json_kafka_row_events");
+    props.put(QUARANTINE_TARGET_TABLE.key(),"json_kafka_row_events");
+    props.put("hoodie.base.path","/tmp/json_kafka_row_events");
+    Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    Option<BaseQuarantineTableWriter> quarantineTableWriterInterface = Option.of(new BaseQuarantineTableWriter<QuarantineJsonEvent>(new HoodieDeltaStreamer.Config(),
+        spark(), props, jsc(), fs()) {
+      List<JavaRDD<HoodieAvroRecord>> errorEvents = new LinkedList();
+      @Override
+      public HoodieWriteConfig getQuarantineTableWriteConfig() {
+        return null;
+      }
+
+      @Override
+      public HoodieDeltaStreamer.Config getSourceDeltaStreamerConfig() {
+        return null;
+      }
+
+      @Override
+      public void addErrorEvents(JavaRDD errorEvent) {
+        errorEvents.add(errorEvent.map(r -> new HoodieAvroRecord<>(new HoodieKey(), null)));
+      }
+
+      @Override
+      public Option<JavaRDD<HoodieAvroRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+        return Option.of(errorEvents.stream().reduce((rdd1, rdd2) -> rdd1.union(rdd2)).get());
+      }
+
+      @Override
+      public String startCommit() {
+        return HoodieActiveTimeline.createNewInstantTime();
+      }
+
+      @Override
+      public boolean upsertAndCommit(String instantTime, String baseTableInstantTime, Option commitedInstantTime) {
+        return false;
+      }
+    });
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource,quarantineTableWriterInterface);
+    String instantTime =  quarantineTableWriterInterface.get().startCommit();
+    assertEquals(1000, kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE).getBatch().get().count());
+    assertEquals(2,((JavaRDD)quarantineTableWriterInterface.get().getErrorEvents(instantTime, Option.empty()).get()).count());
+  }
+
+  @Test
+  public void testErrorEventsForDataInAvroFormat() throws IOException {
+
+    // topic setup.
+    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInAvroFormat";
+
+    testUtils.createTopic(topic, 2);
+    List<TopicPartition> topicPartitions = new ArrayList<>();
+    TopicPartition topicPartition0 = new TopicPartition(topic, 0);
+    topicPartitions.add(topicPartition0);
+    TopicPartition topicPartition1 = new TopicPartition(topic, 1);
+    topicPartitions.add(topicPartition1);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(topic, new String[]{"error_event1", "error_event2"});
+
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
+    props.put(QUARANTINE_TABLE_BASE_PATH.key(),"/tmp/qurantine_table_test/json_kafka_events");
+    props.put(QUARANTINE_TARGET_TABLE.key(),"json_kafka_events");
+    props.put("hoodie.base.path","/tmp/json_kafka_events");
+
+    Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    Option<BaseQuarantineTableWriter> quarantineTableWriterInterface = Option.of(new BaseQuarantineTableWriter<QuarantineJsonEvent>(new HoodieDeltaStreamer.Config(),
+        spark(), props, jsc(), fs()) {
+      List<JavaRDD<HoodieAvroRecord>> errorEvents = new LinkedList();
+      @Override
+      public HoodieWriteConfig getQuarantineTableWriteConfig() {
+        return null;
+      }
+
+      @Override
+      public HoodieDeltaStreamer.Config getSourceDeltaStreamerConfig() {
+        return null;
+      }
+
+      @Override
+      public void addErrorEvents(JavaRDD errorEvent) {
+        errorEvents.add(errorEvent.map(r -> new HoodieAvroRecord<>(new HoodieKey(), null)));
+      }
+
+      @Override
+      public Option<JavaRDD<HoodieAvroRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+        return Option.of(errorEvents.stream().reduce((rdd1, rdd2) -> rdd1.union(rdd2)).get());
+      }
+
+      @Override
+      public String startCommit() {
+        return HoodieActiveTimeline.createNewInstantTime();
+      }
+
+      @Override
+      public boolean upsertAndCommit(String instantTime, String baseTableInstantTime, Option commitedInstantTime) {
+        return false;
+      }
+    });
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource,quarantineTableWriterInterface);
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(),Long.MAX_VALUE);
+    assertEquals(1000,fetch1.getBatch().get().count());
+    String instantTime =  quarantineTableWriterInterface.get().startCommit();
+    assertEquals(2, ((JavaRDD)quarantineTableWriterInterface.get().getErrorEvents(instantTime,Option.empty()).get()).count());
   }
 }
