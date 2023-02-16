@@ -80,9 +80,7 @@ public class Metrics {
       registerHoodieCommonMetrics();
       reporter.report();
       LOG.info("Stopping the metrics reporter...");
-      if (reporter != null) {
-        reporter.stop();
-      }
+      reporter.stop();
     } catch (Exception e) {
       LOG.warn("Error while closing reporter", e);
     } finally {
