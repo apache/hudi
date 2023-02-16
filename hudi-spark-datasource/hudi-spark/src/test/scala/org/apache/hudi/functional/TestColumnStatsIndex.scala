@@ -247,7 +247,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       // We have to include "c1", since we sort the expected outputs by this column
       val requestedColumns = Seq("c4", "c1")
 
-      val expectedColStatsSchema = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex.toSet, sourceTableSchema)
+      val (expectedColStatsSchema, targetIndexedColumns) = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex.toSet, sourceTableSchema)
       // Match against expected column stats table
       val expectedColStatsIndexTableDf =
         spark.read
@@ -300,7 +300,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       val requestedColumns = sourceTableSchema.fieldNames
 
-      val expectedColStatsSchema = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex.toSet, sourceTableSchema)
+      val (expectedColStatsSchema, targetIndexedColumns) = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex.toSet, sourceTableSchema)
       val expectedColStatsIndexUpdatedDF =
         spark.read
           .schema(expectedColStatsSchema)
@@ -559,7 +559,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
         customIndexedColumns.asScala.toSet
       }
     }
-    val expectedColStatsSchema = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
+    val (expectedColStatsSchema, targetIndexedColumns) = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
     val validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue")
 
     columnStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory) { transposedColStatsDF =>
