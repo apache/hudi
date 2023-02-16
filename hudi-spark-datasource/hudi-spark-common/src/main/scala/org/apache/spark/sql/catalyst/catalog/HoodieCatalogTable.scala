@@ -280,7 +280,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
           s"Missing schema for Create Table: $catalogTableName")
         val schema = table.schema
         val options = extraTableConfig(tableExists = false, globalTableConfigs) ++
-          HoodieOptionConfig.mappingSqlOptionToTableConfig(sqlOptions)
+          mapSqlOptionsToTableConfigs(sqlOptions)
         //(addMetaFields(schema), options)
         (addMetaFieldsWithHashFieldIfNeeded(schema, options), options)
 
