@@ -52,27 +52,25 @@ object HoodieCatalogUtils {
     if (cachedPlan != null) {
       // NOTE: Provided that this table is still cached, following operation wouldn't trigger
       //       subsequent resolving and ultimately listing of the table
-      val queryExecution = spark.withActive {
-        spark.sessionState.executePlan(UnresolvedRelation(tableId))
-      }
+      val table = spark.table(tableId)
 
       if (tableMetadata.tableType == CatalogTableType.VIEW) {
         // Temp or persistent views: refresh (or invalidate) any metadata/data cached
         // in the plan recursively
-        queryExecution.analyzed.refresh()
+        table.queryExecution.analyzed.refresh()
       } else {
         // Non-temp tables: refresh the metadata cache
-        sessionCatalog.invalidateCachedTable(tableId)
+        sessionCatalog.refreshTable(tableId)
       }
 
       // If this table is cached as an InMemoryRelation, drop the original
       // cached version and make the new version cached lazily
-      val cache = spark.sharedState.cacheManager.lookupCachedData(queryExecution.logical)
+      val cache = spark.sharedState.cacheManager.lookupCachedData(table)
 
       // Uncache the logical plan
       // NOTE: This is a no-op for the table itself if it's not cached, but will invalidate all
       // caches referencing this table.
-      spark.sharedState.cacheManager.uncacheQuery(spark, cascade = true, plan = queryExecution.logical)
+      spark.sharedState.cacheManager.uncacheQuery(table, cascade = true)
 
       // TODO can we refresh the CacheManager if we're not refreshing the relation?
       //if (cache.nonEmpty) {
