@@ -127,8 +127,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
 
-  public static final ConfigProperty<String> SPARK_WRITE_STORAGE_LEVEL_VALUE = ConfigProperty
-       .key("hoodie.spark.write.storage.level")
+  public static final ConfigProperty<String> TAGGED_RECORD_STORAGE_LEVEL_VALUE = ConfigProperty
+       .key("hoodie.write.tagged.record.storage.level")
        .defaultValue("MEMORY_AND_DISK_SER")
        .withDocumentation("Determine what level of persistence is used to cache write RDDs. "
           + "Refer to org.apache.spark.storage.StorageLevel for different values");
@@ -1075,8 +1075,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getSchema();
   }
 
-  public String getSparkWriteStorageLevel() {
-    return getString(SPARK_WRITE_STORAGE_LEVEL_VALUE);
+  public String getTaggedRecordStorageLevel() {
+    return getString(TAGGED_RECORD_STORAGE_LEVEL_VALUE);
   }
 
   public String getInternalSchema() {

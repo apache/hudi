@@ -150,7 +150,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     // Cache the tagged records, so we don't end up computing both
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
     if (inputRDD.getStorageLevel() == StorageLevel.NONE()) {
-      String writeStorageLevel = config.getSparkWriteStorageLevel();
+      String writeStorageLevel = config.getTaggedRecordStorageLevel();
       inputRDD.persist(StorageLevel.fromString(writeStorageLevel));
     } else {
       LOG.info("RDD PreppedRecords was persisted at: " + inputRDD.getStorageLevel());
