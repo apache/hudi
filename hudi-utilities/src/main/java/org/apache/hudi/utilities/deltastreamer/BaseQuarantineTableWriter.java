@@ -30,7 +30,7 @@ import org.apache.spark.sql.SparkSession;
 
 public abstract class BaseQuarantineTableWriter<T extends QuarantineEvent> {
 
-  String QUARANTINE_PAYLOAD_CLASS = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload";
+  public static String QUARANTINE_PAYLOAD_CLASS = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload";
 
   public static String QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME = "_corrupt_record";
 
