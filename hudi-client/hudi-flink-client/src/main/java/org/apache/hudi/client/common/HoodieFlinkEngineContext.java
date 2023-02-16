@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -166,17 +167,17 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public void putCachedDataIds(String basePath, String instantTime, int... ids) {
+  public void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids) {
     // no operation for now
   }
 
   @Override
-  public List<Integer> getCachedDataIds(String basePath, String instantTime) {
+  public List<Integer> getCachedDataIds(HoodieDataCacheKey cacheKey) {
     return Collections.emptyList();
   }
 
   @Override
-  public List<Integer> removeCachedDataIds(String basePath, String instantTime) {
+  public List<Integer> removeCachedDataIds(HoodieDataCacheKey cacheKey) {
     return Collections.emptyList();
   }
 

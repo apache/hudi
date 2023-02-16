@@ -22,6 +22,7 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
@@ -41,17 +42,18 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.sql.SQLContext;
-import scala.Tuple2;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import scala.Tuple2;
 
 /**
  * A Spark engine implementation of HoodieEngineContext.
@@ -61,7 +63,8 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   private static final Logger LOG = LogManager.getLogger(HoodieSparkEngineContext.class);
   private final JavaSparkContext javaSparkContext;
   private final SQLContext sqlContext;
-  private final Map<Pair<String, String>, List<Integer>> cachedRddIds = new ConcurrentHashMap<>();
+  private final Map<HoodieDataCacheKey, List<Integer>> cachedRddIds = new HashMap<>();
+  private final Object cacheLock = new Object();
 
   public HoodieSparkEngineContext(JavaSparkContext jsc) {
     this(jsc, SQLContext.getOrCreate(jsc.sc()));
@@ -186,22 +189,27 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public void putCachedDataIds(String basePath, String instantTime, int... ids) {
-    Pair<String, String> key = Pair.of(basePath, instantTime);
-    cachedRddIds.putIfAbsent(key, new ArrayList<>());
-    for (int id : ids) {
-      cachedRddIds.get(key).add(id);
+  public void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids) {
+    synchronized (cacheLock) {
+      cachedRddIds.putIfAbsent(cacheKey, new ArrayList<>());
+      for (int id : ids) {
+        cachedRddIds.get(cacheKey).add(id);
+      }
     }
   }
 
   @Override
-  public List<Integer> getCachedDataIds(String basePath, String instantTime) {
-    return cachedRddIds.getOrDefault(Pair.of(basePath, instantTime), Collections.emptyList());
+  public List<Integer> getCachedDataIds(HoodieDataCacheKey cacheKey) {
+    synchronized (cacheLock) {
+      return cachedRddIds.getOrDefault(cacheKey, Collections.emptyList());
+    }
   }
 
   @Override
-  public List<Integer> removeCachedDataIds(String basePath, String instantTime) {
-    List<Integer> removed = cachedRddIds.remove(Pair.of(basePath, instantTime));
-    return removed == null ? Collections.emptyList() : removed;
+  public List<Integer> removeCachedDataIds(HoodieDataCacheKey cacheKey) {
+    synchronized (cacheLock) {
+      List<Integer> removed = cachedRddIds.remove(cacheKey);
+      return removed == null ? Collections.emptyList() : removed;
+    }
   }
 }

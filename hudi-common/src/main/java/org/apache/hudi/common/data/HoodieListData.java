@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.data;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -97,6 +98,11 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
 
   @Override
   public void persist(String level) {
+    // No OP
+  }
+
+  @Override
+  public void persist(String level, HoodieEngineContext engineContext, HoodieDataCacheKey cacheKey) {
     // No OP
   }
 

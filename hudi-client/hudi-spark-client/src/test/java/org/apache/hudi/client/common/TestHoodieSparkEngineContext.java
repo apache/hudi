@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client.common;
 
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -42,9 +43,9 @@ class TestHoodieSparkEngineContext extends SparkClientFunctionalTestHarness {
   void testAddRemoveCachedDataIds() {
     String basePath = "/tmp/foo";
     String instantTime = "000";
-    context.putCachedDataIds(basePath, instantTime, 1, 2, 3);
-    assertEquals(Arrays.asList(1, 2, 3), context.getCachedDataIds(basePath, instantTime));
-    assertEquals(Arrays.asList(1, 2, 3), context.removeCachedDataIds(basePath, instantTime));
-    assertTrue(context.getCachedDataIds(basePath, instantTime).isEmpty());
+    context.putCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime), 1, 2, 3);
+    assertEquals(Arrays.asList(1, 2, 3), context.getCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime)));
+    assertEquals(Arrays.asList(1, 2, 3), context.removeCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime)));
+    assertTrue(context.getCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime)).isEmpty());
   }
 }
