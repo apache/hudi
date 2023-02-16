@@ -29,46 +29,51 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.util.Lazy;
 
 /**
  * Utils for JSON serialization and deserialization.
  */
 public class JsonUtils {
 
-  private static final ObjectMapper MAPPER = new ObjectMapper();
-
-  static {
-    registerModules(MAPPER);
-
-    // We're writing out dates as their string representations instead of (int) timestamps
-    MAPPER.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-    // NOTE: This is necessary to make sure that w/ Jackson >= 2.11 colon is not infixed
-    //       into the timezone value ("+00:00" as opposed to "+0000" before 2.11)
-    //       While Jackson is able to parse both of these formats, we keep it as false
-    //       to make sure metadata produced by Hudi stays consistent across Jackson versions
-    configureColonInTimezone(MAPPER);
-
-    MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-    // We need to exclude custom getters, setters and creators which can use member fields
-    // to derive new fields, so that they are not included in the serialization
-    MAPPER.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-    MAPPER.setVisibility(PropertyAccessor.GETTER, JsonAutoDetect.Visibility.NONE);
-    MAPPER.setVisibility(PropertyAccessor.IS_GETTER, JsonAutoDetect.Visibility.NONE);
-    MAPPER.setVisibility(PropertyAccessor.SETTER, JsonAutoDetect.Visibility.NONE);
-    MAPPER.setVisibility(PropertyAccessor.CREATOR, JsonAutoDetect.Visibility.NONE);
-  }
+  private static final Lazy<ObjectMapper> MAPPER = Lazy.lazily(JsonUtils::instantiateObjectMapper);
 
   public static ObjectMapper getObjectMapper() {
-    return MAPPER;
+    return MAPPER.get();
   }
 
   public static String toString(Object value) {
     try {
-      return MAPPER.writeValueAsString(value);
+      return MAPPER.get().writeValueAsString(value);
     } catch (JsonProcessingException e) {
       throw new HoodieIOException(
           "Fail to convert the class: " + value.getClass().getName() + " to Json String", e);
     }
+  }
+
+  private static ObjectMapper instantiateObjectMapper() {
+    ObjectMapper mapper = new ObjectMapper();
+
+    registerModules(mapper);
+
+    // We're writing out dates as their string representations instead of (int) timestamps
+    mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    // NOTE: This is necessary to make sure that w/ Jackson >= 2.11 colon is not infixed
+    //       into the timezone value ("+00:00" as opposed to "+0000" before 2.11)
+    //       While Jackson is able to parse both of these formats, we keep it as false
+    //       to make sure metadata produced by Hudi stays consistent across Jackson versions
+    configureColonInTimezone(mapper);
+
+    mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    // We need to exclude custom getters, setters and creators which can use member fields
+    // to derive new fields, so that they are not included in the serialization
+    mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
+    mapper.setVisibility(PropertyAccessor.GETTER, JsonAutoDetect.Visibility.NONE);
+    mapper.setVisibility(PropertyAccessor.IS_GETTER, JsonAutoDetect.Visibility.NONE);
+    mapper.setVisibility(PropertyAccessor.SETTER, JsonAutoDetect.Visibility.NONE);
+    mapper.setVisibility(PropertyAccessor.CREATOR, JsonAutoDetect.Visibility.NONE);
+
+    return mapper;
   }
 
   private static void configureColonInTimezone(ObjectMapper mapper) {
