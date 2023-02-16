@@ -36,11 +36,9 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
 
-  private static final int WRITTEN_RECORDS_THRESHOLD_FOR_FILE_SIZE_CHECK = 1000;
-
   private final AtomicLong writtenRecordCount = new AtomicLong(0);
   private final long maxFileSize;
-  private long lastCachedDataSize = -1;
+  private long recordNumForNextCheck = 100;
 
   public HoodieBaseParquetWriter(Path file,
                                  HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
@@ -65,14 +63,18 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
   }
 
   public boolean canWrite() {
-    // TODO we can actually do evaluation more accurately:
-    //      if we cache last data size check, since we account for how many records
-    //      were written we can accurately project avg record size, and therefore
-    //      estimate how many more records we can write before cut off
-    if (lastCachedDataSize == -1 || getWrittenRecordCount() % WRITTEN_RECORDS_THRESHOLD_FOR_FILE_SIZE_CHECK == 0) {
-      lastCachedDataSize = getDataSize();
+    if (getWrittenRecordCount() >= recordNumForNextCheck) {
+      long dataSize = getDataSize();
+      long avgRecordSize = dataSize / getWrittenRecordCount();
+      // Follow the parquet block size check logic here, return false
+      // if it is within ~2 records of the limit
+      if (dataSize > (maxFileSize - avgRecordSize * 2)) {
+        return false;
+      }
+      // Do check it in the halfway
+      recordNumForNextCheck = (recordNumForNextCheck + maxFileSize / avgRecordSize) / 2;
     }
-    return lastCachedDataSize < maxFileSize;
+    return true;
   }
 
   @Override
