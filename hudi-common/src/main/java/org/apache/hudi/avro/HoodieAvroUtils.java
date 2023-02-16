@@ -843,7 +843,7 @@ public class HoodieAvroUtils {
           fieldNames.push(fieldName);
           if (oldSchema.getField(field.name()) != null && !renameCols.containsKey(field.name())) {
             Schema.Field oldField = oldSchema.getField(field.name());
-            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames, validate));
+            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), field.schema(), renameCols, fieldNames, validate));
           } else {
             String fieldFullName = createFullName(fieldNames);
             String fieldNameFromOldSchema = renameCols.getOrDefault(fieldFullName, "");
@@ -851,13 +851,13 @@ public class HoodieAvroUtils {
             if (oldSchema.getField(fieldNameFromOldSchema) != null) {
               // find rename
               Schema.Field oldField = oldSchema.getField(fieldNameFromOldSchema);
-              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames, validate));
+              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), field.schema(), renameCols, fieldNames, validate));
             } else {
               // deal with default value
-              if (fields.get(i).defaultVal() instanceof JsonProperties.Null) {
+              if (field.defaultVal() instanceof JsonProperties.Null) {
                 newRecord.put(i, null);
               } else {
-                newRecord.put(i, fields.get(i).defaultVal());
+                newRecord.put(i, field.defaultVal());
               }
             }
           }
