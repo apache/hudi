@@ -90,6 +90,7 @@ object HoodieSparkSqlWriter {
             asyncClusteringTriggerFn: Option[SparkRDDWriteClient[_] => Unit] = Option.empty,
             extraPreCommitFn: Option[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]] = Option.empty):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
+    
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
     val path = optParams("path")
     val basePath = new Path(path)
