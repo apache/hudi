@@ -63,8 +63,11 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.{SPARK_VERSION, SparkContext}
-
 import java.util.function.BiConsumer
+
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.spark.sql.functions._
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters.setAsJavaSetConverter
 import scala.collection.mutable
@@ -80,7 +83,7 @@ object HoodieSparkSqlWriter {
   def write(sqlContext: SQLContext,
             mode: SaveMode,
             optParams: Map[String, String],
-            df: DataFrame,
+            dataFrame: DataFrame,
             hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
             hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty,
             asyncCompactionTriggerFn: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]] => Unit] = Option.empty,
@@ -88,7 +91,6 @@ object HoodieSparkSqlWriter {
             extraPreCommitFn: Option[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]] = Option.empty)
   : (Boolean, common.util.Option[String], common.util.Option[String], common.util.Option[String],
     SparkRDDWriteClient[HoodieRecordPayload[Nothing]], HoodieTableConfig) = {
-
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
     val path = optParams("path")
     val basePath = new Path(path)
@@ -164,7 +166,7 @@ object HoodieSparkSqlWriter {
         val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER)
         val populateMetaFields = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
         val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT);
-        HoodieTableMetaClient.withPropertyBuilder()
+        val hoodieTableMetaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(tableType)
           .setDatabaseName(databaseName)
           .setTableName(tblName)
@@ -186,10 +188,21 @@ object HoodieSparkSqlWriter {
           .setPartitionMetafileUseBaseFormat(useBaseFormatMetaFile)
           .setShouldDropPartitionColumns(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.DROP_PARTITION_COLUMNS))
           .setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)))
-          .initTable(sparkContext.hadoopConfiguration, path)
+        val (hashPartitionFields, hashPartitionNum) = getHashPartitionParam(optParams)
+        if(containHashPartitionParam(partitionColumns, hashPartitionFields)){
+          hoodieConfig.setValue(HoodieTableConfig.HASH_PARTITION_FIELDS,hashPartitionFields)
+          hoodieConfig.setValue(HoodieTableConfig.HASH_PARTITION_NUM,hashPartitionNum.toString)
+          hoodieTableMetaClient.setHashPartitionNum(hashPartitionNum)
+             .setHashPartitionFields(hashPartitionFields)
+        }
+        hoodieTableMetaClient.initTable(sparkContext.hadoopConfiguration, path)
       }
       tableConfig = tableMetaClient.getTableConfig
-
+      val hashPartitionFields = tableConfig.getHashPartitionFields.orElse(null)
+      val df = if(containHashPartitionParam(partitionColumns, hashPartitionFields))
+        addHashPartitionCol(hashPartitionFields,
+          Integer.parseInt(tableConfig.getHashPartitionNum), dataFrame)
+      else dataFrame
       val commitActionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
 
       // Register Avro classes ([[Schema]], [[GenericData]]) w/ Kryo
@@ -370,6 +383,59 @@ object HoodieSparkSqlWriter {
 
       (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
     }
+  }
+
+  private def getHashPartitionParam(optParams: Map[String, String]): ( String, Integer)  = {
+    val hashPartitionFields = optParams.get(KeyGeneratorOptions.HASH_PARTITION_FIELD_NAME.key).getOrElse(
+      optParams.get(HoodieTableConfig.HASH_PARTITION_FIELDS.key).getOrElse("")
+    )
+    val hashPartitionNum = optParams.get(KeyGeneratorOptions.HASH_PARTITION_NUM.key).getOrElse(
+        optParams.get(HoodieTableConfig.HASH_PARTITION_NUM.key).getOrElse(KeyGeneratorOptions.HASH_PARTITION_NUM.defaultValue())
+    )
+    (hashPartitionFields, Integer.parseInt(hashPartitionNum.toString))
+  }
+
+  private def containHashPartitionParam(
+                                   partitionFields: String,
+                                   hashPartitionFields: String): Boolean = {
+    if(partitionFields != null && partitionFields.split(",").map(x => x.trim).contains(HoodieRecord.HASH_PARTITION_FIELD)){
+      if(hashPartitionFields.isEmpty)
+        throw new HoodieException(s"${KeyGeneratorOptions.HASH_PARTITION_FIELD_NAME.key} is empty," +
+          s" but ${KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key} contains ${HoodieRecord.HASH_PARTITION_FIELD}")
+      true
+    }else{
+      if(!hashPartitionFields.isEmpty)
+        throw new HoodieException(s"${KeyGeneratorOptions.HASH_PARTITION_FIELD_NAME.key} is not empty," +
+          s" but ${KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key} does not contain ${HoodieRecord.HASH_PARTITION_FIELD}")
+      else false
+    }
+  }
+
+  private def containHashPartitionParam(
+                                         partitionFields: String,
+                                         hashPartitionFields:  Array[String]): Boolean = {
+    if(partitionFields != null && partitionFields.split(",").map(x => x.trim).contains(HoodieRecord.HASH_PARTITION_FIELD)){
+      if(hashPartitionFields == null || hashPartitionFields.size == 0)
+        throw new HoodieException(s"${HoodieTableConfig.HASH_PARTITION_FIELDS.key} is empty," +
+          s" but ${HoodieTableConfig.PARTITION_FIELDS.key} contains ${HoodieRecord.HASH_PARTITION_FIELD}")
+      true
+    }else{
+      if(hashPartitionFields != null && hashPartitionFields.size != 0)
+        throw new HoodieException(s"${HoodieTableConfig.PARTITION_FIELDS.key}  does not contain ${HoodieRecord.HASH_PARTITION_FIELD}," +
+          s" but ${HoodieTableConfig.HASH_PARTITION_FIELDS.key}  is not empty.")
+      false
+    }
+  }
+
+  private def addHashPartitionCol(
+                                   hashPartitionFields: Array[String],
+                                   num: Integer,
+                                   df: DataFrame): DataFrame = {
+    val getHashPartitionValue = (cols: Seq[Any], num : Int) => ((cols.filter(_ != null).mkString.trim.hashCode & Integer.MAX_VALUE) % num).toString
+    val addHashPartitionColUdf = udf(getHashPartitionValue)
+    val hashPartitionFieldCols = hashPartitionFields.map(hashPartitionField => col(hashPartitionField.trim))
+    //df.withColumn(HoodieRecord.HASH_PARTITION_FIELD, addCol(hashPartitionCols, lit(num)))
+    df.select(addHashPartitionColUdf(array(hashPartitionFieldCols:_*), lit(num)).as(HoodieRecord.HASH_PARTITION_FIELD), expr("*"))
   }
 
   /**
@@ -628,7 +694,6 @@ object HoodieSparkSqlWriter {
                 df: DataFrame,
                 hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
                 hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty): Boolean = {
-
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
     val path = optParams("path")
     val basePath = new Path(path)
@@ -682,7 +747,7 @@ object HoodieSparkSqlWriter {
           String.valueOf(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue())
         ))
 
-        HoodieTableMetaClient.withPropertyBuilder()
+        val hoodieTableMetaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
           .setRecordKeyFields(recordKeyFields)
@@ -702,7 +767,15 @@ object HoodieSparkSqlWriter {
           .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
           .setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)))
           .setPartitionMetafileUseBaseFormat(useBaseFormatMetaFile)
-          .initTable(sparkContext.hadoopConfiguration, path)
+        if(partitionColumns.split(",").map(x => x.trim).contains(HoodieRecord.HASH_PARTITION_FIELD)){
+          val hashPartitionNum = java.lang.Integer.parseInt(parameters.getOrElse(
+            HoodieTableConfig.HASH_PARTITION_NUM.key(),
+            String.valueOf(HoodieTableConfig.HASH_PARTITION_NUM.defaultValue())
+          ))
+          hoodieTableMetaClient.setHashPartitionNum(hashPartitionNum)
+          .setHashPartitionFields(parameters.getOrElse(HoodieTableConfig.HASH_PARTITION_FIELDS.key(),null))
+        }
+        hoodieTableMetaClient.initTable(sparkContext.hadoopConfiguration, path)
       }
 
       val jsc = new JavaSparkContext(sqlContext.sparkContext)

@@ -35,7 +35,6 @@ import org.apache.hudi.util.JFunction
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
-import java.util.function.{Function => JavaFunction}
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 
@@ -361,10 +360,19 @@ object DataSourceWriteOptions {
 
   /**
    * Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`. Actual
-   * value obtained by invoking .toString()
    */
   val PARTITIONPATH_FIELD = KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME
 
+  /**
+    * Determine the number of hash partitions in the hudi table
+    */
+  val HASH_PARTITION_NUM = KeyGeneratorOptions.HASH_PARTITION_NUM
+
+  /**
+    * Hash partition field. Use its value to generate the hash value of the hash partition field.
+    * value obtained by invoking .toString()
+    */
+  val HASH_PARTITION_FIELD = KeyGeneratorOptions.HASH_PARTITION_FIELD_NAME
   /**
    * Flag to indicate whether to use Hive style partitioning.
    * If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
