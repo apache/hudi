@@ -371,8 +371,8 @@ object DataSourceWriteOptions {
   val HASH_PARTITION_NUM = KeyGeneratorOptions.HASH_PARTITION_NUM
 
   /**
-    * Hash partition field. Use its value to generate the hash value of the hash partition field. 
-    * value obtained by invoking .toString() 
+    * Hash partition field. Use its value to generate the hash value of the hash partition field.
+    * value obtained by invoking .toString()
     */
   val HASH_PARTITION_FIELD = KeyGeneratorOptions.HASH_PARTITION_FIELD_NAME
   /**
