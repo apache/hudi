@@ -58,12 +58,12 @@ Prerequisites for building Apache Hudi:
 * Unix-like system (like Linux, Mac OS X)
 * Java 8 (Java 9 or 10 may work)
 * Git
-* Maven (>=3.3.1)
+* Maven 3.3.1 or later (or invoke the wrapper with ./mvnw for Maven commands)
 
 ```
 # Checkout code and build
 git clone https://github.com/apache/hudi.git && cd hudi
-mvn clean package -DskipTests
+mvnw clean package -DskipTests
 
 # Start command
 spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
@@ -77,7 +77,7 @@ To build for integration tests that include `hudi-integ-test-bundle`, use `-Dint
 To build the Javadoc for all Java and Scala classes:
 ```
 # Javadoc generated under target/site/apidocs
-mvn clean javadoc:aggregate -Pjavadocs
+mvnw clean javadoc:aggregate -Pjavadocs
 ```
 
 ### Build with different Spark versions
@@ -98,13 +98,13 @@ Refer to the table below for building with different Spark and Scala versions.
 For example,
 ```
 # Build against Spark 3.2.x
-mvn clean package -DskipTests -Dspark3.2 -Dscala-2.12
+mvnw clean package -DskipTests -Dspark3.2 -Dscala-2.12
 
 # Build against Spark 3.1.x
-mvn clean package -DskipTests -Dspark3.1 -Dscala-2.12
+mvnw clean package -DskipTests -Dspark3.1 -Dscala-2.12
 
 # Build against Spark 2.4.4 and Scala 2.11
-mvn clean package -DskipTests -Dspark2.4
+mvnw clean package -DskipTests -Dspark2.4
 ```
 
 #### What about "spark-avro" module?
@@ -127,17 +127,17 @@ The default Flink version supported is 1.14. Refer to the table below for buildi
 
 Unit tests can be run with maven profile `unit-tests`.
 ```
-mvn -Punit-tests test
+mvnw -Punit-tests test
 ```
 
 Functional tests, which are tagged with `@Tag("functional")`, can be run with maven profile `functional-tests`.
 ```
-mvn -Pfunctional-tests test
+mvnw -Pfunctional-tests test
 ```
 
 To run tests with spark event logging enabled, define the Spark event log directory. This allows visualizing test DAG and stages using Spark History Server UI.
 ```
-mvn -Punit-tests test -DSPARK_EVLOG_DIR=/path/for/spark/event/log
+mvnw -Punit-tests test -DSPARK_EVLOG_DIR=/path/for/spark/event/log
 ```
 
 ## Quickstart
