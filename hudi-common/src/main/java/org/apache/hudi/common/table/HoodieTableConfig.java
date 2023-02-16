@@ -116,6 +116,16 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Fields used to partition the table. Concatenated values of these fields are used as "
           + "the partition path, by invoking toString()");
 
+  public static final ConfigProperty<String> HASH_PARTITION_NUM = ConfigProperty
+      .key("hoodie.table.hash.partition.num")
+      .defaultValue("256")
+      .withDocumentation("Determine the number of hash partitions in the hudi table ");
+
+  public static final ConfigProperty<String> HASH_PARTITION_FIELDS = ConfigProperty
+          .key("hoodie.table.hash.partition.fields")
+          .noDefaultValue()
+          .withDocumentation("Hash partition field. Use its value to generate the hash value of the hash partition field. ");
+          
   public static final ConfigProperty<String> RECORDKEY_FIELDS = ConfigProperty
       .key("hoodie.table.recordkey.fields")
       .noDefaultValue()
@@ -541,6 +551,21 @@ public class HoodieTableConfig extends HoodieConfig {
     return Option.empty();
   }
 
+  public Option<String[]> getHashPartitionFields() {
+    if (contains(HASH_PARTITION_FIELDS)) {
+      return Option.of(Arrays.stream(getString(HASH_PARTITION_FIELDS).split(","))
+              .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
+    }
+    return Option.empty();
+  }
+
+  public String getHashPartitionNum() {
+    if (contains(HASH_PARTITION_NUM)) {
+      return getString(HASH_PARTITION_NUM);
+    }
+    return HASH_PARTITION_NUM.defaultValue();
+  }
+  
   public boolean isTablePartitioned() {
     return getPartitionFields().map(pfs -> pfs.length > 0).orElse(false);
   }

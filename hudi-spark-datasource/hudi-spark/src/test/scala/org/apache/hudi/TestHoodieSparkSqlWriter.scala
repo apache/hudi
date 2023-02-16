@@ -52,6 +52,10 @@ import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
 import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
+import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.spark.sql.SaveMode.{Append, Overwrite}
+
 import java.io.IOException
 import java.time.Instant
 import java.util.{Collections, Date, UUID}
@@ -1193,6 +1197,138 @@ class TestHoodieSparkSqlWriter {
   }
 
   /**
+    * Test case for hash partition.
+    * When hash.partition.fields is specified and partition.fields contains _hoodie_hash_partition,
+    * a column named _hoodie_hash_partition will be added in this table as one of the partition key.
+    *
+    * If predicates of hash.partition.fields appear in the query statement, 
+    * the _hoodie_hash_partition = X  predicate will be automatically added
+    * to the query statement for partition pruning.
+    */
+  @Test
+  def testHashPartition(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val tablePath = tempBasePath
+    // case 1: test table which created by data frame
+    val insertDf = Seq((1, "a1", 10, 1000, "2021"),
+      (4, "a4", 10, 1000, "2021"),
+      (5, "a5", 10, 1000, "2021"),
+      (6, "a6", 10, 1000, "2021"),
+      (7, "a6", 10, 1000, "2021"),
+      (2, "a2", 20, 2000, "2022"),
+      (3, "a3", 30, 3000, "2023")).toDF("id", "name", "value", "ts", "dt")
+    val options = Map(
+      HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key -> "ts",
+      KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key -> "id",
+      KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key -> "dt,_hoodie_hash_partition",
+      KeyGeneratorOptions.HASH_PARTITION_FIELD_NAME.key -> "id,name",
+      KeyGeneratorOptions.HASH_PARTITION_NUM.key -> "16"
+    )
+    val tableName1 = "hoodie_test_params_1"
+    insertDf.write.format("hudi")
+      .options(options)
+      .option(TBL_NAME.key, tableName1)
+      .mode(Overwrite)
+      .save(s"${tablePath}/${tableName1}")
+    val snapshotQuery = s"SELECT id, name, value, ts, dt FROM ${tableName1}"
+    val roViewDF = spark.read.format("hudi").load(s"${tablePath}/${tableName1}")
+    roViewDF.createOrReplaceTempView(tableName1)
+    assert(insertDf.except(spark.sql(snapshotQuery)).count == 0)
+    // select data only in the pruned partition.
+    // If predicates of hash.partition.fields appear in the query statement,
+    // then the __hoodie_hash_partition = X  predicate will be automatically added
+    // to the query for partition pruning
+    spark.sql(s"select * from  $tableName1 where id = 1 and name = 'a1' and dt = '2021'").show()
+    val upsertDf = Seq((1, "a1", 12, 1002, "2021"),   // update
+      (2, "a2", 22, 2002, "2022"),   // update
+      (3, "a3", 32, 3002, "2023"),   // update
+      (8, "a8", 22, 2002, "2021")    // insert
+    ).toDF("id", "name", "value", "ts", "dt")
+    upsertDf.write.format("hudi")
+      .options(options)
+      .option(TBL_NAME.key, tableName1)
+      .mode(Append)
+      .save(s"${tablePath}/${tableName1}")
+    val roViewDF1 = spark.read.format("hudi").load(s"${tablePath}/${tableName1}")
+    roViewDF1.createOrReplaceTempView(tableName1)
+    spark.sql(s"select * from  $tableName1").show()
+
+    // case 2: test table which created by sql, without using partitioned by ()
+    val tableName2 = "hoodie_test_params_2"
+    val sparksql = s"""
+                      | create table $tableName2 (
+                      |   id int,
+                      |   name string,
+                      |   value int,
+                      |   ts long,
+                      |   dt string
+                      | ) using hudi
+                      | options (
+                      | primaryKey = 'id,name',
+                      | preCombineField = 'ts',
+                      | hoodie.table.partition.fields = 'dt,_hoodie_hash_partition',
+                      | hoodie.table.hash.partition.num = 16,
+                      | hoodie.table.hash.partition.fields = 'id,name'
+                      | )
+                      | location '${tablePath}/${tableName2}'
+       """.stripMargin
+    spark.sql(sparksql)
+    spark.sql(
+      s"""
+         | insert into $tableName2 values
+         | (1, 'a1', 10, 1000, "2021-12-22"),
+         | (4, 'a4', 10, 1000, "2021-12-22"),
+         | (5, 'a5', 10, 1000, "2021-12-22"),
+         | (6, 'a6', 10, 1000, "2021-12-22"),
+         | (7, 'a6', 10, 1000, "2021-12-22"),
+         | (2, 'a2', 20, 2000, "2022-12-22"),
+         | (3, 'a3', 30, 3000, "2023-12-22")
+              """.stripMargin)
+    //update 1 record. tag data only in the pruned partitions.
+    spark.sql(
+      s"update $tableName2 set value = value + 2 where id = 1 and name = 'a1'")
+    spark.sql(s"select * from  $tableName2 ").show()
+
+    // case 3: test table which created by sql, using partitioned by ().
+    // A column named _hoodie_hash_partition will be added in this table as one of the partition key.
+    val tableName3 = "hoodie_test_params_3"
+    val sparksql3 = s"""
+                       | create table $tableName3 (
+                       |   id int,
+                       |   name string,
+                       |   value int,
+                       |   ts long,
+                       |   dt string
+                       | ) using hudi
+                       |  partitioned by (dt)
+                       | tblproperties (
+                       | primaryKey = 'id,name',
+                       | preCombineField = 'ts',
+                       | hoodie.table.hash.partition.num = 16,
+                       | hoodie.table.hash.partition.fields = 'id,name'
+                       | )
+                       | location '${tablePath}/${tableName3}'
+       """.stripMargin
+    spark.sql(sparksql3)
+    spark.sql(
+      s"""
+         | insert into $tableName3 values
+         | (1, 'a1', 10, 1000, "2021-12-22"),
+         | (4, 'a4', 10, 1000, "2021-12-22"),
+         | (5, 'a5', 10, 1000, "2021-12-22"),
+         | (6, 'a6', 10, 1000, "2021-12-22"),
+         | (7, 'a6', 10, 1000, "2021-12-22"),
+         | (2, 'a2', 20, 2000, "2022-12-22"),
+         | (3, 'a3', 30, 3000, "2023-12-22")
+              """.stripMargin)
+    spark.sql(s"select * from  $tableName3 ").show()
+    //update 1 record. tag data only in the pruned partitions.
+    spark.sql(s"update $tableName3 set value = value + 2 where id = 1 and name = 'a1' ")
+    spark.sql(s"select * from  $tableName3 ").show()
+  }
+
+  /**
    *
    * Test that you can't have consistent hashing bucket index on a COW table
    * */
@@ -1228,6 +1364,8 @@ class TestHoodieSparkSqlWriter {
     new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
   }
 }
+
+
 
 object TestHoodieSparkSqlWriter {
   def testDatasourceInsert: java.util.stream.Stream[Arguments] = {

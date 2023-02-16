@@ -20,7 +20,7 @@ package org.apache.spark.sql.catalyst.catalog
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
@@ -33,8 +33,11 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieOptionConfig._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
-import org.apache.spark.sql.types.{StructField, StructType}
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+
 
 import java.util.{Locale, Properties}
 import scala.collection.JavaConverters._
@@ -193,9 +196,39 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(finalSchema, false, recordName, namespace)
       val partitionColumns = if (table.partitionColumnNames.isEmpty) {
-        null
+        val (partitionFields, hashPartitionFields, hashPartitionNum) = getHashPartitionParam(tableConfigs)
+
+        if (containHashPartitionParam(partitionFields, hashPartitionFields)) {
+          properties.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.ComplexKeyGenerator")
+          properties.setProperty(HoodieTableConfig.HASH_PARTITION_FIELDS.key, hashPartitionFields)
+          properties.setProperty(HoodieTableConfig.HASH_PARTITION_NUM.key, hashPartitionNum.toString)
+        }
+        if (!partitionFields.isEmpty) partitionFields else null
       } else {
-        table.partitionColumnNames.mkString(",")
+      if (properties.getProperty(HoodieTableConfig.PARTITION_FIELDS.key) != null)
+          throw new HoodieException(s"Parameter ${HoodieTableConfig.PARTITION_FIELDS.key} cannot be specified " +
+            "as SQL contain [partitioned by].}")
+        if (properties.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key) != null)
+          throw new HoodieException(s"Parameter ${KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME} cannot be specified " +
+            "as SQL contain [partitioned by].}")
+        if (properties.getProperty(KeyGeneratorOptions.HASH_PARTITION_FIELD_NAME.key) != null) {
+          properties.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.ComplexKeyGenerator")
+          properties.setProperty(HoodieTableConfig.HASH_PARTITION_FIELDS.key,
+            properties.getProperty(KeyGeneratorOptions.HASH_PARTITION_FIELD_NAME.key))
+          if (properties.getProperty(KeyGeneratorOptions.HASH_PARTITION_NUM.key) != null)
+            properties.setProperty(HoodieTableConfig.HASH_PARTITION_NUM.key, properties.getProperty(KeyGeneratorOptions.HASH_PARTITION_NUM.key))
+          if (properties.getProperty(HoodieTableConfig.HASH_PARTITION_NUM.key) == null)
+            properties.setProperty(HoodieTableConfig.HASH_PARTITION_NUM.key, HoodieTableConfig.HASH_PARTITION_NUM.defaultValue)
+          s"${table.partitionColumnNames.mkString(",")},${HoodieRecord.HASH_PARTITION_FIELD}"
+        }
+        else if (properties.getProperty(HoodieTableConfig.HASH_PARTITION_FIELDS.key) != null) {
+          val keyGenerator = properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
+          if(keyGenerator == null || !keyGenerator.contains("Complex"))
+            properties.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.ComplexKeyGenerator")
+          if (properties.getProperty(HoodieTableConfig.HASH_PARTITION_NUM.key) == null)
+            properties.setProperty(HoodieTableConfig.HASH_PARTITION_NUM.key, HoodieTableConfig.HASH_PARTITION_NUM.defaultValue)
+          s"${table.partitionColumnNames.mkString(",")},${HoodieRecord.HASH_PARTITION_FIELD}"
+        } else table.partitionColumnNames.mkString(",")
       }
 
       HoodieTableMetaClient.withPropertyBuilder()
@@ -237,7 +270,8 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         val schema = if (schemaFromMetaOpt.nonEmpty) {
           schemaFromMetaOpt.get
         } else if (table.schema.nonEmpty) {
-          addMetaFields(table.schema)
+          //addMetaFields(table.schema)
+          addMetaFieldsWithHashFieldIfNeeded(table.schema, options)
         } else {
           throw new AnalysisException(
             s"Missing schema fields when applying CREATE TABLE clause for ${catalogTableName}")
@@ -250,7 +284,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         val schema = table.schema
         val options = extraTableConfig(tableExists = false, globalTableConfigs) ++
           mapSqlOptionsToTableConfigs(sqlOptions)
-        (addMetaFields(schema), options)
+          (addMetaFieldsWithHashFieldIfNeeded(schema, options), options)
 
       case (CatalogTableType.MANAGED, true) =>
         throw new AnalysisException(s"Can not create the managed table('$catalogTableName')" +
@@ -266,6 +300,48 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     verifyDataSchema(table.identifier, table.tableType, dataSchema)
 
     (finalSchema, tableConfigs)
+  }
+
+  private def getHashPartitionParam(optParams: Map[String, String]): (String, String, Integer) = {
+    val partitionFields = optParams.get(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key).getOrElse(
+      optParams.get(HoodieTableConfig.PARTITION_FIELDS.key).getOrElse("")
+    )
+    val hashPartitionFields = optParams.get(KeyGeneratorOptions.HASH_PARTITION_FIELD_NAME.key).getOrElse(
+      optParams.get(HoodieTableConfig.HASH_PARTITION_FIELDS.key).getOrElse("")
+    )
+    val hashPartitionNum = optParams.get(KeyGeneratorOptions.HASH_PARTITION_NUM.key).getOrElse(
+      optParams.get(HoodieTableConfig.HASH_PARTITION_NUM.key).getOrElse(KeyGeneratorOptions.HASH_PARTITION_NUM.defaultValue())
+    )
+    (partitionFields, hashPartitionFields, Integer.parseInt(hashPartitionNum.toString))
+  }
+
+  private def containHashPartitionParam(
+                                         partitionFields: String,
+                                         hashPartitionFields: String): Boolean = {
+    if (partitionFields.split(",").contains(HoodieRecord.HASH_PARTITION_FIELD)) {
+      if (hashPartitionFields.isEmpty)
+        throw new HoodieException(s"${HoodieTableConfig.HASH_PARTITION_FIELDS.key} is empty," +
+          s" but ${HoodieTableConfig.PARTITION_FIELDS.key} contains ${HoodieRecord.HASH_PARTITION_FIELD}")
+      true
+    } else {
+      if (!hashPartitionFields.isEmpty)
+        throw new HoodieException(s"${HoodieTableConfig.HASH_PARTITION_FIELDS.key} is not empty," +
+          s" but ${HoodieTableConfig.PARTITION_FIELDS.key} does not contain ${HoodieRecord.HASH_PARTITION_FIELD}")
+      else false
+    }
+  }
+
+  private def addMetaFieldsWithHashFieldIfNeeded(
+      schema: StructType,
+      option: Map[String, String]): StructType = {
+    val hashPartitionFields = option.getOrElse(HoodieTableConfig.HASH_PARTITION_FIELDS.key, null)
+    val metaFieldsWithHashFieldIfNeeded = if(hashPartitionFields != null)
+      HoodieRecord.HOODIE_META_COLUMNS.asScala.:+ (HoodieRecord.HASH_PARTITION_FIELD)
+    else HoodieRecord.HOODIE_META_COLUMNS.asScala
+    // filter the meta field to avoid duplicate field.
+    val dataFields = schema.fields.filterNot(f => metaFieldsWithHashFieldIfNeeded.contains(f.name))
+    val fields = metaFieldsWithHashFieldIfNeeded.map(StructField(_, StringType)) ++ dataFields
+    StructType(fields)
   }
 
   private def extraTableConfig(tableExists: Boolean,

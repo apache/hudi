@@ -29,7 +29,7 @@ import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKey
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, EqualTo, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -139,11 +139,16 @@ case class HoodieFileIndex(spark: SparkSession,
 
     var totalFileSize = 0
     var candidateFileSize = 0
+    val hashPartionFilterOption = createHashPartionFilter(partitionFilters ++ dataFilters)
 
     // Prune the partition path by the partition filters
     // NOTE: Non-partitioned tables are assumed to consist from a single partition
     //       encompassing the whole table
-    val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
+    def getPrunedPartitions(hashPartionFilterOption: Option[Expression]) = hashPartionFilterOption match{
+      case None => listMatchingPartitionPaths(partitionFilters)
+      case Some(hashPartionFilter) => listMatchingPartitionPaths(partitionFilters.:+ (hashPartionFilter))
+    }
+    val prunedPartitions = getPrunedPartitions(hashPartionFilterOption)
     val listedPartitions = getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map {
       case (partition, fileSlices) =>
         val baseFileStatuses: Seq[FileStatus] =

@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
@@ -147,7 +148,8 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     //       matching it's important to strip out partition columns, having static values provided in the partition spec,
     //       since such columns wouldn't be otherwise specified w/in the query itself and therefore couldn't be matched
     //       positionally for example
-    val expectedQueryColumns = catalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name))
+    val expectedQueryColumns = catalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name)
+      || f.name.equals(HoodieRecord.HASH_PARTITION_FIELD))
     val coercedQueryOutput = coerceQueryOutputColumns(StructType(expectedQueryColumns), cleanedQuery, catalogTable, conf)
     // After potential reshaping validate that the output of the query conforms to the table's schema
     validate(removeMetaFields(coercedQueryOutput.schema), partitionsSpec, catalogTable)
@@ -180,7 +182,12 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     }
 
     val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
-    val fullQueryOutputSchema = StructType(queryOutputSchema.fields ++ staticPartitionValues.keys.map(StructField(_, StringType)))
+    val hashPartition = catalogTable.metaClient.getTableConfig.getHashPartitionFields.orElse(null)
+
+    val fullQueryOutputSchema = if(hashPartition != null){
+      val hashField = StructField(HoodieRecord.HASH_PARTITION_FIELD, StringType)
+      StructType(queryOutputSchema.fields.:+ (hashField) ++ staticPartitionValues.keys.map(StructField(_, StringType)))
+    }else StructType(queryOutputSchema.fields ++ staticPartitionValues.keys.map(StructField(_, StringType)))
 
     // Assert that query provides all the required columns
     if (!conforms(fullQueryOutputSchema, catalogTable.tableSchemaWithoutMetaFields)) {

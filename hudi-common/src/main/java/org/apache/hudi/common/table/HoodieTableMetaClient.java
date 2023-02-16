@@ -794,6 +794,8 @@ public class HoodieTableMetaClient implements Serializable {
     private String baseFileFormat;
     private String preCombineField;
     private String partitionFields;
+    private String hashPartitionFields;
+    private Integer hashPartitionNum;
     private Boolean cdcEnabled;
     private String cdcSupplementalLoggingMode;
     private String bootstrapIndexClass;
@@ -885,6 +887,16 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setPartitionFields(String partitionFields) {
       this.partitionFields = partitionFields;
+      return this;
+    }
+    
+    public PropertyBuilder setHashPartitionFields(String hashPartitionFields) {
+      this.hashPartitionFields = hashPartitionFields;
+      return this;
+    }
+
+    public PropertyBuilder setHashPartitionNum(int num) {
+      this.hashPartitionNum = num;
       return this;
     }
 
@@ -1044,6 +1056,14 @@ public class HoodieTableMetaClient implements Serializable {
         setPartitionFields(
             hoodieConfig.getString(HoodieTableConfig.PARTITION_FIELDS));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.HASH_PARTITION_FIELDS)) {
+        setHashPartitionFields(
+                hoodieConfig.getString(HoodieTableConfig.HASH_PARTITION_FIELDS));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.HASH_PARTITION_NUM)) {
+        setHashPartitionNum(
+                hoodieConfig.getInt(HoodieTableConfig.HASH_PARTITION_NUM));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)) {
         setRecordKeyFields(hoodieConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
       }
@@ -1145,6 +1165,12 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != partitionFields) {
         tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, partitionFields);
+      }
+      if (null != hashPartitionFields) {
+        tableConfig.setValue(HoodieTableConfig.HASH_PARTITION_FIELDS, hashPartitionFields);
+      }
+      if (null != hashPartitionNum) {
+        tableConfig.setValue(HoodieTableConfig.HASH_PARTITION_NUM, hashPartitionNum.toString());
       }
       if (null != recordKeyFields) {
         tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, recordKeyFields);
