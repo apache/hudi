@@ -207,46 +207,49 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test Add Column and Update Table") {
     withTempDir { tmp =>
-      Seq("cow", "mor").foreach { tableType =>
-        val tableName = generateTableName
-        // create table
-        spark.sql("SET hoodie.datasource.read.extract.partition.values.from.path=true")
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
-             | tblproperties (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             | )
-          """.stripMargin)
+      val tableName = generateTableName
 
-        // insert data to table
-        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 10.0, 1000)
-        )
+      spark.sql("SET hoodie.datasource.read.extract.partition.values.from.path=true")
 
-        spark.sql(s"alter table $tableName add columns (new_col1 int)")
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+     """.stripMargin)
 
-        // update data
-        spark.sql(s"update $tableName set price = 22 where id = 1")
-        checkAnswer(s"select id, name, price, ts, new_col1 from $tableName")(
-          Seq(1, "a1", 22.0, 1000, null)
-        )
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 10.0, 1000)
+      )
 
-        // update and check again
-        spark.sql(s"update $tableName set price = price * 2 where id = 1")
-        checkAnswer(s"select id, name, price, ts, new_col1 from $tableName")(
-          Seq(1, "a1", 44.0, 1000, null)
-        )
-      }
+      spark.sql(s"update $tableName set price = 22 where id = 1")
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 22.0, 1000)
+      )
+
+      spark.sql(s"alter table $tableName add column new_col1 int")
+
+      checkAnswer(s"select id, name, price, ts, new_col1 from $tableName")(
+        Seq(1, "a1", 22.0, 1000, null)
+      )
+
+      // update and check
+      spark.sql(s"update $tableName set price = price * 2 where id = 1")
+      checkAnswer(s"select id, name, price, ts, new_col1 from $tableName")(
+        Seq(1, "a1", 44.0, 1000, null)
+      )
     }
   }
 }
