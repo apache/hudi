@@ -75,20 +75,20 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark,hudi-spark-datasource/hudi-spark -am -DskipTests=true $MVN_ARGS
+          mvnw clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark,hudi-spark-datasource/hudi-spark -am -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+          mvnw test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS
       - name: UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark $MVN_ARGS
+          mvnw test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark $MVN_ARGS
 
   test-flink:
     runs-on: ubuntu-latest
@@ -112,13 +112,13 @@ jobs:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn clean install -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+          mvnw clean install -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+          mvnw test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
 
   validate-bundles:
     runs-on: ubuntu-latest
@@ -147,15 +147,15 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: 'scala-2.12'
         run: |
-          mvn clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+          mvnw clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
           # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
           sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
-          mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
+          mvnw clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
       - name: IT - Bundle Validation
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: 'scala-2.12'
         run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          HUDI_VERSION=$(mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
