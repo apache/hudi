@@ -60,6 +60,7 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
 import static org.apache.hudi.utilities.schema.SchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 
 public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
@@ -133,17 +134,19 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     TypedProperties props = new TypedProperties();
     props.put("hoodie.deltastreamer.source.kafka.topic", "test");
     props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", SCHEMA_PATH);
-    SchemaProvider schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
-        UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
+    SchemaProvider schemaProvider = UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc());
+    assertNotNull(schemaProvider);
+    schemaProvider.addPostProcessor(new ArrayList<>());
 
     AvroKafkaSource avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, null);
-    GenericRecord withoutKafkaOffsets = avroKafkaSource.processForKafkaOffsets(rdd).collect().get(0);
+    GenericRecord withoutKafkaOffsets = avroKafkaSource.maybeAppendKafkaOffsets(rdd).collect().get(0);
 
     props.put(SCHEMA_POST_PROCESSOR_PROP, KafkaOffsetPostProcessor.class.getName());
-    schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
-        UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
+    schemaProvider = UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc());
+    assertNotNull(schemaProvider);
+    schemaProvider.addPostProcessor(new ArrayList<>());
     avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, null);
-    GenericRecord withKafkaOffsets = avroKafkaSource.processForKafkaOffsets(rdd).collect().get(0);
+    GenericRecord withKafkaOffsets = avroKafkaSource.maybeAppendKafkaOffsets(rdd).collect().get(0);
     assertEquals(3,withKafkaOffsets.getSchema().getFields().size() - withoutKafkaOffsets.getSchema().getFields().size());
   }
 
@@ -154,8 +157,9 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
 
     props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", SCHEMA_PATH);
-    SchemaProvider schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
-        UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
+    SchemaProvider schemaProvider = UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc());
+    assertNotNull(schemaProvider);
+    schemaProvider.addPostProcessor(new ArrayList<>());
 
     props.put("hoodie.deltastreamer.source.kafka.value.deserializer.class", ByteArrayDeserializer.class.getName());
     sendMessagesToKafka(topic, 1, 2);
@@ -165,8 +169,9 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
         .getBatch().get().columns()).collect(Collectors.toList());
     props.put(SCHEMA_POST_PROCESSOR_PROP, "org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor");
 
-    schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
-        UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
+    schemaProvider = UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc());
+    assertNotNull(schemaProvider);
+    schemaProvider.addPostProcessor(new ArrayList<>());
     avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     kafkaSource = new SourceFormatAdapter(avroKafkaSource);
     List<String> withKafkaOffsetColumns = Arrays.stream(kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE)

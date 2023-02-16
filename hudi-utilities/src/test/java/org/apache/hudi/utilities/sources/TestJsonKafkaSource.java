@@ -21,10 +21,8 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
-import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
 
 import org.apache.avro.generic.GenericRecord;
@@ -199,15 +197,20 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
         .getBatch().get().columns()).collect(Collectors.toList());
 
     props.put(SCHEMA_POST_PROCESSOR_PROP, "org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor");
-    SchemaProvider postSchemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
-        schemaProvider, props, jsc(), new ArrayList<>());
-    jsonSource = new JsonKafkaSource(props, jsc(), spark(), postSchemaProvider, metrics);
-    kafkaSource = new SourceFormatAdapter(jsonSource);
-    List<String> withKafkaOffsetColumns = Arrays.stream(kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE)
-        .getBatch().get().columns()).collect(Collectors.toList());
+    schemaProvider.addPostProcessor(new ArrayList<>());
 
-    assertEquals(3, withKafkaOffsetColumns.size() - columns.size());
-    List<String> appendList = Arrays.asList(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN);
-    assertEquals(appendList, withKafkaOffsetColumns.subList(withKafkaOffsetColumns.size() - 3, withKafkaOffsetColumns.size()));
+    try {
+      jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+      kafkaSource = new SourceFormatAdapter(jsonSource);
+      List<String> withKafkaOffsetColumns = Arrays.stream(kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE)
+          .getBatch().get().columns()).collect(Collectors.toList());
+
+      assertEquals(3, withKafkaOffsetColumns.size() - columns.size());
+      List<String> appendList = Arrays.asList(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN);
+      assertEquals(appendList, withKafkaOffsetColumns.subList(withKafkaOffsetColumns.size() - 3, withKafkaOffsetColumns.size()));
+    } finally {
+      schemaProvider.removePostProcessor();
+    }
+
   }
 }

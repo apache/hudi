@@ -90,7 +90,7 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public Schema getUnprocessedSourceSchema() {
     if (schema == null) {
       Schema.Parser parser = new Schema.Parser();
       schema = parser.parse(schemaString);
@@ -99,7 +99,7 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getTargetSchema() {
+  public Schema getUnprocessedTargetSchema() {
     return getSourceSchema();
   }
 }

@@ -33,7 +33,7 @@ public class ExampleDataSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public Schema getUnprocessedSourceSchema() {
     return HoodieExampleDataGenerator.avroSchema;
   }
 }

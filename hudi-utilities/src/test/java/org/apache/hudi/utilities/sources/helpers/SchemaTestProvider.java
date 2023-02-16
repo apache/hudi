@@ -38,7 +38,7 @@ public class SchemaTestProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public Schema getUnprocessedSourceSchema() {
     return schemaToReturn.get();
   }
 

@@ -173,7 +173,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public Schema getUnprocessedSourceSchema() {
     String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
     try {
       return parseSchemaFromRegistry(registryUrl);
@@ -183,7 +183,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getTargetSchema() {
+  public Schema getUnprocessedTargetSchema() {
     String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
     String targetRegistryUrl = config.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, registryUrl);
     try {

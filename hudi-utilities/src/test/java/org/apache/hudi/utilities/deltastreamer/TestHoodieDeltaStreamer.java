@@ -2542,7 +2542,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
 
     @Override
-    public Schema getTargetSchema() {
+    public Schema getUnprocessedTargetSchema() {
       return null;
     }
   }

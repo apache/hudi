@@ -32,7 +32,7 @@ public class SimpleSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public Schema getUnprocessedSourceSchema() {
     return sourceSchema;
   }
 }

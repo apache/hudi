@@ -66,25 +66,30 @@ public class JsonKafkaSource extends KafkaSource<String> {
             offsetRanges,
             LocationStrategies.PreferConsistent())
         .filter(x -> !StringUtils.isNullOrEmpty((String) x.value()));
+    return postProcess(maybeAppendKafkaOffsets(kafkaRDD));
+  }
 
-    JavaRDD<String> result = shouldAppendKafkaOffsets() ? kafkaRDD.mapPartitions(partitionIterator -> {
-      List<String> stringList = new LinkedList<>();
-      ObjectMapper om = new ObjectMapper();
-      partitionIterator.forEachRemaining(consumerRecord -> {
-        String record = consumerRecord.value().toString();
-        try {
-          ObjectNode jsonNode = (ObjectNode) om.readTree(record);
-          jsonNode.put(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
-          jsonNode.put(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
-          jsonNode.put(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
-          stringList.add(om.writeValueAsString(jsonNode));
-        } catch (Throwable e) {
-          stringList.add(record);
-        }
+  protected  JavaRDD<String> maybeAppendKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {
+    if (shouldAppendKafkaOffsets()) {
+      return kafkaRDD.mapPartitions(partitionIterator -> {
+        List<String> stringList = new LinkedList<>();
+        ObjectMapper om = new ObjectMapper();
+        partitionIterator.forEachRemaining(consumerRecord -> {
+          String record = consumerRecord.value().toString();
+          try {
+            ObjectNode jsonNode = (ObjectNode) om.readTree(record);
+            jsonNode.put(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
+            jsonNode.put(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
+            jsonNode.put(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
+            stringList.add(om.writeValueAsString(jsonNode));
+          } catch (Throwable e) {
+            stringList.add(record);
+          }
+        });
+        return stringList.iterator();
       });
-      return stringList.iterator();
-    }) : kafkaRDD.map(consumerRecord -> (String) consumerRecord.value());
-    return postProcess(result);
+    }
+    return kafkaRDD.map(consumerRecord -> (String) consumerRecord.value());
   }
 
   private JavaRDD<String> postProcess(JavaRDD<String> jsonStringRDD) {
@@ -97,6 +102,7 @@ public class JsonKafkaSource extends KafkaSource<String> {
     JsonKafkaSourcePostProcessor processor;
     try {
       processor = UtilHelpers.createJsonKafkaSourcePostProcessor(postProcessorClassName, this.props);
+      assert processor != null;
     } catch (IOException e) {
       throw new HoodieSourcePostProcessException("Could not init " + postProcessorClassName, e);
     }

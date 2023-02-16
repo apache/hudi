@@ -56,11 +56,7 @@ import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
-import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
-import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessorDisableSource;
-import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
@@ -477,43 +473,16 @@ public class UtilHelpers {
 
   public static SchemaProvider getOriginalSchemaProvider(SchemaProvider schemaProvider) {
     SchemaProvider originalProvider = schemaProvider;
-    if (schemaProvider instanceof SchemaProviderWithPostProcessor) {
-      originalProvider = ((SchemaProviderWithPostProcessor) schemaProvider).getOriginalSchemaProvider();
-    } else if (schemaProvider instanceof DelegatingSchemaProvider) {
+    if (schemaProvider instanceof DelegatingSchemaProvider) {
       originalProvider = ((DelegatingSchemaProvider) schemaProvider).getSourceSchemaProvider();
     }
     return originalProvider;
   }
 
-  public static SchemaProviderWithPostProcessor wrapSchemaProviderWithPostProcessor(SchemaProvider provider,
-                                                                                    TypedProperties cfg, JavaSparkContext jssc, List<String> transformerClassNames) {
-
-    if (provider == null) {
-      return null;
-    }
-
-    if (provider instanceof SchemaProviderWithPostProcessor) {
-      return (SchemaProviderWithPostProcessor) provider;
-    }
-
-    String schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, null);
-    boolean enableSparkAvroPostProcessor = Boolean.parseBoolean(cfg.getString(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE, "true"));
-
-    if (transformerClassNames != null && !transformerClassNames.isEmpty() && enableSparkAvroPostProcessor) {
-      if (!StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
-        schemaPostProcessorClass = schemaPostProcessorClass + "," + SparkAvroPostProcessor.class.getName();
-      } else {
-        schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();
-      }
-    }
-
-    return new SchemaProviderWithPostProcessorDisableSource(provider,
-        Option.ofNullable(createSchemaPostProcessor(schemaPostProcessorClass, cfg, jssc)));
-  }
-
   public static SchemaProvider createRowBasedSchemaProvider(StructType structType, TypedProperties cfg, JavaSparkContext jssc) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
-    return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
+    rowSchemaProvider.addPostProcessor(null);
+    return rowSchemaProvider;
   }
 
   public static Option<Schema> getLatestTableSchema(JavaSparkContext jssc, FileSystem fs, String basePath) {

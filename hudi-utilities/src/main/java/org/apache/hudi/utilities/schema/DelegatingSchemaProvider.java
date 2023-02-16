@@ -40,12 +40,12 @@ public class DelegatingSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public Schema getUnprocessedSourceSchema() {
     return sourceSchemaProvider.getSourceSchema();
   }
 
   @Override
-  public Schema getTargetSchema() {
+  public Schema getUnprocessedTargetSchema() {
     return targetSchemaProvider.getTargetSchema();
   }
 

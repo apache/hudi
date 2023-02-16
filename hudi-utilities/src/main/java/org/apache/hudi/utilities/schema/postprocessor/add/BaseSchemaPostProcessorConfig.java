@@ -50,4 +50,15 @@ public class BaseSchemaPostProcessorConfig {
       .noDefaultValue()
       .withDocumentation("Docs about new column");
 
+
+  public static final ConfigProperty<String> SCHEMA_PROVIDER_SOURCE_DISABLE = ConfigProperty
+      .key("hoodie.deltastreamer.schemaprovider.source.disable")
+      .defaultValue("false")
+      .withDocumentation("disable schema provider processing on source");
+
+  public static final ConfigProperty<String> SCHEMA_PROVIDER_TARGET_DISABLE = ConfigProperty
+      .key("hoodie.deltastreamer.schemaprovider.target.disable")
+      .defaultValue("false")
+      .withDocumentation("disable schema provider processing on target");
+
 }

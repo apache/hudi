@@ -25,7 +25,6 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessorDisableSource;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 
@@ -35,6 +34,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.kafka010.OffsetRange;
+
+import java.util.Arrays;
 
 import static org.apache.hudi.utilities.schema.SchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_PROP;
 
@@ -57,7 +58,8 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   }
 
   protected boolean shouldAppendKafkaOffsets() {
-    return KafkaOffsetPostProcessor.class.getName().equals(props.getString(SCHEMA_POST_PROCESSOR_PROP, null));
+    return Arrays.stream(props.getString(SCHEMA_POST_PROCESSOR_PROP, "")
+        .split(",")).anyMatch(s -> s.trim().equals(KafkaOffsetPostProcessor.class.getName()));
   }
 
   @Override
@@ -87,13 +89,10 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
     }
   }
 
-  protected AvroConvertor getAvroConverter(Boolean preProcessedSchema) {
+  protected AvroConvertor getAvroConverter(Boolean useUnprocessedSchema) {
     if (schemaProvider == null) {
       throw new HoodieException("Needed schema provider for avro deserializer");
     }
-    if (preProcessedSchema && (schemaProvider instanceof SchemaProviderWithPostProcessorDisableSource)) {
-      return new AvroConvertor(((SchemaProviderWithPostProcessorDisableSource) schemaProvider).getSourceSchemaWithoutPostProcessor());
-    }
-    return new AvroConvertor(schemaProvider.getSourceSchema());
+    return new AvroConvertor(useUnprocessedSchema ? schemaProvider.getUnprocessedSourceSchema() : schemaProvider.getSourceSchema());
   }
 }

@@ -69,7 +69,7 @@ public class InputBatch<T> {
     }
 
     @Override
-    public Schema getSourceSchema() {
+    public Schema getUnprocessedSourceSchema() {
       return NULL_SCHEMA;
     }
   }

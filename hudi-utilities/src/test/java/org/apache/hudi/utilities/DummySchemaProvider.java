@@ -30,7 +30,7 @@ public class DummySchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public Schema getUnprocessedSourceSchema() {
     return Schema.create(Schema.Type.NULL);
   }
 }

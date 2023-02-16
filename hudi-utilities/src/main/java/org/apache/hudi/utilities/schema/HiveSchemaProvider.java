@@ -89,12 +89,12 @@ public class HiveSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public Schema getUnprocessedSourceSchema() {
     return sourceSchema;
   }
 
   @Override
-  public Schema getTargetSchema() {
+  public Schema getUnprocessedTargetSchema() {
     if (targetSchema != null) {
       return targetSchema;
     } else {

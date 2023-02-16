@@ -76,10 +76,9 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
   @Test
   public void testPostProcessor() throws IOException {
     properties.put(Config.SCHEMA_POST_PROCESSOR_PROP, DummySchemaPostProcessor.class.getName());
-    SchemaProvider provider =
-        UtilHelpers.wrapSchemaProviderWithPostProcessor(
-            UtilHelpers.createSchemaProvider(DummySchemaProvider.class.getName(), properties, jsc),
-            properties, jsc, null);
+    SchemaProvider provider = UtilHelpers.createSchemaProvider(DummySchemaProvider.class.getName(), properties, jsc);
+    assertNotNull(provider);
+    provider.addPostProcessor(null);
 
     Schema schema = provider.getSourceSchema();
     assertEquals(schema.getType(), Type.RECORD);
@@ -93,10 +92,9 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     List<String> transformerClassNames = new ArrayList<>();
     transformerClassNames.add(FlatteningTransformer.class.getName());
 
-    SchemaProvider provider =
-        UtilHelpers.wrapSchemaProviderWithPostProcessor(
-            UtilHelpers.createSchemaProvider(SparkAvroSchemaProvider.class.getName(), properties, jsc),
-            properties, jsc, transformerClassNames);
+    SchemaProvider provider = UtilHelpers.createSchemaProvider(SparkAvroSchemaProvider.class.getName(), properties, jsc);
+    assertNotNull(provider);
+    provider.addPostProcessor(transformerClassNames);
 
     Schema schema = provider.getSourceSchema();
     assertEquals(Type.RECORD, schema.getType());

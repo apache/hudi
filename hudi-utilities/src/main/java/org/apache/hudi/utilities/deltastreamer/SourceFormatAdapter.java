@@ -77,7 +77,7 @@ public final class SourceFormatAdapter implements Closeable {
                   // pass in the schema for the Row-to-Avro conversion
                   // to avoid nullability mismatch between Avro schema and Row schema
                   ? HoodieSparkUtils.createRdd(rdd, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, true,
-                  org.apache.hudi.common.util.Option.ofNullable(r.getSchemaProvider().getSourceSchema())
+                  org.apache.hudi.common.util.Option.ofNullable(r.getSchemaProvider().getUnprocessedSourceSchema())
               ).toJavaRDD() : HoodieSparkUtils.createRdd(rdd,
                   HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, false, Option.empty()).toJavaRDD();
             })

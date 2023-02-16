@@ -263,7 +263,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     }
 
     @Override
-    public Schema getSourceSchema() {
+    public Schema getUnprocessedSourceSchema() {
       return schema;
     }
   }

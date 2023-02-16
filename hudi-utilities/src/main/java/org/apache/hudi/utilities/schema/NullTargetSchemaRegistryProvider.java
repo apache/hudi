@@ -34,7 +34,7 @@ public class NullTargetSchemaRegistryProvider extends SchemaRegistryProvider {
   }
 
   @Override
-  public Schema getTargetSchema() {
+  public Schema getUnprocessedTargetSchema() {
     return null;
   }
 }

@@ -371,7 +371,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public Schema getSourceSchema() {
+    public Schema getUnprocessedSourceSchema() {
       return schema;
     }
   }

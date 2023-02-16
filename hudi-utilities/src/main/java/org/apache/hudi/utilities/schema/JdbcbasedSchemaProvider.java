@@ -70,7 +70,7 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public Schema getUnprocessedSourceSchema() {
     if (this.sourceSchema != null) {
       return sourceSchema;
     }
