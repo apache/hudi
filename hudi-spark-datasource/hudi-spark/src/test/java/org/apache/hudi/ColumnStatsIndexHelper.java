@@ -238,12 +238,12 @@ public class ColumnStatsIndexHelper {
             })
             .filter(Objects::nonNull);
 
-      Tuple2<StructType, Seq<String>> indexSchemaAndColumns = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
+      StructType indexSchema = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
           JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSeq(),
           JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSet(),
           StructType$.MODULE$.apply(orderedColumnSchemas)
-      );
+      )._1;
 
-    return sparkSession.createDataFrame(allMetaDataRDD, indexSchemaAndColumns._1);
+    return sparkSession.createDataFrame(allMetaDataRDD, indexSchema);
   }
 }
