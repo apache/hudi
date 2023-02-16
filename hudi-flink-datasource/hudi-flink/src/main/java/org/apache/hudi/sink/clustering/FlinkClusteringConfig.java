@@ -110,6 +110,18 @@ public class FlinkClusteringConfig extends Configuration {
   @Parameter(names = {"--target-partitions"}, description = "Number of partitions to list to create ClusteringPlan, default 2")
   public Integer targetPartitions = 2;
 
+  @Parameter(names = {"--cluster-begin-partition"}, description = "Begin partition used to filter partition (inclusive)")
+  public String clusterBeginPartition = "";
+
+  @Parameter(names = {"--cluster-end-partition"}, description = "End partition used to filter partition (inclusive)")
+  public String clusterEndPartition = "";
+
+  @Parameter(names = {"--partition-regex-pattern"}, description = "Filter clustering partitions that matched regex pattern")
+  public String partitionRegexPattern = "";
+
+  @Parameter(names = {"--partition-selected"}, description = "Partitions to run clustering")
+  public String partitionSelected = "";
+
   public static final String SEQ_FIFO = "FIFO";
   public static final String SEQ_LIFO = "LIFO";
   @Parameter(names = {"--seq"}, description = "Clustering plan execution sequence, two options are supported:\n"
@@ -173,6 +185,10 @@ public class FlinkClusteringConfig extends Configuration {
     conf.setLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES, config.targetFileMaxBytes);
     conf.setLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT, config.smallFileLimit);
     conf.setInteger(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST, config.skipFromLatestPartitions);
+    conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLUSTER_BEGIN_PARTITION, config.clusterBeginPartition);
+    conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLUSTER_END_PARTITION, config.clusterEndPartition);
+    conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_REGEX_PATTERN, config.partitionRegexPattern);
+    conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_SELECTED, config.partitionSelected);
     conf.setString(FlinkOptions.CLUSTERING_SORT_COLUMNS, config.sortColumns);
     conf.setInteger(FlinkOptions.CLUSTERING_MAX_NUM_GROUPS, config.maxNumGroups);
     conf.setInteger(FlinkOptions.CLUSTERING_TARGET_PARTITIONS, config.targetPartitions);

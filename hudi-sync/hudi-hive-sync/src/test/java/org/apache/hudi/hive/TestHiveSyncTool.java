@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -52,6 +53,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -393,6 +395,32 @@ public class TestHiveSyncTool {
     if (syncAsDataSourceTable) {
       assertTrue(ddl.contains("'" + ConfigUtils.IS_QUERY_AS_RO_TABLE + "'='false'"));
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testSyncCOWTableWithCreateManagedTable(boolean createManagedTable) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HMS.name());
+    hiveSyncProps.setProperty(HIVE_CREATE_MANAGED_TABLE.key(), Boolean.toString(createManagedTable));
+
+    String instantTime = "100";
+    HiveTestUtil.createCOWTable(instantTime, 5, true);
+
+    reinitHiveSyncClient();
+    reSyncHiveTable();
+
+    SessionState.start(HiveTestUtil.getHiveConf());
+    Driver hiveDriver = new org.apache.hadoop.hive.ql.Driver(HiveTestUtil.getHiveConf());
+    hiveDriver.run(String.format("SHOW TBLPROPERTIES %s.%s", HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME));
+    List<String> results = new ArrayList<>();
+    hiveDriver.getResults(results);
+
+    assertEquals(
+        String.format("%slast_commit_time_sync\t%s\n%s",
+            createManagedTable ? StringUtils.EMPTY_STRING : "EXTERNAL\tTRUE\n",
+            instantTime,
+            getSparkTableProperties(true, true)),
+        String.format("%s\n", String.join("\n", results.subList(0, results.size() - 1))));
   }
 
   private String getSparkTableProperties(boolean syncAsDataSourceTable, boolean useSchemaFromCommitMetadata) {
