@@ -213,9 +213,10 @@ object HoodieSparkSqlWriter {
         val (hashPartitionFields, hashPartitionNum) = getHashPartitionParam(optParams)
         if(containHashPartitionParam(partitionColumns, hashPartitionFields)){
           hoodieConfig.setValue(HoodieTableConfig.HASH_PARTITION_FIELDS,hashPartitionFields)
+
           hoodieConfig.setValue(HoodieTableConfig.HASH_PARTITION_NUM,hashPartitionNum.toString)
           hoodieTableMetaClient.setHashPartitionNum(hashPartitionNum)
-             .setHashPartitionFields(hashPartitionFields)
+            .setHashPartitionFields(hashPartitionFields)
         }
         hoodieTableMetaClient.initTable(sparkContext.hadoopConfiguration, path)
       }

@@ -899,7 +899,7 @@ public class HoodieTableMetaClient implements Serializable {
       this.hashPartitionNum = num;
       return this;
     }
-    
+
     public PropertyBuilder setCDCEnabled(boolean cdcEnabled) {
       this.cdcEnabled = cdcEnabled;
       return this;

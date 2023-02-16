@@ -119,7 +119,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> HASH_PARTITION_NUM = ConfigProperty
       .key("hoodie.table.hash.partition.num")
       .defaultValue("256")
-      .withDocumentation("Determine the number of hash partitions in the hudi table");
+      .withDocumentation("Determine the number of hash partitions in the hudi table ");
 
   public static final ConfigProperty<String> HASH_PARTITION_FIELDS = ConfigProperty
           .key("hoodie.table.hash.partition.fields")

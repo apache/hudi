@@ -197,6 +197,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       val schema = SchemaConverters.toAvroType(finalSchema, false, recordName, namespace)
       val partitionColumns = if (table.partitionColumnNames.isEmpty) {
         val (partitionFields, hashPartitionFields, hashPartitionNum) = getHashPartitionParam(tableConfigs)
+
         if (containHashPartitionParam(partitionFields, hashPartitionFields)) {
           properties.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.ComplexKeyGenerator")
           properties.setProperty(HoodieTableConfig.HASH_PARTITION_FIELDS.key, hashPartitionFields)

@@ -54,6 +54,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public static final String HOODIE_IS_DELETED_FIELD = "_hoodie_is_deleted";
   public static final String HASH_PARTITION_FIELD = "_hoodie_hash_partition";
 
+
   public enum HoodieMetadataField {
     COMMIT_TIME_METADATA_FIELD("_hoodie_commit_time"),
     COMMIT_SEQNO_METADATA_FIELD("_hoodie_commit_seqno"),

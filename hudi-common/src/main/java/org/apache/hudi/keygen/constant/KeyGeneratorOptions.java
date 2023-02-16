@@ -62,7 +62,7 @@ public class KeyGeneratorOptions extends HoodieConfig {
   public static final ConfigProperty<Integer> HASH_PARTITION_NUM = ConfigProperty
       .key("hoodie.datasource.write.hash.partition.num")
       .defaultValue(256)
-      .withDocumentation("Determine the number of hash partitions in the hudi table");
+      .withDocumentation("Determine the number of hash partitions in the hudi table ");
 
   public static final ConfigProperty<String> HASH_PARTITION_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.hash.partition.field")

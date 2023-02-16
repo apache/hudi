@@ -129,6 +129,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                                   boolean shouldListLazily) {
     this.partitionColumns = metaClient.getTableConfig().getPartitionFields()
         .orElse(new String[0]);
+
     this.hashPartitionColumns = metaClient.getTableConfig().getHashPartitionFields()
         .orElse(new String[0]);
     this.hashPartitionNum = Integer.parseInt((metaClient.getTableConfig().getHashPartitionNum()));

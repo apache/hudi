@@ -1201,7 +1201,7 @@ class TestHoodieSparkSqlWriter {
     * When hash.partition.fields is specified and partition.fields contains _hoodie_hash_partition,
     * a column named _hoodie_hash_partition will be added in this table as one of the partition key.
     *
-    * If predicates of hash.partition.fields appear in the query statement,
+    * If predicates of hash.partition.fields appear in the query statement, 
     * the _hoodie_hash_partition = X  predicate will be automatically added
     * to the query statement for partition pruning.
     */

@@ -140,6 +140,7 @@ case class HoodieFileIndex(spark: SparkSession,
     var totalFileSize = 0
     var candidateFileSize = 0
     val hashPartionFilterOption = createHashPartionFilter(partitionFilters ++ dataFilters)
+
     // Prune the partition path by the partition filters
     // NOTE: Non-partitioned tables are assumed to consist from a single partition
     //       encompassing the whole table

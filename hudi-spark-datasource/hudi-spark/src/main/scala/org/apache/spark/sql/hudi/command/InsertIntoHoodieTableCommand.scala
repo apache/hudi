@@ -183,6 +183,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
 
     val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
     val hashPartition = catalogTable.metaClient.getTableConfig.getHashPartitionFields.orElse(null)
+
     val fullQueryOutputSchema = if(hashPartition != null){
       val hashField = StructField(HoodieRecord.HASH_PARTITION_FIELD, StringType)
       StructType(queryOutputSchema.fields.:+ (hashField) ++ staticPartitionValues.keys.map(StructField(_, StringType)))

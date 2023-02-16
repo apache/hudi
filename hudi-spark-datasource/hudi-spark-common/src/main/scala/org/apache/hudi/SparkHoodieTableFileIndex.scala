@@ -189,7 +189,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         Some(nonEmptyHashPartitionCol.map(colName => (columnValuesMap(colName).get)))
       }
     }
-
   }
 
   protected def createHashPartionFilter(predicates: Seq[Expression]) : Option[Expression] = {
