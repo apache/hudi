@@ -18,23 +18,24 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
-// TODO move to hudi-common
-public class ClosableMergingIterator<T> extends MergingIterator<T> implements ClosableIterator<T> {
+/**
+ * Closeable counterpart of {@link MergingIterator}
+ */
+public class ClosableMergingIterator<T1, T2, R> extends MergingIterator<T1, T2, R> implements ClosableIterator<R> {
 
-  public ClosableMergingIterator(ClosableIterator<T> leftIterator,
-                                 ClosableIterator<T> rightIterator,
-                                 Function<Pair<T, T>, T> mergeFunction) {
+  public ClosableMergingIterator(ClosableIterator<T1> leftIterator,
+                                 ClosableIterator<T2> rightIterator,
+                                 BiFunction<T1, T2, R> mergeFunction) {
     super(leftIterator, rightIterator, mergeFunction);
   }
 
   @Override
   public void close() {
-    ((ClosableIterator<T>) leftIterator).close();
-    ((ClosableIterator<T>) rightIterator).close();
+    ((ClosableIterator<T1>) leftIterator).close();
+    ((ClosableIterator<T2>) rightIterator).close();
   }
 }
