@@ -22,6 +22,9 @@ import org.apache.hudi.common.util.ClosableIterator;
 
 import java.util.function.Function;
 
+/**
+ * {@link MappingIterator} requiring to be closed after iteration (to cleanup resources)
+ */
 public class CloseableMappingIterator<I, O> extends MappingIterator<I, O>
     implements ClosableIterator<O> {
 
