@@ -525,7 +525,7 @@ public class DeltaSync implements Serializable, Closeable {
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
 
-      transformed = formatAdapter.transformDatasetWithQuarantineEvents(transformed);
+      transformed = formatAdapter.transformDatasetWithQuarantineEvents(transformed, QuarantineEvent.QuarantineReason.CUSTOM_TRANSFORMER_FAILURE);
 
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       boolean reconcileSchema = props.getBoolean(DataSourceWriteOptions.RECONCILE_SCHEMA().key());
