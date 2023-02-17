@@ -19,7 +19,7 @@ See the [Spark Quick Start](/docs/quick-start-guide) for more examples of Spark 
 
 **Setup**
 
-If your Spark environment does not have the Hudi jars installed, add `hudi-spark-bundle_2.11-<hudi.version>.jar` to the
+If your Spark environment does not have the Hudi jars installed, add [hudi-spark-bundle](https://mvnrepository.com/artifact/org.apache.hudi/hudi-spark-bundle) jar to the
 classpath of drivers and executors using `--jars` option. Alternatively, hudi-spark-bundle can also fetched via the
 --packages options (e.g: --packages org.apache.hudi:hudi-spark-bundle_2.11:0.13.0).
 
@@ -214,12 +214,12 @@ In order for Hive to recognize Hudi tables and query correctly,
 
 - the HiveServer2 needs to be provided with the `hudi-hadoop-mr-bundle-<hudi.version>.jar` in
   its [aux jars path](https://www.cloudera.com/documentation/enterprise/5-6-x/topics/cm_mc_hive_udf.html#concept_nc3_mms_lr)
-  . This will ensure the input format classes with its dependencies are available for query planning & execution.
-- For MERGE_ON_READ tables, additionally the bundle needs to be put on the hadoop/hive installation across the cluster,
+  . This will ensure the input format classes with their dependencies are available for query planning & execution.
+- For MERGE_ON_READ tables, additionally, the bundle needs to be put on the hadoop/hive installation across the cluster,
   so that queries can pick up the custom RecordReader as well.
 
 In addition to setup above, for beeline cli access, the `hive.input.format` variable needs to be set to the fully
-qualified path name of the inputformat `org.apache.hudi.hadoop.HoodieParquetInputFormat`. For Tez, additionally
+qualified path name of the inputformat `org.apache.hudi.hadoop.HoodieParquetInputFormat`. For Tez, additionally,
 the `hive.tez.input.format` needs to be set to `org.apache.hadoop.hive.ql.io.HiveInputFormat`. Then proceed to query the
 table like any other Hive table.
 
@@ -263,7 +263,7 @@ separated) and calls InputFormat.listStatus() only once with all those partition
 
 ## PrestoDB
 
-PrestoDB is a popular query engine, providing interactive query performance. One can use both Hive or Hudi connector (
+PrestoDB is a popular query engine, providing interactive query performance. One can use both the Hive or Hudi connector (
 Presto version 0.275 onwards) for querying Hudi tables. Both connectors currently support snapshot querying on
 COPY_ON_WRITE tables, and snapshot and read optimized queries on MERGE_ON_READ Hudi tables.
 
@@ -284,7 +284,7 @@ To learn more about the usage of Hudi connector, please
 checkout [prestodb documentation](https://prestodb.io/docs/current/connector/hudi.html).
 
 :::note Incremental queries and point in time queries are not supported either through the Hive connector or Hudi
-connector. However, it is in our roadmap and you can track the development
+connector. However, it is in our roadmap, and you can track the development
 under [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-3210).
 
 There is a known issue ([HUDI-4290](https://issues.apache.org/jira/browse/HUDI-4290)) for a clustered Hudi table. Presto

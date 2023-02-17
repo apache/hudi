@@ -90,7 +90,6 @@ module.exports = {
             type: 'category',
             label: 'Guides',
             items: [
-                'query_engine_setup',
                 'performance',
                 'deployment',
                 'cli',
