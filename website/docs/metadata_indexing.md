@@ -77,11 +77,11 @@ us schedule the indexing for COLUMN_STATS index. First we need to define a prope
 ### Configurations
 
 As mentioned before, metadata indexes are pluggable. One can add any index at any point in time depending on changing
-business requirements. Some configurations to enable particular indexes are listed below. Full set of metadata
+business requirements. Some configurations to enable particular indexes are listed below. The full set of metadata
 configurations can be explored [here](/docs/configurations/#Metadata-Configs).
 
 
-|Config| Default | Description | Scope | Since Version |
+|Config| Default | Scope | Description | Since Version |
 |---|---|---|---|---|
 | hoodie.metadata.enable | true | Metadata table | Set to false to disable metadata table | 0.7.0 |
 | hoodie.metadata.index.async | false | Metadata table | Enable async indexing of metadata table. | 0.11.0 |
@@ -89,7 +89,7 @@ configurations can be explored [here](/docs/configurations/#Metadata-Configs).
 | hoodie.metadata.index.bloom.filter.enable | false | Metadata table | Enable indexing bloom filters of user data files under metadata table | 0.11.0 |
 
 :::note
-Enabling metadata table and configuring a lock provider are the prerequisites for using async indexer. Checkout a sample
+Enabling the metadata table and configuring a lock provider are the prerequisites for using async indexer. Checkout a sample
 configuration below.
 :::
 
