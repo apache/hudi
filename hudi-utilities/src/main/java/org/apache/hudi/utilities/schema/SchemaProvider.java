@@ -57,7 +57,8 @@ public abstract class SchemaProvider implements Serializable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public final Schema getSourceSchema() {
     if (schemaPostProcessor != null
-        && config.getBoolean(BaseSchemaPostProcessorConfig.SCHEMA_PROVIDER_SOURCE_DISABLE.key(), false)) {
+        && !config.getBoolean(BaseSchemaPostProcessorConfig.SCHEMA_PROVIDER_SOURCE_DISABLE.key(),
+        Boolean.parseBoolean(BaseSchemaPostProcessorConfig.SCHEMA_PROVIDER_SOURCE_DISABLE.defaultValue()))) {
       return schemaPostProcessor.processSchema(getUnprocessedSourceSchema());
     }
     return getUnprocessedSourceSchema();
@@ -90,7 +91,8 @@ public abstract class SchemaProvider implements Serializable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public final Schema getTargetSchema() {
     if (schemaPostProcessor != null
-        && config.getBoolean(BaseSchemaPostProcessorConfig.SCHEMA_PROVIDER_TARGET_DISABLE.key(), false)) {
+        && !config.getBoolean(BaseSchemaPostProcessorConfig.SCHEMA_PROVIDER_TARGET_DISABLE.key(),
+        Boolean.parseBoolean(BaseSchemaPostProcessorConfig.SCHEMA_PROVIDER_TARGET_DISABLE.defaultValue()))) {
       return schemaPostProcessor.processSchema(getUnprocessedTargetSchema());
     }
     return getUnprocessedTargetSchema();
