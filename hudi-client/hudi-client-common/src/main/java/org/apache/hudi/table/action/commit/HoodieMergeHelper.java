@@ -18,15 +18,15 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.client.utils.ClosableMergingIterator;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.ClosableMappingIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -123,7 +123,11 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
             HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(bootstrapFileConfig, bootstrapFilePath),
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());
-        recordIterator = bootstrapFileReader.getRecordIterator(mergeHandle.getWriterSchemaWithMetaFields());
+        recordIterator = new ClosableMergingIterator<>(
+            baseFileRecordIterator,
+            (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(),
+            (left, right) ->
+                left.joinWith(right, mergeHandle.getWriterSchemaWithMetaFields()));
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
       } else {
         recordIterator = baseFileRecordIterator;
@@ -132,7 +136,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
       boolean isBufferingRecords = ExecutorFactory.isBufferingRecords(writeConfig);
 
-      wrapper = ExecutorFactory.create(writeConfig, recordIterator, new UpdateHandler(mergeHandle), record -> {
+      executor = ExecutorFactory.create(writeConfig, recordIterator, new UpdateHandler(mergeHandle), record -> {
         HoodieRecord newRecord;
         if (schemaEvolutionTransformerOpt.isPresent()) {
           newRecord = schemaEvolutionTransformerOpt.get().apply(record);
@@ -158,7 +162,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         executor.shutdownNow();
         executor.awaitTermination();
       } else {
-        reader.close();
+        baseFileReader.close();
         mergeHandle.close();
       }
     }
