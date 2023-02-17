@@ -33,13 +33,13 @@ Clustering table service can run asynchronously or synchronously adding a new ac
 
 
 
-### Overall, there are 2 parts to clustering
+### Overall, there are 2 steps to clustering
 
 1.  Scheduling clustering: Create a clustering plan using a pluggable clustering strategy.
 2.  Execute clustering: Process the plan using an execution strategy to create new files and replace old files.
 
 
-### Scheduling clustering
+### Schedule clustering
 
 Following steps are followed to schedule clustering.
 
@@ -48,7 +48,7 @@ Following steps are followed to schedule clustering.
 3.  Finally, the clustering plan is saved to the timeline in an avro [metadata format](https://github.com/apache/hudi/blob/master/hudi-common/src/main/avro/HoodieClusteringPlan.avsc).
 
 
-### Running clustering
+### Execute clustering
 
 1.  Read the clustering plan and get the ‘clusteringGroups’ that mark the file groups that need to be clustered.
 2.  For each group, we instantiate appropriate strategy class with strategyParams (example: sortColumns) and apply that strategy to rewrite the data.
@@ -66,7 +66,7 @@ _Figure: Illustrating query performance improvements by clustering_
 
 ### Batching small files
 
-As mentioned in the intro, streaming ingestion generally results in smaller files in your data lake. But having lot of
+As mentioned in the intro, streaming ingestion generally results in smaller files in your data lake. But having a lot of
 such small files could bring down your query latency. From our experience supporting community users, there are quite a
 few users who are using Hudi just for small file handling capabilities. So, you could employ clustering to batch a lot
 of such small files into larger ones.
@@ -77,7 +77,7 @@ of such small files into larger ones.
 
 Another classic problem in data lake is the arrival time vs event time problem. Generally you write data based on
 arrival time, while query predicates do not sit well with it. With clustering, you can re-write your data by sorting
-based on query predicates and so, your data skipping will be very efficient and your query can ignore scanning lot of
+based on query predicates and so, your data skipping will be very efficient and your query can ignore scanning a lot of
 unnecessary data.
 
 ![Batching small files](/assets/images/clustering_sort.gif)
@@ -91,62 +91,111 @@ update strategy.
 
 ### Plan Strategy
 
-This strategy comes into play while creating clustering plan. It helps to decide what file groups should be clustered.
-Let's look at different plan strategies that are available with Hudi. Note that these strategies are easily pluggable
-using this [config](/docs/configurations#hoodieclusteringplanstrategyclass).
+This strategy comes into play while creating clustering plan. It helps to decide what file groups should be clustered
+and how many output file groups should the clustering produce. Note that these strategies are easily pluggable using the
+config [hoodie.clustering.plan.strategy.class](/docs/configurations#hoodieclusteringplanstrategyclass).
 
-1. `SparkSizeBasedClusteringPlanStrategy`: It selects file slices based on
-   the [small file limit](/docs/configurations/#hoodieclusteringplanstrategysmallfilelimit)
-   of base files and creates clustering groups upto max file size allowed per group. The max size can be specified using
-   this [config](/docs/configurations/#hoodieclusteringplanstrategymaxbytespergroup). This
-   strategy is useful for stitching together medium-sized files into larger ones to reduce lot of files spread across
-   cold partitions.
-2. `SparkRecentDaysClusteringPlanStrategy`: It looks back previous 'N' days partitions and creates a plan that will
-   cluster the 'small' file slices within those partitions. This is the default strategy. It could be useful when the
-   workload is predictable and data is partitioned by time.
-3. `SparkSelectedPartitionsClusteringPlanStrategy`: In case you want to cluster only specific partitions within a range,
-   no matter how old or new are those partitions, then this strategy could be useful. To use this strategy, one needs
-   to set below two configs additionally (both begin and end partitions are inclusive):
+Different plan strategies are as follows:
 
-```
-hoodie.clustering.plan.strategy.cluster.begin.partition
-hoodie.clustering.plan.strategy.cluster.end.partition
-```
+#### Size-based clustering strategies
 
-:::note
-All the strategies are partition-aware and the latter two are still bound by the size limits of the first strategy.
+This strategy creates clustering groups based on max size allowed per group. Also, it excludes files that are greater
+than the small file limit from the clustering plan. Available strategies depending on write client
+are: `SparkSizeBasedClusteringPlanStrategy`, `FlinkSizeBasedClusteringPlanStrategy`
+and `JavaSizeBasedClusteringPlanStrategy`. Furthermore, Hudi provides flexibility to include or exclude partitions for
+clustering, tune the file size limits, maximum number of output groups, as we will see below.
+
+`hoodie.clustering.plan.strategy.partition.selected`: Comma separated list of partitions to be considered for
+clustering.
+
+`hoodie.clustering.plan.strategy.partition.regex.pattern`: Filters clustering partitions that matched regex pattern.
+
+`hoodie.clustering.plan.partition.filter.mode`: In addition to previous filtering, we have few additional filtering as
+well. Different values for this mode are `NONE`, `RECENT_DAYS` and `SELECTED_PARTITIONS`.
+
+- `NONE`: do not filter table partition and thus the clustering plan will include all partitions that have clustering
+  candidate.
+- `RECENT_DAYS`: keep a continuous range of partitions, works together with the below configs:
+   - `hoodie.clustering.plan.strategy.daybased.lookback.partitions`: Number of partitions to list to create
+     ClusteringPlan.
+   - `hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions`: Number of partitions to skip from latest when
+     choosing partitions to create ClusteringPlan. As the name implies, applicable only if partitioning is day based.
+- `SELECTED_PARTITIONS`: keep partitions that are in the specified range based on below configs:
+   - `hoodie.clustering.plan.strategy.cluster.begin.partition`: Begin partition used to filter partition (inclusive).
+   - `hoodie.clustering.plan.strategy.cluster.end.partition`: End partition used to filter partition (inclusive).
+
+**Small file limit**
+
+`hoodie.clustering.plan.strategy.small.file.limit`: Files smaller than the size in bytes specified here are candidates
+for clustering. Larges file groups will be ignored.
+
+**Max number of groups**
+
+`hoodie.clustering.plan.strategy.max.num.groups`: Maximum number of groups to create as part of ClusteringPlan.
+Increasing groups will increase parallelism. This does not imply the number of output file groups as such. This refers
+to clustering groups (parallel tasks/threads that will work towards producing output file groups). Total output file
+groups is also determined by based on target file size which we will discuss shortly.
+
+**Max bytes per group**
+
+`hoodie.clustering.plan.strategy.max.bytes.per.group`: Each clustering operation can create multiple output file groups.
+Total amount of data processed by clustering operation is defined by below two properties (Max bytes per group * Max num
+groups. Thus, this config will assist in capping the max amount of data to be included in one group.
+
+**Target file size max**
+
+`hoodie.clustering.plan.strategy.target.file.max.bytes`: Each group can produce ’N’ (max group size /target file size)
+output file groups.
+
+#### SparkSingleFileSortPlanStrategy
+
+In this strategy, clustering group for each partition is built in the same way as `SparkSizeBasedClusteringPlanStrategy`
+. The difference is that the output group is 1 and file group id remains the same,
+while `SparkSizeBasedClusteringPlanStrategy` can create multiple file groups with newer fileIds.
+
+#### SparkConsistentBucketClusteringPlanStrategy
+
+This strategy is specifically used for consistent bucket index. This will be leveraged to expand your bucket index (from
+static partitioning to dynamic). Typically, users don’t need to use this strategy. Hudi internally uses this for
+dynamically expanding the buckets for bucket index datasets.
+
+:::note The latter two strategies are applicable only for the Spark engine.
 :::
 
 ### Execution Strategy
 
 After building the clustering groups in the planning phase, Hudi applies execution strategy, for each group, primarily
-based on sort columns and size. The strategy can be specified using this [config](/docs/configurations/#hoodieclusteringexecutionstrategyclass).
+based on sort columns and size. The strategy can be specified using the
+config [hoodie.clustering.execution.strategy.class](/docs/configurations/#hoodieclusteringexecutionstrategyclass). By
+default, Hudi sorts the file groups in the plan by the specified columns, while meeting the configured target file
+sizes.
 
-`SparkSortAndSizeExecutionStrategy` is the default strategy. Users can specify the columns to sort the data by, when
-clustering using
-this [config](/docs/configurations/#hoodieclusteringplanstrategysortcolumns). Apart from
-that, we can also set [max file size](/docs/configurations/#hoodieparquetmaxfilesize)
-for the parquet files produced due to clustering. The strategy uses bulk insert to write data into new files, in which
-case, Hudi implicitly uses a partitioner that does sorting based on specified columns. In this way, the strategy changes
-the data layout in a way that not only improves query performance but also balance rewrite overhead automatically.
+The available strategies are as follows:
 
-Now this strategy can be executed either as a single spark job or multiple jobs depending on number of clustering groups
-created in the planning phase. By default, Hudi will submit multiple spark jobs and union the results. In case you want
-to force Hudi to use single spark job, set the execution strategy
-class [config](/docs/configurations/#hoodieclusteringexecutionstrategyclass)
-to `SingleSparkJobExecutionStrategy`.
+1. `SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY`: Uses bulk_insert to re-write data from input file groups.
+   1. Set `hoodie.clustering.execution.strategy.class`
+      to `org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy`.
+   2. `hoodie.clustering.plan.strategy.sort.columns`: Columns to sort the data while clustering. This goes in
+      conjunction with layout optimization strategies depending on your query predicates. One can set comma separated
+      list of columns that needs to be sorted in this config.
+2. `JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY`: Similar to `SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY`, for the Java and Flink
+   engines. Set `hoodie.clustering.execution.strategy.class`
+   to `org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy`.
+3. `SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY`: As the name implies, this is applicable to dynamically expand
+   consistent bucket index and only applicable to the Spark engine. Set `hoodie.clustering.execution.strategy.class`
+   to `org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy`.
 
 ### Update Strategy
 
 Currently, clustering can only be scheduled for tables/partitions not receiving any concurrent updates. By default,
-the [config for update strategy](/docs/configurations/#hoodieclusteringupdatesstrategy) is
-set to ***SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and
-throw an exception. However, in some use-cases updates are very sparse and do not touch most file groups. The default
-strategy to simply reject updates does not seem fair. In such use-cases, users can set the config to ***SparkAllowUpdateStrategy***.
+the [config for update strategy](/docs/configurations/#hoodieclusteringupdatesstrategy) is set to ***
+SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and throw an
+exception. However, in some use-cases updates are very sparse and do not touch most file groups. The default strategy to
+simply reject updates does not seem fair. In such use-cases, users can set the config to ***SparkAllowUpdateStrategy***.
 
 We discussed the critical strategy configurations. All other configurations related to clustering are
-listed [here](/docs/configurations/#Clustering-Configs). Out of this list, a few
-configurations that will be very useful are:
+listed [here](/docs/configurations/#Clustering-Configs). Out of this list, a few configurations that will be very useful
+for inline or async clustering are shown below with code samples.
 
 ## Inline clustering
 
