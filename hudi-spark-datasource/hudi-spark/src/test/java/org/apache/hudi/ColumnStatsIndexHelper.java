@@ -48,10 +48,8 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.util.SerializableConfiguration;
-import scala.Tuple2;
 import scala.collection.JavaConversions;
 import scala.collection.JavaConverters$;
-import scala.collection.Seq;
 
 import javax.annotation.Nonnull;
 import java.math.BigDecimal;
@@ -238,11 +236,11 @@ public class ColumnStatsIndexHelper {
             })
             .filter(Objects::nonNull);
 
-      StructType indexSchema = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
+    StructType indexSchema = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
           JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSeq(),
           JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSet(),
           StructType$.MODULE$.apply(orderedColumnSchemas)
-      )._1;
+    )._1;
 
     return sparkSession.createDataFrame(allMetaDataRDD, indexSchema);
   }
