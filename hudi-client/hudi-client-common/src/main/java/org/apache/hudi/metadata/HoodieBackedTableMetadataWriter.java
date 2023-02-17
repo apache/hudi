@@ -338,7 +338,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
               .withPushgatewayReportPeriodInSeconds(String.valueOf(writeConfig.getPushGatewayReportPeriodSeconds()))
               .withPushgatewayHostName(writeConfig.getPushGatewayHost())
               .withPushgatewayPortNum(writeConfig.getPushGatewayPort()).build();
-          builder.withProps(prometheusConfig.getProps());
+          builder.withProperties(prometheusConfig.getProps());
           break;
         case DATADOG:
         case PROMETHEUS:
