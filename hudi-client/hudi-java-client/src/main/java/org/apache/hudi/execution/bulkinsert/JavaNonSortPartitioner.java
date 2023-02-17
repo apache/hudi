@@ -34,7 +34,7 @@ public class JavaNonSortPartitioner<T>
 
   @Override
   public List<HoodieRecord<T>> repartitionRecords(List<HoodieRecord<T>> records,
-                                                  int outputPartitions) {
+                                                  int targetPartitionNumHint) {
     return records;
   }
 

@@ -23,6 +23,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.TablePathUtils
+import org.apache.spark.TaskContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -30,11 +31,12 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.util.collection.ExternalSorter
 
 import java.util.Locale
 
@@ -52,6 +54,12 @@ trait SparkAdapter extends Serializable {
    * Inject table-valued functions to SparkSessionExtensions
    */
   def injectTableFunctions(extensions : SparkSessionExtensions): Unit = {}
+
+  /**
+   * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
+   * [[TableCatalog]]s
+   */
+  def getRDDUtils: HoodieRDDUtils
 
   /**
    * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
@@ -173,16 +181,6 @@ trait SparkAdapter extends Serializable {
                      parameters: java.util.Map[String, String]): BaseRelation
 
   /**
-   * Create instance of [[HoodieFileScanRDD]]
-   * SPARK-37273 FileScanRDD constructor changed in SPARK 3.3
-   */
-  def createHoodieFileScanRDD(sparkSession: SparkSession,
-                              readFunction: PartitionedFile => Iterator[InternalRow],
-                              filePartitions: Seq[FilePartition],
-                              readDataSchema: StructType,
-                              metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD
-
-  /**
    * Resolve [[DeleteFromTable]]
    * SPARK-38626 condition is no longer Option in Spark 3.3
    */
@@ -208,4 +206,5 @@ trait SparkAdapter extends Serializable {
    * Converts instance of [[StorageLevel]] to a corresponding string
    */
   def convertStorageLevelToString(level: StorageLevel): String
+
 }

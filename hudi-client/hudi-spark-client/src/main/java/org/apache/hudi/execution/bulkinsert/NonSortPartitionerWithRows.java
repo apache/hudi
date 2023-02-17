@@ -18,8 +18,6 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.table.BulkInsertPartitioner;
-
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -31,38 +29,18 @@ import org.apache.spark.sql.Row;
  * <p>
  * - Otherwise, returns input Rows as is.
  * <p>
- * Corresponds to the {@code BulkInsertSortMode.NONE} mode.
+ * Corresponds to the {@link BulkInsertSortMode#NONE} mode.
  */
-public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
-
-  private final boolean enforceNumOutputPartitions;
-
-  /**
-   * Default constructor without enforcing the number of output partitions.
-   */
-  public NonSortPartitionerWithRows() {
-    this(false);
-  }
-
-  /**
-   * Constructor with `enforceNumOutputPartitions` config.
-   *
-   * @param enforceNumOutputPartitions Whether to enforce the number of output partitions.
-   */
-  public NonSortPartitionerWithRows(boolean enforceNumOutputPartitions) {
-    this.enforceNumOutputPartitions = enforceNumOutputPartitions;
-  }
+public class NonSortPartitionerWithRows extends SparkBulkInsertPartitionerBase<Dataset<Row>> {
 
   @Override
-  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
-    if (enforceNumOutputPartitions) {
-      return rows.coalesce(outputSparkPartitions);
-    }
-    return rows;
+  public Dataset<Row> repartitionRecords(Dataset<Row> dataset, int targetPartitionNumHint) {
+    return tryCoalesce(dataset, targetPartitionNumHint);
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
     return false;
   }
+
 }

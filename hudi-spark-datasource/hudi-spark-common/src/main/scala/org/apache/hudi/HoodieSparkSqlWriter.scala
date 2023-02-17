@@ -309,8 +309,8 @@ object HoodieSparkSqlWriter {
             // Short-circuit if bulk_insert via row is enabled.
             // scalastyle:off
             if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
-              val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, hoodieConfig, df, tblName,
-                basePath, path, instantTime, writerSchema, tableConfig.isTablePartitioned)
+              val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, hoodieConfig, df, tableConfig,
+                basePath, path, instantTime, writerSchema)
               return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
             }
             // scalastyle:on
@@ -752,12 +752,11 @@ object HoodieSparkSqlWriter {
   def bulkInsertAsRow(sqlContext: SQLContext,
                       hoodieConfig: HoodieConfig,
                       df: DataFrame,
-                      tblName: String,
+                      tableConfig: HoodieTableConfig,
                       basePath: Path,
                       path: String,
                       instantTime: String,
-                      writerSchema: Schema,
-                      isTablePartitioned: Boolean): (Boolean, common.util.Option[String]) = {
+                      writerSchema: Schema): (Boolean, common.util.Option[String]) = {
     if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
       throw new HoodieException("Dropping duplicates with bulk_insert in row writer path is not supported yet")
     }
@@ -767,15 +766,15 @@ object HoodieSparkSqlWriter {
     val opts = hoodieConfig.getProps.toMap ++
       Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key -> writerSchemaStr)
 
-    val writeConfig = DataSourceUtils.createHoodieConfig(writerSchemaStr, path, tblName, mapAsJavaMap(opts))
+    val writeConfig = DataSourceUtils.createHoodieConfig(writerSchemaStr, path, tableConfig.getTableName, mapAsJavaMap(opts))
     val populateMetaFields = hoodieConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS)
 
     val bulkInsertPartitionerRows: BulkInsertPartitioner[Dataset[Row]] = if (populateMetaFields) {
-      val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
+      val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig, tableConfig)
       if (userDefinedBulkInsertPartitionerOpt.isPresent) {
         userDefinedBulkInsertPartitionerOpt.get
       } else {
-        BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig, isTablePartitioned)
+        BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig, tableConfig.isTablePartitioned)
       }
     } else {
       // Sort modes are not yet supported when meta fields are disabled

@@ -67,7 +67,7 @@ public class RDDSpatialCurveSortPartitioner<T>
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
+  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int targetPartitionNumHint) {
     if (recordType == HoodieRecordType.AVRO) {
       JavaRDD<GenericRecord> genericRecordsRDD =
           records.map(f -> (GenericRecord) f.toIndexedRecord(schema.get(), new Properties()).get().getData());
@@ -78,7 +78,7 @@ public class RDDSpatialCurveSortPartitioner<T>
               schema.toString(),
               sparkEngineContext.getSqlContext().sparkSession()
           );
-      Dataset<Row> sortedDataset = reorder(sourceDataset, outputSparkPartitions);
+      Dataset<Row> sortedDataset = reorder(sourceDataset, targetPartitionNumHint);
 
       return HoodieSparkUtils.createRdd(sortedDataset, schema.get().getName(), schema.get().getNamespace(), false, Option.empty())
           .toJavaRDD()
@@ -93,7 +93,7 @@ public class RDDSpatialCurveSortPartitioner<T>
       StructType structType = HoodieInternalRowUtils.getCachedSchema(schema.get());
       Dataset<Row> sourceDataset = SparkConversionUtils.createDataFrame(records.rdd(),
           sparkEngineContext.getSqlContext().sparkSession(), structType);
-      Dataset<Row> sortedDataset = reorder(sourceDataset, outputSparkPartitions);
+      Dataset<Row> sortedDataset = reorder(sourceDataset, targetPartitionNumHint);
 
       return sortedDataset.queryExecution().toRdd()
           .toJavaRDD()

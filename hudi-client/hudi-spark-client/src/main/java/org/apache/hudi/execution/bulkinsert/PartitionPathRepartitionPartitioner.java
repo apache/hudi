@@ -20,10 +20,8 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
 
@@ -44,33 +42,33 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_
  *
  * @param <T> HoodieRecordPayload type
  */
-public class PartitionPathRepartitionPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public class PartitionPathRepartitionPartitioner<T>
+    extends RepartitioningBulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
-  private final boolean isTablePartitioned;
   private final boolean shouldPopulateMetaFields;
 
   public PartitionPathRepartitionPartitioner(boolean isTablePartitioned, HoodieWriteConfig config) {
-    this.isTablePartitioned = isTablePartitioned;
+    super(isTablePartitioned);
     this.shouldPopulateMetaFields = config.populateMetaFields();
   }
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     int outputSparkPartitions) {
+                                                     int targetPartitionNumHint) {
     if (!shouldPopulateMetaFields) {
       throw new HoodieException(PARTITION_PATH_REPARTITION.name() + " mode requires meta-fields to be enabled");
     }
 
-    if (isTablePartitioned) {
+    if (isPartitionedTable) {
       PartitionPathRDDPartitioner partitioner = new PartitionPathRDDPartitioner(
-          (partitionPath) -> (String) partitionPath, outputSparkPartitions);
+          (partitionPath) -> (String) partitionPath, handleTargetPartitionNumHint(targetPartitionNumHint));
       return records
           .mapToPair(record -> new Tuple2<>(record.getPartitionPath(), record))
           .partitionBy(partitioner)
           .values();
     }
-    return records.coalesce(outputSparkPartitions);
+
+    return tryCoalesce(records, targetPartitionNumHint);
   }
 
   @Override

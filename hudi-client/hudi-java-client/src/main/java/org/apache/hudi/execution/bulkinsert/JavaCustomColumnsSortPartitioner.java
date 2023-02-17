@@ -49,7 +49,7 @@ public class JavaCustomColumnsSortPartitioner<T>
 
   @Override
   public List<HoodieRecord<T>> repartitionRecords(
-      List<HoodieRecord<T>> records, int outputPartitions) {
+      List<HoodieRecord<T>> records, int targetPartitionNumHint) {
     return records.stream().sorted((o1, o2) -> {
       Object values1 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)o1, sortColumnNames, schema, consistentLogicalTimestampEnabled);
       Object values2 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)o2, sortColumnNames, schema, consistentLogicalTimestampEnabled);

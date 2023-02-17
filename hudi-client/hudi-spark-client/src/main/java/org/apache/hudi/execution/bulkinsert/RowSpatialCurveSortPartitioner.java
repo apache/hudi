@@ -36,7 +36,7 @@ public class RowSpatialCurveSortPartitioner extends SpatialCurveSortPartitionerB
   }
 
   @Override
-  public Dataset<Row> repartitionRecords(Dataset<Row> records, int outputPartitions) {
-    return reorder(records, outputPartitions);
+  public Dataset<Row> repartitionRecords(Dataset<Row> records, int targetPartitionNumHint) {
+    return reorder(records, targetPartitionNumHint);
   }
 }

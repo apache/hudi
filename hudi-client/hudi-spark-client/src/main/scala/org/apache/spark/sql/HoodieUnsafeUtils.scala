@@ -21,6 +21,7 @@ package org.apache.spark.sql
 import org.apache.hudi.HoodieUnsafeRDD
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.catalyst.plans.physical.{Partitioning, UnknownPartitioning}
 import org.apache.spark.sql.execution.LogicalRDD
@@ -35,9 +36,10 @@ object HoodieUnsafeUtils {
   /**
    * Fetches expected output [[Partitioning]] of the provided [[DataFrame]]
    *
-   * NOTE: Invoking [[QueryExecution#executedPlan]] wouldn't actually execute the query (ie start pumping the data)
-   *       but instead will just execute Spark resolution, optimization and actual execution planning stages
-   *       returning instance of [[SparkPlan]] ready for execution
+   * NOTE: Spark SQL statements SHOULD NOT BE PASSED INTO THIS METHOD, AS THESE MIGHT GET ACTUALLY EXECUTED
+   *       However, invoking [[QueryExecution#executedPlan]] on queries w/ no side-effects wouldn't
+   *       actually execute the query, but instead will just execute Spark resolution, optimization
+   *       and actual execution planning stages returning instance of [[SparkPlan]]
    */
   def getNumPartitions(df: DataFrame): Int = {
     // NOTE: In general we'd rely on [[outputPartitioning]] of the executable [[SparkPlan]] to determine
@@ -45,13 +47,21 @@ object HoodieUnsafeUtils {
     //       However in case of [[LogicalRDD]] plan's output-partitioning will be stubbed as [[UnknownPartitioning]]
     //       and therefore we will be falling back to determine number of partitions by looking at the RDD itself
     df.queryExecution.logical match {
-      case LogicalRDD(_, rdd, outputPartitioning, _, _) =>
-        outputPartitioning match {
-          case _: UnknownPartitioning => rdd.getNumPartitions
-          case _ => outputPartitioning.numPartitions
+      case PhysicalOperation(_, _, LogicalRDD(_, rdd, outputPartitioning, _, _)) =>
+        if (outputPartitioning.numPartitions > 0) {
+          outputPartitioning.numPartitions
+        } else {
+          rdd.getNumPartitions
         }
 
-      case _ => df.queryExecution.executedPlan.outputPartitioning.numPartitions
+      case _ =>
+        // TODO re-eval
+        val executedPlan = df.queryExecution.executedPlan
+        if (executedPlan.outputPartitioning.numPartitions > 0) {
+          executedPlan.outputPartitioning.numPartitions
+        } else {
+          df.queryExecution.toRdd.getNumPartitions
+        }
     }
   }
 

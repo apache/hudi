@@ -67,6 +67,7 @@ import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -88,8 +89,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
-import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateExpectedPartitionNumRecords;
-import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateTestRecordsForBulkInsert;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -494,11 +493,11 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
     // Insert new records
-    final JavaRDD<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert(jsc);
+    final JavaRDD<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert(jsc, 10);
     SparkBulkInsertCommitActionExecutor bulkInsertExecutor = new SparkBulkInsertCommitActionExecutor(
         context, config, table, instantTime, HoodieJavaRDD.of(inputRecords), Option.empty());
     List<WriteStatus> returnedStatuses = ((HoodieData<WriteStatus>) bulkInsertExecutor.execute().getWriteStatuses()).collectAsList();
-    verifyStatusResult(returnedStatuses, generateExpectedPartitionNumRecords(inputRecords));
+    verifyStatusResult(returnedStatuses, inputRecords.map(HoodieRecord::getPartitionPath).countByValue());
   }
 
   @ParameterizedTest(name = "[{index}] {0}")
@@ -554,4 +553,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     assertTrue(partitionMetadata.readPartitionCreatedCommitTime().get().equals(instantTime));
   }
 
+  private static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc, int count) {
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    List<HoodieRecord> records = dataGenerator.generateInserts("0", count);
+    return jsc.parallelize(records, 1);
+  }
 }

@@ -22,7 +22,6 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
@@ -41,26 +40,27 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_
  * <p>
  * Corresponding to the {@code BulkInsertSortMode.PARTITION_PATH_REPARTITION} mode.
  */
-public class PartitionPathRepartitionPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class PartitionPathRepartitionPartitionerWithRows
+    extends RepartitioningBulkInsertPartitionerBase<Dataset<Row>> {
 
-  private final boolean isTablePartitioned;
   private final boolean shouldPopulateMetaFields;
 
   public PartitionPathRepartitionPartitionerWithRows(boolean isTablePartitioned, HoodieWriteConfig config) {
-    this.isTablePartitioned = isTablePartitioned;
+    super(isTablePartitioned);
     this.shouldPopulateMetaFields = config.populateMetaFields();
   }
 
   @Override
-  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int targetPartitionNumHint) {
     if (!shouldPopulateMetaFields) {
       throw new HoodieException(PARTITION_PATH_REPARTITION.name() + " mode requires meta-fields to be enabled");
     }
 
-    if (isTablePartitioned) {
-      return rows.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    if (isPartitionedTable) {
+      return rows.repartition(handleTargetPartitionNumHint(targetPartitionNumHint), new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
     }
-    return rows.coalesce(outputSparkPartitions);
+
+    return tryCoalesce(rows, targetPartitionNumHint);
   }
 
   @Override

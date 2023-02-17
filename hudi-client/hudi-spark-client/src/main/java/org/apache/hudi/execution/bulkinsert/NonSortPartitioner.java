@@ -19,8 +19,6 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.table.BulkInsertPartitioner;
-
 import org.apache.spark.api.java.JavaRDD;
 
 /**
@@ -31,38 +29,15 @@ import org.apache.spark.api.java.JavaRDD;
  * <p>
  * - Otherwise, returns input records as is.
  * <p>
- * Corresponds to the {@code BulkInsertSortMode.NONE} mode.
+ * Corresponds to the {@link BulkInsertSortMode#NONE} mode.
  *
  * @param <T> HoodieRecordPayload type
  */
-public class NonSortPartitioner<T>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
-
-  private final boolean enforceNumOutputPartitions;
-
-  /**
-   * Default constructor without enforcing the number of output partitions.
-   */
-  public NonSortPartitioner() {
-    this(false);
-  }
-
-  /**
-   * Constructor with `enforceNumOutputPartitions` config.
-   *
-   * @param enforceNumOutputPartitions Whether to enforce the number of output partitions.
-   */
-  public NonSortPartitioner(boolean enforceNumOutputPartitions) {
-    this.enforceNumOutputPartitions = enforceNumOutputPartitions;
-  }
+public class NonSortPartitioner<T> extends SparkBulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
   @Override
-  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     int outputSparkPartitions) {
-    if (enforceNumOutputPartitions) {
-      return records.coalesce(outputSparkPartitions);
-    }
-    return records;
+  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int targetPartitionNumHint) {
+    return tryCoalesce(records, targetPartitionNumHint);
   }
 
   @Override

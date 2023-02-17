@@ -107,7 +107,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
     val projectedReader = projectReader(baseFileReader, requiredSchema.structTypeSchema)
 
     // SPARK-37273 FileScanRDD constructor changed in SPARK 3.3
-    sparkAdapter.createHoodieFileScanRDD(sparkSession, projectedReader.apply, fileSplits.map(_.filePartition), requiredSchema.structTypeSchema)
+    sparkAdapter.getRDDUtils.createHoodieFileScanRDD(sparkSession, projectedReader.apply, fileSplits.map(_.filePartition), requiredSchema.structTypeSchema)
       .asInstanceOf[HoodieUnsafeRDD]
   }
 

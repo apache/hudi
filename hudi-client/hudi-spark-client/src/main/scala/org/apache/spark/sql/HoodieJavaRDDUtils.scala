@@ -16,26 +16,26 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.execution.bulkinsert;
+package org.apache.spark.sql
 
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.spark.api.java.JavaSparkContext.fakeClassTag
+import org.apache.spark.api.java.{JavaPairRDD, JavaRDD}
+
+import java.util.Comparator
+import scala.reflect.ClassTag
 
 /**
- * A factory to generate built-in partitioner to repartition input records into at least
- * expected number of output spark partitions for bulk insert operation.
+ * Suite of utilities helping in handling [[JavaRDD]]
  */
-public abstract class JavaBulkInsertInternalPartitionerFactory {
+object HoodieJavaRDDUtils {
 
-  public static BulkInsertPartitioner get(BulkInsertSortMode sortMode) {
-    switch (sortMode) {
-      case NONE:
-        return new JavaNonSortPartitioner<>();
-      case GLOBAL_SORT:
-        return new JavaGlobalSortPartitioner<>();
-      default:
-        throw new HoodieException("The bulk insert sort mode \"" + sortMode.name()
-            + "\" is not supported in java client.");
-    }
+  /**
+   * [[HoodieRDDUtils.sortWithinPartitions]] counterpart transforming [[JavaRDD]]s
+   */
+  def sortWithinPartitions[K, V](rdd: JavaPairRDD[K, V], c: Comparator[K]): JavaPairRDD[K, V] = {
+    implicit val classTagK: ClassTag[K] = fakeClassTag
+    implicit val classTagV: ClassTag[V] = fakeClassTag
+    JavaPairRDD.fromRDD(HoodieRDDUtils.sortWithinPartitions(rdd.rdd, c))
   }
+
 }
