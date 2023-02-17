@@ -20,6 +20,8 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
@@ -37,7 +39,6 @@ import java.util.Properties;
  * 1. preCombine - Picks the latest delta record for a key, based on an ordering field 2. combineAndGetUpdateValue/getInsertValue - Chooses the latest record based on ordering field value.
  */
 public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
-  private static final String DEFAULT_DELETE_MARKER = "false";
   public static final String METADATA_EVENT_TIME_KEY = "metadata.event_time.key";
   public static final String DELETE_KEY = "hoodie.payload.delete.field";
   public static final String DELETE_MARKER = "hoodie.payload.delete.marker";
@@ -94,9 +95,12 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
    */
   protected boolean isDeleteRecord(GenericRecord genericRecord, Properties properties) {
     final String deleteKey = properties.getProperty(DELETE_KEY);
-    if (deleteKey == null) {
-      return super.isDeleteRecord(genericRecord);
+    if (StringUtils.isNullOrEmpty(deleteKey)) {
+      return isDeleteRecord(genericRecord);
     }
+
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(properties.getProperty(DELETE_MARKER)),
+        () -> DELETE_MARKER + " should be configured with " + DELETE_KEY);
     // Modify to be compatible with new version Avro.
     // The new version Avro throws for GenericRecord.get if the field name
     // does not exist in the schema.
