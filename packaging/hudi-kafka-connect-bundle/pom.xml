@@ -95,6 +95,14 @@
                                     <include>com.esotericsoftware:minlog</include>
                                     <include>org.objenesis:objenesis</include>
 
+                                    <!-- NOTE: Even though Hive bundles Jackson, it doesn't bundle JSR310 module (unlike Spark).
+                                               Therefore, to make sure that JSR310 is compatible w/ the Jackson core used by Hudi, we bundle the core
+                                               as well, while shading it -->
+                                    <include>com.fasterxml.jackson.core:jackson-annotations</include>
+                                    <include>com.fasterxml.jackson.core:jackson-core</include>
+                                    <include>com.fasterxml.jackson.core:jackson-databind</include>
+                                    <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
+
                                     <include>com.github.ben-manes.caffeine:caffeine</include>
                                     <include>com.lmax:disruptor</include>
                                     <include>com.github.davidmoten:guava-mini</include>
@@ -167,6 +175,10 @@
                                 <relocation>
                                     <pattern>org.openjdk.jol.</pattern>
                                     <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.fasterxml.jackson.</pattern>
+                                    <shadedPattern>org.apache.hudi.com.fasterxml.jackson.</shadedPattern>
                                 </relocation>
                             </relocations>
                             <filters>
