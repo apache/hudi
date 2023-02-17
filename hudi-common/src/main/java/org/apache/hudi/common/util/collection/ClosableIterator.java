@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,32 +16,37 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.common.util.collection;
 
-import java.util.function.Function;
+import java.util.Iterator;
 
-public class MappingIterator<T, R> implements ClosableIterator<R> {
-
-  private final ClosableIterator<T> sourceIterator;
-  private final Function<T, R> mapper;
-
-  public MappingIterator(ClosableIterator<T> sourceIterator, Function<T, R> mapper) {
-    this.sourceIterator = sourceIterator;
-    this.mapper = mapper;
-  }
-
+/**
+ * An iterator that give a chance to release resources.
+ *
+ * @param <R> The return type
+ *
+ * TODO move under common.util.collection
+ */
+public interface ClosableIterator<R> extends Iterator<R>, AutoCloseable {
   @Override
-  public boolean hasNext() {
-    return sourceIterator.hasNext();
-  }
+  void close(); // override to not throw exception
 
-  @Override
-  public R next() {
-    return mapper.apply(sourceIterator.next());
-  }
+  static <E> ClosableIterator<E> wrap(Iterator<E> iterator) {
+    return new ClosableIterator<E>() {
+      @Override
+      public boolean hasNext() {
+        return iterator.hasNext();
+      }
 
-  @Override
-  public void close() {
-    sourceIterator.close();
+      @Override
+      public E next() {
+        return iterator.next();
+      }
+
+      @Override
+      public void close() {
+        // no-op
+      }
+    };
   }
 }
