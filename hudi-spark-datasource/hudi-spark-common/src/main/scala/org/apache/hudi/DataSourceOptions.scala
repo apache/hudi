@@ -21,11 +21,12 @@ import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_READ_OPTIMI
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
-import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -845,8 +846,23 @@ object DataSourceOptionsHelper {
 
   def inferKeyGenClazz(props: TypedProperties): String = {
     val partitionFields = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), null)
-    val recordsKeyFields = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key(), null)
+    val recordsKeyFields = getRecordKeyFields(props)
     inferKeyGenClazz(recordsKeyFields, partitionFields)
+  }
+
+  private def getRecordKeyFields(props: TypedProperties): String = {
+    scala.Option(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key(), null))
+      .getOrElse {
+        // NOTE: In case no record-key has been specified we check whether
+        //       record-key auto-generation is enabled
+        val shouldAutoGenRecordKeys =
+          props.getBoolean(HoodieTableConfig.AUTO_GEN_RECORD_KEYS.key, HoodieTableConfig.AUTO_GEN_RECORD_KEYS.defaultValue)
+        if (shouldAutoGenRecordKeys) {
+          HoodieRecord.AUTOGEN_ROW_KEY
+        } else {
+          throw new HoodieException("Either record-key has to be specified or record-key auto-gen be enabled")
+        }
+      }
   }
 
   def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
