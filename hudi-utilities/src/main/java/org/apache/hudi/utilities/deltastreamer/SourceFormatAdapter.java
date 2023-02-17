@@ -97,7 +97,8 @@ public final class SourceFormatAdapter implements Closeable {
    * @param eventsRow
    * @return
    */
-  public Option<Dataset<Row>> transformDatasetWithQuarantineEvents(Option<Dataset<Row>> eventsRow, QuarantineEvent.QuarantineReason quarantineReason) {
+  public Option<Dataset<Row>> transformDatasetWithQuarantineEvents(Option<Dataset<Row>> eventsRow,
+                                                                   QuarantineEvent.QuarantineReason quarantineReason) {
     return eventsRow.map(dataset -> {
           if (quarantineTableWriterInterface.isPresent() && Arrays.stream(dataset.columns()).collect(Collectors.toList())
               .contains(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME)) {
@@ -157,7 +158,8 @@ public final class SourceFormatAdapter implements Closeable {
     switch (source.getSourceType()) {
       case ROW:
         InputBatch<Dataset<Row>> datasetInputBatch = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
-        return new InputBatch<>(transformDatasetWithQuarantineEvents(datasetInputBatch.getBatch(), QuarantineEvent.QuarantineReason.JSON_ROW_DESERIALIZATION_FAILURE),
+        return new InputBatch<>(transformDatasetWithQuarantineEvents(datasetInputBatch.getBatch(),
+            QuarantineEvent.QuarantineReason.JSON_ROW_DESERIALIZATION_FAILURE),
             datasetInputBatch.getCheckpointForNextBatch(), datasetInputBatch.getSchemaProvider());
       case AVRO: {
         InputBatch<JavaRDD<GenericRecord>> r = ((Source<JavaRDD<GenericRecord>>) source).fetchNext(lastCkptStr, sourceLimit);
@@ -181,7 +183,8 @@ public final class SourceFormatAdapter implements Closeable {
           Option<Dataset<Row>> dataset = r.getBatch().map(rdd -> source.getSparkSession().read()
               .option("mode", "PERMISSIVE").option("columnNameOfCorruptRecord", QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME).schema(dataType)
               .json(rdd));
-          Option<Dataset<Row>> eventsDataset = transformDatasetWithQuarantineEvents(dataset, QuarantineEvent.QuarantineReason.JSON_ROW_DESERIALIZATION_FAILURE);
+          Option<Dataset<Row>> eventsDataset = transformDatasetWithQuarantineEvents(dataset,
+              QuarantineEvent.QuarantineReason.JSON_ROW_DESERIALIZATION_FAILURE);
           return new InputBatch<>(
               eventsDataset,
               r.getCheckpointForNextBatch(), r.getSchemaProvider());
