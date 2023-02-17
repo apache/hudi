@@ -60,11 +60,10 @@ public abstract class BaseQuarantineTableWriter<T extends QuarantineEvent> {
 
   /***
    *
-   * @param instantTime
    * @param baseTableInstantTime
    * @param commitedInstantTime
    * @return
    */
-  public abstract boolean upsertAndCommit(String instantTime, String baseTableInstantTime, Option<String> commitedInstantTime);
+  public abstract boolean upsertAndCommit(String baseTableInstantTime, Option<String> commitedInstantTime);
 
 }

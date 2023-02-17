@@ -777,15 +777,15 @@ public class DeltaSync implements Serializable, Closeable {
       }
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
       if (quarantineTableWriterInterfaceImpl.isPresent()) {
-        String qurantineTableStartInstant = quarantineTableWriterInterfaceImpl.get().startCommit();
-        quarantineTableWriterInterfaceImpl.get().addErrorEvents(getErrorEventsForWriteStatus(writeStatusRDD));
+        // Removing writeStatus events from quarantine events, as action on writeStatus can cause base table DAG to reexecute
+        // if original cached dataframe get's unpersisted before this action.
+        //        quarantineTableWriterInterfaceImpl.get().addErrorEvents(getErrorEventsForWriteStatus(writeStatusRDD));
         Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitTimelineOpt);
-        boolean quarantineTableSuccess = quarantineTableWriterInterfaceImpl.get().upsertAndCommit(qurantineTableStartInstant, instantTime, commitedInstantTime);
+        boolean quarantineTableSuccess = quarantineTableWriterInterfaceImpl.get().upsertAndCommit(instantTime, commitedInstantTime);
         if (!quarantineTableSuccess) {
-          LOG.info("Qurantine Table Commit " + qurantineTableStartInstant + " failed!");
           LOG.info("Commit " + instantTime + " failed!");
           writeClient.rollback(instantTime);
-          throw new HoodieException("Qurantine Table Commit " + qurantineTableStartInstant + " failed!");
+          throw new HoodieException("Quarantine Table Commit failed!");
         }
       }
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, Collections.emptyMap(), extraPreCommitFunc);

@@ -241,7 +241,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
       }
 
       @Override
-      public boolean upsertAndCommit(String instantTime, String baseTableInstantTime, Option commitedInstantTime) {
+      public boolean upsertAndCommit(String baseTableInstantTime, Option commitedInstantTime) {
         return false;
       }
     });
@@ -303,7 +303,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
       }
 
       @Override
-      public boolean upsertAndCommit(String instantTime, String baseTableInstantTime, Option commitedInstantTime) {
+      public boolean upsertAndCommit(String baseTableInstantTime, Option commitedInstantTime) {
         return false;
       }
     });
