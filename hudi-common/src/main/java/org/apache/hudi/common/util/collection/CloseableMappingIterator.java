@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.common.util.ClosableIterator;
-
 import java.util.function.Function;
 
 /**
