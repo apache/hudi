@@ -164,12 +164,14 @@ public class TestDefaultHoodieRecordPayload {
       payload.getInsertValue(schema, props).get();
       fail("Should fail");
     } catch (IllegalArgumentException e) {
+      // Ignore
     }
 
     try {
       payload.combineAndGetUpdateValue(record, schema, props).get();
       fail("Should fail");
     } catch (IllegalArgumentException e) {
+      // Ignore
     }
   }
 
