@@ -34,7 +34,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.sql.Timestamp;
-import java.util.TimeZone;
 
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.utils.TestData.insertRow;
@@ -200,7 +199,7 @@ public class TestRowDataKeyGen {
         TimestampData.fromTimestamp(ts), StringData.fromString("par1"));
     final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
 
-    assertThat(keyGen1.getRecordKey(rowData1), is("uuid:id1,ts:"+ts.toLocalDateTime().toString()));
+    assertThat(keyGen1.getRecordKey(rowData1), is("uuid:id1,ts:" + ts.toLocalDateTime().toString()));
 
     conf.setString(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "false");
     final RowDataKeyGen keyGen2 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
