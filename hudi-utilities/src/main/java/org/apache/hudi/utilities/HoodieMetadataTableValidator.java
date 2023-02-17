@@ -354,7 +354,8 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
-  public void run() {
+  public boolean run() {
+    boolean result = false;
     try {
       LOG.info(cfg);
       if (cfg.continuous) {
@@ -362,7 +363,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         doHoodieMetadataTableValidationContinuous();
       } else {
         LOG.info(" ****** do hoodie metadata table validation once ******");
-        doHoodieMetadataTableValidationOnce();
+        result = doHoodieMetadataTableValidationOnce();
       }
     } catch (Exception e) {
       throw new HoodieException("Unable to do hoodie metadata table validation in " + cfg.basePath, e);
@@ -371,17 +372,19 @@ public class HoodieMetadataTableValidator implements Serializable {
       if (asyncMetadataTableValidateService.isPresent()) {
         asyncMetadataTableValidateService.get().shutdown(true);
       }
+      return result;
     }
   }
 
-  private void doHoodieMetadataTableValidationOnce() {
+  private boolean doHoodieMetadataTableValidationOnce() {
     try {
-      doMetadataTableValidation();
-    } catch (HoodieValidationException e) {
+      return doMetadataTableValidation();
+    } catch (Throwable e) {
       LOG.error("Metadata table validation failed to HoodieValidationException", e);
       if (!cfg.ignoreFailed) {
         throw e;
       }
+      return false;
     }
   }
 
@@ -396,7 +399,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     });
   }
 
-  public void doMetadataTableValidation() {
+  public boolean doMetadataTableValidation() {
     boolean finalResult = true;
     metaClient.reloadActiveTimeline();
     String basePath = metaClient.getBasePath();
@@ -404,7 +407,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     // check metadata table is available to read.
     if (!checkMetadataTableIsAvailable()) {
-      return;
+      return true;
     }
 
     if (cfg.skipDataFilesForCleaning) {
@@ -437,7 +440,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     if (allPartitions.isEmpty()) {
       LOG.warn("The result of getting all partitions is null or empty, skip current validation.");
-      return;
+      return true;
     }
 
     HoodieMetadataValidationContext metadataTableBasedContext =
@@ -446,11 +449,11 @@ public class HoodieMetadataTableValidator implements Serializable {
         new HoodieMetadataValidationContext(engineContext, cfg, metaClient, false);
 
     Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
-    List<Boolean> result = engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
+    List<Pair<Boolean, String>> result = engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
       try {
         validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
         LOG.info(String.format("Metadata table validation succeeded for partition %s (partition %s)", partitionPath, taskLabels));
-        return true;
+        return Pair.of(true, "");
       } catch (HoodieValidationException e) {
         LOG.error(
             String.format("Metadata table validation failed for partition %s due to HoodieValidationException (partition %s)",
@@ -458,18 +461,23 @@ public class HoodieMetadataTableValidator implements Serializable {
         if (!cfg.ignoreFailed) {
           throw e;
         }
-        return false;
+        return Pair.of(false, e.getMessage() + " for partition: " + partitionPath);
       }
     }).collectAsList();
 
-    for (Boolean res : result) {
-      finalResult &= res;
+    for (Pair<Boolean, String> res : result) {
+      finalResult &= res.getKey();
+      if (res.getKey().equals(false)) {
+        LOG.error("Metadata Validation failed for table: " + cfg.basePath + " with error: " + res.getValue());
+      }
     }
 
     if (finalResult) {
       LOG.info(String.format("Metadata table validation succeeded (%s).", taskLabels));
+      return true;
     } else {
       LOG.warn(String.format("Metadata table validation failed (%s).", taskLabels));
+      return false;
     }
   }
 

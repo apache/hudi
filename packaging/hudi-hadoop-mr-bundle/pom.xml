@@ -118,10 +118,6 @@
                   <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>com.google.common.</pattern>
-                  <shadedPattern>org.apache.hudi.com.google.common.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.openjdk.jol.</pattern>
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                 </relocation>

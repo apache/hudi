@@ -113,7 +113,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
-    conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     testWriteToHoodie(conf, "cow_write", 2, EXPECTED);
@@ -159,7 +158,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
-    conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
 

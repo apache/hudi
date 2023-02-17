@@ -137,12 +137,12 @@ public class HMSDDLExecutor implements DDLExecutor {
 
       if (!syncConfig.getBoolean(HIVE_CREATE_MANAGED_TABLE)) {
         newTb.putToParameters("EXTERNAL", "TRUE");
+        newTb.setTableType(TableType.EXTERNAL_TABLE.toString());
       }
 
       for (Map.Entry<String, String> entry : tableProperties.entrySet()) {
         newTb.putToParameters(entry.getKey(), entry.getValue());
       }
-      newTb.setTableType(TableType.EXTERNAL_TABLE.toString());
       client.createTable(newTb);
     } catch (Exception e) {
       LOG.error("failed to create table " + tableName, e);
