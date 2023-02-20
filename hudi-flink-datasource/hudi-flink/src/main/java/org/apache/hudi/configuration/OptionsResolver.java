@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -225,6 +226,14 @@ public class OptionsResolver {
    */
   public static boolean isIncrementalQuery(Configuration conf) {
     return conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent() || conf.getOptional(FlinkOptions.READ_END_COMMIT).isPresent();
+  }
+
+  /**
+   * Returns whether consistent value will be generated for a logical timestamp type column.
+   */
+  public static boolean isConsistentLogicalTimestampEnabled(Configuration conf) {
+    return conf.getBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+        Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
   }
 
   // -------------------------------------------------------------------------
