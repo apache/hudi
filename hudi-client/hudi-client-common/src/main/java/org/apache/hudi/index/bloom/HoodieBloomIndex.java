@@ -91,7 +91,8 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
 
     // Cache the result, for subsequent stages.
     if (config.getBloomIndexUseCaching()) {
-      keyFilenamePairs.persist("MEMORY_AND_DISK_SER");
+      keyFilenamePairs.persist(new HoodieConfig(config.getProps())
+          .getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE));
     }
     if (LOG.isDebugEnabled()) {
       long totalTaggedRecords = keyFilenamePairs.count();
