@@ -270,7 +270,6 @@ object DataSourceWriteOptions {
       WriteOperationType.DELETE_PARTITION.value,
       WriteOperationType.INSERT_OVERWRITE_TABLE.value,
       WriteOperationType.COMPACT.value,
-      WriteOperationType.INSERT.value,
       WriteOperationType.ALTER_SCHEMA.value
     )
     .withDocumentation("Whether to do upsert, insert or bulkinsert for the write operation. " +
