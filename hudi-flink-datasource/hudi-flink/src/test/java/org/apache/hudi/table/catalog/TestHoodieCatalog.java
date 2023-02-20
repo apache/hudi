@@ -43,6 +43,7 @@ import org.apache.flink.table.catalog.exceptions.DatabaseAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -94,7 +95,11 @@ public class TestHoodieCatalog {
                     .getLogicalType()
                     .getTypeRoot()
                     .equals(LogicalTypeRoot.VARCHAR)) {
-                  return Column.physical(col.getName(), DataTypes.STRING());
+                  DataType dataType = DataTypes.STRING();
+                  if ("uuid".equals(col.getName())) {
+                    dataType = dataType.notNull();
+                  }
+                  return Column.physical(col.getName(), dataType);
                 } else {
                   return col;
                 }

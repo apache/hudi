@@ -22,11 +22,14 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -59,8 +62,8 @@ import org.apache.flink.table.catalog.exceptions.TablePartitionedException;
 import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.util.CollectionUtil;
-import org.apache.flink.util.StringUtils;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -149,7 +152,7 @@ public class HoodieCatalog extends AbstractCatalog {
 
   @Override
   public boolean databaseExists(String databaseName) throws CatalogException {
-    checkArgument(!StringUtils.isNullOrWhitespaceOnly(databaseName));
+    checkArgument(!StringUtils.isNullOrEmpty(databaseName));
 
     return listDatabases().contains(databaseName);
   }
@@ -241,11 +244,17 @@ public class HoodieCatalog extends AbstractCatalog {
     Map<String, String> options = TableOptionProperties.loadFromProperties(path, hadoopConf);
     final Schema latestSchema = getLatestTableSchema(path);
     if (latestSchema != null) {
+      List<String> pkColumns = TableOptionProperties.getPkColumns(options);
+      // if the table is initialized from spark, the write schema is nullable for pk columns.
+      DataType tableDataType = DataTypeUtils.ensureColumnsAsNonNullable(
+          AvroSchemaConverter.convertToDataType(latestSchema), pkColumns);
       org.apache.flink.table.api.Schema.Builder builder = org.apache.flink.table.api.Schema.newBuilder()
-          .fromRowDataType(AvroSchemaConverter.convertToDataType(latestSchema));
+          .fromRowDataType(tableDataType);
       final String pkConstraintName = TableOptionProperties.getPkConstraintName(options);
-      if (pkConstraintName != null) {
-        builder.primaryKeyNamed(pkConstraintName, TableOptionProperties.getPkColumns(options));
+      if (!StringUtils.isNullOrEmpty(pkConstraintName)) {
+        builder.primaryKeyNamed(pkConstraintName, pkColumns);
+      } else if (!CollectionUtils.isNullOrEmpty(pkColumns)) {
+        builder.primaryKey(pkColumns);
       }
       final org.apache.flink.table.api.Schema schema = builder.build();
       return CatalogTable.of(
@@ -324,7 +333,7 @@ public class HoodieCatalog extends AbstractCatalog {
     try {
       StreamerUtil.initTableIfNotExists(conf);
       // prepare the non-table-options properties
-      if (!StringUtils.isNullOrWhitespaceOnly(resolvedTable.getComment())) {
+      if (!StringUtils.isNullOrEmpty(resolvedTable.getComment())) {
         options.put(TableOptionProperties.COMMENT, resolvedTable.getComment());
       }
       TableOptionProperties.createProperties(tablePathStr, hadoopConf, options);
