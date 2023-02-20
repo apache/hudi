@@ -20,6 +20,7 @@ package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.utils.TestConfigurations;
 
@@ -31,6 +32,8 @@ import org.apache.flink.table.data.TimestampData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.sql.Timestamp;
 
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.utils.TestData.insertRow;
@@ -185,4 +188,24 @@ public class TestRowDataKeyGen {
         TimestampData.fromEpochMillis(1), StringData.fromString(""));
     assertThat(keyGen1.getRecordKey(rowData3), is("__empty__"));
   }
+
+  @Test
+  void testRecoredKeyContainsTimestamp() {
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    conf.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid,ts");
+    conf.setString(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
+    Timestamp ts = new Timestamp(1675841687000L);
+    final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+        TimestampData.fromTimestamp(ts), StringData.fromString("par1"));
+    final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+
+    assertThat(keyGen1.getRecordKey(rowData1), is("uuid:id1,ts:" + ts.toLocalDateTime().toString()));
+
+    conf.setString(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "false");
+    final RowDataKeyGen keyGen2 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+
+    assertThat(keyGen2.getRecordKey(rowData1), is("uuid:id1,ts:1675841687000"));
+
+  }
+
 }
