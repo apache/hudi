@@ -59,19 +59,19 @@ public class HoodieQuarantineTableConfig {
   public static final ConfigProperty<String> QUARANTINE_TABLE_WRITE_CLASS = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.write.class")
       .noDefaultValue()
-      .withDocumentation("Class which handles the quarantine table writes. This config is used to configure " +
-          "a custom implementation for Quarantine Table Writer. Specify the full class name of the custom " +
-          "quarantine table writer as a value for this config");
+      .withDocumentation("Class which handles the quarantine table writes. This config is used to configure "
+          + "a custom implementation for Quarantine Table Writer. Specify the full class name of the custom "
+          + "quarantine table writer as a value for this config");
 
   public static final ConfigProperty<String> QUARANTINE_TABLE_WRITE_FAILURE_STRATEGY = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.write.failure.strategy")
       .defaultValue(QuarantineWriteFailureStrategy.ROLLBACK_COMMIT.name())
-      .withDocumentation("The config specifies the failure strategy if quarantine table write fails. " +
-          "Use one of - "+ Arrays.toString(QuarantineWriteFailureStrategy.values()));
+      .withDocumentation("The config specifies the failure strategy if quarantine table write fails. "
+          + "Use one of - " + Arrays.toString(QuarantineWriteFailureStrategy.values()));
 
   public enum QuarantineWriteFailureStrategy {
-    ROLLBACK_COMMIT ("Rollback the corresponding base table write commit for which the error events were triggered"),
-    LOG_ERROR ("Error is logged but the base table write succeeds");
+    ROLLBACK_COMMIT("Rollback the corresponding base table write commit for which the error events were triggered"),
+    LOG_ERROR("Error is logged but the base table write succeeds");
 
     private final String description;
 
