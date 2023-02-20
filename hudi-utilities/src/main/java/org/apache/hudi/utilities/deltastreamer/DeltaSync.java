@@ -125,7 +125,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -790,6 +789,8 @@ public class DeltaSync implements Serializable, Closeable {
             case LOG_ERROR:
               LOG.error("Quarantine Table write failed for instant " + instantTime);
               break;
+            default:
+              throw new HoodieException("Write failure strategy not implemented for " + quarantineWriteFailureStrategy);
           }
         }
       }

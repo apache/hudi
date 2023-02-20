@@ -211,26 +211,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     props.put(QUARANTINE_TARGET_TABLE.key(),"json_kafka_row_events");
     props.put("hoodie.base.path","/tmp/json_kafka_row_events");
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
-    Option<BaseQuarantineTableWriter> quarantineTableWriterInterface = Option.of(
-        new BaseQuarantineTableWriter<QuarantineEvent<String>>(new HoodieDeltaStreamer.Config(),
-        spark(), props, jsc(), fs()) {
-      List<JavaRDD<HoodieAvroRecord>> errorEvents = new LinkedList();
-
-      @Override
-      public void addErrorEvents(JavaRDD errorEvent) {
-        errorEvents.add(errorEvent.map(r -> new HoodieAvroRecord<>(new HoodieKey(), null)));
-      }
-
-      @Override
-      public Option<JavaRDD<HoodieAvroRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
-        return Option.of(errorEvents.stream().reduce((rdd1, rdd2) -> rdd1.union(rdd2)).get());
-      }
-
-          @Override
-      public boolean upsertAndCommit(String baseTableInstantTime, Option commitedInstantTime) {
-        return false;
-      }
-    });
+    Option<BaseQuarantineTableWriter> quarantineTableWriterInterface = Option.of(getAnonymousQuarantineTableWriter(props));
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, quarantineTableWriterInterface);
     assertEquals(1000, kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE).getBatch().get().count());
     assertEquals(2,((JavaRDD)quarantineTableWriterInterface.get().getErrorEvents(
@@ -260,8 +241,16 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     props.put("hoodie.base.path","/tmp/json_kafka_events");
 
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
-    Option<BaseQuarantineTableWriter> quarantineTableWriterInterface = Option.of(
-        new BaseQuarantineTableWriter<QuarantineEvent<String>>(new HoodieDeltaStreamer.Config(),
+    Option<BaseQuarantineTableWriter> quarantineTableWriterInterface = Option.of(getAnonymousQuarantineTableWriter(props));
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, quarantineTableWriterInterface);
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(),Long.MAX_VALUE);
+    assertEquals(1000,fetch1.getBatch().get().count());
+    assertEquals(2, ((JavaRDD)quarantineTableWriterInterface.get().getErrorEvents(
+        HoodieActiveTimeline.createNewInstantTime(), Option.empty()).get()).count());
+  }
+
+  private BaseQuarantineTableWriter getAnonymousQuarantineTableWriter(TypedProperties props) {
+    return new BaseQuarantineTableWriter<QuarantineEvent<String>>(new HoodieDeltaStreamer.Config(),
         spark(), props, jsc(), fs()) {
       List<JavaRDD<HoodieAvroRecord>> errorEvents = new LinkedList();
 
@@ -275,15 +264,10 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
         return Option.of(errorEvents.stream().reduce((rdd1, rdd2) -> rdd1.union(rdd2)).get());
       }
 
-          @Override
+      @Override
       public boolean upsertAndCommit(String baseTableInstantTime, Option commitedInstantTime) {
         return false;
       }
-    });
-    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, quarantineTableWriterInterface);
-    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(),Long.MAX_VALUE);
-    assertEquals(1000,fetch1.getBatch().get().count());
-    assertEquals(2, ((JavaRDD)quarantineTableWriterInterface.get().getErrorEvents(
-        HoodieActiveTimeline.createNewInstantTime(), Option.empty()).get()).count());
+    };
   }
 }
