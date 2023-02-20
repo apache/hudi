@@ -121,15 +121,13 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
       assertResult(3){commits.length}
 
       // Call rollback_to_instant Procedure with Named Arguments
-      var instant_time = commits(0).get(0).toString
-      checkAnswer(s"""call rollback_to_instant(table => '$tableName', instant_time => '$instant_time')""")(Seq(true))
-      // Call rollback_to_instant Procedure with Positional Arguments
-      instant_time = commits(1).get(0).toString
-      checkAnswer(s"""call rollback_to_instant('$tableName', '$instant_time')""")(Seq(true))
+      spark.sql(s"""call rollback_to_instant(table => '$tableName', instant_time => '${commits(1).get(0).toString}')""")
 
       // 1 commits are left after rollback
       commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(1){commits.length}
+      assertResult(1) {
+        commits.length
+      }
     }
   }
 

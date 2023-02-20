@@ -20,16 +20,15 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
+import java.util
 import java.util.function.Supplier
 
 class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder {
@@ -38,7 +37,8 @@ class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder
     ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None))
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
-    StructField("rollback_result", DataTypes.BooleanType, nullable = true, Metadata.empty))
+    StructField("rollback_result", DataTypes.BooleanType, nullable = true, Metadata.empty),
+    StructField("instant_time", DataTypes.StringType, nullable = true, Metadata.empty))
   )
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -73,10 +73,14 @@ class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder
         throw new HoodieException(s"Commit $instantTime not found in Commits $completedTimeline")
       }
 
-      val result = if (client.rollback(instantTime)) true else false
-      val outputRow = Row(result)
+      val outputRow = new util.ArrayList[Row]
+      val allInstants: List[HoodieInstant] = completedTimeline
+        .findInstantsAfterOrEquals(instantTime, Integer.MAX_VALUE).getReverseOrderedInstants.toArray()
+        .map(r => r.asInstanceOf[HoodieInstant]).toList
 
-      Seq(outputRow)
+      allInstants.foreach(p => outputRow.add(Row(client.rollback(p.getTimestamp), p.getTimestamp)))
+
+      outputRow.stream().toArray().map(r => r.asInstanceOf[Row]).toList
     } finally {
       if (client != null) {
         client.close()
