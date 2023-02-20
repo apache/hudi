@@ -123,6 +123,7 @@ well. Different values for this mode are `NONE`, `RECENT_DAYS` and `SELECTED_PAR
 - `SELECTED_PARTITIONS`: keep partitions that are in the specified range based on below configs:
    - `hoodie.clustering.plan.strategy.cluster.begin.partition`: Begin partition used to filter partition (inclusive).
    - `hoodie.clustering.plan.strategy.cluster.end.partition`: End partition used to filter partition (inclusive).
+- `DAY_ROLLING`: cluster partitions on a rolling basis by the hour to avoid clustering all partitions each time.
 
 **Small file limit**
 
