@@ -24,6 +24,8 @@ import org.apache.hudi.common.config.ConfigProperty;
 
 import javax.annotation.concurrent.Immutable;
 
+import java.util.Arrays;
+
 @Immutable
 @ConfigClassProperty(name = "Quarantine table Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
@@ -32,30 +34,58 @@ public class HoodieQuarantineTableConfig {
   public static final ConfigProperty<Boolean> QUARANTINE_TABLE_ENABLED = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.enable")
       .defaultValue(false)
-      .withDocumentation("config to enable quarantine table");
+      .withDocumentation("Config to enable quarantine table");
 
   public static final ConfigProperty<String> QUARANTINE_TABLE_BASE_PATH = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.base.path")
       .noDefaultValue()
-      .withDocumentation("base path for quarantine table");
+      .withDocumentation("Base path for quarantine table.");
 
   public static final ConfigProperty<String> QUARANTINE_TARGET_TABLE = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.target.table.name")
       .noDefaultValue()
-      .withDocumentation("target table name for quarantine table");
+      .withDocumentation("Target table name for quarantine table");
 
   public static final ConfigProperty<Integer> QUARANTINE_TABLE_UPSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.upsert.shuffle.parallelism")
       .defaultValue(200)
-      .withDocumentation("config to set upsert shuffle parallelism");
+      .withDocumentation("Config to set upsert shuffle parallelism");
 
   public static final ConfigProperty<Integer> QUARANTINE_TABLE_INSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.insert.shuffle.parallelism")
       .defaultValue(200)
-      .withDocumentation("config to set insert shuffle parallelism");
+      .withDocumentation("Config to set insert shuffle parallelism");
 
-  public static final ConfigProperty<String> QUARANTINE_TABLE_WRITER_CLASS = ConfigProperty
-      .key("hoodie.deltastreamer.quarantinetable.writer.class")
+  public static final ConfigProperty<String> QUARANTINE_TABLE_WRITE_CLASS = ConfigProperty
+      .key("hoodie.deltastreamer.quarantinetable.write.class")
       .noDefaultValue()
-      .withDocumentation("Class which handles the quarantine table writes");
+      .withDocumentation("Class which handles the quarantine table writes. This config is used to configure " +
+          "a custom implementation for Quarantine Table Writer. Specify the full class name of the custom " +
+          "quarantine table writer as a value for this config");
+
+  public static final ConfigProperty<String> QUARANTINE_TABLE_WRITE_FAILURE_STRATEGY = ConfigProperty
+      .key("hoodie.deltastreamer.quarantinetable.write.failure.strategy")
+      .defaultValue(QuarantineWriteFailureStrategy.ROLLBACK_COMMIT.name())
+      .withDocumentation("The config specifies the failure strategy if quarantine table write fails. " +
+          "Use one of - "+ Arrays.toString(QuarantineWriteFailureStrategy.values()));
+
+  public enum QuarantineWriteFailureStrategy {
+    ROLLBACK_COMMIT ("Rollback the corresponding base table write commit for which the error events were triggered"),
+    LOG_ERROR ("Error is logged but the base table write succeeds");
+
+    private final String description;
+
+    QuarantineWriteFailureStrategy(String description) {
+      this.description = description;
+    }
+
+    public String getDescription() {
+      return description;
+    }
+
+    @Override
+    public String toString() {
+      return super.toString() + " (" + description + ")\n";
+    }
+  }
 }

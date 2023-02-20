@@ -20,8 +20,11 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieQuarantineTableConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -31,22 +34,33 @@ import org.apache.spark.sql.SparkSession;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 
+import static org.apache.hudi.config.HoodieQuarantineTableConfig.QUARANTINE_TABLE_WRITE_CLASS;
+import static org.apache.hudi.config.HoodieQuarantineTableConfig.QUARANTINE_TABLE_WRITE_FAILURE_STRATEGY;
+
 public final class QuarantineUtils {
 
-  public static BaseQuarantineTableWriter getQuarantineTableWriter(
-      String quarantineTableWriterClass, HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
+  public static Option<BaseQuarantineTableWriter> getQuarantineTableWriter(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
       TypedProperties props, JavaSparkContext jssc, FileSystem fs) {
+    String quarantineTableWriterClass = props.getString(QUARANTINE_TABLE_WRITE_CLASS.key());
+    ValidationUtils.checkState(!StringUtils.isNullOrEmpty(quarantineTableWriterClass),
+        "Missing quarantine table config " + QUARANTINE_TABLE_WRITE_CLASS);
+
     Class<?>[] argClassArr = new Class[] {HoodieDeltaStreamer.Config.class,
         SparkSession.class, TypedProperties.class, JavaSparkContext.class, FileSystem.class};
     String errMsg = "Unable to instantiate QuarantineTableWriter with arguments type " + Arrays.toString(argClassArr);
     ValidationUtils.checkArgument(ReflectionUtils.hasConstructor(BaseQuarantineTableWriter.class.getName(), argClassArr), errMsg);
 
     try {
-      return (BaseQuarantineTableWriter) ReflectionUtils.getClass(quarantineTableWriterClass).getConstructor(argClassArr)
-          .newInstance(cfg, sparkSession, props, jssc, fs);
+      return Option.of((BaseQuarantineTableWriter) ReflectionUtils.getClass(quarantineTableWriterClass).getConstructor(argClassArr)
+          .newInstance(cfg, sparkSession, props, jssc, fs));
     } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
       throw new HoodieException(errMsg, e);
     }
   }
 
+  public static HoodieQuarantineTableConfig.QuarantineWriteFailureStrategy getQuarantineWriteFailureStrategy(
+      TypedProperties props) {
+    String writeFailureStrategy = props.getString(QUARANTINE_TABLE_WRITE_FAILURE_STRATEGY.key());
+    return HoodieQuarantineTableConfig.QuarantineWriteFailureStrategy.valueOf(writeFailureStrategy);
+  }
 }

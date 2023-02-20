@@ -70,6 +70,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
+import org.apache.hudi.config.HoodieQuarantineTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -137,7 +138,6 @@ import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENA
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
 import static org.apache.hudi.config.HoodieQuarantineTableConfig.QUARANTINE_TABLE_ENABLED;
-import static org.apache.hudi.config.HoodieQuarantineTableConfig.QUARANTINE_TABLE_WRITER_CLASS;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
@@ -245,7 +245,8 @@ public class DeltaSync implements Serializable, Closeable {
    */
   private transient SparkRDDWriteClient writeClient;
 
-  private Option<BaseQuarantineTableWriter> quarantineTableWriterInterfaceImpl = Option.empty();
+  private Option<BaseQuarantineTableWriter> quarantineTableWriter = Option.empty();
+  private HoodieQuarantineTableConfig.QuarantineWriteFailureStrategy quarantineWriteFailureStrategy;
 
   private transient HoodieDeltaStreamerMetrics metrics;
 
@@ -291,15 +292,12 @@ public class DeltaSync implements Serializable, Closeable {
     }
     this.multiwriterIdentifier = StringUtils.isNullOrEmpty(id) ? Option.empty() : Option.of(id);
     if (props.getBoolean(QUARANTINE_TABLE_ENABLED.key(),QUARANTINE_TABLE_ENABLED.defaultValue())) {
-      String quarantineTableWriterClass = props.getString(QUARANTINE_TABLE_WRITER_CLASS.key());
-      ValidationUtils.checkState(!StringUtils.isNullOrEmpty(quarantineTableWriterClass),
-          "Missing quarantine table config " + QUARANTINE_TABLE_WRITER_CLASS);
-      this.quarantineTableWriterInterfaceImpl = Option.of(
-          QuarantineUtils.getQuarantineTableWriter(quarantineTableWriterClass, cfg, sparkSession, props, jssc, fs));
+      this.quarantineTableWriter = QuarantineUtils.getQuarantineTableWriter(cfg, sparkSession, props, jssc, fs);
+      this.quarantineWriteFailureStrategy = QuarantineUtils.getQuarantineWriteFailureStrategy(props);
     }
     this.formatAdapter = new SourceFormatAdapter(
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics),
-        this.quarantineTableWriterInterfaceImpl);
+        this.quarantineTableWriter);
   }
 
   /**
@@ -525,7 +523,7 @@ public class DeltaSync implements Serializable, Closeable {
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
 
-      transformed = formatAdapter.transformDatasetWithQuarantineEvents(transformed,
+      transformed = formatAdapter.processQuarantineEvents(transformed,
           QuarantineEvent.QuarantineReason.CUSTOM_TRANSFORMER_FAILURE);
 
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
@@ -777,16 +775,22 @@ public class DeltaSync implements Serializable, Closeable {
             + totalErrorRecords + "/" + totalRecords);
       }
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-      if (quarantineTableWriterInterfaceImpl.isPresent()) {
+      if (quarantineTableWriter.isPresent()) {
         // Removing writeStatus events from quarantine events, as action on writeStatus can cause base table DAG to reexecute
         // if original cached dataframe get's unpersisted before this action.
         //        quarantineTableWriterInterfaceImpl.get().addErrorEvents(getErrorEventsForWriteStatus(writeStatusRDD));
         Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitTimelineOpt);
-        boolean quarantineTableSuccess = quarantineTableWriterInterfaceImpl.get().upsertAndCommit(instantTime, commitedInstantTime);
+        boolean quarantineTableSuccess = quarantineTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
         if (!quarantineTableSuccess) {
-          LOG.info("Commit " + instantTime + " failed!");
-          writeClient.rollback(instantTime);
-          throw new HoodieException("Quarantine Table Commit failed!");
+          switch (quarantineWriteFailureStrategy) {
+            case ROLLBACK_COMMIT:
+              LOG.info("Commit " + instantTime + " failed!");
+              writeClient.rollback(instantTime);
+              throw new HoodieException("Quarantine Table Commit failed!");
+            case LOG_ERROR:
+              LOG.error("Quarantine Table write failed for instant " + instantTime);
+              break;
+          }
         }
       }
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, Collections.emptyMap(), extraPreCommitFunc);
@@ -824,29 +828,6 @@ public class DeltaSync implements Serializable, Closeable {
     // Send DeltaStreamer Metrics
     metrics.updateDeltaStreamerMetrics(overallTimeMs);
     return Pair.of(scheduledCompactionInstant, writeStatusRDD);
-  }
-
-  protected JavaRDD<QuarantineJsonEvent> getErrorEventsForWriteStatus(JavaRDD<WriteStatus> writeStatusRDD) {
-    HoodieWriteConfig config = writeClient.getConfig();
-
-    return writeStatusRDD
-        .filter(WriteStatus::hasErrors)
-        .flatMap(x -> {
-          Schema schema = Schema.parse(config.getSchema());
-          Properties props = config.getPayloadConfig().getProps();
-          return x.getFailedRecords().stream()
-              .map(z -> {
-                HoodieRecordPayload hoodieRecordPayload = (HoodieRecordPayload)z.getData();
-                String recordStr;
-                try {
-                  recordStr = (String) hoodieRecordPayload.getInsertValue(schema,
-                      props).map(value -> value.toString()).get();
-                } catch (IOException e) {
-                  recordStr = null;
-                }
-                return new QuarantineJsonEvent(recordStr, QuarantineEvent.QuarantineReason.HUDI_WRITE_FAILURES);
-              }).iterator();
-        });
   }
 
   /**

@@ -19,23 +19,23 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.spark.sql.types.DataType;
-
-public abstract class QuarantineEvent<T> {
+public class QuarantineEvent<T> {
 
   QuarantineReason reason;
   T payload;
 
-  public abstract DataType getPayloadType();
+  public QuarantineEvent(T payload, QuarantineReason reason) {
+    this.payload = payload;
+    this.reason = reason;
+  }
 
-  public abstract String getPayload();
+  public T getPayload() {
+    return payload;
+  }
 
   public QuarantineReason getReason() {
     return reason;
   }
-
-  public abstract GenericRecord getAvroPayload();
 
   public enum QuarantineReason {
     JSON_AVRO_DESERIALIZATION_FAILURE,
