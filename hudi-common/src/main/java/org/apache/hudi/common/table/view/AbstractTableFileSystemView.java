@@ -259,6 +259,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public void close() {
     try {
       writeLock.lock();
+      this.metaClient = null;
+      this.visibleCommitsAndCompactionTimeline = null;
       clear();
     } finally {
       writeLock.unlock();
@@ -1406,7 +1408,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param newTimeline New Hoodie Timeline
    */
   protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
-    refreshTimeline(newTimeline);
     clear();
     // Initialize with new Hoodie timeline.
     init(metaClient, newTimeline);
