@@ -92,6 +92,10 @@
                   <include>org.rocksdb:rocksdbjni</include>
                   <include>org.antlr:stringtemplate</include>
 
+                  <!-- NOTE: Only Jackson module we're bundling here is JSR310, which we need to bundle only
+                             for Spark 2.x -->
+                  <include>com.fasterxml.jackson.datatype:${fasterxml.jackson.datatype.jsr310.module}</include>
+
                   <include>com.lmax:disruptor</include>
                   <include>com.github.davidmoten:guava-mini</include>
                   <include>com.github.davidmoten:hilbert-curve</include>
