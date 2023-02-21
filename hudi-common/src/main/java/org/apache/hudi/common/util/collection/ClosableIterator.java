@@ -16,24 +16,37 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.adapter;
+package org.apache.hudi.common.util.collection;
 
-import org.apache.flink.table.expressions.CallExpression;
-import org.apache.flink.table.expressions.ResolvedExpression;
-import org.apache.flink.table.functions.BuiltInFunctionDefinition;
-import org.apache.flink.table.types.DataType;
-
-import java.util.List;
+import java.util.Iterator;
 
 /**
- * Call Expression creator for test goals.
+ * An iterator that give a chance to release resources.
+ *
+ * @param <R> The return type
+ *
+ * TODO move under common.util.collection
  */
-public class TestCallExpressions {
+public interface ClosableIterator<R> extends Iterator<R>, AutoCloseable {
+  @Override
+  void close(); // override to not throw exception
 
-  public static CallExpression permanent(
-      BuiltInFunctionDefinition builtInFunctionDefinition,
-      List<ResolvedExpression> args,
-      DataType dataType) {
-    return CallExpression.permanent(builtInFunctionDefinition, args, dataType);
+  static <E> ClosableIterator<E> wrap(Iterator<E> iterator) {
+    return new ClosableIterator<E>() {
+      @Override
+      public boolean hasNext() {
+        return iterator.hasNext();
+      }
+
+      @Override
+      public E next() {
+        return iterator.next();
+      }
+
+      @Override
+      public void close() {
+        // no-op
+      }
+    };
   }
 }

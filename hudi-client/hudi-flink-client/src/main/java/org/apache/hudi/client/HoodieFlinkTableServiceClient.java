@@ -182,6 +182,14 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     }
   }
 
+  @Override
+  protected void preCommit(HoodieCommitMetadata metadata) {
+    // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
+    // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
+    HoodieTable table = createTable(config, hadoopConf);
+    resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
+  }
+
   /**
    * Initialize the table metadata writer, for e.g, bootstrap the metadata table
    * from the filesystem if it does not exist.

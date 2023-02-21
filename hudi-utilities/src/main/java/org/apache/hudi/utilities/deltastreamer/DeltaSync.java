@@ -58,9 +58,9 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.CommitUtils;
-import org.apache.hudi.common.util.IdentityIterator;
-import org.apache.hudi.common.util.MappingIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -572,7 +572,7 @@ public class DeltaSync implements Serializable, Closeable {
             .convertAvroSchemaToStructType(HoodieAvroUtils.removeFields(processedAvroSchema.get(), partitionColumns)) : baseStructType;
         HoodieAvroDeserializer deserializer = SparkAdapterSupport$.MODULE$.sparkAdapter().createAvroDeserializer(processedAvroSchema.get(), baseStructType);
 
-        return new MappingIterator<>(new IdentityIterator<>(itr), rec -> {
+        return new CloseableMappingIterator<>(ClosableIterator.wrap(itr), rec -> {
           InternalRow row = (InternalRow) deserializer.deserialize(rec).get();
           SparkKeyGeneratorInterface keyGenerator = (SparkKeyGeneratorInterface) this.keyGenerator;
           String recordKey = keyGenerator.getRecordKey(row, baseStructType).toString();

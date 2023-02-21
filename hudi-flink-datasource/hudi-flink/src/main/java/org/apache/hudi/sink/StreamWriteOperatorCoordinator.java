@@ -41,7 +41,6 @@ import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -180,7 +179,7 @@ public class StreamWriteOperatorCoordinator
     this.gateways = new SubtaskGateway[this.parallelism];
     // init table, create if not exists.
     this.metaClient = initTableIfNotExists(this.conf);
-    this.ckpMetadata = initCkpMetadata(this.metaClient);
+    this.ckpMetadata = initCkpMetadata(this.metaClient, this.conf);
     // the write client must create after the table creation
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
     initMetadataTable(this.writeClient);
@@ -342,8 +341,8 @@ public class StreamWriteOperatorCoordinator
     writeClient.initMetadataTable();
   }
 
-  private static CkpMetadata initCkpMetadata(HoodieTableMetaClient metaClient) throws IOException {
-    CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient.getFs(), metaClient.getBasePath());
+  private static CkpMetadata initCkpMetadata(HoodieTableMetaClient metaClient, Configuration conf) throws IOException {
+    CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient, conf.getString(FlinkOptions.WRITE_CLIENT_ID));
     ckpMetadata.bootstrap();
     return ckpMetadata;
   }
@@ -372,6 +371,8 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void startInstant() {
+    // refresh the last txn metadata
+    this.writeClient.preTxn(this.metaClient);
     // put the assignment in front of metadata generation,
     // because the instant request from write task is asynchronous.
     this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
@@ -391,8 +392,7 @@ public class StreamWriteOperatorCoordinator
    * until it finds a new inflight instant on the timeline.
    */
   private void initInstant(String instant) {
-    HoodieTimeline completedTimeline =
-        StreamerUtil.createMetaClient(conf).getActiveTimeline().filterCompletedInstants();
+    HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
     executor.execute(() -> {
       if (instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT) || completedTimeline.containsInstant(instant)) {
         // the last instant committed successfully

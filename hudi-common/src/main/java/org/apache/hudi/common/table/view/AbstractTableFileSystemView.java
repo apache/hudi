@@ -247,7 +247,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       }
     });
 
-    Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups = resultStream.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    // Duplicate key error when insert_overwrite same partition in multi writer, keep the instant with greater timestamp when the file group id conflicts
+    Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups = resultStream.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
+        (instance1, instance2) -> HoodieTimeline.compareTimestamps(instance1.getTimestamp(), HoodieTimeline.LESSER_THAN, instance2.getTimestamp()) ? instance2 : instance1));
     resetReplacedFileGroups(replacedFileGroups);
     LOG.info("Took " + hoodieTimer.endTimer() + " ms to read  " + replacedTimeline.countInstants() + " instants, "
         + replacedFileGroups.size() + " replaced file groups");
@@ -257,6 +259,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public void close() {
     try {
       writeLock.lock();
+      this.metaClient = null;
+      this.visibleCommitsAndCompactionTimeline = null;
       clear();
     } finally {
       writeLock.unlock();
@@ -1404,7 +1408,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param newTimeline New Hoodie Timeline
    */
   protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
-    refreshTimeline(newTimeline);
     clear();
     // Initialize with new Hoodie timeline.
     init(metaClient, newTimeline);
