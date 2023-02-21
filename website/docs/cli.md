@@ -40,7 +40,43 @@ Once these are set, you are good to launch hudi-cli and access S3 dataset.
 ```
 ./hudi-cli/hudi-cli.sh
 ```
+### Using hudi-cli on Google Dataproc
+[Dataproc](https://cloud.google.com/dataproc) is Google's managed service for running Apache Hadoop, Apache Spark, 
+Apache Flink, Presto and many other frameworks, including Hudi. If you want to run the Hudi CLI on a Dataproc node 
+which has not been launched with Hudi support enabled, you can use the steps below:  
 
+These steps use Hudi version 0.13.0. If you want to use a different version you will have to edit the below commands 
+appropriately:  
+1. Once you've started the Dataproc cluster, you can ssh into it as follows:
+```
+$ gcloud compute ssh --zone "YOUR_ZONE" "HOSTNAME_OF_MASTER_NODE"  --project "YOUR_PROJECT"
+```  
+
+2. Download the Hudi CLI bundle
+```
+wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-cli-bundle_2.12/0.13.0/hudi-cli-bundle_2.12-0.13.0.jar  
+```
+
+3. Download the Hudi Spark bundle
+```
+wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-spark-bundle_2.12/0.13.0/hudi-spark-bundle_2.12-0.13.0.jar
+```     
+
+4. Download the shell script that launches Hudi CLI bundle
+```
+wget https://raw.githubusercontent.com/apache/hudi/release-0.13.0/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh
+```    
+
+5. Launch Hudi CLI bundle with appropriate environment variables as follows:
+``` 
+CLIENT_JAR=$DATAPROC_DIR/lib/gcs-connector.jar CLI_BUNDLE_JAR=hudi-cli-bundle_2.12-0.13.0.jar SPARK_BUNDLE_JAR=hudi-spark-bundle_2.12-0.13.0.jar ./hudi-cli-with-bundle.sh  
+```
+
+6. hudi->connect --path gs://path_to_some_table  
+Metadata for table some_table loaded  
+
+7. hudi:some_table->commits show --limit 5  
+This command should show the recent commits, if the above steps work correctly.  
 
 ## Connect to a Kerberized cluster
 
