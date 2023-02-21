@@ -98,10 +98,10 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
       kafkaRDD = KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
           LocationStrategies.PreferConsistent());
     }
-    return processForKafkaOffsets(kafkaRDD);
+    return maybeAppendKafkaOffsets(kafkaRDD);
   }
 
-  protected JavaRDD<GenericRecord> processForKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {
+  protected JavaRDD<GenericRecord> maybeAppendKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {
     if (KafkaOffsetPostProcessor.Config.shouldAddOffsets(props)) {
       AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceSchema());
       return kafkaRDD.map(convertor::withKafkaFieldsAppended);
