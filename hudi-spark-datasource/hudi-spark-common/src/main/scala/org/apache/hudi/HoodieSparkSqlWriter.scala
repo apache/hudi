@@ -64,7 +64,7 @@ import org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeRowWriter
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Concat, FormatNumber, Literal, MonotonicallyIncreasingID}
+import org.apache.spark.sql.catalyst.expressions.{Concat, FormatNumber, FormatString, Literal, MonotonicallyIncreasingID, Rand}
 import org.apache.spark.sql.functions.{col, expr}
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
@@ -546,7 +546,8 @@ object HoodieSparkSqlWriter {
   }
 
   def handleRecordKeyAutoGen(df: DataFrame, commitInstant: String, config: HoodieConfig): DataFrame = {
-    if (config.getBooleanOrDefault(HoodieTableConfig.AUTO_GEN_RECORD_KEYS)) {
+    val shouldAutoGenRecordKeys = config.getBooleanOrDefault(HoodieTableConfig.AUTO_GEN_RECORD_KEYS)
+    if (shouldAutoGenRecordKeys) {
       val monotonicIdFormat = "#" * 19
       val rowKeyExpr = Concat(Seq(
         Literal(s"${commitInstant}_"),
@@ -1081,6 +1082,8 @@ object HoodieSparkSqlWriter {
           KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key -> HoodieRecord.AUTOGEN_ROW_KEY
         )
       )
+
+      // TODO operations (only insert, bulk-insert allowed)
 
       // TODO elaborate
       mergedParams.removeAll(Seq(
