@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.ProtoClassBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
@@ -62,6 +63,9 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
 
   @Override
   JavaRDD<Message> toRDD(OffsetRange[] offsetRanges) {
+    if (KafkaOffsetPostProcessor.Config.shouldAddOffsets(props)) {
+      throw new HoodieException("Appending kafka offsets to ProtoKafkaSource is not supported");
+    }
     ProtoDeserializer deserializer = new ProtoDeserializer(className);
     return KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
         LocationStrategies.PreferConsistent()).map(obj -> deserializer.parse(obj.value()));

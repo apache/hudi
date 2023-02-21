@@ -45,7 +45,6 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   protected KafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                         SchemaProvider schemaProvider, SourceType sourceType, HoodieDeltaStreamerMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider, sourceType);
-
     this.schemaProvider = schemaProvider;
     this.metrics = metrics;
   }

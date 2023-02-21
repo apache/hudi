@@ -25,8 +25,14 @@ import com.twitter.bijection.Injection;
 import com.twitter.bijection.avro.GenericAvroCodecs;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 import java.io.Serializable;
+
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
 
 import scala.util.Either;
 import scala.util.Left;
@@ -115,4 +121,18 @@ public class AvroConvertor implements Serializable {
     initSchema();
     return ProtoConversionUtil.convertToAvro(schema, message);
   }
+
+  public GenericRecord withKafkaFieldsAppended(ConsumerRecord consumerRecord) {
+    initSchema();
+    GenericRecord record = (GenericRecord) consumerRecord.value();
+    GenericRecordBuilder recordBuilder = new GenericRecordBuilder(this.schema);
+    for (Schema.Field field :  record.getSchema().getFields()) {
+      recordBuilder.set(field, record.get(field.name()));
+    }
+    recordBuilder.set(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
+    recordBuilder.set(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
+    recordBuilder.set(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
+    return recordBuilder.build();
+  }
+
 }
