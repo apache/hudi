@@ -283,14 +283,10 @@ PrestoDB.
 To learn more about the usage of Hudi connector, please
 checkout [prestodb documentation](https://prestodb.io/docs/current/connector/hudi.html).
 
-:::note Incremental queries and point in time queries are not supported either through the Hive connector or Hudi
+:::note 
+Incremental queries and point in time queries are not supported either through the Hive connector or Hudi
 connector. However, it is in our roadmap, and you can track the development
 under [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-3210).
-
-There is a known issue ([HUDI-4290](https://issues.apache.org/jira/browse/HUDI-4290)) for a clustered Hudi table. Presto
-query using version 0.272 or later may contain duplicates in results if clustering is enabled. This issue has been fixed
-in Hudi version 0.12.0 and we need to upgrade `hudi-presto-bundle`
-in presto to version 0.12.0. It is tracked in [HUDI-4605](https://issues.apache.org/jira/browse/HUDI-4605).
 :::
 
 ### Presto Environment
@@ -379,7 +375,8 @@ REFRESH database.table_name
 Copy on Write Tables in Apache Hudi versions 0.5.2, 0.6.0, 0.7.0, 0.8.0, 0.9.0, 0.10.x and 0.11.x can be queried
 via Amazon Redshift Spectrum external tables. To be able to query Hudi versions 0.10.0 and above please try latest
 versions of Redshift.
-:::note Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supported when you use an Apache
+:::note 
+Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supported when you use an Apache
 Hive metastore as the external catalog.
 :::
 
@@ -394,7 +391,8 @@ Please refer
 to [Doris Hudi external table](https://doris.apache.org/docs/ecosystem/external-table/hudi-external-table/ )
 for more details on the setup.
 
-:::note The current default supported version of Hudi is 0.10.0 and has not been tested in other versions. More versions
+:::note 
+The current default supported version of Hudi is 0.10.0 and has not been tested in other versions. More versions
 will be supported in the future.
 :::
 
