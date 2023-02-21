@@ -67,7 +67,7 @@ _Figure: Illustrating query performance improvements by clustering_
 ### Batching small files
 
 As mentioned in the intro, streaming ingestion generally results in smaller files in your data lake. But having a lot of
-such small files could bring down your query latency. From our experience supporting community users, there are quite a
+such small files could lead to higher query latency. From our experience supporting community users, there are quite a
 few users who are using Hudi just for small file handling capabilities. So, you could employ clustering to batch a lot
 of such small files into larger ones.
 
