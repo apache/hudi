@@ -67,7 +67,7 @@ public class TestFlinkSizeBasedClusteringPlanStrategy {
     HoodieWriteConfig configWithSortEnabled = hoodieWriteConfigBuilder.withClusteringConfig(
         HoodieClusteringConfig.newBuilder()
           .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.NONE)
-          .withClusteringIsForce(false)
+          .withSingleGroupClusteringEnabled(false)
           .withClusteringSortColumns("f0")
           .build())
         .build();
@@ -79,7 +79,7 @@ public class TestFlinkSizeBasedClusteringPlanStrategy {
     HoodieWriteConfig configWithSortDisabled = hoodieWriteConfigBuilder.withClusteringConfig(
         HoodieClusteringConfig.newBuilder()
           .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.NONE)
-          .withClusteringIsForce(false)
+          .withSingleGroupClusteringEnabled(false)
           .withClusteringSortColumns("")
           .build())
         .build();

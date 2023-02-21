@@ -63,35 +63,40 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
 
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
     List<FileSlice> currentGroup = new ArrayList<>();
-    long totalSizeSoFar = 0;
-    int totalFileNumSoFar = 0;
 
-    for (FileSlice currentSlice : fileSlices) {
+    // Sort fileSlices before dividing, which makes dividing more compact
+    List<FileSlice> sortedFileSlices = new ArrayList<>(fileSlices);
+    sortedFileSlices.sort((o1, o2) -> (int)
+        ((o2.getBaseFile().isPresent() ? o2.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())
+            - (o1.getBaseFile().isPresent() ? o1.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())));
+
+    long totalSizeSoFar = 0;
+
+    for (FileSlice currentSlice : sortedFileSlices) {
+      long currentSize = currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
       // check if max size is reached and create new group, if needed.
-      // in now, every clustering group out put is 1 file group.
-      if (totalSizeSoFar >= writeConfig.getClusteringTargetFileMaxBytes() && !currentGroup.isEmpty()) {
-        if (writeConfig.isClusteringForce() || currentGroup.size() > 1 || writeConfig.isClusteringSortEnabled()) {
-          int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
-          LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
-                  + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size());
-          fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
-        }
+      if (totalSizeSoFar + currentSize > writeConfig.getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
+        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
+        LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
+            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+        fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
         currentGroup = new ArrayList<>();
         totalSizeSoFar = 0;
       }
 
-      if (writeConfig.isClusteringForce() || ++totalFileNumSoFar < fileSlices.size() || currentGroup.size() != 0 || writeConfig.isClusteringSortEnabled())  {
-        // Add to the current file-group
-        currentGroup.add(currentSlice);
-        // assume each file group size is ~= parquet.max.file.size
-        totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
-      }
+      // Add to the current file-group
+      currentGroup.add(currentSlice);
+      // assume each file group size is ~= parquet.max.file.size
+      totalSizeSoFar += currentSize;
     }
 
     if (!currentGroup.isEmpty()) {
-      LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
-              + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size());
-      fileSliceGroups.add(Pair.of(currentGroup, 1));
+      if (currentGroup.size() > 1 || writeConfig.shouldClusteringSingleGroup()) {
+        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
+        LOG.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
+            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+        fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
+      }
     }
 
     return fileSliceGroups.stream().map(fileSliceGroup ->
