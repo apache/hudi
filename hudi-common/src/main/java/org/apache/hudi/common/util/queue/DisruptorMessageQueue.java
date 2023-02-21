@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util.queue;
 
+import com.lmax.disruptor.TimeoutException;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -30,6 +31,7 @@ import com.lmax.disruptor.dsl.ProducerType;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 /**
@@ -48,6 +50,8 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
   private boolean isShutdown = false;
   private boolean isStarted = false;
+
+  private static final long TIMEOUT_WAITING_SECS = 10L;
 
   public DisruptorMessageQueue(int bufferSize, Function<I, O> transformFunction, String waitStrategyId, int totalProducers, Runnable preExecuteRunnable) {
     WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyId);
@@ -102,7 +106,19 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
       if (!isShutdown) {
         isShutdown = true;
         isStarted = false;
-        queue.shutdown();
+        if (Thread.currentThread().isInterrupted()) {
+          // if current thread has been interrupted, we still give executor a chance to proceeding.
+          LOG.error("Disruptor Queue has been interrupted! Shutdown now.");
+          try {
+            queue.shutdown(TIMEOUT_WAITING_SECS, TimeUnit.SECONDS);
+          } catch (TimeoutException e) {
+            LOG.error("Disruptor queue shutdown timeout: " + e);
+            throw new HoodieException(e);
+          }
+          throw new HoodieException("Disruptor Queue has been interrupted! Shutdown now.");
+        } else {
+          queue.shutdown();
+        }
       }
     }
   }
