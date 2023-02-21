@@ -29,6 +29,10 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Used internally to add Kafka offsets. You should probably not set
+ * hoodie.deltastreamer.schemaprovider.schema_post_processor to this class
+ * */
 public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
 
   public static class Config {
