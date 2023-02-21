@@ -99,6 +99,13 @@
                   <include>org.apache.hudi:hudi-gcp</include>
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>com.google.cloud:google-cloud-bigquery</include>
+
+			  <!-- Pramod -->
+		  <include>com.google.cloud.bigdataoss:gcs-connector</include>
+		  <include>com.google.auth:google-auth-library-oauth2-http</include>
+		  <include>com.google.oauth-client:google-oauth-client </include>
+
+
                   <include>com.beust:jcommander</include>
                   <include>commons-io:commons-io</include>
                   <include>org.openjdk.jol:jol-core</include>
