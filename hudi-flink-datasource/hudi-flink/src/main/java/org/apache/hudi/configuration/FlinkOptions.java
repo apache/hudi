@@ -197,6 +197,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("index.type")
       .stringType()
       .defaultValue(HoodieIndex.IndexType.FLINK_STATE.name())
+      .withFallbackKeys(HoodieIndexConfig.INDEX_TYPE.key())
       .withDescription("Index type of Flink write job, default is using state backed index.");
 
   public static final ConfigOption<Boolean> INDEX_BOOTSTRAP_ENABLED = ConfigOptions
@@ -382,9 +383,9 @@ public class FlinkOptions extends HoodieConfig {
       .key("write.ignore.failed")
       .booleanType()
       .defaultValue(false)
-      .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch.\n"
-          + "By default false.  Turning this on, could hide the write status errors while the spark checkpoint moves ahead. \n"
-          + "  So, would recommend users to use this with caution.");
+      .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. \n"
+          + "By default false. Turning this on, could hide the write status errors while the flink checkpoint moves ahead. \n"
+          + "So, would recommend users to use this with caution.");
 
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
@@ -561,6 +562,13 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(128)
       .withDescription("Sort memory in MB, default 128MB");
+
+  // this is only for internal use
+  public static final ConfigOption<String> WRITE_CLIENT_ID = ConfigOptions
+      .key("write.client.id")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Unique identifier used to distinguish different writer pipelines for concurrent mode");
 
   // ------------------------------------------------------------------------
   //  Compaction Options

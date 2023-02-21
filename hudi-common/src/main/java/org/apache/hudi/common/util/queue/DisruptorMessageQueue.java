@@ -104,20 +104,21 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   public void close() {
     synchronized (this) {
       if (!isShutdown) {
+        isShutdown = true;
+        isStarted = false;
         if (Thread.currentThread().isInterrupted()) {
           // if current thread has been interrupted, we still give executor a chance to proceeding.
           LOG.error("Disruptor Queue has been interrupted! Shutdown now.");
           try {
             queue.shutdown(TIMEOUT_WAITING_SECS, TimeUnit.SECONDS);
           } catch (TimeoutException e) {
-            LOG.error("Disruptor Queue has been interrupted: " + e);
+            LOG.error("Disruptor queue shutdown timeout: " + e);
             throw new HoodieException(e);
           }
           throw new HoodieException("Disruptor Queue has been interrupted! Shutdown now.");
+        } else {
+          queue.shutdown();
         }
-        isShutdown = true;
-        isStarted = false;
-        queue.shutdown();
       }
     }
   }
