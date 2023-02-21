@@ -31,6 +31,7 @@ import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
@@ -45,8 +46,11 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+
+import scala.Tuple2;
 
 import static org.apache.hudi.config.HoodieQuarantineTableConfig.QUARANTINE_TABLE_BASE_PATH;
 import static org.apache.hudi.config.HoodieQuarantineTableConfig.QUARANTINE_TARGET_TABLE;
@@ -58,6 +62,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Tests against {@link JsonKafkaSource}.
  */
 public class TestJsonKafkaSource extends BaseTestKafkaSource {
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+  private static final HoodieTestDataGenerator DATA_GENERATOR = new HoodieTestDataGenerator(1L);
   static final URL SCHEMA_FILE_URL = TestJsonKafkaSource.class.getClassLoader().getResource("delta-streamer-config/source.avsc");
 
   @BeforeEach
@@ -190,6 +196,24 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", count)));
   }
 
+  void sendJsonSafeMessagesToKafka(String topic, int count, int numPartitions) {
+    try {
+      Tuple2<String, String>[] keyValues = new Tuple2[count];
+      String[] records = jsonifyRecords(DATA_GENERATOR.generateInserts("000", count));
+      for (int i = 0; i < count; i++) {
+        // Drop fields that don't translate to json properly
+        Map node = OBJECT_MAPPER.readValue(records[i], Map.class);
+        node.remove("height");
+        node.remove("current_date");
+        node.remove("nation");
+        keyValues[i] = new Tuple2<>(Integer.toString(i % numPartitions), OBJECT_MAPPER.writeValueAsString(node));
+      }
+      testUtils.sendMessages(topic, keyValues);
+    } catch (Exception ex) {
+      throw new RuntimeException(ex);
+    }
+  }
+
   @Test
   public void testErrorEventsForDataInRowForamt() throws IOException {
     // topic setup.
@@ -202,13 +226,14 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     TopicPartition topicPartition1 = new TopicPartition(topic, 1);
     topicPartitions.add(topicPartition1);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    sendJsonSafeMessagesToKafka(topic, 1000, 2);
     testUtils.sendMessages(topic, new String[]{"error_event1", "error_event2"});
 
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
     props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
     props.put(QUARANTINE_TABLE_BASE_PATH.key(),"/tmp/qurantine_table_test/json_kafka_row_events");
     props.put(QUARANTINE_TARGET_TABLE.key(),"json_kafka_row_events");
+    props.put("hoodie.deltastreamer.quarantinetable.validate.targetschema.enable", "true");
     props.put("hoodie.base.path","/tmp/json_kafka_row_events");
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     Option<BaseQuarantineTableWriter> quarantineTableWriterInterface = Option.of(getAnonymousQuarantineTableWriter(props));
