@@ -104,6 +104,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.Row;
@@ -130,6 +131,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import scala.Tuple2;
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
@@ -528,6 +530,27 @@ public class DeltaSync implements Serializable, Closeable {
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       boolean reconcileSchema = props.getBoolean(DataSourceWriteOptions.RECONCILE_SCHEMA().key());
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
+        // If the target schema is specified through Avro schema,
+        // pass in the schema for the Row-to-Avro conversion
+        // to avoid nullability mismatch between Avro schema and Row schema
+        avroRDDOptional = transformed
+            .map(row ->
+                quarantineTableWriter
+                    .map(impl -> {
+                      Tuple2<RDD<GenericRecord>, RDD<String>> safeCreateRDDs = HoodieSparkUtils.safeCreateRDD(row,
+                          HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+                          Option.of(this.userProvidedSchemaProvider.getTargetSchema())
+                      );
+                      impl.addErrorEvents(safeCreateRDDs._2().toJavaRDD()
+                          .map(evStr -> new QuarantineEvent<>(evStr,
+                              QuarantineEvent.QuarantineReason.AVRO_DESERIALIZATION_FAILURE)));
+                      return safeCreateRDDs._1();
+                    })
+                    .orElseGet(() -> HoodieSparkUtils.createRdd(row,
+                      HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+                      Option.of(this.userProvidedSchemaProvider.getTargetSchema())
+                    )).toJavaRDD()
+            );
         schemaProvider = this.userProvidedSchemaProvider;
       } else {
         Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jssc, fs, cfg.targetBasePath);
@@ -549,12 +572,13 @@ public class DeltaSync implements Serializable, Closeable {
           (SchemaProvider) new DelegatingSchemaProvider(props, jssc, dataAndCheckpoint.getSchemaProvider(),
                 new SimpleSchemaProvider(jssc, targetSchema, props)))
           .orElse(dataAndCheckpoint.getSchemaProvider());
+        // Rewrite transformed records into the expected target schema
+        avroRDDOptional = transformed
+            .map(t -> HoodieSparkUtils.createRdd(
+                t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+                Option.ofNullable(schemaProvider.getTargetSchema())
+            ).toJavaRDD());
       }
-
-      // Rewrite transformed records into the expected target schema
-      avroRDDOptional =
-          transformed.map(t -> HoodieSparkUtils.createRdd(t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE,
-              reconcileSchema, Option.of(schemaProvider.getTargetSchema())).toJavaRDD());
     } else {
       // Pull the data from the source & prepare the write
       InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint =
@@ -679,7 +703,7 @@ public class DeltaSync implements Serializable, Closeable {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY)) || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
-          return Option.of(Pair.of(instant, commitMetadata));
+          return Option.of(Pair.of(instant.toString(), commitMetadata));
         } else {
           return Option.empty();
         }
