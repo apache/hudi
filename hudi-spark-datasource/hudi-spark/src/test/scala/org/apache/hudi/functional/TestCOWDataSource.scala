@@ -101,6 +101,42 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @ParameterizedTest
+  @CsvSource(value = Array(
+    "AVRO,insert", "AVRO,bulk_insert", "AVRO,upsert"
+    // TODO enable
+    //"SPARK,insert", "SPARK,bulk_insert", "SPARK,upsert",
+  ))
+  def testRecordKeysAutoGen(recordType: HoodieRecordType, op: String) {
+    val (writeOpts, _) = getWriterReaderOpts(recordType)
+
+    // NOTE: In this test we deliberately removing record-key configuration
+    //       to validate Hudi is handling this case appropriately
+    val opts = writeOpts -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 10)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    inputDF.write.format("hudi")
+      .options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, op)
+      .option(HoodieTableConfig.AUTO_GEN_RECORD_KEYS.key(), "true")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+
+    val readDF = spark.read.format("hudi").load(basePath)
+
+    val recordKeys = readDF.select(HoodieRecord.AUTOGEN_ROW_KEY)
+      .collectAsList()
+      .map(_.getString(0))
+      .sorted
+
+    println(recordKeys)
+  }
+
+  @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testShortNameStorage(recordType: HoodieRecordType) {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
