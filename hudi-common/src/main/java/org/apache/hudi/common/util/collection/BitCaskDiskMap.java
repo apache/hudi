@@ -443,8 +443,7 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
 
     private byte[] decompressBytes(final byte[] bytes) throws IOException {
       decompressBaos.reset();
-      InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes));
-      try {
+      try (InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes))) {
         int len;
         while ((len = in.read(decompressIntermediateBuffer)) > 0) {
           decompressBaos.write(decompressIntermediateBuffer, 0, len);
