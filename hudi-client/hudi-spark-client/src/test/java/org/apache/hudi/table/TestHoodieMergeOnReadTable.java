@@ -65,6 +65,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.storage.StorageLevel;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -96,6 +97,11 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
     dataGen = new HoodieTestDataGenerator();
+  }
+
+  @BeforeEach
+  void beforeEach() {
+    jsc().getPersistentRDDs().values().forEach(JavaRDD::unpersist);
   }
 
   // Check if record level metadata is aggregated properly at the end of write.

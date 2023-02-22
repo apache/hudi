@@ -76,12 +76,10 @@ public class HoodieFlinkClusteringJob {
   }
 
   public static void main(String[] args) throws Exception {
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
     FlinkClusteringConfig cfg = getFlinkClusteringConfig(args);
     Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
 
-    AsyncClusteringService service = new AsyncClusteringService(cfg, conf, env);
+    AsyncClusteringService service = new AsyncClusteringService(cfg, conf);
 
     new HoodieFlinkClusteringJob(service).start(cfg.serviceMode);
   }
@@ -166,19 +164,13 @@ public class HoodieFlinkClusteringJob {
     private final HoodieFlinkTable<?> table;
 
     /**
-     * Flink Execution Environment.
-     */
-    private final StreamExecutionEnvironment env;
-
-    /**
      * Executor Service.
      */
     private final ExecutorService executor;
 
-    public AsyncClusteringService(FlinkClusteringConfig cfg, Configuration conf, StreamExecutionEnvironment env) throws Exception {
+    public AsyncClusteringService(FlinkClusteringConfig cfg, Configuration conf) throws Exception {
       this.cfg = cfg;
       this.conf = conf;
-      this.env = env;
       this.executor = Executors.newFixedThreadPool(1);
 
       // create metaClient
@@ -289,7 +281,7 @@ public class HoodieFlinkClusteringJob {
       if (table.getMetaClient().getActiveTimeline().containsInstant(inflightInstant)) {
         LOG.info("Rollback inflight clustering instant: [" + clusteringInstant + "]");
         table.rollbackInflightClustering(inflightInstant,
-            commitToRollback -> writeClient.getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+            commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
         table.getMetaClient().reloadActiveTimeline();
       }
 
@@ -337,6 +329,8 @@ public class HoodieFlinkClusteringJob {
       final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
       final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
+
+      StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
       // setup configuration
       long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();

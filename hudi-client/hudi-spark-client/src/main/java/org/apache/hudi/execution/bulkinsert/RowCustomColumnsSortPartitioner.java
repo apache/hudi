@@ -21,6 +21,7 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -44,8 +45,8 @@ public class RowCustomColumnsSortPartitioner implements BulkInsertPartitioner<Da
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> records, int outputSparkPartitions) {
     final String[] sortColumns = this.sortColumnNames;
-    return records.coalesce(outputSparkPartitions)
-        .sortWithinPartitions(HoodieRecord.PARTITION_PATH_METADATA_FIELD, sortColumns);
+    return records.sort(HoodieRecord.PARTITION_PATH_METADATA_FIELD, sortColumns)
+        .coalesce(outputSparkPartitions);
   }
 
   @Override

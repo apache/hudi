@@ -208,14 +208,13 @@ public class ITTestHoodieFlinkClustering {
     TimeUnit.SECONDS.sleep(3);
 
     // Make configuration and setAvroSchema.
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
     FlinkClusteringConfig cfg = new FlinkClusteringConfig();
     cfg.path = tempFile.getAbsolutePath();
     cfg.minClusteringIntervalSeconds = 3;
     cfg.schedule = true;
     Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
 
-    HoodieFlinkClusteringJob.AsyncClusteringService asyncClusteringService = new HoodieFlinkClusteringJob.AsyncClusteringService(cfg, conf, env);
+    HoodieFlinkClusteringJob.AsyncClusteringService asyncClusteringService = new HoodieFlinkClusteringJob.AsyncClusteringService(cfg, conf);
     asyncClusteringService.start(null);
 
     // wait for the asynchronous commit to finish

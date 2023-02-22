@@ -106,6 +106,11 @@
         <created>2022-10-18</created>
         <revision>0.12.1</revision>
       </Version>
+      <Version>
+        <name>Apache Hudi 0.12.2</name>
+        <created>2022-12-28</created>
+        <revision>0.12.2</revision>
+      </Version>
     </release>
     <repository>
       <GitRepository>

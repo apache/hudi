@@ -42,6 +42,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collections;
@@ -65,6 +67,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     this.engineContext = engineContext;
   }
 
+  @Nullable
   public HoodieCompactionPlan generateCompactionPlan() throws IOException {
     // Accumulator to keep track of total log files for a table
     HoodieAccumulator totalLogFiles = engineContext.newAccumulator();

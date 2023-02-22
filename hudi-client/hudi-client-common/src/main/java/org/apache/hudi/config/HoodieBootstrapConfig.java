@@ -108,7 +108,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .key("hoodie.bootstrap.index.class")
       .defaultValue(HFileBootstrapIndex.class.getName())
       .sinceVersion("0.6.0")
-      .withDocumentation("Implementation to use, for mapping a skeleton base file to a boostrap base file.");
+      .withDocumentation("Implementation to use, for mapping a skeleton base file to a bootstrap base file.");
 
   /**
    * @deprecated Use {@link #BASE_PATH} and its methods instead

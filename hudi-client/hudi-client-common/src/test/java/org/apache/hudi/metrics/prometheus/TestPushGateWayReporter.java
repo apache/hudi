@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics.prometheus;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -29,9 +30,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Map;
+
 import static org.apache.hudi.metrics.Metrics.registerGauge;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -56,6 +61,7 @@ public class TestPushGateWayReporter {
     when(config.getPushGatewayDeleteOnShutdown()).thenReturn(true);
     when(config.getPushGatewayJobName()).thenReturn("foo");
     when(config.getPushGatewayRandomJobNameSuffix()).thenReturn(false);
+    when(config.getPushGatewayLabels()).thenReturn("hudi:prometheus");
 
     assertDoesNotThrow(() -> {
       new HoodieMetrics(config);
@@ -64,5 +70,48 @@ public class TestPushGateWayReporter {
     registerGauge("pushGateWayReporter_metric", 123L);
     assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
         .get("pushGateWayReporter_metric").getValue().toString());
+  }
+
+  @Test
+  public void testMetricLabels() {
+    PushGatewayMetricsReporter reporter;
+    Map<String, String> labels;
+
+    when(config.getPushGatewayLabels()).thenReturn("hudi:prometheus");
+    reporter = new PushGatewayMetricsReporter(config, null);
+    labels = reporter.getLabels();
+    assertEquals(1, labels.size());
+    assertTrue(labels.containsKey("hudi"));
+    assertTrue(labels.containsValue("prometheus"));
+
+    when(config.getPushGatewayLabels()).thenReturn("hudi:prome:theus");
+    reporter = new PushGatewayMetricsReporter(config, null);
+    labels = reporter.getLabels();
+    assertEquals(1, labels.size());
+    assertTrue(labels.containsKey("hudi"));
+    assertTrue(labels.containsValue("prome:theus"));
+
+    when(config.getPushGatewayLabels()).thenReturn("hudiprometheus");
+    reporter = new PushGatewayMetricsReporter(config, null);
+    labels = reporter.getLabels();
+    assertEquals(1, labels.size());
+    assertTrue(labels.containsKey("hudiprometheus"));
+    assertTrue(labels.containsValue(""));
+
+    when(config.getPushGatewayLabels()).thenReturn("hudi1:prometheus,hudi2:prometheus");
+    reporter = new PushGatewayMetricsReporter(config, null);
+    labels = reporter.getLabels();
+    assertEquals(2, labels.size());
+    assertTrue(labels.containsKey("hudi1"));
+    assertTrue(labels.containsKey("hudi2"));
+    assertTrue(labels.containsValue("prometheus"));
+
+    try {
+      when(config.getPushGatewayLabels()).thenReturn("hudi:prometheus,hudi:prometheus");
+      reporter = new PushGatewayMetricsReporter(config, null);
+      fail("Should fail");
+    } catch (HoodieException e) {
+      assertTrue(e.getMessage().contains("Duplicate key=hudi found in labels"));
+    }
   }
 }

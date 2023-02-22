@@ -449,7 +449,7 @@ public class HoodieInputFormatUtils {
    * @param dataFile
    * @return
    */
-  public static HoodieBaseFile refreshFileStatus(Configuration conf, HoodieBaseFile dataFile) {
+  private static HoodieBaseFile refreshFileStatus(Configuration conf, HoodieBaseFile dataFile) {
     Path dataPath = dataFile.getFileStatus().getPath();
     try {
       if (dataFile.getFileSize() == 0) {

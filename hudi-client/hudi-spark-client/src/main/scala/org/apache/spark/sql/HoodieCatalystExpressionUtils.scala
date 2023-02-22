@@ -18,15 +18,31 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
+import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.codegen.{GenerateMutableProjection, GenerateUnsafeProjection}
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Like, Literal, MutableProjection, SubqueryExpression, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, AttributeSet, CreateStruct, Expression, GetStructField, Like, Literal, Projection, SubqueryExpression, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{DataType, StructType}
-import scala.annotation.tailrec
 
 trait HoodieCatalystExpressionUtils {
+
+  /**
+   * Returns a filter that its reference is a subset of `outputSet` and it contains the maximum
+   * constraints from `condition`. This is used for predicate push-down
+   * When there is no such filter, `None` is returned.
+   */
+  def extractPredicatesWithinOutputSet(condition: Expression,
+                                       outputSet: AttributeSet): Option[Expression]
+
+  /**
+   * The attribute name may differ from the one in the schema if the query analyzer
+   * is case insensitive. We should change attribute names to match the ones in the schema,
+   * so we do not need to worry about case sensitivity anymore
+   */
+  def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression]
 
   /**
    * Matches an expression iff
@@ -79,11 +95,16 @@ object HoodieCatalystExpressionUtils {
    * B is a subset of A
    */
   def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
-    val attrs = from.toAttributes
-    val attrsMap = attrs.map(attr => (attr.name, attr)).toMap
-    val targetExprs = to.fields.map(f => attrsMap(f.name))
-
-    GenerateUnsafeProjection.generate(targetExprs, attrs)
+    val projection = generateUnsafeProjectionInternal(from, to)
+    val identical = from == to
+    // NOTE: Have to use explicit [[Projection]] instantiation to stay compatible w/ Scala 2.11
+    new UnsafeProjection {
+      override def apply(row: InternalRow): UnsafeRow =
+        row match {
+          case ur: UnsafeRow if identical => ur
+          case _ => projection(row)
+        }
+    }
   }
 
   /**
@@ -107,23 +128,6 @@ object HoodieCatalystExpressionUtils {
       expr.references.forall(r => partitionColumns.exists(resolvedNameEquals(r.name, _))) &&
         !SubqueryExpression.hasSubquery(expr)
     })
-  }
-
-  /**
-   * Generates instance of [[MutableProjection]] projecting row of one [[StructType]] into another [[StructType]]
-   *
-   * NOTE: No safety checks are executed to validate that this projection is actually feasible,
-   *       it's up to the caller to make sure that such projection is possible.
-   *
-   * NOTE: Projection of the row from [[StructType]] A to [[StructType]] B is only possible, if
-   *       B is a subset of A
-   */
-  def generateMutableProjection(from: StructType, to: StructType): MutableProjection = {
-    val attrs = from.toAttributes
-    val attrsMap = attrs.map(attr => (attr.name, attr)).toMap
-    val targetExprs = to.fields.map(f => attrsMap(f.name))
-
-    GenerateMutableProjection.generate(targetExprs, attrs)
   }
 
   /**
@@ -250,6 +254,14 @@ object HoodieCatalystExpressionUtils {
         case _ => null
       }
     )
+  }
+
+  private def generateUnsafeProjectionInternal(from: StructType, to: StructType): UnsafeProjection = {
+    val attrs = from.toAttributes
+    val attrsMap = attrs.map(attr => (attr.name, attr)).toMap
+    val targetExprs = to.fields.map(f => attrsMap(f.name))
+
+    UnsafeProjection.create(targetExprs, attrs)
   }
 
   private def hasUnresolvedRefs(resolvedExpr: Expression): Boolean =

@@ -104,6 +104,7 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
         throw new HoodieIOException("Exception scheduling clustering", ioe);
       }
     }
+
     return planOption;
   }
 }

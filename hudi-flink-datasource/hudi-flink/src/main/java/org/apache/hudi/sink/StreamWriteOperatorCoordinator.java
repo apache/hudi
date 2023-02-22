@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.adapter.OperatorCoordinatorAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -40,7 +41,6 @@ import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -48,9 +48,10 @@ import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
-import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -79,7 +80,7 @@ import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
  * @see StreamWriteFunction for the work flow and semantics
  */
 public class StreamWriteOperatorCoordinator
-    implements OperatorCoordinator {
+    implements OperatorCoordinatorAdapter {
   private static final Logger LOG = LoggerFactory.getLogger(StreamWriteOperatorCoordinator.class);
 
   /**
@@ -178,7 +179,7 @@ public class StreamWriteOperatorCoordinator
     this.gateways = new SubtaskGateway[this.parallelism];
     // init table, create if not exists.
     this.metaClient = initTableIfNotExists(this.conf);
-    this.ckpMetadata = initCkpMetadata(this.metaClient);
+    this.ckpMetadata = initCkpMetadata(this.metaClient, this.conf);
     // the write client must create after the table creation
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
     initMetadataTable(this.writeClient);
@@ -340,8 +341,8 @@ public class StreamWriteOperatorCoordinator
     writeClient.initMetadataTable();
   }
 
-  private static CkpMetadata initCkpMetadata(HoodieTableMetaClient metaClient) throws IOException {
-    CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient.getFs(), metaClient.getBasePath());
+  private static CkpMetadata initCkpMetadata(HoodieTableMetaClient metaClient, Configuration conf) throws IOException {
+    CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient, conf.getString(FlinkOptions.WRITE_CLIENT_ID));
     ckpMetadata.bootstrap();
     return ckpMetadata;
   }
@@ -370,6 +371,8 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void startInstant() {
+    // refresh the last txn metadata
+    this.writeClient.preTxn(this.metaClient);
     // put the assignment in front of metadata generation,
     // because the instant request from write task is asynchronous.
     this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
@@ -389,10 +392,9 @@ public class StreamWriteOperatorCoordinator
    * until it finds a new inflight instant on the timeline.
    */
   private void initInstant(String instant) {
-    HoodieTimeline completedTimeline =
-        StreamerUtil.createMetaClient(conf).getActiveTimeline().filterCompletedInstants();
+    HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
     executor.execute(() -> {
-      if (instant.equals("") || completedTimeline.containsInstant(instant)) {
+      if (instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT) || completedTimeline.containsInstant(instant)) {
         // the last instant committed successfully
         reset();
       } else {
@@ -410,7 +412,11 @@ public class StreamWriteOperatorCoordinator
     this.eventBuffer[event.getTaskID()] = event;
     if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
       // start to initialize the instant.
-      initInstant(event.getInstantTime());
+      final String instant = Arrays.stream(eventBuffer)
+          .filter(evt -> evt.getWriteStatuses().size() > 0)
+          .findFirst().map(WriteMetadataEvent::getInstantTime)
+          .orElse(WriteMetadataEvent.BOOTSTRAP_INSTANT);
+      initInstant(instant);
     }
   }
 

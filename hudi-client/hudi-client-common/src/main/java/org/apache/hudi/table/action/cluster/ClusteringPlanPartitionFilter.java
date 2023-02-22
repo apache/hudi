@@ -21,6 +21,9 @@ package org.apache.hudi.table.action.cluster;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 
+import org.joda.time.DateTime;
+
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -31,6 +34,11 @@ import java.util.stream.Stream;
  *  NONE: skip filter
  *  RECENT DAYS: output recent partition given skip num and days lookback config
  *  SELECTED_PARTITIONS: output partition falls in the [start, end] condition
+ *  DAY_ROLLING: Clustering all partitions once a day to avoid clustering data of all partitions each time.
+ *  sort partitions asc, choose which partition index % 24 = now_hour.
+ *  tips: If hoodie.clustering.inline=true, try to reach the limit of hoodie.clustering.inline.max.commits every hour.
+ *        If hoodie.clustering.async.enabled=true, try to reach the limit of hoodie.clustering.async.max.commits every hour.
+ *
  */
 public class ClusteringPlanPartitionFilter {
 
@@ -43,9 +51,24 @@ public class ClusteringPlanPartitionFilter {
         return recentDaysFilter(partitions, config);
       case SELECTED_PARTITIONS:
         return selectedPartitionsFilter(partitions, config);
+      case DAY_ROLLING:
+        return dayRollingFilter(partitions, config);
       default:
         throw new HoodieClusteringException("Unknown partition filter, filter mode: " + mode);
     }
+  }
+
+  private static List<String> dayRollingFilter(List<String> partitions, HoodieWriteConfig config) {
+    int hour = DateTime.now().getHourOfDay();
+    int len = partitions.size();
+    List<String> selectPt = new ArrayList<>();
+    partitions.sort(String::compareTo);
+    for (int i = 0; i < len; i++) {
+      if (i % 24 == hour) {
+        selectPt.add(partitions.get(i));
+      }
+    }
+    return selectPt;
   }
 
   private static List<String> recentDaysFilter(List<String> partitions, HoodieWriteConfig config) {

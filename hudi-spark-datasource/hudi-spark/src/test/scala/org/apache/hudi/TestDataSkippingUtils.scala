@@ -83,7 +83,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
       )
     )
 
-  val indexSchema: StructType = composeIndexSchema(indexedCols, sourceTableSchema)
+  val (indexSchema: StructType, targetIndexedColumns:  Seq[String]) = composeIndexSchema(indexedCols, indexedCols.toSet, sourceTableSchema)
 
   @ParameterizedTest
   @MethodSource(Array(

@@ -47,10 +47,12 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Random;
 import java.util.function.BiFunction;
@@ -144,7 +146,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   @Override
   public void close() {
     if (this.writeClient != null) {
-      this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
     }
   }
@@ -400,10 +401,9 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       }
     } else if (flushBuffer) {
       // find the max size bucket and flush it out
-      List<DataBucket> sortedBuckets = this.buckets.values().stream()
-          .sorted((b1, b2) -> Long.compare(b2.detector.totalSize, b1.detector.totalSize))
-          .collect(Collectors.toList());
-      final DataBucket bucketToFlush = sortedBuckets.get(0);
+      DataBucket bucketToFlush = this.buckets.values().stream()
+          .max(Comparator.comparingLong(b -> b.detector.totalSize))
+          .orElseThrow(NoSuchElementException::new);
       if (flushBucket(bucketToFlush)) {
         this.tracer.countDown(bucketToFlush.detector.totalSize);
         bucketToFlush.reset();

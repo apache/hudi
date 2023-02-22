@@ -259,8 +259,8 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
-  public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime, boolean skipLocking) {
-    return new CleanActionExecutor<>(context, config, this, cleanInstantTime, skipLocking).execute();
+  public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime) {
+    return new CleanActionExecutor<>(context, config, this, cleanInstantTime, false).execute();
   }
 
   @Override
@@ -286,12 +286,12 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
-  public HoodieRestoreMetadata restore(HoodieEngineContext context, String restoreInstantTime, String instantToRestore) {
-    return new CopyOnWriteRestoreActionExecutor<>(context, config, this, restoreInstantTime, instantToRestore).execute();
+  public HoodieRestoreMetadata restore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
+    return new CopyOnWriteRestoreActionExecutor<>(context, config, this, restoreInstantTimestamp, savepointToRestoreTimestamp).execute();
   }
 
   @Override
-  public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTime, String instantToRestore) {
-    return new RestorePlanActionExecutor<>(context, config, this, restoreInstantTime, instantToRestore).execute();
+  public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
+    return new RestorePlanActionExecutor<>(context, config, this, restoreInstantTimestamp, savepointToRestoreTimestamp).execute();
   }
 }

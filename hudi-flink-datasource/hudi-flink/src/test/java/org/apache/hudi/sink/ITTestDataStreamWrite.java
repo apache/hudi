@@ -31,6 +31,7 @@ import org.apache.hudi.table.catalog.HoodieCatalog;
 import org.apache.hudi.table.catalog.TableOptionProperties;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.HoodiePipeline;
+import org.apache.hudi.util.JsonDeserializationFunction;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
@@ -46,8 +47,6 @@ import org.apache.flink.api.java.io.TextInputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.core.fs.Path;
-import org.apache.flink.formats.common.TimestampFormat;
-import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -58,7 +57,6 @@ import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
 import org.junit.jupiter.api.Test;
@@ -68,7 +66,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -116,7 +113,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
-    conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     testWriteToHoodie(conf, "cow_write", 2, EXPECTED);
@@ -162,7 +158,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
-    conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
 
@@ -226,13 +221,6 @@ public class ITTestDataStreamWrite extends TestLogger {
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
 
-    JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
-        rowType,
-        InternalTypeInfo.of(rowType),
-        false,
-        true,
-        TimestampFormat.ISO_8601
-    );
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_source.data")).toString();
 
@@ -248,7 +236,7 @@ public class ITTestDataStreamWrite extends TestLogger {
       dataStream = execEnv
           // use PROCESS_CONTINUOUSLY mode to trigger checkpoint
           .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
-          .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+          .map(JsonDeserializationFunction.getInstance(rowType))
           .setParallelism(1);
     } else {
       dataStream = execEnv
@@ -256,7 +244,7 @@ public class ITTestDataStreamWrite extends TestLogger {
           .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), checkpoints))
           .name("continuous_file_source")
           .setParallelism(1)
-          .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+          .map(JsonDeserializationFunction.getInstance(rowType))
           .setParallelism(4);
     }
 
@@ -295,13 +283,6 @@ public class ITTestDataStreamWrite extends TestLogger {
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
 
-    JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
-        rowType,
-        InternalTypeInfo.of(rowType),
-        false,
-        true,
-        TimestampFormat.ISO_8601
-    );
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_source.data")).toString();
 
@@ -310,7 +291,7 @@ public class ITTestDataStreamWrite extends TestLogger {
         .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), checkpoints))
         .name("continuous_file_source")
         .setParallelism(1)
-        .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+        .map(JsonDeserializationFunction.getInstance(rowType))
         .setParallelism(4);
 
     OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
@@ -394,18 +375,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     options.put(FlinkOptions.PATH.key(), tempFile.toURI().toString());
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), Objects.requireNonNull(Thread.currentThread().getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     Configuration conf = Configuration.fromMap(options);
-    // Read from file source
-    RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
-            .getLogicalType();
 
-    JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
-        rowType,
-        InternalTypeInfo.of(rowType),
-        false,
-        true,
-        TimestampFormat.ISO_8601
-    );
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_source.data")).toString();
 
@@ -418,7 +388,7 @@ public class ITTestDataStreamWrite extends TestLogger {
         .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), 2))
         .name("continuous_file_source")
         .setParallelism(1)
-        .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+        .map(JsonDeserializationFunction.getInstance(conf))
         .setParallelism(4);
 
     //sink to hoodie table use low-level sink api.
@@ -506,18 +476,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     options.put(FlinkOptions.PATH.key(), tempFile.toURI().toString());
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), Objects.requireNonNull(Thread.currentThread().getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     Configuration conf = Configuration.fromMap(options);
-    // Read from file source
-    RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
-            .getLogicalType();
 
-    JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
-        rowType,
-        InternalTypeInfo.of(rowType),
-        false,
-        true,
-        TimestampFormat.ISO_8601
-    );
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_source.data")).toString();
 
@@ -530,7 +489,7 @@ public class ITTestDataStreamWrite extends TestLogger {
         .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), 2))
         .name("continuous_file_source")
         .setParallelism(1)
-        .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+        .map(JsonDeserializationFunction.getInstance(conf))
         .setParallelism(4);
 
     Schema schema =

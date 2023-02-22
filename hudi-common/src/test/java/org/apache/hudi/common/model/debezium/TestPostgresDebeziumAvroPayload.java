@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.model.debezium;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
@@ -114,6 +118,21 @@ public class TestPostgresDebeziumAvroPayload {
     payload = new PostgresDebeziumAvroPayload(lateRecord, 98L);
     mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);
     validateRecord(mergedRecord, 2, Operation.UPDATE, 99L);
+  }
+
+  @Test
+  public void testMergeWithDeleteUsingEmptyRecord() throws IOException {
+    // empty record being merged with current record.
+    HoodieRecord<PostgresDebeziumAvroPayload> emptyRecord = new HoodieAvroRecord(new HoodieKey(), new PostgresDebeziumAvroPayload(Option.empty()));
+    GenericRecord existingRecord = createRecord(2, Operation.UPDATE, 99L);
+    Option<IndexedRecord> mergedRecord = emptyRecord.getData().combineAndGetUpdateValue(existingRecord, avroSchema, new TypedProperties());
+    // expect nothing to be committed to table
+    assertFalse(mergedRecord.isPresent());
+    // Insert record being merged with empty record.
+    GenericRecord insertedRecord = createRecord(1, Operation.INSERT, 100L);
+    PostgresDebeziumAvroPayload insertPayload = new PostgresDebeziumAvroPayload(insertedRecord, 100L);
+    PostgresDebeziumAvroPayload combinedPayload = (PostgresDebeziumAvroPayload) insertPayload.preCombine(emptyRecord.getData(), avroSchema, new TypedProperties());
+    assertEquals(insertPayload, combinedPayload);
   }
 
   @Test

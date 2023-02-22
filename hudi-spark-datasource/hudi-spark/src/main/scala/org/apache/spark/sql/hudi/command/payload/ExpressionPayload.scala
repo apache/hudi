@@ -26,21 +26,22 @@ import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
-import org.apache.hudi.common.model.BaseAvroPayload.isDeleteRecord
+import org.apache.hudi.common.model.BaseAvroPayload
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
+import org.apache.hudi.common.util.{BinaryUtil, ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.spark.internal.Logging
+import org.apache.spark.serializer.{KryoSerializer, SerializerInstance}
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, Projection, SafeProjection}
-import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.BooleanType
+import org.apache.spark.{SparkConf, SparkEnv}
 
+import java.nio.ByteBuffer
 import java.util.function.{Function, Supplier}
 import java.util.{Base64, Properties}
 import scala.collection.JavaConverters._
@@ -237,7 +238,7 @@ class ExpressionPayload(@transient record: GenericRecord,
     val recordSchema = getRecordSchema(properties)
     val incomingRecord = ConvertibleRecord(bytesToAvro(recordBytes, recordSchema))
 
-    if (isDeleteRecord(incomingRecord.asAvro)) {
+    if (BaseAvroPayload.isDeleteRecord(incomingRecord.asAvro)) {
       HOption.empty[IndexedRecord]()
     } else if (isMORTable(properties)) {
       // For the MOR table, both the matched and not-matched record will step into the getInsertValue() method.
@@ -420,7 +421,7 @@ object ExpressionPayload {
           override def apply(key: (String, Schema)): Seq[(Projection, Projection)] = {
             val (encodedConditionalAssignments, _) = key
             val serializedBytes = Base64.getDecoder.decode(encodedConditionalAssignments)
-            val conditionAssignments = SerDeUtils.toObject(serializedBytes)
+            val conditionAssignments = Serializer.toObject(serializedBytes)
               .asInstanceOf[Map[Expression, Seq[Expression]]]
             conditionAssignments.toSeq.map {
               case (condition, assignments) =>
@@ -454,6 +455,51 @@ object ExpressionPayload {
           new Schema.Field("b_" + field.name,
             field.schema, field.doc, field.defaultVal, field.order))
     Schema.createRecord(a.getName, a.getDoc, a.getNamespace, a.isError, mergedFields.asJava)
+  }
+
+
+  /**
+   * This object differs from Hudi's generic [[SerializationUtils]] in its ability to serialize
+   * Spark's internal structures (various [[Expression]]s)
+   *
+   * For that purpose we re-use Spark's [[KryoSerializer]] instance sharing configuration
+   * with enclosing [[SparkEnv]]. This is necessary to make sure that this particular instance of Kryo
+   * user for serialization of Spark's internal structures (like [[Expression]]s) is configured
+   * appropriately (class-loading, custom serializers, etc)
+   *
+   * TODO rebase on Spark's SerializerSupport
+   */
+  private[hudi] object Serializer {
+
+    // NOTE: This is only Spark >= 3.0
+    private val KRYO_USE_POOL_CONFIG_KEY = "spark.kryo.pool"
+
+    private lazy val conf = {
+      val conf = Option(SparkEnv.get)
+        // To make sure we're not modifying existing environment's [[SparkConf]]
+        // we're cloning it here
+        .map(_.conf.clone)
+        .getOrElse(new SparkConf)
+      // This serializer is configured as thread-local, hence there's no need for
+      // pooling
+      conf.set(KRYO_USE_POOL_CONFIG_KEY, "false")
+      conf
+    }
+
+    private val SERIALIZER_THREAD_LOCAL = new ThreadLocal[SerializerInstance] {
+      override protected def initialValue: SerializerInstance = {
+        new KryoSerializer(conf).newInstance()
+      }
+    }
+
+    def toBytes(o: Any): Array[Byte] = {
+      val buf = SERIALIZER_THREAD_LOCAL.get.serialize(o)
+      BinaryUtil.toBytes(buf)
+    }
+
+    def toObject(bytes: Array[Byte]): Any = {
+      SERIALIZER_THREAD_LOCAL.get.deserialize(ByteBuffer.wrap(bytes))
+    }
   }
 }
 

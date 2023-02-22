@@ -23,6 +23,7 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -37,6 +38,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -59,7 +61,14 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
   public HiveQueryDDLExecutor(HiveSyncConfig config) throws HiveException, MetaException {
     super(config);
-    this.metaStoreClient = Hive.get(config.getHiveConf()).getMSC();
+    HiveConf hiveConf = config.getHiveConf();
+    IMetaStoreClient tempMetaStoreClient;
+    try {
+      tempMetaStoreClient = ((Hive) Hive.class.getMethod("getWithoutRegisterFns", HiveConf.class).invoke(null, hiveConf)).getMSC();
+    } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
+      tempMetaStoreClient = Hive.get(hiveConf).getMSC();
+    }
+    this.metaStoreClient = tempMetaStoreClient;
     try {
       this.sessionState = new SessionState(config.getHiveConf(),
           UserGroupInformation.getCurrentUser().getShortUserName());

@@ -24,12 +24,17 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * {@code HoodieTableFileSystemView} implementation that retrieved partition listings from the Metadata Table.
@@ -49,9 +54,8 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
                                       HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,
                                       HoodieMetadataConfig metadataConfig) {
-    super(metaClient, visibleActiveTimeline);
-    this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true);
+    this(metaClient, visibleActiveTimeline, HoodieTableMetadata.create(engineContext, metadataConfig,
+        metaClient.getBasePath(), FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true));
   }
 
   /**
@@ -63,6 +67,26 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   @Override
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
     return tableMetadata.getAllFilesInPartition(partitionPath);
+  }
+
+  @Override
+  protected List<String> getAllPartitionPaths() throws IOException {
+    return tableMetadata.getAllPartitionPaths();
+  }
+  
+  @Override
+  protected Map<Pair<String, Path>, FileStatus[]> listPartitions(List<Pair<String, Path>> partitionPathList) throws IOException {
+    Map<String, Pair<String, Path>> absoluteToPairMap = partitionPathList.stream()
+        .collect(Collectors.toMap(
+            pair -> pair.getRight().toString(),
+            Function.identity()
+        ));
+    return tableMetadata.getAllFilesInPartitions(
+            partitionPathList.stream().map(pair -> pair.getRight().toString()).collect(Collectors.toList()))
+        .entrySet().stream().collect(Collectors.toMap(
+            entry -> absoluteToPairMap.get(entry.getKey()),
+            Map.Entry::getValue
+        ));
   }
 
   @Override

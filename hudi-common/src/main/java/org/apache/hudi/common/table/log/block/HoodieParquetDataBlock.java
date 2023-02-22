@@ -22,9 +22,9 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
@@ -149,6 +149,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     //       is appropriately carried over
     Configuration inlineConf = new Configuration(blockContentLoc.getHadoopConf());
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+    inlineConf.setClassLoader(InLineFileSystem.class.getClassLoader());
 
     Path inlineLogFilePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),

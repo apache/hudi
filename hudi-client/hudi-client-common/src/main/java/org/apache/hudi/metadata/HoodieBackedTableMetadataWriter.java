@@ -65,6 +65,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -93,6 +94,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
@@ -100,6 +102,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.METADATA_INDEXER_TIME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 
@@ -111,6 +114,8 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetada
 public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWriter {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadataWriter.class);
+
+  public static final String METADATA_COMPACTION_TIME_SUFFIX = "001";
 
   // Virtual keys support for metadata table. This Field is
   // from the metadata payload schema.
@@ -132,15 +137,17 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   /**
    * Hudi backed table metadata writer.
    *
-   * @param hadoopConf               - Hadoop configuration to use for the metadata writer
-   * @param writeConfig              - Writer config
-   * @param engineContext            - Engine context
-   * @param actionMetadata           - Optional action metadata to help decide initialize operations
-   * @param <T>                      - Action metadata types extending Avro generated SpecificRecordBase
-   * @param inflightInstantTimestamp - Timestamp of any instant in progress
+   * @param hadoopConf                 Hadoop configuration to use for the metadata writer
+   * @param writeConfig                Writer config
+   * @param failedWritesCleaningPolicy Cleaning policy on failed writes
+   * @param engineContext              Engine context
+   * @param actionMetadata             Optional action metadata to help decide initialize operations
+   * @param <T>                        Action metadata types extending Avro generated SpecificRecordBase
+   * @param inflightInstantTimestamp   Timestamp of any instant in progress
    */
   protected <T extends SpecificRecordBase> HoodieBackedTableMetadataWriter(Configuration hadoopConf,
                                                                            HoodieWriteConfig writeConfig,
+                                                                           HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                                            HoodieEngineContext engineContext,
                                                                            Option<T> actionMetadata,
                                                                            Option<String> inflightInstantTimestamp) {
@@ -152,7 +159,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     if (writeConfig.isMetadataTableEnabled()) {
       this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
-      this.metadataWriteConfig = createMetadataWriteConfig(writeConfig);
+      this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
       enabled = true;
 
       // Inline compaction and auto clean is required as we dont expose this table outside
@@ -179,7 +186,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   public HoodieBackedTableMetadataWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig,
                                          HoodieEngineContext engineContext) {
-    this(hadoopConf, writeConfig, engineContext, Option.empty(), Option.empty());
+    this(hadoopConf, writeConfig, EAGER, engineContext, Option.empty(), Option.empty());
   }
 
   /**
@@ -230,11 +237,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected abstract void initRegistry();
 
   /**
-   * Create a {@code HoodieWriteConfig} to use for the Metadata Table.
+   * Create a {@code HoodieWriteConfig} to use for the Metadata Table.  This is used by async
+   * indexer only.
    *
-   * @param writeConfig {@code HoodieWriteConfig} of the main dataset writer
+   * @param writeConfig                {@code HoodieWriteConfig} of the main dataset writer
+   * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    */
-  private HoodieWriteConfig createMetadataWriteConfig(HoodieWriteConfig writeConfig) {
+  private HoodieWriteConfig createMetadataWriteConfig(
+      HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     int parallelism = writeConfig.getMetadataInsertParallelism();
 
     int minCommitsToKeep = Math.max(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMinCommitsToKeep());
@@ -242,6 +252,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
+        .withEngineType(writeConfig.getEngineType())
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
             .withConsistencyCheckEnabled(writeConfig.getConsistencyGuardConfig().isConsistencyCheckEnabled())
@@ -261,12 +272,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .forTable(tableName)
         // we will trigger cleaning manually, to control the instant times
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withAsyncClean(writeConfig.isMetadataAsyncClean())
+            .withAsyncClean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE.defaultValue())
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-            .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
+            .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
+            .retainCommits(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED.defaultValue())
             .build())
         // we will trigger archive manually, to ensure only regular writer invokes it
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
@@ -280,7 +291,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             // by default, the HFile does not keep the metadata fields, set up as false
             // to always use the metadata of the new record.
             .withPreserveCommitMetadata(false)
-            .withLogRecordReaderScanV2(String.valueOf(writeConfig.useScanV2ForLogRecordReader()))
+            .withEnableOptimizedLogBlocksScan(String.valueOf(writeConfig.enableOptimizedLogBlocksScan()))
             .build())
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)
@@ -288,7 +299,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withFinalizeWriteParallelism(parallelism)
         .withAllowMultiWriteOnSameInstant(true)
         .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-        .withPopulateMetaFields(dataWriteConfig.getMetadataConfig().populateMetaFields());
+        .withPopulateMetaFields(HoodieMetadataConfig.POPULATE_META_FIELDS.defaultValue());
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();
@@ -319,9 +330,18 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
               .toJmxHost(writeConfig.getJmxHost())
               .build());
           break;
+        case PROMETHEUS_PUSHGATEWAY:
+          HoodieMetricsPrometheusConfig prometheusConfig = HoodieMetricsPrometheusConfig.newBuilder()
+              .withPushgatewayJobname(writeConfig.getPushGatewayJobName())
+              .withPushgatewayRandomJobnameSuffix(writeConfig.getPushGatewayRandomJobNameSuffix())
+              .withPushgatewayLabels(writeConfig.getPushGatewayLabels())
+              .withPushgatewayReportPeriodInSeconds(String.valueOf(writeConfig.getPushGatewayReportPeriodSeconds()))
+              .withPushgatewayHostName(writeConfig.getPushGatewayHost())
+              .withPushgatewayPortNum(writeConfig.getPushGatewayPort()).build();
+          builder.withProperties(prometheusConfig.getProps());
+          break;
         case DATADOG:
         case PROMETHEUS:
-        case PROMETHEUS_PUSHGATEWAY:
         case CONSOLE:
         case INMEMORY:
         case CLOUDWATCH:
@@ -872,7 +892,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     inflightIndexes.addAll(indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
     dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightIndexes));
     HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
-    initialCommit(indexUptoInstantTime, partitionTypes);
+    initialCommit(indexUptoInstantTime + METADATA_INDEXER_TIME_SUFFIX, partitionTypes);
   }
 
   /**
@@ -1019,22 +1039,31 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // finish off any pending compactions if any from previous attempt.
     writeClient.runAnyPendingCompactions();
 
-    String latestDeltaCommitTime = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
-        .get().getTimestamp();
+    String latestDeltaCommitTimeInMetadataTable = metadataMetaClient.reloadActiveTimeline()
+        .getDeltaCommitTimeline()
+        .filterCompletedInstants()
+        .lastInstant().orElseThrow(() -> new HoodieMetadataException("No completed deltacommit in metadata table"))
+        .getTimestamp();
     List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
-        .findInstantsBefore(instantTime).getInstants();
+        .findInstantsBefore(latestDeltaCommitTimeInMetadataTable).getInstants();
 
     if (!pendingInstants.isEmpty()) {
-      LOG.info(String.format("Cannot compact metadata table as there are %d inflight instants before latest deltacommit %s: %s",
-          pendingInstants.size(), latestDeltaCommitTime, Arrays.toString(pendingInstants.toArray())));
+      LOG.info(String.format(
+          "Cannot compact metadata table as there are %d inflight instants in data table before latest deltacommit in metadata table: %s. Inflight instants in data table: %s",
+          pendingInstants.size(), latestDeltaCommitTimeInMetadataTable, Arrays.toString(pendingInstants.toArray())));
       return;
     }
 
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    final String compactionInstantTime = latestDeltaCommitTime + "001";
-    if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
+    final String compactionInstantTime = latestDeltaCommitTimeInMetadataTable + METADATA_COMPACTION_TIME_SUFFIX;
+    // we need to avoid checking compaction w/ same instant again.
+    // lets say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
+    // and again w/ C6, we will re-attempt compaction at which point latest delta commit is C4 in MDT.
+    // and so we try compaction w/ instant C4001. So, we can avoid compaction if we already have compaction w/ same instant time.
+    if (!metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime)
+        && writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       writeClient.compact(compactionInstantTime);
     }
   }
@@ -1057,6 +1086,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
     writeClient.clean(instantTime + "002");
+    writeClient.lazyRollbackFailedIndexing();
   }
 
   /**
@@ -1074,38 +1104,44 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
 
-    List<DirectoryInfo> partitionInfoList = listAllPartitions(dataMetaClient);
-    Map<String, Map<String, Long>> partitionToFilesMap = partitionInfoList.stream()
-        .map(p -> {
-          String partitionName = HoodieTableMetadataUtil.getPartitionIdentifier(p.getRelativePath());
-          return Pair.of(partitionName, p.getFileNameToSizeMap());
-        })
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    // skip file system listing to populate metadata records if its a fresh table.
+    // this is applicable only if the table already has N commits and metadata is enabled at a later point in time.
+    if (createInstantTime.equals(SOLO_COMMIT_TIMESTAMP)) { // SOLO_COMMIT_TIMESTAMP will be the initial commit time in MDT for a fresh table.
+      // If not, last completed commit in data table will be chosen as the initial commit time.
+      LOG.info("Triggering empty Commit to metadata to initialize");
+    } else {
+      List<DirectoryInfo> partitionInfoList = listAllPartitions(dataMetaClient);
+      Map<String, Map<String, Long>> partitionToFilesMap = partitionInfoList.stream()
+          .map(p -> {
+            String partitionName = HoodieTableMetadataUtil.getPartitionIdentifier(p.getRelativePath());
+            return Pair.of(partitionName, p.getFileNameToSizeMap());
+          })
+          .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    int totalDataFilesCount = partitionToFilesMap.values().stream().mapToInt(Map::size).sum();
-    List<String> partitions = new ArrayList<>(partitionToFilesMap.keySet());
+      int totalDataFilesCount = partitionToFilesMap.values().stream().mapToInt(Map::size).sum();
+      List<String> partitions = new ArrayList<>(partitionToFilesMap.keySet());
 
-    if (partitionTypes.contains(MetadataPartitionType.FILES)) {
-      // Record which saves the list of all partitions
-      HoodieRecord allPartitionRecord = HoodieMetadataPayload.createPartitionListRecord(partitions);
-      HoodieData<HoodieRecord> filesPartitionRecords = getFilesPartitionRecords(createInstantTime, partitionInfoList, allPartitionRecord);
-      ValidationUtils.checkState(filesPartitionRecords.count() == (partitions.size() + 1));
-      partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecords);
+      if (partitionTypes.contains(MetadataPartitionType.FILES)) {
+        // Record which saves the list of all partitions
+        HoodieRecord allPartitionRecord = HoodieMetadataPayload.createPartitionListRecord(partitions);
+        HoodieData<HoodieRecord> filesPartitionRecords = getFilesPartitionRecords(createInstantTime, partitionInfoList, allPartitionRecord);
+        ValidationUtils.checkState(filesPartitionRecords.count() == (partitions.size() + 1));
+        partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecords);
+      }
+
+      if (partitionTypes.contains(MetadataPartitionType.BLOOM_FILTERS) && totalDataFilesCount > 0) {
+        final HoodieData<HoodieRecord> recordsRDD = HoodieTableMetadataUtil.convertFilesToBloomFilterRecords(
+            engineContext, Collections.emptyMap(), partitionToFilesMap, getRecordsGenerationParams(), createInstantTime);
+        partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, recordsRDD);
+      }
+
+      if (partitionTypes.contains(MetadataPartitionType.COLUMN_STATS) && totalDataFilesCount > 0) {
+        final HoodieData<HoodieRecord> recordsRDD = HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
+            engineContext, Collections.emptyMap(), partitionToFilesMap, getRecordsGenerationParams());
+        partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, recordsRDD);
+      }
+      LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
     }
-
-    if (partitionTypes.contains(MetadataPartitionType.BLOOM_FILTERS) && totalDataFilesCount > 0) {
-      final HoodieData<HoodieRecord> recordsRDD = HoodieTableMetadataUtil.convertFilesToBloomFilterRecords(
-          engineContext, Collections.emptyMap(), partitionToFilesMap, getRecordsGenerationParams(), createInstantTime);
-      partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, recordsRDD);
-    }
-
-    if (partitionTypes.contains(MetadataPartitionType.COLUMN_STATS) && totalDataFilesCount > 0) {
-      final HoodieData<HoodieRecord> recordsRDD = HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
-          engineContext, Collections.emptyMap(), partitionToFilesMap, getRecordsGenerationParams());
-      partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, recordsRDD);
-    }
-
-    LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
 
     commit(createInstantTime, partitionToRecordsMap, false);
   }
