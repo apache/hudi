@@ -34,27 +34,31 @@ public class HoodieQuarantineTableConfig {
   public static final ConfigProperty<Boolean> QUARANTINE_TABLE_ENABLED = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.enable")
       .defaultValue(false)
-      .withDocumentation("Config to enable quarantine table");
+      .withDocumentation("Config to enable quarantine table. If the config is enabled, " +
+          "all the records with processing error in DeltaStreamer are transferred to quarantine table.");
 
   public static final ConfigProperty<String> QUARANTINE_TABLE_BASE_PATH = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.base.path")
       .noDefaultValue()
-      .withDocumentation("Base path for quarantine table.");
+      .withDocumentation("Base path for quarantine table under which all quarantine records " +
+          "would be stored.");
 
   public static final ConfigProperty<String> QUARANTINE_TARGET_TABLE = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.target.table.name")
       .noDefaultValue()
-      .withDocumentation("Target table name for quarantine table");
+      .withDocumentation("Table name to be used for the quarantine table");
 
   public static final ConfigProperty<Integer> QUARANTINE_TABLE_UPSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.upsert.shuffle.parallelism")
       .defaultValue(200)
-      .withDocumentation("Config to set upsert shuffle parallelism");
+      .withDocumentation("Config to set upsert shuffle parallelism. The config is similar to " +
+          "hoodie.upsert.shuffle.parallelism config but applies to the quarantine table.");
 
   public static final ConfigProperty<Integer> QUARANTINE_TABLE_INSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.insert.shuffle.parallelism")
       .defaultValue(200)
-      .withDocumentation("Config to set insert shuffle parallelism");
+      .withDocumentation("Config to set insert shuffle parallelism. The config is similar to " +
+          "hoodie.insert.shuffle.parallelism config but applies to the quarantine table.");
 
   public static final ConfigProperty<String> QUARANTINE_TABLE_WRITE_CLASS = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.write.class")

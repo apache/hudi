@@ -39,6 +39,8 @@ import org.apache.spark.sql.SparkSession;
  */
 public abstract class BaseQuarantineTableWriter<T extends QuarantineEvent> {
 
+  // The column name passed to Spark for option `columnNameOfCorruptRecord`. The record
+  // is set to this column in case of an error
   public static String QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME = "_corrupt_record";
 
   public BaseQuarantineTableWriter(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
