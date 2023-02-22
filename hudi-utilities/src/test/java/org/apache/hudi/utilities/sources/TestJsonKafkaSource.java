@@ -25,8 +25,8 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
-import org.apache.hudi.utilities.deltastreamer.BaseQuarantineTableWriter;
-import org.apache.hudi.utilities.deltastreamer.QuarantineEvent;
+import org.apache.hudi.utilities.deltastreamer.BaseErrorTableWriter;
+import org.apache.hudi.utilities.deltastreamer.ErrorEvent;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
@@ -52,8 +52,8 @@ import java.util.UUID;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.config.HoodieQuarantineTableConfig.QUARANTINE_TABLE_BASE_PATH;
-import static org.apache.hudi.config.HoodieQuarantineTableConfig.QUARANTINE_TARGET_TABLE;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_BASE_PATH;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TARGET_TABLE;
 import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET;
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecords;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -231,15 +231,15 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
 
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
     props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
-    props.put(QUARANTINE_TABLE_BASE_PATH.key(),"/tmp/qurantine_table_test/json_kafka_row_events");
-    props.put(QUARANTINE_TARGET_TABLE.key(),"json_kafka_row_events");
-    props.put("hoodie.deltastreamer.quarantinetable.validate.targetschema.enable", "true");
+    props.put(ERROR_TABLE_BASE_PATH.key(),"/tmp/qurantine_table_test/json_kafka_row_events");
+    props.put(ERROR_TARGET_TABLE.key(),"json_kafka_row_events");
+    props.put("hoodie.deltastreamer.errortable.validate.targetschema.enable", "true");
     props.put("hoodie.base.path","/tmp/json_kafka_row_events");
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
-    Option<BaseQuarantineTableWriter> quarantineTableWriterInterface = Option.of(getAnonymousQuarantineTableWriter(props));
-    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, quarantineTableWriterInterface);
+    Option<BaseErrorTableWriter> errorTableWriterInterface = Option.of(getAnonymousErrorTableWriter(props));
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, errorTableWriterInterface);
     assertEquals(1000, kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE).getBatch().get().count());
-    assertEquals(2,((JavaRDD)quarantineTableWriterInterface.get().getErrorEvents(
+    assertEquals(2,((JavaRDD)errorTableWriterInterface.get().getErrorEvents(
         HoodieActiveTimeline.createNewInstantTime(), Option.empty()).get()).count());
   }
 
@@ -261,21 +261,21 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
 
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
     props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
-    props.put(QUARANTINE_TABLE_BASE_PATH.key(),"/tmp/qurantine_table_test/json_kafka_events");
-    props.put(QUARANTINE_TARGET_TABLE.key(),"json_kafka_events");
+    props.put(ERROR_TABLE_BASE_PATH.key(),"/tmp/qurantine_table_test/json_kafka_events");
+    props.put(ERROR_TARGET_TABLE.key(),"json_kafka_events");
     props.put("hoodie.base.path","/tmp/json_kafka_events");
 
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
-    Option<BaseQuarantineTableWriter> quarantineTableWriterInterface = Option.of(getAnonymousQuarantineTableWriter(props));
-    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, quarantineTableWriterInterface);
+    Option<BaseErrorTableWriter> errorTableWriterInterface = Option.of(getAnonymousErrorTableWriter(props));
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, errorTableWriterInterface);
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(),Long.MAX_VALUE);
     assertEquals(1000,fetch1.getBatch().get().count());
-    assertEquals(2, ((JavaRDD)quarantineTableWriterInterface.get().getErrorEvents(
+    assertEquals(2, ((JavaRDD)errorTableWriterInterface.get().getErrorEvents(
         HoodieActiveTimeline.createNewInstantTime(), Option.empty()).get()).count());
   }
 
-  private BaseQuarantineTableWriter getAnonymousQuarantineTableWriter(TypedProperties props) {
-    return new BaseQuarantineTableWriter<QuarantineEvent<String>>(new HoodieDeltaStreamer.Config(),
+  private BaseErrorTableWriter getAnonymousErrorTableWriter(TypedProperties props) {
+    return new BaseErrorTableWriter<ErrorEvent<String>>(new HoodieDeltaStreamer.Config(),
         spark(), props, jsc(), fs()) {
       List<JavaRDD<HoodieAvroRecord>> errorEvents = new LinkedList();
 

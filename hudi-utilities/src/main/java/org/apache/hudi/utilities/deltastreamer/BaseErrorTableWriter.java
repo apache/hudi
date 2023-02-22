@@ -31,19 +31,19 @@ import org.apache.spark.sql.SparkSession;
 /**
  * The class which handles error events when delta streamer syncs data from source. All the
  * records which Delta streamer is not able to process are triggered as error events to
- * BaseQuarantineTableWriter. The implementation of BaseQuarantineTableWriter processes
- * these error events through addErrorEvents API and commits them to the quarantine table when
+ * BaseErrorTableWriter. The implementation of BaseErrorTableWriter processes
+ * these error events through addErrorEvents API and commits them to the error table when
  * upsertAndCommit API is called.
  *
- * The writer can use the configs defined in HoodieQuarantineTableConfig to manage the quarantine table.
+ * The writer can use the configs defined in HoodieErrorTableConfig to manage the error table.
  */
-public abstract class BaseQuarantineTableWriter<T extends QuarantineEvent> {
+public abstract class BaseErrorTableWriter<T extends ErrorEvent> {
 
   // The column name passed to Spark for option `columnNameOfCorruptRecord`. The record
   // is set to this column in case of an error
-  public static String QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME = "_corrupt_record";
+  public static String ERROR_TABLE_CURRUPT_RECORD_COL_NAME = "_corrupt_record";
 
-  public BaseQuarantineTableWriter(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
+  public BaseErrorTableWriter(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
                                    TypedProperties props, JavaSparkContext jssc, FileSystem fs) {
   }
 
@@ -63,7 +63,7 @@ public abstract class BaseQuarantineTableWriter<T extends QuarantineEvent> {
 
   /**
    * This API is called to commit the error events (failed Hoodie Records) processed by the writer so far.
-   * These records are committed to a quarantine table.
+   * These records are committed to a error table.
    */
   public abstract boolean upsertAndCommit(String baseTableInstantTime, Option<String> commitedInstantTime);
 

@@ -19,12 +19,12 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-public class QuarantineEvent<T> {
+public class ErrorEvent<T> {
 
-  QuarantineReason reason;
+  ErrorReason reason;
   T payload;
 
-  public QuarantineEvent(T payload, QuarantineReason reason) {
+  public ErrorEvent(T payload, ErrorReason reason) {
     this.payload = payload;
     this.reason = reason;
   }
@@ -33,11 +33,11 @@ public class QuarantineEvent<T> {
     return payload;
   }
 
-  public QuarantineReason getReason() {
+  public ErrorReason getReason() {
     return reason;
   }
 
-  public enum QuarantineReason {
+  public enum ErrorReason {
     JSON_AVRO_DESERIALIZATION_FAILURE,
     JSON_ROW_DESERIALIZATION_FAILURE,
     AVRO_DESERIALIZATION_FAILURE,

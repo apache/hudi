@@ -70,7 +70,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
-import org.apache.hudi.config.HoodieQuarantineTableConfig;
+import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -138,7 +138,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLU
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
-import static org.apache.hudi.config.HoodieQuarantineTableConfig.QUARANTINE_TABLE_ENABLED;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
@@ -246,8 +246,8 @@ public class DeltaSync implements Serializable, Closeable {
    */
   private transient SparkRDDWriteClient writeClient;
 
-  private Option<BaseQuarantineTableWriter> quarantineTableWriter = Option.empty();
-  private HoodieQuarantineTableConfig.QuarantineWriteFailureStrategy quarantineWriteFailureStrategy;
+  private Option<BaseErrorTableWriter> errorTableWriter = Option.empty();
+  private HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy;
 
   private transient HoodieDeltaStreamerMetrics metrics;
 
@@ -292,13 +292,13 @@ public class DeltaSync implements Serializable, Closeable {
       id = props.getProperty(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key());
     }
     this.multiwriterIdentifier = StringUtils.isNullOrEmpty(id) ? Option.empty() : Option.of(id);
-    if (props.getBoolean(QUARANTINE_TABLE_ENABLED.key(),QUARANTINE_TABLE_ENABLED.defaultValue())) {
-      this.quarantineTableWriter = QuarantineUtils.getQuarantineTableWriter(cfg, sparkSession, props, jssc, fs);
-      this.quarantineWriteFailureStrategy = QuarantineUtils.getQuarantineWriteFailureStrategy(props);
+    if (props.getBoolean(ERROR_TABLE_ENABLED.key(),ERROR_TABLE_ENABLED.defaultValue())) {
+      this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, jssc, fs);
+      this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
     this.formatAdapter = new SourceFormatAdapter(
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics),
-        this.quarantineTableWriter);
+        this.errorTableWriter);
   }
 
   /**
@@ -524,8 +524,8 @@ public class DeltaSync implements Serializable, Closeable {
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
 
-      transformed = formatAdapter.processQuarantineEvents(transformed,
-          QuarantineEvent.QuarantineReason.CUSTOM_TRANSFORMER_FAILURE);
+      transformed = formatAdapter.processErrorEvents(transformed,
+          ErrorEvent.ErrorReason.CUSTOM_TRANSFORMER_FAILURE);
 
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       boolean reconcileSchema = props.getBoolean(DataSourceWriteOptions.RECONCILE_SCHEMA().key());
@@ -533,22 +533,22 @@ public class DeltaSync implements Serializable, Closeable {
         // If the target schema is specified through Avro schema,
         // pass in the schema for the Row-to-Avro conversion
         // to avoid nullability mismatch between Avro schema and Row schema
-        Option<BaseQuarantineTableWriter> schemaValidationQuarantineWriter =
-            (quarantineTableWriter.isPresent()
-                && props.getBoolean(HoodieQuarantineTableConfig.QUARANTINE_ENABLE_VALIDATE_TARGET_SCHEMA.key(),
-                HoodieQuarantineTableConfig.QUARANTINE_ENABLE_VALIDATE_TARGET_SCHEMA.defaultValue()))
-                ? quarantineTableWriter : Option.empty();
+        Option<BaseErrorTableWriter> schemaValidationErrorWriter =
+            (errorTableWriter.isPresent()
+                && props.getBoolean(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.key(),
+                HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.defaultValue()))
+                ? errorTableWriter : Option.empty();
         avroRDDOptional = transformed
             .map(row ->
-                schemaValidationQuarantineWriter
+                schemaValidationErrorWriter
                     .map(impl -> {
                       Tuple2<RDD<GenericRecord>, RDD<String>> safeCreateRDDs = HoodieSparkUtils.safeCreateRDD(row,
                           HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
                           Option.of(this.userProvidedSchemaProvider.getTargetSchema())
                       );
                       impl.addErrorEvents(safeCreateRDDs._2().toJavaRDD()
-                          .map(evStr -> new QuarantineEvent<>(evStr,
-                              QuarantineEvent.QuarantineReason.AVRO_DESERIALIZATION_FAILURE)));
+                          .map(evStr -> new ErrorEvent<>(evStr,
+                              ErrorEvent.ErrorReason.AVRO_DESERIALIZATION_FAILURE)));
                       return safeCreateRDDs._1();
                     })
                     .orElseGet(() -> HoodieSparkUtils.createRdd(row,
@@ -803,23 +803,23 @@ public class DeltaSync implements Serializable, Closeable {
             + totalErrorRecords + "/" + totalRecords);
       }
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-      if (quarantineTableWriter.isPresent()) {
-        // Removing writeStatus events from quarantine events, as action on writeStatus can cause base table DAG to reexecute
+      if (errorTableWriter.isPresent()) {
+        // Removing writeStatus events from error events, as action on writeStatus can cause base table DAG to reexecute
         // if original cached dataframe get's unpersisted before this action.
-        //        quarantineTableWriterInterfaceImpl.get().addErrorEvents(getErrorEventsForWriteStatus(writeStatusRDD));
+        //        errorTableWriterInterfaceImpl.get().addErrorEvents(getErrorEventsForWriteStatus(writeStatusRDD));
         Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitTimelineOpt);
-        boolean quarantineTableSuccess = quarantineTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
-        if (!quarantineTableSuccess) {
-          switch (quarantineWriteFailureStrategy) {
+        boolean errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
+        if (!errorTableSuccess) {
+          switch (errorWriteFailureStrategy) {
             case ROLLBACK_COMMIT:
               LOG.info("Commit " + instantTime + " failed!");
               writeClient.rollback(instantTime);
-              throw new HoodieException("Quarantine Table Commit failed!");
+              throw new HoodieException("Error Table Commit failed!");
             case LOG_ERROR:
-              LOG.error("Quarantine Table write failed for instant " + instantTime);
+              LOG.error("Error Table write failed for instant " + instantTime);
               break;
             default:
-              throw new HoodieException("Write failure strategy not implemented for " + quarantineWriteFailureStrategy);
+              throw new HoodieException("Write failure strategy not implemented for " + errorWriteFailureStrategy);
           }
         }
       }

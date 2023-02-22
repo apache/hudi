@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
 import scala.util.Either;
 
 
-import static org.apache.hudi.utilities.deltastreamer.BaseQuarantineTableWriter.QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME;
+import static org.apache.hudi.utilities.deltastreamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
@@ -62,29 +62,29 @@ public final class SourceFormatAdapter implements Closeable {
 
   private final Source source;
 
-  private Option<BaseQuarantineTableWriter> quarantineTableWriterInterface = Option.empty();
+  private Option<BaseErrorTableWriter> errorTableWriterInterface = Option.empty();
 
   public SourceFormatAdapter(Source source) {
     this(source, Option.empty());
   }
 
-  public SourceFormatAdapter(Source source, Option<BaseQuarantineTableWriter> quarantineTableWriterInterface) {
-    this.quarantineTableWriterInterface = quarantineTableWriterInterface;
+  public SourceFormatAdapter(Source source, Option<BaseErrorTableWriter> errorTableWriterInterface) {
+    this.errorTableWriterInterface = errorTableWriterInterface;
     this.source = source;
   }
 
   /**
-   * transform input rdd of json string to generic records with support for adding error events to quarantine table
+   * transform input rdd of json string to generic records with support for adding error events to error table
    * @param inputBatch
    * @return
    */
   private JavaRDD<GenericRecord> transformJsonToGenericRdd(InputBatch<JavaRDD<String>> inputBatch) {
     AvroConvertor convertor = new AvroConvertor(inputBatch.getSchemaProvider().getSourceSchema());
     return inputBatch.getBatch().map(rdd -> {
-      if (quarantineTableWriterInterface.isPresent()) {
+      if (errorTableWriterInterface.isPresent()) {
         JavaRDD<Either<GenericRecord,String>> javaRDD = rdd.map(convertor::fromJsonWithError);
-        quarantineTableWriterInterface.get().addErrorEvents(javaRDD.filter(x -> x.isRight()).map(x ->
-            new QuarantineEvent<>(x.right().get(), QuarantineEvent.QuarantineReason.JSON_AVRO_DESERIALIZATION_FAILURE)));
+        errorTableWriterInterface.get().addErrorEvents(javaRDD.filter(x -> x.isRight()).map(x ->
+            new ErrorEvent<>(x.right().get(), ErrorEvent.ErrorReason.JSON_AVRO_DESERIALIZATION_FAILURE)));
         return javaRDD.filter(x -> x.isLeft()).map(x -> x.left().get());
       } else {
         return rdd.map(convertor::fromJson);
@@ -93,19 +93,19 @@ public final class SourceFormatAdapter implements Closeable {
   }
 
   /**
-   * transform datasets with error events when quarantine table is enabled
+   * transform datasets with error events when error table is enabled
    * @param eventsRow
    * @return
    */
-  public Option<Dataset<Row>> processQuarantineEvents(Option<Dataset<Row>> eventsRow,
-                                                      QuarantineEvent.QuarantineReason quarantineReason) {
+  public Option<Dataset<Row>> processErrorEvents(Option<Dataset<Row>> eventsRow,
+                                                      ErrorEvent.ErrorReason errorReason) {
     return eventsRow.map(dataset -> {
-          if (quarantineTableWriterInterface.isPresent() && Arrays.stream(dataset.columns()).collect(Collectors.toList())
-              .contains(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME)) {
-            quarantineTableWriterInterface.get().addErrorEvents(dataset.filter(new Column(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME).isNotNull())
-                .select(new Column(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME)).toJavaRDD().map(ev ->
-                    new QuarantineEvent<>(ev.getString(0), quarantineReason)));
-            return dataset.filter(new Column(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).drop(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME);
+          if (errorTableWriterInterface.isPresent() && Arrays.stream(dataset.columns()).collect(Collectors.toList())
+              .contains(ERROR_TABLE_CURRUPT_RECORD_COL_NAME)) {
+            errorTableWriterInterface.get().addErrorEvents(dataset.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNotNull())
+                .select(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME)).toJavaRDD().map(ev ->
+                    new ErrorEvent<>(ev.getString(0), errorReason)));
+            return dataset.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).drop(ERROR_TABLE_CURRUPT_RECORD_COL_NAME);
           }
           return dataset;
         }
@@ -158,8 +158,8 @@ public final class SourceFormatAdapter implements Closeable {
     switch (source.getSourceType()) {
       case ROW:
         InputBatch<Dataset<Row>> datasetInputBatch = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
-        return new InputBatch<>(processQuarantineEvents(datasetInputBatch.getBatch(),
-            QuarantineEvent.QuarantineReason.JSON_ROW_DESERIALIZATION_FAILURE),
+        return new InputBatch<>(processErrorEvents(datasetInputBatch.getBatch(),
+            ErrorEvent.ErrorReason.JSON_ROW_DESERIALIZATION_FAILURE),
             datasetInputBatch.getCheckpointForNextBatch(), datasetInputBatch.getSchemaProvider());
       case AVRO: {
         InputBatch<JavaRDD<GenericRecord>> r = ((Source<JavaRDD<GenericRecord>>) source).fetchNext(lastCkptStr, sourceLimit);
@@ -177,14 +177,14 @@ public final class SourceFormatAdapter implements Closeable {
       case JSON: {
         InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
-        if (quarantineTableWriterInterface.isPresent()) {
+        if (errorTableWriterInterface.isPresent()) {
           StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema)
-              .add(new StructField(QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME, DataTypes.StringType, true, Metadata.empty()));
+              .add(new StructField(ERROR_TABLE_CURRUPT_RECORD_COL_NAME, DataTypes.StringType, true, Metadata.empty()));
           Option<Dataset<Row>> dataset = r.getBatch().map(rdd -> source.getSparkSession().read()
-              .option("columnNameOfCorruptRecord", QUARANTINE_TABLE_CURRUPT_RECORD_COL_NAME).schema(dataType.asNullable())
+              .option("columnNameOfCorruptRecord", ERROR_TABLE_CURRUPT_RECORD_COL_NAME).schema(dataType.asNullable())
               .json(rdd));
-          Option<Dataset<Row>> eventsDataset = processQuarantineEvents(dataset,
-              QuarantineEvent.QuarantineReason.JSON_ROW_DESERIALIZATION_FAILURE);
+          Option<Dataset<Row>> eventsDataset = processErrorEvents(dataset,
+              ErrorEvent.ErrorReason.JSON_ROW_DESERIALIZATION_FAILURE);
           return new InputBatch<>(
               eventsDataset,
               r.getCheckpointForNextBatch(), r.getSchemaProvider());
