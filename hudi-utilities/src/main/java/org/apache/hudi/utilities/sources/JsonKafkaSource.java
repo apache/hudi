@@ -55,7 +55,7 @@ public class JsonKafkaSource extends KafkaSource<String> {
   public JsonKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
                          SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
     super(properties, sparkContext, sparkSession,
-        UtilHelpers.schemaProviderWithKafkaOffsetPostProcessorIfNeeded(schemaProvider, properties, sparkContext),
+        UtilHelpers.getSchemaProviderForKafkaSource(schemaProvider, properties, sparkContext),
         SourceType.JSON, metrics);
     properties.put("key.deserializer", StringDeserializer.class.getName());
     properties.put("value.deserializer", StringDeserializer.class.getName());
@@ -73,7 +73,7 @@ public class JsonKafkaSource extends KafkaSource<String> {
   }
 
   protected  JavaRDD<String> maybeAppendKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {
-    if (KafkaOffsetPostProcessor.Config.shouldAddOffsets(props)) {
+    if (this.shouldAddOffsets) {
       return kafkaRDD.mapPartitions(partitionIterator -> {
         List<String> stringList = new LinkedList<>();
         ObjectMapper om = new ObjectMapper();

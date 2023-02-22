@@ -25,7 +25,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
-import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
@@ -53,14 +52,16 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
   public static final String KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX = "hoodie.deltastreamer.source.kafka.value.deserializer.";
   public static final String KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA = KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX + "schema";
   private final String deserializerClassName;
-  protected final SchemaProvider schemaProviderWithoutOffsets;
+
+  //other schema provider may have kafka offsets
+  protected final SchemaProvider originalSchemaProvider;
 
   public AvroKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                          SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
     super(props, sparkContext, sparkSession,
-        UtilHelpers.schemaProviderWithKafkaOffsetPostProcessorIfNeeded(schemaProvider, props, sparkContext),
+        UtilHelpers.getSchemaProviderForKafkaSource(schemaProvider, props, sparkContext),
         SourceType.AVRO, metrics);
-    this.schemaProviderWithoutOffsets = schemaProvider;
+    this.originalSchemaProvider = schemaProvider;
 
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
     deserializerClassName = props.getString(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().key(),
@@ -89,7 +90,9 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
       if (schemaProvider == null) {
         throw new HoodieException("Please provide a valid schema provider class when use ByteArrayDeserializer!");
       }
-      AvroConvertor convertor = new AvroConvertor(schemaProviderWithoutOffsets.getSourceSchema());
+
+      //Don't want kafka offsets here so we use originalSchemaProvider
+      AvroConvertor convertor = new AvroConvertor(originalSchemaProvider.getSourceSchema());
       kafkaRDD = KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
           LocationStrategies.PreferConsistent()).map(obj ->
           new ConsumerRecord<>(obj.topic(), obj.partition(), obj.offset(),
@@ -102,7 +105,7 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
   }
 
   protected JavaRDD<GenericRecord> maybeAppendKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {
-    if (KafkaOffsetPostProcessor.Config.shouldAddOffsets(props)) {
+    if (this.shouldAddOffsets) {
       AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceSchema());
       return kafkaRDD.map(convertor::withKafkaFieldsAppended);
     } else {

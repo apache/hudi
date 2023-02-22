@@ -122,6 +122,9 @@ public class AvroConvertor implements Serializable {
     return ProtoConversionUtil.convertToAvro(schema, message);
   }
 
+  /**
+   * this.schema is required to have kafka offsets for this to work
+   */
   public GenericRecord withKafkaFieldsAppended(ConsumerRecord consumerRecord) {
     initSchema();
     GenericRecord record = (GenericRecord) consumerRecord.value();

@@ -508,7 +508,7 @@ public class UtilHelpers {
         Option.ofNullable(createSchemaPostProcessor(schemaPostProcessorClass, cfg, jssc)));
   }
 
-  public static SchemaProvider schemaProviderWithKafkaOffsetPostProcessorIfNeeded(SchemaProvider provider, TypedProperties cfg, JavaSparkContext jssc) {
+  public static SchemaProvider getSchemaProviderForKafkaSource(SchemaProvider provider, TypedProperties cfg, JavaSparkContext jssc) {
     if (KafkaOffsetPostProcessor.Config.shouldAddOffsets(cfg)) {
       return new SchemaProviderWithPostProcessor(provider, Option.ofNullable(new KafkaOffsetPostProcessor(cfg, jssc)));
     }

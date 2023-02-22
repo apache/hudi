@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
+import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 
@@ -42,11 +43,14 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   protected final SchemaProvider schemaProvider;
   protected KafkaOffsetGen offsetGen;
 
+  protected final boolean shouldAddOffsets;
+
   protected KafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                         SchemaProvider schemaProvider, SourceType sourceType, HoodieDeltaStreamerMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider, sourceType);
     this.schemaProvider = schemaProvider;
     this.metrics = metrics;
+    this.shouldAddOffsets = KafkaOffsetPostProcessor.Config.shouldAddOffsets(props);
   }
 
   @Override

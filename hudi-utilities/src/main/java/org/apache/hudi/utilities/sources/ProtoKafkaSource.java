@@ -59,13 +59,13 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
     props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, ByteArrayDeserializer.class);
     className = props.getString(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key());
     this.offsetGen = new KafkaOffsetGen(props);
+    if (this.shouldAddOffsets) {
+      throw new HoodieException("Appending kafka offsets to ProtoKafkaSource is not supported");
+    }
   }
 
   @Override
   JavaRDD<Message> toRDD(OffsetRange[] offsetRanges) {
-    if (KafkaOffsetPostProcessor.Config.shouldAddOffsets(props)) {
-      throw new HoodieException("Appending kafka offsets to ProtoKafkaSource is not supported");
-    }
     ProtoDeserializer deserializer = new ProtoDeserializer(className);
     return KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
         LocationStrategies.PreferConsistent()).map(obj -> deserializer.parse(obj.value()));
