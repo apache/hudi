@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper, DataSourceUtils}
@@ -212,7 +213,7 @@ object Spark31AlterTableCommand extends Logging {
     * @param sparkSession The spark session.
     */
   def commitWithSchema(internalSchema: InternalSchema, historySchemaStr: String, table: CatalogTable, sparkSession: SparkSession): Unit = {
-    val schema = AvroInternalSchemaConverter.convert(internalSchema, table.identifier.table)
+    val schema = AvroInternalSchemaConverter.convert(internalSchema, getAvroRecordQualifiedName(table.identifier.table))
     val path = getTableLocation(table, sparkSession)
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)

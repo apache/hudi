@@ -28,7 +28,9 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -36,13 +38,18 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
+/**
+ * Implementation of {@link HoodieTableMetadata} based file-system-backed table metadata.
+ */
 public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 
   private static final int DEFAULT_LISTING_PARALLELISM = 1500;
@@ -74,8 +81,24 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
       return FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, datasetBasePath);
     }
 
+    return getPartitionPathWithPathPrefixes(Collections.singletonList(""));
+  }
+
+  @Override
+  public List<String> getPartitionPathWithPathPrefixes(List<String> relativePathPrefixes) {
+    return relativePathPrefixes.stream().flatMap(relativePathPrefix -> {
+      try {
+        return getPartitionPathWithPathPrefix(relativePathPrefix).stream();
+      } catch (IOException e) {
+        throw new HoodieIOException("Error fetching partition paths with relative path: " + relativePathPrefix, e);
+      }
+    }).collect(Collectors.toList());
+  }
+
+  private List<String> getPartitionPathWithPathPrefix(String relativePathPrefix) throws IOException {
     List<Path> pathsToList = new CopyOnWriteArrayList<>();
-    pathsToList.add(basePath);
+    pathsToList.add(StringUtils.isNullOrEmpty(relativePathPrefix)
+        ? new Path(datasetBasePath) : new Path(datasetBasePath, relativePathPrefix));
     List<String> partitionPaths = new CopyOnWriteArrayList<>();
 
     while (!pathsToList.isEmpty()) {
@@ -121,7 +144,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths)
+  public Map<String, FileStatus[]> getAllFilesInPartitions(Collection<String> partitionPaths)
       throws IOException {
     if (partitionPaths == null || partitionPaths.isEmpty()) {
       return Collections.emptyMap();
@@ -129,7 +152,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 
     int parallelism = Math.min(DEFAULT_LISTING_PARALLELISM, partitionPaths.size());
 
-    List<Pair<String, FileStatus[]>> partitionToFiles = engineContext.map(partitionPaths, partitionPathStr -> {
+    List<Pair<String, FileStatus[]>> partitionToFiles = engineContext.map(new ArrayList<>(partitionPaths), partitionPathStr -> {
       Path partitionPath = new Path(partitionPathStr);
       FileSystem fs = partitionPath.getFileSystem(hadoopConf.get());
       return Pair.of(partitionPathStr, FSUtils.getAllDataFilesInPartition(fs, partitionPath));

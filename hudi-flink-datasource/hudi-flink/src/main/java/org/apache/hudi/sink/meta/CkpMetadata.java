@@ -20,6 +20,7 @@ package org.apache.hudi.sink.meta;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -61,7 +62,9 @@ public class CkpMetadata implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(CkpMetadata.class);
 
-  protected static final int MAX_RETAIN_CKP_NUM = 3;
+  // 1 is actually enough for fetching the latest pending instant,
+  // keep 3 instants here for purpose of debugging.
+  private static final int MAX_RETAIN_CKP_NUM = 3;
 
   // the ckp metadata directory
   private static final String CKP_META = "ckp_meta";
@@ -73,12 +76,13 @@ public class CkpMetadata implements Serializable {
   private List<String> instantCache;
 
   private CkpMetadata(Configuration config) {
-    this(FSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)), config.getString(FlinkOptions.PATH));
+    this(FSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)),
+        config.getString(FlinkOptions.PATH), config.getString(FlinkOptions.WRITE_CLIENT_ID));
   }
 
-  private CkpMetadata(FileSystem fs, String basePath) {
+  private CkpMetadata(FileSystem fs, String basePath, String uniqueId) {
     this.fs = fs;
-    this.path = new Path(ckpMetaPath(basePath));
+    this.path = new Path(ckpMetaPath(basePath, uniqueId));
   }
 
   public void close() {
@@ -90,13 +94,14 @@ public class CkpMetadata implements Serializable {
   // -------------------------------------------------------------------------
 
   /**
-   * Initialize the message bus, would clean all the messages and publish the last pending instant.
+   * Initialize the message bus, would keep all the messages.
    *
    * <p>This expects to be called by the driver.
    */
-  public void bootstrap(HoodieTableMetaClient metaClient) throws IOException {
-    fs.delete(path, true);
-    fs.mkdirs(path);
+  public void bootstrap() throws IOException {
+    if (!fs.exists(path)) {
+      fs.mkdirs(path);
+    }
   }
 
   public void startInstant(String instant) {
@@ -106,15 +111,20 @@ public class CkpMetadata implements Serializable {
     } catch (IOException e) {
       throw new HoodieException("Exception while adding checkpoint start metadata for instant: " + instant, e);
     }
+    // cache the instant
+    cache(instant);
     // cleaning
-    clean(instant);
+    clean();
   }
 
-  private void clean(String newInstant) {
+  private void cache(String newInstant) {
     if (this.instantCache == null) {
       this.instantCache = new ArrayList<>();
     }
     this.instantCache.add(newInstant);
+  }
+
+  private void clean() {
     if (instantCache.size() > MAX_RETAIN_CKP_NUM) {
       final String instant = instantCache.get(0);
       boolean[] error = new boolean[1];
@@ -173,8 +183,8 @@ public class CkpMetadata implements Serializable {
   @Nullable
   public String lastPendingInstant() {
     load();
-    for (int i = this.messages.size() - 1; i >= 0; i--) {
-      CkpMessage ckpMsg = this.messages.get(i);
+    if (this.messages.size() > 0) {
+      CkpMessage ckpMsg = this.messages.get(this.messages.size() - 1);
       // consider 'aborted' as pending too to reuse the instant
       if (!ckpMsg.isComplete()) {
         return ckpMsg.getInstant();
@@ -200,12 +210,17 @@ public class CkpMetadata implements Serializable {
     return new CkpMetadata(config);
   }
 
-  public static CkpMetadata getInstance(FileSystem fs, String basePath) {
-    return new CkpMetadata(fs, basePath);
+  public static CkpMetadata getInstance(HoodieTableMetaClient metaClient, String uniqueId) {
+    return new CkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId);
   }
 
-  protected static String ckpMetaPath(String basePath) {
-    return basePath + Path.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + Path.SEPARATOR + CKP_META;
+  public static CkpMetadata getInstance(FileSystem fs, String basePath, String uniqueId) {
+    return new CkpMetadata(fs, basePath, uniqueId);
+  }
+
+  protected static String ckpMetaPath(String basePath, String uniqueId) {
+    String metaPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + Path.SEPARATOR + CKP_META;
+    return StringUtils.isNullOrEmpty(uniqueId) ? metaPath : metaPath + "_" + uniqueId;
   }
 
   private Path fullPath(String fileName) {

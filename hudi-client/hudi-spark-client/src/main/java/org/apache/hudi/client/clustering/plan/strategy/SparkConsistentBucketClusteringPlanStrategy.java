@@ -43,8 +43,8 @@ import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
@@ -86,7 +86,7 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
     HoodieTimeline timeline = getHoodieTable().getActiveTimeline().getDeltaCommitTimeline().filterInflightsAndRequested();
     if (!timeline.empty()) {
       LOG.warn("When using consistent bucket, clustering cannot be scheduled async if there are concurrent writers. "
-          + "Writer instant: " + timeline.getInstants().collect(Collectors.toList()));
+          + "Writer instant: " + timeline.getInstants());
       return false;
     }
     return true;

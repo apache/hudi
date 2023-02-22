@@ -770,9 +770,9 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     Path propertyFile = new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     // Load the properties and verify
     FSDataInputStream fsDataInputStream = metaClient.getFs().open(propertyFile);
-    HoodieConfig hoodieConfig = HoodieConfig.create(fsDataInputStream);
+    HoodieConfig config = new HoodieConfig();
+    config.getProps().load(fsDataInputStream);
     fsDataInputStream.close();
-    assertEquals(Integer.toString(expectedVersion.versionCode()), hoodieConfig
-        .getString(HoodieTableConfig.VERSION));
+    assertEquals(Integer.toString(expectedVersion.versionCode()), config.getString(HoodieTableConfig.VERSION));
   }
 }

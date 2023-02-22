@@ -23,12 +23,17 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -40,19 +45,14 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before_after;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
-import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
-import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_BEGIN_PARTITION;
-import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_END_PARTITION;
-import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST;
 
 /**
  * Hoodie Flink config options.
@@ -82,6 +82,12 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
   //  Common Options
   // ------------------------------------------------------------------------
+
+  public static final ConfigOption<String> DATABASE_NAME = ConfigOptions
+      .key(HoodieTableConfig.DATABASE_NAME.key())
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Database name to register to Hive metastore");
 
   public static final ConfigOption<String> TABLE_NAME = ConfigOptions
       .key(HoodieWriteConfig.TBL_NAME.key())
@@ -115,12 +121,30 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.\n"
           + "This will render any value set for the option in-effective");
 
+  public static final ConfigOption<String> RECORD_MERGER_IMPLS = ConfigOptions
+      .key("record.merger.impls")
+      .stringType()
+      .defaultValue(HoodieAvroRecordMerger.class.getName())
+      .withDescription("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
+          + "These merger impls will filter by record.merger.strategy. "
+          + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
+
+  public static final ConfigOption<String> RECORD_MERGER_STRATEGY = ConfigOptions
+      .key("record.merger.strategy")
+      .stringType()
+      .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .withDescription("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in record.merger.impls which has the same merger strategy id");
+
   public static final ConfigOption<String> PARTITION_DEFAULT_NAME = ConfigOptions
       .key("partition.default_name")
       .stringType()
       .defaultValue(DEFAULT_PARTITION_PATH) // keep sync with hoodie style
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
+
+  // ------------------------------------------------------------------------
+  //  Changelog Capture Options
+  // ------------------------------------------------------------------------
 
   public static final ConfigOption<Boolean> CHANGELOG_ENABLED = ConfigOptions
       .key("changelog.enabled")
@@ -132,6 +156,22 @@ public class FlinkOptions extends HoodieConfig {
           + "2). The source try to emit every changes of a record.\n"
           + "The semantics is best effort because the compaction job would finally merge all changes of a record into one.\n"
           + " default false to have UPSERT semantics");
+
+  public static final ConfigOption<Boolean> CDC_ENABLED = ConfigOptions
+      .key("cdc.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withFallbackKeys(HoodieTableConfig.CDC_ENABLED.key())
+      .withDescription("When enable, persist the change data if necessary, and can be queried as a CDC query mode");
+
+  public static final ConfigOption<String> SUPPLEMENTAL_LOGGING_MODE = ConfigOptions
+      .key("cdc.supplemental.logging.mode")
+      .stringType()
+      .defaultValue(data_before_after.name())
+      .withFallbackKeys(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key())
+      .withDescription("Setting 'op_key_only' persists the 'op' and the record key only, "
+          + "setting 'data_before' persists the additional 'before' image, "
+          + "and setting 'data_before_after' persists the additional 'before' and 'after' images.");
 
   // ------------------------------------------------------------------------
   //  Metadata table Options
@@ -157,6 +197,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("index.type")
       .stringType()
       .defaultValue(HoodieIndex.IndexType.FLINK_STATE.name())
+      .withFallbackKeys(HoodieIndexConfig.INDEX_TYPE.key())
       .withDescription("Index type of Flink write job, default is using state backed index.");
 
   public static final ConfigOption<Boolean> INDEX_BOOTSTRAP_ENABLED = ConfigOptions
@@ -255,11 +296,22 @@ public class FlinkOptions extends HoodieConfig {
       .key("read.streaming.skip_compaction")
       .booleanType()
       .defaultValue(false)// default read as batch
-      .withDescription("Whether to skip compaction instants for streaming read,\n"
-          + "there are two cases that this option can be used to avoid reading duplicates:\n"
-          + "1) you are definitely sure that the consumer reads faster than any compaction instants, "
-          + "usually with delta time compaction strategy that is long enough, for e.g, one week;\n"
+      .withDescription("Whether to skip compaction instants and avoid reading compacted base files for streaming read to improve read performance.\n"
+          + "There are two cases that this option can be used to avoid reading duplicates:\n"
+          + "1) you are definitely sure that the consumer reads [faster than/completes before] any compaction instants "
+          + "when " + HoodieCompactionConfig.PRESERVE_COMMIT_METADATA.key() + " is set to false.\n"
           + "2) changelog mode is enabled, this option is a solution to keep data integrity");
+
+  // this option is experimental
+  public static final ConfigOption<Boolean> READ_STREAMING_SKIP_CLUSTERING = ConfigOptions
+          .key("read.streaming.skip_clustering")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to skip clustering instants to avoid reading base files of clustering operations for streaming read "
+              + "to improve read performance.\n"
+              + "This option toggled to true to avoid duplicates when: \n"
+              + "1) you are definitely sure that the consumer reads [faster than/completes before] any clustering instants "
+              + "when " + HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.key() + " is set to false.\n");
 
   public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
@@ -331,9 +383,9 @@ public class FlinkOptions extends HoodieConfig {
       .key("write.ignore.failed")
       .booleanType()
       .defaultValue(false)
-      .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch.\n"
-          + "By default false.  Turning this on, could hide the write status errors while the spark checkpoint moves ahead. \n"
-          + "  So, would recommend users to use this with caution.");
+      .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. \n"
+          + "By default false. Turning this on, could hide the write status errors while the flink checkpoint moves ahead. \n"
+          + "So, would recommend users to use this with caution.");
 
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
@@ -388,7 +440,9 @@ public class FlinkOptions extends HoodieConfig {
       .key(HoodieWriteConfig.KEYGENERATOR_TYPE.key())
       .stringType()
       .defaultValue(KeyGeneratorType.SIMPLE.name())
-      .withDescription("Key generator type, that implements will extract the key out of incoming record");
+      .withDescription("Key generator type, that implements will extract the key out of incoming record. "
+          + "**Note** This is being actively worked on. Please use "
+          + "`hoodie.datasource.write.keygenerator.class` instead.");
 
   public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
   public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
@@ -497,11 +551,24 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(true)
       .withDescription("Whether to sort the inputs by specific fields for bulk insert tasks, default true");
 
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY = ConfigOptions
+          .key("write.bulk_insert.sort_input.by_record_key")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to sort the inputs by record keys for bulk insert tasks, default false");
+
   public static final ConfigOption<Integer> WRITE_SORT_MEMORY = ConfigOptions
       .key("write.sort.memory")
       .intType()
       .defaultValue(128)
       .withDescription("Sort memory in MB, default 128MB");
+
+  // this is only for internal use
+  public static final ConfigOption<String> WRITE_CLIENT_ID = ConfigOptions
+      .key("write.client.id")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Unique identifier used to distinguish different writer pipelines for concurrent mode");
 
   // ------------------------------------------------------------------------
   //  Compaction Options
@@ -649,6 +716,36 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(2)
       .withDescription("Number of partitions to list to create ClusteringPlan, default is 2");
 
+  public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigOptions
+      .key("clustering.plan.strategy.daybased.skipfromlatest.partitions")
+      .intType()
+      .defaultValue(0)
+      .withDescription("Number of partitions to skip from latest when choosing partitions to create ClusteringPlan");
+
+  public static final ConfigOption<String> CLUSTERING_PLAN_STRATEGY_CLUSTER_BEGIN_PARTITION = ConfigOptions
+      .key("clustering.plan.strategy.cluster.begin.partition")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Begin partition used to filter partition (inclusive)");
+
+  public static final ConfigOption<String> CLUSTERING_PLAN_STRATEGY_CLUSTER_END_PARTITION = ConfigOptions
+      .key("clustering.plan.strategy.cluster.end.partition")
+      .stringType()
+      .defaultValue("")
+      .withDescription("End partition used to filter partition (inclusive)");
+
+  public static final ConfigOption<String> CLUSTERING_PLAN_STRATEGY_PARTITION_REGEX_PATTERN = ConfigOptions
+      .key("clustering.plan.strategy.partition.regex.pattern")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Filter clustering partitions that matched regex pattern");
+
+  public static final ConfigOption<String> CLUSTERING_PLAN_STRATEGY_PARTITION_SELECTED = ConfigOptions
+      .key("clustering.plan.strategy.partition.selected")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Partitions to run clustering");
+
   public static final ConfigOption<String> CLUSTERING_PLAN_STRATEGY_CLASS = ConfigOptions
       .key("clustering.plan.strategy.class")
       .stringType()
@@ -663,10 +760,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(ClusteringPlanPartitionFilterMode.NONE.name())
       .withDescription("Partition filter mode used in the creation of clustering plan. Available values are - "
           + "NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate."
-          + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
-          + PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
-          + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
-          + PARTITION_FILTER_END_PARTITION.key() + "'].");
+          + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + CLUSTERING_TARGET_PARTITIONS.key() + "' and '"
+          + CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
+          + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + CLUSTERING_PLAN_STRATEGY_CLUSTER_BEGIN_PARTITION.key() + "', '"
+          + CLUSTERING_PLAN_STRATEGY_CLUSTER_END_PARTITION.key() + "']."
+          + "DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, "
+          + "which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour.");
 
   public static final ConfigOption<Long> CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES = ConfigOptions
       .key("clustering.plan.strategy.target.file.max.bytes")
@@ -679,12 +778,6 @@ public class FlinkOptions extends HoodieConfig {
       .longType()
       .defaultValue(600L) // default 600 MB
       .withDescription("Files smaller than the size specified here are candidates for clustering, default 600 MB");
-
-  public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigOptions
-      .key("clustering.plan.strategy.daybased.skipfromlatest.partitions")
-      .intType()
-      .defaultValue(0)
-      .withDescription("Number of partitions to skip from latest when choosing partitions to create ClusteringPlan");
 
   public static final ConfigOption<String> CLUSTERING_SORT_COLUMNS = ConfigOptions
       .key("clustering.plan.strategy.sort.columns")
@@ -703,9 +796,10 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
 
   public static final ConfigOption<Boolean> HIVE_SYNC_ENABLED = ConfigOptions
-      .key("hive_sync.enable")
+      .key("hive_sync.enabled")
       .booleanType()
       .defaultValue(false)
+      .withFallbackKeys("hive_sync.enable")
       .withDescription("Asynchronously sync Hive meta to HMS, default false");
 
   public static final ConfigOption<String> HIVE_SYNC_DB = ConfigOptions
@@ -824,6 +918,12 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine");
 
+  public static final ConfigOption<String> HIVE_SYNC_TABLE_STRATEGY = ConfigOptions
+          .key("hive_sync.table.strategy")
+          .stringType()
+          .defaultValue(HoodieSyncTableStrategy.ALL.name())
+          .withDescription("Hive table synchronization strategy. Available option: RO, RT, ALL.");
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -899,18 +999,6 @@ public class FlinkOptions extends HoodieConfig {
    * Returns all the config options.
    */
   public static List<ConfigOption<?>> allOptions() {
-    Field[] declaredFields = FlinkOptions.class.getDeclaredFields();
-    List<ConfigOption<?>> options = new ArrayList<>();
-    for (Field field : declaredFields) {
-      if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
-          && field.getType().equals(ConfigOption.class)) {
-        try {
-          options.add((ConfigOption<?>) field.get(ConfigOption.class));
-        } catch (IllegalAccessException e) {
-          throw new HoodieException("Error while fetching static config option", e);
-        }
-      }
-    }
-    return options;
+    return OptionsResolver.allOptions(FlinkOptions.class);
   }
 }

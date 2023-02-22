@@ -29,6 +29,7 @@ hudi-utilities-bundle solely introduces problems for a specific Spark version.
 bin/spark-submit \
   --driver-memory 4g --executor-memory 2g --num-executors 3 --executor-cores 1 \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+  --conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
   --conf spark.sql.catalogImplementation=hive \
   --conf spark.driver.maxResultSize=1g \
   --conf spark.ui.port=6679 \
@@ -57,6 +58,8 @@ bin/spark-submit \
 bin/spark-submit \
   --driver-memory 4g --executor-memory 2g --num-executors 3 --executor-cores 1 \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+  --conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
+  --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
   --conf spark.sql.catalogImplementation=hive \
   --conf spark.driver.maxResultSize=1g \
   --conf spark.ui.port=6679 \
@@ -85,6 +88,8 @@ bin/spark-submit \
 bin/spark-submit \
   --driver-memory 4g --executor-memory 2g --num-executors 3 --executor-cores 1 \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+  --conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
+  --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
   --conf spark.sql.catalogImplementation=hive \
   --conf spark.driver.maxResultSize=1g \
   --conf spark.ui.port=6679 \

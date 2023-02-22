@@ -77,8 +77,9 @@ public class TestHoodieCommitMetadata {
     String serializedCommitMetadata = commitMetadata.toJsonString();
     HoodieCommitMetadata metadata =
         HoodieCommitMetadata.fromJsonString(serializedCommitMetadata, HoodieCommitMetadata.class);
-    // Make sure timing metrics are not written to instant file
-    assertEquals(0, (long) metadata.getTotalScanTime());
+    assertTrue(commitMetadata.getTotalCreateTime() > 0);
+    assertTrue(commitMetadata.getTotalUpsertTime() > 0);
+    assertTrue(commitMetadata.getTotalScanTime() > 0);
     assertTrue(metadata.getTotalLogFilesCompacted() > 0);
   }
 

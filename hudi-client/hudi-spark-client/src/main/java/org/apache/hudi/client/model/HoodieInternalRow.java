@@ -29,8 +29,6 @@ import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.unsafe.types.CalendarInterval;
 import org.apache.spark.unsafe.types.UTF8String;
 
-import java.util.Arrays;
-
 /**
  * Hudi internal implementation of the {@link InternalRow} allowing to extend arbitrary
  * {@link InternalRow} overlaying Hudi-internal meta-fields on top of it.
@@ -84,7 +82,7 @@ public class HoodieInternalRow extends InternalRow {
     this.sourceContainsMetaFields = sourceContainsMetaFields;
   }
 
-  private HoodieInternalRow(UTF8String[] metaFields,
+  public HoodieInternalRow(UTF8String[] metaFields,
                            InternalRow sourceRow,
                            boolean sourceContainsMetaFields) {
     this.metaFields = metaFields;
@@ -231,7 +229,11 @@ public class HoodieInternalRow extends InternalRow {
 
   @Override
   public InternalRow copy() {
-    return new HoodieInternalRow(Arrays.copyOf(metaFields, metaFields.length), sourceRow.copy(), sourceContainsMetaFields);
+    UTF8String[] copyMetaFields = new UTF8String[metaFields.length];
+    for (int i = 0; i < metaFields.length; i++) {
+      copyMetaFields[i] = metaFields[i] != null ? metaFields[i].copy() : null;
+    }
+    return new HoodieInternalRow(copyMetaFields, sourceRow.copy(), sourceContainsMetaFields);
   }
 
   private int rebaseOrdinal(int ordinal) {

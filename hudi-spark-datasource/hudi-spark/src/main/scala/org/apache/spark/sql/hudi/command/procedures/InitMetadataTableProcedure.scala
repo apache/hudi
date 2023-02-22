@@ -61,7 +61,7 @@ class InitMetadataTableProcedure extends BaseProcedure with ProcedureBuilder wit
         throw new RuntimeException("Metadata directory (" + metadataPath.toString + ") does not exist.")
     }
 
-    val timer = new HoodieTimer().startTimer
+    val timer = HoodieTimer.start
     if (!readOnly) {
       val writeConfig = getWriteConfig(basePath)
       SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf, writeConfig, new HoodieSparkEngineContext(jsc))

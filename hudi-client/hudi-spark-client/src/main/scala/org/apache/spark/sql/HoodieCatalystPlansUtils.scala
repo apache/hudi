@@ -90,4 +90,14 @@ trait HoodieCatalystPlansUtils {
   def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
                        query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan
 
+  /**
+   * Test if the logical plan is a Repair Table LogicalPlan.
+   */
+  def isRepairTable(plan: LogicalPlan): Boolean
+
+  /**
+   * Get the member of the Repair Table LogicalPlan.
+   */
+  def getRepairTableChildren(plan: LogicalPlan):
+    Option[(TableIdentifier, Boolean, Boolean, String)]
 }

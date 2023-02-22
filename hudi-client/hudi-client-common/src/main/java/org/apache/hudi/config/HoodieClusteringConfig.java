@@ -158,7 +158,9 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
           + PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
           + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
-          + PARTITION_FILTER_END_PARTITION.key() + "'].");
+          + PARTITION_FILTER_END_PARTITION.key() + "']."
+          + "DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, "
+          + "which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour.");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
@@ -712,6 +714,58 @@ public class HoodieClusteringConfig extends HoodieConfig {
       }
 
       return enumValue;
+    }
+
+    public String getValue() {
+      return value;
+    }
+  }
+
+  public enum ClusteringOperator {
+
+    /**
+     * only schedule the clustering plan
+     */
+    SCHEDULE("schedule"),
+
+    /**
+     * only execute then pending clustering plans
+     */
+    EXECUTE("execute"),
+
+    /**
+     * schedule cluster first, and execute all pending clustering plans
+     */
+    SCHEDULE_AND_EXECUTE("scheduleandexecute");
+
+    private static final Map<String, ClusteringOperator> VALUE_TO_ENUM_MAP =
+            TypeUtils.getValueToEnumMap(ClusteringOperator.class, e -> e.value);
+
+    private final String value;
+
+    ClusteringOperator(String value) {
+      this.value = value;
+    }
+
+    @Nonnull
+    public static ClusteringOperator fromValue(String value) {
+      ClusteringOperator enumValue = VALUE_TO_ENUM_MAP.get(value);
+      if (enumValue == null) {
+        throw new HoodieException(String.format("Invalid value (%s)", value));
+      }
+      return enumValue;
+    }
+
+    public boolean isSchedule() {
+      return this != ClusteringOperator.EXECUTE;
+    }
+
+    public boolean isExecute() {
+      return this != ClusteringOperator.SCHEDULE;
+    }
+
+    public String getValue() {
+      return value;
     }
   }
 }

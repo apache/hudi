@@ -25,58 +25,65 @@ import java.util.Arrays;
  */
 public enum StorageSchemes {
   // Local filesystem
-  FILE("file", false),
+  FILE("file", false, false),
   // Hadoop File System
-  HDFS("hdfs", true),
+  HDFS("hdfs", true, false),
   // Baidu Advanced File System
-  AFS("afs", true),
+  AFS("afs", true, null),
   // Mapr File System
-  MAPRFS("maprfs", true),
+  MAPRFS("maprfs", true, null),
   // Apache Ignite FS
-  IGNITE("igfs", true),
+  IGNITE("igfs", true, null),
   // AWS S3
-  S3A("s3a", false), S3("s3", false),
+  S3A("s3a", false, true), S3("s3", false, true),
   // Google Cloud Storage
-  GCS("gs", false),
+  GCS("gs", false, true),
   // Azure WASB
-  WASB("wasb", false), WASBS("wasbs", false),
+  WASB("wasb", false, null), WASBS("wasbs", false, null),
   // Azure ADLS
-  ADL("adl", false),
+  ADL("adl", false, null),
   // Azure ADLS Gen2
-  ABFS("abfs", false), ABFSS("abfss", false),
+  ABFS("abfs", false, null), ABFSS("abfss", false, null),
   // Aliyun OSS
-  OSS("oss", false),
+  OSS("oss", false, null),
   // View FS for federated setups. If federating across cloud stores, then append support is false
-  VIEWFS("viewfs", true),
+  VIEWFS("viewfs", true, null),
   //ALLUXIO
-  ALLUXIO("alluxio", false),
+  ALLUXIO("alluxio", false, null),
   // Tencent Cloud Object Storage
-  COSN("cosn", false),
+  COSN("cosn", false, null),
   // Tencent Cloud HDFS
-  CHDFS("ofs", true),
+  CHDFS("ofs", true, null),
   // Tencent Cloud CacheFileSystem
-  GOOSEFS("gfs", false),
+  GOOSEFS("gfs", false, null),
   // Databricks file system
-  DBFS("dbfs", false),
+  DBFS("dbfs", false, null),
   // IBM Cloud Object Storage
-  COS("cos", false),
+  COS("cos", false, null),
   // Huawei Cloud Object Storage
-  OBS("obs", false),
+  OBS("obs", false, null),
   // Kingsoft Standard Storage ks3
-  KS3("ks3", false),
+  KS3("ks3", false, null),
   // JuiceFileSystem
-  JFS("jfs", true),
+  JFS("jfs", true, null),
   // Baidu Object Storage
-  BOS("bos", false),
+  BOS("bos", false, null),
   // Oracle Cloud Infrastructure Object Storage
-  OCI("oci", false);
+  OCI("oci", false, null),
+  // Volcengine Object Storage
+  TOS("tos", false, null),
+  // Volcengine Cloud HDFS
+  CFS("cfs", true, null);
 
   private String scheme;
   private boolean supportsAppend;
+  // null for uncertain if write is transactional, please update this for each FS
+  private Boolean isWriteTransactional;
 
-  StorageSchemes(String scheme, boolean supportsAppend) {
+  StorageSchemes(String scheme, boolean supportsAppend, Boolean isWriteTransactional) {
     this.scheme = scheme;
     this.supportsAppend = supportsAppend;
+    this.isWriteTransactional = isWriteTransactional;
   }
 
   public String getScheme() {
@@ -85,6 +92,10 @@ public enum StorageSchemes {
 
   public boolean supportsAppend() {
     return supportsAppend;
+  }
+
+  public boolean isWriteTransactional() {
+    return isWriteTransactional != null && isWriteTransactional;
   }
 
   public static boolean isSchemeSupported(String scheme) {
@@ -96,5 +107,13 @@ public enum StorageSchemes {
       throw new IllegalArgumentException("Unsupported scheme :" + scheme);
     }
     return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.supportsAppend() && s.scheme.equals(scheme));
+  }
+
+  public static boolean isWriteTransactional(String scheme) {
+    if (!isSchemeSupported(scheme)) {
+      throw new IllegalArgumentException("Unsupported scheme :" + scheme);
+    }
+
+    return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.isWriteTransactional() && s.scheme.equals(scheme));
   }
 }

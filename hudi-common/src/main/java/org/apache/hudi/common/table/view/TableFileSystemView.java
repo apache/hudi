@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -63,6 +64,16 @@ public interface TableFileSystemView {
      * maxCommitTime.
      */
     Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime);
+
+    /**
+     * Streams the latest version base files in all partitions with precondition that
+     * commitTime(file) before maxCommitTime.
+     *
+     * @param maxCommitTime The max commit time to consider.
+     * @return A {@link Map} of partition path to the latest version base files before or on the
+     * commit time
+     */
+    Map<String, Stream<HoodieBaseFile>> getAllLatestBaseFilesBeforeOrOn(String maxCommitTime);
 
     /**
      * Stream all the latest data files pass.
@@ -155,6 +166,13 @@ public interface TableFileSystemView {
    * @return Pair<Pair<InstantTime,CompactionOperation>>
    */
   Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations();
+
+  /**
+   * Return Pending Compaction Operations.
+   *
+   * @return Pair<Pair<InstantTime,CompactionOperation>>
+   */
+  Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations();
 
   /**
    * Last Known Instant on which the view is built.

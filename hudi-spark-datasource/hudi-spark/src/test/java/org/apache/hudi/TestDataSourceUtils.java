@@ -20,17 +20,20 @@ package org.apache.hudi;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Conversions;
@@ -39,6 +42,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -59,6 +63,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -322,5 +327,29 @@ public class TestDataSourceUtils {
         {true, false, false}, {true, true, true},
         {false, true, true},  {false, false, false}
     }).map(Arguments::of);
+  }
+
+  @Test
+  public void testSerHoodieMetadataPayload() throws IOException {
+    String partitionPath = "2022/10/01";
+    String fileName = "file.parquet";
+    String targetColName = "c1";
+
+    HoodieColumnRangeMetadata<Comparable> columnStatsRecord =
+        HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, 0, 500, 0, 100, 12345, 12345);
+
+    HoodieRecord<HoodieMetadataPayload> hoodieMetadataPayload =
+        HoodieMetadataPayload.createColumnStatsRecords(partitionPath, Collections.singletonList(columnStatsRecord), false)
+            .findFirst().get();
+
+    IndexedRecord record = hoodieMetadataPayload.getData().getInsertValue(null).get();
+    byte[] recordToBytes = HoodieAvroUtils.indexedRecordToBytes(record);
+    GenericRecord genericRecord = HoodieAvroUtils.bytesToAvro(recordToBytes, record.getSchema());
+
+    HoodieMetadataPayload genericRecordHoodieMetadataPayload = new HoodieMetadataPayload(Option.of(genericRecord));
+    byte[] bytes = SerializationUtils.serialize(genericRecordHoodieMetadataPayload);
+    HoodieMetadataPayload deserGenericRecordHoodieMetadataPayload = SerializationUtils.deserialize(bytes);
+
+    assertEquals(genericRecordHoodieMetadataPayload, deserGenericRecordHoodieMetadataPayload);
   }
 }

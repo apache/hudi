@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHFileUtils;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -101,7 +102,10 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     Path indexByFilePath = fileIdIndexPath(metaClient);
     try {
       FileSystem fs = metaClient.getFs();
-      isPresent = fs.exists(indexByPartitionPath) && fs.exists(indexByFilePath);
+      // The metadata table is never bootstrapped, so the bootstrap index is always absent
+      // for the metadata table.  The fs.exists calls are avoided for metadata table.
+      isPresent = !HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString())
+          && fs.exists(indexByPartitionPath) && fs.exists(indexByFilePath);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
@@ -291,14 +295,16 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
     @Override
     public List<String> getIndexedPartitionPaths() {
-      HFileScanner scanner = partitionIndexReader().getScanner(true, false);
-      return getAllKeys(scanner, HFileBootstrapIndex::getPartitionFromKey);
+      try (HFileScanner scanner = partitionIndexReader().getScanner(true, false)) {
+        return getAllKeys(scanner, HFileBootstrapIndex::getPartitionFromKey);
+      }
     }
 
     @Override
     public List<HoodieFileGroupId> getIndexedFileGroupIds() {
-      HFileScanner scanner = fileIdIndexReader().getScanner(true, false);
-      return getAllKeys(scanner, HFileBootstrapIndex::getFileGroupFromKey);
+      try (HFileScanner scanner = fileIdIndexReader().getScanner(true, false)) {
+        return getAllKeys(scanner, HFileBootstrapIndex::getFileGroupFromKey);
+      }
     }
 
     private <T> List<T> getAllKeys(HFileScanner scanner, Function<String, T> converter) {

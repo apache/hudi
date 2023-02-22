@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
 import java.util.stream.Stream;
@@ -69,6 +70,15 @@ public class FileSlice implements Serializable {
     this.baseInstantTime = baseInstantTime;
     this.baseFile = null;
     this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
+  }
+
+  public FileSlice(HoodieFileGroupId fileGroupId, String baseInstantTime,
+                   HoodieBaseFile baseFile, List<HoodieLogFile> logFiles) {
+    this.fileGroupId = fileGroupId;
+    this.baseInstantTime = baseInstantTime;
+    this.baseFile = baseFile;
+    this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
+    this.logFiles.addAll(logFiles);
   }
 
   public void setBaseFile(HoodieBaseFile baseFile) {

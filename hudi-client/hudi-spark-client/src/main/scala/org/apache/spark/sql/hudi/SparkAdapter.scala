@@ -19,21 +19,21 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.TablePathUtils
+import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan, SubqueryAlias}
+import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, LogicalRelation, PartitionedFile, SparkParsePartitionUtil}
-import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.sql.{HoodieCatalogUtils, HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 import java.util.Locale
@@ -42,6 +42,16 @@ import java.util.Locale
  * Interface adapting discrepancies and incompatibilities between different Spark versions
  */
 trait SparkAdapter extends Serializable {
+
+  /**
+   * Checks whether provided instance of [[InternalRow]] is actually an instance of [[ColumnarBatchRow]]
+   */
+  def isColumnarBatchRow(r: InternalRow): Boolean
+
+  /**
+   * Inject table-valued functions to SparkSessionExtensions
+   */
+  def injectTableFunctions(extensions : SparkSessionExtensions): Unit = {}
 
   /**
    * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
@@ -107,9 +117,15 @@ trait SparkAdapter extends Serializable {
   def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
     unfoldSubqueryAliases(table) match {
       case LogicalRelation(_, _, Some(table), _) => isHoodieTable(table)
-      case relation: UnresolvedRelation =>
-        isHoodieTable(getCatalystPlanUtils.toTableIdentifier(relation), spark)
-      case _=> false
+      // This is to handle the cases when table is loaded by providing
+      // the path to the Spark DS and not from the catalog
+      case LogicalRelation(fsr: HadoopFsRelation, _, _, _) =>
+        fsr.options.get("path").map { pathStr =>
+          val path = new Path(pathStr)
+          TablePathUtils.isHoodieTablePath(path.getFileSystem(spark.sparkContext.hadoopConfiguration), path)
+        } getOrElse(false)
+
+      case _ => false
     }
   }
 
@@ -146,6 +162,15 @@ trait SparkAdapter extends Serializable {
    * TODO move to HoodieCatalystExpressionUtils
    */
   def createInterpretedPredicate(e: Expression): InterpretedPredicate
+
+  /**
+   * Create Hoodie relation based on globPaths, otherwise use tablePath if it's empty
+   */
+  def createRelation(sqlContext: SQLContext,
+                     metaClient: HoodieTableMetaClient,
+                     schema: Schema,
+                     globPaths: Array[Path],
+                     parameters: java.util.Map[String, String]): BaseRelation
 
   /**
    * Create instance of [[HoodieFileScanRDD]]

@@ -88,8 +88,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
       val resultC = spark.sql(s"call show_compaction('$tableName')")
         .collect()
         .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2)))
-      assertResult(1)(resultC.length)
-      assertResult(resultA)(resultC)
+      assertResult(2)(resultC.length)
 
       checkAnswer(s"call run_compaction(op => 'run', table => '$tableName', timestamp => ${timestamps(0)})")(
         Seq(resultA(0).head, resultA(0)(1), HoodieInstant.State.COMPLETED.name())
@@ -100,7 +99,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
         Seq(3, "a3", 10.0, 1000),
         Seq(4, "a4", 10.0, 1000)
       )
-      assertResult(0)(spark.sql(s"call show_compaction(table => '$tableName')").collect().length)
+      assertResult(2)(spark.sql(s"call show_compaction(table => '$tableName')").collect().length)
     }
   }
 
@@ -168,11 +167,42 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
         Seq(2, "a2", 12.0, 1000),
         Seq(3, "a3", 10.0, 1000)
       )
-      assertResult(0)(spark.sql(s"call show_compaction(path => '${tmp.getCanonicalPath}')").collect().length)
+      assertResult(2)(spark.sql(s"call show_compaction(path => '${tmp.getCanonicalPath}')").collect().length)
 
       checkException(s"call run_compaction(op => 'run', path => '${tmp.getCanonicalPath}', timestamp => 12345L)")(
         s"Compaction instant: 12345 is not found in ${tmp.getCanonicalPath}, Available pending compaction instants are:  "
       )
+    }
+  }
+  test("Test show_compaction Procedure by Path") {
+    withTempDir { tmp =>
+      val tableName1 = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName1 (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  hoodie.compact.inline ='true',
+           |  hoodie.compact.inline.max.delta.commits ='2'
+           | )
+           | location '${tmp.getCanonicalPath}/$tableName1'
+       """.stripMargin)
+      spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
+
+      spark.sql(s"insert into $tableName1 values(1, 'a2', 10, 1000)")
+
+      spark.sql(s"insert into $tableName1 values(1, 'a3', 10, 1000)")
+
+      spark.sql(s"insert into $tableName1 values(1, 'a4', 10, 1000)")
+
+      assertResult(2)(spark.sql(s"call show_compaction(path => '${tmp.getCanonicalPath}/$tableName1')").collect().length)
     }
   }
 }

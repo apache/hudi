@@ -35,17 +35,22 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.SortedMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 public class PushGatewayReporter extends ScheduledReporter {
 
   private static final Logger LOG = LogManager.getLogger(PushGatewayReporter.class);
+  // Ensures that we maintain a single PushGw client (single connection pool) per Push Gw Server instance.
+  private static final Map<String, PushGateway> PUSH_GATEWAY_PER_HOSTNAME = new ConcurrentHashMap<>();
 
-  private final PushGateway pushGateway;
+  private final PushGateway pushGatewayClient;
   private final DropwizardExports metricExports;
   private final CollectorRegistry collectorRegistry;
   private final String jobName;
+  private final Map<String, String> labels;
   private final boolean deleteShutdown;
 
   protected PushGatewayReporter(MetricRegistry registry,
@@ -53,28 +58,39 @@ public class PushGatewayReporter extends ScheduledReporter {
                                 TimeUnit rateUnit,
                                 TimeUnit durationUnit,
                                 String jobName,
+                                Map<String, String> labels,
                                 String serverHost,
                                 int serverPort,
                                 boolean deleteShutdown) {
     super(registry, "hudi-push-gateway-reporter", filter, rateUnit, durationUnit);
     this.jobName = jobName;
+    this.labels = labels;
     this.deleteShutdown = deleteShutdown;
     collectorRegistry = new CollectorRegistry();
     metricExports = new DropwizardExports(registry);
-    pushGateway = createPushGatewayClient(serverHost, serverPort);
+    pushGatewayClient = createPushGatewayClient(serverHost, serverPort);
     metricExports.register(collectorRegistry);
   }
 
-  private PushGateway createPushGatewayClient(String serverHost, int serverPort) {
+  private synchronized PushGateway createPushGatewayClient(String serverHost, int serverPort) {
+    final String serverUrl = String.format("%s:%s", serverHost, serverPort);
+    if (PUSH_GATEWAY_PER_HOSTNAME.containsKey(serverUrl)) {
+      return PUSH_GATEWAY_PER_HOSTNAME.get(serverUrl);
+    }
+
+    PushGateway pushGateway;
     if (serverPort == 443) {
       try {
-        return new PushGateway(new URL("https://" + serverHost + ":" + serverPort));
+        pushGateway = new PushGateway(new URL("https://" + serverUrl));
       } catch (MalformedURLException e) {
         e.printStackTrace();
         throw new IllegalArgumentException("Malformed pushgateway host: " + serverHost);
       }
+    } else {
+      pushGateway = new PushGateway(serverUrl);
     }
-    return new PushGateway(serverHost + ":" + serverPort);
+    PUSH_GATEWAY_PER_HOSTNAME.put(serverUrl, pushGateway);
+    return pushGateway;
   }
 
   @Override
@@ -84,7 +100,7 @@ public class PushGatewayReporter extends ScheduledReporter {
                      SortedMap<String, Meter> meters,
                      SortedMap<String, Timer> timers) {
     try {
-      pushGateway.pushAdd(collectorRegistry, jobName);
+      pushGatewayClient.pushAdd(collectorRegistry, jobName, labels);
     } catch (IOException e) {
       LOG.warn("Can't push monitoring information to pushGateway", e);
     }
@@ -101,7 +117,7 @@ public class PushGatewayReporter extends ScheduledReporter {
     try {
       if (deleteShutdown) {
         collectorRegistry.unregister(metricExports);
-        pushGateway.delete(jobName);
+        pushGatewayClient.delete(jobName);
       }
     } catch (IOException e) {
       LOG.warn("Failed to delete metrics from pushGateway with jobName {" + jobName + "}", e);

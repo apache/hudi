@@ -21,7 +21,6 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -44,7 +43,7 @@ import java.util.List;
  * <p>The back-up writer may rollover on condition(for e.g, the filesystem does not support append
  * or the file size hits the configured threshold).
  */
-public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
+public class FlinkAppendHandle<T, I, K, O>
     extends HoodieAppendHandle<T, I, K, O> implements MiniBatchHandle {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkAppendHandle.class);
@@ -119,11 +118,5 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
   @Override
   public Path getWritePath() {
     return writer.getLogFile().getPath();
-  }
-
-  @Override
-  public boolean shouldReplace() {
-    // log files can append new data buffer directly
-    return false;
   }
 }

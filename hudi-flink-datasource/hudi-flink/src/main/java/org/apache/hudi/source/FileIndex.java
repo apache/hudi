@@ -138,7 +138,7 @@ public class FileIndex {
     }
     String[] partitions = getOrBuildPartitionPaths().stream().map(p -> fullPartitionPath(path, p)).toArray(String[]::new);
     FileStatus[] allFileStatus = FSUtils.getFilesInPartitions(HoodieFlinkEngineContext.DEFAULT, metadataConfig, path.toString(),
-            partitions, "/tmp/")
+            partitions)
         .values().stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
     Set<String> candidateFiles = candidateFilesInMetadataTable(allFileStatus);
     if (candidateFiles == null) {
@@ -297,5 +297,10 @@ public class FileIndex {
     properties.put(HoodieMetadataConfig.ENABLE.key(), conf.getBoolean(FlinkOptions.METADATA_ENABLED));
 
     return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
+  }
+
+  @VisibleForTesting
+  public List<ResolvedExpression> getFilters() {
+    return filters;
   }
 }

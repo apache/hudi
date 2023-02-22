@@ -121,8 +121,15 @@ public final class Option<T> implements Serializable {
   }
 
   /**
-   * Returns this {@link Option} if not empty, otherwise evaluates the provided supplier
-   * and returns the alternative
+   * Returns this {@link Option} if not empty, otherwise returns an alternative
+   */
+  public Option<T> or(Option<T> other) {
+    return val != null ? this : other;
+  }
+
+  /**
+   * Returns this {@link Option} if not empty, otherwise evaluates provided supplier
+   * and returns its result
    */
   public Option<T> or(Supplier<? extends Option<T>> other) {
     return val != null ? this : other.get();

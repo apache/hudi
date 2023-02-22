@@ -24,14 +24,11 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.utilities.HDFSParquetImporter.FormatValidator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
-
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
-
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 import scala.collection.JavaConverters;
 
 /**
@@ -40,33 +37,33 @@ import scala.collection.JavaConverters;
  * @see HoodieDeltaStreamer
  * @deprecated This utility is deprecated in 0.10.0 and will be removed in 0.11.0. Use {@link HoodieDeltaStreamer.Config#runBootstrap} instead.
  */
-@Component
-public class HDFSParquetImportCommand implements CommandMarker {
+@ShellComponent
+public class HDFSParquetImportCommand {
 
-  @CliCommand(value = "hdfsparquetimport", help = "Imports Parquet table to a hoodie table")
+  @ShellMethod(key = "hdfsparquetimport", value = "Imports Parquet table to a hoodie table")
   public String convert(
-      @CliOption(key = "upsert", unspecifiedDefaultValue = "false",
+      @ShellOption(value = "--upsert", defaultValue = "false",
           help = "Uses upsert API instead of the default insert API of WriteClient") boolean useUpsert,
-      @CliOption(key = "srcPath", mandatory = true, help = "Base path for the input table") final String srcPath,
-      @CliOption(key = "targetPath", mandatory = true,
+      @ShellOption(value = "--srcPath", help = "Base path for the input table") final String srcPath,
+      @ShellOption(value = "--targetPath",
           help = "Base path for the target hoodie table") final String targetPath,
-      @CliOption(key = "tableName", mandatory = true, help = "Table name") final String tableName,
-      @CliOption(key = "tableType", mandatory = true, help = "Table type") final String tableType,
-      @CliOption(key = "rowKeyField", mandatory = true, help = "Row key field name") final String rowKeyField,
-      @CliOption(key = "partitionPathField", unspecifiedDefaultValue = "",
+      @ShellOption(value = "--tableName", help = "Table name") final String tableName,
+      @ShellOption(value = "--tableType", help = "Table type") final String tableType,
+      @ShellOption(value = "--rowKeyField", help = "Row key field name") final String rowKeyField,
+      @ShellOption(value = "--partitionPathField", defaultValue = "",
           help = "Partition path field name") final String partitionPathField,
-      @CliOption(key = {"parallelism"}, mandatory = true,
+      @ShellOption(value = {"--parallelism"},
           help = "Parallelism for hoodie insert") final String parallelism,
-      @CliOption(key = "schemaFilePath", mandatory = true,
+      @ShellOption(value = "--schemaFilePath",
           help = "Path for Avro schema file") final String schemaFilePath,
-      @CliOption(key = "format", mandatory = true, help = "Format for the input data") final String format,
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
-      @CliOption(key = "sparkMemory", mandatory = true, help = "Spark executor memory") final String sparkMemory,
-      @CliOption(key = "retry", mandatory = true, help = "Number of retries") final String retry,
-      @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for importing",
-          unspecifiedDefaultValue = "") final String propsFilePath,
-      @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
-          unspecifiedDefaultValue = "") final String[] configs) throws Exception {
+      @ShellOption(value = "--format", help = "Format for the input data") final String format,
+      @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master") String master,
+      @ShellOption(value = "--sparkMemory", help = "Spark executor memory") final String sparkMemory,
+      @ShellOption(value = "--retry", help = "Number of retries") final String retry,
+      @ShellOption(value = "--propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for importing",
+          defaultValue = "") final String propsFilePath,
+      @ShellOption(value = "--hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
+          defaultValue = "") final String[] configs) throws Exception {
 
     (new FormatValidator()).validate("format", format);
 

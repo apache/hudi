@@ -25,11 +25,14 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -37,6 +40,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
@@ -51,7 +55,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -74,7 +80,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test Cases for {@link HoodieLogFileCommand}.
  */
 @Tag("functional")
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
 public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
+
+  @Autowired
+  private Shell shell;
 
   private String partitionPath;
   private HoodieAvroDataBlock dataBlock;
@@ -104,7 +114,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
         .withFileId("test-log-fileid1").overBaseCommit("100").withFs(fs).build()) {
 
       // write data to file
-      List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
+      List<HoodieRecord> records = SchemaTestUtil.generateTestRecords(0, 100).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
@@ -123,8 +133,8 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testShowLogFileCommits() throws JsonProcessingException {
-    CommandResult cr = shell().executeCommand("show logfile metadata --logFilePathPattern " + partitionPath + "/*");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "show logfile metadata --logFilePathPattern " + partitionPath + "/*");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT_TIME)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_RECORD_COUNT)
@@ -142,7 +152,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -151,15 +161,15 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testShowLogFileRecords() throws IOException, URISyntaxException {
-    CommandResult cr = shell().executeCommand("show logfile records --logFilePathPattern " + partitionPath + "/*");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "show logfile records --logFilePathPattern " + partitionPath + "/*");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // construct expect result, get 10 records.
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 10);
     String[][] rows = records.stream().map(r -> new String[] {r.toString()}).toArray(String[][]::new);
     String expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_RECORDS}, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -184,7 +194,8 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
               .withFileId("test-log-fileid1").overBaseCommit(INSTANT_TIME).withFs(fs).withSizeThreshold(500).build();
 
-      List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+      SchemaTestUtil testUtil = new SchemaTestUtil();
+      List<HoodieRecord> records1 = testUtil.generateHoodieTestRecords(0, 100).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
@@ -196,9 +207,9 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
       }
     }
 
-    CommandResult cr = shell().executeCommand("show logfile records --logFilePathPattern "
-        + partitionPath + "/* --mergeRecords true");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "show logfile records --logFilePathPattern "
+            + partitionPath + "/* --mergeRecords true");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // get expected result of 10 records.
     List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(partitionPath + "/*")))
@@ -218,17 +229,19 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
             Boolean.parseBoolean(
                 HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue()))
         .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue())
-        .withSpillableMapBasePath(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue())
+        .withSpillableMapBasePath(HoodieMemoryConfig.getDefaultSpillableMapBasePath())
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
+        .withOptimizedLogBlocksScan(Boolean.parseBoolean(HoodieCompactionConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()))
         .build();
 
-    Iterator<HoodieRecord<? extends HoodieRecordPayload>> records = scanner.iterator();
+    Iterator<HoodieRecord> records = scanner.iterator();
     int num = 0;
     int maxSize = 10;
     List<IndexedRecord> indexRecords = new ArrayList<>();
     while (records.hasNext() && num < maxSize) {
-      Option<IndexedRecord> hoodieRecord = records.next().getData().getInsertValue(schema);
+      Option<IndexedRecord> hoodieRecord = ((HoodieAvroRecord)records.next()).getData().getInsertValue(schema);
       indexRecords.add(hoodieRecord.get());
       num++;
     }
@@ -237,7 +250,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
 
     String expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_RECORDS}, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 }

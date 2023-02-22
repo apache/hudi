@@ -19,30 +19,41 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.hudi.{Spark2HoodieFileScanRDD, Spark2RowSerDe}
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieBaseRelation, Spark2HoodieFileScanRDD, Spark2RowSerDe}
+import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
-import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.sql._
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
+import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.mutable.ArrayBuffer
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 2.4.x
  */
 class Spark2Adapter extends SparkAdapter {
+
+  override def isColumnarBatchRow(r: InternalRow): Boolean = {
+    // NOTE: In Spark 2.x there's no [[ColumnarBatchRow]], instead [[MutableColumnarRow]] is leveraged
+    //       for vectorized reads
+    r.isInstanceOf[MutableColumnarRow]
+  }
 
   override def getCatalogUtils: HoodieCatalogUtils = {
     throw new UnsupportedOperationException("Catalog utilities are not supported in Spark 2.x");
@@ -117,12 +128,38 @@ class Spark2Adapter extends SparkAdapter {
     partitions.toSeq
   }
 
+  override def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
+    super.isHoodieTable(table, spark) ||
+      // NOTE: Following checks extending the logic of the base class specifically for Spark 2.x
+      (unfoldSubqueryAliases(table) match {
+        // This is to handle the cases when table is loaded by providing
+        // the path to the Spark DS and not from the catalog
+        //
+        // NOTE: This logic can't be relocated to the hudi-spark-client
+        case LogicalRelation(_: HoodieBaseRelation, _, _, _) => true
+
+        case relation: UnresolvedRelation =>
+          isHoodieTable(getCatalystPlanUtils.toTableIdentifier(relation), spark)
+
+        case _ => false
+      })
+  }
+
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark24HoodieParquetFileFormat(appendPartitionValues))
   }
 
   override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
     InterpretedPredicate.create(e)
+  }
+
+  override def createRelation(sqlContext: SQLContext,
+                              metaClient: HoodieTableMetaClient,
+                              schema: Schema,
+                              globPaths: Array[Path],
+                              parameters: java.util.Map[String, String]): BaseRelation = {
+    val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
+    DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,

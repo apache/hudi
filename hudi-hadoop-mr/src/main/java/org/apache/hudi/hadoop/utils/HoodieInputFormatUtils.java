@@ -283,8 +283,7 @@ public class HoodieInputFormatUtils {
    * @return
    */
   public static Option<List<HoodieInstant>> getCommitsForIncrementalQuery(Job job, String tableName, HoodieTimeline timeline) {
-    return Option.of(getHoodieTimelineForIncrementalQuery(job, tableName, timeline)
-        .getInstants().collect(Collectors.toList()));
+    return Option.of(getHoodieTimelineForIncrementalQuery(job, tableName, timeline).getInstants());
   }
 
   /**
@@ -496,19 +495,5 @@ public class HoodieInputFormatUtils {
         .map(HoodieCommitMetadata::getWritePartitionPaths)
         .flatMap(Collection::stream)
         .collect(Collectors.toSet());
-  }
-
-  /**
-   * Returns the commit metadata of the given instant.
-   *
-   * @param instant   The hoodie instant
-   * @param timeline  The timeline
-   * @return the commit metadata
-   */
-  public static HoodieCommitMetadata getCommitMetadata(
-      HoodieInstant instant,
-      HoodieTimeline timeline) throws IOException {
-    byte[] data = timeline.getInstantDetails(instant).get();
-    return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
   }
 }

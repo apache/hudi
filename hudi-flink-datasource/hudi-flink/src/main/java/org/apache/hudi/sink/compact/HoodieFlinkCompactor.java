@@ -32,6 +32,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategies;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
@@ -40,11 +41,9 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.client.deployment.application.ApplicationExecutionException;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -70,12 +69,10 @@ public class HoodieFlinkCompactor {
   }
 
   public static void main(String[] args) throws Exception {
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
     FlinkCompactionConfig cfg = getFlinkCompactionConfig(args);
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
 
-    AsyncCompactionService service = new AsyncCompactionService(cfg, conf, env);
+    AsyncCompactionService service = new AsyncCompactionService(cfg, conf);
 
     new HoodieFlinkCompactor(service).start(cfg.serviceMode);
   }
@@ -159,19 +156,13 @@ public class HoodieFlinkCompactor {
     private final HoodieFlinkTable<?> table;
 
     /**
-     * Flink Execution Environment.
-     */
-    private final StreamExecutionEnvironment env;
-
-    /**
      * Executor Service.
      */
     private final ExecutorService executor;
 
-    public AsyncCompactionService(FlinkCompactionConfig cfg, Configuration conf, StreamExecutionEnvironment env) throws Exception {
+    public AsyncCompactionService(FlinkCompactionConfig cfg, Configuration conf) throws Exception {
       this.cfg = cfg;
       this.conf = conf;
-      this.env = env;
       this.executor = Executors.newFixedThreadPool(1);
 
       // create metaClient
@@ -188,7 +179,7 @@ public class HoodieFlinkCompactor {
       // infer changelog mode
       CompactionUtil.inferChangelogMode(conf, metaClient);
 
-      this.writeClient = StreamerUtil.createWriteClient(conf);
+      this.writeClient = FlinkWriteClients.createWriteClientV2(conf);
       this.writeConfig = writeClient.getConfig();
       this.table = writeClient.getHoodieTable();
     }
@@ -264,7 +255,7 @@ public class HoodieFlinkCompactor {
           .map(timestamp -> {
             try {
               return Pair.of(timestamp, CompactionUtils.getCompactionPlan(table.getMetaClient(), timestamp));
-            } catch (IOException e) {
+            } catch (Exception e) {
               throw new HoodieException("Get compaction plan at instant " + timestamp + " error", e);
             }
           })
@@ -305,13 +296,14 @@ public class HoodieFlinkCompactor {
       }
       table.getMetaClient().reloadActiveTimeline();
 
+      StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
       env.addSource(new CompactionPlanSourceFunction(compactionPlans))
           .name("compaction_source")
           .uid("uid_compaction_source")
           .rebalance()
           .transform("compact_task",
               TypeInformation.of(CompactionCommitEvent.class),
-              new ProcessOperator<>(new CompactFunction(conf)))
+              new CompactOperator(conf))
           .setParallelism(compactionParallelism)
           .addSink(new CompactionCommitSink(conf))
           .name("compaction_commit")

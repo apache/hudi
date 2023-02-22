@@ -18,18 +18,22 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import java.io.Serializable;
-import java.util.concurrent.TimeUnit;
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.Serializable;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
@@ -45,16 +49,22 @@ public class LockManager implements Serializable, AutoCloseable {
   private final SerializableConfiguration hadoopConf;
   private final int maxRetries;
   private final long maxWaitTimeInMs;
+  private transient HoodieLockMetrics metrics;
   private volatile LockProvider lockProvider;
 
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs) {
+    this(writeConfig, fs, writeConfig.getProps());
+  }
+
+  public LockManager(HoodieWriteConfig writeConfig, FileSystem fs, TypedProperties lockProps) {
     this.writeConfig = writeConfig;
     this.hadoopConf = new SerializableConfiguration(fs.getConf());
-    this.lockConfiguration = new LockConfiguration(writeConfig.getProps());
+    this.lockConfiguration = new LockConfiguration(lockProps);
     maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
         Integer.parseInt(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.defaultValue()));
     maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
         Long.parseLong(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS.defaultValue()));
+    metrics = new HoodieLockMetrics(writeConfig);
   }
 
   public void lock() {
@@ -64,15 +74,19 @@ public class LockManager implements Serializable, AutoCloseable {
       boolean acquired = false;
       while (retryCount <= maxRetries) {
         try {
+          metrics.startLockApiTimerContext();
           acquired = lockProvider.tryLock(writeConfig.getLockAcquireWaitTimeoutInMs(), TimeUnit.MILLISECONDS);
           if (acquired) {
+            metrics.updateLockAcquiredMetric();
             break;
           }
-          LOG.info("Retrying to acquire lock...");
+          metrics.updateLockNotAcquiredMetric();
+          LOG.info("Retrying to acquire lock. Current lock owner information : " + lockProvider.getCurrentOwnerLockInfo());
           Thread.sleep(maxWaitTimeInMs);
         } catch (HoodieLockException | InterruptedException e) {
+          metrics.updateLockNotAcquiredMetric();
           if (retryCount >= maxRetries) {
-            throw new HoodieLockException("Unable to acquire lock, lock object ", e);
+            throw new HoodieLockException("Unable to acquire lock, lock object " + lockProvider.getLock(), e);
           }
           try {
             Thread.sleep(maxWaitTimeInMs);
@@ -96,6 +110,7 @@ public class LockManager implements Serializable, AutoCloseable {
   public void unlock() {
     if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       getLockProvider().unlock();
+      metrics.updateLockHeldTimerMetrics();
     }
   }
 

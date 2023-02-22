@@ -21,12 +21,16 @@ package org.apache.hudi.common.util;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.concurrent.ThreadSafe;
+
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import javax.annotation.concurrent.ThreadSafe;
 
+/**
+ * Thread-safe rate limiter implementation.
+ */
 @ThreadSafe
 public class RateLimiter {
 

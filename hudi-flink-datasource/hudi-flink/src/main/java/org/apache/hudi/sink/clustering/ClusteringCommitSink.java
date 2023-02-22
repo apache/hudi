@@ -36,7 +36,8 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.ClusteringUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -87,7 +88,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     if (writeClient == null) {
-      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+      this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     }
     this.commitBuffer = new HashMap<>();
     this.table = writeClient.getHoodieTable();
@@ -121,7 +122,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     if (events.stream().anyMatch(ClusteringCommitEvent::isFailed)) {
       try {
         // handle failure case
-        CompactionUtil.rollbackCompaction(table, instant);
+        ClusteringUtil.rollbackClustering(table, writeClient, instant);
       } finally {
         // remove commitBuffer to avoid obsolete metadata commit
         reset(instant);
@@ -145,6 +146,17 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
         .map(ClusteringCommitEvent::getWriteStatuses)
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
+
+    long numErrorRecords = statuses.stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
+
+    if (numErrorRecords > 0 && !this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
+      // handle failure case
+      LOG.error("Got {} error records during clustering of instant {},\n"
+          + "option '{}' is configured as false,"
+          + "rolls back the clustering", numErrorRecords, instant, FlinkOptions.IGNORE_FAILED.key());
+      ClusteringUtil.rollbackClustering(table, writeClient, instant);
+      return;
+    }
 
     HoodieWriteMetadata<List<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
     writeMetadata.setWriteStatuses(statuses);

@@ -18,11 +18,14 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
@@ -31,9 +34,12 @@ import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
+import org.apache.hudi.sync.common.util.ConfigUtils;
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
+import org.apache.hadoop.hive.metastore.api.SerDeInfo;
+import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.log4j.LogManager;
@@ -50,6 +56,8 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
@@ -113,7 +121,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
-    if (tableProperties == null || tableProperties.isEmpty()) {
+    if (MapUtils.isNullOrEmpty(tableProperties)) {
       return;
     }
     try {
@@ -124,6 +132,36 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       client.alter_table(databaseName, tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to update table properties for table: "
+          + tableName, e);
+    }
+  }
+
+  @Override
+  public void updateSerdeProperties(String tableName, Map<String, String> serdeProperties) {
+    if (MapUtils.isNullOrEmpty(serdeProperties)) {
+      return;
+    }
+    try {
+      serdeProperties.putIfAbsent("serialization.format", "1");
+      Table table = client.getTable(databaseName, tableName);
+      StorageDescriptor storageDescriptor = table.getSd();
+      SerDeInfo serdeInfo = storageDescriptor.getSerdeInfo();
+      if (serdeInfo != null && serdeInfo.getParametersSize() == serdeProperties.size()) {
+        Map<String, String> parameters = serdeInfo.getParameters();
+        boolean different = serdeProperties.entrySet().stream().anyMatch(e ->
+            !parameters.containsKey(e.getKey()) || !parameters.get(e.getKey()).equals(e.getValue()));
+        if (!different) {
+          LOG.debug("Table " + tableName + " serdeProperties already up to date, skip update serde properties.");
+          return;
+        }
+      }
+
+      HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
+      String serDeClassName = HoodieInputFormatUtils.getSerDeClassName(baseFileFormat);
+      storageDescriptor.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
+      client.alter_table(databaseName, tableName, table);
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to update table serde info for table: "
           + tableName, e);
     }
   }
@@ -142,6 +180,19 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
           .collect(Collectors.toList());
     } catch (TException e) {
       throw new HoodieHiveSyncException("Failed to get all partitions for table " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  @Override
+  public List<Partition> getPartitionsByFilter(String tableName, String filter) {
+    try {
+      return client.listPartitionsByFilter(databaseName, tableName, filter, (short)-1)
+          .stream()
+          .map(p -> new Partition(p.getValues(), p.getSd().getLocation()))
+          .collect(Collectors.toList());
+    } catch (TException e) {
+      throw new HoodieHiveSyncException("Failed to get partitions for table "
+          + tableId(databaseName, tableName) + " with filter " + filter, e);
     }
   }
 
@@ -213,7 +264,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
-    if (getActiveTimeline().getInstants().noneMatch(i -> i.getTimestamp().equals(timeStamp))) {
+    if (getActiveTimeline().getInstantsAsStream().noneMatch(i -> i.getTimestamp().equals(timeStamp))) {
       throw new HoodieHiveSyncException(
           "Not a valid completed timestamp " + timeStamp + " for table " + tableName);
     }
@@ -263,6 +314,11 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     if (lastCommitSynced.isPresent()) {
       try {
         Table table = client.getTable(databaseName, tableName);
+        String basePath = config.getString(META_SYNC_BASE_PATH);
+        StorageDescriptor sd = table.getSd();
+        sd.setLocation(basePath);
+        SerDeInfo serdeInfo = sd.getSerdeInfo();
+        serdeInfo.putToParameters(ConfigUtils.TABLE_SERDE_PATH, basePath);
         table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
         client.alter_table(databaseName, tableName, table);
       } catch (Exception e) {

@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, SchemaTestUtil}
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable
 import org.apache.spark.api.java.JavaSparkContext
+import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.IOException
 import java.net.URL
@@ -109,10 +110,36 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       val newProps: URL = this.getClass.getClassLoader.getResource("table-config.properties")
 
       // overwrite hoodie props
-      val Result = spark.sql(s"""call repair_overwrite_hoodie_props(table => '$tableName', new_props_file_path => '${newProps.getPath}')""").collect()
-      assertResult(15) {
-        Result.length
-      }
+      val expectedOutput ="""
+          |[hoodie.archivelog.folder,archived,archive]
+          |[hoodie.database.name,default,null]
+          |[hoodie.datasource.write.drop.partition.columns,false,false]
+          |[hoodie.datasource.write.hive_style_partitioning,true,null]
+          |[hoodie.datasource.write.partitionpath.urlencode,false,null]
+          |[hoodie.table.checksum,,]
+          |[hoodie.table.create.schema,,]
+          |[hoodie.table.keygenerator.class,org.apache.hudi.keygen.NonpartitionedKeyGenerator,null]
+          |[hoodie.table.name,,]
+          |[hoodie.table.precombine.field,ts,null]
+          |[hoodie.table.recordkey.fields,id,null]
+          |[hoodie.table.type,COPY_ON_WRITE,COPY_ON_WRITE]
+          |[hoodie.table.version,,]
+          |[hoodie.timeline.layout.version,,]""".stripMargin.trim
+
+      val actual = spark.sql(s"""call repair_overwrite_hoodie_props(table => '$tableName', new_props_file_path => '${newProps.getPath}')""")
+        .collect()
+        .map {
+          // omit these properties with variant values
+          case row if row.getString(0).equals("hoodie.table.checksum") => "[hoodie.table.checksum,,]"
+          case row if row.getString(0).equals("hoodie.table.create.schema") => "[hoodie.table.create.schema,,]"
+          case row if row.getString(0).equals("hoodie.table.name") => "[hoodie.table.name,,]"
+          case row if row.getString(0).equals("hoodie.table.version") => "[hoodie.table.version,,]"
+          case row if row.getString(0).equals("hoodie.timeline.layout.version") => "[hoodie.timeline.layout.version,,]"
+          case o => o.toString()
+        }
+        .mkString("\n")
+
+      assertEquals(expectedOutput, actual)
     }
   }
 
@@ -151,7 +178,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient)
       // first, there are four instants
       assertResult(4) {
-        metaClient.getActiveTimeline.filterInflightsAndRequested.getInstants.count
+        metaClient.getActiveTimeline.filterInflightsAndRequested.countInstants
       }
 
       checkAnswer(s"""call repair_corrupted_clean_files(table => '$tableName')""")(Seq(true))
@@ -160,7 +187,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient)
       // after clearing, there should be 0 instant
       assertResult(0) {
-        metaClient.getActiveTimeline.filterInflightsAndRequested.getInstants.count
+        metaClient.getActiveTimeline.filterInflightsAndRequested.getInstantsAsStream.count
       }
     }
   }
@@ -461,8 +488,9 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
     val schema: Schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema)
     val testTable: HoodieSparkWriteableTestTable = HoodieSparkWriteableTestTable.of(metaClient, schema)
 
-    val hoodieRecords1 = SchemaTestUtil.generateHoodieTestRecords(0, 100, schema)
-    val hoodieRecords2 = SchemaTestUtil.generateHoodieTestRecords(100, 100, schema)
+    val testUtil = new SchemaTestUtil
+    val hoodieRecords1 = testUtil.generateHoodieTestRecords(0, 100, schema)
+    val hoodieRecords2 = testUtil.generateHoodieTestRecords(100, 100, schema)
     testTable.addCommit("20160401010101")
       .withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "1", hoodieRecords1)
     testTable.withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "2", hoodieRecords2)

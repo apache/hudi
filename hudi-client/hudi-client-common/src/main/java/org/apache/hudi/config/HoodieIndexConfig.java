@@ -49,6 +49,7 @@ import static org.apache.hudi.config.HoodieHBaseIndexConfig.ZKPORT;
 import static org.apache.hudi.config.HoodieHBaseIndexConfig.ZKQUORUM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.BLOOM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.BUCKET;
+import static org.apache.hudi.index.HoodieIndex.IndexType.FLINK_STATE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.HBASE;
@@ -59,10 +60,11 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
  * Indexing related config.
  */
 @Immutable
-@ConfigClassProperty(name = "Index Configs",
+@ConfigClassProperty(name = "Common Index Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that control indexing behavior, "
-        + "which tags incoming records as either inserts or updates to older records.")
+    subGroupName = ConfigGroups.SubGroupNames.INDEX,
+    areCommonConfigs = true,
+    description = "")
 public class HoodieIndexConfig extends HoodieConfig {
 
   private static final Logger LOG = LogManager.getLogger(HoodieIndexConfig.class);
@@ -72,8 +74,9 @@ public class HoodieIndexConfig extends HoodieConfig {
       // Builder#getDefaultIndexType has already set it according to engine type
       .noDefaultValue()
       .withValidValues(HBASE.name(), INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(),
-          SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name())
-      .withDocumentation("Type of index to use. Default is Bloom filter. "
+          SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name(), FLINK_STATE.name())
+      .withDocumentation("Type of index to use. Default is SIMPLE on Spark engine, "
+          + "and INMEMORY on Flink and Java engines. "
           + "Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. "
           + "Bloom filters removes the dependency on a external system "
           + "and is stored in the footer of the Parquet Data Files");
@@ -254,7 +257,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket."
           + "Possible options are [SIMPLE | CONSISTENT_HASHING]."
           + "Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size "
-          + "issues of the SIMPLE hashing engine.");
+          + "issues of the SIMPLE hashing engine. Consistent hashing only works with MOR tables, only use simple hashing on COW tables.");
 
   /**
    * Bucket num equals file groups num in each partition.
@@ -271,12 +274,14 @@ public class HoodieIndexConfig extends HoodieConfig {
   public static final ConfigProperty<String> BUCKET_INDEX_MAX_NUM_BUCKETS = ConfigProperty
       .key("hoodie.bucket.index.max.num.buckets")
       .noDefaultValue()
+      .sinceVersion("0.13.0")
       .withDocumentation("Only applies if bucket index engine is consistent hashing. Determine the upper bound of "
           + "the number of buckets in the hudi table. Bucket resizing cannot be done higher than this max limit.");
 
   public static final ConfigProperty<String> BUCKET_INDEX_MIN_NUM_BUCKETS = ConfigProperty
       .key("hoodie.bucket.index.min.num.buckets")
       .noDefaultValue()
+      .sinceVersion("0.13.0")
       .withDocumentation("Only applies if bucket index engine is consistent hashing. Determine the lower bound of "
           + "the number of buckets in the hudi table. Bucket resizing cannot be done lower than this min limit.");
 
@@ -289,12 +294,14 @@ public class HoodieIndexConfig extends HoodieConfig {
   public static final ConfigProperty<Double> BUCKET_SPLIT_THRESHOLD = ConfigProperty
       .key("hoodie.bucket.index.split.threshold")
       .defaultValue(2.0)
+      .sinceVersion("0.13.0")
       .withDocumentation("Control if the bucket should be split when using consistent hashing bucket index."
           + "Specifically, if a file slice size reaches `hoodie.xxxx.max.file.size` * threshold, then split will be carried out.");
 
   public static final ConfigProperty<Double> BUCKET_MERGE_THRESHOLD = ConfigProperty
       .key("hoodie.bucket.index.merge.threshold")
       .defaultValue(0.2)
+      .sinceVersion("0.13.0")
       .withDocumentation("Control if buckets should be merged when using consistent hashing bucket index"
           + "Specifically, if a file slice size is smaller than `hoodie.xxxx.max.file.size` * threshold, then it will be considered"
           + "as a merge candidate.");
@@ -645,6 +652,11 @@ public class HoodieIndexConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withRecordKeyField(String keyField) {
+      hoodieIndexConfig.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, keyField);
+      return this;
+    }
+
     public HoodieIndexConfig build() {
       hoodieIndexConfig.setDefaultValue(INDEX_TYPE, getDefaultIndexType(engineType));
       hoodieIndexConfig.setDefaults(HoodieIndexConfig.class.getName());
@@ -676,10 +688,10 @@ public class HoodieIndexConfig extends HoodieConfig {
         // check the bucket index hash field
         if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD))) {
           hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD,
-              hoodieIndexConfig.getStringOrDefault(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
+              hoodieIndexConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
         } else {
           boolean valid = Arrays
-              .stream(hoodieIndexConfig.getStringOrDefault(KeyGeneratorOptions.RECORDKEY_FIELD_NAME).split(","))
+              .stream(hoodieIndexConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME).split(","))
               .collect(Collectors.toSet())
               .containsAll(Arrays.asList(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD).split(",")));
           if (!valid) {

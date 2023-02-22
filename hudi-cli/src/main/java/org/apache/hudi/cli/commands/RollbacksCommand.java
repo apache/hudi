@@ -25,20 +25,18 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.launcher.SparkLauncher;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,17 +49,17 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTI
 /**
  * CLI command to display rollback options.
  */
-@Component
-public class RollbacksCommand implements CommandMarker {
+@ShellComponent
+public class RollbacksCommand {
 
-  @CliCommand(value = "show rollbacks", help = "List all rollback instants")
+  @ShellMethod(key = "show rollbacks", value = "List all rollback instants")
   public String showRollbacks(
-      @CliOption(key = {"limit"}, help = "Limit #rows to be displayed", unspecifiedDefaultValue = "10") Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly) {
-    HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.getTableMetaClient());
+      @ShellOption(value = {"--limit"}, help = "Limit #rows to be displayed", defaultValue = "10") Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly) {
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline rollback = activeTimeline.getRollbackTimeline().filterCompletedInstants();
 
     final List<Comparable[]> rows = new ArrayList<>();
@@ -90,16 +88,16 @@ public class RollbacksCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  @CliCommand(value = "show rollback", help = "Show details of a rollback instant")
+  @ShellMethod(key = "show rollback", value = "Show details of a rollback instant")
   public String showRollback(
-      @CliOption(key = {"instant"}, help = "Rollback instant", mandatory = true) String rollbackInstant,
-      @CliOption(key = {"limit"}, help = "Limit  #rows to be displayed", unspecifiedDefaultValue = "10") Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @ShellOption(value = {"--instant"}, help = "Rollback instant") String rollbackInstant,
+      @ShellOption(value = {"--limit"}, help = "Limit  #rows to be displayed", defaultValue = "10") Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+              defaultValue = "false") final boolean headerOnly)
       throws IOException {
-    HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.getTableMetaClient());
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     final List<Comparable[]> rows = new ArrayList<>();
     HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
         activeTimeline.getInstantDetails(new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
@@ -125,14 +123,15 @@ public class RollbacksCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  @CliCommand(value = "commit rollback", help = "Rollback a commit")
+  @ShellMethod(key = "commit rollback", value = "Rollback a commit")
   public String rollbackCommit(
-      @CliOption(key = {"commit"}, help = "Commit to rollback") final String instantTime,
-      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+      @ShellOption(value = {"--commit"}, help = "Commit to rollback") final String instantTime,
+      @ShellOption(value = {"--sparkProperties"}, help = "Spark Properties File Path",
+          defaultValue = "") final String sparkPropertiesPath,
+      @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master") String master,
+      @ShellOption(value = "--sparkMemory", defaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory,
-      @CliOption(key = "rollbackUsingMarkers", unspecifiedDefaultValue = "false",
+      @ShellOption(value = "--rollbackUsingMarkers", defaultValue = "false",
           help = "Enabling marker based rollback") final String rollbackUsingMarkers)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
@@ -154,15 +153,5 @@ public class RollbacksCommand implements CommandMarker {
       return "Commit " + instantTime + " failed to roll back";
     }
     return "Commit " + instantTime + " rolled back";
-  }
-
-  /**
-   * An Active timeline containing only rollbacks.
-   */
-  public static class RollbackTimeline extends HoodieActiveTimeline {
-
-    public RollbackTimeline(HoodieTableMetaClient metaClient) {
-      super(metaClient, CollectionUtils.createImmutableSet(HoodieTimeline.ROLLBACK_EXTENSION));
-    }
   }
 }

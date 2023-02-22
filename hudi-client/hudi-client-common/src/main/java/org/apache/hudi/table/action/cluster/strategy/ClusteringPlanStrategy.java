@@ -25,7 +25,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -50,7 +49,7 @@ import java.util.stream.Stream;
 /**
  * Pluggable implementation for scheduling clustering and creating ClusteringPlan.
  */
-public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O> implements Serializable {
+public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
   private static final Logger LOG = LogManager.getLogger(ClusteringPlanStrategy.class);
 
   public static final int CLUSTERING_PLAN_VERSION_1 = 1;
@@ -116,14 +115,15 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
    */
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(String partition) {
     SyncableFileSystemView fileSystemView = (SyncableFileSystemView) getHoodieTable().getSliceView();
-    Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering = fileSystemView.getPendingCompactionOperations()
-        .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
-        .collect(Collectors.toSet());
-    fgIdsInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet()));
+    Set<HoodieFileGroupId> fgIdsInPendingCompactionLogCompactionAndClustering =
+        Stream.concat(fileSystemView.getPendingCompactionOperations(), fileSystemView.getPendingLogCompactionOperations())
+            .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
+            .collect(Collectors.toSet());
+    fgIdsInPendingCompactionLogCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet()));
 
     return hoodieTable.getSliceView().getLatestFileSlices(partition)
         // file ids already in clustering are not eligible
-        .filter(slice -> !fgIdsInPendingCompactionAndClustering.contains(slice.getFileGroupId()));
+        .filter(slice -> !fgIdsInPendingCompactionLogCompactionAndClustering.contains(slice.getFileGroupId()));
   }
 
   /**

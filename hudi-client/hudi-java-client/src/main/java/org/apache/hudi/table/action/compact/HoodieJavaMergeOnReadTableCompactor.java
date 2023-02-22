@@ -23,7 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -36,13 +36,16 @@ import java.util.List;
  * compactions, passes it through a CompactionFilter and executes all the compactions and
  * writes a new version of base files and make a normal commit.
  */
-public class HoodieJavaMergeOnReadTableCompactor<T extends HoodieRecordPayload>
+public class HoodieJavaMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   @Override
   public void preCompact(
-      HoodieTable table, HoodieTimeline pendingCompactionTimeline, String compactionInstantTime) {
-    HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
+      HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime) {
+    if (WriteOperationType.LOG_COMPACT.equals(operationType)) {
+      throw new UnsupportedOperationException("Log compaction is not supported for this execution engine.");
+    }
+    HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(instantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
       table.rollbackInflightCompaction(inflightInstant);
       table.getMetaClient().reloadActiveTimeline();

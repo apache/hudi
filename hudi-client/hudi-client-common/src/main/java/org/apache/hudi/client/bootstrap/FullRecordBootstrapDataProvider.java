@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -49,8 +50,9 @@ public abstract class FullRecordBootstrapDataProvider<I> implements Serializable
    * @param tableName Hudi Table Name
    * @param sourceBasePath Source Base Path
    * @param partitionPaths Partition Paths
+   * @param config config
    * @return input records
    */
   public abstract I generateInputRecords(String tableName,
-      String sourceBasePath, List<Pair<String, List<HoodieFileStatus>>> partitionPaths);
+      String sourceBasePath, List<Pair<String, List<HoodieFileStatus>>> partitionPaths, HoodieWriteConfig config);
 }

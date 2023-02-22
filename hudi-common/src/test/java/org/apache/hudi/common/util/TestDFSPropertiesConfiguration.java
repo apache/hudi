@@ -20,8 +20,11 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
@@ -70,11 +73,11 @@ public class TestDFSPropertiesConfiguration {
         "int.prop=123", "double.prop=113.4", "string.prop=str", "boolean.prop=true", "long.prop=1354354354"});
 
     filePath = new Path(dfsBasePath + "/t2.props");
-    writePropertiesFile(filePath, new String[] {"string.prop=ignored", "include=t1.props"});
+    writePropertiesFile(filePath, new String[] {"string.prop=ignored", "include=" + dfsBasePath + "/t1.props"});
 
     filePath = new Path(dfsBasePath + "/t3.props");
     writePropertiesFile(filePath,
-        new String[] {"double.prop=838.3", "include = t2.props", "double.prop=243.4", "string.prop=t3.value"});
+        new String[] {"double.prop=838.3", "include=" + "t2.props", "double.prop=243.4", "string.prop=t3.value"});
 
     filePath = new Path(dfsBasePath + "/t4.props");
     writePropertiesFile(filePath, new String[] {"double.prop=838.3", "include = t4.props"});
@@ -171,9 +174,14 @@ public class TestDFSPropertiesConfiguration {
   @Test
   public void testNoGlobalConfFileConfigured() {
     ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
-    // Should not throw any exception when no external configuration file configured
     DFSPropertiesConfiguration.refreshGlobalProps();
-    assertEquals(0, DFSPropertiesConfiguration.getGlobalProps().size());
+    try {
+      if (!FSUtils.getFs(DFSPropertiesConfiguration.DEFAULT_PATH, new Configuration()).exists(DFSPropertiesConfiguration.DEFAULT_PATH)) {
+        assertEquals(0, DFSPropertiesConfiguration.getGlobalProps().size());
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Cannot check if the default config file exist: " + DFSPropertiesConfiguration.DEFAULT_PATH);
+    }
   }
 
   @Test

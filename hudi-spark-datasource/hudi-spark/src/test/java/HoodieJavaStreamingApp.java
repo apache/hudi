@@ -51,7 +51,6 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
@@ -60,6 +59,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 
 /**
  * Sample program that writes & reads hoodie tables via the Spark datasource streaming.
@@ -137,9 +137,10 @@ public class HoodieJavaStreamingApp {
    * @throws Exception
    */
   public void run() throws Exception {
-    // Spark session setup..
-    SparkSession spark = SparkSession.builder().appName("Hoodie Spark Streaming APP")
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
+    SparkSession spark = SparkSession.builder()
+        .config(getSparkConfForTest("Hoodie Spark Streaming APP"))
+        .getOrCreate();
+
     JavaSparkContext jssc = new JavaSparkContext(spark.sparkContext());
 
     // folder path clean up and creation, preparing the environment
@@ -198,16 +199,19 @@ public class HoodieJavaStreamingApp {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(tablePath).build();
     if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       // Ensure we have successfully completed one compaction commit
-      ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().getInstants().count() == 1);
+      ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().countInstants() == 1);
     } else {
-      ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().getInstants().count() >= 1);
+      ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().countInstants() >= 1);
     }
 
     // Deletes Stream
     // Need to restart application to ensure spark does not assume there are multiple streams active.
     spark.close();
-    SparkSession newSpark = SparkSession.builder().appName("Hoodie Spark Streaming APP")
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
+
+    SparkSession newSpark = SparkSession.builder()
+        .config(getSparkConfForTest("Hoodie Spark Streaming APP"))
+        .getOrCreate();
+
     jssc = new JavaSparkContext(newSpark.sparkContext());
     String ckptPath2 = streamingCheckpointingPath + "/stream2";
     String srcPath2 = srcPath + "/stream2";
@@ -253,12 +257,12 @@ public class HoodieJavaStreamingApp {
     while ((currTime - beginTime) < timeoutMsecs) {
       try {
         HoodieTimeline timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, tablePath);
-        LOG.info("Timeline :" + timeline.getInstants().collect(Collectors.toList()));
+        LOG.info("Timeline :" + timeline.getInstants());
         if (timeline.countInstants() >= numCommits) {
           return;
         }
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
-        System.out.println("Instants :" + metaClient.getActiveTimeline().getInstants().collect(Collectors.toList()));
+        System.out.println("Instants :" + metaClient.getActiveTimeline().getInstants());
       } catch (TableNotFoundException te) {
         LOG.info("Got table not found exception. Retrying");
       } finally {

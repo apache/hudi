@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -32,7 +31,7 @@ import java.util.List;
  * HoodieTable that need to pass in the
  * {@link org.apache.hudi.io.HoodieWriteHandle} explicitly.
  */
-public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
+public interface ExplicitWriteHandleTable<T> {
   /**
    * Upsert a batch of new records into Hoodie table at the supplied instantTime.
    *

@@ -18,11 +18,12 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.client.transaction.lock.LockManager;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -34,15 +35,20 @@ import java.io.Serializable;
  */
 public class TransactionManager implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(TransactionManager.class);
-  private final LockManager lockManager;
-  private final boolean isOptimisticConcurrencyControlEnabled;
-  private Option<HoodieInstant> currentTxnOwnerInstant = Option.empty();
+  protected static final Logger LOG = LogManager.getLogger(TransactionManager.class);
+  protected final LockManager lockManager;
+  protected final boolean isOptimisticConcurrencyControlEnabled;
+  protected Option<HoodieInstant> currentTxnOwnerInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedTxnOwnerInstant = Option.empty();
 
   public TransactionManager(HoodieWriteConfig config, FileSystem fs) {
-    this.lockManager = new LockManager(config, fs);
-    this.isOptimisticConcurrencyControlEnabled = config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+    this(new LockManager(config, fs),
+        config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl());
+  }
+
+  protected TransactionManager(LockManager lockManager, boolean isOptimisticConcurrencyControlEnabled) {
+    this.lockManager = lockManager;
+    this.isOptimisticConcurrencyControlEnabled = isOptimisticConcurrencyControlEnabled;
   }
 
   public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant,
@@ -67,9 +73,9 @@ public class TransactionManager implements Serializable {
     }
   }
 
-  private synchronized boolean reset(Option<HoodieInstant> callerInstant,
-                                  Option<HoodieInstant> newTxnOwnerInstant,
-                                  Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
+  protected synchronized boolean reset(Option<HoodieInstant> callerInstant,
+                                       Option<HoodieInstant> newTxnOwnerInstant,
+                                       Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
     if (!this.currentTxnOwnerInstant.isPresent() || this.currentTxnOwnerInstant.get().equals(callerInstant.get())) {
       this.currentTxnOwnerInstant = newTxnOwnerInstant;
       this.lastCompletedTxnOwnerInstant = lastCompletedTxnOwnerInstant;
@@ -97,4 +103,7 @@ public class TransactionManager implements Serializable {
     return currentTxnOwnerInstant;
   }
 
+  public boolean isOptimisticConcurrencyControlEnabled() {
+    return isOptimisticConcurrencyControlEnabled;
+  }
 }

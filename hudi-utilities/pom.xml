@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.13.0-SNAPSHOT</version>
+    <version>0.14.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -72,6 +72,10 @@
       </resource>
       <resource>
         <directory>src/test/resources</directory>
+        <excludes>
+          <exclude>*-site.xml</exclude>
+        </excludes>
+        <filtering>false</filtering>
       </resource>
     </resources>
   </build>
@@ -85,7 +89,6 @@
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java-util</artifactId>
-      <scope>test</scope>
       <exclusions>
         <exclusion>
           <groupId>com.google.guava</groupId>
@@ -124,6 +127,19 @@
           <artifactId>servlet-api</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+
+    <!-- Hoodie - cloud providers -->
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-aws</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-gcp</artifactId>
+      <version>${project.version}</version>
     </dependency>
 
     <!-- Hoodie - Other -->
@@ -223,6 +239,10 @@
         <exclusion>
           <groupId>org.slf4j</groupId>
           <artifactId>slf4j-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.zookeeper</groupId>
+          <artifactId>zookeeper</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -436,14 +456,6 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- AWS Services -->
-    <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sqs -->
-    <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-sqs</artifactId>
-      <version>${aws.sdk.version}</version>
-    </dependency>
-    
     <!-- Hive - Test -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
