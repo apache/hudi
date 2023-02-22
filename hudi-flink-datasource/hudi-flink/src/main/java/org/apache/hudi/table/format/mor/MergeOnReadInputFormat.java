@@ -228,7 +228,7 @@ public class MergeOnReadInputFormat
           + "file path: " + split.getBasePath()
           + "log paths: " + split.getLogPaths()
           + "hoodie table path: " + split.getTablePath()
-          + "spark partition Index: " + split.getSplitNumber()
+          + "flink partition Index: " + split.getSplitNumber()
           + "merge type: " + split.getMergeType());
     }
   }
