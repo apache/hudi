@@ -38,10 +38,6 @@ import scala.collection.JavaConverters._
  */
 object HoodieWriterUtils {
 
-  /*def javaParametersWithWriteDefaults(parameters: java.util.Map[String, String]): java.util.Map[String, String] = {
-    mapAsJavaMap(parametersWithWriteDefaults(parameters.asScala.toMap))
-  }*/
-
   /**
     * Add default options for unspecified write options keys.
     *
@@ -84,14 +80,14 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
     if (isFreshTable) { // only set default values for a fresh table. these might be used for config validation in subsequent commits and hence
-      // we should not setting defaults. (infer function could result in setting wrong defaults)
+      // we should not be setting any defaults. (infer function could result in setting wrong defaults)
       hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
       hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     }
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
-  def getRawInitialParams(parameters: Map[String, String]): Map[String, String] = {
+  def getParamsWithAlternatives(parameters: Map[String, String]): Map[String, String] = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
     val props = new Properties()
     props.putAll(parameters)

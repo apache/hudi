@@ -22,7 +22,7 @@ import org.apache.avro.generic.{GenericData, GenericRecord}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
-import org.apache.hudi.DataSourceOptionsHelper.loadParamsFromTableConfig
+import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
@@ -124,10 +124,10 @@ object HoodieSparkSqlWriter {
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
     var tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
     // get initial params and validate configs
-    val initialRawParams = getInitialParams(optParams)
-    val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(initialRawParams)
+    val paramsWithoutDefaults = getParamsWithoutDefaults(optParams)
+    val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(paramsWithoutDefaults)
     val timestampKeyGeneratorConfigs = extractConfigsRelatedToTimestampBasedKeyGenerator(
-      originKeyGeneratorClassName, initialRawParams)
+      originKeyGeneratorClassName, paramsWithoutDefaults)
 
     // Validate datasource and tableconfig keygen are the same
     validateKeyGeneratorConfig(originKeyGeneratorClassName, tableConfig);
@@ -1048,15 +1048,14 @@ object HoodieSparkSqlWriter {
       mergedParams(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = mergedParams(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)
     }
     if (null != tableConfig && mode != SaveMode.Overwrite) {
-      loadParamsFromTableConfig(tableConfig, optParams).foreach((kv) => mergedParams(kv._1) = kv._2)
+      fetchMissingWriteConfigsFromTableConfig(tableConfig, optParams).foreach((kv) => mergedParams(kv._1) = kv._2)
 
-      tableConfig.getProps.foreach { case (key, value) =>
-        if (!mergedParams.containsKey(key)) { // over-ride only if not explicitly set by the user.
+      // over-ride only if not explicitly set by the user.
+      tableConfig.getProps.filter( kv => !mergedParams.contains(kv._1))
+        .foreach { case (key, value) =>
           mergedParams(key) = value
-        }
       }
     }
-
     // use preCombineField to fill in PAYLOAD_ORDERING_FIELD_PROP_KEY
     if (mergedParams.contains(PRECOMBINE_FIELD.key())) {
       mergedParams.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, mergedParams(PRECOMBINE_FIELD.key()))
@@ -1065,9 +1064,9 @@ object HoodieSparkSqlWriter {
     (params, HoodieWriterUtils.convertMapToHoodieConfig(params))
   }
 
-  private def getInitialParams(optParams: Map[String, String]): (Map[String, String]) = {
+  private def getParamsWithoutDefaults(optParams: Map[String, String]): (Map[String, String]) = {
     val translatedOptions = DataSourceWriteOptions.translateSqlOptions(optParams)
-    val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.getRawInitialParams(translatedOptions)
+    val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.getParamsWithAlternatives(translatedOptions)
     if (!mergedParams.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
       && mergedParams.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)) {
       mergedParams(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = mergedParams(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)
