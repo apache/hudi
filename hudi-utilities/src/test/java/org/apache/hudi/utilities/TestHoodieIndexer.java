@@ -158,11 +158,11 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   }
 
   @Test
-  public void testIndexerWithWriter() throws IOException {
+  public void testIndexerWithWriterFinishingFirst() throws IOException {
     // Test the case where the indexer is running, i.e., the delta commit in the metadata table
     // is inflight, while the regular writer is updating metadata table.
     // The delta commit from the indexer should not be rolled back.
-    String tableName = "indexer_with_writer";
+    String tableName = "indexer_with_writer_finishing_first";
     // Enable files and bloom_filters on the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder =
         getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
@@ -227,6 +227,68 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         metadataMetaClient.getActiveTimeline().readRollbackInfoAsBytes(rollbackInstant).get());
     assertEquals(mdtCommitTime, rollbackMetadata.getInstantsRollback()
         .stream().findFirst().get().getCommitTime());
+  }
+
+  @Test
+  public void testIndexerWithWriterFinishingLast() throws IOException {
+    // Test the case where a regular write updating the metadata table is in progress,
+    // i.e., a delta commit in the metadata table is inflight, and the async indexer
+    // finishes the original delta commit.  In this case, the async indexer should not
+    // trigger the rollback on other inflight writes in the metadata table.
+    String tableName = "indexer_with_writer_finishing_first";
+    // Enable files and bloom_filters on the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder =
+        getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
+    HoodieMetadataConfig metadataConfig = metadataConfigBuilder.build();
+    upsertToTable(metadataConfig, tableName);
+    upsertToTable(metadataConfig, tableName);
+
+    // Transition the last commit to inflight
+    HoodieInstant commit = metaClient.getActiveTimeline().lastInstant().get();
+    String commitTime = commit.getTimestamp();
+    metaClient.getActiveTimeline().revertToInflight(commit);
+
+    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
+        context(), metadataConfig, metaClient.getBasePathV2().toString(),
+        getWriteConfigBuilder(basePath(), tableName).build().getSpillableMapBasePath());
+    HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
+    HoodieInstant mdtCommit = metadataMetaClient.getActiveTimeline()
+        .filter(i -> i.getTimestamp().equals(commitTime))
+        .getInstants().get(0);
+    metadataMetaClient.getActiveTimeline().revertToInflight(mdtCommit);
+
+    // Run async indexer, creating a new indexing instant in the data table and a new delta commit
+    // in the metadata table, with the suffix "004"
+    HoodieIndexer.Config config = new HoodieIndexer.Config();
+    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
+    config.basePath = basePath();
+    config.tableName = tableName;
+    config.indexTypes = COLUMN_STATS.name();
+    config.runningMode = SCHEDULE_AND_EXECUTE;
+    config.propsFilePath = propsPath;
+    config.configs.add(HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.key() + "=" + colStatsFileGroupCount);
+    config.configs.add(HoodieMetadataConfig.METADATA_INDEX_CHECK_TIMEOUT_SECONDS + "=1");
+
+    // start the indexer and validate files index is completely built out
+    HoodieIndexer indexer = new HoodieIndexer(jsc(), config);
+    // The catchup won't finish due to inflight delta commit, and this is expected
+    assertEquals(-1, indexer.start(0));
+
+    // Now, make sure that the inflight delta commit happened before the async indexer
+    // is intact
+    metaClient = reload(metaClient);
+    metadataMetaClient = reload(metadataMetaClient);
+
+    assertTrue(metaClient.getActiveTimeline().containsInstant(commitTime));
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(commitTime));
+    assertTrue(metaClient.getActiveTimeline()
+        .filter(i -> i.getTimestamp().equals(commitTime))
+        .getInstants().get(0).isInflight());
+    assertTrue(metadataMetaClient.getActiveTimeline()
+        .filter(i -> i.getTimestamp().equals(commitTime))
+        .getInstants().get(0).isInflight());
+    assertTrue(metaClient.getActiveTimeline().getRollbackTimeline().empty());
+    assertTrue(metadataMetaClient.getActiveTimeline().getRollbackTimeline().empty());
   }
 
   private static Stream<Arguments> colStatsFileGroupCountParams() {
