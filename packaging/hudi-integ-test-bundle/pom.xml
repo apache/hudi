@@ -152,7 +152,7 @@
                   <include>com.fasterxml.jackson.core:jackson-core</include>
                   <include>com.fasterxml.jackson.core:jackson-databind</include>
                   <include>com.fasterxml.jackson.dataformat:jackson-dataformat-yaml</include>
-                  <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
+                  <include>com.fasterxml.jackson.datatype:${fasterxml.jackson.datatype.jsr310.module}</include>
 
                   <include>org.apache.curator:curator-framework</include>
                   <include>org.apache.curator:curator-client</include>
@@ -256,8 +256,8 @@
                   <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>com.fasterxml.jackson.dataformat.</pattern>
-                  <shadedPattern>org.apache.hudi.com.fasterxml.jackson.dataformat.</shadedPattern>
+                  <pattern>com.fasterxml.jackson.</pattern>
+                  <shadedPattern>org.apache.hudi.com.fasterxml.jackson.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.parquet.avro.</pattern>
