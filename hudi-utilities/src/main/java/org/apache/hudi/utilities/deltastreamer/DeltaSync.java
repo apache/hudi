@@ -533,9 +533,14 @@ public class DeltaSync implements Serializable, Closeable {
         // If the target schema is specified through Avro schema,
         // pass in the schema for the Row-to-Avro conversion
         // to avoid nullability mismatch between Avro schema and Row schema
+        Option<BaseQuarantineTableWriter> schemaValidationQuarantineWriter =
+            (quarantineTableWriter.isPresent()
+                && props.getBoolean(HoodieQuarantineTableConfig.QUARANTINE_ENABLE_VALIDATE_TARGET_SCHEMA.key(),
+                HoodieQuarantineTableConfig.QUARANTINE_ENABLE_VALIDATE_TARGET_SCHEMA.defaultValue()))
+                ? quarantineTableWriter : Option.empty();
         avroRDDOptional = transformed
             .map(row ->
-                quarantineTableWriter
+                schemaValidationQuarantineWriter
                     .map(impl -> {
                       Tuple2<RDD<GenericRecord>, RDD<String>> safeCreateRDDs = HoodieSparkUtils.safeCreateRDD(row,
                           HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,

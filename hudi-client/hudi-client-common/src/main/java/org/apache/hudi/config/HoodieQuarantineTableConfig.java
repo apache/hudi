@@ -67,6 +67,11 @@ public class HoodieQuarantineTableConfig {
           + "a custom implementation for Quarantine Table Writer. Specify the full class name of the custom "
           + "quarantine table writer as a value for this config");
 
+  public static final ConfigProperty<Boolean> QUARANTINE_ENABLE_VALIDATE_TARGET_SCHEMA = ConfigProperty
+      .key("hoodie.deltastreamer.quarantinetable.validate.targetschema.enable")
+      .defaultValue(false)
+      .withDocumentation("Records with schema mismatch with Target Schema are sent to Quarantine Table.");
+
   public static final ConfigProperty<String> QUARANTINE_TABLE_WRITE_FAILURE_STRATEGY = ConfigProperty
       .key("hoodie.deltastreamer.quarantinetable.write.failure.strategy")
       .defaultValue(QuarantineWriteFailureStrategy.ROLLBACK_COMMIT.name())
