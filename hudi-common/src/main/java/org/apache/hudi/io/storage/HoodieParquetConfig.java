@@ -21,6 +21,9 @@ package org.apache.hudi.io.storage;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
+import static org.apache.parquet.column.ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
+import static org.apache.parquet.column.ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
+
 /**
  * Base ParquetConfig to hold config params for writing to Parquet.
  * @param <T>
@@ -34,6 +37,8 @@ public class HoodieParquetConfig<T> {
   private final Configuration hadoopConf;
   private final double compressionRatio;
   private final boolean dictionaryEnabled;
+  private final long minRowCountForSizeCheck = DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
+  private final long maxRowCountForSizeCheck = DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
 
   public HoodieParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize,
                              int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio, boolean dictionaryEnabled) {
@@ -77,5 +82,13 @@ public class HoodieParquetConfig<T> {
 
   public boolean dictionaryEnabled() {
     return dictionaryEnabled;
+  }
+
+  public long getMinRowCountForSizeCheck() {
+    return minRowCountForSizeCheck;
+  }
+
+  public long getMaxRowCountForSizeCheck() {
+    return maxRowCountForSizeCheck;
   }
 }

@@ -40,6 +40,8 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -121,6 +123,45 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
     recordKeys.forEach(recordKey -> {
       assertTrue(bloomFilter.mightContain(recordKey));
     });
+  }
+
+  @Test
+  @Timeout(value = 60)
+  public void testFileSizeCheck() throws Exception {
+    HoodieWriteConfig.Builder writeConfigBuilder =
+        SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort);
+
+    HoodieRowParquetWriteSupport writeSupport = getWriteSupport(writeConfigBuilder, hadoopConf, true);
+    HoodieWriteConfig cfg = writeConfigBuilder.build();
+
+    // Make the written records could exceed maxRowCountForSizeCheck
+    cfg.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(5 * 1024 * 1024));
+    HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
+        CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
+        writeSupport.getHadoopConf(), cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
+
+    Path filePath = new Path(basePath + "/check_file_size.parquet");
+
+    try (HoodieInternalRowParquetWriter writer = new HoodieInternalRowParquetWriter(filePath, parquetConfig)) {
+
+      while (writer.canWrite()) {
+        Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, 100,
+            HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, false);
+        StructType schema = inputRows.schema();
+        List<InternalRow> rows = SparkDatasetTestUtils.toInternalRows(inputRows, SparkDatasetTestUtils.ENCODER);
+        for (InternalRow row : rows) {
+          if (writer.canWrite()) {
+            writer.writeRow(row.getUTF8String(schema.fieldIndex("record_key")), row);
+          } else {
+            break;
+          }
+        }
+      }
+
+      long avgRecordSize = writer.getDataSize() / writer.getWrittenRecordCount();
+      assertTrue(writer.getDataSize() > cfg.getParquetMaxFileSize() - avgRecordSize * 2,
+          "The writer stops write new records while the file doesn't hint the max file size limit");
+    }
   }
 
   private HoodieRowParquetWriteSupport getWriteSupport(HoodieWriteConfig.Builder writeConfigBuilder, Configuration hadoopConf, boolean parquetWriteLegacyFormatEnabled) {

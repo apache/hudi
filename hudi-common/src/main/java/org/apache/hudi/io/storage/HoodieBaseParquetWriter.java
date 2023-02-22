@@ -36,9 +36,10 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
 
+  private final HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig;
   private final AtomicLong writtenRecordCount = new AtomicLong(0);
   private final long maxFileSize;
-  private long recordNumForNextCheck = 100;
+  private long recordNumForNextCheck;
 
   public HoodieBaseParquetWriter(Path file,
                                  HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
@@ -54,25 +55,32 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
         DEFAULT_WRITER_VERSION,
         FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
 
+    this.parquetConfig = parquetConfig;
     // We cannot accurately measure the snappy compressed output file size. We are choosing a
     // conservative 10%
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
     // stream and the actual file size reported by HDFS
     this.maxFileSize = parquetConfig.getMaxFileSize()
         + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
+    this.recordNumForNextCheck = parquetConfig.getMinRowCountForSizeCheck();
   }
 
   public boolean canWrite() {
     if (getWrittenRecordCount() >= recordNumForNextCheck) {
       long dataSize = getDataSize();
-      long avgRecordSize = dataSize / getWrittenRecordCount();
+      // In some very extreme cases, like all records are same value, then it's possible
+      // the dataSize is much lower than the writtenRecordCount(high compression ratio),
+      // causing avgRecordSize to 0, we'll force the avgRecordSize to 1 for such cases.
+      long avgRecordSize = Math.max(dataSize / getWrittenRecordCount(), 1);
       // Follow the parquet block size check logic here, return false
       // if it is within ~2 records of the limit
       if (dataSize > (maxFileSize - avgRecordSize * 2)) {
         return false;
       }
-      // Do check it in the halfway
-      recordNumForNextCheck = (recordNumForNextCheck + maxFileSize / avgRecordSize) / 2;
+      recordNumForNextCheck = recordNumForNextCheck + Math.min(
+          // Do check it in the halfway,
+          Math.max(parquetConfig.getMinRowCountForSizeCheck(), (maxFileSize / avgRecordSize) / 2),
+          parquetConfig.getMaxRowCountForSizeCheck());
     }
     return true;
   }
@@ -83,7 +91,7 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
     writtenRecordCount.incrementAndGet();
   }
 
-  protected long getWrittenRecordCount() {
+  public long getWrittenRecordCount() {
     return writtenRecordCount.get();
   }
 }
