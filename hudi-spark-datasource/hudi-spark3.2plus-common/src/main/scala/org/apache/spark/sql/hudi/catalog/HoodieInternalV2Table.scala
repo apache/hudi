@@ -104,10 +104,17 @@ private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
 
   override def build(): V1Write = new V1Write {
     override def toInsertableRelation: InsertableRelation = {
+      val mode = if (overwriteTable) {
+        // insert overwrite non-partition table
+        SaveMode.Overwrite
+      } else {
+        // for insert into or insert overwrite partition we use append mode.
+        SaveMode.Append
+      }
       new InsertableRelation {
         override def insert(data: DataFrame, overwrite: Boolean): Unit = {
           alignOutputColumns(data).write.format("org.apache.hudi")
-            .mode(SaveMode.Append)
+            .mode(mode)
             .options(buildHoodieConfig(hoodieCatalogTable) ++
               buildHoodieInsertConfig(hoodieCatalogTable, spark, overwritePartition, overwriteTable, Map.empty, Map.empty))
             .save()

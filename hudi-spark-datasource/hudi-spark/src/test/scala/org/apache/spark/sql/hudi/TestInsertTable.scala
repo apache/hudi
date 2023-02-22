@@ -1125,4 +1125,39 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test bulk insert non-partition table") {
+    withSQLConf("hoodie.sql.insert.mode" -> "non-strict", "hoodie.schema.on.read.enable" -> "true") {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          // Test bulk insert for non-partitioned table
+          val nonPartitionedTable = generateTableName
+          spark.sql(
+            s"""
+               |create table $nonPartitionedTable (
+               |  id int,
+               |  name string,
+               |  price double
+               |) using hudi
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id'
+               | )
+               | location '${tmp.getCanonicalPath}/$nonPartitionedTable'
+    """.stripMargin)
+          spark.sql("set hoodie.sql.bulk.insert.enable = true")
+          spark.sql(s"insert into $nonPartitionedTable values(1, 'a1', 10)")
+          checkAnswer(s"select id, name, price from $nonPartitionedTable")(
+            Seq(1, "a1", 10.0)
+          )
+          spark.sql(s"insert overwrite table $nonPartitionedTable values(2, 'a2', 10)")
+          checkAnswer(s"select id, name, price from $nonPartitionedTable")(
+            Seq(2, "a2", 10.0)
+          )
+          spark.sql("set hoodie.sql.bulk.insert.enable = false")
+        }
+      }
+    }
+  }
+
 }
