@@ -77,10 +77,11 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
       if (dataSize > (maxFileSize - avgRecordSize * 2)) {
         return false;
       }
-      recordNumForNextCheck = recordNumForNextCheck + Math.min(
-          // Do check it in the halfway,
-          Math.max(parquetConfig.getMinRowCountForSizeCheck(), (maxFileSize / avgRecordSize) / 2),
-          parquetConfig.getMaxRowCountForSizeCheck());
+      recordNumForNextCheck = Math.min(
+          Math.max(recordNumForNextCheck + parquetConfig.getMinRowCountForSizeCheck(),
+              // Do check it in the halfway
+              (recordNumForNextCheck + (maxFileSize / avgRecordSize)) / 2),
+          recordNumForNextCheck + parquetConfig.getMaxRowCountForSizeCheck());
     }
     return true;
   }
