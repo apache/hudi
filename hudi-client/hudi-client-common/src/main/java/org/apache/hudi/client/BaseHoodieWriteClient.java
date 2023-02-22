@@ -843,10 +843,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   private void startCommit(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
     LOG.info("Generate a new instant time: " + instantTime + " action: " + actionType);
     // check there are no inflight restore before starting a new commit.
-    ValidationUtils.checkArgument(metaClient.getActiveTimeline().getRestoreTimeline().filterInflightsAndRequested().countInstants() == 0,
-        "Found pending restore in active timeline. Please complete the restore fully before proceeding. As of now, table could be in an inconsistent state. "
-          + "Pending restores: " + Arrays.toString(metaClient.getActiveTimeline().getRestoreTimeline()
-          .filterInflightsAndRequested().getInstantsAsStream().map(instant -> instant.getTimestamp()).collect(Collectors.toList()).toArray()));
+    HoodieTimeline inflightRestoreTimeline = metaClient.getActiveTimeline().getRestoreTimeline().filterInflightsAndRequested();
+    ValidationUtils.checkArgument(inflightRestoreTimeline.countInstants() == 0,
+        "Found pending restore in active timeline. Please complete the restore fully before proceeding. As of now, "
+            + "table could be in an inconsistent state. Pending restores: " + Arrays.toString(inflightRestoreTimeline.getInstantsAsStream()
+            .map(instant -> instant.getTimestamp()).collect(Collectors.toList()).toArray()));
 
     // if there are pending compactions, their instantTime must not be greater than that of this instant time
     metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().ifPresent(latestPending ->
