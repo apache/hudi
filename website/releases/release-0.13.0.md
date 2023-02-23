@@ -464,7 +464,7 @@ which is lock-free. This increases the write throughput when data volume is larg
 on cloud storage shows **20%** performance improvement compared to the existing executor type of bounded in-memory queue.
 
 :::caution
-`DisruptorExecutor` is supported for Spark insert and Spark bulk insert operations as an EXPERIMENTAL feature
+`DisruptorExecutor` is supported for Spark insert and Spark bulk insert operations as an ***EXPERIMENTAL*** feature
 :::
 
 Users can set `hoodie.write.executor.type=DISRUPTOR_EXECUTOR` to enable this feature. There are other configurations
