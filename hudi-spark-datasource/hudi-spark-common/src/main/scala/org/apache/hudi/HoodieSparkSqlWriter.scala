@@ -25,6 +25,7 @@ import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAv
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
+import org.apache.hudi.RecordKeyAutoGen.{handleAutoGenRecordKeysConfig, tryRecordKeyAutoGen}
 import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
@@ -176,8 +177,7 @@ object HoodieSparkSqlWriter {
       log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
       (false, common.util.Option.empty(), common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
     } else {
-      // TODO streamline
-      val reshapedDF = handleRecordKeyAutoGen(df, instantTime, hoodieConfig)
+      val reshapedDF = tryRecordKeyAutoGen(df, instantTime, hoodieConfig)
       val sourceStructType = reshapedDF.schema
 
       // Handle various save modes
@@ -542,16 +542,6 @@ object HoodieSparkSqlWriter {
       })
     }
     fullPartitions.distinct
-  }
-
-  def handleRecordKeyAutoGen(df: DataFrame, commitInstant: String, config: HoodieConfig): DataFrame = {
-    val shouldAutoGenRecordKeys = config.getBooleanOrDefault(HoodieTableConfig.AUTO_GEN_RECORD_KEYS)
-    if (shouldAutoGenRecordKeys) {
-      // TODO reorder to keep all meta-fields as first?
-      df.withColumn(HoodieRecord.AUTOGEN_ROW_KEY, new Column(AutoRecordKeyGenExpression(commitInstant)))
-    } else {
-      df
-    }
   }
 
   def getPartitionColumns(partitionParam: String): Seq[String] = {
@@ -1064,26 +1054,9 @@ object HoodieSparkSqlWriter {
       }
     }
 
-    val shouldAutoGenRecordKeys = mergedParams.getOrDefault(HoodieTableConfig.AUTO_GEN_RECORD_KEYS.key,
-      HoodieTableConfig.AUTO_GEN_RECORD_KEYS.defaultValue.toString).toBoolean
+    handleAutoGenRecordKeysConfig(mergedParams)
 
-    if (shouldAutoGenRecordKeys) {
-      // In case when keys will be auto-generated we have to override following configuration
-      mergedParams.putAll(
-        // TODO set payload disallowing merging
-        Map(
-          KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key -> HoodieRecord.AUTOGEN_ROW_KEY
-        )
-      )
-
-      // TODO operations (only insert, bulk-insert allowed)
-
-      // TODO elaborate
-      mergedParams.removeAll(Seq(
-        HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key,
-        HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY
-      ))
-    } else if (mergedParams.contains(PRECOMBINE_FIELD.key())) {
+    if (mergedParams.contains(PRECOMBINE_FIELD.key())) {
       // use preCombineField to fill in PAYLOAD_ORDERING_FIELD_PROP_KEY
       mergedParams.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, mergedParams(PRECOMBINE_FIELD.key()))
     }
