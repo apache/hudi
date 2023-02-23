@@ -117,6 +117,9 @@ class HoodieCatalog extends DelegatingCatalogExtension
         val schemaEvolutionEnabled: Boolean = spark.sessionState.conf.getConfString(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
           DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
 
+        val supportV2ReadEnabled: Boolean = spark.sessionState.conf.getConfString(DataSourceReadOptions.READ_SUPPORT_V2_ENABLE.key,
+          DataSourceReadOptions.READ_SUPPORT_V2_ENABLE.defaultValue.toString).toBoolean
+
         // NOTE: PLEASE READ CAREFULLY
         //
         // Since Hudi relations don't currently implement DS V2 Read API, we by default fallback to V1 here.
@@ -124,7 +127,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
         // where V2 API have to be used. Currently only such use-case is using of Schema Evolution feature
         //
         // Check out HUDI-4178 for more details
-        if (schemaEvolutionEnabled) {
+        if (schemaEvolutionEnabled || supportV2ReadEnabled) {
           v2Table
         } else {
           v2Table.v1TableWrapper
