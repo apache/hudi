@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
@@ -97,8 +96,7 @@ public class RunCompactionActionExecutor<T> extends
       HoodieData<WriteStatus> statuses = compactor.compact(
           context, compactionPlan, table, configCopy, instantTime, compactionHandler);
 
-      compactor.maybePersist(statuses, config);
-      context.putCachedDataIds(HoodieDataCacheKey.of(config.getBasePath(), instantTime), statuses.getId());
+      compactor.maybePersist(statuses, context, config, instantTime);
       context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());
       List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collectAsList();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
