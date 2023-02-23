@@ -24,7 +24,7 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieRecordPayload, HoodieTableType, OverwriteWithLatestAvroPayload}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util
@@ -52,6 +52,7 @@ import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 import java.util.function.Consumer
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
+import scala.collection.convert.ImplicitConversions.`list asScalaBuffer`
 
 /**
  * Tests on Spark DataSource for MOR table.
@@ -96,6 +97,42 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
     )
+
+  @ParameterizedTest
+  @CsvSource(value = Array(
+    "AVRO,insert", "AVRO,bulk_insert", "AVRO,upsert",
+    "SPARK,insert", "SPARK,bulk_insert", "SPARK,upsert"
+  ))
+  def testRecordKeysAutoGen(recordType: HoodieRecordType, op: String) {
+    val (writeOpts, _) = getWriterReaderOpts(recordType)
+
+    // NOTE: In this test we deliberately removing record-key configuration
+    //       to validate Hudi is handling this case appropriately
+    val opts = writeOpts -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    inputDF.write.format("hudi")
+      .options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, op)
+      .option(HoodieTableConfig.AUTO_GEN_RECORD_KEYS.key(), "true")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+
+    val readDF = spark.read.format("hudi").load(basePath)
+
+    val recordKeys = readDF.select(HoodieRecord.AUTOGEN_ROW_KEY)
+      .distinct()
+      .collectAsList()
+      .map(_.getString(0))
+      .sorted
+
+    assertEquals(100, recordKeys.size)
+  }
 
   @ParameterizedTest
   @CsvSource(Array("AVRO, AVRO, avro", "AVRO, SPARK, parquet", "SPARK, AVRO, parquet", "SPARK, SPARK, parquet"))

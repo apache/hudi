@@ -102,9 +102,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "AVRO,insert", "AVRO,bulk_insert", "AVRO,upsert"
-    // TODO enable
-    //"SPARK,insert", "SPARK,bulk_insert", "SPARK,upsert",
+    "AVRO,insert", "AVRO,bulk_insert", "AVRO,upsert",
+    "SPARK,insert", "SPARK,bulk_insert", "SPARK,upsert"
   ))
   def testRecordKeysAutoGen(recordType: HoodieRecordType, op: String) {
     val (writeOpts, _) = getWriterReaderOpts(recordType)
@@ -114,7 +113,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val opts = writeOpts -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
 
     // Insert Operation
-    val records = recordsToStrings(dataGen.generateInserts("000", 10)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
 
     inputDF.write.format("hudi")
@@ -129,11 +128,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val readDF = spark.read.format("hudi").load(basePath)
 
     val recordKeys = readDF.select(HoodieRecord.AUTOGEN_ROW_KEY)
+      .distinct()
       .collectAsList()
       .map(_.getString(0))
       .sorted
 
-    println(recordKeys)
+    assertEquals(100, recordKeys.size)
   }
 
   @ParameterizedTest
