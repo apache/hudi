@@ -145,13 +145,14 @@ trait ProvidesHoodieConfig extends Logging {
       (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
         case (true, _, _, _, false, _) =>
           throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
-        case (true, true, _, _, _, true) =>
-          throw new IllegalArgumentException(s"Insert Overwrite Partition can not use bulk insert.")
+        // if enableBulkInsert is true, use bulk insert for the insert overwrite non-partitioned table.
+        case (true, _, true, _, _, _) =>
+          throw new IllegalArgumentException(s"Insert Overwrite can not use bulk insert.")
+        case (true, true, _, _, _, _) =>
+          throw new IllegalArgumentException(s"Insert Overwrite can not use bulk insert.")
         case (true, _, _, true, _, _) =>
           throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
             s" Please disable $INSERT_DROP_DUPS and try again.")
-        // if enableBulkInsert is true, use bulk insert for the insert overwrite non-partitioned table.
-        case (true, false, true, _, _, false) => BULK_INSERT_OPERATION_OPT_VAL
         // insert overwrite table
         case (false, false, true, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
         // insert overwrite partition
