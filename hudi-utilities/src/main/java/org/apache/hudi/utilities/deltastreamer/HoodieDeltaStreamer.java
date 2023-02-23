@@ -75,8 +75,10 @@ import org.apache.spark.sql.SparkSession;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -100,6 +102,15 @@ public class HoodieDeltaStreamer implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
+  private static final String ADDITIONAL_SENSITIVE_CONFIG_KEYS = "hoodie.sensitive.config.keys";
+  private static final List<String> DEFAULT_SENSITIVE_CONFIG_KEYS = Arrays.asList(
+      "ssl",
+      "tls",
+      "sasl",
+      "auth",
+      "credentials"
+  );
+  private static final String SENSITIVE_VALUES_MASKED = "SENSITIVE_INFO_MASKED";
 
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
@@ -528,7 +539,11 @@ public class HoodieDeltaStreamer implements Serializable {
     }
   }
 
-  private static String toSortedTruncatedString(TypedProperties props) {
+  static String toSortedTruncatedString(TypedProperties props) {
+    List<String> sensitiveConfigList = new LinkedList<>();
+    sensitiveConfigList = props.getStringList(ADDITIONAL_SENSITIVE_CONFIG_KEYS, ",", sensitiveConfigList);
+    sensitiveConfigList.addAll(DEFAULT_SENSITIVE_CONFIG_KEYS);
+
     List<String> allKeys = new ArrayList<>();
     for (Object k : props.keySet()) {
       allKeys.add(k.toString());
@@ -541,6 +556,12 @@ public class HoodieDeltaStreamer implements Serializable {
       if (value.length() > 255 && !LOG.isDebugEnabled()) {
         value = value.substring(0, 128) + "[...]";
       }
+
+      // Mask values for security/ credentials and other sensitive configs
+      if (sensitiveConfigList.stream().anyMatch(key::contains)) {
+        value = SENSITIVE_VALUES_MASKED;
+      }
+
       propsLog.append(key).append(": ").append(value).append("\n");
     }
     return propsLog.toString();
