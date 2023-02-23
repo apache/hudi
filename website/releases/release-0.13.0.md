@@ -304,7 +304,7 @@ For reading, set:
 hoodie.datasource.query.type=incremental
 hoodie.datasource.query.incremental.format=cdc
 ```
-and other usual [incremental query](docs/quick-start-guide#incremental-query)'s options like begin and end instant
+and other usual [incremental query](/docs/quick-start-guide#incremental-query)'s options like begin and end instant
 times, and CDC results are returned.
 
 :::caution
@@ -453,7 +453,7 @@ The early conflict detection in OCC is ***EXPERIMENTAL*** in 0.13.0 release.
 
 By default, this feature is turned off. To try this out, a user needs to set
 `hoodie.write.concurrency.early.conflict.detection.enable` to **`true`**, when using OCC for concurrency control
-(see the [Concurrency Control](https://hudi.apache.org/docs/concurrency_control) page for more details).
+(see the [Concurrency Control](/docs/concurrency_control) page for more details).
 
 ### Lock-Free Message Queue in Writing Data
 
@@ -493,7 +493,7 @@ AVRO for the target Hudi table. Set `hoodie.deltastreamer.schemaprovider.registr
 this interface `org.apache.hudi.utilities.schema.SchemaRegistryProvider.SchemaConverter` to provide custom conversion
 from the original schema to AVRO.
 
-### Providing Hudi Configs via Spark SQL config
+### Providing Hudi Configs via Spark SQL Config
 
 Users can now provide Hudi configs via Spark SQL conf, for example, setting
 ```
