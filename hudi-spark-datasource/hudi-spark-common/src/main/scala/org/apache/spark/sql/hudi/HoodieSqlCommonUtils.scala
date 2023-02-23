@@ -51,13 +51,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     override def get() = new SimpleDateFormat("yyyy-MM-dd")
   })
 
-  def getTableIdentifier(table: LogicalPlan): TableIdentifier = {
-    table match {
-      case SubqueryAlias(name, _) => sparkAdapter.getCatalystPlanUtils.toTableIdentifier(name)
-      case _ => throw new IllegalArgumentException(s"Illegal table: $table")
-    }
-  }
-
   def getTableSqlSchema(metaClient: HoodieTableMetaClient,
                         includeMetadataFields: Boolean = false): Option[StructType] = {
     val schemaResolver = new TableSchemaResolver(metaClient)
@@ -130,15 +123,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     }
   }
 
-  private def tripAlias(plan: LogicalPlan): LogicalPlan = {
-    plan match {
-      case SubqueryAlias(_, relation: LogicalPlan) =>
-        tripAlias(relation)
-      case other =>
-        other
-    }
-  }
-
   /**
    * Add the hoodie meta fields to the schema.
    * @param schema
@@ -167,18 +151,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     metaFields.contains(name)
   }
 
-  def removeMetaFields(df: DataFrame): DataFrame = {
-    val withoutMetaColumns = df.logicalPlan.output
-      .filterNot(attr => isMetaField(attr.name))
-      .map(new Column(_))
-    if (withoutMetaColumns.length != df.logicalPlan.output.size) {
-      df.select(withoutMetaColumns: _*)
-    } else {
-      df
-    }
-  }
-
-  def removeMetaFields(attrs: Seq[Attribute]): Seq[Attribute] = {
+  def removeMetaFields[T <: Attribute](attrs: Seq[T]): Seq[T] = {
     attrs.filterNot(attr => isMetaField(attr.name))
   }
 
@@ -242,19 +215,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     val fs = basePath.getFileSystem(conf)
     val metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME)
     fs.exists(metaPath)
-  }
-
-  /**
-   * Split the expression to a sub expression seq by the AND operation.
-   * @param expression
-   * @return
-   */
-  def splitByAnd(expression: Expression): Seq[Expression] = {
-    expression match {
-      case And(left, right) =>
-        splitByAnd(left) ++ splitByAnd(right)
-      case exp => Seq(exp)
-    }
   }
 
   /**
@@ -336,10 +296,10 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     resolver(field.name, other.name) && field.dataType == other.dataType
   }
 
-  def castIfNeeded(child: Expression, dataType: DataType, conf: SQLConf): Expression = {
+  def castIfNeeded(child: Expression, dataType: DataType): Expression = {
     child match {
       case Literal(nul, NullType) => Literal(nul, dataType)
-      case expr if child.dataType != dataType => Cast(expr, dataType, Option(conf.sessionLocalTimeZone))
+      case expr if child.dataType != dataType => Cast(expr, dataType, Option(SQLConf.get.sessionLocalTimeZone))
       case _ => child
     }
   }

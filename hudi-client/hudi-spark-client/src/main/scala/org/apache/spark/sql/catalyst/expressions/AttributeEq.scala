@@ -15,21 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.parser
+package org.apache.spark.sql.catalyst.expressions
 
-import org.apache.spark.internal.Logging
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.execution.{SparkSqlAstBuilder, SparkSqlParser}
-
-// TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.1x
-class HoodieSpark3_1ExtendedSqlParser(session: SparkSession, delegate: ParserInterface) extends SparkSqlParser
-  with HoodieExtendedParserInterface
-  with Logging {
-
-  override val astBuilder: SparkSqlAstBuilder = new HoodieSpark31SqlAstBuilder(session)
-
-  override def parseMultipartIdentifier(sqlText: String): Seq[String] = super[SparkSqlParser].parseMultipartIdentifier(sqlText)
-}
-
+/**
+ * This class primarily serves as a proxy for [[AttributeEquals]] inaccessible outside
+ * the current package
+ */
+class AttributeEq(attr: Attribute) extends AttributeEquals(attr) {}

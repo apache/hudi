@@ -25,6 +25,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto for MOR table 2") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create a mor partitioned table.
       spark.sql(
@@ -142,6 +143,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test Merge Into CTAS Table") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -163,9 +165,9 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            |merge into $tableName h0
            |using (
-           | select 1 as s_id, 'a1_1' as name
+           | select 1 as id, 'a1_1' as name
            |) s0
-           |on h0.id = s0.s_id
+           |on h0.id = s0.id
            |when matched then update set *
            |""".stripMargin
       )
@@ -177,6 +179,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test Merge With Complex Data Type") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -240,6 +243,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test column name matching for insert * and update set *") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -264,23 +268,27 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 1.0, 10, "2021-03-21")
       )
 
-      // Test the order of column types in sourceTable is similar to that in targetTable
+      // NOTE: When using star update/insert clauses (ie `insert *` or `update *`) order of the
+      //       columns in the source and target table _have to_ match (Spark won't be applying any column
+      //       column resolution logic)
       spark.sql(
         s"""
            |merge into $tableName as t0
            |using (
-           |  select 1 as id, '2021-05-05' as dt, 1002 as ts, 97 as price, 'a1' as name union all
-           |  select 1 as id, '2021-05-05' as dt, 1003 as ts, 98 as price, 'a2' as name union all
-           |  select 2 as id, '2021-05-05' as dt, 1001 as ts, 99 as price, 'a3' as name
+           |  select 1 as id, 'a1' as name, 97 as price, 1002 as ts, '2021-05-05' as dt union all
+           |  select 1 as id, 'a2' as name, 98 as price, 1003 as ts, '2021-05-05' as dt union all
+           |  select 2 as id, 'a3' as name, 99 as price, 1001 as ts, '2021-05-05' as dt
            | ) as s0
            |on t0.id = s0.id
            |when matched then update set *
            |when not matched then insert *
            |""".stripMargin)
+
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
         Seq(1, "a2", 98.0, 1003, "2021-05-05"),
         Seq(2, "a3", 99.0, 1001, "2021-05-05")
       )
+
       // Test the order of the column types of sourceTable is different from the column types of targetTable
       spark.sql(
         s"""
@@ -291,8 +299,8 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  select 3 as id, 'a3' as name, 1000 as ts, '2021-05-05' as dt, 102 as price
            | ) as s0
            |on t0.id = s0.id
-           |when matched then update set *
-           |when not matched then insert *
+           |when matched then update set t0.name = s0.name, t0.ts = s0.ts, t0.dt = s0.dt, t0.price = s0.price
+           |when not matched then insert (id, name, ts, dt, price) values (s0.id, s0.name, s0.ts, s0.dt, s0.price)
            |""".stripMargin)
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
         Seq(1, "a1", 100.0, 1004, "2021-05-05"),
@@ -305,8 +313,8 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            |merge into $tableName as t0
            |using (
-           |  select 1 as id, 'a6' as name, 1006 as ts, '2021-05-05' as dt, 106 as price, '0' as flag union all
-           |  select 4 as id, 'a4' as name, 1000 as ts, '2021-05-06' as dt, 100 as price, '1' as flag
+           |  select 1 as id, 'a6' as name, 106 as price, 1006 as ts, '2021-05-05' as dt, '0' as flag union all
+           |  select 4 as id, 'a4' as name, 100 as price, 1000 as ts, '2021-05-06' as dt, '1' as flag
            | ) as s0
            |on t0.id = s0.id
            |when matched and flag = '1' then update set *
@@ -323,6 +331,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto For Source Table With Column Aliases") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -366,6 +375,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto When PrimaryKey And PreCombineField Of Source Table And Target Table Differ In Case Only") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -390,8 +400,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  select 1 as ID, 'a1' as NAME, 10 as PRICE, 1000 as TS, '1' as FLAG
            | ) s0
            | on s0.ID = $tableName.id
-           | when matched and FLAG = '1' then update set
-           | id = s0.ID, name = s0.NAME, price = s0.PRICE, ts = s0.TS
+           | when matched and FLAG = '1' then update set *
            | when not matched and FLAG = '1' then insert *
            |""".stripMargin)
       checkAnswer(s"select id, name, price, ts from $tableName")(
@@ -406,8 +415,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  select 1 as ID, 'a1' as NAME, 11 as PRICE, 1001 as TS, '1' as FLAG
            | ) s0
            | on s0.id = $tableName.id
-           | when matched and FLAG = '1' then update set
-           | id = s0.id, name = s0.NAME, price = s0.PRICE, ts = s0.ts
+           | when matched and FLAG = '1' then update set id = s0.id, name = s0.NAME, price = s0.PRICE, ts = s0.ts
            | when not matched and FLAG = '1' then insert *
            |""".stripMargin)
       checkAnswer(s"select id, name, price, ts from $tableName")(
@@ -422,8 +430,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  select 2 as ID, 'a2' as NAME, 12 as PRICE, 1002 as TS, '1' as FLAG
            | ) s0
            | on cast(s0.id as int) = $tableName.id
-           | when matched and FLAG = '1' then update set
-           | id = s0.id, name = s0.NAME, price = s0.PRICE, ts = s0.ts
+           | when matched and FLAG = '1' then update set id = s0.id, name = s0.NAME, price = s0.PRICE, ts = s0.ts
            | when not matched and FLAG = '1' then insert *
            |""".stripMargin)
       checkAnswer(s"select id, name, price, ts from $tableName")(
@@ -435,6 +442,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test ignoring case") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -474,7 +482,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName
            | using (
-           |  select 1 as id, 'a1' as name, 20 as PRICE, '2021-05-05' as dt, 1001 as ts
+           |  select 1 as id, 'a1' as name, 20 as PRICE, 1001 as ts, '2021-05-05' as dt
            | ) s0
            | on s0.id = $tableName.id
            | when matched then update set
@@ -490,8 +498,8 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 1111 as ts, '2021-05-05' as dt, 111 as PRICE union all
-           |  select 2 as id, 'a2' as name, 1112 as ts, '2021-05-05' as dt, 112 as PRICE
+           |  select 1 as id, 'a1' as name, 111 as PRICE, 1111 as ts, '2021-05-05' as dt union all
+           |  select 2 as id, 'a2' as name, 112 as PRICE, 1112 as ts, '2021-05-05' as dt
            | ) as s0
            | on t0.id = s0.id
            | when matched then update set *
@@ -506,6 +514,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test ignoring case for MOR table") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create a mor partitioned table.
       spark.sql(
@@ -531,7 +540,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as NAME, 1111 as ts, '2021-05-05' as DT, 111 as price
+           |  select 1 as id, 'a1' as NAME, 111 as price, 1111 as ts, '2021-05-05' as DT
            | ) as s0
            | on t0.id = s0.id
            | when matched then update set *
@@ -546,6 +555,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test only insert when source table contains history") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -591,6 +601,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test only insert when source table contains history and target table has multiple keys") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table with multiple keys
       spark.sql(
@@ -661,7 +672,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 'a1' as name, 1 as id, 10 as price, 1000 as ts, '2021-03-21' as dt
+           |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when not matched and s0.id % 2 = 1 then insert *
@@ -738,7 +749,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 'a2' as name, 1 as id, 1000 as ts
+           |  select 1 as id, 'a2' as name, 1000 as ts
            | ) as s0
            | on t0.id = s0.id
            | when matched then update set t0.name = s0.name, t0.ts = s0.ts
