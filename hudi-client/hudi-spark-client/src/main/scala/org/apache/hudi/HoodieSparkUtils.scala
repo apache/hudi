@@ -148,28 +148,32 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
     // NOTE: We have to serialize Avro schema, and then subsequently parse it on the executor node, since Spark
     //       serializer is not able to digest it
     val writerAvroSchemaStr = writerAvroSchema.toString
+    val readerAvroSchemaStr = readerAvroSchema.toString
     // NOTE: We're accessing toRdd here directly to avoid [[InternalRow]] to [[Row]] conversion
 
     if (!sameSchema) {
-      val rdds: RDD[Either[GenericRecord, String]] = df.queryExecution.toRdd.mapPartitions { rows =>
+      val rdds: RDD[Either[GenericRecord, InternalRow]] = df.queryExecution.toRdd.mapPartitions { rows =>
         if (rows.isEmpty) {
           Iterator.empty
         } else {
           val writerAvroSchema = new Schema.Parser().parse(writerAvroSchemaStr)
+          val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
           val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
-          val rowDeserializer = getCatalystRowSerDe(writerSchema)
-          val transform: InternalRow => Either[GenericRecord, String] = internalRow => try {
+          val transform: InternalRow => Either[GenericRecord, InternalRow] = internalRow => try {
             Left(HoodieAvroUtils.rewriteRecordDeep(convert(internalRow), readerAvroSchema, true))
           } catch {
             case _: Throwable =>
-              val rdd = df.sparkSession.sparkContext.parallelize(Seq(rowDeserializer.deserializeRow(internalRow)))
-              Right(df.sqlContext.createDataFrame(rdd, writerSchema).toJSON.first())
+              Right(internalRow)
           }
           rows.map(transform)
         }
       }
+      val rowDeserializer = getCatalystRowSerDe(writerSchema)
+      val df2 = df.sparkSession.createDataFrame(
+        rdds.filter(_.isRight).map(_.right.get).map(ir => rowDeserializer.deserializeRow(ir)), writerSchema)
+
       // going to follow up on improving performance of separating out events
-      (rdds.filter(_.isLeft).map(_.left.get), rdds.filter(_.isRight).map(_.right.get))
+      (rdds.filter(_.isLeft).map(_.left.get), df2.toJSON.rdd)
     } else {
       val rdd = df.queryExecution.toRdd.mapPartitions { rows =>
         if (rows.isEmpty) {
