@@ -168,12 +168,13 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
           rows.map(transform)
         }
       }
+
       val rowDeserializer = getCatalystRowSerDe(writerSchema)
-      val df2 = df.sparkSession.createDataFrame(
+      val errorRDD = df.sparkSession.createDataFrame(
         rdds.filter(_.isRight).map(_.right.get).map(ir => rowDeserializer.deserializeRow(ir)), writerSchema)
 
       // going to follow up on improving performance of separating out events
-      (rdds.filter(_.isLeft).map(_.left.get), df2.toJSON.rdd)
+      (rdds.filter(_.isLeft).map(_.left.get), errorRDD.toJSON.rdd)
     } else {
       val rdd = df.queryExecution.toRdd.mapPartitions { rows =>
         if (rows.isEmpty) {
