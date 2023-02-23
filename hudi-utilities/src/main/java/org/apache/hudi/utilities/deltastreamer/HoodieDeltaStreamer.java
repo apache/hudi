@@ -692,8 +692,6 @@ public class HoodieDeltaStreamer implements Serializable {
 
       deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, conf,
           this::onInitializingWriteClient);
-
-      this.schemaProvider = UtilHelpers.getSchemaProviderForKafkaSource(this.schemaProvider, this.props, jssc);
     }
 
     public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf)
