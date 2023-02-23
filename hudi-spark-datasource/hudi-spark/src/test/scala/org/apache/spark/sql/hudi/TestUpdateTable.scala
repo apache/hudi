@@ -204,4 +204,50 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
       }
     })
   }
+
+  test("Test Add Column and Update Table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  ff decimal(38, 10)
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+     """.stripMargin)
+
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 10.0")
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 10.0, 1000)
+      )
+
+      spark.sql(s"update $tableName set price = 22 where id = 1")
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 22.0, 1000)
+      )
+
+      spark.sql(s"alter table $tableName add column new_col1 int")
+
+      checkAnswer(s"select id, name, price, ts, new_col1 from $tableName")(
+        Seq(1, "a1", 22.0, 1000, null)
+      )
+
+      // update and check
+      spark.sql(s"update $tableName set price = price * 2 where id = 1")
+      checkAnswer(s"select id, name, price, ts, new_col1 from $tableName")(
+        Seq(1, "a1", 44.0, 1000, null)
+      )
+    }
+  }
 }
