@@ -275,7 +275,7 @@ public class DeltaSync implements Serializable, Closeable {
     this.fs = fs;
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
     this.props = props;
-    this.userProvidedSchemaProvider = schemaProvider;
+    this.userProvidedSchemaProvider = UtilHelpers.getSchemaProviderForKafkaSource(schemaProvider, props, jssc);
     this.processedSchema = new SchemaSet();
     this.keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     refreshTimeline();

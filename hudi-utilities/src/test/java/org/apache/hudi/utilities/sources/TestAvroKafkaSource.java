@@ -42,6 +42,8 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -105,7 +107,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     try (Producer<String, byte[]> producer = new KafkaProducer<>(config)) {
       for (int i = 0; i < genericRecords.size(); i++) {
         // use consistent keys to get even spread over partitions for test expectations
-        producer.send(new ProducerRecord<>(topic, Integer.toString(i % numPartitions), HoodieAvroUtils.avroToBytes(genericRecords.get(i))));
+        producer.send(new ProducerRecord<>(topic, i % numPartitions, "key", HoodieAvroUtils.avroToBytes(genericRecords.get(i))));
       }
     }
   }
@@ -157,20 +159,28 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
         UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
 
     props.put("hoodie.deltastreamer.source.kafka.value.deserializer.class", ByteArrayDeserializer.class.getName());
-    sendMessagesToKafka(topic, 1, 2);
+    int numPartitions = 3;
+    int numMessages = 15;
+    testUtils.createTopic(topic,numPartitions);
+    sendMessagesToKafka(topic, numMessages, numPartitions);
     AvroKafkaSource avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(avroKafkaSource);
-    List<String> columns = Arrays.stream(kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE)
-        .getBatch().get().columns()).collect(Collectors.toList());
+    Dataset<Row> c = kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE)
+        .getBatch().get();
+    List<String> columns = Arrays.stream(c.columns()).collect(Collectors.toList());
     props.put(KafkaOffsetPostProcessor.Config.KAFKA_APPEND_OFFSETS.key(), "true");
 
     schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
         UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
     avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     kafkaSource = new SourceFormatAdapter(avroKafkaSource);
-    List<String> withKafkaOffsetColumns = Arrays.stream(kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE)
-        .getBatch().get().columns()).collect(Collectors.toList());
-
+    Dataset<Row>  d = kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE).getBatch().get();
+    assertEquals(numMessages, d.count());
+    for (int i = 0; i < numPartitions; i++) {
+      assertEquals(numMessages / numPartitions, d.filter("_hoodie_kafka_source_partition=" + i).collectAsList().size());
+    }
+    List<String> withKafkaOffsetColumns = Arrays.stream(d.columns()).collect(Collectors.toList());
+    assertEquals(0, d.drop(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN,"city_to_state").except(c.drop("city_to_state")).count());
     assertEquals(3, withKafkaOffsetColumns.size() - columns.size());
     List<String> appendList = Arrays.asList(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN);
     assertEquals(appendList, withKafkaOffsetColumns.subList(withKafkaOffsetColumns.size() - 3, withKafkaOffsetColumns.size()));

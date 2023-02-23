@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -27,11 +28,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.BaseErrorTableWriter;
 import org.apache.hudi.utilities.deltastreamer.ErrorEvent;
-import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
-import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -71,8 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 public class TestJsonKafkaSource extends BaseTestKafkaSource {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  private static final HoodieTestDataGenerator DATA_GENERATOR = new HoodieTestDataGenerator(1L);
-  static final URL SCHEMA_FILE_URL = TestJsonKafkaSource.class.getClassLoader().getResource("delta-streamer-config/source.avsc");
+  static final URL SCHEMA_FILE_URL = TestJsonKafkaSource.class.getClassLoader().getResource("delta-streamer-config/source_short_trip_uber.avsc");
 
   @BeforeEach
   public void init() throws Exception {
@@ -120,7 +118,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
     assertEquals(Option.empty(), kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
     // Send  1000 non-null messages to Kafka
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 1000, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
     // Send  100 null messages to Kafka
     testUtils.sendMessages(topic, new String[100]);
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
@@ -143,12 +141,13 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     1. Extract without any checkpoint => get all the data, respecting default upper cap since both sourceLimit and
     maxEventsFromKafkaSourceProp are set to Long.MAX_VALUE
      */
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    List<HoodieRecord> send1 = dataGenerator.generateInsertsAsPerSchema("000", 1000, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA);
+    testUtils.sendMessages(topic, jsonifyRecords(send1));
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
     assertEquals(1000, fetch1.getBatch().get().count());
 
     // 2. Produce new data, extract new data based on sourceLimit
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("001", 1000)));
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("001", 1000, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
     InputBatch<Dataset<Row>> fetch2 =
         kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), 1500);
     assertEquals(1000, fetch2.getBatch().get().count());
@@ -166,12 +165,12 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 1000, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
     assertEquals(900, fetch1.getBatch().get().count());
 
     // 2. Produce new data, extract new data based on upper cap
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("001", 1000)));
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("001", 1000, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
     InputBatch<Dataset<Row>> fetch2 =
         kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(500, fetch2.getBatch().get().count());
@@ -201,13 +200,14 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   @Override
   void sendMessagesToKafka(String topic, int count, int numPartitions) {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", count)));
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", count, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
   }
 
   void sendJsonSafeMessagesToKafka(String topic, int count, int numPartitions) {
     try {
       Tuple2<String, String>[] keyValues = new Tuple2[count];
-      String[] records = jsonifyRecords(DATA_GENERATOR.generateInserts("000", count));
+      HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+      String[] records = jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", count, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA));
       for (int i = 0; i < count; i++) {
         // Drop fields that don't translate to json properly
         Map node = OBJECT_MAPPER.readValue(records[i], Map.class);
@@ -264,7 +264,8 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     TopicPartition topicPartition1 = new TopicPartition(topic, 1);
     topicPartitions.add(topicPartition1);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 1000,
+        HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
     testUtils.sendMessages(topic, new String[]{"error_event1", "error_event2"});
 
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
@@ -308,23 +309,28 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   @Test
   public void testAppendKafkaOffset() {
     final String topic = TEST_TOPIC_PREFIX + "testKafkaOffsetAppend";
-    testUtils.createTopic(topic, 2);
-    sendMessagesToKafka(topic, 10, 2);
+    int numPartitions = 3;
+    int numMessages = 15;
+    testUtils.createTopic(topic, numPartitions);
+    sendMessagesToKafka(topic, numMessages, numPartitions);
 
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
-    List<String> columns = Arrays.stream(kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE)
-        .getBatch().get().columns()).collect(Collectors.toList());
+    Dataset<Row> c = kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE).getBatch().get();
+    assertEquals(numMessages, c.count());
+    List<String> columns = Arrays.stream(c.columns()).collect(Collectors.toList());
 
     props.put(KafkaOffsetPostProcessor.Config.KAFKA_APPEND_OFFSETS.key(), "true");
-    SchemaProvider postSchemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
-        schemaProvider, props, jsc(), new ArrayList<>());
-    jsonSource = new JsonKafkaSource(props, jsc(), spark(), postSchemaProvider, metrics);
+    jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     kafkaSource = new SourceFormatAdapter(jsonSource);
-    List<String> withKafkaOffsetColumns = Arrays.stream(kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE)
-        .getBatch().get().columns()).collect(Collectors.toList());
-
+    Dataset<Row> d = kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE).getBatch().get();
+    assertEquals(numMessages, d.count());
+    for (int i = 0; i < numPartitions; i++) {
+      assertEquals(numMessages / numPartitions, d.filter("_hoodie_kafka_source_partition=" + i).collectAsList().size());
+    }
+    assertEquals(0, d.drop(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN).except(c).count());
+    List<String> withKafkaOffsetColumns = Arrays.stream(d.columns()).collect(Collectors.toList());
     assertEquals(3, withKafkaOffsetColumns.size() - columns.size());
     List<String> appendList = Arrays.asList(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN);
     assertEquals(appendList, withKafkaOffsetColumns.subList(withKafkaOffsetColumns.size() - 3, withKafkaOffsetColumns.size()));
