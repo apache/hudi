@@ -1054,6 +1054,8 @@ object HoodieSparkSqlWriter {
       }
     }
 
+    // NOTE: Here we handle necessary config overrides in case record-key auto-generation
+    //       is enabled
     handleAutoGenRecordKeysConfig(mergedParams)
 
     if (mergedParams.contains(PRECOMBINE_FIELD.key())) {

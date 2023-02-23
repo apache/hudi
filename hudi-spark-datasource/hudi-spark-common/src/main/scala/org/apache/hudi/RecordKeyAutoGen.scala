@@ -25,10 +25,6 @@ object RecordKeyAutoGen {
     }
   }
 
-  def handleAutoGenRecordKeysConfigJava(mergedParams: JMap[String, String]): Unit = {
-    handleAutoGenRecordKeysConfig(mergedParams.asScala)
-  }
-
   def handleAutoGenRecordKeysConfig(mergedParams: mutable.Map[String, String]): Unit = {
     val shouldAutoGenRecordKeys = mergedParams.getOrElse(HoodieTableConfig.AUTO_GEN_RECORD_KEYS.key,
       HoodieTableConfig.AUTO_GEN_RECORD_KEYS.defaultValue.toString).toBoolean
@@ -48,6 +44,12 @@ object RecordKeyAutoGen {
         HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY
       )
     }
+  }
+
+  def handleAutoGenRecordKeysConfigJava(hoodieConfig: HoodieConfig): Unit = {
+    val props = hoodieConfig.getProps
+    handleAutoGenRecordKeysConfig(props.asScala.asInstanceOf[mutable.Map[String, String]])
+    new HoodieConfig(props)
   }
 
 }
