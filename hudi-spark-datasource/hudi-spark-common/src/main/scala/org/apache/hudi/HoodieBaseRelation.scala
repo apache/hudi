@@ -178,7 +178,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val resolver = sparkSession.sessionState.analyzer.resolver
     val metaFieldMetadata = sparkAdapter.createCatalystMetadataForMetaField
 
-    // TODO elaborate
+    // NOTE: Here we annotate meta-fields with corresponding metadata such that Spark (>= 3.2)
+    //       is able to recognize such fields as meta-fields
     StructType(converted.map { field =>
       if (metaFieldNames.exists(metaFieldName => resolver(metaFieldName, field.name))) {
         field.copy(metadata = metaFieldMetadata)
