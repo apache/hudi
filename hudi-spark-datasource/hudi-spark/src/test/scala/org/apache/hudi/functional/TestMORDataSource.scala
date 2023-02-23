@@ -50,9 +50,8 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import java.util.function.Consumer
-import scala.collection.JavaConversions.mapAsJavaMap
+import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import scala.collection.convert.ImplicitConversions.`list asScalaBuffer`
 
 /**
  * Tests on Spark DataSource for MOR table.
