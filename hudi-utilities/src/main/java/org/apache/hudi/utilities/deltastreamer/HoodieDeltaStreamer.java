@@ -83,6 +83,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.String.format;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -116,6 +117,8 @@ public class HoodieDeltaStreamer implements Serializable {
   private final Option<BootstrapExecutor> bootstrapExecutor;
 
   public static final String DELTASYNC_POOL_NAME = "hoodiedeltasync";
+
+  public static AtomicInteger counter = new AtomicInteger(0);
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
@@ -425,7 +428,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     public boolean isInlineCompactionEnabled() {
       // Inline compaction is disabled for continuous mode, otherwise enabled for MOR
-      return !continuousMode && !forceDisableCompaction
+      return !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
     }
 

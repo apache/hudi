@@ -33,8 +33,11 @@ import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ActionType;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
@@ -48,6 +51,8 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -102,6 +107,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
@@ -217,6 +223,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       return true;
     }
     LOG.info("Committing " + instantTime + " action " + commitActionType);
+
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config, hadoopConf);
     HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
@@ -231,6 +238,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
       commit(table, commitActionType, instantTime, metadata, stats);
+
+      if (config.isMetadataTableEnabled()) {
+        validateFileGroups(table, stats);
+      }
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
       releaseResources();
@@ -267,8 +278,36 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return true;
   }
 
+  private void validateFileGroups(HoodieTable hoodieTable, List<HoodieWriteStat> writeStatList) {
+    LOG.info("Validating file groups for missed updated :: ");
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
+    HoodieTableFileSystemView fileSystemView = FileSystemViewManager.createInMemoryFileSystemView(context, hoodieTable.getMetaClient(), metadataConfig);
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, metadataConfig, config.getBasePath());
+    partitionPaths.forEach(pPath -> fileSystemView.getLatestBaseFiles(pPath).collect(Collectors.toList()));
+    List<HoodieWriteStat> toProcessStats = writeStatList.stream().filter(writeStat -> !writeStat.getPath().endsWith(".parquet")).collect(Collectors.toList());
+
+    for (HoodieWriteStat writeStat : toProcessStats) {
+      String fileID = writeStat.getFileId();
+      String filePath = writeStat.getPath();
+      String prevCommitTime = writeStat.getPrevCommit();
+      String pPath = writeStat.getPartitionPath();
+      String logFilesBaseCommitTime = FSUtils.getCommitTime(filePath);
+      Option<FileSlice> fileSlice = fileSystemView.getLatestFileSlice(pPath, fileID);
+      if (!fileID.isEmpty()) {
+        String latestBaseFileInstantTime = fileSlice.get().getBaseInstantTime();
+        if (logFilesBaseCommitTime.equals(latestBaseFileInstantTime)) {
+          throw new HoodieIOException("XXX Log file added to last but one file slice for " + pPath + ", " + fileID + ", new log file " + filePath
+              + ", latest base file commit time : " + fileSlice.get().getBaseInstantTime());
+        } else {
+          LOG.debug("Log file added to latest file slice for " + pPath + ", " + fileID + ", new log file " + filePath
+              + ", latest base file commit time : " + fileSlice.get().getBaseInstantTime());
+        }
+      }
+    }
+  }
+  
   protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
-                      List<HoodieWriteStat> stats) throws IOException {
+                        List<HoodieWriteStat> stats) throws IOException {
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
