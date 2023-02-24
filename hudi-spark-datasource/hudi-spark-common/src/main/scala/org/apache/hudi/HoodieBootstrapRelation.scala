@@ -62,8 +62,6 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
   override type FileSplit = HoodieBootstrapSplit
   override type Relation = HoodieBootstrapRelation
 
-  private val resolver = sqlContext.sparkSession.sessionState.analyzer.resolver
-
   private lazy val skeletonSchema = HoodieSparkUtils.getMetaSchema
 
   override val mandatoryFields: Seq[String] = Seq.empty

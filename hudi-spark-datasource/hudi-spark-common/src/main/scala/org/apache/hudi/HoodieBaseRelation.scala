@@ -48,6 +48,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{convertToCatalystExpression, generateUnsafeProjection}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources._
@@ -102,6 +103,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   imbueConfigs(sqlContext)
 
   protected val sparkSession: SparkSession = sqlContext.sparkSession
+
+  protected lazy val resolver: Resolver = sparkSession.sessionState.analyzer.resolver
 
   protected lazy val conf: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   protected lazy val jobConf = new JobConf(conf)
@@ -179,8 +182,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected lazy val tableStructSchema: StructType = {
     val converted = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
-
-    val resolver = sparkSession.sessionState.analyzer.resolver
     val metaFieldMetadata = sparkAdapter.createCatalystMetadataForMetaField
 
     // NOTE: Here we annotate meta-fields with corresponding metadata such that Spark (>= 3.2)
@@ -616,7 +617,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //       Note that, by default, partition columns are not omitted therefore specifying
     //       partition schema for reader is not required
     if (extractPartitionValuesFromPartitionPath) {
-      val partitionSchema = StructType(partitionColumns.map(StructField(_, StringType)))
+      val partitionSchema = filterInPartitionColumns(tableSchema.structTypeSchema)
       val prunedDataStructSchema = prunePartitionColumns(tableSchema.structTypeSchema)
       val prunedRequiredSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
 
@@ -628,8 +629,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     }
   }
 
-  private def prunePartitionColumns(dataStructSchema: StructType): StructType =
-    StructType(dataStructSchema.filterNot(f => partitionColumns.contains(f.name)))
+  private def filterInPartitionColumns(structType: StructType): StructType =
+    StructType(structType.filter(f => partitionColumns.exists(col => resolver(f.name, col))))
+
+  private def prunePartitionColumns(structType: StructType): StructType =
+    StructType(structType.filterNot(f => partitionColumns.exists(pc => resolver(f.name, pc))))
 
   private def getConfigValue(config: ConfigProperty[String],
                              defaultValueOption: Option[String]=Option.empty): String = {
