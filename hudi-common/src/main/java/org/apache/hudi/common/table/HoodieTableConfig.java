@@ -224,7 +224,13 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> AUTO_GEN_RECORD_KEYS = ConfigProperty
       .key("hoodie.datasource.write.recordkey.autogen")
       .defaultValue(false)
-      .withDocumentation("TODO");
+      .withDocumentation("Enables automatic generation of the record-keys in cases when dataset bears "
+          + "no natural record key satisfying requirements of being the primary-key in the Hudi table. "
+          + "Record key auto-gen is only recommended for 'append-only' payloads, ie ones leveraging 'insert' or "
+          + "'bulk_insert' operations, not requiring de-duplication or updating existing (already persisted) "
+          + "records. Note, that record keys produced by auto-gen are globally unique, therefore permitting "
+          + "records to be subsequently deleted if necessary"
+      );
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
