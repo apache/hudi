@@ -19,9 +19,10 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.config.HoodieConfig
-import org.apache.hudi.common.model.{HoodiePayloadProps, HoodieRecord}
+import org.apache.hudi.common.model.{HoodiePayloadProps, HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.spark.sql.{Column, DataFrame}
 import org.apache.spark.sql.catalyst.expressions.AutoRecordKeyGenExpression
@@ -30,6 +31,9 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters.mapAsScalaMapConverter
 
 object RecordKeyAutoGen {
+
+  private val allowedOperations: Set[String] =
+    Set(WriteOperationType.INSERT, WriteOperationType.BULK_INSERT).map(_.value)
 
   // TODO elaborate
   def tryRecordKeyAutoGen(df: DataFrame, commitInstant: String, config: HoodieConfig): DataFrame = {
@@ -46,16 +50,21 @@ object RecordKeyAutoGen {
     val shouldAutoGenRecordKeys = mergedParams.getOrElse(HoodieTableConfig.AUTO_GEN_RECORD_KEYS.key,
       HoodieTableConfig.AUTO_GEN_RECORD_KEYS.defaultValue.toString).toBoolean
     if (shouldAutoGenRecordKeys) {
+      val operation = mergedParams.getOrElse(DataSourceWriteOptions.OPERATION.key,
+        DataSourceWriteOptions.OPERATION.defaultValue)
+      if (!allowedOperations.contains(operation)) {
+        throw new HoodieException(s"Operation '$operation' is not compatible with record key auto-generation")
+      }
+
       // In case when keys will be auto-generated we have to override following configuration
-      mergedParams ++=
-        // TODO set payload disallowing merging
-        Map(
-          KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key -> HoodieRecord.AUTOGEN_ROW_KEY
-        )
+      //    - Record key-field name (to the auto-gen'd one)
+      mergedParams ++= Map(
+        KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key -> HoodieRecord.AUTOGEN_ROW_KEY
+      )
 
-      // TODO operations (only insert, bulk-insert allowed)
-
-      // TODO elaborate
+      // In case when keys will be auto-generated we override following configuration
+      //    - Pre-combine field (since updating is not compatible w/ auto-gen anyway)
+      //    - Payload ordering field
       mergedParams --= Seq(
         HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key,
         HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY
