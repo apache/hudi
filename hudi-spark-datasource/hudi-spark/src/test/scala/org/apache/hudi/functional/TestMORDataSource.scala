@@ -23,12 +23,14 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieRecordPayload, HoodieTableType, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieRecordPayload, HoodieTableType, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.ExceptionUtil.getRootCause
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.index.HoodieIndex.IndexType
@@ -37,9 +39,9 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, SparkDatasetMixin}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, ScalaAssertionSupport, SparkDatasetMixin}
 import org.apache.log4j.LogManager
-import org.apache.spark.sql._
+import org.apache.spark.sql.{SaveMode, _}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.BooleanType
@@ -55,7 +57,9 @@ import scala.collection.JavaConverters._
 /**
  * Tests on Spark DataSource for MOR table.
  */
-class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin {
+class TestMORDataSource extends HoodieSparkClientTestBase
+  with SparkDatasetMixin
+  with ScalaAssertionSupport {
 
   var spark: SparkSession = null
   private val log = LogManager.getLogger(classOf[TestMORDataSource])
@@ -98,10 +102,86 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "AVRO,insert", "AVRO,bulk_insert", "AVRO,upsert",
-    "SPARK,insert", "SPARK,bulk_insert", "SPARK,upsert"
+    "AVRO,insert", "AVRO,bulk_insert", "SPARK,insert", "SPARK,bulk_insert"
   ))
-  def testRecordKeysAutoGen(recordType: HoodieRecordType, op: String) {
+  def testRecordKeysAutoGen(recordType: HoodieRecordType, op: String): Unit = {
+    val (vanillaWriteOpts, readOpts) = getWriterReaderOpts(recordType)
+
+    // NOTE: In this test we deliberately removing record-key configuration
+    //       to validate Hudi is handling this case appropriately
+    val writeOpts = vanillaWriteOpts -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key) ++ Map(
+      HoodieTableConfig.AUTO_GEN_RECORD_KEYS.key() -> "true"
+    )
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 50)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    //
+    // Step #1: Persist first batch with auto-gen'd record-keys
+    //
+
+    inputDF.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, op)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+
+    //
+    // Step #2: Persist *same* batch with auto-gen'd record-keys (new record keys should
+    //          be generated this time)
+    //
+
+    inputDF.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, op)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val readDF = spark.read.format("hudi")
+      .options(readOpts)
+      .load(basePath)
+
+    val recordKeys = readDF.select(HoodieRecord.AUTOGEN_ROW_KEY)
+      .distinct()
+      .collectAsList()
+      .map(_.getString(0))
+
+    // Validate auto-gen'd keys are globally unique
+    assertEquals(100, recordKeys.size)
+
+    //
+    // Step #3: Delete some of the records
+    //
+
+    // NOTE: Since the table is partitioned we have to make sure we provide a tuple of
+    //       (partition, record-key) to delete the record
+    val recordsToDelete = readDF.select(HoodieRecord.AUTOGEN_ROW_KEY, "partition")
+      .limit(50)
+
+    recordsToDelete.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, WriteOperationType.DELETE.value)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val remainingRecordKeys = spark.read.format("hudi")
+      .load(basePath)
+      .select(HoodieRecord.AUTOGEN_ROW_KEY)
+      .distinct()
+      .collectAsList()
+      .map(_.getString(0))
+
+    assertEquals(50, remainingRecordKeys.size)
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = Array(
+    "AVRO,upsert", "AVRO,bootstrap", "SPARK,upsert", "SPARK,bootstrap"
+  ))
+  def testRecordKeysAutoGenInvalidOperation(recordType: HoodieRecordType, op: String): Unit = {
     val (writeOpts, _) = getWriterReaderOpts(recordType)
 
     // NOTE: In this test we deliberately removing record-key configuration
@@ -109,27 +189,19 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val opts = writeOpts -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
 
     // Insert Operation
-    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 1)).toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
 
-    inputDF.write.format("hudi")
-      .options(opts)
-      .option(DataSourceWriteOptions.OPERATION.key, op)
-      .option(HoodieTableConfig.AUTO_GEN_RECORD_KEYS.key(), "true")
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
+    val e = assertThrows(classOf[HoodieException]) {
+      inputDF.write.format("hudi")
+        .options(opts)
+        .option(DataSourceWriteOptions.OPERATION.key, op)
+        .option(HoodieTableConfig.AUTO_GEN_RECORD_KEYS.key(), "true")
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
+    }
 
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
-
-    val readDF = spark.read.format("hudi").load(basePath)
-
-    val recordKeys = readDF.select(HoodieRecord.AUTOGEN_ROW_KEY)
-      .distinct()
-      .collectAsList()
-      .map(_.getString(0))
-      .sorted
-
-    assertEquals(100, recordKeys.size)
+    assertEquals(s"Operation '$op' is not compatible with record key auto-generation", getRootCause(e).getMessage)
   }
 
   @ParameterizedTest
