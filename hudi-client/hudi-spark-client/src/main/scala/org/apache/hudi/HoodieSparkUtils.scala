@@ -21,7 +21,7 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.spark.SPARK_VERSION
@@ -84,7 +84,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
     // making Spark deserialize its internal representation [[InternalRow]] into [[Row]] for subsequent conversion
     // (and back)
     val sameSchema = writerAvroSchema.equals(readerAvroSchema)
-    val (nullable, _) = AvroConversionUtils.resolveAvroTypeNullability(writerAvroSchema)
+    val nullable = AvroSchemaUtils.resolveNullableSchema(writerAvroSchema) != writerAvroSchema
 
     // NOTE: We have to serialize Avro schema, and then subsequently parse it on the executor node, since Spark
     //       serializer is not able to digest it

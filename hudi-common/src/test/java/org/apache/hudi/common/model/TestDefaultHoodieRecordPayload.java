@@ -33,9 +33,12 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Properties;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Unit tests {@link DefaultHoodieRecordPayload}.
@@ -108,6 +111,68 @@ public class TestDefaultHoodieRecordPayload {
 
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema, props).get(), delRecord1);
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema, props).isPresent());
+  }
+
+  @Test
+  public void testDeleteKey() throws IOException {
+    props.setProperty(DELETE_KEY, "ts");
+    props.setProperty(DELETE_MARKER, String.valueOf(1L));
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "1");
+    record.put("partition", "partition0");
+    record.put("ts", 0L);
+    record.put("_hoodie_is_deleted", false);
+
+    GenericRecord delRecord = new GenericData.Record(schema);
+    delRecord.put("id", "2");
+    delRecord.put("partition", "partition1");
+    delRecord.put("ts", 1L);
+    delRecord.put("_hoodie_is_deleted", false);
+
+    GenericRecord defaultDeleteRecord = new GenericData.Record(schema);
+    defaultDeleteRecord.put("id", "2");
+    defaultDeleteRecord.put("partition", "partition1");
+    defaultDeleteRecord.put("ts", 2L);
+    defaultDeleteRecord.put("_hoodie_is_deleted", true);
+
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1);
+    DefaultHoodieRecordPayload deletePayload = new DefaultHoodieRecordPayload(delRecord, 2);
+    DefaultHoodieRecordPayload defaultDeletePayload = new DefaultHoodieRecordPayload(defaultDeleteRecord, 2);
+
+    assertEquals(record, payload.getInsertValue(schema, props).get());
+    assertEquals(defaultDeleteRecord, defaultDeletePayload.getInsertValue(schema, props).get());
+    assertFalse(deletePayload.getInsertValue(schema, props).isPresent());
+
+    assertEquals(delRecord, payload.combineAndGetUpdateValue(delRecord, schema, props).get());
+    assertEquals(defaultDeleteRecord, payload.combineAndGetUpdateValue(defaultDeleteRecord, schema, props).get());
+    assertFalse(deletePayload.combineAndGetUpdateValue(record, schema, props).isPresent());
+  }
+
+  @Test
+  public void testDeleteKeyConfiguration() throws IOException {
+    props.setProperty(DELETE_KEY, "ts");
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "1");
+    record.put("partition", "partition0");
+    record.put("ts", 0L);
+    record.put("_hoodie_is_deleted", false);
+
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1);
+
+    // Verify failure when DELETE_MARKER is not configured along with DELETE_KEY
+    try {
+      payload.getInsertValue(schema, props).get();
+      fail("Should fail");
+    } catch (IllegalArgumentException e) {
+      // Ignore
+    }
+
+    try {
+      payload.combineAndGetUpdateValue(record, schema, props).get();
+      fail("Should fail");
+    } catch (IllegalArgumentException e) {
+      // Ignore
+    }
   }
 
   @Test

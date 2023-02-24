@@ -16,16 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.catalyst.plans.logical
+package org.apache.hudi.testutils;
 
-import org.apache.spark.sql.catalyst.trees.TreeNode
+import org.apache.hudi.common.util.Option;
+import org.apache.spark.sql.SparkSessionExtensions;
+import org.apache.spark.sql.hudi.HoodieSparkSessionExtension;
 
-/**
- * NOTE: This is a sham trait providing a stub method definition which is not used anywhere.
- * This is required just to be able to compile the code that relies on [[UnaryLike]]
- * (introduced in Spark 3.2) against Spark < 3.2
- */
-trait HoodieUnaryLikeSham[T <: TreeNode[T]] {
-  self: TreeNode[T] =>
-  protected def withNewChildInternal(newChild: T): T
+import java.util.function.Consumer;
+
+public abstract class HoodieSparkClientTestBase extends HoodieClientTestBase {
+
+  @Override
+  protected Option<Consumer<SparkSessionExtensions>> getSparkSessionExtensionsInjector() {
+    return Option.of((receiver) -> new HoodieSparkSessionExtension().apply(receiver));
+  }
+
 }

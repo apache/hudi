@@ -50,6 +50,9 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     dir
   }
 
+  // NOTE: We need to set "spark.testing" property to make sure Spark can appropriately
+  //       recognize environment as testing
+  System.setProperty("spark.testing", "true")
   // NOTE: We have to fix the timezone to make sure all date-/timestamp-bound utilities output
   //       is consistent with the fixtures
   DateTimeZone.setDefault(DateTimeZone.UTC)

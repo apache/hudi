@@ -89,8 +89,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   extends BaseRelation
     with FileRelation
     with PrunedFilteredScan
-    with Logging
-    with SparkAdapterSupport {
+    with Logging {
 
   type FileSplit <: HoodieFileSplit
   type Relation <: HoodieBaseRelation
@@ -173,7 +172,22 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     (avroSchema, internalSchemaOpt)
   }
 
-  protected lazy val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
+  protected lazy val tableStructSchema: StructType = {
+    val converted = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
+
+    val resolver = sparkSession.sessionState.analyzer.resolver
+    val metaFieldMetadata = sparkAdapter.createCatalystMetadataForMetaField
+
+    // NOTE: Here we annotate meta-fields with corresponding metadata such that Spark (>= 3.2)
+    //       is able to recognize such fields as meta-fields
+    StructType(converted.map { field =>
+      if (metaFieldNames.exists(metaFieldName => resolver(metaFieldName, field.name))) {
+        field.copy(metadata = metaFieldMetadata)
+      } else {
+        field
+      }
+    })
+  }
 
   protected lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
@@ -608,6 +622,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 }
 
 object HoodieBaseRelation extends SparkAdapterSupport {
+
+  private lazy val metaFieldNames = HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet
 
   case class BaseFileReader(read: PartitionedFile => Iterator[InternalRow], val schema: StructType) {
     def apply(file: PartitionedFile): Iterator[InternalRow] = read.apply(file)

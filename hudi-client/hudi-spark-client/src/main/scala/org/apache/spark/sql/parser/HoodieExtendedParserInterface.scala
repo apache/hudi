@@ -16,16 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.spark.sql.parser
 
-import java.util.Iterator;
+import org.apache.spark.sql.catalyst.parser.ParserInterface
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 
 /**
- * An iterator that give a chance to release resources.
- *
- * @param <R> The return type
+ * This trait helps us to bridge compatibility gap of [[ParserInterface]] b/w different
+ * Spark versions
  */
-public interface ClosableIterator<R> extends Iterator<R>, AutoCloseable {
-  @Override
-  void close(); // override to not throw exception
+trait HoodieExtendedParserInterface extends ParserInterface {
+
+  def parseQuery(sqlText: String): LogicalPlan = {
+    throw new UnsupportedOperationException(s"Unsupported, parseQuery is implemented in Spark >= 3.3.0")
+  }
+
+  def parseMultipartIdentifier(sqlText: String): Seq[String] = {
+    throw new UnsupportedOperationException(s"Unsupported, parseMultipartIdentifier is implemented in Spark >= 3.0.0")
+  }
+
 }
