@@ -30,6 +30,10 @@ import org.apache.hudi.exception.HoodieCommitCallbackException;
 public class HoodieCommitCallbackFactory {
   public static HoodieWriteCommitCallback create(HoodieWriteConfig config) {
     String callbackClass = config.getCallbackClass();
+    return create(config, callbackClass);
+  }
+
+  public static HoodieWriteCommitCallback create(HoodieWriteConfig config, String callbackClass) {
     if (!StringUtils.isNullOrEmpty(callbackClass)) {
       Object instance = ReflectionUtils.loadClass(callbackClass, config);
       if (!(instance instanceof HoodieWriteCommitCallback)) {

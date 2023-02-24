@@ -109,6 +109,7 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.avro.HoodieAvroDeserializer;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
+
 import scala.collection.JavaConversions;
 
 import java.io.Closeable;
@@ -122,6 +123,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -134,6 +136,7 @@ import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
+import static org.apache.hudi.config.HoodieWriteConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
@@ -240,6 +243,18 @@ public class DeltaSync implements Serializable, Closeable {
 
   private transient HoodieMetrics hoodieMetrics;
 
+
+  /**
+   * Unique identifier of the deltastreamer
+   * */
+  private transient Option<String> identifier;
+
+  /**
+   * The last checkpoint that THIS deltastreamer instance wrote.
+   * NOT the last checkpoint in the timeline.
+   */
+  private transient String latestCheckpointWritten;
+
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
@@ -265,6 +280,8 @@ public class DeltaSync implements Serializable, Closeable {
     this.formatAdapter = new SourceFormatAdapter(
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
     this.conf = conf;
+    String id = conf.get(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key());
+    this.identifier = StringUtils.isNullOrEmpty(id) ? Option.empty() : Option.of(id);
   }
 
   /**
@@ -608,7 +625,9 @@ public class DeltaSync implements Serializable, Closeable {
           resumeCheckpointStr = Option.of(cfg.checkpoint);
         } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
           //if previous checkpoint is an empty string, skip resume use Option.empty()
-          resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
+          String value = commitMetadata.getMetadata(CHECKPOINT_KEY);
+          resumeCheckpointStr = identifier.isPresent()
+              ? HoodieDeltaStreamerMultiwriterCheckpoint.readCheckpointValue(value, identifier.get()) : Option.of(value);
         } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
             HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
           throw new HoodieDeltaStreamerException(
@@ -628,7 +647,7 @@ public class DeltaSync implements Serializable, Closeable {
     return resumeCheckpointStr;
   }
 
-  protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
+  public Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
     return (Option<HoodieCommitMetadata>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
@@ -698,8 +717,13 @@ public class DeltaSync implements Serializable, Closeable {
     boolean hasErrors = totalErrorRecords > 0;
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
+      Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc = Option.empty();
       if (checkpointStr != null) {
-        checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
+        if (identifier.isPresent()) {
+          extraPreCommitFunc = Option.of(new HoodieDeltaStreamerMultiwriterCheckpoint(this, checkpointStr, latestCheckpointWritten));
+        } else {
+          checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
+        }
       }
       if (cfg.checkpoint != null) {
         checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
@@ -710,9 +734,11 @@ public class DeltaSync implements Serializable, Closeable {
             + totalErrorRecords + "/" + totalRecords);
       }
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, Collections.emptyMap());
+      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType,
+          Collections.emptyMap(), extraPreCommitFunc);
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
+        latestCheckpointWritten = checkpointStr;
         this.formatAdapter.getSource().onCommit(checkpointStr);
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
@@ -1060,5 +1086,9 @@ public class DeltaSync implements Serializable, Closeable {
   private Set<String> getPartitionColumns(KeyGenerator keyGenerator, TypedProperties props) {
     String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
     return Arrays.stream(partitionColumns.split(",")).collect(Collectors.toSet());
+  }
+
+  public String getId() {
+    return identifier.get();
   }
 }

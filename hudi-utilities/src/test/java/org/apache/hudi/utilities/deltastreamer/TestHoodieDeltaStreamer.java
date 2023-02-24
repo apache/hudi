@@ -2432,7 +2432,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
     }
 
-    protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
+    public Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
       return super.getLatestCommitMetadataWithValidCheckpointInfo(timeline);
     }
   }
