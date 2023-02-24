@@ -1,6 +1,6 @@
 ---
 title: "Release 0.8.0"
-sidebar_position: 10
+sidebar_position: 11
 layout: releases
 toc: true
 last_modified_at: 2020-05-28T08:40:00-07:00
