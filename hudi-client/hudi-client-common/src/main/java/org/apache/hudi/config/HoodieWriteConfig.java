@@ -620,6 +620,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to enable commit conflict checking or not during early "
           + "conflict detection.");
 
+  public static final ConfigProperty<String> SENSITIVE_CONFIG_KEYS_FILTER = ConfigProperty
+      .key("hoodie.sensitive.config.keys")
+      .defaultValue("ssl,tls,sasl,auth,credentials")
+      .withDocumentation("Comma separated list of filters for sensitive config keys. Delta Streamer "
+          + "avoids printing any configurations which contains the configured filter.");
+
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;

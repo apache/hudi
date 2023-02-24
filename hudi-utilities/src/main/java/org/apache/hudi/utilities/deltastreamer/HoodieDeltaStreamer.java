@@ -102,14 +102,8 @@ public class HoodieDeltaStreamer implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
-  private static final String ADDITIONAL_SENSITIVE_CONFIG_KEYS = "hoodie.sensitive.config.keys";
   private static final List<String> DEFAULT_SENSITIVE_CONFIG_KEYS = Arrays.asList(
-      "ssl",
-      "tls",
-      "sasl",
-      "auth",
-      "credentials"
-  );
+      HoodieWriteConfig.SENSITIVE_CONFIG_KEYS_FILTER.defaultValue().split(","));
   private static final String SENSITIVE_VALUES_MASKED = "SENSITIVE_INFO_MASKED";
 
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY;
@@ -540,9 +534,8 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   static String toSortedTruncatedString(TypedProperties props) {
-    List<String> sensitiveConfigList = new LinkedList<>();
-    sensitiveConfigList = props.getStringList(ADDITIONAL_SENSITIVE_CONFIG_KEYS, ",", sensitiveConfigList);
-    sensitiveConfigList.addAll(DEFAULT_SENSITIVE_CONFIG_KEYS);
+    List<String> sensitiveConfigList = props.getStringList(HoodieWriteConfig.SENSITIVE_CONFIG_KEYS_FILTER.key(),
+        ",", DEFAULT_SENSITIVE_CONFIG_KEYS);
 
     List<String> allKeys = new ArrayList<>();
     for (Object k : props.keySet()) {
