@@ -34,7 +34,8 @@ import java.util.function.Supplier
 class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None))
+    ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None),
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 1000))
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("rollback_result", DataTypes.BooleanType, nullable = true, Metadata.empty),
@@ -50,6 +51,7 @@ class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder
 
     val table = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
     val instantTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
+    val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
@@ -73,14 +75,11 @@ class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder
         throw new HoodieException(s"Commit $instantTime not found in Commits $completedTimeline")
       }
 
-      val outputRow = new util.ArrayList[Row]
-      val allInstants: List[HoodieInstant] = completedTimeline
-        .findInstantsAfterOrEquals(instantTime, Integer.MAX_VALUE).getReverseOrderedInstants.toArray()
-        .map(r => r.asInstanceOf[HoodieInstant]).toList
-
-      allInstants.foreach(p => outputRow.add(Row(client.rollback(p.getTimestamp), p.getTimestamp)))
-
-      outputRow.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+      completedTimeline.findInstantsAfterOrEquals(instantTime, Integer.MAX_VALUE)
+        .getReverseOrderedInstants.toArray()
+        .map(r => r.asInstanceOf[HoodieInstant])
+        .map(p => Row(client.rollback(p.getTimestamp), p.getTimestamp))
+        .take(limit)
     } finally {
       if (client != null) {
         client.close()
