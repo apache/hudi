@@ -64,7 +64,7 @@ public class Metrics {
     if (reporters.size() == 0) {
       throw new RuntimeException("Cannot initialize Reporters.");
     }
-    reporters.forEach(r -> r.start());
+    reporters.forEach(MetricsReporter::start);
 
     Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
     this.initialized = true;
@@ -104,16 +104,16 @@ public class Metrics {
         throw new HoodieException("failed to MetricsExporters", e);
       }
     }
-    LOG.info("total additional metrics roporters added =" + reporterList.size());
+    LOG.info("total additional metrics reporters added =" + reporterList.size());
     return reporterList;
   }
 
   public synchronized void shutdown() {
     try {
       registerHoodieCommonMetrics();
-      reporters.forEach(r -> r.report());
+      reporters.forEach(MetricsReporter::report);
       LOG.info("Stopping the metrics reporter...");
-      reporters.forEach(r -> r.stop());
+      reporters.forEach(MetricsReporter::stop);
     } catch (Exception e) {
       LOG.warn("Error while closing reporter", e);
     } finally {
@@ -125,18 +125,22 @@ public class Metrics {
     try {
       LOG.info("Reporting and flushing all metrics");
       registerHoodieCommonMetrics();
-      reporters.forEach(r -> r.report());
+      reporters.forEach(MetricsReporter::report);
       registry.getNames().forEach(this.registry::remove);
       registerHoodieCommonMetrics();
-      registry.getNames().forEach(this.registry::remove);
     } catch (Exception e) {
       LOG.error("Error while reporting and flushing metrics", e);
     }
   }
-  
+
   public void registerGauges(Map<String, Long> metricsMap, Option<String> prefix) {
     String metricPrefix = prefix.isPresent() ? prefix.get() + "." : "";
     metricsMap.forEach((k, v) -> registerGauge(metricPrefix + k, v));
+  }
+
+  public void registerGauges(Map<String, Long> metricsMap, Option<String> prefix, Map<String, String> labels) {
+    String metricPrefix = prefix.isPresent() ? prefix.get() + "." : "";
+    metricsMap.forEach((k, v) -> registerGauge(metricPrefix + MetricUtils.getMetricWithLabel(k, labels), v));
   }
 
   public void registerGauge(String metricName, final long value) {

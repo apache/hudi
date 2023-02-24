@@ -56,6 +56,9 @@ public class MetricsReporterFactory {
 
     MetricsReporterType type = config.getMetricsReporterType();
     MetricsReporter reporter = null;
+    if (type == null) {
+      return reporter;
+    }
     switch (type) {
       case GRAPHITE:
         reporter = new MetricsGraphiteReporter(config, registry);
