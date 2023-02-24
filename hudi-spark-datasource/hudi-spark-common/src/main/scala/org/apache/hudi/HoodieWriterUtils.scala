@@ -210,7 +210,7 @@ object HoodieWriterUtils {
       // in default scenario(simple key gen,there won't be any entry in table config, but we need to ensure new incoming also
       // matches it
       if (tableConfigKeyGen == null && datasourceKeyGen != null && !datasourceKeyGen.equalsIgnoreCase(classOf[SimpleKeyGenerator].getCanonicalName)) {
-        diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t " + classOf[SimpleKeyGenerator].getCanonicalName + "\n")
+        diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t" + classOf[SimpleKeyGenerator].getCanonicalName + "\n")
       }
     }
 

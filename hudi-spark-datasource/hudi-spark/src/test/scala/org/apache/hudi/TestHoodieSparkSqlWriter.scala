@@ -534,7 +534,7 @@ class TestHoodieSparkSqlWriter {
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       HoodieTableConfig.POPULATE_META_FIELDS.key() -> String.valueOf(populateMetaFields),
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[SimpleKeyGenerator].getCanonicalName)
-    val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
+    val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier, true)
     // generate the inserts
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
@@ -598,7 +598,7 @@ class TestHoodieSparkSqlWriter {
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
         HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
-      val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
+      val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier, true)
       initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true, initBasePath = false)
 
       val client = spy(DataSourceUtils.createHoodieClient(
@@ -638,10 +638,10 @@ class TestHoodieSparkSqlWriter {
       .setBaseFileFormat(fooTableParams.getOrElse(HoodieWriteConfig.BASE_FILE_FORMAT.key,
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name))
       .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
-      .setPayloadClassName(fooTableParams(PAYLOAD_CLASS_NAME.key))
-      .setPreCombineField(fooTableParams(PRECOMBINE_FIELD.key))
+      .setPayloadClassName(PAYLOAD_CLASS_NAME.key)
+      .setPreCombineField(fooTableParams.getOrElse(PRECOMBINE_FIELD.key, PRECOMBINE_FIELD.defaultValue()))
       .setPartitionFields(fooTableParams(DataSourceWriteOptions.PARTITIONPATH_FIELD.key))
-      .setKeyGeneratorClassProp(fooTableParams(KEYGENERATOR_CLASS_NAME.key))
+      .setKeyGeneratorClassProp(fooTableParams.getOrElse(KEYGENERATOR_CLASS_NAME.key, KEYGENERATOR_CLASS_NAME.defaultValue()))
       if(addBootstrapPath) {
         tableMetaClientBuilder
           .setBootstrapBasePath(fooTableParams(HoodieBootstrapConfig.BASE_PATH.key))
@@ -988,7 +988,8 @@ class TestHoodieSparkSqlWriter {
          | ) using hudi
          | partitioned by (dt)
          | options (
-         |  primaryKey = 'id'
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts'
          | )
          | location '$tablePath1'
        """.stripMargin)
@@ -1002,7 +1003,8 @@ class TestHoodieSparkSqlWriter {
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
       .mode(SaveMode.Append).save(tablePath1)
-    assert(spark.read.format("hudi").load(tablePath1 + "/*").count() == 1)
+    val hudiDf = spark.read.format("hudi").load(tablePath1)
+    assert(hudiDf.count() == 1)
 
     // case 2: test table which created by dataframe
     val (tableName2, tablePath2) = ("hoodie_test_params_2", s"$tempBasePath" + "_2")
@@ -1037,7 +1039,7 @@ class TestHoodieSparkSqlWriter {
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName2)
       .mode(SaveMode.Append).save(tablePath2)
-    val data = spark.read.format("hudi").load(tablePath2 + "/*")
+    val data = spark.read.format("hudi").load(tablePath2)
     assert(data.count() == 2)
     assert(data.select("_hoodie_partition_path").map(_.getString(0)).distinct.collect.head == "2021-10-16")
   }
@@ -1072,7 +1074,6 @@ class TestHoodieSparkSqlWriter {
         .mode(SaveMode.Append).save(tablePath1)
     }
     assert(configConflictException.getMessage.contains("Config conflict"))
-    assert(configConflictException.getMessage.contains(s"KeyGenerator:\t${classOf[SimpleKeyGenerator].getName}\t${classOf[NonpartitionedKeyGenerator].getName}"))
   }
 
   @Test

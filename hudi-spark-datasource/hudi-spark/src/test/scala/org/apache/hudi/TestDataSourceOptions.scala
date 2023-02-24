@@ -31,7 +31,7 @@ class TestDataSourceOptions {
       TABLE_NAME.key -> "hudi_table",
       PARTITIONPATH_FIELD.key -> "year,month"
     )
-    val modifiedOptions1 = HoodieWriterUtils.parametersWithWriteDefaults(inputOptions1)
+    val modifiedOptions1 = HoodieWriterUtils.parametersWithWriteDefaults(inputOptions1, true)
     assertEquals(classOf[ComplexKeyGenerator].getName, modifiedOptions1(KEYGENERATOR_CLASS_NAME.key))
     assertEquals("hudi_table", modifiedOptions1(HoodieSyncConfig.META_SYNC_TABLE_NAME.key))
     assertEquals("year,month", modifiedOptions1(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key))
@@ -44,7 +44,7 @@ class TestDataSourceOptions {
       PARTITIONPATH_FIELD.key -> "year",
       HIVE_STYLE_PARTITIONING.key -> "true"
     )
-    val modifiedOptions2 = HoodieWriterUtils.parametersWithWriteDefaults(inputOptions2)
+    val modifiedOptions2 = HoodieWriterUtils.parametersWithWriteDefaults(inputOptions2, true)
     assertEquals(classOf[SimpleKeyGenerator].getName, modifiedOptions2(KEYGENERATOR_CLASS_NAME.key))
     assertEquals("hudi_table", modifiedOptions2(HoodieSyncConfig.META_SYNC_TABLE_NAME.key))
     assertEquals("year", modifiedOptions2(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key))

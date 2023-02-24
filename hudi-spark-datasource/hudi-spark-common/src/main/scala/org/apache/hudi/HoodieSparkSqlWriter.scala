@@ -122,7 +122,7 @@ object HoodieSparkSqlWriter {
 
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
-    var tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
+    var tableConfig = if (mode == SaveMode.Overwrite || !tableExists) null else getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
     // get initial params and validate configs
     val paramsWithoutDefaults = getParamsWithoutDefaults(optParams)
     val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(paramsWithoutDefaults)
@@ -135,7 +135,6 @@ object HoodieSparkSqlWriter {
 
     // re-use table configs and set write config details
     val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode)
-
     val databaseName = hoodieConfig.getStringOrDefault(HoodieTableConfig.DATABASE_NAME, "")
     val tblName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME,
       s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.").trim
@@ -207,7 +206,7 @@ object HoodieSparkSqlWriter {
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
           .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(hoodieConfig.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE))
-          .setKeyGeneratorClassProp(originKeyGeneratorClassName)
+          .setKeyGeneratorClassProp(hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key))
           .set(timestampKeyGeneratorConfigs)
           .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
           .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
@@ -679,7 +678,8 @@ object HoodieSparkSqlWriter {
     val sparkContext = sqlContext.sparkContext
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
-    val tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
+    if (mode == SaveMode.Overwrite || !tableExists) null else getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
+    val tableConfig = if (mode == SaveMode.Overwrite || !tableExists) null else getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
     validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite)
 
     val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode)
