@@ -182,7 +182,7 @@ Such behavior change on `BULK_INSERT` write operation improves the write perform
 
 :::tip
 If you still observe small file issues with the default `NONE` sort mode, we suggest sorting the input data based on the
-partition path and record key before writing to the Hudi table. You can also usee `GLOBAL_SORT` to ensure the best file
+partition path and record key before writing to the Hudi table. You can also use `GLOBAL_SORT` to ensure the best file
 size.
 :::
 
