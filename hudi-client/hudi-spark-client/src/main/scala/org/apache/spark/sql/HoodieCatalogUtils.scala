@@ -40,7 +40,7 @@ object HoodieCatalogUtils {
    * Refreshes metadata and flushes cached data (resolved [[LogicalPlan]] representation,
    * already loaded [[InMemoryRelation]]) for the table identified by [[tableId]].
    *
-   * This method is usually invoked at the ond of the write operation to make sure cached
+   * This method is usually invoked at the end of the write operation to make sure cached
    * data/metadata are synchronized with the state on storage.
    *
    * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
