@@ -50,6 +50,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{convertToCatalystExpression, generateUnsafeProjection}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources._
@@ -102,6 +103,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected val sparkSession: SparkSession = sqlContext.sparkSession
 
   protected def tableName: String = metaClient.getTableConfig.getTableName
+  protected lazy val resolver: Resolver = sparkSession.sessionState.analyzer.resolver
 
   protected lazy val conf: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   protected lazy val jobConf = new JobConf(conf)
@@ -457,7 +459,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * For enable hoodie.datasource.write.drop.partition.columns, need to create an InternalRow on partition values
    * and pass this reader on parquet file. So that, we can query the partition columns.
    */
-  protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow = {
+
+  protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow =
+    getPartitionColumnsAsInternalRowInternal(file, shouldExtractPartitionValuesFromPartitionPath)
+
+  protected def getPartitionColumnsAsInternalRowInternal(file: FileStatus,
+                                                         extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
     try {
       val tableConfig = metaClient.getTableConfig
       if (shouldExtractPartitionValuesFromPartitionPath) {
@@ -507,7 +514,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                      requiredDataSchema: HoodieTableSchema,
                                      filters: Seq[Filter],
                                      options: Map[String, String],
-                                     hadoopConf: Configuration): BaseFileReader = {
+                                     hadoopConf: Configuration,
+                                     shouldAppendPartitionValuesOverride: Option[Boolean] = None): BaseFileReader = {
     val tableBaseFileFormat = tableConfig.getBaseFileFormat
 
     // NOTE: PLEASE READ CAREFULLY
@@ -528,7 +536,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
             hadoopConf = hadoopConf,
             // We're delegating to Spark to append partition values to every row only in cases
             // when these corresponding partition-values are not persisted w/in the data file itself
-            appendPartitionValues = shouldExtractPartitionValuesFromPartitionPath
+            appendPartitionValues = shouldAppendPartitionValuesOverride.getOrElse(shouldExtractPartitionValuesFromPartitionPath)
           )
           // Since partition values by default are omitted, and not persisted w/in data-files by Spark,
           // data-file readers (such as [[ParquetFileFormat]]) have to inject partition values while reading
@@ -582,6 +590,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected def tryPrunePartitionColumns(tableSchema: HoodieTableSchema,
                                          requiredSchema: HoodieTableSchema): (StructType, HoodieTableSchema, HoodieTableSchema) = {
+    tryPrunePartitionColumnsInternal(tableSchema, requiredSchema, shouldExtractPartitionValuesFromPartitionPath)
+  }
+
+  protected def tryPrunePartitionColumnsInternal(tableSchema: HoodieTableSchema,
+                                                 requiredSchema: HoodieTableSchema,
+                                                 extractPartitionValuesFromPartitionPath: Boolean): (StructType, HoodieTableSchema, HoodieTableSchema) = {
     // Since schema requested by the caller might contain partition columns, we might need to
     // prune it, removing all partition columns from it in case these columns are not persisted
     // in the data files
@@ -591,8 +605,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //       the partition path, and omitted from the data file, back into fetched rows;
     //       Note that, by default, partition columns are not omitted therefore specifying
     //       partition schema for reader is not required
-    if (shouldExtractPartitionValuesFromPartitionPath) {
-      val partitionSchema = StructType(partitionColumns.map(StructField(_, StringType)))
+    if (extractPartitionValuesFromPartitionPath) {
+      val partitionSchema = filterInPartitionColumns(tableSchema.structTypeSchema)
       val prunedDataStructSchema = prunePartitionColumns(tableSchema.structTypeSchema)
       val prunedRequiredSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
 
@@ -604,8 +618,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     }
   }
 
-  private def prunePartitionColumns(dataStructSchema: StructType): StructType =
-    StructType(dataStructSchema.filterNot(f => partitionColumns.contains(f.name)))
+  private def filterInPartitionColumns(structType: StructType): StructType =
+    StructType(structType.filter(f => partitionColumns.exists(col => resolver(f.name, col))))
+
+  private def prunePartitionColumns(structType: StructType): StructType =
+    StructType(structType.filterNot(f => partitionColumns.exists(pc => resolver(f.name, pc))))
 
   private def getConfigValue(config: ConfigProperty[String],
                              defaultValueOption: Option[String]=Option.empty): String = {
