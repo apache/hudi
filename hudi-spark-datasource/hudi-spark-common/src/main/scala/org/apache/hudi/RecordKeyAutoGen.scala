@@ -32,13 +32,25 @@ import scala.jdk.CollectionConverters.mapAsScalaMapConverter
 
 object RecordKeyAutoGen {
 
-  private val allowedOperations: Set[String] =
+  /**
+   * Set of operations supporting record-key auto-gen (currently only [[WriteOperationType.INSERT]],
+   * [[WriteOperationType.BULK_INSERT]])
+   */
+  private val supportedOperations: Set[String] =
     Set(WriteOperationType.INSERT, WriteOperationType.BULK_INSERT).map(_.value)
 
-  // TODO elaborate
+  /**
+   * Set of operations compatible w/ record-key auto-gen (additionally to [[supportedOperations]]
+   * [[WriteOperationType.DELETE]] is a compatible operation)
+   */
+  private val compatibleOperations: Set[String] = supportedOperations ++
+    Set(WriteOperationType.DELETE).map(_.value)
+
   def tryRecordKeyAutoGen(df: DataFrame, commitInstant: String, config: HoodieConfig): DataFrame = {
     val shouldAutoGenRecordKeys = config.getBooleanOrDefault(HoodieTableConfig.AUTO_GEN_RECORD_KEYS)
-    if (shouldAutoGenRecordKeys) {
+    val operation = config.getStringOrDefault(DataSourceWriteOptions.OPERATION)
+
+    if (shouldAutoGenRecordKeys && supportedOperations.contains(operation)) {
       // TODO reorder to keep all meta-fields as first?
       df.withColumn(HoodieRecord.AUTOGEN_ROW_KEY, new Column(AutoRecordKeyGenExpression(commitInstant)))
     } else {
@@ -52,7 +64,7 @@ object RecordKeyAutoGen {
     if (shouldAutoGenRecordKeys) {
       val operation = mergedParams.getOrElse(DataSourceWriteOptions.OPERATION.key,
         DataSourceWriteOptions.OPERATION.defaultValue)
-      if (!allowedOperations.contains(operation)) {
+      if (!compatibleOperations.contains(operation)) {
         throw new HoodieException(s"Operation '$operation' is not compatible with record key auto-generation")
       }
 
