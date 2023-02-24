@@ -34,9 +34,12 @@ class TestAutoRecordKeyGenExpression {
     val partitionId = 13
     projection.initialize(partitionId)
 
-    val row = projection.apply(InternalRow.empty)
+    val generatedKeys = Seq.range(0, 4)
+      .map(_ => projection.apply(InternalRow.empty).copy())
+      .map(_.getString(0))
+    val expectedKeys = Seq.range(0, 4).map(id => s"${nonce}_${partitionId}_${id}")
 
-    assertEquals(s"${nonce}_${partitionId}_0", row.getString(0))
+    assertEquals(expectedKeys, generatedKeys)
   }
 
   @Test
@@ -47,6 +50,9 @@ class TestAutoRecordKeyGenExpression {
     val partitionId = 13
     autoGenExpr.initialize(partitionId)
 
-    assertEquals(s"${nonce}_${partitionId}_0", autoGenExpr.eval(InternalRow.empty).toString)
+    val generatedKeys = Seq.range(0, 4).map(_ => autoGenExpr.eval(InternalRow.empty).toString)
+    val expectedKeys = Seq.range(0, 4).map(id => s"${nonce}_${partitionId}_${id}")
+
+    assertEquals(expectedKeys, generatedKeys)
   }
 }
