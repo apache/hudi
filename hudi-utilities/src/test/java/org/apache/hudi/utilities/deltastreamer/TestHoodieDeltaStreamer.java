@@ -2333,6 +2333,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertFalse(truncatedKeys.contains("SASL SECRET KEY"));
     assertFalse(truncatedKeys.contains("AUTH CREDENTIALS"));
     assertFalse(truncatedKeys.contains("AUTH USER INFO"));
+    assertTrue(truncatedKeys.contains("SENSITIVE_INFO_MASKED"));
   }
 
   void testDeltaStreamerWithSpecifiedOperation(final String tableBasePath, WriteOperationType operationType, HoodieRecordType recordType) throws Exception {
