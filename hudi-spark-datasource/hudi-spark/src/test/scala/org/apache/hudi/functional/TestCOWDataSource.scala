@@ -102,10 +102,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "AVRO,insert", "AVRO,bulk_insert", "AVRO,upsert",
-    "SPARK,insert", "SPARK,bulk_insert", "SPARK,upsert"
+    "AVRO,insert", "AVRO,bulk_insert", "SPARK,insert", "SPARK,bulk_insert"
   ))
-  def testRecordKeysAutoGen(recordType: HoodieRecordType, op: String) {
+  def testRecordKeysAutoGen(recordType: HoodieRecordType, op: String): Unit = {
     val (writeOpts, _) = getWriterReaderOpts(recordType)
 
     // NOTE: In this test we deliberately removing record-key configuration
@@ -134,6 +133,34 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .sorted
 
     assertEquals(100, recordKeys.size)
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = Array(
+    "AVRO,upsert", "AVRO,delete", "AVRO,bootstrap",
+    "SPARK,upsert", "SPARK,delete", "SPARK,bootstrap"
+  ))
+  def testRecordKeysAutoGenInvalidOperation(recordType: HoodieRecordType, op: String): Unit = {
+    val (writeOpts, _) = getWriterReaderOpts(recordType)
+
+    // NOTE: In this test we deliberately removing record-key configuration
+    //       to validate Hudi is handling this case appropriately
+    val opts = writeOpts -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 1)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    val e = assertThrows(classOf[HoodieException]) {
+      inputDF.write.format("hudi")
+        .options(opts)
+        .option(DataSourceWriteOptions.OPERATION.key, op)
+        .option(HoodieTableConfig.AUTO_GEN_RECORD_KEYS.key(), "true")
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
+    }
+
+    assertEquals(s"Operation '$op' is not compatible with record key auto-generation", getRootCause(e).getMessage)
   }
 
   @ParameterizedTest
