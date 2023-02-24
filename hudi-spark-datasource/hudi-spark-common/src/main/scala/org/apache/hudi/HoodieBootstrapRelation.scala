@@ -134,17 +134,6 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       shouldAppendPartitionValuesOverride = Some(true)
     )
 
-    // NOTE: In some case schema of the reader's output (reader's schema) might not match the schema expected by the caller.
-    //       This could occur for ex, when requested schema contains partition columns which might not be persisted w/in the
-    //       data file, but instead would be parsed from the partition path. In that case output of the file-reader will have
-    //       different ordering of the fields than the original required schema (for more details please check out
-    //       [[ParquetFileFormat]] impl). In that case we have to project the rows from the file-reader's schema
-    //       back into the one expected by the caller.
-    //       Meta-fields will be fetched from the skeleton file and therefore we have to strip them from the required
-    //       schema
-    val projectedBootstrapDataFileReader =
-      projectReader(bootstrapDataFileReader, removeMetaFields(requiredSchema.structTypeSchema))
-
     val boostrapSkeletonFileReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       dataSchema = new HoodieTableSchema(skeletonSchema),
@@ -162,7 +151,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       shouldAppendPartitionValuesOverride = Some(false)
     )
 
-    (projectedBootstrapDataFileReader, boostrapSkeletonFileReader)
+    (bootstrapDataFileReader, boostrapSkeletonFileReader)
   }
 
   private def createRegularFileReader(tableSchema: HoodieTableSchema,
