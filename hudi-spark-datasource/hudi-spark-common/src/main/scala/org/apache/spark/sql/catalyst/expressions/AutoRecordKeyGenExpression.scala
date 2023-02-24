@@ -18,6 +18,7 @@
 package org.apache.spark.sql.catalyst.expressions
 
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.AutoRecordKeyGenExpression.{escapeString, separator}
 import org.apache.spark.sql.catalyst.expressions.codegen.Block.BlockHelper
 import org.apache.spark.sql.catalyst.expressions.codegen.{CodeGenerator, CodegenContext, ExprCode, FalseLiteral}
 import org.apache.spark.sql.types.{DataType, StringType}
@@ -76,9 +77,8 @@ case class AutoRecordKeyGenExpression(nonce: String) extends LeafExpression with
     val partitionPrefixTerm = "partitionPrefix"
     ctx.addImmutableStateIfNotExists(CodeGenerator.javaType(StringType), partitionPrefixTerm)
     ctx.addPartitionInitializationStatement(s"$countTerm = 0L;")
-    // NOTE: String here has to be broken in 2 since Scala's interpolated strings do not
-    //       support escaping
-    ctx.addPartitionInitializationStatement(s"$partitionPrefixTerm" + "= UTF8String.fromString(String.valueOf(partitionIndex) + \"_\");")
+    ctx.addPartitionInitializationStatement(s"$partitionPrefixTerm = " +
+      s"UTF8String.fromString(${escapeString(nonce + separator)} + String.valueOf(partitionIndex) + ${escapeString(separator)});")
 
     ev.copy(code = code"""
       final ${CodeGenerator.javaType(dataType)} ${ev.value} = UTF8String.concat($partitionPrefixTerm, UTF8String.fromString(String.valueOf($countTerm)));
@@ -90,4 +90,12 @@ case class AutoRecordKeyGenExpression(nonce: String) extends LeafExpression with
   override def sql: String = s"record_key_gen_expression()"
 
   override def freshCopy(): AutoRecordKeyGenExpression = AutoRecordKeyGenExpression(nonce)
+}
+
+object AutoRecordKeyGenExpression {
+
+  private val separator = "_"
+
+  private def escapeString(s: String): String = "\"" + s + "\""
+
 }
