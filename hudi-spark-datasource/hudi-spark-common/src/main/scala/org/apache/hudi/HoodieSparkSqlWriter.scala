@@ -145,7 +145,7 @@ object HoodieSparkSqlWriter {
     asyncClusteringTriggerFnDefined = asyncClusteringTriggerFn.isDefined
     sparkContext.getConf.getOption("spark.serializer") match {
       case Some(ser) if ser.equals("org.apache.spark.serializer.KryoSerializer") =>
-      case _ => throw new HoodieException("hoodie only support org.apache.spark.serializer.KryoSerializer as spark.serializer")
+      case _ => throw new HoodieException("Hudi only supports Kryo as serializer in Spark")
     }
     val tableType = HoodieTableType.valueOf(hoodieConfig.getString(TABLE_TYPE))
     var operation = WriteOperationType.fromValue(hoodieConfig.getString(OPERATION))

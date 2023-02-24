@@ -30,6 +30,7 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
@@ -224,10 +225,15 @@ class TestHoodieSparkSqlWriter {
    */
   @Test
   def testParametersWithWriteDefaults(): Unit = {
-    val originals = HoodieWriterUtils.parametersWithWriteDefaults(Map.empty)
+    val originals = HoodieWriterUtils.parametersWithWriteDefaults(Map(RECORDKEY_FIELD.key -> "row_key"))
     val rhsKey = "hoodie.right.hand.side.key"
     val rhsVal = "hoodie.right.hand.side.val"
-    val modifier = Map(OPERATION.key -> INSERT_OPERATION_OPT_VAL, TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL, rhsKey -> rhsVal)
+    val modifier = Map(
+      RECORDKEY_FIELD.key -> "row_key",
+      OPERATION.key -> INSERT_OPERATION_OPT_VAL,
+      TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      rhsKey -> rhsVal
+    )
     val modified = HoodieWriterUtils.parametersWithWriteDefaults(modifier)
     val matcher = (k: String, v: String) => modified(k) should be(v)
     originals foreach {
@@ -247,10 +253,15 @@ class TestHoodieSparkSqlWriter {
     val session = SparkSession.builder().appName("hoodie_test").master("local").getOrCreate()
     try {
       val sqlContext = session.sqlContext
-      val options = Map("path" -> "hoodie/test/path", HoodieWriteConfig.TBL_NAME.key -> "hoodie_test_tbl")
+      val options = Map(
+        "path" -> "hoodie/test/path",
+        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test_tbl",
+        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "row_key"
+      )
+
       val e = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.ErrorIfExists, options,
         session.emptyDataFrame))
-      assert(e.getMessage.contains("spark.serializer"))
+      assertEquals("Hudi only supports Kryo as serializer in Spark", getRootCause(e).getMessage)
     } finally {
       session.stop()
       initSparkContext()
