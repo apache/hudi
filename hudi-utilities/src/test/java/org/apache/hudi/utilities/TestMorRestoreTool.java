@@ -59,7 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestMorRestoreTool extends SparkClientFunctionalTestHarness implements SparkProvider {
 
-  private static final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0L);
+  private static final HoodieTestDataGenerator DATA_GENERATOR = new HoodieTestDataGenerator(0L);
   private HoodieTableMetaClient metaClient;
 
   @BeforeEach
@@ -69,7 +69,7 @@ public class TestMorRestoreTool extends SparkClientFunctionalTestHarness impleme
 
   @AfterAll
   public static void cleanup() {
-    dataGen.close();
+    DATA_GENERATOR.close();
   }
 
   @Test
@@ -91,7 +91,7 @@ public class TestMorRestoreTool extends SparkClientFunctionalTestHarness impleme
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+      List<HoodieRecord> records = DATA_GENERATOR.generateInserts(newCommitTime, 200);
       upsertToMorTable(client, records, newCommitTime);
 
       /*
@@ -99,12 +99,12 @@ public class TestMorRestoreTool extends SparkClientFunctionalTestHarness impleme
        */
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
-      records = dataGen.generateUpdates(newCommitTime, 100);
+      records = DATA_GENERATOR.generateUpdates(newCommitTime, 100);
       upsertToMorTable(client, records, newCommitTime);
 
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
-      records = dataGen.generateUpdates(newCommitTime, 50);
+      records = DATA_GENERATOR.generateUpdates(newCommitTime, 50);
       upsertToMorTable(client, records, newCommitTime);
       String toRestoreCommit = newCommitTime;
 
@@ -112,7 +112,7 @@ public class TestMorRestoreTool extends SparkClientFunctionalTestHarness impleme
       HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
       table.getHoodieView().sync();
       Map<String, List<HoodieLogFile>> beforeRestoreFileSlice = new HashMap<>();
-      for (String partitionPath : dataGen.getPartitionPaths()) {
+      for (String partitionPath : DATA_GENERATOR.getPartitionPaths()) {
         List<FileSlice> groupedLogFiles =
             table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
         beforeRestoreFileSlice.put(partitionPath, new ArrayList<>());
@@ -136,12 +136,12 @@ public class TestMorRestoreTool extends SparkClientFunctionalTestHarness impleme
        */
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
-      records = dataGen.generateUpdates(newCommitTime, 100);
+      records = DATA_GENERATOR.generateUpdates(newCommitTime, 100);
       upsertToMorTable(client, records, newCommitTime);
 
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
-      records = dataGen.generateUpdates(newCommitTime, 50);
+      records = DATA_GENERATOR.generateUpdates(newCommitTime, 50);
       upsertToMorTable(client, records, newCommitTime);
 
       String secondCompactionInstant = client.scheduleCompaction(Option.empty()).get().toString();
@@ -155,12 +155,12 @@ public class TestMorRestoreTool extends SparkClientFunctionalTestHarness impleme
 
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
-      records = dataGen.generateUpdates(newCommitTime, 100);
+      records = DATA_GENERATOR.generateUpdates(newCommitTime, 100);
       upsertToMorTable(client, records, newCommitTime);
 
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
-      records = dataGen.generateUpdates(newCommitTime, 50);
+      records = DATA_GENERATOR.generateUpdates(newCommitTime, 50);
       upsertToMorTable(client, records, newCommitTime);
 
       // trigger restore
@@ -175,7 +175,7 @@ public class TestMorRestoreTool extends SparkClientFunctionalTestHarness impleme
       table = HoodieSparkTable.create(cfg, context(), metaClient);
       table.getHoodieView().sync();
       Map<String, List<HoodieLogFile>> afterRestoreFileSlice = new HashMap<>();
-      for (String partitionPath : dataGen.getPartitionPaths()) {
+      for (String partitionPath : DATA_GENERATOR.getPartitionPaths()) {
         List<FileSlice> groupedLogFiles =
             table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
         afterRestoreFileSlice.put(partitionPath, new ArrayList<>());
