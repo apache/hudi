@@ -43,7 +43,7 @@ import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
@@ -452,6 +452,38 @@ class TestHoodieSparkSqlWriter {
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf = dropMetaFields(actualDf)
     assert(df.except(trimmedDf).count() == 0)
+  }
+
+  /**
+   * Test case for upsert dataset without precombine field and with
+   * auto adjusted COMBINE_BEFORE_UPSERT set to false.
+   */
+  @Disabled
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testUpsertDatasetWithoutPrecombineFieldInferedCombineBeforeUpsert(tableType: HoodieTableType): Unit = {
+    // TODO enable after (HUDI-5824) is merged
+    val options = Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      "hoodie.insert.shuffle.parallelism" -> "1"
+    )
+    val df = spark.range(0, 10).toDF("keyid")
+      .withColumn("age", expr("keyid + 1000"))
+    df.write.format("hudi")
+      .options(options.updated(DataSourceWriteOptions.OPERATION.key, "insert"))
+      .mode(SaveMode.Overwrite).save(tempBasePath)
+    // upsert same record again
+    val df_update = spark.range(0, 10).toDF("keyid")
+      .withColumn("age", expr("keyid + 2000"))
+    df_update.write.format("hudi")
+      .options(options.updated(DataSourceWriteOptions.OPERATION.key, "upsert"))
+      .mode(SaveMode.Append).save(tempBasePath)
+    val df_result = spark.read.format("hudi").load(tempBasePath).selectExpr("keyid", "age")
+    assert(df_result.count() == 10)
+    assert(df_result.where("age >= 2000").count() == 10)
   }
 
   /**

@@ -2945,8 +2945,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       autoAdjustConfigsForNoPreCombineMode(isPreCombineFieldNameSet);
     }
 
-
-
     private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
       if (writeConfig.isAutoAdjustLockConfigs()) {
         // auto adjustment is required only for deltastreamer and spark streaming where async table services can be executed in the same JVM.
@@ -2990,8 +2988,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       }
     }
 
-    private void autoAdjustConfigsForNoPreCombineMode(boolean isPreCombineFieldNameSet){
-      // TODO implement auto adjust when no precombine mode is set
+    private void autoAdjustConfigsForNoPreCombineMode(boolean isPreCombineFieldNameSet) {
       if (writeConfig.getTableType() == HoodieTableType.COPY_ON_WRITE && isPreCombineFieldNameSet) {
         LOG.info(String.format("Automatically set %s=%s since use has not disabled combine before upsert "
                 + "in absence of precombine field", COMBINE_BEFORE_UPSERT.key(), "false"));

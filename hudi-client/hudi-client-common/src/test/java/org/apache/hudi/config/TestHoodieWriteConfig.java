@@ -58,6 +58,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class TestHoodieWriteConfig {
 
@@ -383,12 +384,12 @@ public class TestHoodieWriteConfig {
             .withProperties(properties)
             .build();
     // assume PreCombine field is not set by default
-    assertEquals(writeConfig.isPrecombineFieldSet(), false);
+    assertFalse(writeConfig.isPrecombineFieldSet());
     if (writeConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {
-      assertEquals(writeConfig.shouldCombineBeforeUpsert(), false);
+      assertFalse(writeConfig.shouldCombineBeforeUpsert());
     } else {
       // for MoR PreCombine field is required
-      assertEquals(writeConfig.shouldCombineBeforeUpsert(), true);
+      assertTrue(writeConfig.shouldCombineBeforeUpsert());
     }
 
 
