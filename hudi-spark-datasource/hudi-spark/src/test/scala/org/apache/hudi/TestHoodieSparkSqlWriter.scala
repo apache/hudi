@@ -956,8 +956,9 @@ class TestHoodieSparkSqlWriter {
     df_update.write.format("hudi")
       .options(options.updated(DataSourceWriteOptions.OPERATION.key, "upsert"))
       .mode(SaveMode.Append).save(tempBasePath)
-    assert(spark.read.format("hudi").load(tempBasePath).count() == 10)
-    assert(spark.read.format("hudi").load(tempBasePath).where("age >= 2000").count() == 10)
+    val df_result = spark.read.format("hudi").load(tempBasePath)
+    assert(df_result.count() == 10)
+    assert(df_result.where("age >= 2000").count() == 10)
   }
 
   /**
