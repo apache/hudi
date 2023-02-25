@@ -1124,6 +1124,11 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(PRECOMBINE_FIELD_NAME);
   }
 
+  public boolean isPrecombineFieldSet() {
+    // TODO(HUDI-3456) cleanup
+    return getPreCombineField().isEmpty() ? false : true;
+  }
+
   public String getWritePayloadClass() {
     return getString(WRITE_PAYLOAD_CLASS_NAME);
   }
@@ -2935,7 +2940,12 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
+
+      final boolean isPreCombineFieldNameSet = writeConfig.isPrecombineFieldSet();
+      autoAdjustConfigsForNoPreCombineMode(isPreCombineFieldNameSet);
     }
+
+
 
     private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
       if (writeConfig.isAutoAdjustLockConfigs()) {
@@ -2977,6 +2987,15 @@ public class HoodieWriteConfig extends HoodieConfig {
         LOG.info(String.format("Automatically set %s=%s since optimistic concurrency control is used",
             HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
             HoodieFailedWritesCleaningPolicy.LAZY.name()));
+      }
+    }
+
+    private void autoAdjustConfigsForNoPreCombineMode(boolean isPreCombineFieldNameSet){
+      // TODO implement auto adjust when no precombine mode is set
+      if (writeConfig.getTableType() == HoodieTableType.COPY_ON_WRITE && isPreCombineFieldNameSet) {
+        LOG.info(String.format("Automatically set %s=%s since use has not disabled combine before upsert "
+                + "in absence of precombine field", COMBINE_BEFORE_UPSERT.key(), "false"));
+        writeConfig.setValue(COMBINE_BEFORE_UPSERT.key(), "false");
       }
     }
 

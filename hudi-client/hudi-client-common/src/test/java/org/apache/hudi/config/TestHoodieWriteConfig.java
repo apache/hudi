@@ -373,6 +373,27 @@ public class TestHoodieWriteConfig {
         HoodieFailedWritesCleaningPolicy.LAZY, FileSystemBasedLockProviderTestClass.class.getName());
   }
 
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testAutoAdjustConfigsForNoPreCombineMode(HoodieTableType tableType) {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+            .withPath("/tmp")
+            .withProperties(properties)
+            .build();
+    // assume PreCombine field is not set by default
+    assertEquals(writeConfig.isPrecombineFieldSet(), false);
+    if (writeConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {
+      assertEquals(writeConfig.shouldCombineBeforeUpsert(), false);
+    } else {
+      // for MoR PreCombine field is required
+      assertEquals(writeConfig.shouldCombineBeforeUpsert(), true);
+    }
+
+
+  }
+
   @Test
   public void testConsistentBucketIndexDefaultClusteringConfig() {
     Properties props = new Properties();
