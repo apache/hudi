@@ -167,7 +167,7 @@ public class TestMorRestoreTool extends SparkClientFunctionalTestHarness impleme
       MORRestoreTool.Config restoreToolConfig = new MORRestoreTool.Config();
       restoreToolConfig.basePath = cfg.getBasePath();
       restoreToolConfig.commitTime = toRestoreCommit;
-      restoreToolConfig.dryRun = false;
+      restoreToolConfig.execute = true;
       MORRestoreTool restoreTool = new MORRestoreTool(jsc(), restoreToolConfig);
       restoreTool.run();
 

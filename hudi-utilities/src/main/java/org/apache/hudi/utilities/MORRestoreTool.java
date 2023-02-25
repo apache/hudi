@@ -31,8 +31,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieMetadataException;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -52,8 +55,24 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
+import static org.apache.hudi.table.HoodieTable.clearMetadataTablePartitionsConfig;
+
 /**
- *
+ * Sample command
+ * ./bin/spark-submit
+ * --driver-memory 5g
+ * --executor-memory 6g
+ * --num-executors 1
+ * --executor-cores 2
+ * --deploy-mode client
+ * --class org.apache.hudi.utilities.MORRestoreTool UTILITIES_BUNDLE/hudi-utilities-bundle_2.11-0.14.0-SNAPSHOT.jar
+ * --base-path /tmp/hudi_trips_more_restore/
+ * --commitTime 20230225091008404
+ * --spark-master local[2]
+ * --execute
+ * --cleanUpMetadata
  */
 public class MORRestoreTool implements Serializable {
 
@@ -107,8 +126,11 @@ public class MORRestoreTool implements Serializable {
     @Parameter(names = {"--commitTime", "-c"}, description = "Instant Time to restore to", required = true)
     public String commitTime = "";
 
-    @Parameter(names = {"--dryRun"}, description = "Dry run without deleting any files", required = false)
-    public boolean dryRun = true;
+    @Parameter(names = {"--execute"}, description = "If not enabled, will do a dry run. If enabled, will delete files for real", required = false)
+    public boolean execute = false;
+
+    @Parameter(names = {"--cleanUpMetadata"}, description = "Clean up metadata table if exists", required = false)
+    public boolean cleanupMetadata = false;
 
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
@@ -209,10 +231,27 @@ public class MORRestoreTool implements Serializable {
     }
   }
 
-  public boolean doRestore() {
+  public boolean doRestore() throws IOException {
     AtomicBoolean finalResult = new AtomicBoolean(true);
     String basePath = metaClient.getBasePath();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    FileSystem fs = metaClient.getFs();
+    if (fs.exists(new Path(basePath + "/" + METADATA_TABLE_FOLDER_PATH))) {
+      if (!cfg.cleanupMetadata) {
+        LOG.error("Metadata is enabled for the table. please delete it and retry. Or enable --cleanUpMetadata flag to trigger deletion/disabling "
+            + "via the same tool");
+        throw new HoodieIOException("Restore is not feasible when metadata is enabled");
+      } else {
+        LOG.info("Metadata exists. Going ahead with cleaning it up");
+        try {
+          deleteMetadataTable(basePath, engineContext);
+          clearMetadataTablePartitionsConfig(Option.empty(), true, metaClient);
+        } catch (HoodieMetadataException e) {
+          throw new HoodieException("Failed to delete metadata table.", e);
+        }
+      }
+    }
+
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
     List<String> partitions = FSUtils.getAllPartitionPaths(engineContext, metadataConfig, basePath);
     SerializableConfiguration serializedConf = new SerializableConfiguration(metaClient.getHadoopConf());
@@ -229,27 +268,29 @@ public class MORRestoreTool implements Serializable {
           for (FileSlice fileSlice : fileSlices) {
             LOG.info("File slice commit time " + fileSlice.getBaseInstantTime());
             if (HoodieTimeline.compareTimestamps(fileSlice.getBaseInstantTime(), HoodieTimeline.GREATER_THAN, cfg.commitTime)) {
-              LOG.info("Deleting entire file slice ");
+              LOG.info(fileSlice.getBaseInstantTime() + " Deleting entire file slice ");
               if (fileSlice.getBaseFile().isPresent()) {
-                LOG.info("Base file to delete " + fileSlice.getBaseFile().get().getPath());
+                LOG.info(fileSlice.getBaseInstantTime() + " Base file to delete " + fileSlice.getBaseFile().get().getPath());
                 filesToDelete.add(Pair.of(pPath, fileSlice.getBaseFile().get().getPath()));
               }
               fileSlice.getLogFiles().forEach(logFile -> {
-                LOG.info("   log file to delete " + logFile.getPath().toString());
+                LOG.info(fileSlice.getBaseInstantTime() + "   log file to delete " + logFile.getPath().toString());
                 filesToDelete.add(Pair.of(pPath, logFile.getPath().toString()));
               });
             } else if (HoodieTimeline.compareTimestamps(fileSlice.getBaseInstantTime(), HoodieTimeline.EQUALS, cfg.commitTime)) {
-              LOG.info("Deleting all log files except base file");
+              LOG.info(fileSlice.getBaseInstantTime() + " Deleting all log files except base file");
               if (fileSlice.getBaseFile().isPresent()) {
-                LOG.info("Not deleting Base file " + fileSlice.getBaseFile().get().getPath());
+                LOG.info(fileSlice.getBaseInstantTime() + "Not deleting Base file " + fileSlice.getBaseFile().get().getPath());
               }
               fileSlice.getLogFiles().forEach(logFile -> {
-                LOG.info("   log file to delete " + logFile.getPath().toString());
+                LOG.info(fileSlice.getBaseInstantTime() + "   log file to delete " + logFile.getPath().toString());
                 filesToDelete.add(Pair.of(pPath, logFile.getPath().toString()));
               });
-              LOG.info("Not processing remaining file slices");
+              LOG.info(fileSlice.getBaseInstantTime() + " Not processing remaining file slices");
               break;
             } else {
+              LOG.info(fileSlice.getBaseInstantTime() + " Found a file slice which is lesser than commit to be restored. Ignoring remaining file slices");
+              break;
               // we need to collect only partial list of log files to be deleted
               /*TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
               try {
@@ -281,28 +322,29 @@ public class MORRestoreTool implements Serializable {
           return filesToDelete.iterator();
         }).collectAsList();
 
-    FileSystem fs = metaClient.getFs();
     LOG.info("\n\n================================================================================");
-    LOG.info("List of files to delete ");
     if (totalFilesToDelete.size() > 0) {
+      LOG.info("List of files to delete ");
       totalFilesToDelete.forEach(fileToDelete -> {
         LOG.info("   File to delete " + fileToDelete.getValue());
       });
-      if (!cfg.dryRun) {
+      if (cfg.execute) {
         int parallelism = Math.max(1, totalFilesToDelete.size() / 100);
         List<Boolean> result = engineContext.parallelize(totalFilesToDelete).repartition(parallelism)
             .map((SerializableFunction<Pair<String, String>, Boolean>) partitionFileToDeletePair
                 -> {
               Path pathToDelete = new Path(partitionFileToDeletePair.getValue());
               FileSystem fileSystem = pathToDelete.getFileSystem(serializedConf.get());
-              LOG.info("   File to delete " + partitionFileToDeletePair.getValue());
+              LOG.info("   File getting deleted " + partitionFileToDeletePair.getValue());
               return fileSystem.delete(new Path(partitionFileToDeletePair.getValue()));
             }).collectAsList();
         result.forEach(entry -> finalResult.set(finalResult.get() && entry));
       }
+    } else {
+      LOG.info("No files to delete");
     }
 
-    if (!cfg.dryRun) {
+    if (cfg.execute) {
       LOG.info("Removing timeline files ");
       metaClient.reloadActiveTimeline().getReverseOrderedInstants().collect(Collectors.toList())
           .forEach(instant -> {
@@ -311,24 +353,24 @@ public class MORRestoreTool implements Serializable {
               try {
                 if (instant.isCompleted()) {
                   LOG.info("Deleting all 3 timeline files");
-                  fs.delete(new Path(basePath + "/.hoodie/" + instant.getFileName()));
+                  fs.delete(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getFileName()));
                   String action = instant.getAction();
                   if (instant.getAction().equals("commit")) {
                     action = "compaction";
                   }
-                  fs.delete(new Path(basePath + "/.hoodie/" + instant.getTimestamp() + "." + action
+                  fs.delete(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + action
                       + HoodieTimeline.INFLIGHT_EXTENSION));
-                  fs.delete(new Path(basePath + "/.hoodie/" + instant.getTimestamp() + "." + action
+                  fs.delete(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + action
                       + HoodieTimeline.REQUESTED_EXTENSION));
                 } else if (instant.isInflight()) {
                   LOG.info("Deleting requested and inflight timeline files");
-                  fs.delete(new Path(basePath + "/.hoodie/" + instant.getTimestamp() + "." + instant.getAction()
+                  fs.delete(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + instant.getAction()
                       + HoodieTimeline.INFLIGHT_EXTENSION));
-                  fs.delete(new Path(basePath + "/.hoodie/" + instant.getTimestamp() + "." + instant.getAction()
+                  fs.delete(new Path(basePath + "/." + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + instant.getAction()
                       + HoodieTimeline.REQUESTED_EXTENSION));
                 } else {
                   LOG.info("Deleting only requested timeline files");
-                  fs.delete(new Path(basePath + "/.hoodie/" + instant.getTimestamp() + "." + instant.getAction()
+                  fs.delete(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + instant.getAction()
                       + HoodieTimeline.REQUESTED_EXTENSION));
                 }
               } catch (IOException e) {

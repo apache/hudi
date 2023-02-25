@@ -953,7 +953,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       try {
         LOG.info("Deleting metadata table because it is disabled in writer.");
         deleteMetadataTable(config.getBasePath(), context);
-        clearMetadataTablePartitionsConfig(Option.empty(), true);
+        clearMetadataTablePartitionsConfig(Option.empty(), true, metaClient);
       } catch (HoodieMetadataException e) {
         throw new HoodieException("Failed to delete metadata table.", e);
       }
@@ -971,7 +971,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           if (metadataPartitionExists(metaClient.getBasePath(), context, partitionType)) {
             deleteMetadataPartition(metaClient.getBasePath(), context, partitionType);
           }
-          clearMetadataTablePartitionsConfig(Option.of(partitionType), false);
+          clearMetadataTablePartitionsConfig(Option.of(partitionType), false, metaClient);
         } catch (HoodieMetadataException e) {
           throw new HoodieException("Failed to delete metadata partition: " + partitionType.name(), e);
         }
@@ -1021,7 +1021,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   /**
    * Clears hoodie.table.metadata.partitions in hoodie.properties
    */
-  private void clearMetadataTablePartitionsConfig(Option<MetadataPartitionType> partitionType, boolean clearAll) {
+  public static void clearMetadataTablePartitionsConfig(Option<MetadataPartitionType> partitionType, boolean clearAll, HoodieTableMetaClient metaClient) {
     Set<String> partitions = metaClient.getTableConfig().getMetadataPartitions();
     if (clearAll && partitions.size() > 0) {
       LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
