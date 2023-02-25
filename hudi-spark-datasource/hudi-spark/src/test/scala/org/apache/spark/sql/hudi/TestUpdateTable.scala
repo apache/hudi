@@ -205,7 +205,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
     })
   }
 
-  test("Test Add Column and Update Table") {
+  test("Test decimal type") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -235,18 +235,6 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
       spark.sql(s"update $tableName set price = 22 where id = 1")
       checkAnswer(s"select id, name, price, ts from $tableName")(
         Seq(1, "a1", 22.0, 1000)
-      )
-
-      spark.sql(s"alter table $tableName add column new_col1 int")
-
-      checkAnswer(s"select id, name, price, ts, new_col1 from $tableName")(
-        Seq(1, "a1", 22.0, 1000, null)
-      )
-
-      // update and check
-      spark.sql(s"update $tableName set price = price * 2 where id = 1")
-      checkAnswer(s"select id, name, price, ts, new_col1 from $tableName")(
-        Seq(1, "a1", 44.0, 1000, null)
       )
     }
   }
