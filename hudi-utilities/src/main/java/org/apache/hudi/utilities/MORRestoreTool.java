@@ -45,12 +45,15 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SQLContext;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -131,6 +134,9 @@ public class MORRestoreTool implements Serializable {
 
     @Parameter(names = {"--cleanUpMetadata"}, description = "Clean up metadata table if exists", required = false)
     public boolean cleanupMetadata = false;
+
+    @Parameter(names = {"--validateReadAfterExecute"}, description = "Validate read of the table succeeds after restoring.", required = false)
+    public boolean validateReadAfterExecute = false;
 
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
@@ -237,17 +243,25 @@ public class MORRestoreTool implements Serializable {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     FileSystem fs = metaClient.getFs();
     if (fs.exists(new Path(basePath + "/" + METADATA_TABLE_FOLDER_PATH))) {
-      if (!cfg.cleanupMetadata) {
-        LOG.error("Metadata is enabled for the table. please delete it and retry. Or enable --cleanUpMetadata flag to trigger deletion/disabling "
-            + "via the same tool");
-        throw new HoodieIOException("Restore is not feasible when metadata is enabled");
+      if (!cfg.execute) {
+        if (!cfg.cleanupMetadata) {
+          LOG.info("Dry run. Metadata table exists. Please set --cleanUpMetadata for the script to clean up metadata table during actual execution.");
+        } else {
+          LOG.info("Dry run. Metadata table exists and --cleanUpMetadata is set. Will clean up metadata table during actual execution");
+        }
       } else {
-        LOG.info("Metadata exists. Going ahead with cleaning it up");
-        try {
-          deleteMetadataTable(basePath, engineContext);
-          clearMetadataTablePartitionsConfig(Option.empty(), true, metaClient);
-        } catch (HoodieMetadataException e) {
-          throw new HoodieException("Failed to delete metadata table.", e);
+        if (!cfg.cleanupMetadata) {
+          LOG.error("Metadata is enabled for the table. please delete it and retry. Or enable --cleanUpMetadata flag to trigger deletion/disabling "
+              + "via the same tool");
+          throw new HoodieIOException("Restore is not feasible when metadata is enabled");
+        } else {
+          LOG.info("Metadata exists. Going ahead with cleaning it up");
+          try {
+            deleteMetadataTable(basePath, engineContext);
+            clearMetadataTablePartitionsConfig(Option.empty(), true, metaClient);
+          } catch (HoodieMetadataException e) {
+            throw new HoodieException("Failed to delete metadata table.", e);
+          }
         }
       }
     }
@@ -324,10 +338,27 @@ public class MORRestoreTool implements Serializable {
 
     LOG.info("\n\n================================================================================");
     if (totalFilesToDelete.size() > 0) {
+      if (!cfg.execute) {
+        LOG.info("Dry run :");
+      }
       LOG.info("List of files to delete ");
-      totalFilesToDelete.forEach(fileToDelete -> {
-        LOG.info("   File to delete " + fileToDelete.getValue());
-      });
+      Map<String, Map<String, List<String>>> partitionFilesToDelete = new HashMap<>();
+      for (Pair<String, String> partitionPathFileNamePair : totalFilesToDelete) {
+        partitionFilesToDelete.computeIfAbsent(partitionPathFileNamePair.getKey(), s -> new HashMap<>());
+        String fileId = FSUtils.getFileId(partitionPathFileNamePair.getValue());
+        partitionFilesToDelete.get(partitionPathFileNamePair.getKey()).computeIfAbsent(fileId, s -> new ArrayList<>());
+        partitionFilesToDelete.get(partitionPathFileNamePair.getKey()).get(fileId).add(partitionPathFileNamePair.getValue());
+      }
+
+      for (Map.Entry<String, Map<String, List<String>>> entry : partitionFilesToDelete.entrySet()) {
+        String partitionPath = entry.getKey();
+        Map<String, List<String>> fileIdFilesToDelete = entry.getValue();
+        LOG.info("Partition :: " + partitionPath);
+        for (Map.Entry<String, List<String>> fileIdFilesList : fileIdFilesToDelete.entrySet()) {
+          LOG.info("  FileID :: " + fileIdFilesList.getKey());
+          fileIdFilesList.getValue().forEach(fileToDelete -> LOG.info("    File to delete " + fileToDelete));
+        }
+      }
       if (cfg.execute) {
         int parallelism = Math.max(1, totalFilesToDelete.size() / 100);
         List<Boolean> result = engineContext.parallelize(totalFilesToDelete).repartition(parallelism)
@@ -344,40 +375,59 @@ public class MORRestoreTool implements Serializable {
       LOG.info("No files to delete");
     }
 
-    if (cfg.execute) {
-      LOG.info("Removing timeline files ");
-      metaClient.reloadActiveTimeline().getReverseOrderedInstants().collect(Collectors.toList())
-          .forEach(instant -> {
-            if (HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, cfg.commitTime)) {
-              LOG.info("Deleting timeline file for commit " + instant.getTimestamp());
-              try {
-                if (instant.isCompleted()) {
-                  LOG.info("Deleting all 3 timeline files");
-                  fs.delete(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getFileName()));
-                  String action = instant.getAction();
-                  if (instant.getAction().equals("commit")) {
-                    action = "compaction";
-                  }
-                  fs.delete(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + action
-                      + HoodieTimeline.INFLIGHT_EXTENSION));
-                  fs.delete(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + action
-                      + HoodieTimeline.REQUESTED_EXTENSION));
-                } else if (instant.isInflight()) {
-                  LOG.info("Deleting requested and inflight timeline files");
-                  fs.delete(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + instant.getAction()
-                      + HoodieTimeline.INFLIGHT_EXTENSION));
-                  fs.delete(new Path(basePath + "/." + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + instant.getAction()
-                      + HoodieTimeline.REQUESTED_EXTENSION));
-                } else {
-                  LOG.info("Deleting only requested timeline files");
-                  fs.delete(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + instant.getAction()
-                      + HoodieTimeline.REQUESTED_EXTENSION));
-                }
-              } catch (IOException e) {
-                LOG.error("Failed to delete timeline file ", e);
-              }
+    LOG.info("Collecting timeline files to delete ");
+    List<Path> pathsToDelete = new ArrayList<>();
+    metaClient.reloadActiveTimeline().getReverseOrderedInstants().collect(Collectors.toList())
+        .forEach(instant -> {
+          if (HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, cfg.commitTime)) {
+            //LOG.info("Deleting timeline file for commit " + instant.getTimestamp());
+            String action = instant.getAction();
+            if (instant.getAction().equals("commit")) {
+              action = "compaction";
             }
-          });
+            if (instant.isCompleted()) {
+              //LOG.info("Deleting all 3 timeline files");
+              pathsToDelete.add(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getFileName()));
+              pathsToDelete.add(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + action
+                  + HoodieTimeline.INFLIGHT_EXTENSION));
+              pathsToDelete.add(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + action
+                  + HoodieTimeline.REQUESTED_EXTENSION));
+            } else if (instant.isInflight()) {
+              //LOG.info("Deleting requested and inflight timeline files");
+              pathsToDelete.add(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + action
+                  + HoodieTimeline.INFLIGHT_EXTENSION));
+              pathsToDelete.add(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + action
+                  + HoodieTimeline.REQUESTED_EXTENSION));
+            } else {
+              //LOG.info("Deleting only requested timeline files");
+              pathsToDelete.add(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instant.getTimestamp() + "." + action
+                  + HoodieTimeline.REQUESTED_EXTENSION));
+            }
+          }
+        });
+
+    if (cfg.execute) {
+      LOG.info("Deleting timeline files ");
+      pathsToDelete.forEach(entry -> {
+        LOG.info("Timeline file to be deleted " + entry.toString());
+        try {
+          fs.delete(entry);
+        } catch (IOException e) {
+          LOG.error("Failed to delete timeline file ", e);
+        }
+      });
+    } else {
+      LOG.info("Dry run :");
+      LOG.info("List of timeline files that will be deleted during actual execution");
+      pathsToDelete.forEach(entry -> LOG.info("Timeline file to delete " + entry.toString()));
+    }
+
+    if (cfg.execute && cfg.validateReadAfterExecute) {
+      LOG.info("Validating read after restoring ");
+      SQLContext sqlContext = new SQLContext(jsc);
+      if (sqlContext.read().format("org.apache.hudi").load(basePath).count() == 0) {
+        LOG.error("Read of table failed");
+      }
     }
     return finalResult.get();
   }
