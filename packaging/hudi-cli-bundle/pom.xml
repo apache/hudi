@@ -35,6 +35,7 @@
     <jakarta.validation.version>2.0.2</jakarta.validation.version>
     <jline.version>3.21.0</jline.version>
     <hudi.cli.gson.version>2.6.2</hudi.cli.gson.version>
+    <commons-configuration-2.version>2.8.0</commons-configuration-2.version>
   </properties>
 
   <build>
@@ -108,6 +109,7 @@
                   <include>jakarta.validation:jakarta.validation-api</include>
                   <include>net.java.dev.jna:jna</include>
 
+                  <include>org.apache.commons:commons-configuration2</include>
                   <include>org.apache.httpcomponents:httpclient</include>
                   <include>org.apache.httpcomponents:httpcore</include>
                   <include>org.apache.httpcomponents:fluent-hc</include>
@@ -275,6 +277,11 @@
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpclient</artifactId>
       <version>${http.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-configuration2</artifactId>
+      <version>${commons-configuration-2.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
