@@ -52,7 +52,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private static final Logger LOG = LogManager.getLogger(HoodieLogFormatReader.class);
 
-  public HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
+  HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
                         boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
                         String recordKeyField, InternalSchema internalSchema) throws IOException {
     this.logFiles = logFiles;
