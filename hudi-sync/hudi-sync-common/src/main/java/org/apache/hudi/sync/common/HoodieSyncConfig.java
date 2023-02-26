@@ -41,6 +41,8 @@ import javax.annotation.concurrent.Immutable;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
@@ -199,6 +201,13 @@ public class HoodieSyncConfig extends HoodieConfig {
   @Override
   public String toString() {
     return props.toString();
+  }
+
+  public Map<String, String> toMap() {
+    return props.entrySet().stream()
+        .collect(Collectors.toMap(
+            e -> e.getKey().toString(),
+            e -> Objects.toString(e.getValue(), "")));
   }
 
   public static class HoodieSyncConfigParams {

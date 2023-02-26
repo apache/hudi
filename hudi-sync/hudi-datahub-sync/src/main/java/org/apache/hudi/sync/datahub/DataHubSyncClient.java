@@ -19,14 +19,15 @@
 
 package org.apache.hudi.sync.datahub;
 
-import com.linkedin.common.Status;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
+import com.linkedin.common.Status;
 import com.linkedin.common.urn.DatasetUrn;
 import com.linkedin.data.template.SetMode;
 import com.linkedin.data.template.StringMap;
@@ -52,10 +53,13 @@ import datahub.event.MetadataChangeProposalWrapper;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.parquet.schema.MessageType;
-import java.util.Collections;
+
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static java.util.Collections.singletonMap;
 
 public class DataHubSyncClient extends HoodieSyncClient {
 
@@ -76,7 +80,16 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
-    updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, getActiveTimeline().lastInstant().get().getTimestamp()));
+    Option<String> latestCommitTime = getActiveTimeline().lastInstant().map(HoodieInstant::getTimestamp);
+    latestCommitTime.ifPresent(s -> updateTableProperties(tableName, singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, s)));
+  }
+
+  @Override
+  public void updateHoodieConfigs(String tableName) {
+    Map<String, String> syncConfigs = new HashMap<>(config.toMap());
+    Option<String> latestCommitTime = getActiveTimeline().lastInstant().map(HoodieInstant::getTimestamp);
+    latestCommitTime.ifPresent(s -> syncConfigs.put(HOODIE_LAST_COMMIT_TIME_SYNC, s));
+    updateTableProperties(tableName, syncConfigs);
   }
 
   @Override

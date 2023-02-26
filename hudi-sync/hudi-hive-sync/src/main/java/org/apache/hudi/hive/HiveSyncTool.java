@@ -263,7 +263,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, droppedPartitions);
     boolean meetSyncConditions = schemaChanged || partitionsChanged;
     if (!config.getBoolean(META_SYNC_CONDITIONAL_SYNC) || meetSyncConditions) {
-      syncClient.updateLastCommitTimeSynced(tableName);
+      syncClient.updateHoodieConfigs(tableName);
     }
     LOG.info("Sync complete for " + tableName);
   }

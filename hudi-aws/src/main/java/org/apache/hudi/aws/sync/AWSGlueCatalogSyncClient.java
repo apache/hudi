@@ -19,6 +19,7 @@
 package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -425,6 +426,18 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       updateTableParameters(awsGlue, databaseName, tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitTimestamp), false);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update last sync commit time for " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  @Override
+  public void updateHoodieConfigs(String tableName) {
+    Map<String, String> syncConfigs = new HashMap<>(config.toMap());
+    Option<String> latestCommitTime = getActiveTimeline().lastInstant().map(HoodieInstant::getTimestamp);
+    latestCommitTime.ifPresent(s -> syncConfigs.put(HOODIE_LAST_COMMIT_TIME_SYNC, s));
+    try {
+      updateTableParameters(awsGlue, databaseName, tableName, syncConfigs, false);
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to update Hudi configs for " + tableId(databaseName, tableName), e);
     }
   }
 

@@ -179,8 +179,18 @@ public interface HoodieMetaSyncOperations {
 
   /**
    * Update the timestamp of last sync.
+   *
+   * @deprecated Use {@link #updateHoodieConfigs(String)} instead.
    */
+  @Deprecated
   default void updateLastCommitTimeSynced(String tableName) {
+
+  }
+
+  /**
+   * Update Hudi configs.
+   */
+  default void updateHoodieConfigs(String tableName) {
 
   }
 

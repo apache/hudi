@@ -328,6 +328,25 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   @Override
+  public void updateHoodieConfigs(String tableName) {
+    Map<String, String> syncConfigs = new HashMap<>(config.toMap());
+    Option<String> latestCommitTime = getActiveTimeline().lastInstant().map(HoodieInstant::getTimestamp);
+    latestCommitTime.ifPresent(s -> syncConfigs.put(HOODIE_LAST_COMMIT_TIME_SYNC, s));
+    try {
+      Table table = client.getTable(databaseName, tableName);
+      String basePath = config.getString(META_SYNC_BASE_PATH);
+      StorageDescriptor sd = table.getSd();
+      sd.setLocation(basePath);
+      SerDeInfo serdeInfo = sd.getSerdeInfo();
+      serdeInfo.putToParameters(ConfigUtils.TABLE_SERDE_PATH, basePath);
+      syncConfigs.forEach(table::putToParameters);
+      client.alter_table(databaseName, tableName, table);
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to update Hudi configs for " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  @Override
   public List<FieldSchema> getMetastoreFieldSchemas(String tableName) {
     try {
       return client.getSchema(databaseName, tableName)
