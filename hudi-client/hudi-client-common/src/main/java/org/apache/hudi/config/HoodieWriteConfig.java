@@ -1121,6 +1121,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getPreCombineField() {
+    // passing "" for now as it's done in other places, to be revisited in:
     // TODO(HUDI-3456) cleanup
     String preCombineField = getString(PRECOMBINE_FIELD_NAME);
     return preCombineField == null ? "" : preCombineField;
@@ -1128,7 +1129,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isPrecombineFieldSet() {
     // TODO(HUDI-3456) cleanup
-    return getPreCombineField().isEmpty() || getPreCombineField() == null ? false : true;
+    return getPreCombineField().isEmpty() ? false : true;
   }
 
   public String getWritePayloadClass() {

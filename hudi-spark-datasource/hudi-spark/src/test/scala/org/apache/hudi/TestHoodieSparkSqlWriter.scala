@@ -153,6 +153,7 @@ class TestHoodieSparkSqlWriter {
       "hoodie.upsert.shuffle.parallelism" -> "1",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
   }
@@ -268,6 +269,7 @@ class TestHoodieSparkSqlWriter {
       "path" -> tempBasePath,
       HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
       "hoodie.datasource.write.recordkey.field" -> "uuid",
+      "hoodie.datasource.write.precombine.field" -> "ts",
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4")
     val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
@@ -278,6 +280,7 @@ class TestHoodieSparkSqlWriter {
       "path" -> tempBasePath,
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_bar_tbl",
       "hoodie.datasource.write.recordkey.field" -> "uuid",
+      "hoodie.datasource.write.precombine.field" -> "ts",
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4")
     val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
@@ -322,13 +325,15 @@ class TestHoodieSparkSqlWriter {
   def testChangePartitionPath(): Unit = {
     //create a new table
     val tableModifier1 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "ts")
+      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "ts",
+      "hoodie.datasource.write.precombine.field" -> "ts")
     val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
 
     //on same path try write with different partitionpath field and Append SaveMode should throw an exception
     val tableModifier2 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "uuid")
+      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "uuid",
+      "hoodie.datasource.write.precombine.field" -> "ts")
     val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     val hoodieException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier2, dataFrame2))
     assert(hoodieException.getMessage.contains("Config conflict"))
