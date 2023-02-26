@@ -59,8 +59,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.singletonMap;
-
 public class DataHubSyncClient extends HoodieSyncClient {
 
   protected final DataHubSyncConfig config;
@@ -76,12 +74,6 @@ public class DataHubSyncClient extends HoodieSyncClient {
   @Override
   public Option<String> getLastCommitTimeSynced(String tableName) {
     throw new UnsupportedOperationException("Not supported: `getLastCommitTimeSynced`");
-  }
-
-  @Override
-  public void updateLastCommitTimeSynced(String tableName) {
-    Option<String> latestCommitTime = getActiveTimeline().lastInstant().map(HoodieInstant::getTimestamp);
-    latestCommitTime.ifPresent(s -> updateTableProperties(tableName, singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, s)));
   }
 
   @Override

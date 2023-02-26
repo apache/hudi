@@ -308,26 +308,6 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateLastCommitTimeSynced(String tableName) {
-    // Set the last commit time from the TBLproperties
-    Option<String> lastCommitSynced = getActiveTimeline().lastInstant().map(HoodieInstant::getTimestamp);
-    if (lastCommitSynced.isPresent()) {
-      try {
-        Table table = client.getTable(databaseName, tableName);
-        String basePath = config.getString(META_SYNC_BASE_PATH);
-        StorageDescriptor sd = table.getSd();
-        sd.setLocation(basePath);
-        SerDeInfo serdeInfo = sd.getSerdeInfo();
-        serdeInfo.putToParameters(ConfigUtils.TABLE_SERDE_PATH, basePath);
-        table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
-        client.alter_table(databaseName, tableName, table);
-      } catch (Exception e) {
-        throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
-      }
-    }
-  }
-
-  @Override
   public void updateHoodieConfigs(String tableName) {
     Map<String, String> syncConfigs = new HashMap<>(config.toMap());
     Option<String> latestCommitTime = getActiveTimeline().lastInstant().map(HoodieInstant::getTimestamp);

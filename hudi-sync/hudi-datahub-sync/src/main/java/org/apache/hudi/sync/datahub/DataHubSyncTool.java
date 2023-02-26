@@ -53,7 +53,7 @@ public class DataHubSyncTool extends HoodieSyncTool {
   public void syncHoodieTable() {
     try (DataHubSyncClient syncClient = new DataHubSyncClient(config)) {
       syncClient.updateTableSchema(config.getString(META_SYNC_TABLE_NAME), null);
-      syncClient.updateLastCommitTimeSynced(config.getString(META_SYNC_TABLE_NAME));
+      syncClient.updateHoodieConfigs(config.getString(META_SYNC_TABLE_NAME));
     }
   }
 
