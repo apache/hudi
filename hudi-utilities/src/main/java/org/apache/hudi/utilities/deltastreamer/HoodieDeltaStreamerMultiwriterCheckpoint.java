@@ -51,7 +51,7 @@ public class HoodieDeltaStreamerMultiwriterCheckpoint implements BiConsumer<Hood
   private final DeltaSync ds;
   private final String checkpoint;
   private final String latestCheckpointWritten;
-  
+
   public HoodieDeltaStreamerMultiwriterCheckpoint(DeltaSync ds, String checkpoint, String latestCheckpointWritten) {
     this.ds = ds;
     this.id = ds.getId();
@@ -73,11 +73,11 @@ public class HoodieDeltaStreamerMultiwriterCheckpoint implements BiConsumer<Hood
     //Get checkpoint map
     Map<String,String> checkpointMap;
     if (latestCommitMetadata.isPresent()) {
-      String value = commitMetadata.getMetadata(CHECKPOINT_KEY);
+      String value = latestCommitMetadata.get().getExtraMetadata().get(CHECKPOINT_KEY);
       try {
         checkpointMap = OM.readValue(value, Map.class);
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to parse checkpoint as map", e);
+      } catch (Exception e) {
+        throw new HoodieException("Failed to parse checkpoint as map", e);
       }
     } else {
       checkpointMap = new HashMap<>();

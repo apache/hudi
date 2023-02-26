@@ -281,6 +281,9 @@ public class DeltaSync implements Serializable, Closeable {
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
     this.conf = conf;
     String id = conf.get(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key());
+    if (StringUtils.isNullOrEmpty(id)) {
+      id = props.getProperty(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key());
+    }
     this.identifier = StringUtils.isNullOrEmpty(id) ? Option.empty() : Option.of(id);
   }
 
