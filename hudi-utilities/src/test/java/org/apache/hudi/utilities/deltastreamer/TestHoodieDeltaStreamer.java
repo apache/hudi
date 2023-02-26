@@ -2355,6 +2355,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     TypedProperties properties = new TypedProperties();
     properties.setProperty("hoodie.datasource.write.recordkey.field","key");
+    properties.setProperty("hoodie.datasource.write.precombine.field", "ts");
     properties.setProperty("hoodie.datasource.write.partitionpath.field","pp");
     TestDeltaSync testDeltaSync = new TestDeltaSync(cfg, sparkSession, null, properties,
         jsc, fs, jsc.hadoopConfiguration(), null);

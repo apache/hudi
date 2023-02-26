@@ -880,6 +880,7 @@ public class DeltaSync implements Serializable, Closeable {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
             .withPath(cfg.targetBasePath)
+            .withPreCombineField(cfg.sourceOrderingField)
             .combineInput(cfg.filterDupes, combineBeforeUpsert)
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()

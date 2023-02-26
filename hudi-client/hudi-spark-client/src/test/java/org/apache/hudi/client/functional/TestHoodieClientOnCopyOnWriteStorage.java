@@ -937,7 +937,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   public void testDeletesForInsertsInSameBatch(boolean populateMetaFields) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
-    SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());
+    SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.withPreCombineField("ts").build());
     /**
      * Write 200 inserts and issue deletes to a subset(50) of inserts.
      */
@@ -989,7 +989,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // instantiate client
 
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
-        .withProps(config.getProps())
+        .withProps(config.getProps()).withPreCombineField("ts")
         .withCompactionConfig(
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(10000).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)

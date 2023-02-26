@@ -90,7 +90,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
 
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
-    HoodieWriteConfig cfg = cfgBuilder.build();
+    HoodieWriteConfig cfg = cfgBuilder.withPreCombineField("ts").build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
       HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
@@ -245,7 +245,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
 
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
-    HoodieWriteConfig cfg = cfgBuilder.build();
+    HoodieWriteConfig cfg = cfgBuilder.withPreCombineField("ts").build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
       HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
