@@ -19,10 +19,12 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -35,23 +37,34 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConversions;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -59,6 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestMorRestoreTool extends SparkClientFunctionalTestHarness implements SparkProvider {
 
+  private static final Logger LOG = LogManager.getLogger(TestMorRestoreTool.class);
   private static final HoodieTestDataGenerator DATA_GENERATOR = new HoodieTestDataGenerator(0L);
   private HoodieTableMetaClient metaClient;
 
@@ -93,6 +107,40 @@ public class TestMorRestoreTool extends SparkClientFunctionalTestHarness impleme
 
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(newCommitTime, 200);
       upsertToMorTable(client, records, newCommitTime);
+
+      List<GenericRecord> genRecs = new ArrayList<>();
+      records.forEach(rec -> {
+        try {
+          genRecs.add((GenericRecord) ((HoodieAvroRecord) rec)
+              .getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get());
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      });
+
+      Dataset<Row> inputDf = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(jsc().parallelize(genRecs)), HoodieTestDataGenerator.AVRO_SCHEMA.toString(),
+          spark());
+
+      Dataset<Row> hudiDf = spark().read().format("hudi").load(basePath()).drop(
+          JavaConversions.asScalaIterator(HoodieRecord.HOODIE_META_COLUMNS.iterator()).toSeq());
+      List<Row> inputRows = inputDf.collectAsList();
+      List<Row> hudiRows = hudiDf.collectAsList();
+      Collections.sort(inputRows, new Comparator<Row>() {
+        @Override
+        public int compare(Row o1, Row o2) {
+          return ((String) o1.getAs("_row_key")).compareTo(o2.getAs("_row_key"));
+        }
+      });
+      Collections.sort(hudiRows, new Comparator<Row>() {
+        @Override
+        public int compare(Row o1, Row o2) {
+          return ((String) o1.getAs("_row_key")).compareTo(o2.getAs("_row_key"));
+        }
+      });
+      if (!hudiRows.equals(inputRows)) {
+        LOG.error("Records do not match ");
+        throw new HoodieException("record do not match");
+      }
 
       /*
        * Write 2 (updates)
@@ -163,11 +211,18 @@ public class TestMorRestoreTool extends SparkClientFunctionalTestHarness impleme
       records = DATA_GENERATOR.generateUpdates(newCommitTime, 50);
       upsertToMorTable(client, records, newCommitTime);
 
+      // delete the 2nd compaction commit completed instant from timeline to mimic inflight compaction.
+      metaClient.getFs().delete(new Path(basePath() + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME
+          + Path.SEPARATOR + secondCompactionInstant + "." + HoodieActiveTimeline.COMMIT_ACTION));
+
+      client.savepoint(toRestoreCommit, "test comment", "test user");
+
       // trigger restore
       MORRestoreTool.Config restoreToolConfig = new MORRestoreTool.Config();
       restoreToolConfig.basePath = cfg.getBasePath();
-      restoreToolConfig.commitTime = toRestoreCommit;
+      restoreToolConfig.commitToRestore = toRestoreCommit;
       restoreToolConfig.execute = true;
+      restoreToolConfig.cleanupMetadata = true;
       MORRestoreTool restoreTool = new MORRestoreTool(jsc(), restoreToolConfig);
       restoreTool.run();
 
