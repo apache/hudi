@@ -2319,6 +2319,23 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertNoPartitionMatch(tableBasePath, sqlContext, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
   }
 
+  @Test
+  public void testToSortedTruncatedStringSecretsMasked() {
+    TypedProperties props =
+        new DFSPropertiesConfiguration(fs.getConf(), new Path(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+    props.put("ssl.trustore.location", "SSL SECRET KEY");
+    props.put("sasl.jaas.config", "SASL SECRET KEY");
+    props.put("auth.credentials", "AUTH CREDENTIALS");
+    props.put("auth.user.info", "AUTH USER INFO");
+
+    String truncatedKeys = HoodieDeltaStreamer.toSortedTruncatedString(props);
+    assertFalse(truncatedKeys.contains("SSL SECRET KEY"));
+    assertFalse(truncatedKeys.contains("SASL SECRET KEY"));
+    assertFalse(truncatedKeys.contains("AUTH CREDENTIALS"));
+    assertFalse(truncatedKeys.contains("AUTH USER INFO"));
+    assertTrue(truncatedKeys.contains("SENSITIVE_INFO_MASKED"));
+  }
+
   void testDeltaStreamerWithSpecifiedOperation(final String tableBasePath, WriteOperationType operationType, HoodieRecordType recordType) throws Exception {
     // Initial insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
