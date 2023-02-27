@@ -19,10 +19,13 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+/**
+ * Error event is an event triggered during write or processing failure of a record.
+ */
 public class ErrorEvent<T> {
 
-  ErrorReason reason;
-  T payload;
+  private final ErrorReason reason;
+  private final T payload;
 
   public ErrorEvent(T payload, ErrorReason reason) {
     this.payload = payload;
@@ -37,11 +40,19 @@ public class ErrorEvent<T> {
     return reason;
   }
 
+  /**
+   * The reason behind write or processing failure of a record
+   */
   public enum ErrorReason {
+    // Failure during json to avro record conversion
     JSON_AVRO_DESERIALIZATION_FAILURE,
+    // Failure during json to row conversion
     JSON_ROW_DESERIALIZATION_FAILURE,
+    // Failure during row to avro record conversion
     AVRO_DESERIALIZATION_FAILURE,
+    // Failure during hudi writes
     HUDI_WRITE_FAILURES,
+    // Failure during transformation of source to target RDD
     CUSTOM_TRANSFORMER_FAILURE
   }
 }

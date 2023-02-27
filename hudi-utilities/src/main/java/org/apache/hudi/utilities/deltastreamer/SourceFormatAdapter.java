@@ -62,14 +62,14 @@ public final class SourceFormatAdapter implements Closeable {
 
   private final Source source;
 
-  private Option<BaseErrorTableWriter> errorTableWriterInterface = Option.empty();
+  private Option<BaseErrorTableWriter> errorTableWriter = Option.empty();
 
   public SourceFormatAdapter(Source source) {
     this(source, Option.empty());
   }
 
-  public SourceFormatAdapter(Source source, Option<BaseErrorTableWriter> errorTableWriterInterface) {
-    this.errorTableWriterInterface = errorTableWriterInterface;
+  public SourceFormatAdapter(Source source, Option<BaseErrorTableWriter> errorTableWriter) {
+    this.errorTableWriter = errorTableWriter;
     this.source = source;
   }
 
@@ -81,9 +81,9 @@ public final class SourceFormatAdapter implements Closeable {
   private JavaRDD<GenericRecord> transformJsonToGenericRdd(InputBatch<JavaRDD<String>> inputBatch) {
     AvroConvertor convertor = new AvroConvertor(inputBatch.getSchemaProvider().getSourceSchema());
     return inputBatch.getBatch().map(rdd -> {
-      if (errorTableWriterInterface.isPresent()) {
+      if (errorTableWriter.isPresent()) {
         JavaRDD<Either<GenericRecord,String>> javaRDD = rdd.map(convertor::fromJsonWithError);
-        errorTableWriterInterface.get().addErrorEvents(javaRDD.filter(x -> x.isRight()).map(x ->
+        errorTableWriter.get().addErrorEvents(javaRDD.filter(x -> x.isRight()).map(x ->
             new ErrorEvent<>(x.right().get(), ErrorEvent.ErrorReason.JSON_AVRO_DESERIALIZATION_FAILURE)));
         return javaRDD.filter(x -> x.isLeft()).map(x -> x.left().get());
       } else {
@@ -100,9 +100,9 @@ public final class SourceFormatAdapter implements Closeable {
   public Option<Dataset<Row>> processErrorEvents(Option<Dataset<Row>> eventsRow,
                                                       ErrorEvent.ErrorReason errorReason) {
     return eventsRow.map(dataset -> {
-          if (errorTableWriterInterface.isPresent() && Arrays.stream(dataset.columns()).collect(Collectors.toList())
+          if (errorTableWriter.isPresent() && Arrays.stream(dataset.columns()).collect(Collectors.toList())
               .contains(ERROR_TABLE_CURRUPT_RECORD_COL_NAME)) {
-            errorTableWriterInterface.get().addErrorEvents(dataset.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNotNull())
+            errorTableWriter.get().addErrorEvents(dataset.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNotNull())
                 .select(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME)).toJavaRDD().map(ev ->
                     new ErrorEvent<>(ev.getString(0), errorReason)));
             return dataset.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).drop(ERROR_TABLE_CURRUPT_RECORD_COL_NAME);
@@ -177,7 +177,10 @@ public final class SourceFormatAdapter implements Closeable {
       case JSON: {
         InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
-        if (errorTableWriterInterface.isPresent()) {
+        if (errorTableWriter.isPresent()) {
+          // if error table writer is enabled, during spark read `columnNameOfCorruptRecord` option is configured.
+          // Any records which spark is unable to read successfully are transferred to the column
+          // configured via this option. The column is then used to trigger error events.
           StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema)
               .add(new StructField(ERROR_TABLE_CURRUPT_RECORD_COL_NAME, DataTypes.StringType, true, Metadata.empty()));
           Option<Dataset<Row>> dataset = r.getBatch().map(rdd -> source.getSparkSession().read()

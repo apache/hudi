@@ -533,29 +533,25 @@ public class DeltaSync implements Serializable, Closeable {
         // If the target schema is specified through Avro schema,
         // pass in the schema for the Row-to-Avro conversion
         // to avoid nullability mismatch between Avro schema and Row schema
-        Option<BaseErrorTableWriter> schemaValidationErrorWriter =
-            (errorTableWriter.isPresent()
-                && props.getBoolean(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.key(),
-                HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.defaultValue()))
-                ? errorTableWriter : Option.empty();
-        avroRDDOptional = transformed
-            .map(row ->
-                schemaValidationErrorWriter
-                    .map(impl -> {
-                      Tuple2<RDD<GenericRecord>, RDD<String>> safeCreateRDDs = HoodieSparkUtils.safeCreateRDD(row,
-                          HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
-                          Option.of(this.userProvidedSchemaProvider.getTargetSchema())
-                      );
-                      impl.addErrorEvents(safeCreateRDDs._2().toJavaRDD()
-                          .map(evStr -> new ErrorEvent<>(evStr,
-                              ErrorEvent.ErrorReason.AVRO_DESERIALIZATION_FAILURE)));
-                      return safeCreateRDDs._1();
-                    })
-                    .orElseGet(() -> HoodieSparkUtils.createRdd(row,
-                      HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
-                      Option.of(this.userProvidedSchemaProvider.getTargetSchema())
-                    )).toJavaRDD()
-            );
+        if (errorTableWriter.isPresent()
+            && props.getBoolean(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.key(),
+            HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.defaultValue())) {
+          // If the above conditions are met, trigger error events for the rows whose conversion to
+          // avro records fails.
+          avroRDDOptional = transformed.map(
+              rowDataset -> {
+                Tuple2<RDD<GenericRecord>, RDD<String>> safeCreateRDDs = HoodieSparkUtils.safeCreateRDD(rowDataset,
+                    HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+                    Option.of(this.userProvidedSchemaProvider.getTargetSchema()));
+                errorTableWriter.get().addErrorEvents(safeCreateRDDs._2().toJavaRDD()
+                    .map(evStr -> new ErrorEvent<>(evStr,
+                        ErrorEvent.ErrorReason.AVRO_DESERIALIZATION_FAILURE)));
+                return safeCreateRDDs._1.toJavaRDD();
+              });
+        } else {
+          avroRDDOptional = transformed.map(
+              rowDataset -> getTransformedRDD(rowDataset, reconcileSchema, this.userProvidedSchemaProvider.getTargetSchema()));
+        }
         schemaProvider = this.userProvidedSchemaProvider;
       } else {
         Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jssc, fs, cfg.targetBasePath);
@@ -578,11 +574,7 @@ public class DeltaSync implements Serializable, Closeable {
                 new SimpleSchemaProvider(jssc, targetSchema, props)))
           .orElse(dataAndCheckpoint.getSchemaProvider());
         // Rewrite transformed records into the expected target schema
-        avroRDDOptional = transformed
-            .map(t -> HoodieSparkUtils.createRdd(
-                t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
-                Option.ofNullable(schemaProvider.getTargetSchema())
-            ).toJavaRDD());
+        avroRDDOptional = transformed.map(t -> getTransformedRDD(t, reconcileSchema, schemaProvider.getTargetSchema()));
       }
     } else {
       // Pull the data from the source & prepare the write
@@ -646,6 +638,11 @@ public class DeltaSync implements Serializable, Closeable {
     }
 
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
+  }
+
+  private JavaRDD<GenericRecord> getTransformedRDD(Dataset<Row> rowDataset, boolean reconcileSchema, Schema readerSchema) {
+    return HoodieSparkUtils.createRdd(rowDataset, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+        Option.ofNullable(readerSchema)).toJavaRDD();
   }
 
   /**
@@ -804,9 +801,7 @@ public class DeltaSync implements Serializable, Closeable {
       }
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
       if (errorTableWriter.isPresent()) {
-        // Removing writeStatus events from error events, as action on writeStatus can cause base table DAG to reexecute
-        // if original cached dataframe get's unpersisted before this action.
-        //        errorTableWriterInterfaceImpl.get().addErrorEvents(getErrorEventsForWriteStatus(writeStatusRDD));
+        // Commit the error events triggered so far to the error table
         Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitTimelineOpt);
         boolean errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
         if (!errorTableSuccess) {

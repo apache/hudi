@@ -29,8 +29,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
 /**
- * The class which handles error events when delta streamer syncs data from source. All the
- * records which Delta streamer is not able to process are triggered as error events to
+ * The class which handles error events while processing write records. All the
+ * records which have a processing/write failure are triggered as error events to
  * BaseErrorTableWriter. The implementation of BaseErrorTableWriter processes
  * these error events through addErrorEvents API and commits them to the error table when
  * upsertAndCommit API is called.
