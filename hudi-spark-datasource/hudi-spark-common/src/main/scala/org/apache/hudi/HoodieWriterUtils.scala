@@ -44,7 +44,7 @@ object HoodieWriterUtils {
     * @param parameters
     * @return
     */
-  def parametersWithWriteDefaults(parameters: Map[String, String], isFreshTable: Boolean = false): Map[String, String] = {
+  def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
     val props = new Properties()
     props.putAll(parameters)
@@ -79,11 +79,8 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(RECONCILE_SCHEMA)
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
-    if (isFreshTable) { // only set default values for a fresh table. these might be used for config validation in subsequent commits and hence
-      // we should not be setting any defaults. (infer function could result in setting wrong defaults)
-      hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
-      hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
-    }
+    hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
+    hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
@@ -207,9 +204,9 @@ object HoodieWriterUtils {
           diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
         }
       }
-      // in default scenario(simple key gen,there won't be any entry in table config, but we need to ensure new incoming also
-      // matches it
-      if (tableConfigKeyGen == null && datasourceKeyGen != null && !datasourceKeyGen.equalsIgnoreCase(classOf[SimpleKeyGenerator].getCanonicalName)) {
+      // in default scenario(simple key gen,there won't be any entry with new incoming, but we need to ensure new table config maps
+      // to simple key gen. if for any other key gen, we will fail the validation.
+      if (datasourceKeyGen == null && tableConfigKeyGen != null && !tableConfigKeyGen.equalsIgnoreCase(classOf[SimpleKeyGenerator].getCanonicalName)) {
         diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t" + classOf[SimpleKeyGenerator].getCanonicalName + "\n")
       }
     }

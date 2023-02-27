@@ -211,7 +211,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieMetadataConfig.ENABLE.key -> "false"
-    ) ++ writeOpts
+    )
     // this write should succeed even w/o though we don't set key gen explicitly.
     writeToHudi(optsWithNoRepeatedTableConfig, inputDF)
     spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
@@ -248,7 +248,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       "hoodie.upsert.shuffle.parallelism" -> "4",
       "hoodie.datasource.write.keygenerator.class" -> classOf[SimpleKeyGenerator].getCanonicalName,
       HoodieMetadataConfig.ENABLE.key -> "false"
-    ) ++ writeOpts
+    )
     // this write should succeed even w/o though we set key gen explicitly, its the default
     writeToHudi(optsWithNoRepeatedTableConfig, inputDF)
     spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
@@ -296,7 +296,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieMetadataConfig.ENABLE.key -> "false",
       configKey -> configValue
-    ) ++ writeOpts
+    )
 
     // this write should fail since we are setting a config explicitly which wasn't set in first commit and does not match the default value.
     val t = assertThrows(classOf[Throwable]) {
