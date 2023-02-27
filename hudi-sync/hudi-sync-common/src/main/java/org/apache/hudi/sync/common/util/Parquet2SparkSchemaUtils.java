@@ -19,10 +19,14 @@
 package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.util.ValidationUtils;
+
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
+
+import java.util.Collections;
+import java.util.Map;
 
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 
@@ -34,23 +38,41 @@ import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 public class Parquet2SparkSchemaUtils {
 
   public static String convertToSparkSchemaJson(GroupType parquetSchema) {
+    return convertToSparkSchemaJson(parquetSchema, Collections.emptyMap());
+  }
+
+  public static String convertToSparkSchemaJson(GroupType parquetSchema, Map<String, String> commentMap) {
     String fieldsJsonString = parquetSchema.getFields().stream().map(field -> {
       switch (field.getRepetition()) {
         case OPTIONAL:
           return "{\"name\":\"" + field.getName() + "\",\"type\":" + convertFieldType(field)
-                  + ",\"nullable\":true,\"metadata\":{}}";
+              + ",\"nullable\":true,\"metadata\":{" + getCommentStr(commentMap.get(field.getName())) + "}}";
         case REQUIRED:
           return "{\"name\":\"" + field.getName() + "\",\"type\":" + convertFieldType(field)
-                  + ",\"nullable\":false,\"metadata\":{}}";
+              + ",\"nullable\":false,\"metadata\":{" + getCommentStr(commentMap.get(field.getName())) + "}}";
         case REPEATED:
           String arrayType = arrayType(field, false);
           return "{\"name\":\"" + field.getName() + "\",\"type\":" + arrayType
-                  + ",\"nullable\":false,\"metadata\":{}}";
+              + ",\"nullable\":false,\"metadata\":{" + getCommentStr(commentMap.get(field.getName())) + "}}";
         default:
           throw new UnsupportedOperationException("Unsupport convert " + field + " to spark sql type");
       }
     }).reduce((a, b) -> a + "," + b).orElse("");
     return "{\"type\":\"struct\",\"fields\":[" + fieldsJsonString + "]}";
+  }
+
+  /**
+   * get comment
+   *
+   * @param comment
+   * @return
+   */
+  private static String getCommentStr(String comment) {
+    String result = "";
+    if (comment != null) {
+      result = String.format("\"comment\":\"%s\"", comment);
+    }
+    return result;
   }
 
   private static String convertFieldType(Type field) {
@@ -67,39 +89,49 @@ public class Parquet2SparkSchemaUtils {
     OriginalType originalType = field.getOriginalType();
 
     switch (typeName) {
-      case BOOLEAN: return "boolean";
-      case FLOAT: return "float";
-      case DOUBLE: return "double";
+      case BOOLEAN:
+        return "boolean";
+      case FLOAT:
+        return "float";
+      case DOUBLE:
+        return "double";
       case INT32:
         if (originalType == null) {
           return "integer";
         }
         switch (originalType) {
-          case INT_8: return "byte";
-          case INT_16: return "short";
-          case INT_32: return "integer";
-          case DATE: return "date";
+          case INT_8:
+            return "byte";
+          case INT_16:
+            return "short";
+          case INT_32:
+            return "integer";
+          case DATE:
+            return "date";
           case DECIMAL:
             return "decimal(" + field.getDecimalMetadata().getPrecision() + ","
-                    + field.getDecimalMetadata().getScale() + ")";
-          default: throw new UnsupportedOperationException("Unsupport convert " + typeName + " to spark sql type");
+                + field.getDecimalMetadata().getScale() + ")";
+          default:
+            throw new UnsupportedOperationException("Unsupport convert " + typeName + " to spark sql type");
         }
       case INT64:
         if (originalType == null) {
           return "long";
         }
-        switch (originalType)  {
-          case INT_64: return "long";
+        switch (originalType) {
+          case INT_64:
+            return "long";
           case DECIMAL:
             return "decimal(" + field.getDecimalMetadata().getPrecision() + ","
-                    + field.getDecimalMetadata().getScale() + ")";
+                + field.getDecimalMetadata().getScale() + ")";
           case TIMESTAMP_MICROS:
           case TIMESTAMP_MILLIS:
             return "timestamp";
           default:
             throw new UnsupportedOperationException("Unsupport convert " + typeName + " to spark sql type");
         }
-      case INT96: return "timestamp";
+      case INT96:
+        return "timestamp";
 
       case BINARY:
         if (originalType == null) {
@@ -107,13 +139,14 @@ public class Parquet2SparkSchemaUtils {
         }
         switch (originalType) {
           case UTF8:
-          case  ENUM:
-          case  JSON:
+          case ENUM:
+          case JSON:
             return "string";
-          case BSON: return "binary";
+          case BSON:
+            return "binary";
           case DECIMAL:
             return "decimal(" + field.getDecimalMetadata().getPrecision() + ","
-                    + field.getDecimalMetadata().getScale() + ")";
+                + field.getDecimalMetadata().getScale() + ")";
           default:
             throw new UnsupportedOperationException("Unsupport convert " + typeName + " to spark sql type");
         }
@@ -122,7 +155,7 @@ public class Parquet2SparkSchemaUtils {
         switch (originalType) {
           case DECIMAL:
             return "decimal(" + field.getDecimalMetadata().getPrecision() + ","
-                  + field.getDecimalMetadata().getScale() + ")";
+                + field.getDecimalMetadata().getScale() + ")";
           default:
             throw new UnsupportedOperationException("Unsupport convert " + typeName + " to spark sql type");
         }
@@ -153,8 +186,8 @@ public class Parquet2SparkSchemaUtils {
         Type valueType = keyValueType.getType(1);
         boolean valueOptional = valueType.isRepetition(OPTIONAL);
         return "{\"type\":\"map\", \"keyType\":" + convertFieldType(keyType)
-                + ",\"valueType\":" + convertFieldType(valueType)
-                + ",\"valueContainsNull\":" + valueOptional + "}";
+            + ",\"valueType\":" + convertFieldType(valueType)
+            + ",\"valueContainsNull\":" + valueOptional + "}";
       default:
         throw new UnsupportedOperationException("Unsupport convert " + field + " to spark sql type");
     }
@@ -166,6 +199,6 @@ public class Parquet2SparkSchemaUtils {
 
   private static boolean isElementType(Type repeatedType, String parentName) {
     return repeatedType.isPrimitive() || repeatedType.asGroupType().getFieldCount() > 1
-      || repeatedType.getName().equals("array") || repeatedType.getName().equals(parentName + "_tuple");
+        || repeatedType.getName().equals("array") || repeatedType.getName().equals(parentName + "_tuple");
   }
 }

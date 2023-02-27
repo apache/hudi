@@ -26,6 +26,8 @@ import org.apache.hudi.configuration.FlinkOptions;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.catalog.Column;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
@@ -250,5 +252,45 @@ public class HiveSchemaUtils {
       }
     }
     return Pair.of(regularColumns, partitionColumns);
+  }
+
+  /**
+   * Create Hive field schemas from Flink table schema including the hoodie metadata fields.
+   */
+  public static List<FieldSchema> toHiveFieldSchemaWithResolved(ResolvedSchema schema, boolean withOperationField) {
+    List<FieldSchema> columns = new ArrayList<>();
+    Collection<String> metaFields = new ArrayList<>(HoodieRecord.HOODIE_META_COLUMNS);
+    if (withOperationField) {
+      metaFields.add(HoodieRecord.OPERATION_METADATA_FIELD);
+    }
+
+    for (String metaField : metaFields) {
+      columns.add(new FieldSchema(metaField, "string", null));
+    }
+    columns.addAll(createHiveColumnsWithResolved(schema));
+    return columns;
+  }
+
+  /**
+   * Create Hive columns from Flink table schema.
+   */
+  private static List<FieldSchema> createHiveColumnsWithResolved(ResolvedSchema schema) {
+    final DataType dataType = schema.toPhysicalRowDataType();
+    List<Column> sourceColumns = schema.getColumns();
+    final RowType rowType = (RowType) dataType.getLogicalType();
+    final String[] fieldNames = rowType.getFieldNames().toArray(new String[0]);
+    final DataType[] fieldTypes = dataType.getChildren().toArray(new DataType[0]);
+
+    List<FieldSchema> columns = new ArrayList<>(fieldNames.length);
+
+    for (int i = 0; i < fieldNames.length; i++) {
+      columns.add(
+          new FieldSchema(
+              fieldNames[i],
+              toHiveTypeInfo(fieldTypes[i]).getTypeName(),
+              sourceColumns.get(i).getComment().isPresent() ? sourceColumns.get(i).getComment().get() : null));
+    }
+
+    return columns;
   }
 }

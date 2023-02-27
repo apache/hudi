@@ -26,6 +26,7 @@ import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,13 +35,21 @@ import static org.apache.parquet.schema.OriginalType.UTF8;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 
 public class SparkDataSourceTableUtils {
+
+  public static Map<String, String> getSparkTableProperties(List<String> partitionNames, String sparkVersion,
+                                                            int schemaLengthThreshold, MessageType schema) {
+    return getSparkTableProperties(partitionNames, sparkVersion, schemaLengthThreshold, schema, Collections.emptyMap());
+  }
+
   /**
    * Get Spark Sql related table properties. This is used for spark datasource table.
-   * @param schema  The schema to write to the table.
+   *
+   * @param schema The schema to write to the table.
    * @return A new parameters added the spark's table properties.
    */
   public static Map<String, String> getSparkTableProperties(List<String> partitionNames, String sparkVersion,
-                                                            int schemaLengthThreshold, MessageType schema) {
+                                                            int schemaLengthThreshold, MessageType schema,
+                                                            Map<String, String> commentMap) {
     // Convert the schema and partition info used by spark sql to hive table properties.
     // The following code refers to the spark code in
     // https://github.com/apache/spark/blob/master/sql/hive/src/main/scala/org/apache/spark/sql/hive/HiveExternalCatalog.scala
@@ -77,7 +86,7 @@ public class SparkDataSourceTableUtils {
       sparkProperties.put("spark.sql.create.version", sparkVersion);
     }
     // Split the schema string to multi-parts according the schemaLengthThreshold size.
-    String schemaString = Parquet2SparkSchemaUtils.convertToSparkSchemaJson(reOrderedType);
+    String schemaString = Parquet2SparkSchemaUtils.convertToSparkSchemaJson(reOrderedType, commentMap);
     int numSchemaPart = (schemaString.length() + schemaLengthThreshold - 1) / schemaLengthThreshold;
     sparkProperties.put("spark.sql.sources.schema.numParts", String.valueOf(numSchemaPart));
     // Add each part of schema string to sparkProperties
