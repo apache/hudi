@@ -25,7 +25,8 @@ import org.apache.spark.sql.catalyst.trees.TreeNode
  * This is required just to be able to compile the code that relies on [[UnaryLike]]
  * (introduced in Spark 3.2) against Spark < 3.2
  */
-trait HoodieUnaryLikeSham[T <: TreeNode[T]] {
-  self: TreeNode[T] =>
+trait HoodieUnaryLikeSham[T <: TreeNode[T]] { self: TreeNode[T] =>
+
   protected def withNewChildInternal(newChild: T): T
+
 }

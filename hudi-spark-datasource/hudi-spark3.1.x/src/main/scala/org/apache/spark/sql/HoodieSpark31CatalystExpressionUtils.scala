@@ -24,6 +24,12 @@ import org.apache.spark.sql.types.DataType
 
 object HoodieSpark31CatalystExpressionUtils extends HoodieSpark3CatalystExpressionUtils {
 
+  override def matchCast(expr: Expression): Option[(Expression, DataType, Option[String])] =
+    expr match {
+      case Cast(child, dataType, timeZoneId) => Some((child, dataType, timeZoneId))
+      case _ => None
+    }
+
   override def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference] = {
     expr match {
       case OrderPreservingTransformation(attrRef) => Some(attrRef)

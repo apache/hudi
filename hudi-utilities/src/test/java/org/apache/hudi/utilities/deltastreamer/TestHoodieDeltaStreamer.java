@@ -650,6 +650,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(String.format("hoodie.bootstrap.base.path=%s", bootstrapSourcePath));
     cfg.configs.add(String.format("%s=%s", DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "rider"));
     cfg.configs.add(String.format("hoodie.bootstrap.keygen.class=%s", SimpleKeyGenerator.class.getName()));
+    cfg.configs.add("hoodie.datasource.write.hive_style_partitioning=true");
     cfg.configs.add("hoodie.bootstrap.parallelism=5");
     cfg.targetBasePath = newDatasetBasePath;
     new HoodieDeltaStreamer(cfg, jsc).sync();
@@ -660,6 +661,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertRecordCount(1950, newDatasetBasePath, sqlContext);
     res.registerTempTable("bootstrapped");
     assertEquals(1950, sqlContext.sql("select distinct _hoodie_record_key from bootstrapped").count());
+    // NOTE: To fetch record's count Spark will optimize the query fetching minimal possible amount
+    //       of data, which might not provide adequate amount of test coverage
+    sqlContext.sql("select * from bootstrapped").show();
 
     StructField[] fields = res.schema().fields();
     List<String> fieldNames = Arrays.asList(res.schema().fieldNames());
@@ -774,7 +778,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(1900, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(fs.getConf()).build());
-    Schema tableSchema = tableSchemaResolver.getTableAvroSchemaWithoutMetadataFields();
+    Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
     assertNotNull(tableSchema);
 
     Schema expectedSchema;
@@ -1155,7 +1159,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     return config;
   }
 
-  @Disabled("HUDI-5815 for investigation")
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testHoodieIndexer(HoodieRecordType recordType) throws Exception {

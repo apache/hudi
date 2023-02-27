@@ -1609,8 +1609,20 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST);
   }
 
+  public boolean isSingleGroupClusteringEnabled() {
+    return getBoolean(HoodieClusteringConfig.PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED);
+  }
+
+  public boolean shouldClusteringSingleGroup() {
+    return isClusteringSortEnabled() || isSingleGroupClusteringEnabled();
+  }
+
   public String getClusteringSortColumns() {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS);
+  }
+
+  public boolean isClusteringSortEnabled() {
+    return !StringUtils.isNullOrEmpty(getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS));
   }
 
   public HoodieClusteringConfig.LayoutOptimizationStrategy getLayoutOptimizationStrategy() {
