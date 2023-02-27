@@ -63,6 +63,8 @@ public class AwsGlueCatalogSyncTool extends HiveSyncTool {
     // HiveConf needs to load fs conf to allow instantiation via AWSGlueClientFactory
     TypedProperties props = params.toProps();
     Configuration hadoopConf = FSUtils.getFs(props.getString(META_SYNC_BASE_PATH.key()), new Configuration()).getConf();
-    new AwsGlueCatalogSyncTool(props, hadoopConf).syncHoodieTable();
+    try (AwsGlueCatalogSyncTool tool = new AwsGlueCatalogSyncTool(props, hadoopConf)) {
+      tool.syncHoodieTable();
+    }
   }
 }
