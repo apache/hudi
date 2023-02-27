@@ -20,14 +20,16 @@ package org.apache.hudi.functional
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
+import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort}
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
@@ -35,7 +37,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
 import java.time.Instant
 import java.util.Collections
@@ -56,6 +58,12 @@ class TestDataSourceForBootstrap {
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
+
+  val sparkRecordTypeOpts = Map(
+    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
+    HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
+  )
+
   var basePath: String = _
   var srcPath: String = _
   var fs: FileSystem = _
@@ -153,12 +161,18 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecords, hoodieROViewDF1WithBasePath.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF1WithBasePath.filter(s"timestamp == $updateTimestamp").count())
 
-    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = false, isHiveStylePartitioned = false)
+    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = false, isHiveStylePartitioned = true)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("METADATA_ONLY", "FULL_RECORD"))
-  def testMetadataBootstrapCOWHiveStylePartitioned(bootstrapMode: String): Unit = {
+  @CsvSource(value = Array(
+    "METADATA_ONLY,AVRO",
+    // TODO(HUDI-5807) enable for spark native records
+    /* "METADATA_ONLY,SPARK", */
+    "FULL_RECORD,AVRO",
+    "FULL_RECORD,SPARK"
+  ))
+  def testMetadataBootstrapCOWHiveStylePartitioned(bootstrapMode: String, recordType: HoodieRecordType): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
@@ -181,16 +195,15 @@ class TestDataSourceForBootstrap {
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
       DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
-      readOpts,
+      readOpts ++ getRecordTypeOpts(recordType),
       classOf[SimpleKeyGenerator].getName)
 
     // check marked directory clean up
     assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
 
-    // TODO(HUDI-5602) troubleshoot
     val expectedDF = bootstrapMode match {
       case "METADATA_ONLY" =>
-        sort(sourceDF).withColumn("datestr", lit(null))
+        sort(sourceDF)
       case "FULL_RECORD" =>
         sort(sourceDF)
     }
@@ -208,9 +221,11 @@ class TestDataSourceForBootstrap {
     val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
       jsc, spark.sqlContext)
 
+    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType)
+
     updateDF.write
       .format("hudi")
-      .options(commonOpts)
+      .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
@@ -234,28 +249,31 @@ class TestDataSourceForBootstrap {
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = true, isHiveStylePartitioned = true)
   }
 
-  @Test def testMetadataBootstrapCOWPartitioned(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType],
+    // TODO(HUDI-5807) enable for spark native records
+    names = Array("AVRO" /*, "SPARK" */))
+  def testMetadataBootstrapCOWPartitioned(recordType: HoodieRecordType): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
     val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
-    // Writing data for each partition instead of using partitionBy to avoid hive-style partitioning and hence
-    // have partitioned columns stored in the data file
-    partitionPaths.foreach(partitionPath => {
-      sourceDF
-        .filter(sourceDF("datestr").equalTo(lit(partitionPath)))
-        .write
-        .format("parquet")
-        .mode(SaveMode.Overwrite)
-        .save(srcPath + "/" + partitionPath)
-    })
+    sourceDF.write.format("parquet")
+      .partitionBy("datestr")
+      .mode(SaveMode.Overwrite)
+      .save(srcPath)
+
+    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++ Map(
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
+    )
 
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
       DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
-      commonOpts.updated(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr"),
+      writeOpts,
       classOf[SimpleKeyGenerator].getName)
 
     // Read bootstrapped table and verify count using glob path
@@ -270,10 +288,9 @@ class TestDataSourceForBootstrap {
     val updateDf1 = hoodieROViewDF1.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
     updateDf1.write
       .format("hudi")
-      .options(commonOpts)
+      .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -290,10 +307,9 @@ class TestDataSourceForBootstrap {
 
     updateDF2.write
       .format("hudi")
-      .options(commonOpts)
+      .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -309,31 +325,34 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecords, hoodieROViewDF4.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF4.filter(s"timestamp == $updateTimestamp").count())
 
-    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime3, isPartitioned = true, isHiveStylePartitioned = false)
+    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime3, isPartitioned = true, isHiveStylePartitioned = true)
   }
 
-  @Test def testMetadataBootstrapMORPartitionedInlineCompactionOn(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType],
+    // TODO(HUDI-5807) enable for spark native records
+    names = Array("AVRO" /*, "SPARK" */))
+  def testMetadataBootstrapMORPartitionedInlineCompactionOn(recordType: HoodieRecordType): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
     val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
-    // Writing data for each partition instead of using partitionBy to avoid hive-style partitioning and hence
-    // have partitioned columns stored in the data file
-    partitionPaths.foreach(partitionPath => {
-      sourceDF
-        .filter(sourceDF("datestr").equalTo(lit(partitionPath)))
-        .write
-        .format("parquet")
-        .mode(SaveMode.Overwrite)
-        .save(srcPath + "/" + partitionPath)
-    })
+    sourceDF.write.format("parquet")
+      .partitionBy("datestr")
+      .mode(SaveMode.Overwrite)
+      .save(srcPath)
+
+    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++ Map(
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
+    )
 
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
       DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
-      commonOpts.updated(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr"),
+      writeOpts,
       classOf[SimpleKeyGenerator].getName)
 
     // Read bootstrapped table and verify count
@@ -350,10 +369,9 @@ class TestDataSourceForBootstrap {
 
     updateDF.write
       .format("hudi")
-      .options(commonOpts)
+      .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
       .option(HoodieCompactionConfig.INLINE_COMPACT.key, "true")
       .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key, "1")
       .mode(SaveMode.Append)
@@ -379,28 +397,29 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecordsUpdate, hoodieROViewDFWithBasePath.filter(s"timestamp == $updateTimestamp").count())
   }
 
-  @Test def testMetadataBootstrapMORPartitioned(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testMetadataBootstrapMORPartitioned(recordType: HoodieRecordType): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
     val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
-    // Writing data for each partition instead of using partitionBy to avoid hive-style partitioning and hence
-    // have partitioned columns stored in the data file
-    partitionPaths.foreach(partitionPath => {
-      sourceDF
-        .filter(sourceDF("datestr").equalTo(lit(partitionPath)))
-        .write
-        .format("parquet")
-        .mode(SaveMode.Overwrite)
-        .save(srcPath + "/" + partitionPath)
-    })
+    sourceDF.write.format("parquet")
+      .partitionBy("datestr")
+      .mode(SaveMode.Overwrite)
+      .save(srcPath)
+
+    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++ Map(
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
+    )
 
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
       DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
-      commonOpts.updated(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr"),
+      writeOpts,
       classOf[SimpleKeyGenerator].getName)
 
     // Read bootstrapped table and verify count
@@ -423,10 +442,9 @@ class TestDataSourceForBootstrap {
     val updateDf1 = hoodieROViewDF1.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
     updateDf1.write
       .format("hudi")
-      .options(commonOpts)
+      .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -446,10 +464,9 @@ class TestDataSourceForBootstrap {
 
     updateDF2.write
       .format("hudi")
-      .options(commonOpts)
+      .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -466,31 +483,31 @@ class TestDataSourceForBootstrap {
     assertEquals(0, hoodieROViewDF3.filter(s"timestamp == $updateTimestamp").count())
   }
 
-  @Test def testFullBootstrapCOWPartitioned(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testFullBootstrapCOWPartitioned(recordType: HoodieRecordType): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
     val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
-    // Writing data for each partition instead of using partitionBy to avoid hive-style partitioning and hence
-    // have partitioned columns stored in the data file
-    partitionPaths.foreach(partitionPath => {
-      sourceDF
-        .filter(sourceDF("datestr").equalTo(lit(partitionPath)))
-        .write
-        .format("parquet")
-        .mode(SaveMode.Overwrite)
-        .save(srcPath + "/" + partitionPath)
-    })
+    sourceDF.write.format("parquet")
+      .partitionBy("datestr")
+      .mode(SaveMode.Overwrite)
+      .save(srcPath)
+
+    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++ Map(
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
+    )
 
     // Perform bootstrap
     val bootstrapDF = spark.emptyDataFrame
     bootstrapDF.write
       .format("hudi")
-      .options(commonOpts)
+      .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
       .option(HoodieBootstrapConfig.BASE_PATH.key, srcPath)
       .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
       .option(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key, classOf[FullRecordBootstrapModeSelector].getName)
@@ -515,10 +532,9 @@ class TestDataSourceForBootstrap {
 
     updateDF.write
       .format("hudi")
-      .options(commonOpts)
+      .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -530,7 +546,7 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecords, hoodieROViewDF2.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF2.filter(s"timestamp == $updateTimestamp").count())
 
-    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = true, isHiveStylePartitioned = false)
+    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = true, isHiveStylePartitioned = true)
   }
 
   def runMetadataBootstrapAndVerifyCommit(tableType: String,
@@ -596,6 +612,12 @@ class TestDataSourceForBootstrap {
         hoodieIncViewDF3.count())
     }
   }
+
+  def getRecordTypeOpts(recordType: HoodieRecordType): Map[String, String] =
+    recordType match {
+      case HoodieRecordType.SPARK => sparkRecordTypeOpts
+      case _ => Map.empty
+    }
 }
 
 object TestDataSourceForBootstrap {

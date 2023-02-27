@@ -163,7 +163,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     if (isWorkloadProfileNeeded()) {
       context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
       workloadProfile = new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
-      LOG.info("Input workload profile :" + workloadProfile);
+      LOG.debug("Input workload profile :" + workloadProfile);
     }
 
     // partition using the insert partitioner

@@ -652,6 +652,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(String.format("hoodie.bootstrap.base.path=%s", bootstrapSourcePath));
     cfg.configs.add(String.format("%s=%s", DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "rider"));
     cfg.configs.add(String.format("hoodie.bootstrap.keygen.class=%s", SimpleKeyGenerator.class.getName()));
+    cfg.configs.add("hoodie.datasource.write.hive_style_partitioning=true");
     cfg.configs.add("hoodie.bootstrap.parallelism=5");
     cfg.targetBasePath = newDatasetBasePath;
     new HoodieDeltaStreamer(cfg, jsc).sync();
@@ -662,6 +663,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertRecordCount(1950, newDatasetBasePath, sqlContext);
     res.registerTempTable("bootstrapped");
     assertEquals(1950, sqlContext.sql("select distinct _hoodie_record_key from bootstrapped").count());
+    // NOTE: To fetch record's count Spark will optimize the query fetching minimal possible amount
+    //       of data, which might not provide adequate amount of test coverage
+    sqlContext.sql("select * from bootstrapped").show();
 
     StructField[] fields = res.schema().fields();
     List<String> fieldNames = Arrays.asList(res.schema().fieldNames());
@@ -776,7 +780,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(1900, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(fs.getConf()).build());
-    Schema tableSchema = tableSchemaResolver.getTableAvroSchemaWithoutMetadataFields();
+    Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
     assertNotNull(tableSchema);
 
     Schema expectedSchema;
@@ -2400,6 +2404,23 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.sync();
     // No records should match the HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION.
     TestHelpers.assertNoPartitionMatch(tableBasePath, sqlContext, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
+  }
+
+  @Test
+  public void testToSortedTruncatedStringSecretsMasked() {
+    TypedProperties props =
+        new DFSPropertiesConfiguration(fs.getConf(), new Path(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+    props.put("ssl.trustore.location", "SSL SECRET KEY");
+    props.put("sasl.jaas.config", "SASL SECRET KEY");
+    props.put("auth.credentials", "AUTH CREDENTIALS");
+    props.put("auth.user.info", "AUTH USER INFO");
+
+    String truncatedKeys = HoodieDeltaStreamer.toSortedTruncatedString(props);
+    assertFalse(truncatedKeys.contains("SSL SECRET KEY"));
+    assertFalse(truncatedKeys.contains("SASL SECRET KEY"));
+    assertFalse(truncatedKeys.contains("AUTH CREDENTIALS"));
+    assertFalse(truncatedKeys.contains("AUTH USER INFO"));
+    assertTrue(truncatedKeys.contains("SENSITIVE_INFO_MASKED"));
   }
 
   void testDeltaStreamerWithSpecifiedOperation(final String tableBasePath, WriteOperationType operationType, HoodieRecordType recordType) throws Exception {
