@@ -38,6 +38,7 @@ import java.io.Serializable;
 import java.util.Properties;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
+import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
 
@@ -58,6 +59,7 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
   public static final ConfigProperty<String> BIGQUERY_SYNC_DATASET_NAME = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.dataset_name")
       .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(DATABASE_NAME)))
       .withDocumentation("Name of the target dataset in BigQuery");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_DATASET_LOCATION = ConfigProperty
@@ -110,6 +112,7 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
 
   public BigQuerySyncConfig(Properties props) {
     super(props);
+    setDefaults(BigQuerySyncConfig.class.getName());
   }
 
   public static class BigQuerySyncConfigParams {
