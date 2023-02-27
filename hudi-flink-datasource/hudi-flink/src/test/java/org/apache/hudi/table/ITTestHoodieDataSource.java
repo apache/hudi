@@ -613,14 +613,16 @@ public class ITTestHoodieDataSource {
         + "(1,'Danny',TIMESTAMP '2021-12-01 01:02:01.100001'),\n"
         + "(2,'Stephen',TIMESTAMP '2021-12-02 03:04:02.200002'),\n"
         + "(3,'Julian',TIMESTAMP '2021-12-03 13:14:03.300003'),\n"
-        + "(4,'Fabian',TIMESTAMP '2021-12-04 15:16:04.400004')";
+        + "(4,'Fabian',TIMESTAMP '2021-12-04 15:16:04.400004'),\n"
+        + "(5,'Tom',TIMESTAMP '2721-12-04 15:16:04.500005')";
     execInsertSql(streamTableEnv, insertInto);
 
     final String expected = "["
         + "+I[1, Danny, 2021-12-01T01:02:01.100001], "
         + "+I[2, Stephen, 2021-12-02T03:04:02.200002], "
         + "+I[3, Julian, 2021-12-03T13:14:03.300003], "
-        + "+I[4, Fabian, 2021-12-04T15:16:04.400004]]";
+        + "+I[4, Fabian, 2021-12-04T15:16:04.400004], "
+        + "+I[5, Tom, 2721-12-04T15:16:04.500005]]";
 
     List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
     assertRowsEquals(result, expected);
