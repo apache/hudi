@@ -122,7 +122,7 @@ object HoodieSparkSqlWriter {
 
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
-    var tableConfig = if (mode == SaveMode.Overwrite || !tableExists) null else getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
+    var tableConfig = getHoodieTableConfig(sparkContext, path, mode, hoodieTableConfigOpt)
     // get initial params and validate configs
     val paramsWithoutDefaults = getParamsWithoutDefaults(optParams)
     val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(paramsWithoutDefaults)
@@ -678,8 +678,8 @@ object HoodieSparkSqlWriter {
     val sparkContext = sqlContext.sparkContext
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
-    if (mode == SaveMode.Overwrite || !tableExists) null else getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
-    val tableConfig = if (mode == SaveMode.Overwrite || !tableExists) null else getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
+    // fetch table config for an already existing table and SaveMode is not Overwrite.
+    val tableConfig = getHoodieTableConfig(sparkContext, path, mode, hoodieTableConfigOpt)
     validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite)
 
     val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode)
@@ -1029,8 +1029,9 @@ object HoodieSparkSqlWriter {
 
   private def getHoodieTableConfig(sparkContext: SparkContext,
                                    tablePath: String,
+                                   mode: SaveMode,
                                    hoodieTableConfigOpt: Option[HoodieTableConfig]): HoodieTableConfig = {
-    if (tableExists) {
+    if (tableExists && mode != SaveMode.Overwrite) {
       hoodieTableConfigOpt.getOrElse(
         HoodieTableMetaClient.builder().setConf(sparkContext.hadoopConfiguration).setBasePath(tablePath)
           .build().getTableConfig)
