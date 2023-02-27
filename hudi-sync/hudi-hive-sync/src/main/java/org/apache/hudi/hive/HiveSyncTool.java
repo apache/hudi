@@ -83,9 +83,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
-  protected final HiveSyncConfig config;
-  protected final String databaseName;
-  protected final String tableName;
+  private HiveSyncConfig config;
+  private final String databaseName;
+  private final String tableName;
+
   protected HoodieSyncClient syncClient;
   protected String snapshotTableName;
   protected Option<String> roTableName;
@@ -184,6 +185,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       } catch (Exception e) {
         throw new HoodieHiveSyncException("Fail to close sync client.", e);
       }
+    }
+    if (config != null) {
+      config = null;
     }
   }
 
