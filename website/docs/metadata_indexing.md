@@ -5,13 +5,23 @@ toc: true
 last_modified_at:
 ---
 
-We can now create different metadata indexes, including files, bloom filters and column stats,
-asynchronously in Hudi, which are then used by queries and writing to improve performance.
-Being able to index without blocking writing has two benefits,
+Hudi maintains a scalable [metadata](/docs/metadata) that has some auxiliary data about the table.
+The [pluggable indexing subsystem](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi)
+of Hudi depends on the metadata table. Different types of index, from `files` index for locating records efficiently
+to `column_stats` index for data skipping, are part of the metadata table. A fundamental tradeoff in any data system
+that supports indexes is to balance the write throughput with index updates. A brute-force way is to lock out the writes
+while indexing. However, very large tables can take hours to index. This is where Hudi's novel asynchronous metadata
+indexing comes into play.
+
+We can now create different metadata indexes, including `files`, `bloom_filters` and `column_stats`, asynchronously in
+Hudi, which are then used by readers and writers to improve performance. Being able to index without blocking writing
+has two benefits,
+
 - improved write latency
 - reduced resource wastage due to contention between writing and indexing.
 
-To learn more about the design of this feature, please check out [RFC-45](https://github.com/apache/hudi/blob/master/rfc/rfc-45/rfc-45.md).
+In this document, we will learn how to setup asynchronous metadata indexing. To learn more about the design of this
+feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi).
 
 ## Setup Async Indexing
 
@@ -64,8 +74,23 @@ spark-submit \
 From version 0.11.0 onwards, Hudi metadata table is enabled by default and the files index will be automatically created. While the deltastreamer is running in continuous mode, let
 us schedule the indexing for COLUMN_STATS index. First we need to define a properties file for the indexer.
 
+### Configurations
+
+As mentioned before, metadata indexes are pluggable. One can add any index at any point in time depending on changing
+business requirements. Some configurations to enable particular indexes are listed below. The full set of metadata
+configurations can be explored [here](/docs/configurations/#Metadata-Configs).
+
+
+|Config| Default | Scope | Description | Since Version |
+|---|---|---|---|---|
+| hoodie.metadata.enable | true | Metadata table | Set to false to disable metadata table | 0.7.0 |
+| hoodie.metadata.index.async | false | Metadata table | Enable async indexing of metadata table. | 0.11.0 |
+| hoodie.metadata.index.column.stats.enable | false | Metadata table | Enable indexing column ranges of user data files under metadata table key lookups | 0.11.0 |
+| hoodie.metadata.index.bloom.filter.enable | false | Metadata table | Enable indexing bloom filters of user data files under metadata table | 0.11.0 |
+
 :::note
-Enabling metadata table and configuring a lock provider are the prerequisites for using async indexer.
+Enabling the metadata table and configuring a lock provider are the prerequisites for using async indexer. Checkout a sample
+configuration below.
 :::
 
 ```
