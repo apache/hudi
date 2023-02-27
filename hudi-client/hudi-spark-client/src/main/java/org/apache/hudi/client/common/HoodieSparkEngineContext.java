@@ -43,6 +43,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.sql.SQLContext;
 
+import javax.annotation.concurrent.ThreadSafe;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -58,13 +60,13 @@ import scala.Tuple2;
 /**
  * A Spark engine implementation of HoodieEngineContext.
  */
+@ThreadSafe
 public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSparkEngineContext.class);
   private final JavaSparkContext javaSparkContext;
   private final SQLContext sqlContext;
   private final Map<HoodieDataCacheKey, List<Integer>> cachedRddIds = new HashMap<>();
-  private final Object cacheLock = new Object();
 
   public HoodieSparkEngineContext(JavaSparkContext jsc) {
     this(jsc, SQLContext.getOrCreate(jsc.sc()));
@@ -190,7 +192,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids) {
-    synchronized (cacheLock) {
+    synchronized (cachedRddIds) {
       cachedRddIds.putIfAbsent(cacheKey, new ArrayList<>());
       for (int id : ids) {
         cachedRddIds.get(cacheKey).add(id);
@@ -200,14 +202,14 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public List<Integer> getCachedDataIds(HoodieDataCacheKey cacheKey) {
-    synchronized (cacheLock) {
+    synchronized (cachedRddIds) {
       return cachedRddIds.getOrDefault(cacheKey, Collections.emptyList());
     }
   }
 
   @Override
   public List<Integer> removeCachedDataIds(HoodieDataCacheKey cacheKey) {
-    synchronized (cacheLock) {
+    synchronized (cachedRddIds) {
       List<Integer> removed = cachedRddIds.remove(cacheKey);
       return removed == null ? Collections.emptyList() : removed;
     }

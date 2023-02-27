@@ -67,7 +67,7 @@ public interface HoodieData<T> extends Serializable {
   void persist(String level);
 
   /**
-   * Persists the data w/ provided {@code level} (if applicable), and cache it within the {@code engineContext}.
+   * Persists the data w/ provided {@code level} (if applicable), and cache the data's ids within the {@code engineContext}.
    */
   void persist(String level, HoodieEngineContext engineContext, HoodieDataCacheKey cacheKey);
 
