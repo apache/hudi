@@ -28,6 +28,9 @@ import org.apache.parquet.hadoop.api.WriteSupport;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.apache.parquet.column.ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
+import static org.apache.parquet.column.ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
+
 /**
  * Base class of Hudi's custom {@link ParquetWriter} implementations
  *
@@ -36,10 +39,9 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
 
-  private final HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig;
   private final AtomicLong writtenRecordCount = new AtomicLong(0);
   private final long maxFileSize;
-  private long recordNumForNextCheck;
+  private long recordCountForNextSizeCheck;
 
   public HoodieBaseParquetWriter(Path file,
                                  HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
@@ -55,33 +57,32 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
         DEFAULT_WRITER_VERSION,
         FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
 
-    this.parquetConfig = parquetConfig;
     // We cannot accurately measure the snappy compressed output file size. We are choosing a
     // conservative 10%
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
     // stream and the actual file size reported by HDFS
     this.maxFileSize = parquetConfig.getMaxFileSize()
         + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
-    this.recordNumForNextCheck = parquetConfig.getMinRowCountForSizeCheck();
+    this.recordCountForNextSizeCheck = DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
   }
 
   public boolean canWrite() {
-    if (getWrittenRecordCount() >= recordNumForNextCheck) {
+    long writtenCount = getWrittenRecordCount();
+    if (writtenCount >= recordCountForNextSizeCheck) {
       long dataSize = getDataSize();
       // In some very extreme cases, like all records are same value, then it's possible
       // the dataSize is much lower than the writtenRecordCount(high compression ratio),
       // causing avgRecordSize to 0, we'll force the avgRecordSize to 1 for such cases.
-      long avgRecordSize = Math.max(dataSize / getWrittenRecordCount(), 1);
+      long avgRecordSize = Math.max(dataSize / writtenCount, 1);
       // Follow the parquet block size check logic here, return false
       // if it is within ~2 records of the limit
       if (dataSize > (maxFileSize - avgRecordSize * 2)) {
         return false;
       }
-      recordNumForNextCheck = Math.min(
-          Math.max(recordNumForNextCheck + parquetConfig.getMinRowCountForSizeCheck(),
-              // Do check it in the halfway
-              (recordNumForNextCheck + (maxFileSize / avgRecordSize)) / 2),
-          recordNumForNextCheck + parquetConfig.getMaxRowCountForSizeCheck());
+      recordCountForNextSizeCheck = writtenCount + Math.min(
+          // Do check it in the halfway
+          Math.max(DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK, (maxFileSize / avgRecordSize - writtenCount) / 2),
+          DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK);
     }
     return true;
   }
