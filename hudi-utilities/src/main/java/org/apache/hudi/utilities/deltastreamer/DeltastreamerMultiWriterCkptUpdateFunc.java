@@ -41,7 +41,7 @@ import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKP
  * because it needs the lock to ensure that it does not overwrite another deltastreamers
  * latest checkpoint with an older one.
  */
-public class HoodieDeltaStreamerMultiwriterCheckpoint implements BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata> {
+public class DeltastreamerMultiWriterCkptUpdateFunc implements BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata> {
   private static final ObjectMapper OM = new ObjectMapper();
 
   //deltastreamer id
@@ -49,13 +49,13 @@ public class HoodieDeltaStreamerMultiwriterCheckpoint implements BiConsumer<Hood
 
   //the deltastreamer
   private final DeltaSync ds;
-  private final String checkpoint;
+  private final String newCheckpoint;
   private final String latestCheckpointWritten;
 
-  public HoodieDeltaStreamerMultiwriterCheckpoint(DeltaSync ds, String checkpoint, String latestCheckpointWritten) {
+  public DeltastreamerMultiWriterCkptUpdateFunc(DeltaSync ds, String newCheckpoint, String latestCheckpointWritten) {
     this.ds = ds;
     this.id = ds.getId();
-    this.checkpoint = checkpoint;
+    this.newCheckpoint = newCheckpoint;
     this.latestCheckpointWritten = latestCheckpointWritten;
   }
 
@@ -64,8 +64,7 @@ public class HoodieDeltaStreamerMultiwriterCheckpoint implements BiConsumer<Hood
     //Get last completed deltacommit
     Option<HoodieCommitMetadata> latestCommitMetadata;
     try {
-      ds.refreshTimeline();
-      latestCommitMetadata = ds.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline().getCommitsTimeline());
+      latestCommitMetadata = ds.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.reloadActiveTimeline().getCommitsTimeline());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to get the latest commit metadata", e);
     }
@@ -89,24 +88,11 @@ public class HoodieDeltaStreamerMultiwriterCheckpoint implements BiConsumer<Hood
     }
 
     //Add map to metadata
-    checkpointMap.put(id, checkpoint);
+    checkpointMap.put(id, newCheckpoint);
     try {
       commitMetadata.addMetadata(CHECKPOINT_KEY, OM.writeValueAsString(checkpointMap));
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);
-    }
-  }
-
-  public static Option<String> readCheckpointValue(String value, String id) {
-    try {
-      Map<String,String> checkpointMap = OM.readValue(value, Map.class);
-      if (!checkpointMap.containsKey(id)) {
-        return Option.empty();
-      }
-      String checkpointVal = checkpointMap.get(id);
-      return Option.of(checkpointVal);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to parse checkpoint as map", e);
     }
   }
 }

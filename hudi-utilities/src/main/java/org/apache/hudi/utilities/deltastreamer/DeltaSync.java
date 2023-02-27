@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import com.codahale.metrics.Timer;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericRecord;
@@ -121,6 +122,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -152,6 +154,7 @@ public class DeltaSync implements Serializable, Closeable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
+  private static final ObjectMapper OM = new ObjectMapper();
 
   /**
    * Delta Sync Config.
@@ -247,7 +250,7 @@ public class DeltaSync implements Serializable, Closeable {
   /**
    * Unique identifier of the deltastreamer
    * */
-  private transient Option<String> identifier;
+  private transient Option<String> multiwriterIdentifier;
 
   /**
    * The last checkpoint that THIS deltastreamer instance wrote.
@@ -284,7 +287,7 @@ public class DeltaSync implements Serializable, Closeable {
     if (StringUtils.isNullOrEmpty(id)) {
       id = props.getProperty(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key());
     }
-    this.identifier = StringUtils.isNullOrEmpty(id) ? Option.empty() : Option.of(id);
+    this.multiwriterIdentifier = StringUtils.isNullOrEmpty(id) ? Option.empty() : Option.of(id);
   }
 
   /**
@@ -629,8 +632,7 @@ public class DeltaSync implements Serializable, Closeable {
         } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
           //if previous checkpoint is an empty string, skip resume use Option.empty()
           String value = commitMetadata.getMetadata(CHECKPOINT_KEY);
-          resumeCheckpointStr = identifier.isPresent()
-              ? HoodieDeltaStreamerMultiwriterCheckpoint.readCheckpointValue(value, identifier.get()) : Option.of(value);
+          resumeCheckpointStr = multiwriterIdentifier.isPresent() ? readCheckpointValue(value, multiwriterIdentifier.get()) : Option.of(value);
         } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
             HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
           throw new HoodieDeltaStreamerException(
@@ -648,6 +650,19 @@ public class DeltaSync implements Serializable, Closeable {
       }
     }
     return resumeCheckpointStr;
+  }
+
+  public static Option<String> readCheckpointValue(String value, String id) {
+    try {
+      Map<String,String> checkpointMap = OM.readValue(value, Map.class);
+      if (!checkpointMap.containsKey(id)) {
+        return Option.empty();
+      }
+      String checkpointVal = checkpointMap.get(id);
+      return Option.of(checkpointVal);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to parse checkpoint as map", e);
+    }
   }
 
   public Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
@@ -722,8 +737,8 @@ public class DeltaSync implements Serializable, Closeable {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc = Option.empty();
       if (checkpointStr != null) {
-        if (identifier.isPresent()) {
-          extraPreCommitFunc = Option.of(new HoodieDeltaStreamerMultiwriterCheckpoint(this, checkpointStr, latestCheckpointWritten));
+        if (multiwriterIdentifier.isPresent()) {
+          extraPreCommitFunc = Option.of(new DeltastreamerMultiWriterCkptUpdateFunc(this, checkpointStr, latestCheckpointWritten));
         } else {
           checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
         }
@@ -1092,6 +1107,6 @@ public class DeltaSync implements Serializable, Closeable {
   }
 
   public String getId() {
-    return identifier.get();
+    return multiwriterIdentifier.get();
   }
 }
