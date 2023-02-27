@@ -269,7 +269,7 @@ public class MarkerUtils {
     Set<String> missingFileIDs = currentInstants.stream().flatMap(instant -> {
       try {
         return HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class)
-            .getFileIdAndRelativePaths().keySet().stream();
+            .getFileIdAndRelativePaths().values().stream().map(MarkerUtils::makerToPartitionAndFileID);
       } catch (Exception e) {
         return Stream.empty();
       }
