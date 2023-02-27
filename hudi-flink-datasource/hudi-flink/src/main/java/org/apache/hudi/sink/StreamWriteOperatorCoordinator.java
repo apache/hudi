@@ -33,6 +33,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
@@ -335,7 +336,9 @@ public class StreamWriteOperatorCoordinator
    * Sync hoodie table metadata to Hive metastore.
    */
   public void doSyncHive() {
-    hiveSyncContext.hiveSyncTool().syncHoodieTable();
+    try (HiveSyncTool syncTool = hiveSyncContext.hiveSyncTool()) {
+      syncTool.syncHoodieTable();
+    }
   }
 
   private static void initMetadataTable(HoodieFlinkWriteClient<?> writeClient) {
