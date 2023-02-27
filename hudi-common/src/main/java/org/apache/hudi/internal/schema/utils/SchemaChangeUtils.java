@@ -77,6 +77,9 @@ public class SchemaChangeUtils {
           if (decimalDsr.isWiderThan(decimalSrc)) {
             return true;
           }
+          if (decimalDsr.precision() >= decimalSrc.precision() && decimalDsr.scale() == decimalSrc.scale()) {
+            return true;
+          }
         } else if (dsr.typeId() == Type.TypeID.STRING) {
           return true;
         }
