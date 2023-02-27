@@ -1226,7 +1226,7 @@ class TestHoodieSparkSqlWriter {
       .setConf(spark.sparkContext.hadoopConfiguration)
       .setBasePath(tempBasePath)
       .build()
-    new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
+    new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false)
   }
 }
 

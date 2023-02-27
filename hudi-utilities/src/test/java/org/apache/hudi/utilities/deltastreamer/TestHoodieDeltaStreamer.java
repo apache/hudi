@@ -778,7 +778,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(1900, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(fs.getConf()).build());
-    Schema tableSchema = tableSchemaResolver.getTableAvroSchemaWithoutMetadataFields();
+    Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
     assertNotNull(tableSchema);
 
     Schema expectedSchema;
