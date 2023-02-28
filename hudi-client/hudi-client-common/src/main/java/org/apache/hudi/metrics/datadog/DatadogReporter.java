@@ -94,9 +94,9 @@ public class DatadogReporter extends ScheduledReporter {
       final long now = clock.getTime() / 1000;
       final PayloadBuilder builder = new PayloadBuilder();
       builder.withMetricType(MetricType.gauge);
-      gauges.forEach((metricName, metric) -> {
-        builder.addGauge(prefix(MetricUtils.getMetricAndLabels(metricName).getKey()), now, (long) metric.getValue());
-      });
+      gauges.forEach(
+          (metricName, metric) -> builder.addGauge(prefix(MetricUtils.getMetricAndLabels(metricName).getKey()),
+              now, (long) metric.getValue()));
       host.ifPresent(builder::withHost);
       List<String> runTimeLables = labelsKeyValue.getKey();
       tags.map(runTimeLables::addAll);

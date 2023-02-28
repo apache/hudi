@@ -98,7 +98,7 @@ public class HoodieMetricsConfig extends HoodieConfig {
   public static final ConfigProperty<String> METRICS_REPORTER_FILE_BASED_CONFIGS_PATH = ConfigProperty
       .key(METRIC_PREFIX + ".configs.properties")
       .defaultValue("")
-      .sinceVersion("0.12.2")
+      .sinceVersion("0.14.0")
       .withDocumentation("Comma separated list of config file paths for metric exporter configs");
 
   /**

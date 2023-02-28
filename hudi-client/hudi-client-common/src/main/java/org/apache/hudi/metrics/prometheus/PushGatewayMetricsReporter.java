@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics.prometheus;
 
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.MetricsReporter;
@@ -92,6 +93,10 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
   }
 
   private static Map<String, String> parseLabels(String labels) {
+    if (StringUtils.isNullOrEmpty(labels)) {
+      return Collections.emptyMap();
+    }
+
     Stream<String[]> intermediateStream = Pattern.compile("\\s*,\\s*")
         .splitAsStream(labels.trim())
         .map(s -> s.split(":", 2));

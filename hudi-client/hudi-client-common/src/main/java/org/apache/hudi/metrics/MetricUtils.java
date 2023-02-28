@@ -18,6 +18,8 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import java.util.Arrays;
 import java.util.List;
@@ -27,8 +29,9 @@ import java.util.stream.Collectors;
 public class MetricUtils {
 
   private static Pair<String, String> splitToPair(String label) {
-    String[] keyValuess = label.split(":");
-    return  Pair.of(keyValuess[0], keyValuess.length == 2 ? keyValuess[1] : "");
+    String[] keyValues = label.split(":");
+    ValidationUtils.checkArgument(StringUtils.nonEmpty(keyValues[0]), String.format("Key is empty for label %s", label));
+    return  Pair.of(keyValues[0], keyValues.length == 2 ? keyValues[1] : "");
   }
 
   public static Pair<String,Map<String, String>> getLabelsAndMetricMap(String metric) {
@@ -54,11 +57,5 @@ public class MetricUtils {
     return Pair.of(metricAndLabels.getLeft(),
         Arrays.stream(metricAndLabels.getRight().split(",")).collect(Collectors.toList())
     );
-  }
-
-  public static String getMetricWithLabel(String metric, Map<String,String> labels) {
-    String labelsStr = labels.entrySet().stream().map(entry -> String.format("%s:%s",entry.getKey(), entry.getValue()))
-        .collect(Collectors.joining(","));
-    return String.format("%s;%s",metric,labelsStr);
   }
 }

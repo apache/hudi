@@ -71,12 +71,11 @@ public class TestPushGateWayReporter {
 
   @Test
   public void testRegisterGauge() {
-    addConfigs();
-    hoodieMetrics = new HoodieMetrics(config);
-    metrics = hoodieMetrics.getMetrics();
+    when(config.isMetricsOn()).thenReturn(true);
 
     assertDoesNotThrow(() -> {
-      new HoodieMetrics(config);
+      hoodieMetrics = new HoodieMetrics(config);
+      metrics = hoodieMetrics.getMetrics();
     });
 
     metrics.registerGauge("pushGateWayReporter_metric", 123L);
@@ -91,13 +90,15 @@ public class TestPushGateWayReporter {
     String propPrometheusPath = Objects.requireNonNull(PROP_FILE_PROMETHEUS_URL).toURI().getPath();
     String propDatadogPath = Objects.requireNonNull(PROP_FILE_DATADOG_URL).toURI().getPath();
     if (addDefaultReporter) {
-      addConfigs();
+      when(config.isMetricsOn()).thenReturn(true);
+      when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
+      when(config.getPushGatewayReportPeriodSeconds()).thenReturn(30);
+    } else {
+      when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+      when(config.getMetricReporterMetricsNamePrefix()).thenReturn(TestPushGateWayReporter.class.getSimpleName());
+      when(config.getMetricReporterFileBasedConfigs()).thenReturn(propPrometheusPath + "," + propDatadogPath);
+      when(config.isMetricsOn()).thenReturn(true);
     }
-
-    when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    when(config.getMetricReporterMetricsNamePrefix()).thenReturn(TestPushGateWayReporter.class.getSimpleName());
-    when(config.getMetricReporterFileBasedConfigs()).thenReturn(propPrometheusPath + "," + propDatadogPath);
-    when(config.isMetricsOn()).thenReturn(true);
 
     hoodieMetrics = new HoodieMetrics(config);
     metrics = hoodieMetrics.getMetrics();
@@ -107,27 +108,15 @@ public class TestPushGateWayReporter {
     Map<String, String> labels = new HashMap<>();
     labels.put("group", "a");
     labels.put("job", "0");
-    metricsMap.put("with_label_metric", 1L);
+    metricsMap.put("with_label_metric;group:a,job:0", 1L);
     labellessMetricMap.put("without_label_metric", 1L);
-    metrics.registerGauges(metricsMap, Option.empty(), labels);
+    metrics.registerGauges(metricsMap, Option.empty());
     metrics.registerGauges(labellessMetricMap, Option.empty());
     List<String> metricKeys = new ArrayList<>(metrics.getRegistry().getGauges().keySet());
     assertEquals(0, MetricUtils.getLabelsAndMetricMap(metricKeys.stream()
         .filter(x -> x.contains("without_label_metric")).findFirst().get()).getValue().size());
     assertEquals(labels, MetricUtils.getLabelsAndMetricMap(metricKeys.stream()
         .filter(x -> x.contains("with_label_metric")).findFirst().get()).getValue());
-  }
-
-  private void addConfigs() {
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
-    when(config.getPushGatewayHost()).thenReturn("localhost");
-    when(config.getPushGatewayPort()).thenReturn(9091);
-    when(config.getPushGatewayReportPeriodSeconds()).thenReturn(30);
-    when(config.getPushGatewayDeleteOnShutdown()).thenReturn(true);
-    when(config.getPushGatewayJobName()).thenReturn("foo");
-    when(config.getPushGatewayRandomJobNameSuffix()).thenReturn(false);
-    when(config.getPushGatewayLabels()).thenReturn("hudi:prometheus");
-    when(config.isMetricsOn()).thenReturn(true);
   }
 
   @Test

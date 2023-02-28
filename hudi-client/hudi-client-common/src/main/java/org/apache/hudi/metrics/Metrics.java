@@ -56,11 +56,11 @@ public class Metrics {
     registry = new MetricRegistry();
     commonMetricPrefix = metricConfig.getMetricReporterMetricsNamePrefix();
     reporters = new ArrayList<>();
-    MetricsReporter defaultReporter = MetricsReporterFactory.createReporter(metricConfig, registry);
-    if (defaultReporter != null) {
-      reporters.add(defaultReporter);
+    Option<MetricsReporter> defaultReporter = MetricsReporterFactory.createReporter(metricConfig, registry);
+    defaultReporter.ifPresent(reporters::add);
+    if (StringUtils.nonEmpty(metricConfig.getMetricReporterFileBasedConfigs())) {
+      reporters.addAll(addAdditionalMetricsExporters(metricConfig));
     }
-    reporters.addAll(addAdditionalMetricsExporters(metricConfig));
     if (reporters.size() == 0) {
       throw new RuntimeException("Cannot initialize Reporters.");
     }
@@ -91,18 +91,21 @@ public class Metrics {
 
   private List<MetricsReporter> addAdditionalMetricsExporters(HoodieWriteConfig metricConfig) {
     List<MetricsReporter> reporterList = new ArrayList<>();
-    if (!StringUtils.isNullOrEmpty(metricConfig.getMetricReporterFileBasedConfigs())) {
-      List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
-      try (FileSystem fs = FSUtils.getFs(propPathList.get(0), new Configuration())) {
-        for (String propPath: propPathList) {
-          HoodieWriteConfig secondarySourceConfig = HoodieWriteConfig.newBuilder().fromInputStream(
-              fs.open(new Path(propPath))).withPath(metricConfig.getBasePath()).build();
-          reporterList.add(MetricsReporterFactory.createReporter(secondarySourceConfig, registry));
+    List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
+    try (FileSystem fs = FSUtils.getFs(propPathList.get(0), new Configuration())) {
+      for (String propPath : propPathList) {
+        HoodieWriteConfig secondarySourceConfig = HoodieWriteConfig.newBuilder().fromInputStream(
+            fs.open(new Path(propPath))).withPath(metricConfig.getBasePath()).build();
+        Option<MetricsReporter> reporter = MetricsReporterFactory.createReporter(secondarySourceConfig, registry);
+        if (reporter.isPresent()) {
+          reporterList.add(reporter.get());
+        } else {
+          LOG.error(String.format("Could not create reporter using properties path %s base path %s",
+              propPath, metricConfig.getBasePath()));
         }
-      } catch (IOException e) {
-        LOG.error("Failed to add MetricsExporters", e);
-        throw new HoodieException("failed to MetricsExporters", e);
       }
+    } catch (IOException e) {
+      LOG.error("Failed to add MetricsExporters", e);
     }
     LOG.info("total additional metrics reporters added =" + reporterList.size());
     return reporterList;
@@ -136,11 +139,6 @@ public class Metrics {
   public void registerGauges(Map<String, Long> metricsMap, Option<String> prefix) {
     String metricPrefix = prefix.isPresent() ? prefix.get() + "." : "";
     metricsMap.forEach((k, v) -> registerGauge(metricPrefix + k, v));
-  }
-
-  public void registerGauges(Map<String, Long> metricsMap, Option<String> prefix, Map<String, String> labels) {
-    String metricPrefix = prefix.isPresent() ? prefix.get() + "." : "";
-    metricsMap.forEach((k, v) -> registerGauge(metricPrefix + MetricUtils.getMetricWithLabel(k, labels), v));
   }
 
   public void registerGauge(String metricName, final long value) {
