@@ -233,7 +233,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
     props.put(ERROR_TABLE_BASE_PATH.key(),"/tmp/qurantine_table_test/json_kafka_row_events");
     props.put(ERROR_TARGET_TABLE.key(),"json_kafka_row_events");
-    props.put("hoodie.deltastreamer.errortable.validate.targetschema.enable", "true");
+    props.put("hoodie.errortable.validate.targetschema.enable", "true");
     props.put("hoodie.base.path","/tmp/json_kafka_row_events");
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     Option<BaseErrorTableWriter> errorTableWriter = Option.of(getAnonymousErrorTableWriter(props));

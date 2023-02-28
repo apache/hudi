@@ -32,48 +32,48 @@ import java.util.Arrays;
     description = "Configurations that are required for Error table configs")
 public class HoodieErrorTableConfig {
   public static final ConfigProperty<Boolean> ERROR_TABLE_ENABLED = ConfigProperty
-      .key("hoodie.deltastreamer.errortable.enable")
+      .key("hoodie.errortable.enable")
       .defaultValue(false)
       .withDocumentation("Config to enable error table. If the config is enabled, "
           + "all the records with processing error in DeltaStreamer are transferred to error table.");
 
   public static final ConfigProperty<String> ERROR_TABLE_BASE_PATH = ConfigProperty
-      .key("hoodie.deltastreamer.errortable.base.path")
+      .key("hoodie.errortable.base.path")
       .noDefaultValue()
       .withDocumentation("Base path for error table under which all error records "
           + "would be stored.");
 
   public static final ConfigProperty<String> ERROR_TARGET_TABLE = ConfigProperty
-      .key("hoodie.deltastreamer.errortable.target.table.name")
+      .key("hoodie.errortable.target.table.name")
       .noDefaultValue()
       .withDocumentation("Table name to be used for the error table");
 
   public static final ConfigProperty<Integer> ERROR_TABLE_UPSERT_PARALLELISM_VALUE = ConfigProperty
-      .key("hoodie.deltastreamer.errortable.upsert.shuffle.parallelism")
+      .key("hoodie.errortable.upsert.shuffle.parallelism")
       .defaultValue(200)
       .withDocumentation("Config to set upsert shuffle parallelism. The config is similar to "
           + "hoodie.upsert.shuffle.parallelism config but applies to the error table.");
 
   public static final ConfigProperty<Integer> ERROR_TABLE_INSERT_PARALLELISM_VALUE = ConfigProperty
-      .key("hoodie.deltastreamer.errortable.insert.shuffle.parallelism")
+      .key("hoodie.errortable.insert.shuffle.parallelism")
       .defaultValue(200)
       .withDocumentation("Config to set insert shuffle parallelism. The config is similar to "
           + "hoodie.insert.shuffle.parallelism config but applies to the error table.");
 
   public static final ConfigProperty<String> ERROR_TABLE_WRITE_CLASS = ConfigProperty
-      .key("hoodie.deltastreamer.errortable.write.class")
+      .key("hoodie.errortable.write.class")
       .noDefaultValue()
       .withDocumentation("Class which handles the error table writes. This config is used to configure "
           + "a custom implementation for Error Table Writer. Specify the full class name of the custom "
           + "error table writer as a value for this config");
 
   public static final ConfigProperty<Boolean> ERROR_ENABLE_VALIDATE_TARGET_SCHEMA = ConfigProperty
-      .key("hoodie.deltastreamer.errortable.validate.targetschema.enable")
+      .key("hoodie.errortable.validate.targetschema.enable")
       .defaultValue(false)
       .withDocumentation("Records with schema mismatch with Target Schema are sent to Error Table.");
 
   public static final ConfigProperty<String> ERROR_TABLE_WRITE_FAILURE_STRATEGY = ConfigProperty
-      .key("hoodie.deltastreamer.errortable.write.failure.strategy")
+      .key("hoodie.errortable.write.failure.strategy")
       .defaultValue(ErrorWriteFailureStrategy.ROLLBACK_COMMIT.name())
       .withDocumentation("The config specifies the failure strategy if error table write fails. "
           + "Use one of - " + Arrays.toString(ErrorWriteFailureStrategy.values()));
