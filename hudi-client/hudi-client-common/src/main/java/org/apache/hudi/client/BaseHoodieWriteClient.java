@@ -131,7 +131,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected transient Timer.Context writeTimer = null;
 
   protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
-  protected Set<String> pendingInflightAndRequestedInstants;
+  protected Set<String> pendingInflightAndRequestedInstants = Collections.emptySet();
 
   protected BaseHoodieTableServiceClient<O> tableServiceClient;
 
