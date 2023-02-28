@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.table.HoodieTable;
@@ -66,7 +67,9 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
   @Override
   protected Partitioner getPartitioner(WorkloadProfile profile) {
     return table.getStorageLayout().layoutPartitionerClass()
-        .map(c -> getLayoutPartitioner(profile, c))
+        .map(c -> c.equals(HoodieLayoutConfig.SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME)
+            ? new SparkInsertOverwriteBucketIndexPartitioner(profile, context, table, config)
+            : getLayoutPartitioner(profile, c))
         .orElse(new SparkInsertOverwritePartitioner(profile, context, table, config));
   }
 

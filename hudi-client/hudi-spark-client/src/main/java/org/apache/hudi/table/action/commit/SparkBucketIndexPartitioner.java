@@ -106,15 +106,19 @@ public class SparkBucketIndexPartitioner<T> extends
   public BucketInfo getBucketInfo(int bucketNumber) {
     String partitionPath = partitionPaths.get(bucketNumber / numBuckets);
     String bucketId = BucketIdentifier.bucketIdStr(bucketNumber % numBuckets);
-    Option<String> fileIdOption = Option.fromJavaOptional(updatePartitionPathFileIds
-        .getOrDefault(partitionPath, Collections.emptySet()).stream()
-        .filter(e -> e.startsWith(bucketId))
-        .findFirst());
+    Option<String> fileIdOption = findReusingFileId(partitionPath, bucketId);
     if (fileIdOption.isPresent()) {
       return new BucketInfo(BucketType.UPDATE, fileIdOption.get(), partitionPath);
     } else {
       return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucketId), partitionPath);
     }
+  }
+
+  protected Option<String> findReusingFileId(String partitionPath, String bucketId) {
+    return Option.fromJavaOptional(updatePartitionPathFileIds
+          .getOrDefault(partitionPath, Collections.emptySet()).stream()
+          .filter(e -> e.startsWith(bucketId))
+          .findFirst());
   }
 
   @Override
