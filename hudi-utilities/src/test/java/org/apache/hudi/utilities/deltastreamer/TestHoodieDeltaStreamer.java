@@ -86,6 +86,7 @@ import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -138,6 +139,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.config.HoodieWriteConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
 import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE;
 import static org.apache.hudi.config.metrics.HoodieMetricsConfig.TURN_METRICS_ON;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
@@ -1802,6 +1804,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   private void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue, String topicName) throws IOException {
+    prepareJsonKafkaDFSSource(propsFileName, autoResetValue, topicName, null);
+  }
+
+  private void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue, String topicName, Map<String,String> extraProps) throws IOException {
     // Properties used for testing delta-streamer with JsonKafka source
     TypedProperties props = new TypedProperties();
     populateAllCommonProps(props, basePath, testUtils.brokerAddress());
@@ -1815,6 +1821,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/source_uber.avsc");
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", basePath + "/target_uber.avsc");
     props.setProperty("auto.offset.reset", autoResetValue);
+    if (extraProps != null && !extraProps.isEmpty()) {
+      extraProps.forEach(props::setProperty);
+    }
 
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs, basePath + "/" + propsFileName);
   }
@@ -1909,6 +1918,78 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(JSON_KAFKA_NUM_RECORDS * 2, tableBasePath, sqlContext);
+  }
+
+  @Test
+  public void testDeltaStreamerMultiwriterCheckpoint() throws Exception {
+    // prep parquet source
+    PARQUET_SOURCE_ROOT = basePath + "/parquetFilesMultiCheckpoint" + testNum;
+    int parquetRecords = 100;
+    HoodieTestDataGenerator dataGenerator = prepareParquetDFSFiles(parquetRecords, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, true,
+        HoodieTestDataGenerator.TRIP_SCHEMA, HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
+
+    prepareParquetDFSSource(true, true, "source_uber.avsc", "target_uber.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "driver");
+
+    // delta streamer w/ parquet source
+    String tableBasePath = basePath + "/test_multi_checkpoint" + testNum;
+    HoodieDeltaStreamer.Config parquetCfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_PARQUET, false,
+        true, Integer.MAX_VALUE, false, null, null, "timestamp", null);
+    parquetCfg.configs = new ArrayList<>();
+    parquetCfg.configs.add(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key() + "=parquet");
+    //parquetCfg.continuousMode = false;
+    HoodieDeltaStreamer parquetDs = new HoodieDeltaStreamer(parquetCfg, jsc);
+    parquetDs.sync();
+    TestHelpers.assertRecordCount(100, tableBasePath, sqlContext);
+
+    // prep json kafka source
+    topicName = "topic" + testNum;
+    prepareJsonKafkaDFSFiles(20, true, topicName);
+    Map<String, String> kafkaExtraProps = new HashMap<>();
+    kafkaExtraProps.put(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key(), "kafka");
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName, kafkaExtraProps);
+    // delta streamer w/ json kafka source
+    HoodieDeltaStreamer kafkaDs = new HoodieDeltaStreamer(
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+            Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+            true, Integer.MAX_VALUE, false, null, null, "timestamp", null), jsc);
+    kafkaDs.sync();
+    int totalExpectedRecords = parquetRecords + 20;
+    TestHelpers.assertRecordCount(totalExpectedRecords, tableBasePath, sqlContext);
+    //parquet again
+    prepareParquetDFSUpdates(parquetRecords, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, true, HoodieTestDataGenerator.TRIP_SCHEMA, HoodieTestDataGenerator.AVRO_TRIP_SCHEMA,
+        dataGenerator, "001");
+    parquetDs = new HoodieDeltaStreamer(parquetCfg, jsc);
+    parquetDs.sync();
+    TestHelpers.assertRecordCount(parquetRecords * 2 + 20, tableBasePath, sqlContext);
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(jsc.hadoopConfiguration(), tableBasePath);
+    List<HoodieInstant> instants = metaClient.getCommitsTimeline().getInstants();
+
+    ObjectMapper objectMapper = new ObjectMapper();
+    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+        .fromBytes(metaClient.getCommitsTimeline().getInstantDetails(instants.get(0)).get(), HoodieCommitMetadata.class);
+    Map<String,String>  checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
+
+    String parquetFirstcheckpoint = checkpointVals.get("parquet");
+    assertNotNull(parquetFirstcheckpoint);
+    commitMetadata = HoodieCommitMetadata
+        .fromBytes(metaClient.getCommitsTimeline().getInstantDetails(instants.get(1)).get(), HoodieCommitMetadata.class);
+    checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
+    String kafkaCheckpoint = checkpointVals.get("kafka");
+    assertNotNull(kafkaCheckpoint);
+    assertEquals(parquetFirstcheckpoint, checkpointVals.get("parquet"));
+
+    commitMetadata = HoodieCommitMetadata
+        .fromBytes(metaClient.getCommitsTimeline().getInstantDetails(instants.get(2)).get(), HoodieCommitMetadata.class);
+    checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
+    String parquetSecondCheckpoint = checkpointVals.get("parquet");
+    assertNotNull(parquetSecondCheckpoint);
+    assertEquals(kafkaCheckpoint,checkpointVals.get("kafka"));
+    assertTrue(Long.parseLong(parquetSecondCheckpoint) > Long.parseLong(parquetFirstcheckpoint));
+    parquetDs.shutdownGracefully();
+    kafkaDs.shutdownGracefully();
   }
 
   @Test
@@ -2453,7 +2534,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
     }
 
-    protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
+    public Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
       return super.getLatestCommitMetadataWithValidCheckpointInfo(timeline);
     }
   }
