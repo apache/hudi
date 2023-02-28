@@ -237,7 +237,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     props.put("hoodie.base.path","/tmp/json_kafka_row_events");
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     Option<BaseErrorTableWriter> errorTableWriter = Option.of(getAnonymousErrorTableWriter(props));
-    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, errorTableWriter);
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, errorTableWriter, Option.of(props));
     assertEquals(1000, kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE).getBatch().get().count());
     assertEquals(2,((JavaRDD)errorTableWriter.get().getErrorEvents(
         HoodieActiveTimeline.createNewInstantTime(), Option.empty()).get()).count());
@@ -267,7 +267,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
 
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     Option<BaseErrorTableWriter> errorTableWriter = Option.of(getAnonymousErrorTableWriter(props));
-    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, errorTableWriter);
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, errorTableWriter, Option.of(props));
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(),Long.MAX_VALUE);
     assertEquals(1000,fetch1.getBatch().get().count());
     assertEquals(2, ((JavaRDD)errorTableWriter.get().getErrorEvents(

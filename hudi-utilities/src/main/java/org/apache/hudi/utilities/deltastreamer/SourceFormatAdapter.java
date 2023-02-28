@@ -20,6 +20,8 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -29,6 +31,7 @@ import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
+import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import com.google.protobuf.Message;
 import org.apache.avro.Schema;
@@ -61,16 +64,44 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 public final class SourceFormatAdapter implements Closeable {
 
   private final Source source;
+  private final boolean shouldSanitize;
+  private final String invalidCharMask;
 
   private Option<BaseErrorTableWriter> errorTableWriter = Option.empty();
 
   public SourceFormatAdapter(Source source) {
-    this(source, Option.empty());
+    this(source, Option.empty(), Option.empty());
   }
 
-  public SourceFormatAdapter(Source source, Option<BaseErrorTableWriter> errorTableWriter) {
+  public SourceFormatAdapter(Source source, Option<BaseErrorTableWriter> errorTableWriter, Option<TypedProperties> props) {
     this.errorTableWriter = errorTableWriter;
     this.source = source;
+    if (!props.isPresent()) {
+      this.shouldSanitize = false;
+      this.invalidCharMask = "";
+      return;
+    }
+    this.shouldSanitize = props.get().getBoolean(SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES, false);
+    this.invalidCharMask = props.get().getString(SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK, "__");
+    if (this.shouldSanitize && source.getSourceType() == Source.SourceType.PROTO) {
+      throw new IllegalArgumentException("PROTO cannot be sanitized");
+    }
+  }
+
+  /**
+   * Config that automatically sanitizes the field names as per avro naming rules.
+   * @return enabled status.
+   */
+  private boolean isFieldNameSanitizingEnabled() {
+    return shouldSanitize;
+  }
+
+  /**
+   * Replacement mask for invalid characters encountered in avro names.
+   * @return sanitized value.
+   */
+  private String getInvalidCharMask() {
+    return invalidCharMask;
   }
 
   /**
@@ -79,7 +110,8 @@ public final class SourceFormatAdapter implements Closeable {
    * @return
    */
   private JavaRDD<GenericRecord> transformJsonToGenericRdd(InputBatch<JavaRDD<String>> inputBatch) {
-    AvroConvertor convertor = new AvroConvertor(inputBatch.getSchemaProvider().getSourceSchema());
+    MercifulJsonConverter.clearCache(inputBatch.getSchemaProvider().getSourceSchema().getFullName());
+    AvroConvertor convertor = new AvroConvertor(inputBatch.getSchemaProvider().getSourceSchema(), isFieldNameSanitizingEnabled(), getInvalidCharMask());
     return inputBatch.getBatch().map(rdd -> {
       if (errorTableWriter.isPresent()) {
         JavaRDD<Either<GenericRecord,String>> javaRDD = rdd.map(convertor::fromJsonWithError);
@@ -118,14 +150,18 @@ public final class SourceFormatAdapter implements Closeable {
   public InputBatch<JavaRDD<GenericRecord>> fetchNewDataInAvroFormat(Option<String> lastCkptStr, long sourceLimit) {
     switch (source.getSourceType()) {
       case AVRO:
+        //don't need to sanitize because it's already avro
         return ((Source<JavaRDD<GenericRecord>>) source).fetchNext(lastCkptStr, sourceLimit);
       case JSON: {
+        //sanitizing is done inside the convertor in transformJsonToGenericRdd if enabled
         InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCkptStr, sourceLimit);
         JavaRDD<GenericRecord> eventsRdd = transformJsonToGenericRdd(r);
         return new InputBatch<>(Option.ofNullable(eventsRdd),r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       case ROW: {
-        InputBatch<Dataset<Row>> r = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
+        //we do the sanitizing here if enabled
+        InputBatch<Dataset<Row>> r = SanitizationUtils.maybeSanitizeFieldNames(((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit),
+            isFieldNameSanitizingEnabled(), getInvalidCharMask());
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(
             rdd -> {
                 SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
@@ -141,6 +177,7 @@ public final class SourceFormatAdapter implements Closeable {
             .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       case PROTO: {
+        //TODO([HUDI-5830]) implement field name sanitization
         InputBatch<JavaRDD<Message>> r = ((Source<JavaRDD<Message>>) source).fetchNext(lastCkptStr, sourceLimit);
         AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(rdd -> rdd.map(convertor::fromProtoMessage)).orElse(null)),
@@ -151,30 +188,43 @@ public final class SourceFormatAdapter implements Closeable {
     }
   }
 
+  private InputBatch<Dataset<Row>> avroDataInRowFormat(InputBatch<JavaRDD<GenericRecord>> r) {
+    Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
+    return new InputBatch<>(
+        Option
+            .ofNullable(
+                r.getBatch()
+                    .map(rdd -> AvroConversionUtils.createDataFrame(JavaRDD.toRDD(rdd), sourceSchema.toString(),
+                        source.getSparkSession())
+                    )
+                    .orElse(null)),
+        r.getCheckpointForNextBatch(), r.getSchemaProvider());
+  }
+
   /**
    * Fetch new data in row format. If the source provides data in different format, they are translated to Row format
    */
   public InputBatch<Dataset<Row>> fetchNewDataInRowFormat(Option<String> lastCkptStr, long sourceLimit) {
     switch (source.getSourceType()) {
       case ROW:
-        InputBatch<Dataset<Row>> datasetInputBatch = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
+        //we do the sanitizing here if enabled
+        InputBatch<Dataset<Row>> datasetInputBatch = SanitizationUtils.maybeSanitizeFieldNames(((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit),
+            isFieldNameSanitizingEnabled(), getInvalidCharMask());
         return new InputBatch<>(processErrorEvents(datasetInputBatch.getBatch(),
             ErrorEvent.ErrorReason.JSON_ROW_DESERIALIZATION_FAILURE),
             datasetInputBatch.getCheckpointForNextBatch(), datasetInputBatch.getSchemaProvider());
       case AVRO: {
+        //don't need to sanitize because it's already avro
         InputBatch<JavaRDD<GenericRecord>> r = ((Source<JavaRDD<GenericRecord>>) source).fetchNext(lastCkptStr, sourceLimit);
-        Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
-        return new InputBatch<>(
-            Option
-                .ofNullable(
-                    r.getBatch()
-                        .map(rdd -> AvroConversionUtils.createDataFrame(JavaRDD.toRDD(rdd), sourceSchema.toString(),
-                            source.getSparkSession())
-                        )
-                        .orElse(null)),
-            r.getCheckpointForNextBatch(), r.getSchemaProvider());
+        return avroDataInRowFormat(r);
       }
       case JSON: {
+        if (isFieldNameSanitizingEnabled()) {
+          //leverage the json -> avro sanitizing. TODO([HUDI-5829]) Optimize by sanitizing during direct conversion
+          InputBatch<JavaRDD<GenericRecord>> r = fetchNewDataInAvroFormat(lastCkptStr, sourceLimit);
+          return avroDataInRowFormat(r);
+
+        }
         InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
         if (errorTableWriter.isPresent()) {
@@ -200,6 +250,7 @@ public final class SourceFormatAdapter implements Closeable {
         }
       }
       case PROTO: {
+        //TODO([HUDI-5830]) implement field name sanitization
         InputBatch<JavaRDD<Message>> r = ((Source<JavaRDD<Message>>) source).fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
         AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());

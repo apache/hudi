@@ -45,6 +45,8 @@ public class AvroConvertor implements Serializable {
   private transient Schema schema;
 
   private final String schemaStr;
+  private final String invalidCharMask;
+  private final boolean shouldSanitize;
 
   /**
    * To be lazily inited on executors.
@@ -58,12 +60,24 @@ public class AvroConvertor implements Serializable {
   private transient Injection<GenericRecord, byte[]> recordInjection;
 
   public AvroConvertor(String schemaStr) {
+    this(schemaStr, false, "");
+  }
+
+  public AvroConvertor(String schemaStr, boolean shouldSanitize, String invalidCharMask) {
     this.schemaStr = schemaStr;
+    this.invalidCharMask = invalidCharMask;
+    this.shouldSanitize = shouldSanitize;
   }
 
   public AvroConvertor(Schema schema) {
+    this(schema, false, "");
+  }
+
+  public AvroConvertor(Schema schema, boolean shouldSanitize, String invalidCharMask) {
     this.schemaStr = schema.toString();
     this.schema = schema;
+    this.invalidCharMask = invalidCharMask;
+    this.shouldSanitize = shouldSanitize;
   }
 
   private void initSchema() {
@@ -81,7 +95,7 @@ public class AvroConvertor implements Serializable {
 
   private void initJsonConvertor() {
     if (jsonConverter == null) {
-      jsonConverter = new MercifulJsonConverter();
+      jsonConverter = new MercifulJsonConverter(this.shouldSanitize, this.invalidCharMask);
     }
   }
 
