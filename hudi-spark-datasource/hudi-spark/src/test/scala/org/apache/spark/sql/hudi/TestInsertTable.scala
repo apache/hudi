@@ -1062,6 +1062,49 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Insert Overwrite Bucket Index Table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a partitioned table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  dt string,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           | primaryKey = 'id',
+           | preCombineField = 'ts',
+           | hoodie.index.type = 'BUCKET')
+           | partitioned by (dt)
+           | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (1, 'a1', 10, 1000, "2021-01-05")
+              """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 10.0, 1000, "2021-01-05")
+      )
+
+      spark.sql(
+        s"""
+           | insert overwrite $tableName partition(dt = '2021-01-05')
+           | select 1 as id, 'a2' as name, 11 as price, 1000 as ts
+              """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a2", 11.0, 1000, "2021-01-05")
+      )
+    }
+  }
+
   /**
    * This test is to make sure that bulk insert doesn't create a bunch of tiny files if
    * hoodie.bulkinsert.user.defined.partitioner.sort.columns doesn't start with the partition columns

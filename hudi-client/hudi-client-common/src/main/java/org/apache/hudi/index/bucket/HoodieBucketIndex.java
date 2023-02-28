@@ -92,7 +92,6 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
   public boolean requiresTagging(WriteOperationType operationType) {
     switch (operationType) {
       case INSERT:
-      case INSERT_OVERWRITE:
       case UPSERT:
       case DELETE:
         return true;
