@@ -270,23 +270,24 @@ Spark SQL needs an explicit create table command.
 1. Since Hudi 0.10.0, `primaryKey` is required. It aligns with Hudi DataSource writer’s and resolves behavioural
    discrepancies reported in previous versions. Non-primary-key tables are no longer supported. Any Hudi table created
    pre-0.10.0 without a `primaryKey` needs to be re-created with a `primaryKey` field with 0.10.0.
-2. Similar to `hoodie.datasource.write.recordkey.field`, `uuid` is used as primary key by default; if that's the case
-   for your table, you can skip setting `primaryKey` in `tblproperties`.
-3. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
-4. `preCombineField` is required for MOR tables.
-5. When set `primaryKey`, `preCombineField`, `type` or other Hudi configs, `tblproperties` is preferred over `options`.
-6. A new Hudi table created by Spark SQL will by default set `hoodie.datasource.write.hive_style_partitioning=true`.
+2. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
+3. `preCombineField` is required for MOR tables. 
+4. When set `primaryKey`, `preCombineField`, `type` or other Hudi configs, `tblproperties` is preferred over `options`. 
+5. A new Hudi table created by Spark SQL will by default set `hoodie.datasource.write.hive_style_partitioning=true`.
 :::
 
 **Create a Non-Partitioned Table**
 
 ```sql
--- create a cow table, with default primaryKey 'uuid' and without preCombineField provided
+-- create a cow table, with primaryKey 'uuid' and without preCombineField provided
 create table hudi_cow_nonpcf_tbl (
   uuid int,
   name string,
   price double
-) using hudi;
+) using hudi
+tblproperties (
+  primaryKey = 'uuid'
+);
 
 
 -- create a mor non-partitioned table with preCombineField provided

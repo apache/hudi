@@ -74,7 +74,7 @@ Options useful for writing tables via `write.format.option(...)`
 > Record key field. Value to be used as the `recordKey` component of `HoodieKey`.
 Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using
 the dot notation eg: `a.b.c`<br></br>
-> **Default Value**: uuid (Optional)<br></br>
+> **Default Value**: N/A (Required)<br></br>
 > `Config Param: RECORDKEY_FIELD`<br></br>
 
 ---
