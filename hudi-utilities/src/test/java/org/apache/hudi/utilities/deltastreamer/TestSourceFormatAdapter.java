@@ -258,8 +258,6 @@ public class TestSourceFormatAdapter {
     assertTrue(inputBatch.getBatch().isPresent());
     Dataset<Row> ds = inputBatch.getBatch().get();
     assertTrue(ds.collectAsList().size() == 2);
-    System.out.println(getSchemaWithBadAvroNamingForArrayType(true));
-    System.out.println(ds.schema());
     assertTrue(getSchemaWithBadAvroNamingForArrayType(true).equals(ds.schema()));
     JavaRDD<String> expectedData = jsc.textFile("src/test/resources/data/avro_sanitization_bad_naming_nested_array_out.json");
     assertEquals(expectedData.collect(), ds.toJSON().collectAsList());

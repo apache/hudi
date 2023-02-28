@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 
 public class SanitizationUtils {
 
-  private static ObjectMapper OM = new ObjectMapper();
+  private static final ObjectMapper OM = new ObjectMapper();
 
   public static class Config {
     // sanitizes names of invalid schema fields both in the data read from source and also in the schema.
