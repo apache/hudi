@@ -70,6 +70,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
+import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -103,6 +104,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.Row;
@@ -129,12 +131,14 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import scala.Tuple2;
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
@@ -242,6 +246,9 @@ public class DeltaSync implements Serializable, Closeable {
    */
   private transient SparkRDDWriteClient writeClient;
 
+  private Option<BaseErrorTableWriter> errorTableWriter = Option.empty();
+  private HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy;
+
   private transient HoodieDeltaStreamerMetrics metrics;
 
   private transient HoodieMetrics hoodieMetrics;
@@ -279,15 +286,19 @@ public class DeltaSync implements Serializable, Closeable {
 
     this.metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(this.schemaProvider));
     this.hoodieMetrics = new HoodieMetrics(getHoodieClientConfig(this.schemaProvider));
-
-    this.formatAdapter = new SourceFormatAdapter(
-        UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
     this.conf = conf;
     String id = conf.get(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key());
     if (StringUtils.isNullOrEmpty(id)) {
       id = props.getProperty(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key());
     }
     this.multiwriterIdentifier = StringUtils.isNullOrEmpty(id) ? Option.empty() : Option.of(id);
+    if (props.getBoolean(ERROR_TABLE_ENABLED.key(),ERROR_TABLE_ENABLED.defaultValue())) {
+      this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, jssc, fs);
+      this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
+    }
+    this.formatAdapter = new SourceFormatAdapter(
+        UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics),
+        this.errorTableWriter);
   }
 
   /**
@@ -513,9 +524,34 @@ public class DeltaSync implements Serializable, Closeable {
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
 
+      transformed = formatAdapter.processErrorEvents(transformed,
+          ErrorEvent.ErrorReason.CUSTOM_TRANSFORMER_FAILURE);
+
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       boolean reconcileSchema = props.getBoolean(DataSourceWriteOptions.RECONCILE_SCHEMA().key());
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
+        // If the target schema is specified through Avro schema,
+        // pass in the schema for the Row-to-Avro conversion
+        // to avoid nullability mismatch between Avro schema and Row schema
+        if (errorTableWriter.isPresent()
+            && props.getBoolean(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.key(),
+            HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.defaultValue())) {
+          // If the above conditions are met, trigger error events for the rows whose conversion to
+          // avro records fails.
+          avroRDDOptional = transformed.map(
+              rowDataset -> {
+                Tuple2<RDD<GenericRecord>, RDD<String>> safeCreateRDDs = HoodieSparkUtils.safeCreateRDD(rowDataset,
+                    HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+                    Option.of(this.userProvidedSchemaProvider.getTargetSchema()));
+                errorTableWriter.get().addErrorEvents(safeCreateRDDs._2().toJavaRDD()
+                    .map(evStr -> new ErrorEvent<>(evStr,
+                        ErrorEvent.ErrorReason.AVRO_DESERIALIZATION_FAILURE)));
+                return safeCreateRDDs._1.toJavaRDD();
+              });
+        } else {
+          avroRDDOptional = transformed.map(
+              rowDataset -> getTransformedRDD(rowDataset, reconcileSchema, this.userProvidedSchemaProvider.getTargetSchema()));
+        }
         schemaProvider = this.userProvidedSchemaProvider;
       } else {
         Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jssc, fs, cfg.targetBasePath);
@@ -537,12 +573,9 @@ public class DeltaSync implements Serializable, Closeable {
           (SchemaProvider) new DelegatingSchemaProvider(props, jssc, dataAndCheckpoint.getSchemaProvider(),
                 new SimpleSchemaProvider(jssc, targetSchema, props)))
           .orElse(dataAndCheckpoint.getSchemaProvider());
+        // Rewrite transformed records into the expected target schema
+        avroRDDOptional = transformed.map(t -> getTransformedRDD(t, reconcileSchema, schemaProvider.getTargetSchema()));
       }
-
-      // Rewrite transformed records into the expected target schema
-      avroRDDOptional =
-          transformed.map(t -> HoodieSparkUtils.createRdd(t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE,
-              reconcileSchema, Option.of(schemaProvider.getTargetSchema())).toJavaRDD());
     } else {
       // Pull the data from the source & prepare the write
       InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint =
@@ -607,6 +640,11 @@ public class DeltaSync implements Serializable, Closeable {
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
   }
 
+  private JavaRDD<GenericRecord> getTransformedRDD(Dataset<Row> rowDataset, boolean reconcileSchema, Schema readerSchema) {
+    return HoodieSparkUtils.createRdd(rowDataset, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+        Option.ofNullable(readerSchema)).toJavaRDD();
+  }
+
   /**
    * Process previous commit metadata and checkpoint configs set by user to determine the checkpoint to resume from.
    * @param commitTimelineOpt commit timeline of interest.
@@ -661,13 +699,13 @@ public class DeltaSync implements Serializable, Closeable {
     }
   }
 
-  public Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
-    return (Option<HoodieCommitMetadata>) timeline.getReverseOrderedInstants().map(instant -> {
+  protected Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
+    return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY)) || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
-          return Option.of(commitMetadata);
+          return Option.of(Pair.of(instant.toString(), commitMetadata));
         } else {
           return Option.empty();
         }
@@ -675,6 +713,20 @@ public class DeltaSync implements Serializable, Closeable {
         throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
       }
     }).filter(Option::isPresent).findFirst().orElse(Option.empty());
+  }
+
+  protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
+    return getLatestInstantAndCommitMetadataWithValidCheckpointInfo(timeline).map(pair -> pair.getRight());
+  }
+
+  protected Option<String> getLatestInstantWithValidCheckpointInfo(Option<HoodieTimeline> timelineOpt) {
+    return timelineOpt.map(timeline -> {
+      try {
+        return getLatestInstantAndCommitMetadataWithValidCheckpointInfo(timeline).map(pair -> pair.getLeft());
+      } catch (IOException e) {
+        throw new HoodieIOException("failed to get latest instant with ValidCheckpointInfo", e);
+      }
+    }).orElse(Option.empty());
   }
 
   /**
@@ -748,8 +800,25 @@ public class DeltaSync implements Serializable, Closeable {
             + totalErrorRecords + "/" + totalRecords);
       }
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType,
-          Collections.emptyMap(), extraPreCommitFunc);
+      if (errorTableWriter.isPresent()) {
+        // Commit the error events triggered so far to the error table
+        Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitTimelineOpt);
+        boolean errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
+        if (!errorTableSuccess) {
+          switch (errorWriteFailureStrategy) {
+            case ROLLBACK_COMMIT:
+              LOG.info("Commit " + instantTime + " failed!");
+              writeClient.rollback(instantTime);
+              throw new HoodieException("Error Table Commit failed!");
+            case LOG_ERROR:
+              LOG.error("Error Table write failed for instant " + instantTime);
+              break;
+            default:
+              throw new HoodieException("Write failure strategy not implemented for " + errorWriteFailureStrategy);
+          }
+        }
+      }
+      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, Collections.emptyMap(), extraPreCommitFunc);
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
         latestCheckpointWritten = checkpointStr;
