@@ -145,6 +145,35 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertFalse(tableConfig.contains(OPERATION.key()))
   }
 
+  test("Test Create Table With Chinese Name And Backquote") {
+    withTempDir { tmp =>
+      // specify a chinese table name
+      val tableName = "中文表"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey = 'id,name',
+           |  type = 'cow'
+           | )
+           | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+      assertResult(true) (
+        spark.sessionState.catalog.tableExists(new TableIdentifier(tableName))
+      )
+      // insert some data
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      checkAnswer(s"select * from $tableName")(
+        Seq(1, "a1", 10.0, 1000)
+      )
+    }
+  }
+
   test("Test Create External Hoodie Table") {
     withTempDir { tmp =>
       // Test create cow table.

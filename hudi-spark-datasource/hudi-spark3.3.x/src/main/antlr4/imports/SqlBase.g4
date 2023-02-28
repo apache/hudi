@@ -1864,7 +1864,7 @@ BIGDECIMAL_LITERAL
     ;
 
 IDENTIFIER
-    : (LETTER | DIGIT | '_')+
+    : (CHINESE | LETTER | DIGIT | '_')+
     ;
 
 BACKQUOTED_IDENTIFIER
@@ -1886,6 +1886,10 @@ fragment DIGIT
 
 fragment LETTER
     : [A-Z]
+    ;
+
+fragment CHINESE
+    : [\u4e00-\u9fa5]| [ÀÃÇÊÉÕàãçêõáéíóú]
     ;
 
 SIMPLE_COMMENT

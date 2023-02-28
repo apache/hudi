@@ -70,6 +70,57 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
     })
   }
 
+  test("Test compaction table named in chinese") {
+    withRecordType()(withTempDir {tmp =>
+      val tableName = "中文表"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'mor',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      spark.sql("set hoodie.parquet.max.file.size = 10000")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
+      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
+      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
+      spark.sql(s"update $tableName set price = 11 where id = 1")
+
+      spark.sql(s"schedule compaction  on $tableName")
+      spark.sql(s"update $tableName set price = 12 where id = 2")
+      spark.sql(s"schedule compaction  on $tableName")
+      val compactionRows = spark.sql(s"show compaction on $tableName limit 10").collect()
+      val timestamps = compactionRows.map(_.getString(0))
+      assertResult(2)(timestamps.length)
+
+      spark.sql(s"run compaction on $tableName at ${timestamps(1)}")
+      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+        Seq(1, "a1", 11.0, 1000),
+        Seq(2, "a2", 12.0, 1000),
+        Seq(3, "a3", 10.0, 1000),
+        Seq(4, "a4", 10.0, 1000)
+      )
+      assertResult(2)(spark.sql(s"show compaction on $tableName").collect().length)
+      spark.sql(s"run compaction on $tableName at ${timestamps(0)}")
+      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+        Seq(1, "a1", 11.0, 1000),
+        Seq(2, "a2", 12.0, 1000),
+        Seq(3, "a3", 10.0, 1000),
+        Seq(4, "a4", 10.0, 1000)
+      )
+      assertResult(2)(spark.sql(s"show compaction on $tableName").collect().length)
+    })
+  }
+
   test("Test compaction path") {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
