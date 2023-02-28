@@ -21,6 +21,7 @@ package org.apache.hudi
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
 import org.apache.hudi.HoodieBootstrapRelation.validate
+import org.apache.hudi.HoodieBaseRelation.convertToAvroSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.rdd.RDD
@@ -119,9 +120,9 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 
     val bootstrapDataFileReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
-      dataSchema = new HoodieTableSchema(bootstrapDataFileSchema),
+      dataSchema = new HoodieTableSchema(bootstrapDataFileSchema, convertToAvroSchema(bootstrapDataFileSchema, tableName).toString),
       partitionSchema = partitionSchema,
-      requiredDataSchema = new HoodieTableSchema(requiredBootstrapDataFileSchema),
+      requiredDataSchema = new HoodieTableSchema(requiredBootstrapDataFileSchema, convertToAvroSchema(requiredBootstrapDataFileSchema, tableName).toString),
       // NOTE: For bootstrapped files we can't apply any filtering in case we'd need to merge it with
       //       a skeleton-file as we rely on matching ordering of the records across bootstrap- and skeleton-files
       filters = if (requiredSkeletonFileSchema.isEmpty) filters else Seq(),
@@ -136,11 +137,11 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 
     val boostrapSkeletonFileReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
-      dataSchema = new HoodieTableSchema(skeletonSchema),
+      dataSchema = new HoodieTableSchema(skeletonSchema, convertToAvroSchema(skeletonSchema, tableName).toString),
       // NOTE: Here we specify partition-schema as empty since we don't need Spark to inject partition-values
       //       parsed from the partition-path
       partitionSchema = StructType(Seq.empty),
-      requiredDataSchema = new HoodieTableSchema(requiredSkeletonFileSchema),
+      requiredDataSchema = new HoodieTableSchema(requiredSkeletonFileSchema, convertToAvroSchema(requiredSkeletonFileSchema, tableName).toString),
       // NOTE: For bootstrapped files we can't apply any filtering in case we'd need to merge it with
       //       a skeleton-file as we rely on matching ordering of the records across bootstrap- and skeleton-files
       filters = if (requiredBootstrapDataFileSchema.isEmpty) filters else Seq(),
