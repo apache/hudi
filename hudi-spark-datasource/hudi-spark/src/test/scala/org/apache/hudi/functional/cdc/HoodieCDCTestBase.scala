@@ -32,8 +32,10 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{data_before, op_key_only}
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull}
@@ -55,7 +57,8 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1",
-    HoodieCleanConfig.AUTO_CLEAN.key -> "false"
+    HoodieCleanConfig.AUTO_CLEAN.key -> "false",
+    DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> classOf[NonpartitionedKeyGenerator].getCanonicalName
   )
 
   @BeforeEach override def setUp(): Unit = {

@@ -33,6 +33,7 @@ import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieW
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
@@ -70,7 +71,7 @@ class TestHoodieSparkSqlWriter {
   var hoodieFooTableName = "hoodie_foo_tbl"
   var tempBasePath: String = _
   var commonTableModifier: Map[String, String] = Map()
-  case class StringLongTest(uuid: String, ts: Long)
+  case class StringLongPartitionPathTest(uuid: String, ts: Long, pPath: String)
 
   /**
    * Setup method running before each test.
@@ -268,9 +269,11 @@ class TestHoodieSparkSqlWriter {
       "path" -> tempBasePath,
       HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
       "hoodie.datasource.write.recordkey.field" -> "uuid",
+      KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "pPath",
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4")
-    val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    val dataFrame = spark.createDataFrame(Seq(StringLongPartitionPathTest(UUID.randomUUID().toString, new Date().getTime,
+      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, dataFrame)
 
     //on same path try append with different("hoodie_bar_tbl") table name which should throw an exception
@@ -278,9 +281,11 @@ class TestHoodieSparkSqlWriter {
       "path" -> tempBasePath,
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_bar_tbl",
       "hoodie.datasource.write.recordkey.field" -> "uuid",
+      KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "pPath",
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4")
-    val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    val dataFrame2 = spark.createDataFrame(Seq(StringLongPartitionPathTest(UUID.randomUUID().toString, new Date().getTime,
+      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
     val tableAlreadyExistException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, barTableModifier, dataFrame2))
     assert(tableAlreadyExistException.getMessage.contains("Config conflict"))
     assert(tableAlreadyExistException.getMessage.contains(s"${HoodieWriteConfig.TBL_NAME.key}:\thoodie_bar_tbl\thoodie_foo_tbl"))
@@ -299,14 +304,16 @@ class TestHoodieSparkSqlWriter {
   def testValidateTableConfigWithOverwriteSaveMode(): Unit = {
     //create a new table
     val tableModifier1 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.datasource.write.recordkey.field" -> "uuid")
-    val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+      "hoodie.datasource.write.recordkey.field" -> "uuid", KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "pPath")
+    val dataFrame = spark.createDataFrame(Seq(StringLongPartitionPathTest(UUID.randomUUID().toString, new Date().getTime,
+      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
 
     //on same path try write with different RECORDKEY_FIELD_NAME and Append SaveMode should throw an exception
     val tableModifier2 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.datasource.write.recordkey.field" -> "ts")
-    val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+      "hoodie.datasource.write.recordkey.field" -> "ts", KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "pPath")
+    val dataFrame2 = spark.createDataFrame(Seq(StringLongPartitionPathTest(UUID.randomUUID().toString, new Date().getTime,
+      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
     val hoodieException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier2, dataFrame2))
     assert(hoodieException.getMessage.contains("Config conflict"))
     assert(hoodieException.getMessage.contains(s"RecordKey:\tts\tuuid"))
@@ -323,13 +330,15 @@ class TestHoodieSparkSqlWriter {
     //create a new table
     val tableModifier1 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
       "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "ts")
-    val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    val dataFrame = spark.createDataFrame(Seq(StringLongPartitionPathTest(UUID.randomUUID().toString, new Date().getTime,
+      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
 
     //on same path try write with different partitionpath field and Append SaveMode should throw an exception
     val tableModifier2 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
       "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "uuid")
-    val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    val dataFrame2 = spark.createDataFrame(Seq(StringLongPartitionPathTest(UUID.randomUUID().toString, new Date().getTime,
+      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
     val hoodieException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier2, dataFrame2))
     assert(hoodieException.getMessage.contains("Config conflict"))
     assert(hoodieException.getMessage.contains(s"PartitionPath:\tuuid\tts"))
