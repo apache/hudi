@@ -204,11 +204,6 @@ object HoodieWriterUtils {
           diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
         }
       }
-      // in default scenario(simple key gen,there won't be any entry with new incoming, but we need to ensure new table config maps
-      // to simple key gen. if for any other key gen, we will fail the validation.
-      if (datasourceKeyGen == null && tableConfigKeyGen != null && !tableConfigKeyGen.equalsIgnoreCase(classOf[SimpleKeyGenerator].getCanonicalName)) {
-        diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t" + classOf[SimpleKeyGenerator].getCanonicalName + "\n")
-      }
     }
 
     if (diffConfigs.nonEmpty) {
