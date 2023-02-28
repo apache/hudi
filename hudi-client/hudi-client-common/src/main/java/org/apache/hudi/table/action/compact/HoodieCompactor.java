@@ -83,7 +83,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    *
    * @param writeStatus {@link HoodieData} of {@link WriteStatus}.
    */
-  public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config);
+  public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime);
 
   /**
    * Execute compaction operations and report back status.

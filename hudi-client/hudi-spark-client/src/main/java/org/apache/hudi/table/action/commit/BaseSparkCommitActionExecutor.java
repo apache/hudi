@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -150,8 +151,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     // Cache the tagged records, so we don't end up computing both
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
     if (inputRDD.getStorageLevel() == StorageLevel.NONE()) {
-      String writeStorageLevel = config.getTaggedRecordStorageLevel();
-      inputRDD.persist(StorageLevel.fromString(writeStorageLevel));
+      HoodieJavaRDD.of(inputRDD).persist(config.getTaggedRecordStorageLevel(),
+          context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     } else {
       LOG.info("RDD PreppedRecords was persisted at: " + inputRDD.getStorageLevel());
     }
@@ -258,7 +259,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   protected HoodieData<WriteStatus> updateIndex(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
     // RDD actions that are performed after updating the index.
-    writeStatuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE));
+    writeStatuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     Instant indexStartTime = Instant.now();
     // Update the index back
     HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
