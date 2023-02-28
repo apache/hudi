@@ -1960,8 +1960,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     //parquet again
     prepareParquetDFSUpdates(parquetRecords, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, true, HoodieTestDataGenerator.TRIP_SCHEMA, HoodieTestDataGenerator.AVRO_TRIP_SCHEMA,
         dataGenerator, "001");
-
-    //parquetCfg.continuousMode = false;
     parquetDs = new HoodieDeltaStreamer(parquetCfg, jsc);
     parquetDs.sync();
     TestHelpers.assertRecordCount(parquetRecords * 2 + 20, tableBasePath, sqlContext);
@@ -1969,26 +1967,26 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(jsc.hadoopConfiguration(), tableBasePath);
     List<HoodieInstant> instants = metaClient.getCommitsTimeline().getInstants();
 
-    ObjectMapper om = new ObjectMapper();
+    ObjectMapper objectMapper = new ObjectMapper();
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
         .fromBytes(metaClient.getCommitsTimeline().getInstantDetails(instants.get(0)).get(), HoodieCommitMetadata.class);
-    Map<String,String>  m = om.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
+    Map<String,String>  checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
 
-    String parquetFirstcheckpoint = m.get("parquet");
+    String parquetFirstcheckpoint = checkpointVals.get("parquet");
     assertNotNull(parquetFirstcheckpoint);
     commitMetadata = HoodieCommitMetadata
         .fromBytes(metaClient.getCommitsTimeline().getInstantDetails(instants.get(1)).get(), HoodieCommitMetadata.class);
-    m = om.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
-    String kafkaCheckpoint = m.get("kafka");
+    checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
+    String kafkaCheckpoint = checkpointVals.get("kafka");
     assertNotNull(kafkaCheckpoint);
-    assertEquals(parquetFirstcheckpoint, m.get("parquet"));
+    assertEquals(parquetFirstcheckpoint, checkpointVals.get("parquet"));
 
     commitMetadata = HoodieCommitMetadata
         .fromBytes(metaClient.getCommitsTimeline().getInstantDetails(instants.get(2)).get(), HoodieCommitMetadata.class);
-    m = om.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
-    String parquetSecondCheckpoint = m.get("parquet");
+    checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
+    String parquetSecondCheckpoint = checkpointVals.get("parquet");
     assertNotNull(parquetSecondCheckpoint);
-    assertEquals(kafkaCheckpoint,m.get("kafka"));
+    assertEquals(kafkaCheckpoint,checkpointVals.get("kafka"));
     assertTrue(Long.parseLong(parquetSecondCheckpoint) > Long.parseLong(parquetFirstcheckpoint));
     parquetDs.shutdownGracefully();
     kafkaDs.shutdownGracefully();

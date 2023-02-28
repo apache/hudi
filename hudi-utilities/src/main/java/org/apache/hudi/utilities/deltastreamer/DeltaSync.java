@@ -154,7 +154,7 @@ public class DeltaSync implements Serializable, Closeable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
-  private static final ObjectMapper OM = new ObjectMapper();
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**
    * Delta Sync Config.
@@ -654,7 +654,7 @@ public class DeltaSync implements Serializable, Closeable {
 
   public static Option<String> readCheckpointValue(String value, String id) {
     try {
-      Map<String,String> checkpointMap = OM.readValue(value, Map.class);
+      Map<String,String> checkpointMap = OBJECT_MAPPER.readValue(value, Map.class);
       if (!checkpointMap.containsKey(id)) {
         return Option.empty();
       }
@@ -1106,7 +1106,7 @@ public class DeltaSync implements Serializable, Closeable {
     return Arrays.stream(partitionColumns.split(",")).collect(Collectors.toSet());
   }
 
-  public String getId() {
+  public String getMultiwriterIdentifier() {
     return multiwriterIdentifier.get();
   }
 }

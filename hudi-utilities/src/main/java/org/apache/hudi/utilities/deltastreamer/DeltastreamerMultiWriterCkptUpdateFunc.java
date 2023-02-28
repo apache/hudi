@@ -42,7 +42,7 @@ import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKP
  * latest checkpoint with an older one.
  */
 public class DeltastreamerMultiWriterCkptUpdateFunc implements BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata> {
-  private static final ObjectMapper OM = new ObjectMapper();
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   //deltastreamer id
   private final String id;
@@ -54,7 +54,7 @@ public class DeltastreamerMultiWriterCkptUpdateFunc implements BiConsumer<Hoodie
 
   public DeltastreamerMultiWriterCkptUpdateFunc(DeltaSync ds, String newCheckpoint, String latestCheckpointWritten) {
     this.ds = ds;
-    this.id = ds.getId();
+    this.id = ds.getMultiwriterIdentifier();
     this.newCheckpoint = newCheckpoint;
     this.latestCheckpointWritten = latestCheckpointWritten;
   }
@@ -74,7 +74,7 @@ public class DeltastreamerMultiWriterCkptUpdateFunc implements BiConsumer<Hoodie
     if (latestCommitMetadata.isPresent()) {
       String value = latestCommitMetadata.get().getExtraMetadata().get(CHECKPOINT_KEY);
       try {
-        checkpointMap = OM.readValue(value, Map.class);
+        checkpointMap = OBJECT_MAPPER.readValue(value, Map.class);
       } catch (Exception e) {
         throw new HoodieException("Failed to parse checkpoint as map", e);
       }
@@ -90,7 +90,7 @@ public class DeltastreamerMultiWriterCkptUpdateFunc implements BiConsumer<Hoodie
     //Add map to metadata
     checkpointMap.put(id, newCheckpoint);
     try {
-      commitMetadata.addMetadata(CHECKPOINT_KEY, OM.writeValueAsString(checkpointMap));
+      commitMetadata.addMetadata(CHECKPOINT_KEY, OBJECT_MAPPER.writeValueAsString(checkpointMap));
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);
     }

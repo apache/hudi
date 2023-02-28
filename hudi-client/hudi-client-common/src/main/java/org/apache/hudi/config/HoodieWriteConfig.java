@@ -623,7 +623,9 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> MUTLI_WRITER_SOURCE_CHECKPOINT_ID = ConfigProperty
       .key("hoodie.deltastreamer.multiwriter.source.checkpoint.id")
       .noDefaultValue()
-      .withDocumentation("Define Unique Id for source to be used in commit checkpoint");
+      .withDocumentation("Unique Id to be used for multiwriter deltastreamer scenario. This is the "
+          + "scenario when multiple deltastreamers are used to write to the same target table. If you are just using "
+          + "a single deltastreamer for a table then you do not need to set this config.");
 
   public static final ConfigProperty<String> SENSITIVE_CONFIG_KEYS_FILTER = ConfigProperty
       .key("hoodie.sensitive.config.keys")
