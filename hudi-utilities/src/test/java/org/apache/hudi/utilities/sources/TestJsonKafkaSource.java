@@ -304,8 +304,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
       }
     };
   }
-
-
+  
   @Test
   public void testAppendKafkaOffset() {
     final String topic = TEST_TOPIC_PREFIX + "testKafkaOffsetAppend";
