@@ -278,9 +278,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public void reset() {
     try {
       writeLock.lock();
-      clear();
-      // Initialize with new Hoodie timeline.
-      init(metaClient, getTimeline());
+      runReset();
     } finally {
       writeLock.unlock();
     }
