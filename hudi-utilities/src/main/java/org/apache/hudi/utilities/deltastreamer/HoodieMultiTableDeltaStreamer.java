@@ -18,27 +18,27 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import com.beust.jcommander.Parameter;
 import org.apache.hudi.client.utils.OperationConverter;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.IdentitySplitter;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
+import org.apache.hudi.utilities.sources.JsonDFSSource;
 
 import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.utilities.sources.JsonDFSSource;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -265,6 +265,7 @@ public class HoodieMultiTableDeltaStreamer {
         description = "base path prefix for multi table support via HoodieMultiTableDeltaStreamer class")
     public String basePathPrefix;
 
+    // Ethan: similar here, some can be provided through Hudi configs instead of command line arguments
     @Deprecated
     @Parameter(names = {"--target-table"}, description = "name of the target table")
     public String targetTableName;
@@ -293,6 +294,7 @@ public class HoodieMultiTableDeltaStreamer {
         + "JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}")
     public String sourceClassName = JsonDFSSource.class.getName();
 
+    // Ethan: use preCombine field instead
     @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
         + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record")
     public String sourceOrderingField = "ts";

@@ -237,6 +237,7 @@ public class HoodieDeltaStreamer implements Serializable {
     public static final String DEFAULT_DFS_SOURCE_PROPERTIES = "file://" + System.getProperty("user.dir")
         + "/src/test/resources/delta-streamer-config/dfs-source.properties";
 
+    // Ethan should most of this be provided through the write configs instead of passing in through the command line argument?
     @Parameter(names = {"--target-base-path"},
         description = "base path for the target hoodie table. "
             + "(Will be created if did not exist first time around. If exists, expected to be a hoodie table)",
@@ -271,6 +272,7 @@ public class HoodieDeltaStreamer implements Serializable {
             + "JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}")
     public String sourceClassName = JsonDFSSource.class.getName();
 
+    // Ethan: use preCombine field instead
     @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
         + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record")
     public String sourceOrderingField = "ts";
@@ -307,6 +309,7 @@ public class HoodieDeltaStreamer implements Serializable {
         description = "Should duplicate records from source be dropped/filtered out before insert/bulk-insert")
     public Boolean filterDupes = false;
 
+    // Ethan: deprecate and remove this
     //will abandon in the future version, recommended use --enable-sync
     @Parameter(names = {"--enable-hive-sync"}, description = "Enable syncing to hive")
     public Boolean enableHiveSync = false;
