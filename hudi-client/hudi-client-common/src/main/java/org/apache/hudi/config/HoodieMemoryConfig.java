@@ -65,11 +65,13 @@ public class HoodieMemoryConfig extends HoodieConfig {
   public static final long DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 100 * 1024 * 1024L;
 
   // Ethan: Should this be automatically configured as a fraction of memory
+  // naming: unit?
   public static final ConfigProperty<Long> MAX_MEMORY_FOR_MERGE = ConfigProperty
       .key("hoodie.memory.merge.max.size")
       .defaultValue(DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
       .withDocumentation("Maximum amount of memory used  in bytes for merge operations, before spilling to local storage.");
 
+  // Ethan: naming: unit?
   public static final ConfigProperty<String> MAX_MEMORY_FOR_COMPACTION = ConfigProperty
       .key("hoodie.memory.compaction.max.size")
       .noDefaultValue()

@@ -182,6 +182,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "Although DISRUPTOR is still experimental.");
 
   // Ethan: Should this be automatically determined based on the partition and record key column(s)?
+  // e.g., single column -> simple key gen, multiple column -> complex key gen
+  // no partition column -> non-partitioned key gen
   public static final ConfigProperty<String> KEYGENERATOR_TYPE = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.type")
       .defaultValue(KeyGeneratorType.SIMPLE.name())
@@ -190,6 +192,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "**Note** This is being actively worked on. Please use "
           + "`hoodie.datasource.write.keygenerator.class` instead.");
 
+  // Ethan: look like we can remove this as it is mature?
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty
       .key("hoodie.rollback.using.markers")
       .defaultValue("true")
@@ -217,6 +220,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs "
           + "etc in .hoodie directory under this base path directory.");
 
+  // Ethan: is this still necessary?
   public static final ConfigProperty<String> AVRO_SCHEMA_STRING = ConfigProperty
       .key("hoodie.avro.schema")
       .noDefaultValue()
@@ -284,6 +288,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue("0")
       .withDocumentation("Parallelism used for “delete” operation. Delete operations also performs shuffles, similar to upsert operation.");
 
+  // Ethan: does this need to be automatically set based on the input like other parallelism?
   public static final ConfigProperty<String> ROLLBACK_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.rollback.parallelism")
       .defaultValue("100")
@@ -294,6 +299,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(String.valueOf(4 * 1024 * 1024))
       .withDocumentation("Size of in-memory buffer used for parallelizing network reads and lake storage writes.");
 
+  // Ethan: is 1024B too small as the default?
   public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_BUFFER_LIMIT_BYTES = ConfigProperty
       .key("hoodie.write.executor.disruptor.buffer.limit.bytes")
       .defaultValue(String.valueOf(1024))
@@ -315,6 +321,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When inserted records share same key, controls whether they should be first combined (i.e de-duplicated) before"
           + " writing to storage.");
 
+  // Ethan: should we have one "hoodie.combine.before.write" for all change operations instead of one config per operation?
   public static final ConfigProperty<String> COMBINE_BEFORE_UPSERT = ConfigProperty
       .key("hoodie.combine.before.upsert")
       .defaultValue("true")
@@ -334,18 +341,22 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Write status objects hold metadata about a write (stats, errors), that is not yet committed to storage. "
           + "This controls the how that information is cached for inspection by clients. We rarely expect this to be changed.");
 
+  // Ethan: this should be an internal config.
   public static final ConfigProperty<String> AUTO_COMMIT_ENABLE = ConfigProperty
       .key("hoodie.auto.commit")
       .defaultValue("true")
       .withDocumentation("Controls whether a write operation should auto commit. This can be turned off to perform inspection"
           + " of the uncommitted write before deciding to commit.");
 
+  // Ethan: we never talk about this in docs :)
   public static final ConfigProperty<String> WRITE_STATUS_CLASS_NAME = ConfigProperty
       .key("hoodie.writestatus.class")
       .defaultValue(WriteStatus.class.getName())
       .withDocumentation("Subclass of " + WriteStatus.class.getName() + " to be used to collect information about a write. Can be "
           + "overridden to collection additional metrics/statistics about the data if needed.");
 
+  // Ethan: similarly, we should revisit all parallelism and see if they can be auto-configured
+  // instead of a static default.
   public static final ConfigProperty<String> FINALIZE_WRITE_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.finalize.write.parallelism")
       .defaultValue("200")
@@ -380,6 +391,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("The batch interval in milliseconds for marker creation batch processing");
 
+  // Ethan: similar here for revisiting parallelism
   public static final ConfigProperty<String> MARKERS_DELETE_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.markers.delete.parallelism")
       .defaultValue("100")
@@ -413,6 +425,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When true, spins up an instance of the timeline server (meta server that serves cached file listings, statistics),"
           + "running on each writer's driver process, accepting requests during the write from executors.");
 
+  // Ethan: is this still useful?
   public static final ConfigProperty<Boolean> EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED = ConfigProperty
       .key("hoodie.embed.timeline.server.reuse.enabled")
       .defaultValue(false)
@@ -435,12 +448,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue("true")
       .withDocumentation("Controls whether gzip compression is used, for large responses from the timeline server, to improve latency.");
 
+  // Ethan: should we flip this on by default?
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_USE_ASYNC_ENABLE = ConfigProperty
       .key("hoodie.embed.timeline.server.async")
       .defaultValue("false")
       .withDocumentation("Controls whether or not, the requests to the timeline server are processed in asynchronous fashion, "
           + "potentially improving throughput.");
 
+  // Ethan: we should remove this?
   public static final ConfigProperty<String> FAIL_ON_TIMELINE_ARCHIVING_ENABLE = ConfigProperty
       .key("hoodie.fail.on.timeline.archiving")
       .defaultValue("true")
@@ -454,6 +469,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Table services such as compaction and clustering can fail and prevent syncing to "
           + "the metaclient. Set this to true to fail writes when table services fail");
 
+  // Ethan: do we still need all of the consistency check logic given major cloud storage are now strongly consistent?
   public static final ConfigProperty<Long> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.initial_interval_ms")
       .defaultValue(2000L)
@@ -476,12 +492,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When enabled, data validation checks are performed during merges to ensure expected "
           + "number of records after merge operation.");
 
+  // Ethan: should "hoodie.combine.before.insert" controls the behavior this one intends to control as well?
   public static final ConfigProperty<String> MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE = ConfigProperty
       .key("hoodie.merge.allow.duplicate.on.inserts")
       .defaultValue("false")
       .withDocumentation("When enabled, we allow duplicate keys even if inserts are routed to merge with an existing file (for ensuring file sizing)."
           + " This is only relevant for insert operation, since upsert, delete operations will ensure unique key constraints are maintained.");
 
+  // Ethan: should we make the default 0, to reduce the write amplication and make MOR write fast?
   public static final ConfigProperty<Integer> MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT = ConfigProperty
       .key("hoodie.merge.small.file.group.candidates.limit")
       .defaultValue(1)
@@ -506,6 +524,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "OPTIMISTIC_CONCURRENCY_CONTROL: Multiple writers can operate on the table and exactly one of them succeed "
           + "if a conflict (writes affect the same file group) is detected.");
 
+  // Ethan: need to check why we need both "hoodie.avro.schema" and "hoodie.write.schema".
   public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
       .key("hoodie.write.schema")
       .noDefaultValue()
@@ -526,11 +545,13 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Given the importance of supporting such cases for the user's migration to 0.5.x, we are proposing a safety flag
    * (disabled by default) which will allow this old behavior.
    */
+  // Ethan: is this still needed?
   public static final ConfigProperty<String> ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE = ConfigProperty
       .key("_.hoodie.allow.multi.write.on.same.instant")
       .defaultValue("false")
       .withDocumentation("");
 
+  // Ethan: configs around schema and schema evolution need to be review separately.
   public static final ConfigProperty<String> AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE = ConfigProperty
       .key(AVRO_SCHEMA_STRING.key() + ".external.transformation")
       .defaultValue("false")
@@ -544,6 +565,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to allow generation of empty commits, even if no data was written in the commit. "
           + "It's useful in cases where extra metadata needs to be published regardless e.g tracking source offsets when ingesting data");
 
+  // Ethan: maybe this can auto turned on for CDC?
   public static final ConfigProperty<Boolean> ALLOW_OPERATION_METADATA_FIELD = ConfigProperty
       .key("hoodie.allow.operation.metadata.field")
       .defaultValue(false)
@@ -569,12 +591,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Control to enable release all persist rdds when the spark job finish.");
 
+  // Ethan: shall we remove this and do auto adjustment everywhere?
   public static final ConfigProperty<Boolean> AUTO_ADJUST_LOCK_CONFIGS = ConfigProperty
       .key("hoodie.auto.adjust.lock.configs")
       .defaultValue(false)
       .sinceVersion("0.11.0")
       .withDocumentation("Auto adjust lock configurations when metadata table is enabled and for async table services.");
 
+  // Ethan: should we remove this and make the validation mandatory?
   public static final ConfigProperty<Boolean> SKIP_DEFAULT_PARTITION_VALIDATION = ConfigProperty
       .key("hoodie.skip.default.partition.validation")
       .defaultValue(false)
