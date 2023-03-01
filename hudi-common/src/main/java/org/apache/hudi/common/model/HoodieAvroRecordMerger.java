@@ -18,15 +18,15 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -93,6 +93,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
       COMBINING
     }
 
+    // Ethan: not sure if we need this? shouldn't there be only one legacy merging behavior?
     public static ConfigProperty<String> LEGACY_OPERATING_MODE =
         ConfigProperty.key("hoodie.datasource.write.record.merger.legacy.operation")
             .defaultValue(LegacyOperationMode.COMBINING.name())

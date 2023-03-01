@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that control how file metadata is stored by Hudi, for transaction processing and queries.")
 public class FileSystemViewStorageConfig extends HoodieConfig {
-  //cfg
+  // Configs for file system view
 
   // Property Names
   public static final ConfigProperty<FileSystemViewStorageType> VIEW_TYPE = ConfigProperty
@@ -112,6 +112,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
       .defaultValue("/tmp/hoodie_timeline_rocksdb")
       .withDocumentation("Path on local storage to use, when storing file system view in embedded kv store/rocksdb.");
 
+  // Ethan: is default too long?
   public static final ConfigProperty<Integer> REMOTE_TIMEOUT_SECS = ConfigProperty
       .key("hoodie.filesystem.view.remote.timeout.secs")
       .defaultValue(5 * 60) // 5 min
@@ -148,6 +149,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
           .withDocumentation("The class name of the Exception that needs to be re-tryed, separated by commas. "
                   + "Default is empty which means retry all the IOException and RuntimeException from Remote Request.");
 
+  // Ethan: this is internal
   public static final ConfigProperty<String> REMOTE_BACKUP_VIEW_ENABLE = ConfigProperty
       .key("hoodie.filesystem.remote.backup.view.enable")
       .defaultValue("true") // Need to be disabled only for tests.

@@ -62,6 +62,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Enable publishing of metrics around metadata table.");
 
   // Parallelism for inserts
+  // Ethan: is this intended to be tweaked?
   public static final ConfigProperty<Integer> INSERT_PARALLELISM_VALUE = ConfigProperty
       .key(METADATA_PREFIX + ".insert.parallelism")
       .defaultValue(1)
@@ -69,6 +70,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Parallelism to use when inserting to the metadata table");
 
   // Async clean
+  // Ethan: Some of these configs cannot be overridden by users anymore.  Shall we remove such entries?
   public static final ConfigProperty<Boolean> ASYNC_CLEAN_ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".clean.async")
       .defaultValue(false)
@@ -90,6 +92,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Controls how often the metadata table is compacted.");
 
   // Archival settings
+  // Ethan: shall we remove the MDT archival configs and instead align these with data table?
   public static final ConfigProperty<Integer> MIN_COMMITS_TO_KEEP = ConfigProperty
       .key(METADATA_PREFIX + ".keep.min.commits")
       .defaultValue(20)
@@ -121,6 +124,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Directories matching this regex, will be filtered out when initializing metadata table from lake storage for the first time.");
 
+  // Ethan: remove this now?
   public static final ConfigProperty<String> ASSUME_DATE_PARTITIONING = ConfigProperty
       .key("hoodie.assume.date.partitioning")
       .defaultValue("false")
@@ -179,11 +183,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "log files and read parallelism in the column stats index partition. The recommendation is to size the "
           + "file group count such that the base files are under 1GB.");
 
+  // Ethan: similar comment on auto deriving parallelism
   public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_PARALLELISM = ConfigProperty
-          .key(METADATA_PREFIX + ".index.column.stats.parallelism")
-          .defaultValue(10)
-          .sinceVersion("0.11.0")
-          .withDocumentation("Parallelism to use, when generating column stats index.");
+      .key(METADATA_PREFIX + ".index.column.stats.parallelism")
+      .defaultValue(10)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Parallelism to use, when generating column stats index.");
 
   public static final ConfigProperty<String> COLUMN_STATS_INDEX_FOR_COLUMNS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.column.list")
@@ -238,7 +243,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("There are cases when extra files are requested to be deleted from "
           + "metadata table which are never added before. This config determines how to handle "
           + "such spurious deletes");
-
+  
   public static final ConfigProperty<Boolean> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
       .key(METADATA_PREFIX + OPTIMIZED_LOG_BLOCKS_SCAN)
       .defaultValue(false)

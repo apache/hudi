@@ -36,7 +36,8 @@ import java.util.Properties;
     description = "The consistency guard related config options, to help talk to eventually consistent object storage."
         + "(Tip: S3 is NOT eventually consistent anymore!)")
 public class ConsistencyGuardConfig extends HoodieConfig {
-  //cfg
+  // Config for consistency guard
+  // Ethan: can we remove these completely?
 
   public static final ConfigProperty<String> ENABLE = ConfigProperty
       .key("hoodie.consistency.check.enabled")

@@ -33,7 +33,7 @@ import org.apache.hudi.common.config.HoodieConfig;
         + "This config allows developers to setup the Key generator class that "
         + "will extract these out of incoming records.")
 public class KeyGeneratorOptions extends HoodieConfig {
-  //cfg
+  // Configs for key gen options
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = ConfigProperty
       .key("hoodie.datasource.write.partitionpath.urlencode")

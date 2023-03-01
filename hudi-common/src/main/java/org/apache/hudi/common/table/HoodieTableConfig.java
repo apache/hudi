@@ -74,7 +74,7 @@ import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.
  * @since 0.3.0
  */
 public class HoodieTableConfig extends HoodieConfig {
-  //cfg
+  // Table configs
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
 
@@ -163,6 +163,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
 
+  // Ethan: to be merged with write payload class
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
@@ -200,7 +201,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(true)
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
-
+  
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()

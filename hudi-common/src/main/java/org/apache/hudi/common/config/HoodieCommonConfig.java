@@ -32,9 +32,11 @@ import java.util.Properties;
 @ConfigClassProperty(name = "Common Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "The following set of configurations are common across Hudi.")
+// Ethan: Possible to move all of these to other config classes?  Does not seem like a required class to me.
 public class HoodieCommonConfig extends HoodieConfig {
-  //cfg
+  // Common configs across Hudi
 
+  // Ethan: the config key naming is not intuitive.  Shall we change it?
   public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
       .key("hoodie.schema.on.read.enable")
       .defaultValue(false)

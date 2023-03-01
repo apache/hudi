@@ -32,7 +32,7 @@ import java.util.Properties;
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations used by the Hudi Metastore.")
 public class HoodieMetaserverConfig extends HoodieConfig {
-  //cfg
+  // Configs for Metaserver
 
   public static final String METASERVER_PREFIX = "hoodie.metaserver";
 
@@ -60,6 +60,7 @@ public class HoodieMetaserverConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("Number of retries while opening a connection to metastore");
 
+  // Ethan: unit in naming?
   public static final ConfigProperty<Integer> METASERVER_CONNECTION_RETRY_DELAY = ConfigProperty
       .key(METASERVER_PREFIX + ".connect.retry.delay")
       .defaultValue(1)

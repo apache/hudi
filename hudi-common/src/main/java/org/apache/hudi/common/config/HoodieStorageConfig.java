@@ -33,7 +33,7 @@ import java.util.Properties;
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that control aspects around writing, sizing, reading base and log files.")
 public class HoodieStorageConfig extends HoodieConfig {
-  //cfg
+  // Configs for Hudi storage level
 
   public static final ConfigProperty<String> PARQUET_MAX_FILE_SIZE = ConfigProperty
       .key("hoodie.parquet.max.file.size")
@@ -79,11 +79,13 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Lower values increase the size in bytes of metadata tracked within HFile, but can offer potentially "
           + "faster lookup times.");
 
+  // Ethan: avro as default?
   public static final ConfigProperty<String> LOGFILE_DATA_BLOCK_FORMAT = ConfigProperty
       .key("hoodie.logfile.data.block.format")
       .noDefaultValue()
       .withDocumentation("Format of the data block within delta logs. Following formats are currently supported \"avro\", \"hfile\", \"parquet\"");
 
+  // Ethan: is the default too large, adding memory pressure?
   public static final ConfigProperty<String> LOGFILE_MAX_SIZE = ConfigProperty
       .key("hoodie.logfile.max.size")
       .defaultValue(String.valueOf(1024 * 1024 * 1024)) // 1 GB
@@ -109,6 +111,7 @@ public class HoodieStorageConfig extends HoodieConfig {
       .defaultValue("gzip")
       .withDocumentation("Compression Codec for parquet files");
 
+  // Ethan: Need to annotate the supported Hudi versions
   public static final ConfigProperty<Boolean> PARQUET_DICTIONARY_ENABLED = ConfigProperty
       .key("hoodie.parquet.dictionary.enabled")
       .defaultValue(true)
