@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.FileIOUtils;
 
 import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -39,7 +40,7 @@ import java.util.Properties;
     description = "Controls memory usage for compaction "
         + "and merges, performed internally by Hudi.")
 public class HoodieMemoryConfig extends HoodieConfig {
-  //cfg
+  // Configs for memory for MOR merging
 
   // Default max memory fraction during hash-merge, excess spills to disk
   public static final ConfigProperty<String> MAX_MEMORY_FRACTION_FOR_MERGE = ConfigProperty
@@ -63,6 +64,7 @@ public class HoodieMemoryConfig extends HoodieConfig {
   // Minimum memory size (100MB) for the spillable map.
   public static final long DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 100 * 1024 * 1024L;
 
+  // Ethan: Should this be automatically configured as a fraction of memory
   public static final ConfigProperty<Long> MAX_MEMORY_FOR_MERGE = ConfigProperty
       .key("hoodie.memory.merge.max.size")
       .defaultValue(DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
@@ -78,6 +80,7 @@ public class HoodieMemoryConfig extends HoodieConfig {
       .defaultValue(16 * 1024 * 1024)
       .withDocumentation("Property to control the max memory in bytes for dfs input stream buffer size");
 
+  // Ethan: auto configured using table base path?
   public static final ConfigProperty<String> SPILLABLE_MAP_BASE_PATH = ConfigProperty
       .key("hoodie.memory.spillable.map.path")
       .noDefaultValue()

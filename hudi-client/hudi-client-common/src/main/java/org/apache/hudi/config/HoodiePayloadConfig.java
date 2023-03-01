@@ -40,8 +40,10 @@ import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_F
     description = "Payload related configs, that can be leveraged to "
         + "control merges based on specific business fields in the data.")
 public class HoodiePayloadConfig extends HoodieConfig {
-  //cfg
+  // Configs for Hudi payload class
 
+  // Ethan: shall we use preCombine only and remove this?  It acts as the same purpose as the precombine field.
+  // This confuses user too.
   public static final ConfigProperty<String> ORDERING_FIELD = ConfigProperty
       .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
       .defaultValue("ts")
@@ -54,12 +56,13 @@ public class HoodiePayloadConfig extends HoodieConfig {
       .withDocumentation("Table column/field name to derive timestamp associated with the records. This can"
           + "be useful for e.g, determining the freshness of the table.");
 
+  // Ethan: remove this and align with the write payload class ("hoodie.datasource.write.payload.class")?
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
       .withDocumentation("This needs to be same as class used during insert/upserts. Just like writing, compaction also uses "
-        + "the record payload class to merge records in the log against each other, merge again with the base file and "
-        + "produce the final record to be written after compaction.");
+          + "the record payload class to merge records in the log against each other, merge again with the base file and "
+          + "produce the final record to be written after compaction.");
 
   /** @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods instead */
   @Deprecated

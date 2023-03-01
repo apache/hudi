@@ -66,8 +66,9 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
     areCommonConfigs = true,
     description = "")
 public class HoodieLockConfig extends HoodieConfig {
-  //cfg
+  // Configs for common and legacy lock providers
 
+  // Ethan: nit: this is initial delay
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS = ConfigProperty
       .key(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY)
       .defaultValue(DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS)
@@ -75,6 +76,8 @@ public class HoodieLockConfig extends HoodieConfig {
       .withDocumentation("Initial amount of time to wait between retries to acquire locks, "
           + " subsequent retries will exponentially backoff.");
 
+  // Ethan: default should be larger? like 16s?  we already have exponential backoff. sth like 1 -> 2 -> 4 -> 8 -> 16 -> 16 ...
+  // currently, retry times is 15.  The change increases the retry period from ~1min to ~4min.
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS = ConfigProperty
       .key(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY)
       .defaultValue(String.valueOf(5000L))
@@ -100,6 +103,7 @@ public class HoodieLockConfig extends HoodieConfig {
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum number of times to retry to acquire lock additionally from the lock manager.");
 
+  // Ethan: is this too large? what about 30s?
   public static final ConfigProperty<Integer> LOCK_ACQUIRE_WAIT_TIMEOUT_MS = ConfigProperty
       .key(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY)
       .defaultValue(60 * 1000)
@@ -112,11 +116,12 @@ public class HoodieLockConfig extends HoodieConfig {
       .sinceVersion("0.8.0")
       .withDocumentation("For DFS based lock providers, path to store the locks under. use Table's meta path as default");
 
+  // Ethan: should the default also allow expiration? Need to dig into the code to understand what this controls.
   public static final ConfigProperty<Integer> FILESYSTEM_LOCK_EXPIRE = ConfigProperty
-        .key(FILESYSTEM_LOCK_EXPIRE_PROP_KEY)
-        .defaultValue(0)
-        .sinceVersion("0.12.0")
-        .withDocumentation("For DFS based lock providers, expire time in minutes, must be a nonnegative number, default means no expire");
+      .key(FILESYSTEM_LOCK_EXPIRE_PROP_KEY)
+      .defaultValue(0)
+      .sinceVersion("0.12.0")
+      .withDocumentation("For DFS based lock providers, expire time in minutes, must be a nonnegative number, default means no expire");
 
   public static final ConfigProperty<String> HIVE_DATABASE_NAME = ConfigProperty
       .key(HIVE_DATABASE_NAME_PROP_KEY)
@@ -136,6 +141,7 @@ public class HoodieLockConfig extends HoodieConfig {
       .sinceVersion("0.8.0")
       .withDocumentation("For Hive based lock provider, the Hive metastore URI to acquire locks against.");
 
+  // Ethan: set this automatically based on the table base path?
   public static final ConfigProperty<String> ZK_BASE_PATH = ConfigProperty
       .key(ZK_BASE_PATH_PROP_KEY)
       .noDefaultValue()
@@ -155,6 +161,7 @@ public class HoodieLockConfig extends HoodieConfig {
       .sinceVersion("0.8.0")
       .withDocumentation("Timeout in ms, to wait for establishing connection with Zookeeper.");
 
+  // Ethan: remove ZK_PORT so that ZK_CONNECT_URL also includes the port number?
   public static final ConfigProperty<String> ZK_CONNECT_URL = ConfigProperty
       .key(ZK_CONNECT_URL_PROP_KEY)
       .noDefaultValue()

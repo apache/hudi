@@ -25,13 +25,15 @@ import org.apache.hudi.common.config.HoodieConfig;
  * Configs/params used for internal purposes.
  */
 public class HoodieInternalConfig extends HoodieConfig {
-  //cfg
+  // Some internal configs (?)
 
   private static final long serialVersionUID = 0L;
 
+  // Ethan: why do we need this? BulkInsertPartitioner can already indicate `arePartitionRecordsSorted()`
   public static final String BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED = "hoodie.bulkinsert.are.partitioner.records.sorted";
   public static final Boolean DEFAULT_BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED = false;
 
+  // Ethan: why do we need this?
   public static final ConfigProperty<String> BULKINSERT_INPUT_DATA_SCHEMA_DDL = ConfigProperty
       .key("hoodie.bulkinsert.schema.ddl")
       .noDefaultValue()

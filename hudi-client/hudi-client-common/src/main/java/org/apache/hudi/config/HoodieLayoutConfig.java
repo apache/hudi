@@ -26,6 +26,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import javax.annotation.concurrent.Immutable;
+
 import java.util.Properties;
 
 /**
@@ -37,13 +38,15 @@ import java.util.Properties;
     description = "Configurations that control storage layout and data distribution, "
         + "which defines how the files are organized within a table.")
 public class HoodieLayoutConfig extends HoodieConfig {
-  //cfg
+  // Configs for Hudi storage layer
 
+  // Ethan: should this be a table config? I assume this cannot be changed once determined
   public static final ConfigProperty<String> LAYOUT_TYPE = ConfigProperty
       .key("hoodie.storage.layout.type")
       .defaultValue("DEFAULT")
       .withDocumentation("Type of storage layout. Possible options are [DEFAULT | BUCKET]");
 
+  // Ethan: use enum to be engine-agnostic?
   public static final ConfigProperty<String> LAYOUT_PARTITIONER_CLASS_NAME = ConfigProperty
       .key("hoodie.storage.layout.partitioner.class")
       .noDefaultValue()
