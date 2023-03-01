@@ -123,8 +123,8 @@ object HoodieSparkSqlWriter {
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
     var tableConfig = getHoodieTableConfig(sparkContext, path, mode, hoodieTableConfigOpt)
-    // get initial params and validate configs
-    val paramsWithoutDefaults = getParamsWithoutDefaults(optParams)
+    // get params w/o injecting default and validate
+    val paramsWithoutDefaults = HoodieWriterUtils.getParamsWithAlternatives(optParams)
     val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(paramsWithoutDefaults)
     val timestampKeyGeneratorConfigs = extractConfigsRelatedToTimestampBasedKeyGenerator(
       originKeyGeneratorClassName, paramsWithoutDefaults)
@@ -133,7 +133,7 @@ object HoodieSparkSqlWriter {
     validateKeyGeneratorConfig(originKeyGeneratorClassName, tableConfig);
     validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite);
 
-    // re-use table configs and set write config details
+    // re-use table configs and inject defaults.
     val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode)
     val databaseName = hoodieConfig.getStringOrDefault(HoodieTableConfig.DATABASE_NAME, "")
     val tblName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME,
@@ -1027,6 +1027,14 @@ object HoodieSparkSqlWriter {
     asyncClusteringTriggerFnDefined && client.getConfig.isAsyncClusteringEnabled
   }
 
+  /**
+   * Fetch table config for an already existing table and if save mode is not Overwrite.
+   * @param sparkContext instance of {@link SparkContext} to use.
+   * @param tablePath table base path.
+   * @param mode save mode in use.
+   * @param hoodieTableConfigOpt return table config from this Option if present. else poll from a new metaClient.
+   * @return {@link HoodieTableConfig} is conditions match. if not, returns null.
+   */
   private def getHoodieTableConfig(sparkContext: SparkContext,
                                    tablePath: String,
                                    mode: SaveMode,
@@ -1066,12 +1074,6 @@ object HoodieSparkSqlWriter {
     }
     val params = mergedParams.toMap
     (params, HoodieWriterUtils.convertMapToHoodieConfig(params))
-  }
-
-  private def getParamsWithoutDefaults(optParams: Map[String, String]): (Map[String, String]) = {
-    val translatedOptions = DataSourceWriteOptions.translateSqlOptions(optParams)
-    val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.getParamsWithAlternatives(translatedOptions)
-     mergedParams.toMap
   }
 
   private def extractConfigsRelatedToTimestampBasedKeyGenerator(keyGenerator: String,

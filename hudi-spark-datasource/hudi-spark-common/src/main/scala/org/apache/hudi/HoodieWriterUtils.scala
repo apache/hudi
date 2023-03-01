@@ -51,6 +51,8 @@ object HoodieWriterUtils {
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
+    hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
+    hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     hoodieConfig.setDefaultValue(ENABLE)
     hoodieConfig.setDefaultValue(COMMIT_METADATA_KEYPREFIX)
     hoodieConfig.setDefaultValue(INSERT_DROP_DUPS)
@@ -79,11 +81,15 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(RECONCILE_SCHEMA)
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
-    hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
-    hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
+  /**
+   * Fetch params by translating alternatives if any. Do not set any default as this method is intended to be called
+   * before validation.
+   * @param parameters hash map of parameters.
+   * @return hash map of raw with translated parameters.
+   */
   def getParamsWithAlternatives(parameters: Map[String, String]): Map[String, String] = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
     val props = new Properties()
@@ -150,13 +156,8 @@ object HoodieWriterUtils {
 
         val datasourcePreCombineKey = params.getOrElse(PRECOMBINE_FIELD.key(), null)
         val tableConfigPreCombineKey = tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD)
-        if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey
-          && datasourcePreCombineKey != tableConfigPreCombineKey) {
+        if (null != datasourcePreCombineKey && datasourcePreCombineKey != tableConfigPreCombineKey) {
           diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
-        }
-        // not set in tableConfig, but incoming has some valid value
-        if (tableConfigPreCombineKey == null && datasourcePreCombineKey != null) {
-          diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\tnull\n")
         }
 
         val datasourceKeyGen = getOriginKeyGenerator(params)

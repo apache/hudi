@@ -33,7 +33,6 @@ import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieW
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
@@ -71,7 +70,7 @@ class TestHoodieSparkSqlWriter {
   var hoodieFooTableName = "hoodie_foo_tbl"
   var tempBasePath: String = _
   var commonTableModifier: Map[String, String] = Map()
-  case class StringLongPartitionPathTest(uuid: String, ts: Long, pPath: String)
+  case class StringLongTest(uuid: String, ts: Long)
 
   /**
    * Setup method running before each test.
@@ -269,11 +268,9 @@ class TestHoodieSparkSqlWriter {
       "path" -> tempBasePath,
       HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
       "hoodie.datasource.write.recordkey.field" -> "uuid",
-      KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "pPath",
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4")
-    val dataFrame = spark.createDataFrame(Seq(StringLongPartitionPathTest(UUID.randomUUID().toString, new Date().getTime,
-      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
+    val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, dataFrame)
 
     //on same path try append with different("hoodie_bar_tbl") table name which should throw an exception
@@ -281,11 +278,9 @@ class TestHoodieSparkSqlWriter {
       "path" -> tempBasePath,
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_bar_tbl",
       "hoodie.datasource.write.recordkey.field" -> "uuid",
-      KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "pPath",
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4")
-    val dataFrame2 = spark.createDataFrame(Seq(StringLongPartitionPathTest(UUID.randomUUID().toString, new Date().getTime,
-      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
+    val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     val tableAlreadyExistException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, barTableModifier, dataFrame2))
     assert(tableAlreadyExistException.getMessage.contains("Config conflict"))
     assert(tableAlreadyExistException.getMessage.contains(s"${HoodieWriteConfig.TBL_NAME.key}:\thoodie_bar_tbl\thoodie_foo_tbl"))
@@ -304,16 +299,14 @@ class TestHoodieSparkSqlWriter {
   def testValidateTableConfigWithOverwriteSaveMode(): Unit = {
     //create a new table
     val tableModifier1 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.datasource.write.recordkey.field" -> "uuid", KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "pPath")
-    val dataFrame = spark.createDataFrame(Seq(StringLongPartitionPathTest(UUID.randomUUID().toString, new Date().getTime,
-      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
+      "hoodie.datasource.write.recordkey.field" -> "uuid")
+    val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
 
     //on same path try write with different RECORDKEY_FIELD_NAME and Append SaveMode should throw an exception
     val tableModifier2 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.datasource.write.recordkey.field" -> "ts", KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "pPath")
-    val dataFrame2 = spark.createDataFrame(Seq(StringLongPartitionPathTest(UUID.randomUUID().toString, new Date().getTime,
-      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
+      "hoodie.datasource.write.recordkey.field" -> "ts")
+    val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     val hoodieException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier2, dataFrame2))
     assert(hoodieException.getMessage.contains("Config conflict"))
     assert(hoodieException.getMessage.contains(s"RecordKey:\tts\tuuid"))
@@ -330,15 +323,13 @@ class TestHoodieSparkSqlWriter {
     //create a new table
     val tableModifier1 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
       "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "ts")
-    val dataFrame = spark.createDataFrame(Seq(StringLongPartitionPathTest(UUID.randomUUID().toString, new Date().getTime,
-      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
+    val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
 
     //on same path try write with different partitionpath field and Append SaveMode should throw an exception
     val tableModifier2 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
       "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "uuid")
-    val dataFrame2 = spark.createDataFrame(Seq(StringLongPartitionPathTest(UUID.randomUUID().toString, new Date().getTime,
-      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
+    val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     val hoodieException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier2, dataFrame2))
     assert(hoodieException.getMessage.contains("Config conflict"))
     assert(hoodieException.getMessage.contains(s"PartitionPath:\tuuid\tts"))
@@ -1054,14 +1045,13 @@ class TestHoodieSparkSqlWriter {
   }
 
   @Test
-  def testNonpartitonedToDefaultKeyGen(): Unit = {
+  def testNonpartitonedWithResuseTableConfig(): Unit = {
     val _spark = spark
     import _spark.implicits._
     val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts"
     )
 
     // case 1: When commit C1 specificies a key generator and commit C2 does not specify key generator
@@ -1075,14 +1065,12 @@ class TestHoodieSparkSqlWriter {
       .mode(SaveMode.Overwrite).save(tablePath1)
 
     val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
-    // raise exception when no KEYGENERATOR_CLASS_NAME is specified and it is expected to default to SimpleKeyGenerator
-    val configConflictException = intercept[HoodieException] {
-      df2.write.format("hudi")
-        .options(options)
-        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
-        .mode(SaveMode.Append).save(tablePath1)
-    }
-    assert(configConflictException.getMessage.contains("Config conflict"))
+    // In first commit, we explicitly over-ride it to Nonpartitioned, where as in 2nd batch, since re-using of table configs
+    // come into play, no exception should be thrown even if we don't supply any key gen class.
+    df2.write.format("hudi")
+      .options(options)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+      .mode(SaveMode.Append).save(tablePath1)
   }
 
   @Test

@@ -20,8 +20,6 @@ package org.apache.hudi.functional.cdc
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql.QueryTest.checkAnswer
 import org.apache.spark.sql.catalyst.expressions.{Add, If, Literal}
@@ -51,8 +49,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
       "hoodie.bulkinsert.shuffle.parallelism" -> "2",
-      "hoodie.delete.shuffle.parallelism" -> "1",
-      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> classOf[NonpartitionedKeyGenerator].getCanonicalName
+      "hoodie.delete.shuffle.parallelism" -> "1"
     )
 
     val _spark = spark

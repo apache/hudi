@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, _}
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
 import org.apache.hudi.common.model.{OverwriteWithLatestAvroPayload, WriteOperationType}
@@ -50,9 +50,6 @@ trait ProvidesHoodieConfig extends Logging {
     val sparkSession: SparkSession = hoodieCatalogTable.spark
     val tableConfig = hoodieCatalogTable.tableConfig
 
-    // NOTE: Here we fallback to "" to make sure that null value is not overridden with
-    // default value ("ts")
-    // TODO(HUDI-3456) clean up
     val preCombineField = Option(tableConfig.getPreCombineField).getOrElse(null)
 
     require(hoodieCatalogTable.primaryKeys.nonEmpty,
@@ -75,7 +72,7 @@ trait ProvidesHoodieConfig extends Logging {
       HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString
     )
 
-    var overridingOpts = Map[String, String](
+    val overridingOpts = Map[String, String](
       "path" -> hoodieCatalogTable.tableLocation,
       RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
       TBL_NAME.key -> hoodieCatalogTable.tableName,
@@ -84,10 +81,6 @@ trait ProvidesHoodieConfig extends Logging {
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
       PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp
     )
-
-    if (preCombineField != null) {
-      overridingOpts = overridingOpts ++ Map(PRECOMBINE_FIELD.key -> preCombineField)
-    }
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
@@ -198,7 +191,7 @@ trait ProvidesHoodieConfig extends Logging {
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     )
 
-    var overridingOpts = extraOptions ++ Map(
+    val overridingOpts = extraOptions ++ Map(
       "path" -> path,
       TABLE_TYPE.key -> tableType,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
@@ -206,11 +199,9 @@ trait ProvidesHoodieConfig extends Logging {
       HIVE_STYLE_PARTITIONING.key -> hiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> urlEncodePartitioning,
       RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
+      PRECOMBINE_FIELD.key -> preCombineField,
       PARTITIONPATH_FIELD.key -> partitionFieldsStr
     )
-    if (preCombineField != null) {
-      overridingOpts = overridingOpts ++ Map(PRECOMBINE_FIELD.key -> preCombineField)
-    }
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
@@ -224,13 +215,14 @@ trait ProvidesHoodieConfig extends Logging {
 
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
-    var overridingOpts = Map(
+    val overridingOpts = Map(
       "path" -> hoodieCatalogTable.tableLocation,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
       TABLE_TYPE.key -> hoodieCatalogTable.tableTypeName,
       OPERATION.key -> DataSourceWriteOptions.DELETE_PARTITION_OPERATION_OPT_VAL,
       PARTITIONS_TO_DELETE.key -> partitionsToDrop,
       RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
+      PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(null),
       PARTITIONPATH_FIELD.key -> partitionFields,
       HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
@@ -241,10 +233,6 @@ trait ProvidesHoodieConfig extends Logging {
       HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFields,
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     )
-
-    if (hoodieCatalogTable.preCombineKey.orNull != null) {
-      overridingOpts = overridingOpts ++ Map(PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.get)
-    }
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = Map.empty, overridingOpts = overridingOpts)

@@ -556,14 +556,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase)
     val partitionSchema = StructType(tableSchema.filter(f => partitionColumns.contains(f.name)))
 
-    val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse(null)
-
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
-    var overridingOpts = Map(
+    val overridingOpts = Map(
       "path" -> path,
       RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
-      PRECOMBINE_FIELD.key -> preCombineField,
+      PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(null),
       TBL_NAME.key -> hoodieCatalogTable.tableName,
       PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
@@ -592,10 +590,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       CANONICALIZE_NULLABLE.key -> "false",
       SQL_MERGE_INTO_WRITES.key -> "true"
     )
-
-    if (preCombineField != null) {
-      overridingOpts = overridingOpts ++ Map(PRECOMBINE_FIELD.key -> preCombineField)
-    }
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = Map.empty, overridingOpts = overridingOpts)
