@@ -5,7 +5,7 @@ summary: Introduce BigQuery integration in Hudi.
 ---
 
 Hudi tables can be queried from [Google Cloud BigQuery](https://cloud.google.com/bigquery) as external tables. As of
-now, the Hudi-BigQuery integration only works for hive-style partitioned Copy-On-Write tables.
+now, the Hudi-BigQuery integration only works for [hive-style](https://hudi.apache.org/docs/configurations/#Key-Generator-Options) partitioned [Copy-On-Write](https://hudi.apache.org/docs/table_types#copy-on-write-table) tables.
 
 ## Configurations
 
