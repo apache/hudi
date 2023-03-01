@@ -145,7 +145,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig)) {
       // rollback 2nd commit and ensure stats reflect the info.
-      List<HoodieRollbackStat> stats = testRun(useFileListingMetadata, writeConfig, writeClient);
+      List<HoodieRollbackStat> stats = testUpdateAndRollback(useFileListingMetadata, writeConfig, writeClient);
 
       assertEquals(3, stats.size());
       for (HoodieRollbackStat stat : stats) {
@@ -172,7 +172,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig)) {
 
       // rollback 2nd commit and ensure stats reflect the info.
-      List<HoodieRollbackStat> stats = testRun(useFileListingMetadata, writeConfig, writeClient);
+      List<HoodieRollbackStat> stats = testUpdateAndRollback(useFileListingMetadata, writeConfig, writeClient);
 
       assertEquals(3, stats.size());
       for (HoodieRollbackStat stat : stats) {
@@ -184,7 +184,55 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     }
   }
 
-  private List<HoodieRollbackStat> testRun(boolean useFileListingMetadata, HoodieWriteConfig writeConfig, SparkRDDWriteClient writeClient) {
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
+  public void testMergeOnReadRollbackDeletesFirstAppendFiles(boolean useFileListingMetadata) throws Exception {
+    // init MERGE_ON_READ_TABLE
+    tearDown();
+    tableType = HoodieTableType.MERGE_ON_READ;
+    setUp();
+
+    HoodieWriteConfig writeConfig = getConfigBuilder().withRollbackUsingMarkers(true).withAutoCommit(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(useFileListingMetadata).build())
+        .withPath(basePath).build();
+
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig)) {
+
+      // rollback 2nd commit and ensure stats reflect the info.
+      List<HoodieRollbackStat> stats = testInsertAndRollback(writeClient);
+
+      assertEquals(3, stats.size());
+      for (HoodieRollbackStat stat : stats) {
+        assertEquals(1, stat.getSuccessDeleteFiles().size());
+        assertEquals(0, stat.getFailedDeleteFiles().size());
+        assertEquals(0, stat.getCommandBlocksCount().size());
+        stat.getCommandBlocksCount().forEach((fileStatus, len) -> assertTrue(fileStatus.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())));
+      }
+    }
+  }
+
+  private List<HoodieRollbackStat> testInsertAndRollback(SparkRDDWriteClient writeClient) {
+    String newCommitTime = "001";
+    writeClient.startCommitWithTime(newCommitTime);
+
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+    JavaRDD<WriteStatus> writeStatuses = writeClient.insert(jsc.parallelize(records, 1), newCommitTime);
+    writeClient.commit(newCommitTime, writeStatuses);
+
+    writeStatuses.collect();
+
+    HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
+    List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
+        "002").getRollbackRequests(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"));
+
+    // rollback 1st commit and ensure stats reflect the info.
+    return new BaseRollbackHelper(hoodieTable.getMetaClient(), getConfig()).performRollback(context,
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"),
+        rollbackRequests);
+  }
+
+  private List<HoodieRollbackStat> testUpdateAndRollback(boolean useFileListingMetadata, HoodieWriteConfig writeConfig, SparkRDDWriteClient writeClient) {
     String newCommitTime = "001";
     writeClient.startCommitWithTime(newCommitTime);
 
