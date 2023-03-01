@@ -247,5 +247,5 @@ stages:
                 mkdir /tmp/spark-events/
           - script: |
               export SPARK_HOME=$(Pipeline.Workspace)/$(SPARK_ARCHIVE)
-              mvnw $(MVN_OPTS_TEST) -Pintegration-tests verify
+              ./mvnw $(MVN_OPTS_TEST) -Pintegration-tests verify
             displayName: IT
