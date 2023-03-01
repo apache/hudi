@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.utilities.sources.InputBatch;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -82,8 +81,9 @@ public class SanitizationUtils {
     return sanitizedStructType;
   }
 
-  private static Dataset<Row> sanitizeColumnNamesForAvro(Dataset<Row> inputDataset, String invalidCharMask) {
+  public static Dataset<Row> sanitizeColumnNamesForAvro(Dataset<Row> inputDataset, String invalidCharMask) {
     StructField[] inputFields = inputDataset.schema().fields();
+    String[] fieldNames = inputDataset.schema().fieldNames();
     Dataset<Row> targetDataset = inputDataset;
     for (StructField sf : inputFields) {
       DataType sanitizedFieldDataType = sanitizeDataTypeForAvro(sf.dataType(), invalidCharMask);
@@ -98,24 +98,6 @@ public class SanitizationUtils {
       }
     }
     return targetDataset;
-  }
-
-  /**
-   * Sanitize all columns including nested ones as per Avro conventions.
-   * @param srcBatch
-   * @param shouldSanitize
-   * @param invalidCharMask
-   * @return sanitized batch.
-   */
-  public static InputBatch<Dataset<Row>> maybeSanitizeFieldNames(InputBatch<Dataset<Row>> srcBatch,
-                                                                 boolean shouldSanitize,
-                                                                 String invalidCharMask) {
-    if (!shouldSanitize || !srcBatch.getBatch().isPresent()) {
-      return srcBatch;
-    }
-    Dataset<Row> srcDs = srcBatch.getBatch().get();
-    Dataset<Row> targetDs = sanitizeColumnNamesForAvro(srcDs, invalidCharMask);
-    return new InputBatch<>(Option.ofNullable(targetDs), srcBatch.getCheckpointForNextBatch(), srcBatch.getSchemaProvider());
   }
 
   /*

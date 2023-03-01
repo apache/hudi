@@ -21,8 +21,6 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.avro.SchemaParseException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -34,6 +32,9 @@ import java.io.IOException;
 
 import static org.apache.hudi.utilities.sources.helpers.SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES;
 import static org.apache.hudi.utilities.sources.helpers.SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
+import static org.apache.hudi.utilities.testutils.SanitizationTestBase.generateProperFormattedSchema;
+import static org.apache.hudi.utilities.testutils.SanitizationTestBase.generateRenamedSchemaWithConfiguredReplacement;
+import static org.apache.hudi.utilities.testutils.SanitizationTestBase.generateRenamedSchemaWithDefaultReplacement;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -62,47 +63,6 @@ public class TestFilebasedSchemaProvider extends UtilitiesTestBase {
   @AfterEach
   public void teardown() throws Exception {
     super.teardown();
-  }
-
-  private Schema generateProperFormattedSchema() {
-    Schema addressSchema = SchemaBuilder.record("Address").fields()
-        .requiredString("streetaddress")
-        .requiredString("city")
-        .endRecord();
-    Schema personSchema = SchemaBuilder.record("Person").fields()
-        .requiredString("firstname")
-        .requiredString("lastname")
-        .name("address").type(addressSchema).noDefault()
-        .endRecord();
-    return personSchema;
-  }
-
-  // replacement mask is "__".
-  private Schema generateRenamedSchemaWithDefaultReplacement() {
-    Schema addressSchema = SchemaBuilder.record("__Address").fields()
-        .nullableString("__stree9add__ress", "@@@any_address")
-        .requiredString("cit__y__")
-        .endRecord();
-    Schema personSchema = SchemaBuilder.record("Person").fields()
-        .requiredString("__firstname")
-        .requiredString("__lastname")
-        .name("address").type(addressSchema).noDefault()
-        .endRecord();
-    return personSchema;
-  }
-
-  // replacement mask is "_".
-  private Schema generateRenamedSchemaWithConfiguredReplacement() {
-    Schema addressSchema = SchemaBuilder.record("_Address").fields()
-        .nullableString("_stree9add_ress", "@@@any_address")
-        .requiredString("cit_y_")
-        .endRecord();
-    Schema personSchema = SchemaBuilder.record("Person").fields()
-        .requiredString("_firstname")
-        .requiredString("_lastname")
-        .name("address").type(addressSchema).noDefault()
-        .endRecord();
-    return personSchema;
   }
 
   @Test

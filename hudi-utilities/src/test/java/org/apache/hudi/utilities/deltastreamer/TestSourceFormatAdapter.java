@@ -19,14 +19,13 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
+import org.apache.hudi.utilities.testutils.SanitizationTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
@@ -35,132 +34,25 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.avro.SchemaConverters;
-import org.apache.spark.sql.types.ArrayType;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.MapType;
-import org.apache.spark.sql.types.Metadata;
-import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestSourceFormatAdapter {
+public class TestSourceFormatAdapter extends SanitizationTestBase {
   private static final String DUMMY_CHECKPOINT = "dummy_checkpoint";
 
-  private static SparkSession spark;
-  private static JavaSparkContext jsc;
   private TestRowDataSource testRowDataSource;
   private TestJsonDataSource testJsonDataSource;
-
-  @BeforeAll
-  public static void start() {
-    spark = SparkSession
-        .builder()
-        .master("local[*]")
-        .appName(TestSourceFormatAdapter.class.getName())
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-        .getOrCreate();
-    jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
-  }
-
-  @AfterAll
-  public static void shutdown() {
-    jsc.close();
-    spark.close();
-  }
 
   // Forces to initialize object before every test.
   @AfterEach
   public void teardown() {
     testRowDataSource = null;
     testJsonDataSource = null;
-  }
-
-  private String sanitizeIfNeeded(String src, boolean shouldSanitize) {
-    return shouldSanitize ? HoodieAvroUtils.sanitizeName(src, "__") : src;
-  }
-
-  private StructType getSchemaWithProperNaming() {
-    StructType addressStruct = new StructType(new StructField[] {
-        new StructField("state", DataTypes.StringType, true, Metadata.empty()),
-        new StructField("street", DataTypes.StringType, true, Metadata.empty()),
-        new StructField("zip", DataTypes.LongType, true, Metadata.empty()),
-    });
-
-    StructType personStruct = new StructType(new StructField[] {
-        new StructField("address", addressStruct, true, Metadata.empty()),
-        new StructField("name", DataTypes.StringType, true, Metadata.empty()),
-        new StructField("occupation", DataTypes.StringType, true, Metadata.empty()),
-        new StructField("place", DataTypes.StringType, true, Metadata.empty())
-    });
-    return personStruct;
-  }
-
-  private StructType getSchemaWithBadAvroNamingForStructType(boolean shouldSanitize) {
-    StructType addressStruct = new StructType(new StructField[] {
-        new StructField(sanitizeIfNeeded("@state.", shouldSanitize),
-            DataTypes.StringType, true, Metadata.empty()),
-        new StructField(sanitizeIfNeeded("@@stree@t@", shouldSanitize),
-            DataTypes.StringType, true, Metadata.empty()),
-        new StructField(sanitizeIfNeeded("8@_zip", shouldSanitize),
-            DataTypes.LongType, true, Metadata.empty())
-    });
-
-    StructType personStruct = new StructType(new StructField[] {
-        new StructField(sanitizeIfNeeded("@_addr*$ess", shouldSanitize),
-            addressStruct, true, Metadata.empty()),
-        new StructField(sanitizeIfNeeded("9name", shouldSanitize),
-            DataTypes.StringType, true, Metadata.empty()),
-        new StructField(sanitizeIfNeeded("_occu9pation", shouldSanitize),
-            DataTypes.StringType, true, Metadata.empty()),
-        new StructField(sanitizeIfNeeded("@plac.e.", shouldSanitize),
-            DataTypes.StringType, true, Metadata.empty())
-    });
-    return personStruct;
-  }
-
-  private StructType getSchemaWithBadAvroNamingForArrayType(boolean shouldSanitize) {
-    StructType addressStruct = new StructType(new StructField[] {
-        new StructField(sanitizeIfNeeded("@state.", shouldSanitize),
-            DataTypes.StringType, true, Metadata.empty()),
-        new StructField(sanitizeIfNeeded("@@stree@t@", shouldSanitize),
-            DataTypes.StringType, true, Metadata.empty()),
-        new StructField(sanitizeIfNeeded("8@_zip", shouldSanitize),
-            DataTypes.LongType, true, Metadata.empty())
-    });
-
-    StructType personStruct = new StructType(new StructField[] {
-        new StructField(sanitizeIfNeeded("@name", shouldSanitize),
-            DataTypes.StringType, true, Metadata.empty()),
-        new StructField(sanitizeIfNeeded("@arr@", shouldSanitize),
-            new ArrayType(addressStruct, true), true, Metadata.empty())
-    });
-    return personStruct;
-  }
-
-  private StructType getSchemaWithBadAvroNamingForMapType(boolean shouldSanitize) {
-    StructType addressStruct = new StructType(new StructField[] {
-        new StructField(sanitizeIfNeeded("@state.", shouldSanitize),
-            DataTypes.StringType, true, Metadata.empty()),
-        new StructField(sanitizeIfNeeded("@@stree@t@", shouldSanitize),
-            DataTypes.StringType, true, Metadata.empty()),
-        new StructField(sanitizeIfNeeded("8@_zip", shouldSanitize),
-            DataTypes.LongType, true, Metadata.empty())
-    });
-
-    StructType personStruct = new StructType(new StructField[] {
-        new StructField(sanitizeIfNeeded("@name", shouldSanitize),
-            DataTypes.StringType, true, Metadata.empty()),
-        new StructField(sanitizeIfNeeded("@map9", shouldSanitize),
-            new MapType(DataTypes.StringType, addressStruct, true), true, Metadata.empty()),
-    });
-    return personStruct;
   }
 
   private void setupRowSource(Dataset<Row> ds) {
@@ -175,115 +67,46 @@ public class TestSourceFormatAdapter {
     testJsonDataSource = new TestJsonDataSource(new TypedProperties(), jsc, spark, basicSchemaProvider, batch);
   }
 
-  private InputBatch<Dataset<Row>> fetchRowData(JavaRDD<String> rdd, StructType inputSchema) {
+  private InputBatch<Dataset<Row>> fetchRowData(JavaRDD<String> rdd, StructType unsanitizedSchema) {
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.put(SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES, true);
     typedProperties.put(SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK, "__");
-    setupRowSource(spark.read().schema(inputSchema).json(rdd));
+    setupRowSource(spark.read().schema(unsanitizedSchema).json(rdd));
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testRowDataSource, Option.empty(), Option.of(typedProperties));
     return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(DUMMY_CHECKPOINT), 10L);
   }
 
-  private InputBatch<Dataset<Row>> fetchJsonData(JavaRDD<String> rdd, StructType inputSchema) {
+  private InputBatch<Dataset<Row>> fetchJsonData(JavaRDD<String> rdd, StructType sanitizedSchema) {
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.put(SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES, true);
     typedProperties.put(SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK, "__");
-    setupJsonSource(rdd, SchemaConverters.toAvroType(inputSchema, false, "record", ""));
+    setupJsonSource(rdd, SchemaConverters.toAvroType(sanitizedSchema, false, "record", ""));
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testJsonDataSource, Option.empty(), Option.of(typedProperties));
     return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(DUMMY_CHECKPOINT), 10L);
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"row", "json"})
-  public void nestedTypeWithProperNaming(String sourceType) {
-    JavaRDD<String> rdd = jsc.textFile("src/test/resources/data/avro_sanitization.json");
-    StructType inputSchema = getSchemaWithProperNaming();
-    InputBatch<Dataset<Row>> inputBatch;
-    switch (sourceType) {
-      case "row":
-        inputBatch = fetchRowData(rdd, inputSchema);
-        break;
-      case "json":
-        inputBatch = fetchJsonData(rdd, inputSchema);
-        break;
-      default:
-        throw new HoodieException("Invalid test source");
-    }
+  private void verifySanitization(InputBatch<Dataset<Row>> inputBatch, String sanitizedDataFile, StructType sanitizedSchema) {
+    JavaRDD<String> expectedRDD = jsc.textFile(sanitizedDataFile);
     assertTrue(inputBatch.getBatch().isPresent());
     Dataset<Row> ds = inputBatch.getBatch().get();
-    assertTrue(ds.collectAsList().size() == 2);
-    assertTrue(inputSchema.equals(ds.schema()));
-    JavaRDD<String> expectedData = jsc.textFile("src/test/resources/data/avro_sanitization.json");
-    assertEquals(expectedData.collect(), ds.toJSON().collectAsList());
+    assertEquals(2, ds.collectAsList().size());
+    assertTrue(sanitizedSchema.equals(ds.schema()));
+    assertEquals(expectedRDD.collect(), ds.toJSON().collectAsList());
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"row", "json"})
-  public void structTypeAndBadNaming(String sourceType) {
-    JavaRDD<String> rdd = jsc.textFile("src/test/resources/data/avro_sanitization_bad_naming_in.json");
-    InputBatch<Dataset<Row>> inputBatch;
-    switch (sourceType) {
-      case "row":
-        inputBatch = fetchRowData(rdd, getSchemaWithBadAvroNamingForStructType(false));
-        break;
-      case "json":
-        inputBatch = fetchJsonData(rdd, getSchemaWithBadAvroNamingForStructType(true));
-        break;
-      default:
-        throw new HoodieException("Invalid test source");
-    }
-    assertTrue(inputBatch.getBatch().isPresent());
-    Dataset<Row> ds = inputBatch.getBatch().get();
-    assertTrue(ds.collectAsList().size() == 2);
-    assertTrue(getSchemaWithBadAvroNamingForStructType(true).equals(ds.schema()));
-    JavaRDD<String> expectedData = jsc.textFile("src/test/resources/data/avro_sanitization_bad_naming_out.json");
-    assertEquals(expectedData.collect(), ds.toJSON().collectAsList());
+  @MethodSource("provideDataFiles")
+  public void testRowSanitization(String unsanitizedDataFile, String sanitizedDataFile, StructType unsanitizedSchema, StructType sanitizedSchema) {
+    JavaRDD<String> unsanitizedRDD = jsc.textFile(unsanitizedDataFile);
+    verifySanitization(fetchRowData(unsanitizedRDD, unsanitizedSchema), sanitizedDataFile, sanitizedSchema);
+
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"row", "json"})
-  public void arrayTypeAndBadNaming(String sourceType) {
-    JavaRDD<String> rdd = jsc.textFile("src/test/resources/data/avro_sanitization_bad_naming_nested_array_in.json");
-    InputBatch<Dataset<Row>> inputBatch;
-    switch (sourceType) {
-      case "row":
-        inputBatch = fetchRowData(rdd, getSchemaWithBadAvroNamingForArrayType(false));
-        break;
-      case "json":
-        inputBatch = fetchJsonData(rdd, getSchemaWithBadAvroNamingForArrayType(true));
-        break;
-      default:
-        throw new HoodieException("Invalid test source");
-    }
-    assertTrue(inputBatch.getBatch().isPresent());
-    Dataset<Row> ds = inputBatch.getBatch().get();
-    assertTrue(ds.collectAsList().size() == 2);
-    assertTrue(getSchemaWithBadAvroNamingForArrayType(true).equals(ds.schema()));
-    JavaRDD<String> expectedData = jsc.textFile("src/test/resources/data/avro_sanitization_bad_naming_nested_array_out.json");
-    assertEquals(expectedData.collect(), ds.toJSON().collectAsList());
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = {"row", "json"})
-  public void mapTypeAndBadNaming(String sourceType) {
-    JavaRDD<String> rdd = jsc.textFile("src/test/resources/data/avro_sanitization_bad_naming_nested_map_in.json");
-    InputBatch<Dataset<Row>> inputBatch;
-    switch (sourceType) {
-      case "row":
-        inputBatch = fetchRowData(rdd, getSchemaWithBadAvroNamingForMapType(false));
-        break;
-      case "json":
-        inputBatch = fetchJsonData(rdd, getSchemaWithBadAvroNamingForMapType(true));
-        break;
-      default:
-        throw new HoodieException("Invalid test source");
-    }
-    assertTrue(inputBatch.getBatch().isPresent());
-    Dataset<Row> ds = inputBatch.getBatch().get();
-    assertTrue(ds.collectAsList().size() == 2);
-    assertTrue(getSchemaWithBadAvroNamingForMapType(true).equals(ds.schema()));
-    JavaRDD<String> expectedData = jsc.textFile("src/test/resources/data/avro_sanitization_bad_naming_nested_map_out.json");
-    assertEquals(expectedData.collect(), ds.toJSON().collectAsList());
+  @MethodSource("provideDataFiles")
+  public void testJsonSanitization(String unsanitizedDataFile, String sanitizedDataFile, StructType unsanitizedSchema, StructType sanitizedSchema) {
+    JavaRDD<String> unsanitizedRDD = jsc.textFile(unsanitizedDataFile);
+    verifySanitization(fetchJsonData(unsanitizedRDD, sanitizedSchema), sanitizedDataFile, sanitizedSchema);
   }
 
   public static class TestRowDataSource extends Source<Dataset<Row>> {
