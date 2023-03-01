@@ -66,7 +66,7 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
     areCommonConfigs = true,
     description = "")
 public class HoodieIndexConfig extends HoodieConfig {
-  //cfg
+  // Configs for common and legacy index
 
   private static final Logger LOG = LogManager.getLogger(HoodieIndexConfig.class);
 
@@ -149,6 +149,7 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "When true, interval tree based file pruning optimization is enabled. "
           + "This mode speeds-up file-pruning based on key ranges when compared with the brute-force mode");
 
+  // Ethan: remove this config and clean up relevant logic?
   // TODO: On by default. Once stable, we will remove the other mode.
   public static final ConfigProperty<String> BLOOM_INDEX_BUCKETIZED_CHECKING = ConfigProperty
       .key("hoodie.bloom.index.bucketized.checking")
@@ -178,6 +179,7 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "When true, the incoming writes will cached to speed up index lookup by reducing IO "
           + "for computing parallelism or affected partitions");
 
+  // Ethan: should the parallelim below be dynamically determined by Spark?
   public static final ConfigProperty<String> SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.simple.index.parallelism")
       .defaultValue("100")
@@ -212,6 +214,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies when #simpleIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. "
           + "Refer to org.apache.spark.storage.StorageLevel for different values");
 
+  // Ethan: should we remove these two and avoid data quality issues?
   /**
    * Only applies if index type is GLOBAL_BLOOM.
    * <p>
@@ -260,6 +263,7 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size "
           + "issues of the SIMPLE hashing engine. Consistent hashing only works with MOR tables, only use simple hashing on COW tables.");
 
+  // Ethan: is the default too large?
   /**
    * Bucket num equals file groups num in each partition.
    * Bucket num can be set according to partition size and file group size.
@@ -272,6 +276,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, "
           + "and each partition is divided to N buckets.");
 
+  // Ethan: should the defaults based on "hoodie.bucket.index.num.buckets": e.g., min=0.5*num, max=4*num?
   public static final ConfigProperty<String> BUCKET_INDEX_MAX_NUM_BUCKETS = ConfigProperty
       .key("hoodie.bucket.index.max.num.buckets")
       .noDefaultValue()

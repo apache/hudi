@@ -36,7 +36,7 @@ import java.util.Properties;
         + "(when HBase based indexing is enabled), which tags incoming "
         + "records as either inserts or updates to older records.")
 public class HoodieHBaseIndexConfig extends HoodieConfig {
-  //cfg
+  // Configs for HBase Index
 
   public static final ConfigProperty<String> ZKQUORUM = ConfigProperty
       .key("hoodie.index.hbase.zkquorum")
@@ -104,6 +104,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .defaultValue(false)
       .withDocumentation("Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on write volume.");
 
+  // Ethan: the following two are not used anywhere in the code base
   public static final ConfigProperty<String> MIN_QPS_FRACTION = ConfigProperty
       .key("hoodie.index.hbase.min.qps.fraction")
       .noDefaultValue()
@@ -114,6 +115,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Maximum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads");
 
+  // Ethan: The following three are not used
   public static final ConfigProperty<Integer> DESIRED_PUTS_TIME_IN_SECONDS = ConfigProperty
       .key("hoodie.index.hbase.desired_puts_time_in_secs")
       .defaultValue(600)
@@ -145,6 +147,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .defaultValue("/QPS_ROOT")
       .withDocumentation("chroot in zookeeper, to use for all qps allocation co-ordination.");
 
+  // Ethan: should this be turned on by default?
   public static final ConfigProperty<Boolean> UPDATE_PARTITION_PATH_ENABLE = ConfigProperty
       .key("hoodie.hbase.index.update.partition.path")
       .defaultValue(false)
@@ -153,6 +156,8 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
           + "this config when set, will delete old record in old partition "
           + "and will insert it as new record in new partition.");
 
+  // Ethan: There are caveats around the interplay between rollback/partition path update and the HBase global index.
+  // We need to revisit these for the default configs.
   public static final ConfigProperty<Boolean> ROLLBACK_SYNC_ENABLE = ConfigProperty
       .key("hoodie.index.hbase.rollback.sync")
       .defaultValue(false)
@@ -190,6 +195,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .defaultValue(8)
       .withDocumentation("Only applicable when using RebalancedSparkHoodieHBaseIndex, same as hbase regions count can get the best performance");
 
+  // Deprecated names should be cleared
   /**
    * @deprecated Use {@link #ZKQUORUM} and its methods instead
    */
