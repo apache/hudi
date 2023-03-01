@@ -25,7 +25,7 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
-import org.apache.hudi.utilities.testutils.SanitizationTestBase;
+import org.apache.hudi.utilities.testutils.SanitizationTestUtils;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
@@ -35,18 +35,42 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.avro.SchemaConverters;
 import org.apache.spark.sql.types.StructType;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestSourceFormatAdapter extends SanitizationTestBase {
-  private static final String DUMMY_CHECKPOINT = "dummy_checkpoint";
+public class TestSourceFormatAdapter {
 
+  protected static SparkSession spark;
+  protected static JavaSparkContext jsc;
+  private static final String DUMMY_CHECKPOINT = "dummy_checkpoint";
   private TestRowDataSource testRowDataSource;
   private TestJsonDataSource testJsonDataSource;
+
+  @BeforeAll
+  public static void start() {
+    spark = SparkSession
+        .builder()
+        .master("local[*]")
+        .appName(TestSourceFormatAdapter.class.getName())
+        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+        .getOrCreate();
+    jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
+  }
+
+  @AfterAll
+  public static void shutdown() {
+    jsc.close();
+    spark.close();
+  }
 
   // Forces to initialize object before every test.
   @AfterEach
@@ -69,8 +93,8 @@ public class TestSourceFormatAdapter extends SanitizationTestBase {
 
   private InputBatch<Dataset<Row>> fetchRowData(JavaRDD<String> rdd, StructType unsanitizedSchema) {
     TypedProperties typedProperties = new TypedProperties();
-    typedProperties.put(SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES, true);
-    typedProperties.put(SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK, "__");
+    typedProperties.put(SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES.key(), true);
+    typedProperties.put(SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
     setupRowSource(spark.read().schema(unsanitizedSchema).json(rdd));
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testRowDataSource, Option.empty(), Option.of(typedProperties));
     return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(DUMMY_CHECKPOINT), 10L);
@@ -78,8 +102,8 @@ public class TestSourceFormatAdapter extends SanitizationTestBase {
 
   private InputBatch<Dataset<Row>> fetchJsonData(JavaRDD<String> rdd, StructType sanitizedSchema) {
     TypedProperties typedProperties = new TypedProperties();
-    typedProperties.put(SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES, true);
-    typedProperties.put(SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK, "__");
+    typedProperties.put(SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES.key(), true);
+    typedProperties.put(SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
     setupJsonSource(rdd, SchemaConverters.toAvroType(sanitizedSchema, false, "record", ""));
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testJsonDataSource, Option.empty(), Option.of(typedProperties));
     return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(DUMMY_CHECKPOINT), 10L);
@@ -90,7 +114,7 @@ public class TestSourceFormatAdapter extends SanitizationTestBase {
     assertTrue(inputBatch.getBatch().isPresent());
     Dataset<Row> ds = inputBatch.getBatch().get();
     assertEquals(2, ds.collectAsList().size());
-    assertTrue(sanitizedSchema.equals(ds.schema()));
+    assertEquals(sanitizedSchema, ds.schema());
     assertEquals(expectedRDD.collect(), ds.toJSON().collectAsList());
   }
 
@@ -157,4 +181,9 @@ public class TestSourceFormatAdapter extends SanitizationTestBase {
       return schema;
     }
   }
+
+  private static Stream<Arguments> provideDataFiles() {
+    return SanitizationTestUtils.provideDataFiles();
+  }
+
 }

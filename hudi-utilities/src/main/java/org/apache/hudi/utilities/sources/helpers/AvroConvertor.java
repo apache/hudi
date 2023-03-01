@@ -32,6 +32,9 @@ import scala.util.Either;
 import scala.util.Left;
 import scala.util.Right;
 
+import static org.apache.hudi.utilities.sources.helpers.SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES;
+import static org.apache.hudi.utilities.sources.helpers.SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
+
 /**
  * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy fields to circumvent issues around
  * serializing these objects from driver to executors
@@ -60,24 +63,24 @@ public class AvroConvertor implements Serializable {
   private transient Injection<GenericRecord, byte[]> recordInjection;
 
   public AvroConvertor(String schemaStr) {
-    this(schemaStr, false, "");
+    this(schemaStr, SANITIZE_SCHEMA_FIELD_NAMES.defaultValue(), SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
   }
 
   public AvroConvertor(String schemaStr, boolean shouldSanitize, String invalidCharMask) {
     this.schemaStr = schemaStr;
-    this.invalidCharMask = invalidCharMask;
     this.shouldSanitize = shouldSanitize;
+    this.invalidCharMask = invalidCharMask;
   }
 
   public AvroConvertor(Schema schema) {
-    this(schema, false, "");
+    this(schema, SANITIZE_SCHEMA_FIELD_NAMES.defaultValue(), SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
   }
 
   public AvroConvertor(Schema schema, boolean shouldSanitize, String invalidCharMask) {
     this.schemaStr = schema.toString();
     this.schema = schema;
-    this.invalidCharMask = invalidCharMask;
     this.shouldSanitize = shouldSanitize;
+    this.invalidCharMask = invalidCharMask;
   }
 
   private void initSchema() {

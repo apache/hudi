@@ -57,8 +57,8 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     super(props, jssc);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_FILE_PROP));
     String sourceFile = props.getString(Config.SOURCE_SCHEMA_FILE_PROP);
-    boolean shouldSanitize = props.getBoolean(SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES,false);
-    String invalidCharMask = props.getString(SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK,"__");
+    boolean shouldSanitize = SanitizationUtils.getShouldSanitize(props);
+    String invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
     this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
     this.sourceSchema = readAvroSchemaFromFile(sourceFile, this.fs, shouldSanitize, invalidCharMask);
     if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {

@@ -57,6 +57,8 @@ import scala.util.Either;
 import static org.apache.hudi.utilities.deltastreamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
+import static org.apache.hudi.utilities.sources.helpers.SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES;
+import static org.apache.hudi.utilities.sources.helpers.SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
 
 /**
  * Adapts data-format provided by the source to the data-format required by the client (DeltaStreamer).
@@ -64,8 +66,8 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 public final class SourceFormatAdapter implements Closeable {
 
   private final Source source;
-  private final boolean shouldSanitize;
-  private final String invalidCharMask;
+  private boolean shouldSanitize = SANITIZE_SCHEMA_FIELD_NAMES.defaultValue();
+  private String invalidCharMask = SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue();
 
   private Option<BaseErrorTableWriter> errorTableWriter = Option.empty();
 
@@ -74,15 +76,12 @@ public final class SourceFormatAdapter implements Closeable {
   }
 
   public SourceFormatAdapter(Source source, Option<BaseErrorTableWriter> errorTableWriter, Option<TypedProperties> props) {
-    this.errorTableWriter = errorTableWriter;
     this.source = source;
-    if (!props.isPresent()) {
-      this.shouldSanitize = false;
-      this.invalidCharMask = "";
-      return;
+    this.errorTableWriter = errorTableWriter;
+    if (props.isPresent()) {
+      this.shouldSanitize = SanitizationUtils.getShouldSanitize(props.get());
+      this.invalidCharMask = SanitizationUtils.getInvalidCharMask(props.get());
     }
-    this.shouldSanitize = props.get().getBoolean(SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES, false);
-    this.invalidCharMask = props.get().getString(SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK, "__");
     if (this.shouldSanitize && source.getSourceType() == Source.SourceType.PROTO) {
       throw new IllegalArgumentException("PROTO cannot be sanitized");
     }

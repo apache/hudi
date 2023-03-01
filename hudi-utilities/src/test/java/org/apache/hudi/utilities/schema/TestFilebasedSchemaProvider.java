@@ -32,9 +32,9 @@ import java.io.IOException;
 
 import static org.apache.hudi.utilities.sources.helpers.SanitizationUtils.Config.SANITIZE_SCHEMA_FIELD_NAMES;
 import static org.apache.hudi.utilities.sources.helpers.SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
-import static org.apache.hudi.utilities.testutils.SanitizationTestBase.generateProperFormattedSchema;
-import static org.apache.hudi.utilities.testutils.SanitizationTestBase.generateRenamedSchemaWithConfiguredReplacement;
-import static org.apache.hudi.utilities.testutils.SanitizationTestBase.generateRenamedSchemaWithDefaultReplacement;
+import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateProperFormattedSchema;
+import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateRenamedSchemaWithConfiguredReplacement;
+import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateRenamedSchemaWithDefaultReplacement;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -75,7 +75,7 @@ public class TestFilebasedSchemaProvider extends UtilitiesTestBase {
   @Test
   public void renameBadlyFormattedSchemaTest() throws IOException {
     TypedProperties props = Helpers.setupSchemaOnDFS("delta-streamer-config", "file_schema_provider_invalid.avsc");
-    props.put(SANITIZE_SCHEMA_FIELD_NAMES, "true");
+    props.put(SANITIZE_SCHEMA_FIELD_NAMES.key(), "true");
     this.schemaProvider = new FilebasedSchemaProvider(props, jsc);
     assertEquals(this.schemaProvider.getSourceSchema(), generateRenamedSchemaWithDefaultReplacement());
   }
@@ -89,10 +89,10 @@ public class TestFilebasedSchemaProvider extends UtilitiesTestBase {
   }
 
   @Test
-  public void renameBadlyFormattedSchemaWithInvalidCharMaskConfiguredTest() throws IOException {
+  public void renameBadlyFormattedSchemaWithAltCharMaskConfiguredTest() throws IOException {
     TypedProperties props = Helpers.setupSchemaOnDFS("delta-streamer-config", "file_schema_provider_invalid.avsc");
-    props.put(SANITIZE_SCHEMA_FIELD_NAMES, "true");
-    props.put(SCHEMA_FIELD_NAME_INVALID_CHAR_MASK, "_");
+    props.put(SANITIZE_SCHEMA_FIELD_NAMES.key(), "true");
+    props.put(SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "_");
     this.schemaProvider = new FilebasedSchemaProvider(props, jsc);
     assertEquals(this.schemaProvider.getSourceSchema(), generateRenamedSchemaWithConfiguredReplacement());
   }

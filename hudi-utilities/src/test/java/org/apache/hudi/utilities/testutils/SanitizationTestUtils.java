@@ -20,50 +20,26 @@
 package org.apache.hudi.utilities.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.utilities.deltastreamer.TestSourceFormatAdapter;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.MapType;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.provider.Arguments;
 
 import java.util.stream.Stream;
 
-public class SanitizationTestBase {
+import static org.apache.hudi.utilities.sources.helpers.SanitizationUtils.Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
 
-  protected static SparkSession spark;
-  protected static JavaSparkContext jsc;
-
-  protected final String invalidCharMask = "__";
-
-  @BeforeAll
-  public static void start() {
-    spark = SparkSession
-        .builder()
-        .master("local[*]")
-        .appName(TestSourceFormatAdapter.class.getName())
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-        .getOrCreate();
-    jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
-  }
-
-  @AfterAll
-  public static void shutdown() {
-    jsc.close();
-    spark.close();
-  }
+public class SanitizationTestUtils {
+  public static String invalidCharMask = SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue();
 
   private static String sanitizeIfNeeded(String src, boolean shouldSanitize) {
-    return shouldSanitize ? HoodieAvroUtils.sanitizeName(src, "__") : src;
+    return shouldSanitize ? HoodieAvroUtils.sanitizeName(src, invalidCharMask) : src;
   }
 
   protected static StructType getSchemaWithProperNaming() {
@@ -182,7 +158,7 @@ public class SanitizationTestBase {
     return personSchema;
   }
 
-  protected static Stream<Arguments> provideDataFiles() {
+  public static Stream<Arguments> provideDataFiles() {
     return Stream.of(
         Arguments.of("src/test/resources/data/avro_sanitization.json", "src/test/resources/data/avro_sanitization.json",
             getSchemaWithProperNaming(), getSchemaWithProperNaming()),

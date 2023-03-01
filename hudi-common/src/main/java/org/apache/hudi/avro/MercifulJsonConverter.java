@@ -52,7 +52,7 @@ public class MercifulJsonConverter {
 
   private final String invalidCharMask;
   private final boolean shouldSanitize;
-
+  
   /**
    * Build type processor map for each avro type.
    */
@@ -79,7 +79,7 @@ public class MercifulJsonConverter {
    * Uses a default objectMapper to deserialize a json string.
    */
   public MercifulJsonConverter() {
-    this(false, "");
+    this(false, "__");
   }
 
 

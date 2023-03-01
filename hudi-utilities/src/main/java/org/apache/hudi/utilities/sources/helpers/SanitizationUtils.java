@@ -19,6 +19,8 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -38,19 +40,39 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Avro schemas have restrictions (https://avro.apache.org/docs/current/spec.html#names) on field names
+ * that other schema formats do not have. This class provides utilities to help with sanitizing
+ */
 public class SanitizationUtils {
 
   private static final ObjectMapper OM = new ObjectMapper();
 
   public static class Config {
-    // sanitizes names of invalid schema fields both in the data read from source and also in the schema.
-    // invalid definition here goes by avro naming convention (https://avro.apache.org/docs/current/spec.html#names).
-    public static final String SANITIZE_SCHEMA_FIELD_NAMES = "hoodie.deltastreamer.source.sanitize.invalid.schema.field.names";
 
-    public static final String SCHEMA_FIELD_NAME_INVALID_CHAR_MASK = "hoodie.deltastreamer.source.sanitize.invalid.char.mask";
+    public static final ConfigProperty<Boolean> SANITIZE_SCHEMA_FIELD_NAMES = ConfigProperty
+        .key("hoodie.deltastreamer.source.sanitize.invalid.schema.field.names")
+        .defaultValue(false)
+        .withDocumentation("Sanitizes names of invalid schema fields both in the data read from source and also in the schema "
+            + "Replaces invalid characters with hoodie.deltastreamer.source.sanitize.invalid.char.mask. Invalid characters are by "
+            + "goes by avro naming convention (https://avro.apache.org/docs/current/spec.html#names).");
+
+    public static final ConfigProperty<String> SCHEMA_FIELD_NAME_INVALID_CHAR_MASK = ConfigProperty
+        .key("hoodie.deltastreamer.source.sanitize.invalid.char.mask")
+        .defaultValue("__")
+        .withDocumentation("Defines the character sequence that replaces invalid characters in schema field names if "
+          + "hoodie.deltastreamer.source.sanitize.invalid.schema.field.names is enabled.");
   }
 
   private static final String AVRO_FIELD_NAME_KEY = "name";
+
+  public static boolean getShouldSanitize(TypedProperties props) {
+    return props.getBoolean(Config.SANITIZE_SCHEMA_FIELD_NAMES.key(),Config.SANITIZE_SCHEMA_FIELD_NAMES.defaultValue());
+  }
+
+  public static String getInvalidCharMask(TypedProperties props) {
+    return props.getString(Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(),Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
+  }
 
   private static DataType sanitizeDataTypeForAvro(DataType dataType, String invalidCharMask) {
     if (dataType instanceof ArrayType) {
@@ -83,7 +105,6 @@ public class SanitizationUtils {
 
   public static Dataset<Row> sanitizeColumnNamesForAvro(Dataset<Row> inputDataset, String invalidCharMask) {
     StructField[] inputFields = inputDataset.schema().fields();
-    String[] fieldNames = inputDataset.schema().fieldNames();
     Dataset<Row> targetDataset = inputDataset;
     for (StructField sf : inputFields) {
       DataType sanitizedFieldDataType = sanitizeDataTypeForAvro(sf.dataType(), invalidCharMask);
