@@ -160,7 +160,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
 
       long avgRecordSize = writer.getDataSize() / writer.getWrittenRecordCount();
       assertTrue(writer.getDataSize() > cfg.getParquetMaxFileSize() - avgRecordSize * 2,
-          "The writer stops write new records while the file doesn't hint the max file size limit");
+          "The writer stops write new records while the file doesn't reach the max file size limit");
     }
   }
 
