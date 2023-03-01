@@ -134,8 +134,9 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
     HoodieRowParquetWriteSupport writeSupport = getWriteSupport(writeConfigBuilder, hadoopConf, true);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
 
-    // Make the written records could exceed maxRowCountForSizeCheck
-    cfg.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(5 * 1024 * 1024));
+    // In general, the avgRecordSize 127 bytes, so here we make the max file size to 2M,
+    // to generate more than 10000 records to test the `maxRowCountForSizeCheck`(10000 by default)
+    cfg.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(2 * 1024 * 1024));
     HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
         CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
         writeSupport.getHadoopConf(), cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
@@ -145,7 +146,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
     try (HoodieInternalRowParquetWriter writer = new HoodieInternalRowParquetWriter(filePath, parquetConfig)) {
 
       while (writer.canWrite()) {
-        Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, 100,
+        Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, 10000,
             HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, false);
         StructType schema = inputRows.schema();
         List<InternalRow> rows = SparkDatasetTestUtils.toInternalRows(inputRows, SparkDatasetTestUtils.ENCODER);
