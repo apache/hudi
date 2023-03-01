@@ -58,6 +58,9 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
     props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, ByteArrayDeserializer.class);
     className = props.getString(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key());
     this.offsetGen = new KafkaOffsetGen(props);
+    if (this.shouldAddOffsets) {
+      throw new HoodieException("Appending kafka offsets to ProtoKafkaSource is not supported");
+    }
   }
 
   @Override
