@@ -57,6 +57,7 @@ public class HiveSyncConfigHolder {
   /**
    * @deprecated Use {@link #HIVE_SYNC_MODE} instead of this config from 0.9.0
    */
+  // Ethan: remove this
   @Deprecated
   public static final ConfigProperty<String> HIVE_USE_JDBC = ConfigProperty
       .key("hoodie.datasource.hive_sync.use_jdbc")
@@ -88,10 +89,12 @@ public class HiveSyncConfigHolder {
       .key("hoodie.datasource.hive_sync.table_properties")
       .noDefaultValue()
       .withDocumentation("Additional properties to store with table.");
+  // Ethan: is this required?
   public static final ConfigProperty<String> HIVE_TABLE_SERDE_PROPERTIES = ConfigProperty
       .key("hoodie.datasource.hive_sync.serde_properties")
       .noDefaultValue()
       .withDocumentation("Serde properties to hive table.");
+  // Ethan: what does this control?
   public static final ConfigProperty<String> HIVE_SYNC_AS_DATA_SOURCE_TABLE = ConfigProperty
       .key("hoodie.datasource.hive_sync.sync_as_datasource")
       .defaultValue("true")
@@ -101,6 +104,7 @@ public class HiveSyncConfigHolder {
       .defaultValue(4000)
       .withDocumentation("");
   // Create table as managed table
+  // Ethan: should we always create external table?
   public static final ConfigProperty<Boolean> HIVE_CREATE_MANAGED_TABLE = ConfigProperty
       .key("hoodie.datasource.hive_sync.create_managed_table")
       .defaultValue(false)
@@ -114,6 +118,7 @@ public class HiveSyncConfigHolder {
       .key("hoodie.datasource.hive_sync.batch_num")
       .defaultValue(1000)
       .withDocumentation("The number of partitions one batch when synchronous partitions to hive.");
+  // Ethan: provide a default value?
   public static final ConfigProperty<String> HIVE_SYNC_MODE = ConfigProperty
       .key("hoodie.datasource.hive_sync.mode")
       .noDefaultValue()

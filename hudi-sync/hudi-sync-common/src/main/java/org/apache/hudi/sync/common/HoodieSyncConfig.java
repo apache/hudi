@@ -61,10 +61,11 @@ import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIO
     areCommonConfigs = true,
     description = "")
 public class HoodieSyncConfig extends HoodieConfig {
-  //cfg
+  // Confgs for meta sync
 
   private static final Logger LOG = LogManager.getLogger(HoodieSyncConfig.class);
 
+  // Ethan: auto determined with writer
   public static final ConfigProperty<String> META_SYNC_BASE_PATH = ConfigProperty
       .key("hoodie.datasource.meta.sync.base.path")
       .defaultValue("")
@@ -75,6 +76,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("false")
       .withDocumentation("Enable Syncing the Hudi Table with an external meta store or data catalog.");
 
+  // Ethan: naming needs to be cleaned up with backward compatibility
   // ToDo change the prefix of the following configs from hive_sync to meta_sync
   public static final ConfigProperty<String> META_SYNC_DATABASE_NAME = ConfigProperty
       .key("hoodie.datasource.hive_sync.database")
@@ -136,6 +138,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
           + "default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.");
 
+  // Ethan: is the infer function wrong (based on MDT)?
   public static final ConfigProperty<String> META_SYNC_ASSUME_DATE_PARTITION = ConfigProperty
       .key("hoodie.datasource.hive_sync.assume_date_partitioning")
       .defaultValue(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING.defaultValue())
@@ -148,6 +151,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       .withInferFunction(cfg -> Option.ofNullable(cfg.getBoolean(URL_ENCODE_PARTITIONING)))
       .withDocumentation("If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.");
 
+  // Ethan: turn MDT read on for hive sync?
   public static final ConfigProperty<Boolean> META_SYNC_USE_FILE_LISTING_FROM_METADATA = ConfigProperty
       .key("hoodie.meta.sync.metadata_file_listing")
       .defaultValue(DEFAULT_METADATA_ENABLE_FOR_READERS)
@@ -159,6 +163,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("false")
       .withDocumentation("If true, only sync on conditions like schema change or partition change.");
 
+  // Ethan: why do we need this?
   public static final ConfigProperty<String> META_SYNC_SPARK_VERSION = ConfigProperty
       .key("hoodie.meta_sync.spark.version")
       .defaultValue("")

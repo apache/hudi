@@ -42,7 +42,7 @@ import java.util.Properties;
     groupName = ConfigGroups.Names.META_SYNC,
     description = "Configurations used by the Hudi to sync metadata to Hive Metastore.")
 public class HiveSyncConfig extends HoodieSyncConfig {
-  //cfg
+  // Configs for Hive Sync
 
   /*
    * Config constants below are retained here for BWC purpose.
@@ -75,6 +75,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   public static final ConfigProperty<String> HIVE_SYNC_COMMENT = HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
   public static final ConfigProperty<String> HIVE_SYNC_TABLE_STRATEGY = HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
 
+  //  Ethan: should this be turned on by default?
   public static final ConfigProperty<Boolean> HIVE_SYNC_FILTER_PUSHDOWN_ENABLED = ConfigProperty
       .key("hoodie.datasource.hive_sync.filter_pushdown_enabled")
       .defaultValue(false)

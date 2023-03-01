@@ -42,7 +42,7 @@ import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier
     groupName = ConfigGroups.Names.META_SYNC,
     description = "Configurations used by the Hudi to sync metadata to DataHub.")
 public class DataHubSyncConfig extends HoodieSyncConfig {
-  //cfg
+  // Configs for Datahub Sync
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS = ConfigProperty
       .key("hoodie.meta.sync.datahub.dataset.identifier.class")
@@ -59,6 +59,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .noDefaultValue()
       .withDocumentation("Auth token to connect to the DataHub instance.");
 
+  // Ethan: I assume is not required?
   public static final ConfigProperty<String> META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS = ConfigProperty
       .key("hoodie.meta.sync.datahub.emitter.supplier.class")
       .noDefaultValue()

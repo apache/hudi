@@ -37,8 +37,9 @@ import java.util.Properties;
     groupName = ConfigGroups.Names.META_SYNC,
     description = "Global replication configurations used by the Hudi to sync metadata to Hive Metastore.")
 public class GlobalHiveSyncConfig extends HiveSyncConfig {
-  //cfg
+  // Configs for global Hive sync
 
+  // Ethan: docs and what does this do?
   public static final ConfigProperty<String> META_SYNC_GLOBAL_REPLICATE_TIMESTAMP = ConfigProperty
       .key("hoodie.meta_sync.global.replicate.timestamp")
       .noDefaultValue()
