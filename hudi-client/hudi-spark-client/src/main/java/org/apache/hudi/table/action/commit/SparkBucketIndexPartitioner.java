@@ -48,10 +48,10 @@ import org.apache.hudi.table.WorkloadStat;
 public class SparkBucketIndexPartitioner<T> extends
     SparkHoodiePartitioner<T> {
 
-  private final int numBuckets;
+  protected final int numBuckets;
   private final String indexKeyField;
   private final int totalPartitionPaths;
-  private final List<String> partitionPaths;
+  protected final List<String> partitionPaths;
   /**
    * Helps get the RDD partition id, partition id is partition offset + bucket id.
    * The partition offset is a multiple of the bucket num.
@@ -106,19 +106,15 @@ public class SparkBucketIndexPartitioner<T> extends
   public BucketInfo getBucketInfo(int bucketNumber) {
     String partitionPath = partitionPaths.get(bucketNumber / numBuckets);
     String bucketId = BucketIdentifier.bucketIdStr(bucketNumber % numBuckets);
-    Option<String> fileIdOption = findReusingFileId(partitionPath, bucketId);
+    Option<String> fileIdOption = Option.fromJavaOptional(updatePartitionPathFileIds
+        .getOrDefault(partitionPath, Collections.emptySet()).stream()
+        .filter(e -> e.startsWith(bucketId))
+        .findFirst());
     if (fileIdOption.isPresent()) {
       return new BucketInfo(BucketType.UPDATE, fileIdOption.get(), partitionPath);
     } else {
       return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucketId), partitionPath);
     }
-  }
-
-  protected Option<String> findReusingFileId(String partitionPath, String bucketId) {
-    return Option.fromJavaOptional(updatePartitionPathFileIds
-          .getOrDefault(partitionPath, Collections.emptySet()).stream()
-          .filter(e -> e.startsWith(bucketId))
-          .findFirst());
   }
 
   @Override

@@ -26,18 +26,22 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
+import org.apache.hudi.exception.HoodieInsertOverwriteException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.Partitioner;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.index.HoodieIndex.IndexType.BUCKET;
 
 public class SparkInsertOverwriteCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
@@ -66,11 +70,21 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
 
   @Override
   protected Partitioner getPartitioner(WorkloadProfile profile) {
-    return table.getStorageLayout().layoutPartitionerClass()
-        .map(c -> c.equals(HoodieLayoutConfig.SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME)
-            ? new SparkInsertOverwriteBucketIndexPartitioner(profile, context, table, config)
-            : getLayoutPartitioner(profile, c))
-        .orElse(new SparkInsertOverwritePartitioner(profile, context, table, config));
+    // Fix HUDI-5857, insert overwrite should generate new file group id
+    if (config.getIndexType().equals(BUCKET)) {
+      switch (config.getBucketIndexEngineType()) {
+        case SIMPLE:
+          return new SparkInsertOverwriteSimpleBucketIndexPartitioner(profile, context, table, config);
+        case CONSISTENT_HASHING:
+          return new SparkInsertOverwriteConsistentBucketIndexPartitioner(profile, context, table, config);
+        default:
+          throw new HoodieNotSupportedException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
+      }
+    } else {
+      return table.getStorageLayout().layoutPartitionerClass()
+          .map(c -> getLayoutPartitioner(profile, c))
+          .orElse(new SparkInsertOverwritePartitioner(profile, context, table, config));
+    }
   }
 
   @Override
@@ -87,5 +101,20 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
   protected List<String> getAllExistingFileIds(String partitionPath) {
     // because new commit is not complete. it is safe to mark all existing file Ids as old files
     return table.getSliceView().getLatestFileSlices(partitionPath).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
+  }
+
+  @Override
+  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr, Partitioner partitioner) {
+    SparkHoodiePartitioner upsertPartitioner = (SparkHoodiePartitioner) partitioner;
+    BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
+    BucketType btype = binfo.bucketType;
+    if (btype.equals(BucketType.INSERT)) {
+      return handleInsert(binfo.fileIdPrefix, recordItr);
+    } else if (btype.equals(BucketType.UPDATE)) {
+      throw new HoodieInsertOverwriteException(
+          "Insert overwrite should always use INSERT bucketType, please correct the logical of " + partitioner.getClass().getName());
+    } else {
+      throw new HoodieInsertOverwriteException("Unknown bucketType " + btype + " for partition :" + partition);
+    }
   }
 }

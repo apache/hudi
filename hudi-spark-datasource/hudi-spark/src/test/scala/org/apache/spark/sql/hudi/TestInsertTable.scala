@@ -1266,8 +1266,15 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert overwrite table $tableName partition(dt = '2021-01-05')
            | select * from (select 13 , 'a2', 12, 1000) limit 10
         """.stripMargin)
+
+      // Double insert overwrite static partition
+      spark.sql(
+        s"""
+           | insert overwrite table $tableName partition(dt = '2021-01-05')
+           | select * from (select 13 , 'a3', 12, 1000) limit 10
+        """.stripMargin)
       checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
-        Seq(13, "a2", 12.0, 1000, "2021-01-05")
+        Seq(13, "a3", 12.0, 1000, "2021-01-05")
       )
     })
   }
