@@ -90,14 +90,14 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   }
 
   @Override
-  public void reset() {
-    super.reset();
+  public void runReset() {
+    super.runReset();
     tableMetadata.reset();
   }
 
   @Override
-  public void sync() {
-    super.sync();
+  protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
+    super.runSync(oldTimeline, newTimeline);
     tableMetadata.reset();
   }
 

@@ -269,6 +269,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Clears the partition Map and reset view states.
+   * <p>
+   * NOTE: This method SHOULD NOT BE OVERRIDDEN which may cause stale file system view
+   * to be served.  Instead, override {@link AbstractTableFileSystemView#runReset} to
+   * add custom logic.
    */
   @Override
   public void reset() {
@@ -280,6 +284,20 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     } finally {
       writeLock.unlock();
     }
+  }
+
+  /**
+   * Resets the view states, which can be overridden by subclasses.  This reset logic is guarded
+   * by the write lock.
+   * <p>
+   * NOTE: This method SHOULD BE OVERRIDDEN for any custom logic.  DO NOT OVERRIDE
+   * {@link AbstractTableFileSystemView#reset} directly, which may cause stale file system view
+   * to be served.
+   */
+  protected void runReset() {
+    clear();
+    // Initialize with new Hoodie timeline.
+    init(metaClient, getTimeline());
   }
 
   /**
@@ -1388,6 +1406,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     return visibleCommitsAndCompactionTimeline;
   }
 
+  /**
+   * Syncs the file system view from storage to memory.
+   * <p>
+   * NOTE: This method SHOULD NOT BE OVERRIDDEN which may cause stale file system view
+   * to be served.  Instead, override {@link AbstractTableFileSystemView#runSync} to
+   * add custom logic.
+   */
   @Override
   public void sync() {
     HoodieTimeline oldTimeline = getTimeline();
@@ -1401,11 +1426,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Performs complete reset of file-system view. Subsequent partition view calls will load file slices against latest
-   * timeline
+   * Performs complete reset of file-system view. Subsequent partition view calls will load file
+   * slices against the latest timeline.  This sync logic is guarded by the write lock.
+   * <p>
+   * NOTE: This method SHOULD BE OVERRIDDEN for any custom logic.  DO NOT OVERRIDE
+   * {@link AbstractTableFileSystemView#sync} directly, which may cause stale file system view
+   * to be served.
    *
-   * @param oldTimeline Old Hoodie Timeline
-   * @param newTimeline New Hoodie Timeline
+   * @param oldTimeline Old Hudi Timeline
+   * @param newTimeline New Hudi Timeline
    */
   protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
     clear();
