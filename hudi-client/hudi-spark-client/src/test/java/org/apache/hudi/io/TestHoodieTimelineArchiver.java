@@ -1408,7 +1408,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     HoodieTestDataGenerator.createPendingReplaceFile(basePath, "00000002", wrapperFs.getConf());
     for (int i = 1; i < 8; i++) {
       if (i != 2) {
-        testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 2);
+        testTable.doWriteOperation("0000000" + i, WriteOperationType.CLUSTER, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 2);
       }
       // archival
       Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);

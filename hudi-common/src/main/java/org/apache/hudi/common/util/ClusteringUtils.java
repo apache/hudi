@@ -262,7 +262,8 @@ public class ClusteringUtils {
       Option<HoodieInstant> pendingInstantOpt = replaceTimeline.filterInflights().firstInstant();
       if (pendingInstantOpt.isPresent()) {
         // Get the previous commit before the first inflight clustering instant.
-        Option<HoodieInstant> beforePendingInstant = activeTimeline.filterCompletedInstants()
+        Option<HoodieInstant> beforePendingInstant = activeTimeline.getCommitsTimeline()
+            .filterCompletedInstants()
             .findInstantsBefore(pendingInstantOpt.get().getTimestamp())
             .lastInstant();
         if (beforePendingInstant.isPresent()
