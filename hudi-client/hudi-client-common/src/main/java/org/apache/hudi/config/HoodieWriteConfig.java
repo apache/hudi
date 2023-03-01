@@ -112,11 +112,12 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
     description = "Configurations that control write behavior on Hudi tables. These can be directly passed down from even "
         + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g DeltaStreamer).")
 public class HoodieWriteConfig extends HoodieConfig {
-  //cfg
+  // Core configs for write operations
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteConfig.class);
   private static final long serialVersionUID = 0L;
 
+  // Ethan: This is an internal property
   // This is a constant as is should never be changed via config (will invalidate previous commits)
   // It is here so that both the client and deltastreamer use the same reference
   public static final String DELTASTREAMER_CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
@@ -140,6 +141,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Field used in preCombining before actual write. When two records have the same key value, "
           + "we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)");
 
+  // Ethan: regarding the namespace, should we use "hoodie.write." instead of "hoodie.datasource.write." as the prefix?
   public static final ConfigProperty<String> WRITE_PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.payload.class")
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
@@ -154,6 +156,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "These merger impls will filter by hoodie.datasource.write.record.merger.strategy "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
 
+  // Ethan: the ID is not straightforward to users.
   public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
       .key("hoodie.datasource.write.record.merger.strategy")
       .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
@@ -178,6 +181,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "this queue has no need for additional memory and cpu resources due to lock or multithreading, but also lost some benefits such as speed limit. "
           + "Although DISRUPTOR is still experimental.");
 
+  // Ethan: Should this be automatically determined based on the partition and record key column(s)?
   public static final ConfigProperty<String> KEYGENERATOR_TYPE = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.type")
       .defaultValue(KeyGeneratorType.SIMPLE.name())

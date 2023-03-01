@@ -38,7 +38,7 @@ import java.util.Properties;
     groupName = ConfigGroups.Names.SPARK_DATASOURCE,
     description = "The following set of configurations help validate new data before commits.")
 public class HoodiePreCommitValidatorConfig extends HoodieConfig {
-  //cfg
+  // Configs for precommit validator
 
   public static final ConfigProperty<String> VALIDATOR_CLASS_NAMES = ConfigProperty
       .key("hoodie.precommit.validators")
@@ -46,6 +46,7 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
       .withDocumentation("Comma separated list of class names that can be invoked to validate commit");
   public static final String VALIDATOR_TABLE_VARIABLE = "<TABLE_NAME>";
 
+  // Ethan: it seems that these SQL query configs are not used?  ALso, could we have one config for all SQL queries?
   public static final ConfigProperty<String> EQUALITY_SQL_QUERIES = ConfigProperty
       .key("hoodie.precommit.validators.equality.sql.queries")
       .defaultValue("")

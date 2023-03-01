@@ -36,7 +36,7 @@ import java.util.Properties;
     areCommonConfigs = true,
     description = "")
 public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
-  //cfg
+  // Configs for write commit callback
 
   public static final String CALLBACK_PREFIX = "hoodie.write.commit.callback.";
 
@@ -66,6 +66,7 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
       .sinceVersion("0.6.0")
       .withDocumentation("Http callback API key. hudi_write_commit_http_callback by default");
 
+  // Ethan: default is too low? 30s instead?
   public static final ConfigProperty<Integer> CALLBACK_HTTP_TIMEOUT_IN_SECONDS = ConfigProperty
       .key(CALLBACK_PREFIX + "http.timeout.seconds")
       .defaultValue(3)

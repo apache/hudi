@@ -42,8 +42,8 @@ import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_F
 public class HoodiePayloadConfig extends HoodieConfig {
   // Configs for Hudi payload class
 
-  // Ethan: shall we use preCombine only and remove this?  It acts as the same purpose as the precombine field.
-  // This confuses user too.
+  // Ethan: shall we use preCombine ("hoodie.datasource.write.precombine.field") only and remove this?
+  // It acts as the same purpose as the precombine field.  This confuses user too.
   public static final ConfigProperty<String> ORDERING_FIELD = ConfigProperty
       .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
       .defaultValue("ts")
