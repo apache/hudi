@@ -23,7 +23,6 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 
 import com.codahale.metrics.MetricRegistry;
 import org.apache.hadoop.conf.Configuration;
