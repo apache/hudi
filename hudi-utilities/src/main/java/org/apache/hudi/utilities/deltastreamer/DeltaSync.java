@@ -298,7 +298,7 @@ public class DeltaSync implements Serializable, Closeable {
     }
     this.formatAdapter = new SourceFormatAdapter(
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics),
-        this.errorTableWriter);
+        this.errorTableWriter, Option.of(props));
   }
 
   /**

@@ -21,9 +21,12 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -54,15 +57,12 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     super(props, jssc);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_FILE_PROP));
     String sourceFile = props.getString(Config.SOURCE_SCHEMA_FILE_PROP);
+    boolean shouldSanitize = SanitizationUtils.getShouldSanitize(props);
+    String invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
     this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
-    try {
-      this.sourceSchema = new Schema.Parser().parse(this.fs.open(new Path(sourceFile)));
-      if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {
-        this.targetSchema =
-            new Schema.Parser().parse(fs.open(new Path(props.getString(Config.TARGET_SCHEMA_FILE_PROP))));
-      }
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Error reading schema", ioe);
+    this.sourceSchema = readAvroSchemaFromFile(sourceFile, this.fs, shouldSanitize, invalidCharMask);
+    if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {
+      this.targetSchema = readAvroSchemaFromFile(props.getString(Config.TARGET_SCHEMA_FILE_PROP), this.fs, shouldSanitize, invalidCharMask);
     }
   }
 
@@ -78,5 +78,15 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     } else {
       return super.getTargetSchema();
     }
+  }
+
+  private static Schema readAvroSchemaFromFile(String schemaPath, FileSystem fs, boolean sanitizeSchema, String invalidCharMask) {
+    String schemaStr;
+    try (FSDataInputStream in = fs.open(new Path(schemaPath))) {
+      schemaStr = FileIOUtils.readAsUTFString(in);
+    } catch (IOException ioe) {
+      throw new HoodieIOException(String.format("Error reading schema from file %s", schemaPath), ioe);
+    }
+    return SanitizationUtils.parseAvroSchema(schemaStr, sanitizeSchema, invalidCharMask);
   }
 }
