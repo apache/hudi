@@ -94,7 +94,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -819,7 +818,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(getMetaClient());
       Schema writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
       Schema tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaResolver.getTableAvroSchema(false));
-      AvroSchemaUtils.checkSchemaCompatible(tableSchema, writerSchema, getDropPartitionColNames(), shouldValidate, allowProjection);
+      AvroSchemaUtils.checkSchemaCompatible(tableSchema, writerSchema, shouldValidate, allowProjection, getDropPartitionColNames());
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
     }
@@ -1040,7 +1039,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return Functions.noop();
   }
 
-  private Collection<String> getDropPartitionColNames() {
+  private Set<String> getDropPartitionColNames() {
     boolean shouldDropPartitionColumns = metaClient.getTableConfig().shouldDropPartitionColumns();
     if (!shouldDropPartitionColumns) {
       return Collections.emptySet();

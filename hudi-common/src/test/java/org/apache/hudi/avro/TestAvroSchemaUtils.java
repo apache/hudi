@@ -215,18 +215,18 @@ public class TestAvroSchemaUtils {
   @ValueSource(booleans = {false, true})
   public void testIsCompatibleProjectionNotAllowed(boolean shouldValidate) {
     assertThrows(SchemaCompatibilityException.class,
-        () -> AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, Collections.emptySet(), shouldValidate, false));
+        () -> AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.emptySet()));
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   public void testIsCompatibleProjectionAllowed(boolean shouldValidate) {
-    AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, Collections.emptySet(), shouldValidate, true);
+    AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, true, Collections.emptySet());
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   public void testIsCompatiblePartitionDropCols(boolean shouldValidate) {
-    AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, Collections.singleton("c"), shouldValidate, false);
+    AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.singleton("c"));
   }
 }

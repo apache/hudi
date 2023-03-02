@@ -24,10 +24,10 @@ import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
@@ -96,7 +96,7 @@ public class AvroSchemaUtils {
    * @param newSchema new schema
    * @return true if prev schema is a projection of new schema.
    */
-  public static boolean canProject(Schema prevSchema, Schema newSchema, Collection<String> exceptCols) {
+  public static boolean canProject(Schema prevSchema, Schema newSchema, Set<String> exceptCols) {
     return prevSchema.getFields().stream()
         .filter(f -> !exceptCols.contains(f.name()))
         .map(oldSchemaField -> SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField))
@@ -298,12 +298,26 @@ public class AvroSchemaUtils {
     }
   }
 
+  /**
+   * Checks whether writer schema is compatible with table schema considering {@code AVRO_SCHEMA_VALIDATE_ENABLE}
+   * and {@code SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP} options.
+   * To avoid collision of {@code SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP} and {@code DROP_PARTITION_COLUMNS}
+   * partition column names should be passed as {@code dropPartitionColNames}.
+   * Passed empty set means {@code DROP_PARTITION_COLUMNS} is disabled.
+   *
+   * @param tableSchema the latest dataset schema
+   * @param writerSchema writer schema
+   * @param shouldValidate whether {@link AvroSchemaCompatibility} check being performed
+   * @param allowProjection whether column dropping check being performed
+   * @param dropPartitionColNames partition column names to being excluded from column dropping check
+   * @throws SchemaCompatibilityException if writer schema is not compatible
+   */
   public static void checkSchemaCompatible(
       Schema tableSchema,
       Schema writerSchema,
-      Collection<String> dropPartitionColNames,
       boolean shouldValidate,
-      boolean allowProjection) throws SchemaCompatibilityException {
+      boolean allowProjection,
+      Set<String> dropPartitionColNames) throws SchemaCompatibilityException {
 
     String errorMessage = null;
 
