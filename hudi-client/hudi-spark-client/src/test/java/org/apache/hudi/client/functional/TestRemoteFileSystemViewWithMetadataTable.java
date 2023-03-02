@@ -53,7 +53,8 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -67,6 +68,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.view.FileSystemViewStorageConfig.REMOTE_PORT_NUM;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -126,12 +128,17 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
     }
   }
 
-  @Test
-  public void testMORGetLatestFileSliceWithMetadataTable() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testMORGetLatestFileSliceWithMetadataTable(boolean useExistingTimelineServer) throws IOException {
     // This test utilizes the `HoodieBackedTestDelayedTableMetadata` to make sure the
     // synced file system view is always served.
+
+    SparkRDDWriteClient writeClient = createWriteClient(
+        useExistingTimelineServer ? Option.of(timelineService) : Option.empty());
+
     for (int i = 0; i < 3; i++) {
-      writeToTable(i, timelineService);
+      writeToTable(i, writeClient);
     }
 
     // At this point, there are three deltacommits and one compaction commit in the Hudi timeline,
@@ -163,9 +170,13 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
       lookupList.addAll(partitionFileIdPairList);
     }
 
-    LOG.info("Connecting to Timeline Server: " + timelineService.getServerPort());
-    RemoteHoodieTableFileSystemView view = new RemoteHoodieTableFileSystemView(
-        "localhost", timelineService.getServerPort(), metaClient);
+    int timelineServerPort = useExistingTimelineServer
+        ? timelineService.getServerPort()
+        : writeClient.getTimelineServer().get().getRemoteFileSystemViewConfig().getRemoteViewServerPort();
+
+    LOG.info("Connecting to Timeline Server: " + timelineServerPort);
+    RemoteHoodieTableFileSystemView view =
+        new RemoteHoodieTableFileSystemView("localhost", timelineServerPort, metaClient);
 
     List<TestViewLookUpCallable> callableList = lookupList.stream()
         .map(pair -> new TestViewLookUpCallable(view, pair, compactionCommit.getTimestamp()))
@@ -192,7 +203,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
     return HoodieTableType.MERGE_ON_READ;
   }
 
-  private void writeToTable(int round, TimelineService timelineService) throws IOException {
+  private SparkRDDWriteClient createWriteClient(Option<TimelineService> timelineService) {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
@@ -207,13 +218,16 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
             .build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withStorageType(FileSystemViewStorageType.REMOTE_ONLY)
-            .withRemoteServerPort(timelineService.getServerPort())
+            .withRemoteServerPort(timelineService.isPresent()
+                ? timelineService.get().getServerPort() : REMOTE_PORT_NUM.defaultValue())
             .build())
         .withAutoCommit(false)
         .forTable("test_mor_table")
         .build();
-    SparkRDDWriteClient writeClient =
-        new SparkRDDWriteClient(context, writeConfig, Option.of(timelineService));
+    return new SparkRDDWriteClient(context, writeConfig, timelineService);
+  }
+
+  private void writeToTable(int round, SparkRDDWriteClient writeClient) throws IOException {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     writeClient.startCommitWithTime(instantTime);
     List<HoodieRecord> records = round == 0
