@@ -582,7 +582,7 @@ public class FSUtils {
   /**
    * When a file was opened and the task died without closing the stream, another task executor cannot open because the
    * existing lease will be active. We will try to recover the lease, from HDFS. If a data node went down, it takes
-   * about 10 minutes for the lease to be rocovered. But if the client dies, this should be instant.
+   * about 10 minutes for the lease to be recovered. But if the client dies, this should be instant.
    */
   public static boolean recoverDFSFileLease(final DistributedFileSystem dfs, final Path p)
       throws IOException, InterruptedException {
