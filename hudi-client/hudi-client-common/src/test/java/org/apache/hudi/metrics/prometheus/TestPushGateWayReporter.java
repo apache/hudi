@@ -154,11 +154,11 @@ public class TestPushGateWayReporter {
     assertTrue(labels.containsValue("prometheus"));
 
     try {
-      when(config.getPushGatewayLabels()).thenReturn("hudi:prometheus,hudi:prometheus");
+      when(config.getPushGatewayLabels()).thenReturn("hudi:prometheus,hudi:prom");
       reporter = new PushGatewayMetricsReporter(config, null);
       fail("Should fail");
-    } catch (HoodieException e) {
-      assertTrue(e.getMessage().contains("Duplicate key=hudi found in labels"));
+    } catch (IllegalStateException e) {
+      assertTrue(e.getMessage().contains("Multiple values {prometheus, prom} for same key"));
     }
   }
 }

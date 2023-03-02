@@ -26,23 +26,30 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class MetricUtils {
+public final class MetricUtils {
+
+  // Example metric:- with_label_metric;group:a,job:0. Here `with_label_metric` is the metric name.
+  // `group:a` and `job:0` are the labels for this metric.
+  // Metric name and labels are separated by `;`
+  private static final String METRIC_NAME_AND_LABELS_SEPARATOR = ";";
+  // Multiple Labels are separated by `,`
+  private static final String LABELS_SEPARATOR = ",";
+  // Label key and value is separated by `:`
+  private static final String LABELS_KEY_AND_VALUE_SEPARATOR = ":";
 
   private static Pair<String, String> splitToPair(String label) {
-    String[] keyValues = label.split(":");
+    String[] keyValues = label.split(LABELS_KEY_AND_VALUE_SEPARATOR, 2);
     ValidationUtils.checkArgument(StringUtils.nonEmpty(keyValues[0]), String.format("Key is empty for label %s", label));
     return  Pair.of(keyValues[0], keyValues.length == 2 ? keyValues[1] : "");
   }
 
   public static Pair<String,Map<String, String>> getLabelsAndMetricMap(String metric) {
     Pair<String, List<String>> labelsList = getLabelsAndMetricList(metric);
-    return Pair.of(labelsList.getLeft(),labelsList.getValue().stream().filter(s -> s.contains(":")).map(MetricUtils::splitToPair)
-        .collect(Collectors.toMap(Pair::getLeft, Pair::getRight))
-    );
+    return Pair.of(labelsList.getLeft(), getLabelsAsMap(labelsList.getValue()));
   }
 
   public static Pair<String,String> getMetricAndLabels(String metric) {
-    String[] tokens = metric.split(";");
+    String[] tokens = metric.split(METRIC_NAME_AND_LABELS_SEPARATOR);
     if (tokens.length > 2) {
       throw new RuntimeException("more than one ';' detected in metric string");
     }
@@ -52,10 +59,23 @@ public class MetricUtils {
     return Pair.of(tokens[0], "");
   }
 
+  public static Map<String, String> getLabelsAsMap(String labels) {
+    return getLabelsAsMap(getLabels(labels));
+  }
+
+  public static Map<String, String> getLabelsAsMap(List<String> labels) {
+    return labels.stream().filter(StringUtils::nonEmpty).map(MetricUtils::splitToPair)
+        .collect(Collectors.toMap(Pair::getLeft, Pair::getRight, (v1, v2) -> {
+          throw new IllegalStateException(String.format("Multiple values {%s, %s} for same key", v1, v2));
+        }));
+  }
+
+  public static List<String> getLabels(String labels) {
+    return Arrays.stream(labels.split(LABELS_SEPARATOR)).filter(StringUtils::nonEmpty).collect(Collectors.toList());
+  }
+
   public static Pair<String,List<String>> getLabelsAndMetricList(String metric) {
     Pair<String, String> metricAndLabels = getMetricAndLabels(metric);
-    return Pair.of(metricAndLabels.getLeft(),
-        Arrays.stream(metricAndLabels.getRight().split(",")).collect(Collectors.toList())
-    );
+    return Pair.of(metricAndLabels.getLeft(), getLabels(metricAndLabels.getRight()));
   }
 }
