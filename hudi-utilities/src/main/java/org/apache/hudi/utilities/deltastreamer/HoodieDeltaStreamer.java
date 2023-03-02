@@ -420,6 +420,9 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--post-write-termination-strategy-class"}, description = "Post writer termination strategy class to gracefully shutdown deltastreamer in continuous mode")
     public String postWriteTerminationStrategyClass = "";
 
+    @Parameter(names = {"--ingestion-metrics-class"}, description = "Ingestion metrics class for reporting metrics during ingestion lifecycles.")
+    public String ingestionMetricsClass = HoodieDeltaStreamerMetrics.class.getCanonicalName();
+
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
@@ -473,6 +476,7 @@ public class HoodieDeltaStreamer implements Serializable {
               && Objects.equals(forceDisableCompaction, config.forceDisableCompaction)
               && Objects.equals(checkpoint, config.checkpoint)
               && Objects.equals(initialCheckpointProvider, config.initialCheckpointProvider)
+              && Objects.equals(ingestionMetricsClass, config.ingestionMetricsClass)
               && Objects.equals(help, config.help);
     }
 
@@ -486,7 +490,7 @@ public class HoodieDeltaStreamer implements Serializable {
               continuousMode, minSyncIntervalSeconds, sparkMaster, commitOnErrors,
               deltaSyncSchedulingWeight, compactSchedulingWeight, clusterSchedulingWeight, deltaSyncSchedulingMinShare,
               compactSchedulingMinShare, clusterSchedulingMinShare, forceDisableCompaction, checkpoint,
-              initialCheckpointProvider, help);
+              initialCheckpointProvider, ingestionMetricsClass, help);
     }
 
     @Override
@@ -525,6 +529,7 @@ public class HoodieDeltaStreamer implements Serializable {
               + ", forceDisableCompaction=" + forceDisableCompaction
               + ", checkpoint='" + checkpoint + '\''
               + ", initialCheckpointProvider='" + initialCheckpointProvider + '\''
+              + ", ingestionMetricsClass='" + ingestionMetricsClass + '\''
               + ", help=" + help
               + '}';
     }

@@ -21,8 +21,8 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
@@ -52,7 +52,7 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
 public class JsonKafkaSource extends KafkaSource<String> {
 
   public JsonKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
-                         SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
+                         SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
     super(properties, sparkContext, sparkSession,
         UtilHelpers.getSchemaProviderForKafkaSource(schemaProvider, properties, sparkContext),
         SourceType.JSON, metrics);
