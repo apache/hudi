@@ -51,6 +51,7 @@ object HoodieWriterUtils {
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
+    hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
     hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     hoodieConfig.setDefaultValue(ENABLE)
@@ -156,7 +157,7 @@ object HoodieWriterUtils {
 
         val datasourcePreCombineKey = params.getOrElse(PRECOMBINE_FIELD.key(), null)
         val tableConfigPreCombineKey = tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD)
-        if (null != datasourcePreCombineKey && datasourcePreCombineKey != tableConfigPreCombineKey) {
+        if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey && datasourcePreCombineKey != tableConfigPreCombineKey) {
           diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
         }
 

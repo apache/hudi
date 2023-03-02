@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, _}
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
 import org.apache.hudi.common.model.{OverwriteWithLatestAvroPayload, WriteOperationType}
@@ -50,7 +50,10 @@ trait ProvidesHoodieConfig extends Logging {
     val sparkSession: SparkSession = hoodieCatalogTable.spark
     val tableConfig = hoodieCatalogTable.tableConfig
 
-    val preCombineField = Option(tableConfig.getPreCombineField).getOrElse(null)
+    // NOTE: Here we fallback to "" to make sure that null value is not overridden with
+    // default value ("ts")
+    // TODO(HUDI-3456) clean up
+    val preCombineField = Option(tableConfig.getPreCombineField).getOrElse("")
 
     require(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
@@ -114,7 +117,10 @@ trait ProvidesHoodieConfig extends Logging {
 
     val partitionFieldsStr = hoodieCatalogTable.partitionFields.mkString(",")
 
-    val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse(null)
+    // NOTE: Here we fallback to "" to make sure that null value is not overridden with
+    // default value ("ts")
+    // TODO(HUDI-3456) clean up
+    val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
     val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("false")
@@ -222,7 +228,7 @@ trait ProvidesHoodieConfig extends Logging {
       OPERATION.key -> DataSourceWriteOptions.DELETE_PARTITION_OPERATION_OPT_VAL,
       PARTITIONS_TO_DELETE.key -> partitionsToDrop,
       RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
-      PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(null),
+      PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(""),
       PARTITIONPATH_FIELD.key -> partitionFields,
       HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
