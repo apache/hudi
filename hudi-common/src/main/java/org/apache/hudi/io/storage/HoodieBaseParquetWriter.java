@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.api.WriteSupport;
@@ -93,7 +94,12 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
     writtenRecordCount.incrementAndGet();
   }
 
-  public long getWrittenRecordCount() {
+  protected long getWrittenRecordCount() {
     return writtenRecordCount.get();
+  }
+
+  @VisibleForTesting
+  protected long getRecordCountForNextSizeCheck() {
+    return recordCountForNextSizeCheck;
   }
 }
