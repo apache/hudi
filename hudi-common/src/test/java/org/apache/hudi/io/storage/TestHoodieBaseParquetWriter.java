@@ -113,7 +113,7 @@ public class TestHoodieBaseParquetWriter {
       long recordsDelta = (maxFileSize / avgRecordSize - writer.getWrittenRecordCount()) / 2;
       assertEquals(writer.getRecordCountForNextSizeCheck(), writer.getWrittenRecordCount() + recordsDelta);
 
-      writer.setCurrentDataSize(2 * 1024 * 1024);
+      writer.setCurrentDataSize(maxFileSize);
       writer.setWrittenRecordCount(writer.getRecordCountForNextSizeCheck());
       assertFalse(writer.canWrite(),
           "The writer stops write new records while the file doesn't reach the max file size limit");
