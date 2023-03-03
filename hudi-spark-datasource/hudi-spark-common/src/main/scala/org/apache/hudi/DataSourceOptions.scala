@@ -288,12 +288,12 @@ object DataSourceWriteOptions {
     .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.")
 
   /**
-    * Translate spark parameters to hudi parameters
+    * May be derive partition path from incoming df if not explicitly set.
     *
     * @param optParams Parameters to be translated
     * @return Parameters after translation
     */
-  def translateSqlOptions(optParams: Map[String, String]): Map[String, String] = {
+  def mayBeDerivePartitionPath(optParams: Map[String, String]): Map[String, String] = {
     var translatedOptParams = optParams
     // translate the api partitionBy of spark DataFrameWriter to PARTITIONPATH_FIELD
     // we should set hoodie's partition path only if its not set by the user.

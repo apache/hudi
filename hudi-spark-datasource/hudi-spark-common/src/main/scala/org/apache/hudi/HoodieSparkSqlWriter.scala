@@ -1050,7 +1050,7 @@ object HoodieSparkSqlWriter {
 
   private def mergeParamsAndGetHoodieConfig(optParams: Map[String, String],
                                             tableConfig: HoodieTableConfig, mode: SaveMode): (Map[String, String], HoodieConfig) = {
-    val translatedOptions = DataSourceWriteOptions.translateSqlOptions(optParams)
+    val translatedOptions = DataSourceWriteOptions.mayBeDerivePartitionPath(optParams)
     var translatedOptsWithMappedTableConfig = mutable.Map.empty ++ translatedOptions.toMap
     if (tableConfig != null && mode != SaveMode.Overwrite) {
       // for missing write configs corresponding to table configs, fill them up.
