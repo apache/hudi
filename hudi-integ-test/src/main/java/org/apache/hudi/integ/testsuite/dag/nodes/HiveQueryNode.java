@@ -52,11 +52,11 @@ public class HiveQueryNode extends BaseQueryNode {
     this.hiveServiceProvider.startLocalHiveServiceIfNeeded(executionContext.getHoodieTestSuiteWriter().getConfiguration());
     TypedProperties properties = new TypedProperties();
     properties.putAll(executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
-        .getDeltaSyncService().getDeltaSync().getProps());
+        .getDeltaSync().getProps());
     properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
-        .getDeltaSyncService().getDeltaSync().getCfg().targetBasePath);
+        .getDeltaSync().getCfg().targetBasePath);
     properties.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.key(), executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
-        .getDeltaSyncService().getDeltaSync().getCfg().baseFileFormat);
+        .getDeltaSync().getCfg().baseFileFormat);
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(properties);
     this.hiveServiceProvider.syncToLocalHiveIfNeeded(executionContext.getHoodieTestSuiteWriter());
     try (Connection con = DriverManager.getConnection(hiveSyncConfig.getString(HIVE_URL),

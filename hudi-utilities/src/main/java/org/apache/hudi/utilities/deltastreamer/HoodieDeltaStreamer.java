@@ -116,7 +116,7 @@ public class HoodieDeltaStreamer implements Serializable {
    */
   private final TypedProperties properties;
 
-  protected transient Option<DeltaSyncService> deltaSyncService;
+  protected transient Option<HoodieIngestionService> ingestionService;
 
   private final Option<BootstrapExecutor> bootstrapExecutor;
 
@@ -149,7 +149,7 @@ public class HoodieDeltaStreamer implements Serializable {
     this.cfg = cfg;
     this.bootstrapExecutor = Option.ofNullable(
         cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, this.properties) : null);
-    this.deltaSyncService = Option.ofNullable(
+    this.ingestionService = Option.ofNullable(
         cfg.runBootstrap ? null : new DeltaSyncService(cfg, jssc, fs, conf, Option.ofNullable(this.properties)));
   }
 
@@ -180,7 +180,7 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public void shutdownGracefully() {
-    deltaSyncService.ifPresent(ds -> ds.shutdown(false));
+    ingestionService.ifPresent(ds -> ds.shutdown(false));
   }
 
   /**
@@ -194,7 +194,7 @@ public class HoodieDeltaStreamer implements Serializable {
       bootstrapExecutor.get().execute();
     } else {
       if (cfg.continuousMode) {
-        deltaSyncService.ifPresent(ds -> {
+        ingestionService.ifPresent(ds -> {
           ds.start(this::onDeltaSyncShutdown);
           try {
             ds.waitForShutdown();
@@ -206,18 +206,12 @@ public class HoodieDeltaStreamer implements Serializable {
       } else {
         LOG.info("Delta Streamer running only single round");
         try {
-          deltaSyncService.ifPresent(ds -> {
-            try {
-              ds.getDeltaSync().syncOnce();
-            } catch (IOException e) {
-              throw new HoodieIOException(e.getMessage(), e);
-            }
-          });
+          ingestionService.ifPresent(HoodieIngestionService::ingestOnce);
         } catch (Exception ex) {
           LOG.error("Got error running delta sync once. Shutting down", ex);
           throw ex;
         } finally {
-          deltaSyncService.ifPresent(DeltaSyncService::close);
+          ingestionService.ifPresent(HoodieIngestionService::close);
           LOG.info("Shut down delta streamer");
         }
       }
@@ -230,7 +224,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
   private boolean onDeltaSyncShutdown(boolean error) {
     LOG.info("DeltaSync shutdown. Closing write client. Error?" + error);
-    deltaSyncService.ifPresent(DeltaSyncService::close);
+    ingestionService.ifPresent(HoodieIngestionService::close);
     return true;
   }
 
@@ -909,7 +903,10 @@ public class HoodieDeltaStreamer implements Serializable {
     }
   }
 
-  public DeltaSyncService getDeltaSyncService() {
-    return deltaSyncService.get();
+  /**
+   * This API is for testing only.
+   */
+  public HoodieIngestionService getIngestionService() {
+    return ingestionService.get();
   }
 }

@@ -919,7 +919,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     boolean shutDownRequested = false;
     int timeSoFar = 0;
     while (!shutDownRequested) {
-      shutDownRequested = ds.getDeltaSyncService().isShutdownRequested();
+      shutDownRequested = ds.getIngestionService().isShutdownRequested();
       Thread.sleep(500);
       timeSoFar += 500;
       if (timeSoFar > (2 * 60 * 1000)) {
@@ -928,7 +928,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
     boolean shutdownComplete = false;
     while (!shutdownComplete) {
-      shutdownComplete = ds.getDeltaSyncService().isShutdown();
+      shutdownComplete = ds.getIngestionService().isShutdown();
       Thread.sleep(500);
       timeSoFar += 500;
       if (timeSoFar > (2 * 60 * 1000)) {
