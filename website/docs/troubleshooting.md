@@ -121,6 +121,42 @@ Caused by: org.apache.hudi.exception.HoodieKeyException: recordKey value: "null"
   at org.apache.hudi.HoodieSparkSqlWriter$$anonfun$1.apply(HoodieSparkSqlWriter.scala:100)
 ```
 
+#### IOException: Write end dead or CIRCULAR REFERENCE while writing to GCS 
+If you encounter below stacktrace, please set the spark config as suggested below.
+```
+--conf 'spark.hadoop.fs.gs.outputstream.pipe.type=NIO_CHANNEL_PIPE'
+```
+
+```
+ at org.apache.hudi.io.storage.HoodieAvroParquetWriter.close(HoodieAvroParquetWriter.java:84)
+	Suppressed: java.io.IOException: Upload failed for 'gs://bucket/b0ee4274-5193-4a26-bcff-d60654fd7b24-0_0-42-671_20230228055305900.parquet'
+		at com.google.cloud.hadoop.repackaged.gcs.com.google.cloud.hadoop.util.BaseAbstractGoogleAsyncWriteChannel.waitForCompletionAndThrowIfUploadFailed(BaseAbstractGoogleAsyncWriteChannel.java:260)
+		at com.google.cloud.hadoop.repackaged.gcs.com.google.cloud.hadoop.util.BaseAbstractGoogleAsyncWriteChannel.write(BaseAbstractGoogleAsyncWriteChannel.java:121)
+		at java.base/java.nio.channels.Channels.writeFullyImpl(Channels.java:74)
+		at java.base/java.nio.channels.Channels.writeFully(Channels.java:97)
+		at java.base/java.nio.channels.Channels$1.write(Channels.java:172)
+		at java.base/java.io.BufferedOutputStream.flushBuffer(BufferedOutputStream.java:81)
+		at java.base/java.io.BufferedOutputStream.flush(BufferedOutputStream.java:142)
+		at java.base/java.io.FilterOutputStream.close(FilterOutputStream.java:182)
+		... 44 more
+	Caused by: java.io.IOException: Write end dead
+		at java.base/java.io.PipedInputStream.read(PipedInputStream.java:310)
+		at java.base/java.io.PipedInputStream.read(PipedInputStream.java:377)
+		at com.google.cloud.hadoop.repackaged.gcs.com.google.api.client.util.ByteStreams.read(ByteStreams.java:172)
+		at com.google.cloud.hadoop.repackaged.gcs.com.google.api.client.googleapis.media.MediaHttpUploader.buildContentChunk(MediaHttpUploader.java:610)
+		at com.google.cloud.hadoop.repackaged.gcs.com.google.api.client.googleapis.media.MediaHttpUploader.resumableUpload(MediaHttpUploader.java:380)
+		at com.google.cloud.hadoop.repackaged.gcs.com.google.api.client.googleapis.media.MediaHttpUploader.upload(MediaHttpUploader.java:308)
+		at com.google.cloud.hadoop.repackaged.gcs.com.google.api.client.googleapis.services.AbstractGoogleClientRequest.executeUnparsed(AbstractGoogleClientRequest.java:539)
+		at com.google.cloud.hadoop.repackaged.gcs.com.google.api.client.googleapis.services.AbstractGoogleClientRequest.executeUnparsed(AbstractGoogleClientRequest.java:466)
+		at com.google.cloud.hadoop.repackaged.gcs.com.google.api.client.googleapis.services.AbstractGoogleClientRequest.execute(AbstractGoogleClientRequest.java:576)
+		at com.google.cloud.hadoop.repackaged.gcs.com.google.cloud.hadoop.util.AbstractGoogleAsyncWriteChannel$UploadOperation.call(AbstractGoogleAsyncWriteChannel.java:85)
+		at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+		... 3 more
+Caused by: [CIRCULAR REFERENCE: java.io.IOException: Write end dead]
+```
+
+We have an active patch(https://github.com/apache/hudi/pull/7245) on fixing the issue. Until we land this, you can use above config to bypass the issue.  
+
 #### Hive Sync
 
 ##### Caused by: java.sql.SQLException: Error while processing statement: FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask. Unable to alter table. The following columns have types incompatible with the existing columns in their respective positions : __col1,__col2
