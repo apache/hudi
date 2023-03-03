@@ -434,6 +434,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
       // The clustering commit instant can not be archived unless we ensure that the replaced files have been cleaned,
       // without the replaced files metadata on the timeline, the fs view would expose duplicates for readers.
+      // Meanwhile, when inline or async clustering is enabled, we need to ensure that there is a commit in the active timeline
+      // to check whether the file slice generated in pending clustering after archive isn't committed.
       Option<HoodieInstant> oldestInstantToRetainForClustering =
           ClusteringUtils.getOldestInstantToRetainForClustering(table.getActiveTimeline(), table.getMetaClient());
 
@@ -449,7 +451,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               return !(firstSavepoint.isPresent() && compareTimestamps(firstSavepoint.get().getTimestamp(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
             }
           }).filter(s -> {
-            // Ensure commits >= the oldest pending compaction commit is retained
+            // Ensure commits >= the oldest pending compaction/replace commit is retained
             return oldestPendingCompactionAndReplaceInstant
                 .map(instant -> compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
                 .orElse(true);

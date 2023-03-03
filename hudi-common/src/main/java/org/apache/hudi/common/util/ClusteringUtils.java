@@ -226,8 +226,10 @@ public class ClusteringUtils {
   }
 
   /**
-   * Checks whether the latest clustering instant has a subsequent cleaning action. Returns
-   * the clustering instant if there is such cleaning action or empty.
+   * Returns the oldest instant to retain between the clustering instant that there is such cleaning action or empty,
+   * and the latest instant before the oldest inflight clustering instant.
+   *
+   * <p>Checks whether the latest clustering instant has a subsequent cleaning action, and the oldest inflight clustering instant has a previous commit.
    *
    * @param activeTimeline The active timeline
    * @param metaClient     The meta client
@@ -235,7 +237,8 @@ public class ClusteringUtils {
    */
   public static Option<HoodieInstant> getOldestInstantToRetainForClustering(
       HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient) throws IOException {
-    HoodieTimeline replaceTimeline = activeTimeline.getCompletedReplaceTimeline();
+    Option<HoodieInstant> oldestInstantToRetain = Option.empty();
+    HoodieTimeline replaceTimeline = activeTimeline.getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.REPLACE_COMMIT_ACTION));
     if (!replaceTimeline.empty()) {
       Option<HoodieInstant> cleanInstantOpt =
           activeTimeline.getCleanerTimeline().filter(instant -> !instant.isCompleted()).firstInstant();
@@ -249,15 +252,25 @@ public class ClusteringUtils {
                         ? cleanInstant
                         : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
                 .getEarliestInstantToRetain().getTimestamp();
-        return StringUtils.isNullOrEmpty(earliestCommitToRetain)
-            ? Option.empty()
-            : replaceTimeline.filter(instant ->
-                HoodieTimeline.compareTimestamps(instant.getTimestamp(),
-                    HoodieTimeline.GREATER_THAN_OR_EQUALS,
-                    earliestCommitToRetain))
-            .firstInstant();
+        if (!StringUtils.isNullOrEmpty(earliestCommitToRetain)) {
+          oldestInstantToRetain = replaceTimeline.filterCompletedInstants()
+              .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestCommitToRetain))
+              .firstInstant();
+        }
+      }
+      Option<HoodieInstant> pendingInstantOpt = replaceTimeline.filterInflights().firstInstant();
+      if (pendingInstantOpt.isPresent()) {
+        // Get the previous commit before the first inflight clustering instant.
+        Option<HoodieInstant> beforePendingInstant = activeTimeline.getCommitsTimeline()
+            .filterCompletedInstants()
+            .findInstantsBefore(pendingInstantOpt.get().getTimestamp())
+            .lastInstant();
+        if (beforePendingInstant.isPresent()
+            && oldestInstantToRetain.map(instant -> instant.compareTo(beforePendingInstant.get()) > 0).orElse(true)) {
+          oldestInstantToRetain = beforePendingInstant;
+        }
       }
     }
-    return Option.empty();
+    return oldestInstantToRetain;
   }
 }
