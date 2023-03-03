@@ -19,34 +19,28 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 
 /**
  * Packs incoming records to be inserted into buckets (1 bucket = 1 RDD partition).
  */
-public class SparkInsertOverwriteConsistentBucketIndexPartitioner extends SparkInsertOverwritePartitioner {
+public class SparkBucketIndexInsertOverwritePartitioner<T> extends SparkBucketIndexPartitioner<T> {
 
-  public SparkInsertOverwriteConsistentBucketIndexPartitioner(
-      WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
+  public SparkBucketIndexInsertOverwritePartitioner(
+      WorkloadProfile profile,
+      HoodieEngineContext context,
+      HoodieTable table,
       HoodieWriteConfig config) {
     super(profile, context, table, config);
   }
 
   @Override
   public BucketInfo getBucketInfo(int bucketNumber) {
-    BucketInfo bucketInfo = super.getBucketInfo(bucketNumber);
-    switch (bucketInfo.bucketType) {
-      case INSERT:
-        return bucketInfo;
-      case UPDATE:
-        // Insert overwrite always generates new bucket file id
-        return new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), bucketInfo.partitionPath);
-      default:
-        throw new HoodieUpsertException("Unknown bucketType " + bucketInfo.bucketType);
-    }
+    String partitionPath = partitionPaths.get(bucketNumber / numBuckets);
+    String bucketId = BucketIdentifier.bucketIdStr(bucketNumber % numBuckets);
+    return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucketId), partitionPath);
   }
 }

@@ -51,6 +51,9 @@ public class HoodieLayoutConfig extends HoodieConfig {
   public static final String SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME =
       "org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner";
 
+  public static final String SIMPLE_BUCKET_LAYOUT_OVERWRITE_PARTITIONER_CLASS_NAME =
+      "org.apache.hudi.table.action.commit.SparkBucketIndexInsertOverwritePartitioner";
+
   private HoodieLayoutConfig() {
     super();
   }
