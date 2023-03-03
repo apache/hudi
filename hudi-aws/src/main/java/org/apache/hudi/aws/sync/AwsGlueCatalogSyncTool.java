@@ -18,6 +18,8 @@
 
 package org.apache.hudi.aws.sync;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 
@@ -25,6 +27,8 @@ import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
 
 import java.util.Properties;
+
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
 /**
  * Currently Experimental. Utility class that implements syncing a Hudi Table with the
@@ -56,6 +60,11 @@ public class AwsGlueCatalogSyncTool extends HiveSyncTool {
       cmd.usage();
       System.exit(0);
     }
-    new AwsGlueCatalogSyncTool(params.toProps(), new Configuration()).syncHoodieTable();
+    // HiveConf needs to load fs conf to allow instantiation via AWSGlueClientFactory
+    TypedProperties props = params.toProps();
+    Configuration hadoopConf = FSUtils.getFs(props.getString(META_SYNC_BASE_PATH.key()), new Configuration()).getConf();
+    try (AwsGlueCatalogSyncTool tool = new AwsGlueCatalogSyncTool(props, hadoopConf)) {
+      tool.syncHoodieTable();
+    }
   }
 }

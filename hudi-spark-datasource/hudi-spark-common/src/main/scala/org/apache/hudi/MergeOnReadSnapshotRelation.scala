@@ -190,7 +190,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
           StructType(requiredDataSchema.structTypeSchema.fields
             .filterNot(f => unusedMandatoryColumnNames.contains(f.name)))
 
-        new HoodieTableSchema(prunedStructSchema)
+        HoodieTableSchema(prunedStructSchema, convertToAvroSchema(prunedStructSchema, tableName).toString)
       }
 
       val requiredSchemaReaderSkipMerging = createBaseFileReader(

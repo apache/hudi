@@ -38,7 +38,7 @@ import java.io.IOException;
  * - For inserts, op=i
  * - For deletes, op=d
  * - For updates, op=u
- * - For snapshort inserts, op=r
+ * - For snapshot inserts, op=r
  * <p>
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  */

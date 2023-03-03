@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -55,7 +56,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
   }
 
   @Override
-  public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config) {
+  public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     // No OP
   }
 }

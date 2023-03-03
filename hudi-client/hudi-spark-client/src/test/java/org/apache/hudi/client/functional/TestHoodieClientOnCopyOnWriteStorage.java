@@ -32,6 +32,7 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
@@ -874,6 +875,52 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 10);
       BulkInsertPartitioner<JavaRDD<HoodieRecord>> partitioner = new RDDCustomColumnsSortPartitioner(new String[]{"rider"}, HoodieTestDataGenerator.AVRO_SCHEMA, false);
       List<WriteStatus> statuses = client.bulkInsert(insertRecordsRDD1, commitTime1, Option.of(partitioner)).collect();
+      assertNoWriteErrors(statuses);
+    }
+  }
+
+  @Test
+  public void testPendingRestore() throws IOException {
+    HoodieWriteConfig config = getConfigBuilder().withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
+    Path completeRestoreFile = null;
+    Path backupCompletedRestoreFile = null;
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      final String commitTime1 = "001";
+      client.startCommitWithTime(commitTime1);
+      List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, 100);
+      JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 2);
+      List<WriteStatus> statuses = client.insert(insertRecordsRDD1, commitTime1).collect();
+      assertNoWriteErrors(statuses);
+
+      // inject a pending restore
+      client.savepoint("001", "user1","comment1");
+
+      client.restoreToInstant("001", false);
+      // remove completed restore instant from timeline to mimic pending restore.
+      HoodieInstant restoreCompleted = metaClient.reloadActiveTimeline().getRestoreTimeline().filterCompletedInstants().getInstants().get(0);
+      completeRestoreFile = new Path(config.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + restoreCompleted.getTimestamp()
+          + "." + HoodieTimeline.RESTORE_ACTION);
+      backupCompletedRestoreFile = new Path(config.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + restoreCompleted.getTimestamp()
+          + "." + HoodieTimeline.RESTORE_ACTION + ".backup");
+      metaClient.getFs().rename(completeRestoreFile, backupCompletedRestoreFile);
+    }
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      final String commitTime2 = "002";
+      // since restore is pending, should fail the commit
+      assertThrows(IllegalArgumentException.class, () -> client.startCommitWithTime(commitTime2));
+    }
+    // add back the restore file.
+    metaClient.getFs().rename(backupCompletedRestoreFile, completeRestoreFile);
+
+    // retrigger a new commit, should succeed.
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      final String commitTime3 = "003";
+      client.startCommitWithTime(commitTime3);
+      List<HoodieRecord> inserts3 = dataGen.generateInserts(commitTime3, 100);
+      JavaRDD<HoodieRecord> insertRecordsRDD3 = jsc.parallelize(inserts3, 2);
+      List<WriteStatus> statuses = client.insert(insertRecordsRDD3, commitTime3).collect();
       assertNoWriteErrors(statuses);
     }
   }

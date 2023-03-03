@@ -53,7 +53,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -75,6 +74,7 @@ import org.apache.spark.sql.SparkSession;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -100,6 +100,9 @@ public class HoodieDeltaStreamer implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
+  private static final List<String> DEFAULT_SENSITIVE_CONFIG_KEYS = Arrays.asList(
+      HoodieWriteConfig.SENSITIVE_CONFIG_KEYS_FILTER.defaultValue().split(","));
+  private static final String SENSITIVE_VALUES_MASKED = "SENSITIVE_INFO_MASKED";
 
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
@@ -213,7 +216,6 @@ public class HoodieDeltaStreamer implements Serializable {
           throw ex;
         } finally {
           deltaSyncService.ifPresent(DeltaSyncService::close);
-          Metrics.shutdown();
           LOG.info("Shut down delta streamer");
         }
       }
@@ -528,7 +530,10 @@ public class HoodieDeltaStreamer implements Serializable {
     }
   }
 
-  private static String toSortedTruncatedString(TypedProperties props) {
+  static String toSortedTruncatedString(TypedProperties props) {
+    List<String> sensitiveConfigList = props.getStringList(HoodieWriteConfig.SENSITIVE_CONFIG_KEYS_FILTER.key(),
+        ",", DEFAULT_SENSITIVE_CONFIG_KEYS);
+
     List<String> allKeys = new ArrayList<>();
     for (Object k : props.keySet()) {
       allKeys.add(k.toString());
@@ -541,6 +546,12 @@ public class HoodieDeltaStreamer implements Serializable {
       if (value.length() > 255 && !LOG.isDebugEnabled()) {
         value = value.substring(0, 128) + "[...]";
       }
+
+      // Mask values for security/ credentials and other sensitive configs
+      if (sensitiveConfigList.stream().anyMatch(key::contains)) {
+        value = SENSITIVE_VALUES_MASKED;
+      }
+
       propsLog.append(key).append(": ").append(value).append("\n");
     }
     return propsLog.toString();

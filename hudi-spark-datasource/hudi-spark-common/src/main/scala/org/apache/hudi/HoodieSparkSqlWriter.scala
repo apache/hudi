@@ -828,7 +828,7 @@ object HoodieSparkSqlWriter {
   }
 
   def cleanup() : Unit = {
-    Metrics.shutdown()
+    Metrics.shutdownAllMetrics()
   }
 
   private def handleSaveModes(spark: SparkSession, mode: SaveMode, tablePath: Path, tableConfig: HoodieTableConfig, tableName: String,
