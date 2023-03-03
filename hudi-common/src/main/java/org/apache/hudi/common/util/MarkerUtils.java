@@ -269,7 +269,7 @@ public class MarkerUtils {
     Set<String> missingFileIDs = currentInstants.stream().flatMap(instant -> {
       try {
         return HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class)
-            .getFileIdAndRelativePaths().values().stream().map(MarkerUtils::makerToPartitionAndFileID);
+            .getFileIdAndRelativePaths().keySet().stream();
       } catch (Exception e) {
         return Stream.empty();
       }
@@ -315,6 +315,18 @@ public class MarkerUtils {
   public static String makerToPartitionAndFileID(String marker) {
     String[] ele = marker.split("_");
     return ele[0];
+  }
+
+  /**
+   * Get fileID from full marker path, for example:
+   * 20210623/0/20210825/932a86d9-5c1d-44c7-ac99-cb88b8ef8478-0_85-15-1390_20220620181735781.parquet.marker.MERGE
+   *    ==> get 932a86d9-5c1d-44c7-ac99-cb88b8ef8478-0
+   * @param marker
+   * @return
+   */
+  public static String makerToFileID(String marker) {
+    String[] ele = marker.split("_")[0].split("/");
+    return ele[ele.length - 1];
   }
 
   /**
