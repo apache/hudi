@@ -142,6 +142,170 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
   }
 
+  @Test
+  def testReuseTableConfigs() {
+    val recordType = HoodieRecordType.AVRO
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      "hoodie.delete.shuffle.parallelism" -> "1",
+      HoodieMetadataConfig.ENABLE.key -> "false" // this is testing table configs and write configs. disabling metadata to save on test run time.
+    ))
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    val commonOptsNoPreCombine = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      HoodieMetadataConfig.ENABLE.key -> "false"
+    ) ++ writeOpts
+
+    writeToHudi(commonOptsNoPreCombine, inputDF)
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
+
+    val optsWithNoRepeatedTableConfig = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieMetadataConfig.ENABLE.key -> "false"
+    ) ++ writeOpts
+    // this write should succeed even w/o setting any param for record key, partition path since table config will be re-used.
+    writeToHudi(optsWithNoRepeatedTableConfig, inputDF)
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
+  }
+
+  @Test
+  def testSimpleKeyGenDroppingConfigs() {
+    val recordType = HoodieRecordType.AVRO
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      "hoodie.delete.shuffle.parallelism" -> "1",
+      HoodieMetadataConfig.ENABLE.key -> "false", // this is testing table configs and write configs. disabling metadata to save on test run time.
+      "hoodie.datasource.write.keygenerator.class" -> classOf[SimpleKeyGenerator].getCanonicalName
+    ))
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    val commonOptsNoPreCombine = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      HoodieMetadataConfig.ENABLE.key -> "false"
+    ) ++ writeOpts
+
+    writeToHudi(commonOptsNoPreCombine, inputDF)
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
+
+    val optsWithNoRepeatedTableConfig = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieMetadataConfig.ENABLE.key -> "false"
+    )
+    // this write should succeed even w/o though we don't set key gen explicitly.
+    writeToHudi(optsWithNoRepeatedTableConfig, inputDF)
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
+  }
+
+  @Test
+  def testSimpleKeyGenExtraneuousAddition() {
+    val recordType = HoodieRecordType.AVRO
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      "hoodie.delete.shuffle.parallelism" -> "1"
+    ))
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    val commonOptsNoPreCombine = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      HoodieMetadataConfig.ENABLE.key -> "false" // this is testing table configs and write configs. disabling metadata to save on test run time.
+    ) ++ writeOpts
+
+    writeToHudi(commonOptsNoPreCombine, inputDF)
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
+
+    val optsWithNoRepeatedTableConfig = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.datasource.write.keygenerator.class" -> classOf[SimpleKeyGenerator].getCanonicalName,
+      HoodieMetadataConfig.ENABLE.key -> "false"
+    )
+    // this write should succeed even w/o though we set key gen explicitly, its the default
+    writeToHudi(optsWithNoRepeatedTableConfig, inputDF)
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
+  }
+
+  private def writeToHudi(opts: Map[String, String], df: Dataset[Row]) : Unit = {
+    df.write.format("hudi")
+      .options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array("hoodie.datasource.write.recordkey.field,begin_lat", "hoodie.datasource.write.partitionpath.field,end_lon",
+    "hoodie.datasource.write.keygenerator.class,org.apache.hudi.keygen.NonpartitionedKeyGenerator", "hoodie.datasource.write.precombine.field,fare"))
+  def testAlteringRecordKeyConfig(configKey: String, configValue: String) {
+    val recordType = HoodieRecordType.AVRO
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      "hoodie.delete.shuffle.parallelism" -> "1",
+      "hoodie.datasource.write.precombine.field" -> "ts",
+      HoodieMetadataConfig.ENABLE.key -> "false" // this is testing table configs and write configs. disabling metadata to save on test run time.
+    ))
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    val commonOptsNoPreCombine = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      HoodieMetadataConfig.ENABLE.key -> "false"
+    ) ++ writeOpts
+    writeToHudi(commonOptsNoPreCombine, inputDF)
+
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
+
+    val optsForBatch2 = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieMetadataConfig.ENABLE.key -> "false",
+      configKey -> configValue
+    )
+
+    // this write should fail since we are setting a config explicitly which wasn't set in first commit and does not match the default value.
+    val t = assertThrows(classOf[Throwable]) {
+      writeToHudi(optsForBatch2, inputDF)
+    }
+    assertTrue(getRootCause(t).getMessage.contains("Config conflict"))
+  }
+
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testHoodieIsDeletedNonBooleanField(recordType: HoodieRecordType) {
