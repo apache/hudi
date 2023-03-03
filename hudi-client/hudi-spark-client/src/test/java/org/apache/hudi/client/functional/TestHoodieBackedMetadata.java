@@ -791,7 +791,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     String commitInstant = "0000002";
     doWriteOperation(testTable, commitInstant, INSERT);
 
-    // test multi-writer scenario. lets add 1,2,3,4 where 1,2,4 succeeded, but 3 is still inflight. so latest delta commit in MDT is 4, while 3 is still pending
+    // test multi-writer scenario. let's add 1,2,3,4 where 1,2,4 succeeded, but 3 is still inflight. so the latest delta commit in MDT is 4, while 3 is still pending
     // in DT and not seen by MDT yet. compaction should not trigger until 3 goes to completion.
 
     // create an inflight commit for 3
@@ -821,6 +821,167 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
     assertEquals(tableMetadata.getLatestCompactionTime().get(), metadataCompactionInstant);
     // do full metadata validation
+    validateMetadata(testTable, true);
+  }
+
+  /**
+   * Test the MDT compaction when there are pending instants on DT
+   * that are committed to MDT already.
+   */
+  @Test
+  public void testMetadataTableCompactionWithPendingInstantCommitted() throws Exception {
+    init(MERGE_ON_READ, false);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        // config radical cleaning and archival options
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .retainCommits(1).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(2, 3).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableFullScan(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(4)
+            .build()).build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    // write 3 delta commits first
+    doWriteOperation(testTable, "0000001", INSERT);
+    doWriteOperation(testTable, "0000002", INSERT);
+
+    // simulate a successful commit to MDT following with a failed commit to DT
+    // create an inflight compaction for 3
+    String compactionInstant = "0000003";
+    HoodieCommitMetadata commitMetadata = testTable.doCompaction(compactionInstant, asList("p1", "p2"), true);
+    // still commits the metadata to MDT, this is the 4th delta commit to MDT
+    metadataWriter.update(commitMetadata, compactionInstant, true);
+
+    // the fifth delta commit should not trigger the MDT compaction
+    doWriteOperation(testTable, "0000004", INSERT);
+
+    // verify compaction must not be kicked in now,
+    // because once the compaction commit metadata has been written into HFile,
+    // and the compaction rollback of DT has not been kicked in, the MDT reader would return
+    // the compaction metadata directly without any filtering(we only have instants filtering for log files now)
+    try (HoodieTableMetadata tableMetadata = metadata(writeConfig, context)) {
+      assertFalse(tableMetadata.getLatestCompactionTime().isPresent());
+    }
+
+    // do more write operations to trigger the archival
+    doWriteOperation(testTable, "0000005");
+    doWriteOperation(testTable, "0000006");
+    doWriteOperation(testTable, "0000007");
+
+    // do full metadata validation
+    validateMetadata(testTable, Collections.singletonList(compactionInstant), true);
+
+    // rollback the failed compaction in DT
+    String rollbackInstant = "0000008";
+    // also clean in inflightCommits cache because the testTable.doRollback and validateMetadata
+    // all filter out all the inflight commits when list the partition files from fs,
+    // the committed log files that share the pending compaction base time are also filtered,
+    // the file listing from fs should be improved.
+    testTable.inflightCommits().remove(compactionInstant);
+    testTable.doRollback(commitMetadata, compactionInstant, rollbackInstant);
+
+    // do full metadata validation
+    validateMetadata(testTable, true);
+
+    // complete the compaction
+    testTable.recoverCompaction(compactionInstant, commitMetadata);
+
+    // triggers the compaction
+    doWriteOperation(testTable, "0000010");
+
+    try (HoodieTableMetadata tableMetadata = metadata(writeConfig, context)) {
+      assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
+      assertEquals(tableMetadata.getLatestCompactionTime().get(), rollbackInstant + METADATA_COMPACTION_TIME_SUFFIX);
+    }
+    // do full metadata validation
+    validateMetadata(testTable, true);
+  }
+
+  /**
+   * A demo of the workflow to demonstrate the use case to unblock:
+   *
+   * <pre>
+   *   delta_c1 (F3, F4) (MDT)
+   *   delta_c1 (F1, F2) (DT)
+   *
+   *   c2.inflight (compaction triggers in DT)
+   *
+   *   delta_c3 (F7, F8) (MDT)
+   *   delta_c3 (F5, F6) (DT)
+   *
+   *   delta_c4 (F9, F10) (MDT)
+   *   -- can we trigger MDT compaction here? The answer is yes
+   *   1. c2 in DT would block the archiving of C2 in MDT
+   *   2. the MDT reader would ignore the C2 too because it is filtered by the c2
+   *      on DT timeline, so the compaction does not include
+   *      c2 delta_c4 (F11, F12) (DT)
+   *
+   *   c2 (F7, F8) (compaction complete in MDT)
+   *   c2 commit to DT
+   * </pre>
+   */
+  @Test
+  public void testMetadataTableCompactionWithPendingCompaction() throws Exception {
+    init(MERGE_ON_READ, false);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        // config radical cleaning and archival options
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .retainCommits(1).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(2, 3).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableFullScan(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(4)
+            .build()).build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    // write 3 delta commits first
+    doWriteOperation(testTable, "0000001", INSERT);
+    doWriteOperation(testTable, "0000002", INSERT);
+
+    // test compaction scenario. let's add 1,2,3,4 where 1,2,4 succeeded, but 3 is an inflight compaction.
+    // so the latest delta commit in MDT is 4, while 3 is still pending
+    // in DT and not seen by MDT yet. compaction should trigger even if 3 still pending.
+
+    // simulate a failed commit to DT
+    // create an inflight compaction for 3
+    String compactionInstant = "0000003";
+    HoodieCommitMetadata commitMetadata = testTable.doCompaction(compactionInstant, asList("p1", "p2"), true);
+
+    doWriteOperation(testTable, "0000004", INSERT);
+    // the fifth write commit should trigger the MDT compaction
+    doWriteOperation(testTable, "0000005", INSERT);
+
+    // verify compaction be kicked in now
+    try (HoodieTableMetadata tableMetadata = metadata(writeConfig, context)) {
+      assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
+      assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000004" + METADATA_COMPACTION_TIME_SUFFIX);
+    }
+
+    // do full metadata validation
+    validateMetadata(testTable, Collections.singletonList(compactionInstant), true);
+
+    // do more write operations to trigger the archival
+    doWriteOperation(testTable, "0000006");
+    doWriteOperation(testTable, "0000007");
+    doWriteOperation(testTable, "0000008");
+
+    // do full metadata validation
+    validateMetadata(testTable, Collections.singletonList(compactionInstant), true);
+
+    // also clean in inflightCommits cache because the testTable.doRollback and validateMetadata
+    // all filter out all the inflight commits when list the partition files from fs,
+    // the committed log files that share the pending compaction base time are also filtered,
+    // the file listing from fs should be improved.
+    testTable.inflightCommits().remove(compactionInstant);
+    // rollback the failed compaction in DT
+    testTable.doRollback(commitMetadata, compactionInstant, "0000009");
+
+    // validate the MDT again
     validateMetadata(testTable, true);
   }
 

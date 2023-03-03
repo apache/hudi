@@ -461,10 +461,19 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable recoverCompaction(String instantTime, HoodieCommitMetadata commitMetadata) throws Exception {
+    inflightCommits.remove(instantTime);
+    createInflightCompaction(basePath, instantTime);
+    createCommit(basePath, instantTime, Option.of(commitMetadata));
+    return this;
+  }
+
   public HoodieTestTable addCompaction(String instantTime, HoodieCommitMetadata commitMetadata) throws Exception {
     createRequestedCompaction(basePath, instantTime);
     createInflightCompaction(basePath, instantTime);
-    return addCommit(instantTime, Option.of(commitMetadata));
+    createCommit(basePath, instantTime, Option.of(commitMetadata));
+    currentInstantTime = instantTime;
+    return this;
   }
 
   public HoodieTestTable moveInflightCompactionToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
@@ -744,18 +753,21 @@ public class HoodieTestTable {
     });
   }
 
-  public HoodieTestTable doRollback(String commitTimeToRollback, String commitTime) throws Exception {
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    Option<HoodieCommitMetadata> commitMetadata = getMetadataForInstant(commitTimeToRollback);
-    if (!commitMetadata.isPresent()) {
-      throw new IllegalArgumentException("Instant to rollback not present in timeline: " + commitTimeToRollback);
-    }
-    Map<String, List<String>> partitionFiles = getPartitionFiles(commitMetadata.get());
+  public HoodieTestTable doRollback(HoodieCommitMetadata commitMetadata, String commitTimeToRollback, String commitTime) throws Exception {
+    Map<String, List<String>> partitionFiles = getPartitionFiles(commitMetadata);
     HoodieRollbackMetadata rollbackMetadata = getRollbackMetadata(commitTimeToRollback, partitionFiles);
     for (Map.Entry<String, List<String>> entry : partitionFiles.entrySet()) {
       deleteFilesInPartition(entry.getKey(), entry.getValue());
     }
     return addRollback(commitTime, rollbackMetadata);
+  }
+
+  public HoodieTestTable doRollback(String commitTimeToRollback, String commitTime) throws Exception {
+    Option<HoodieCommitMetadata> commitMetadata = getMetadataForInstant(commitTimeToRollback);
+    if (!commitMetadata.isPresent()) {
+      throw new IllegalArgumentException("Instant to rollback not present in timeline: " + commitTimeToRollback);
+    }
+    return doRollback(commitMetadata.get(), commitTimeToRollback, commitTime);
   }
 
   public HoodieTestTable doRollbackWithExtraFiles(String commitTimeToRollback, String commitTime, Map<String, List<String>> extraFiles) throws Exception {
@@ -941,7 +953,7 @@ public class HoodieTestTable {
                                                Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap,
                                                boolean bootstrap, boolean createInflightCommit) throws Exception {
     if (partitionToFilesNameLengthMap.isEmpty()) {
-      partitionToFilesNameLengthMap = Collections.singletonMap(EMPTY_STRING, Collections.EMPTY_LIST);
+      partitionToFilesNameLengthMap = Collections.singletonMap(EMPTY_STRING, Collections.emptyList());
     }
     HoodieTestTableState testTableState = getTestTableStateWithPartitionFileInfo(operationType,
         metaClient.getTableType(), commitTime, partitionToFilesNameLengthMap);
@@ -973,8 +985,7 @@ public class HoodieTestTable {
   }
 
   private Option<HoodieCommitMetadata> getMetadataForInstant(String instantTime) {
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    Option<HoodieInstant> hoodieInstant = metaClient.getActiveTimeline().getCommitsTimeline()
+    Option<HoodieInstant> hoodieInstant = metaClient.reloadActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
     try {
       if (hoodieInstant.isPresent()) {
