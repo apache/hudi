@@ -269,10 +269,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Clears the partition Map and reset view states.
-   * <p>
-   * NOTE: This method SHOULD NOT BE OVERRIDDEN which may cause stale file system view
-   * to be served.  Instead, override {@link AbstractTableFileSystemView#runReset} to
-   * add custom logic.
    */
   @Override
   public void reset() {
