@@ -61,7 +61,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Main REST Handler class that handles and delegates calls to timeline relevant handlers.
@@ -79,10 +78,6 @@ public class RequestHandler {
   private final BaseFileHandler dataFileHandler;
   private final MarkerHandler markerHandler;
   private final Registry metricsRegistry = Registry.getRegistry("TimelineService");
-  // This read-write lock is used for syncing the file system view if it is behind client's view
-  private final ReentrantReadWriteLock globalLock = new ReentrantReadWriteLock();
-  private final ReentrantReadWriteLock.ReadLock readLock = globalLock.readLock();
-  private final ReentrantReadWriteLock.WriteLock writeLock = globalLock.writeLock();
   private ScheduledExecutorService asyncResultService = Executors.newSingleThreadScheduledExecutor();
 
   public RequestHandler(Javalin app, Configuration conf, TimelineService.Config timelineServiceConfig,
@@ -156,11 +151,6 @@ public class RequestHandler {
    * Determines if local view of table's timeline is behind that of client's view.
    */
   private boolean isLocalViewBehind(Context ctx) {
-    try {
-      // This read lock makes sure that if the local view of the table is being synced,
-      // no timeline server requests should be processed or handled until the sync process
-      // is finished.
-      readLock.lock();
       String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
       String lastKnownInstantFromClient =
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
@@ -185,39 +175,30 @@ public class RequestHandler {
 
       // As a safety check, even if hash is same, ensure instant is present
       return !localTimeline.containsOrBeforeTimelineStarts(lastKnownInstantFromClient);
-    } finally {
-      readLock.unlock();
-    }
   }
 
   /**
    * Syncs data-set view if local view is behind.
    */
   private boolean syncIfLocalViewBehind(Context ctx) {
-    if (isLocalViewBehind(ctx)) {
-      String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
-      String lastKnownInstantFromClient = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
-      SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
-      synchronized (view) {
-        if (isLocalViewBehind(ctx)) {
-          try {
-            // This write lock guards around syncing the local view of the table so that it blocks
-            // any timeline server request from being processed or handled until the sync process
-            // is finished.
-            writeLock.lock();
-            HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-            LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
-                + " as last known instant but server has the following last instant on timeline :"
-                + localTimeline.lastInstant());
-            view.sync();
-            return true;
-          } finally {
-            writeLock.unlock();
-          }
-        }
+    boolean result = false;
+    String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
+    SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
+    synchronized (view) {
+      if (isLocalViewBehind(ctx)) {
+
+        String lastKnownInstantFromClient = ctx.queryParamAsClass(
+                RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class)
+            .getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
+        HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
+        LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
+            + " as last known instant but server has the following last instant on timeline :"
+            + localTimeline.lastInstant());
+        view.sync();
+        result = true;
       }
     }
-    return false;
+    return result;
   }
 
   private void writeValueAsString(Context ctx, Object obj) throws JsonProcessingException {

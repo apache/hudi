@@ -78,24 +78,32 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   @Override
-  protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
+  public void sync() {
     try {
-      if (incrementalTimelineSyncEnabled) {
-        TimelineDiffResult diffResult = TimelineDiffHelper.getNewInstantsForIncrementalSync(oldTimeline, newTimeline);
-        if (diffResult.canSyncIncrementally()) {
-          LOG.info("Doing incremental sync");
-          runIncrementalSync(newTimeline, diffResult);
-          LOG.info("Finished incremental sync");
-          // Reset timeline to latest
-          refreshTimeline(newTimeline);
-          return;
+      writeLock.lock();
+      HoodieTimeline oldTimeline = getTimeline();
+      HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
+      try {
+        if (incrementalTimelineSyncEnabled) {
+          TimelineDiffResult diffResult = TimelineDiffHelper.getNewInstantsForIncrementalSync(oldTimeline, newTimeline);
+          if (diffResult.canSyncIncrementally()) {
+            LOG.info("Doing incremental sync");
+            runIncrementalSync(newTimeline, diffResult);
+            LOG.info("Finished incremental sync");
+            // Reset timeline to latest
+            refreshTimeline(newTimeline);
+            return;
+          }
         }
+      } catch (Exception ioe) {
+        LOG.error("Got exception trying to perform incremental sync. Reverting to complete sync", ioe);
       }
-    } catch (Exception ioe) {
-      LOG.error("Got exception trying to perform incremental sync. Reverting to complete sync", ioe);
+      clear();
+      // Initialize with new Hoodie timeline.
+      init(metaClient, newTimeline);
+    } finally {
+      writeLock.unlock();
     }
-
-    super.runSync(oldTimeline, newTimeline);
   }
 
   /**

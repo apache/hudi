@@ -95,8 +95,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   // Locks to control concurrency. Sync operations use write-lock blocking all fetch operations.
   // For the common-case, we allow concurrent read of single or multiple partitions
   private final ReentrantReadWriteLock globalLock = new ReentrantReadWriteLock();
-  private final ReadLock readLock = globalLock.readLock();
-  private final WriteLock writeLock = globalLock.writeLock();
+  protected final ReadLock readLock = globalLock.readLock();
+  protected final WriteLock writeLock = globalLock.writeLock();
 
   private BootstrapIndex bootstrapIndex;
 
@@ -278,7 +278,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public void reset() {
     try {
       writeLock.lock();
-      runReset();
+      clear();
+      // Initialize with new Hoodie timeline.
+      init(metaClient, getTimeline());
     } finally {
       writeLock.unlock();
     }
@@ -292,16 +294,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * {@link AbstractTableFileSystemView#reset} directly, which may cause stale file system view
    * to be served.
    */
-  protected void runReset() {
-    clear();
-    // Initialize with new Hoodie timeline.
-    init(metaClient, getTimeline());
-  }
 
   /**
    * Clear the resource.
    */
-  private void clear() {
+  protected void clear() {
     addedPartitions.clear();
     resetViewState();
     bootstrapIndex = null;
@@ -1413,11 +1410,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   @Override
   public void sync() {
-    HoodieTimeline oldTimeline = getTimeline();
-    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
     try {
       writeLock.lock();
-      runSync(oldTimeline, newTimeline);
+      HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
+      clear();
+      // Initialize with new Hoodie timeline.
+      init(metaClient, newTimeline);
     } finally {
       writeLock.unlock();
     }
