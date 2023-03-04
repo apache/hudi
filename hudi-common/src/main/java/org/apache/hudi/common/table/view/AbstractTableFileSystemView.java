@@ -287,15 +287,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Resets the view states, which can be overridden by subclasses.  This reset logic is guarded
-   * by the write lock.
-   * <p>
-   * NOTE: This method SHOULD BE OVERRIDDEN for any custom logic.  DO NOT OVERRIDE
-   * {@link AbstractTableFileSystemView#reset} directly, which may cause stale file system view
-   * to be served.
-   */
-
-  /**
    * Clear the resource.
    */
   protected void clear() {
@@ -1403,10 +1394,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Syncs the file system view from storage to memory.
-   * <p>
-   * NOTE: This method SHOULD NOT BE OVERRIDDEN which may cause stale file system view
-   * to be served.  Instead, override {@link AbstractTableFileSystemView#runSync} to
-   * add custom logic.
    */
   @Override
   public void sync() {
@@ -1419,23 +1406,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     } finally {
       writeLock.unlock();
     }
-  }
-
-  /**
-   * Performs complete reset of file-system view. Subsequent partition view calls will load file
-   * slices against the latest timeline.  This sync logic is guarded by the write lock.
-   * <p>
-   * NOTE: This method SHOULD BE OVERRIDDEN for any custom logic.  DO NOT OVERRIDE
-   * {@link AbstractTableFileSystemView#sync} directly, which may cause stale file system view
-   * to be served.
-   *
-   * @param oldTimeline Old Hudi Timeline
-   * @param newTimeline New Hudi Timeline
-   */
-  protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
-    clear();
-    // Initialize with new Hoodie timeline.
-    init(metaClient, newTimeline);
   }
 
   /**

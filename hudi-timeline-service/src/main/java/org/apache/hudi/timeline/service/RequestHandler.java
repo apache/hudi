@@ -151,30 +151,30 @@ public class RequestHandler {
    * Determines if local view of table's timeline is behind that of client's view.
    */
   private boolean isLocalViewBehind(Context ctx) {
-      String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
-      String lastKnownInstantFromClient =
-          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
-      String timelineHashFromClient = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.TIMELINE_HASH, String.class).getOrDefault("");
-      HoodieTimeline localTimeline =
-          viewManager.getFileSystemView(basePath).getTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
-            + "], localTimeline=" + localTimeline.getInstants());
-      }
+    String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
+    String lastKnownInstantFromClient =
+        ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
+    String timelineHashFromClient = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.TIMELINE_HASH, String.class).getOrDefault("");
+    HoodieTimeline localTimeline =
+        viewManager.getFileSystemView(basePath).getTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
+          + "], localTimeline=" + localTimeline.getInstants());
+    }
 
-      if ((!localTimeline.getInstantsAsStream().findAny().isPresent())
-          && HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)) {
-        return false;
-      }
+    if ((!localTimeline.getInstantsAsStream().findAny().isPresent())
+        && HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)) {
+      return false;
+    }
 
-      String localTimelineHash = localTimeline.getTimelineHash();
-      // refresh if timeline hash mismatches
-      if (!localTimelineHash.equals(timelineHashFromClient)) {
-        return true;
-      }
+    String localTimelineHash = localTimeline.getTimelineHash();
+    // refresh if timeline hash mismatches
+    if (!localTimelineHash.equals(timelineHashFromClient)) {
+      return true;
+    }
 
-      // As a safety check, even if hash is same, ensure instant is present
-      return !localTimeline.containsOrBeforeTimelineStarts(lastKnownInstantFromClient);
+    // As a safety check, even if hash is same, ensure instant is present
+    return !localTimeline.containsOrBeforeTimelineStarts(lastKnownInstantFromClient);
   }
 
   /**
