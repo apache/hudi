@@ -106,10 +106,7 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   public void sync() {
     try {
       writeLock.lock();
-      HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
-      clear();
-      // Initialize with new Hoodie timeline.
-      init(metaClient, newTimeline);
+      maySyncIncrementally();
       tableMetadata.reset();
     } finally {
       writeLock.unlock();

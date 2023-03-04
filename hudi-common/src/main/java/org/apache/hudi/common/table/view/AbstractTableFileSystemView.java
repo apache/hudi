@@ -1389,7 +1389,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Syncs the file system view from storage to memory.
+   * Syncs the file system view from storage to memory.  Performs complete reset of file-system
+   * view. Subsequent partition view calls will load file slices against the latest timeline.
+   * <p>
+   * NOTE: The logic MUST BE guarded by the write lock.
    */
   @Override
   public void sync() {
