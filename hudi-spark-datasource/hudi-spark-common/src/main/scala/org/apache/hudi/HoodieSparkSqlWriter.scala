@@ -594,11 +594,11 @@ object HoodieSparkSqlWriter {
     if (isCompatibleProjectionOf(tableSchema, newSchema)) {
       // Picking table schema as a writer schema we need to validate that we'd be able to
       // rewrite incoming batch's data (written in new schema) into it
-      (tableSchema, isSchemaCompatible(newSchema, tableSchema, true))
+      (tableSchema, isSchemaCompatible(newSchema, tableSchema))
     } else {
       // Picking new schema as a writer schema we need to validate that we'd be able to
       // rewrite table's data into it
-      (newSchema, isSchemaCompatible(tableSchema, newSchema, true))
+      (newSchema, isSchemaCompatible(tableSchema, newSchema))
     }
   }
 
