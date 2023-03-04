@@ -181,7 +181,6 @@ public class RequestHandler {
    * Syncs data-set view if local view is behind.
    */
   private boolean syncIfLocalViewBehind(Context ctx) {
-    boolean result = false;
     String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
     SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
     synchronized (view) {
@@ -195,10 +194,10 @@ public class RequestHandler {
             + " as last known instant but server has the following last instant on timeline :"
             + localTimeline.lastInstant());
         view.sync();
-        result = true;
+        return true;
       }
     }
-    return result;
+    return false;
   }
 
   private void writeValueAsString(Context ctx, Object obj) throws JsonProcessingException {
