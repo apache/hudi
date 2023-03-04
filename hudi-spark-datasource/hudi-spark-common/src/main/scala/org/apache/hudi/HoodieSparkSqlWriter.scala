@@ -431,20 +431,19 @@ object HoodieSparkSqlWriter {
 
         val allowAutoEvolutionColumnDrop = opts.getOrDefault(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key,
           HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.defaultValue).toBoolean
+        val reconcileSchemaStrategy = opts.getOrDefault(HoodieCommonConfig.RECONCILE_SCHEMA_STRATEGY.key(),
+          HoodieCommonConfig.RECONCILE_SCHEMA_STRATEGY.defaultValue())
 
         if (shouldReconcileSchema) {
           internalSchemaOpt match {
             case Some(internalSchema) =>
               // Apply schema evolution, by auto-merging write schema and read schema
-              val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema)
-              val evolvedSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
-              val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields().filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
-              if (shouldRemoveMetaDataFromInternalSchema) HoodieAvroUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
+              SchemaReconcileUtils.reconcileSchema(sourceSchema, canonicalizedSourceSchema, internalSchema, latestTableSchema.getFullName)
             case None =>
               // In case schema reconciliation is enabled we will employ (legacy) reconciliation
               // strategy to produce target writer's schema (see definition below)
               val (reconciledSchema, isCompatible) =
-                reconcileSchemasLegacy(latestTableSchema, canonicalizedSourceSchema)
+                SchemaReconcileUtils.reconcileSchemas(latestTableSchema, canonicalizedSourceSchema, reconcileSchemaStrategy)
 
               // NOTE: In some cases we need to relax constraint of incoming dataset's schema to be compatible
               //       w/ the table's one and allow schemas to diverge. This is required in cases where
@@ -575,31 +574,6 @@ object HoodieSparkSqlWriter {
     parameters ++ Map(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key() -> SerDeHelper.toJson(correctInternalSchema.getOrElse(null)),
       HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() -> schemaEvolutionEnable,
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key()  -> schemaValidateEnable)
-  }
-
-  private def reconcileSchemasLegacy(tableSchema: Schema, newSchema: Schema): (Schema, Boolean) = {
-    // Legacy reconciliation implements following semantic
-    //    - In case new-schema is a "compatible" projection of the existing table's one (projection allowing
-    //      permitted type promotions), table's schema would be picked as (reconciled) writer's schema;
-    //    - Otherwise, we'd fall back to picking new (batch's) schema as a writer's schema;
-    //
-    // Philosophically, such semantic aims at always choosing a "wider" schema, ie the one containing
-    // the other one (schema A contains schema B, if schema B is a projection of A). This enables us,
-    // to always "extend" the schema during schema evolution and hence never lose the data (when, for ex
-    // existing column is being dropped in a new batch)
-    //
-    // NOTE: By default Hudi doesn't allow automatic schema evolution to drop the columns from the target
-    //       table. However, when schema reconciliation is turned on, we would allow columns to be dropped
-    //       in the incoming batch (as these would be reconciled in anyway)
-    if (isCompatibleProjectionOf(tableSchema, newSchema)) {
-      // Picking table schema as a writer schema we need to validate that we'd be able to
-      // rewrite incoming batch's data (written in new schema) into it
-      (tableSchema, isSchemaCompatible(newSchema, tableSchema, true))
-    } else {
-      // Picking new schema as a writer schema we need to validate that we'd be able to
-      // rewrite table's data into it
-      (newSchema, isSchemaCompatible(tableSchema, newSchema, true))
-    }
   }
 
   /**
