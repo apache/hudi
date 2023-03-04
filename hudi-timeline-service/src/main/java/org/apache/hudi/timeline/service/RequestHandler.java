@@ -181,19 +181,20 @@ public class RequestHandler {
    * Syncs data-set view if local view is behind.
    */
   private boolean syncIfLocalViewBehind(Context ctx) {
-    if (isLocalViewBehind(ctx)) {
-      String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
-      String lastKnownInstantFromClient = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
-      SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
-      synchronized (view) {
-        if (isLocalViewBehind(ctx)) {
-          HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-          LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
-              + " as last known instant but server has the following last instant on timeline :"
-              + localTimeline.lastInstant());
-          view.sync();
-          return true;
-        }
+    String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
+    SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
+    synchronized (view) {
+      if (isLocalViewBehind(ctx)) {
+
+        String lastKnownInstantFromClient = ctx.queryParamAsClass(
+                RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class)
+            .getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
+        HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
+        LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
+            + " as last known instant but server has the following last instant on timeline :"
+            + localTimeline.lastInstant());
+        view.sync();
+        return true;
       }
     }
     return false;
