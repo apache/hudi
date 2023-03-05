@@ -31,6 +31,7 @@ import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -47,6 +48,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringUpdateException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -185,47 +187,18 @@ public class HoodieDeltaStreamer implements Serializable {
 
   /**
    * Main method to start syncing.
-   *
-   * @throws Exception
    */
   public void sync() throws Exception {
     if (bootstrapExecutor.isPresent()) {
       LOG.info("Performing bootstrap. Source=" + bootstrapExecutor.get().getBootstrapConfig().getBootstrapSourceBasePath());
       bootstrapExecutor.get().execute();
     } else {
-      if (cfg.continuousMode) {
-        ingestionService.ifPresent(ds -> {
-          ds.start(this::onDeltaSyncShutdown);
-          try {
-            ds.waitForShutdown();
-          } catch (Exception e) {
-            throw new HoodieException(e.getMessage(), e);
-          }
-        });
-        LOG.info("Delta Sync shutting down");
-      } else {
-        LOG.info("Delta Streamer running only single round");
-        try {
-          ingestionService.ifPresent(HoodieIngestionService::ingestOnce);
-        } catch (Exception ex) {
-          LOG.error("Got error running delta sync once. Shutting down", ex);
-          throw ex;
-        } finally {
-          ingestionService.ifPresent(HoodieIngestionService::close);
-          LOG.info("Shut down delta streamer");
-        }
-      }
+      ingestionService.ifPresent(HoodieIngestionService::startIngestion);
     }
   }
 
   public Config getConfig() {
     return cfg;
-  }
-
-  private boolean onDeltaSyncShutdown(boolean error) {
-    LOG.info("DeltaSync shutdown. Closing write client. Error?" + error);
-    ingestionService.ifPresent(HoodieIngestionService::close);
-    return true;
   }
 
   public static class Config implements Serializable {
@@ -708,10 +681,6 @@ public class HoodieDeltaStreamer implements Serializable {
       }
     }
 
-    public DeltaSync getDeltaSync() {
-      return deltaSync;
-    }
-
     @Override
     protected Pair<CompletableFuture, ExecutorService> startService() {
       ExecutorService executor = Executors.newFixedThreadPool(1);
@@ -752,19 +721,13 @@ public class HoodieDeltaStreamer implements Serializable {
                 }
               }
               // check if deltastreamer need to be shutdown
-              if (postWriteTerminationStrategy.isPresent()) {
-                if (postWriteTerminationStrategy.get().shouldShutdown(scheduledCompactionInstantAndRDD.isPresent() ? Option.of(scheduledCompactionInstantAndRDD.get().getRight()) :
-                    Option.empty())) {
-                  error = true;
-                  shutdown(false);
-                }
+              Option<HoodieData<WriteStatus>> lastWriteStatuses = Option.ofNullable(
+                  scheduledCompactionInstantAndRDD.isPresent() ? HoodieJavaRDD.of(scheduledCompactionInstantAndRDD.get().getRight()) : null);
+              if (requestShutdownIfNeeded(lastWriteStatuses)) {
+                error = true;
+                shutdown(false);
               }
-              long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
-              if (toSleepMs > 0) {
-                LOG.info("Last sync ran less than min sync interval: " + cfg.minSyncIntervalSeconds + " s, sleep: "
-                    + toSleepMs + " ms.");
-                Thread.sleep(toSleepMs);
-              }
+              sleepBeforeNextIngestion(start);
             } catch (HoodieUpsertException ue) {
               handleUpsertException(ue);
             } catch (Exception e) {
@@ -817,7 +780,15 @@ public class HoodieDeltaStreamer implements Serializable {
         deltaSync.syncOnce();
       } catch (IOException e) {
         throw new HoodieIngestionException(String.format("Ingestion via %s failed with exception.", this.getClass()), e);
+      } finally {
+        close();
       }
+    }
+
+    @Override
+    protected boolean requestShutdownIfNeeded(Option<HoodieData<WriteStatus>> lastWriteStatuses) {
+      Option<JavaRDD<WriteStatus>> lastWriteStatusRDD = Option.ofNullable(lastWriteStatuses.isPresent() ? HoodieJavaRDD.getJavaRDD(lastWriteStatuses.get()) : null);
+      return postWriteTerminationStrategy.isPresent() && postWriteTerminationStrategy.get().shouldShutdown(lastWriteStatusRDD);
     }
 
     /**
@@ -877,13 +848,18 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     @Override
+    protected boolean onIngestionCompletes(boolean hasError) {
+      LOG.info("Ingestion completed. Has error: " + hasError);
+      close();
+      return true;
+    }
+
+    @Override
     public Option<HoodieIngestionMetrics> getMetrics() {
       return Option.ofNullable(deltaSync.getMetrics());
     }
 
-    /**
-     * Close all resources.
-     */
+    @Override
     public void close() {
       if (deltaSync != null) {
         deltaSync.close();
@@ -900,6 +876,13 @@ public class HoodieDeltaStreamer implements Serializable {
 
     public TypedProperties getProps() {
       return props;
+    }
+
+    /**
+     * This API is for testing only.
+     */
+    public DeltaSync getDeltaSync() {
+      return deltaSync;
     }
   }
 

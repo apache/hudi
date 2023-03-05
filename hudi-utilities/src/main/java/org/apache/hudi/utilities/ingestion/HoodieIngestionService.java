@@ -19,8 +19,10 @@
 package org.apache.hudi.utilities.ingestion;
 
 import org.apache.hudi.async.HoodieAsyncService;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -75,29 +77,19 @@ public abstract class HoodieIngestionService extends HoodieAsyncService {
     ExecutorService executor = Executors.newFixedThreadPool(1);
     return Pair.of(CompletableFuture.supplyAsync(() -> {
       try {
-        initTableServices();
         while (!isShutdownRequested()) {
           long ingestionStartEpochMillis = System.currentTimeMillis();
           ingestOnce();
-          boolean requested = requestShutdownIfNeeded();
+          boolean requested = requestShutdownIfNeeded(Option.empty());
           if (!requested) {
             sleepBeforeNextIngestion(ingestionStartEpochMillis);
           }
         }
       } finally {
-        closeTableServices();
         executor.shutdownNow();
       }
       return true;
     }, executor), executor);
-  }
-
-  protected void initTableServices() {
-    // no op
-  }
-
-  protected void closeTableServices() {
-    // no op
   }
 
   /**
@@ -115,7 +107,7 @@ public abstract class HoodieIngestionService extends HoodieAsyncService {
    *
    * @see org.apache.hudi.utilities.deltastreamer.PostWriteTerminationStrategy
    */
-  protected boolean requestShutdownIfNeeded() {
+  protected boolean requestShutdownIfNeeded(Option<HoodieData<WriteStatus>> lastWriteStatus) {
     return false;
   }
 
