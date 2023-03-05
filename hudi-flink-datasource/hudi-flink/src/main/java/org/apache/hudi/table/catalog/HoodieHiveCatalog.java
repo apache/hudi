@@ -843,7 +843,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     } catch (Exception e) {
       throw new CatalogException(
           String.format(
-              "Failed to drop partition %s of table %s", partitionSpec, tablePath));
+              "Failed to drop partition %s of table %s", partitionSpec, tablePath), e);
     }
   }
 

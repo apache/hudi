@@ -2316,8 +2316,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     int maxCommits = 1;
     HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(maxCommits).build())
-        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .retainCommits(maxCommits).build())
+        .withParallelism(1, 1)
+        .withBulkInsertParallelism(1)
+        .withFinalizeWriteParallelism(1)
+        .withDeleteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();
