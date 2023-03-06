@@ -237,7 +237,7 @@ Options useful for writing tables via `write.format.option(...)`
 ---
 
 > ### hoodie.datasource.write.partitionpath.field
-> Partition path field. Value to be used at the partitionPath component of HoodieKey. Actual value ontained by invoking .toString()<br></br>
+> Partition path field. Value to be used at the partitionPath component of HoodieKey. Actual value obtained by invoking .toString()<br></br>
 > `Default Value: N/A `**(Required)**<br></br>
 > `Config Param: PARTITIONPATH_FIELD`<br></br>
 
@@ -2639,7 +2639,7 @@ Hudi maintains keys (record key + partition path) for uniquely identifying a par
 
 `Config Class`: org.apache.hudi.keygen.constant.KeyGeneratorOptions<br></br>
 > ### hoodie.datasource.write.partitionpath.field
-> Partition path field. Value to be used at the partitionPath component of HoodieKey. Actual value ontained by invoking .toString()<br></br>
+> Partition path field. Value to be used at the partitionPath component of HoodieKey. Actual value obtained by invoking .toString()<br></br>
 > `Default Value: N/A `**(Required)**<br></br>
 > `Config Param: PARTITIONPATH_FIELD_NAME`<br></br>
 
