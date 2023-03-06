@@ -20,29 +20,25 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.Metrics;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 
 import com.codahale.metrics.Timer;
 
-import java.io.Serializable;
+public class HoodieDeltaStreamerMetrics extends HoodieIngestionMetrics {
 
-public class HoodieDeltaStreamerMetrics implements Serializable {
-
-  private HoodieWriteConfig config;
-  private String tableName;
-
-  public String overallTimerName = null;
-  public String hiveSyncTimerName = null;
-  public String metaSyncTimerName = null;
-  private transient Timer overallTimer = null;
-  public transient Timer hiveSyncTimer = null;
-  public transient Timer metaSyncTimer = null;
   private Metrics metrics;
 
-  public HoodieDeltaStreamerMetrics(HoodieWriteConfig config) {
-    this.config = config;
-    this.tableName = config.getTableName();
-    if (config.isMetricsOn()) {
-      this.metrics =  Metrics.getInstance(config);
+  private String overallTimerName;
+  private String hiveSyncTimerName;
+  private String metaSyncTimerName;
+  private transient Timer overallTimer;
+  private transient Timer hiveSyncTimer;
+  private transient Timer metaSyncTimer;
+
+  public HoodieDeltaStreamerMetrics(HoodieWriteConfig writeConfig) {
+    super(writeConfig);
+    if (writeConfig.isMetricsOn()) {
+      metrics = Metrics.getInstance(writeConfig);
       this.overallTimerName = getMetricsName("timer", "deltastreamer");
       this.hiveSyncTimerName = getMetricsName("timer", "deltastreamerHiveSync");
       this.metaSyncTimerName = getMetricsName("timer", "deltastreamerMetaSync");
@@ -50,107 +46,119 @@ public class HoodieDeltaStreamerMetrics implements Serializable {
   }
 
   public Timer.Context getOverallTimerContext() {
-    if (config.isMetricsOn() && overallTimer == null) {
+    if (writeConfig.isMetricsOn() && overallTimer == null) {
       overallTimer = createTimer(overallTimerName);
     }
     return overallTimer == null ? null : overallTimer.time();
   }
 
   public Timer.Context getHiveSyncTimerContext() {
-    if (config.isMetricsOn() && hiveSyncTimer == null) {
+    if (writeConfig.isMetricsOn() && hiveSyncTimer == null) {
       hiveSyncTimer = createTimer(hiveSyncTimerName);
     }
     return hiveSyncTimer == null ? null : hiveSyncTimer.time();
   }
 
   public Timer.Context getMetaSyncTimerContext() {
-    if (config.isMetricsOn() && metaSyncTimer == null) {
+    if (writeConfig.isMetricsOn() && metaSyncTimer == null) {
       metaSyncTimer = createTimer(metaSyncTimerName);
     }
     return metaSyncTimer == null ? null : metaSyncTimer.time();
   }
 
   private Timer createTimer(String name) {
-    return config.isMetricsOn() ? metrics.getRegistry().timer(name) : null;
+    return writeConfig.isMetricsOn() ? metrics.getRegistry().timer(name) : null;
   }
 
-  String getMetricsName(String action, String metric) {
-    return config == null ? null : String.format("%s.%s.%s", config.getMetricReporterMetricsNamePrefix(), action, metric);
+  private String getMetricsName(String action, String metric) {
+    return String.format("%s.%s.%s", writeConfig.getMetricReporterMetricsNamePrefix(), action, metric);
   }
 
   public void updateDeltaStreamerMetrics(long durationInNs) {
-    if (config.isMetricsOn()) {
+    if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "duration"), getDurationInMs(durationInNs));
     }
   }
 
   public void updateDeltaStreamerMetaSyncMetrics(String syncClassShortName, long syncNs) {
-    if (config.isMetricsOn()) {
+    if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", syncClassShortName), getDurationInMs(syncNs));
     }
   }
 
-  public void updateDeltaStreamerKafkaDelayCountMetrics(long kafkaDelayCount) {
-    if (config.isMetricsOn()) {
-      metrics.registerGauge(getMetricsName("deltastreamer", "kafkaDelayCount"), kafkaDelayCount);
-    }
-  }
-
   public void updateDeltaStreamerSyncMetrics(long syncEpochTimeInMs) {
-    if (config.isMetricsOn()) {
+    if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "lastSync"), syncEpochTimeInMs);
     }
   }
 
-  public void updateDeltaStreamerKafkaMessageInCount(long totalNewMsgCount) {
-    if (config.isMetricsOn()) {
-      metrics.registerGauge(getMetricsName("deltastreamer", "kafkaMessageInCount"), totalNewMsgCount);
-    }
-  }
-
   public void updateNumSuccessfulSyncs(long numSuccessfulSyncs) {
-    if (config.isMetricsOn()) {
+    if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "numSuccessfulSyncs"), numSuccessfulSyncs);
     }
   }
 
   public void updateNumFailedSyncs(long numFailedSyncs) {
-    if (config.isMetricsOn()) {
+    if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "numFailedSyncs"), numFailedSyncs);
     }
   }
 
   public void updateNumConsecutiveFailures(int numConsecutiveFailures) {
-    if (config.isMetricsOn()) {
+    if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "numConsecutiveFailures"), numConsecutiveFailures);
     }
   }
 
   public void updateTotalSourceBytesAvailableForIngest(long totalSourceBytesAvailable) {
-    if (config.isMetricsOn()) {
+    if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "totalSourceBytesAvailable"), totalSourceBytesAvailable);
     }
   }
 
   public void updateTotalSyncDurationMs(long totalSyncDurationMs) {
-    if (config.isMetricsOn()) {
+    if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "totalSyncDurationMs"), totalSyncDurationMs);
     }
   }
 
   public void updateActualSyncDurationMs(long actualSyncDurationMs) {
-    if (config.isMetricsOn()) {
+    if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "actualSyncDurationMs"), actualSyncDurationMs);
     }
   }
 
+  /**
+   * Update heartbeat from deltastreamer ingestion job when active for a table.
+   *
+   * @param heartbeatTimestampMs the timestamp in milliseconds at which heartbeat is emitted.
+   */
+  public void updateDeltaStreamerHeartbeatTimestamp(long heartbeatTimestampMs) {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "heartbeatTimestampMs"), heartbeatTimestampMs);
+    }
+  }
+
+  public void updateDeltaStreamerSourceDelayCount(String sourceMetricName, long sourceDelayCount) {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", sourceMetricName), sourceDelayCount);
+    }
+  }
+
+  public void updateDeltaStreamerSourceNewMessageCount(String sourceMetricName, long sourceNewMessageCount) {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", sourceMetricName), sourceNewMessageCount);
+    }
+  }
+
+  @Override
   public void shutdown() {
     if (metrics != null) {
       metrics.shutdown();
     }
   }
 
-  public long getDurationInMs(long ctxDuration) {
+  private static long getDurationInMs(long ctxDuration) {
     return ctxDuration / 1000000;
   }
 }
