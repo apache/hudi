@@ -49,7 +49,7 @@ public class TestMetricsReporterFactory {
   @Test
   public void metricsReporterFactoryShouldReturnReporter() {
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
-    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry);
+    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry).get();
     assertTrue(reporter instanceof InMemoryMetricsReporter);
   }
 
@@ -61,7 +61,7 @@ public class TestMetricsReporterFactory {
     props.setProperty("testKey", "testValue");
 
     when(config.getProps()).thenReturn(props);
-    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry);
+    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry).get();
     assertTrue(reporter instanceof CustomizableMetricsReporter);
     assertEquals(props, ((DummyMetricsReporter) reporter).getProps());
     assertEquals(registry, ((DummyMetricsReporter) reporter).getRegistry());

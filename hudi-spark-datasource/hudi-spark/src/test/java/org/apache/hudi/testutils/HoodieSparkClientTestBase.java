@@ -16,40 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.testutils;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.util.Option;
+import org.apache.spark.sql.SparkSessionExtensions;
+import org.apache.spark.sql.hudi.HoodieSparkSessionExtension;
 
-public class ClosableIteratorWithSchema<R> implements ClosableIterator<R> {
+import java.util.function.Consumer;
 
-  private final ClosableIterator<R> iter;
-  private final Schema schema;
-
-  public ClosableIteratorWithSchema(ClosableIterator<R> iter, Schema schema) {
-    this.iter = iter;
-    this.schema = schema;
-  }
-
-  public static <R> ClosableIteratorWithSchema<R> newInstance(ClosableIterator<R> iter, Schema schema) {
-    return new ClosableIteratorWithSchema<>(iter, schema);
-  }
-
-  public Schema getSchema() {
-    return schema;
-  }
+public abstract class HoodieSparkClientTestBase extends HoodieClientTestBase {
 
   @Override
-  public void close() {
-    iter.close();
+  protected Option<Consumer<SparkSessionExtensions>> getSparkSessionExtensionsInjector() {
+    return Option.of((receiver) -> new HoodieSparkSessionExtension().apply(receiver));
   }
 
-  @Override
-  public boolean hasNext() {
-    return iter.hasNext();
-  }
-
-  @Override
-  public R next() {
-    return iter.next();
-  }
 }

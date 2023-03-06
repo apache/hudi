@@ -53,10 +53,6 @@ import java.util.Set;
 
 import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before_after;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
-import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
-import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_BEGIN_PARTITION;
-import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_END_PARTITION;
-import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST;
 
 /**
  * Hoodie Flink config options.
@@ -184,7 +180,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> METADATA_ENABLED = ConfigOptions
       .key("metadata.enabled")
       .booleanType()
-      .defaultValue(false)
+      .defaultValue(true)
       .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default disabled");
 
   public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
@@ -201,6 +197,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("index.type")
       .stringType()
       .defaultValue(HoodieIndex.IndexType.FLINK_STATE.name())
+      .withFallbackKeys(HoodieIndexConfig.INDEX_TYPE.key())
       .withDescription("Index type of Flink write job, default is using state backed index.");
 
   public static final ConfigOption<Boolean> INDEX_BOOTSTRAP_ENABLED = ConfigOptions
@@ -386,9 +383,9 @@ public class FlinkOptions extends HoodieConfig {
       .key("write.ignore.failed")
       .booleanType()
       .defaultValue(false)
-      .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch.\n"
-          + "By default false.  Turning this on, could hide the write status errors while the spark checkpoint moves ahead. \n"
-          + "  So, would recommend users to use this with caution.");
+      .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. \n"
+          + "By default false. Turning this on, could hide the write status errors while the flink checkpoint moves ahead. \n"
+          + "So, would recommend users to use this with caution.");
 
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
@@ -566,6 +563,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(128)
       .withDescription("Sort memory in MB, default 128MB");
 
+  // this is only for internal use
+  public static final ConfigOption<String> WRITE_CLIENT_ID = ConfigOptions
+      .key("write.client.id")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Unique identifier used to distinguish different writer pipelines for concurrent mode");
+
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------
@@ -712,6 +716,36 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(2)
       .withDescription("Number of partitions to list to create ClusteringPlan, default is 2");
 
+  public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigOptions
+      .key("clustering.plan.strategy.daybased.skipfromlatest.partitions")
+      .intType()
+      .defaultValue(0)
+      .withDescription("Number of partitions to skip from latest when choosing partitions to create ClusteringPlan");
+
+  public static final ConfigOption<String> CLUSTERING_PLAN_STRATEGY_CLUSTER_BEGIN_PARTITION = ConfigOptions
+      .key("clustering.plan.strategy.cluster.begin.partition")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Begin partition used to filter partition (inclusive)");
+
+  public static final ConfigOption<String> CLUSTERING_PLAN_STRATEGY_CLUSTER_END_PARTITION = ConfigOptions
+      .key("clustering.plan.strategy.cluster.end.partition")
+      .stringType()
+      .defaultValue("")
+      .withDescription("End partition used to filter partition (inclusive)");
+
+  public static final ConfigOption<String> CLUSTERING_PLAN_STRATEGY_PARTITION_REGEX_PATTERN = ConfigOptions
+      .key("clustering.plan.strategy.partition.regex.pattern")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Filter clustering partitions that matched regex pattern");
+
+  public static final ConfigOption<String> CLUSTERING_PLAN_STRATEGY_PARTITION_SELECTED = ConfigOptions
+      .key("clustering.plan.strategy.partition.selected")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Partitions to run clustering");
+
   public static final ConfigOption<String> CLUSTERING_PLAN_STRATEGY_CLASS = ConfigOptions
       .key("clustering.plan.strategy.class")
       .stringType()
@@ -726,10 +760,10 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(ClusteringPlanPartitionFilterMode.NONE.name())
       .withDescription("Partition filter mode used in the creation of clustering plan. Available values are - "
           + "NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate."
-          + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
-          + PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
-          + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
-          + PARTITION_FILTER_END_PARTITION.key() + "']."
+          + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + CLUSTERING_TARGET_PARTITIONS.key() + "' and '"
+          + CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
+          + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + CLUSTERING_PLAN_STRATEGY_CLUSTER_BEGIN_PARTITION.key() + "', '"
+          + CLUSTERING_PLAN_STRATEGY_CLUSTER_END_PARTITION.key() + "']."
           + "DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, "
           + "which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour.");
 
@@ -744,12 +778,6 @@ public class FlinkOptions extends HoodieConfig {
       .longType()
       .defaultValue(600L) // default 600 MB
       .withDescription("Files smaller than the size specified here are candidates for clustering, default 600 MB");
-
-  public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigOptions
-      .key("clustering.plan.strategy.daybased.skipfromlatest.partitions")
-      .intType()
-      .defaultValue(0)
-      .withDescription("Number of partitions to skip from latest when choosing partitions to create ClusteringPlan");
 
   public static final ConfigOption<String> CLUSTERING_SORT_COLUMNS = ConfigOptions
       .key("clustering.plan.strategy.sort.columns")

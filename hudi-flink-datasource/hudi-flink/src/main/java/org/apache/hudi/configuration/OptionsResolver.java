@@ -18,13 +18,19 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -225,6 +231,46 @@ public class OptionsResolver {
    */
   public static boolean isIncrementalQuery(Configuration conf) {
     return conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent() || conf.getOptional(FlinkOptions.READ_END_COMMIT).isPresent();
+  }
+
+  /**
+   * Returns whether consistent value will be generated for a logical timestamp type column.
+   */
+  public static boolean isConsistentLogicalTimestampEnabled(Configuration conf) {
+    return conf.getBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+        Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+  }
+
+  /**
+   * Returns whether the writer txn should be guarded by lock.
+   */
+  public static boolean needsGuardByLock(Configuration conf) {
+    return conf.getBoolean(FlinkOptions.METADATA_ENABLED)
+        || conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
+            .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+  }
+
+  /**
+   * Returns the index type.
+   */
+  public static HoodieIndex.IndexType getIndexType(Configuration conf) {
+    return HoodieIndex.IndexType.valueOf(conf.getString(FlinkOptions.INDEX_TYPE));
+  }
+
+  /**
+   * Returns the index key field.
+   */
+  public static String getIndexKeyField(Configuration conf) {
+    return conf.getString(FlinkOptions.INDEX_KEY_FIELD, conf.getString(FlinkOptions.RECORD_KEY_FIELD));
+  }
+
+  /**
+   * Returns the conflict resolution strategy.
+   */
+  public static ConflictResolutionStrategy getConflictResolutionStrategy(Configuration conf) {
+    return isBucketIndexType(conf)
+        ? new BucketIndexConcurrentFileWritesConflictResolutionStrategy()
+        : new SimpleConcurrentFileWritesConflictResolutionStrategy();
   }
 
   // -------------------------------------------------------------------------

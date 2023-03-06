@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -41,6 +42,7 @@ import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -91,6 +93,9 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -99,7 +104,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.isSchemaCompatible;
+import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
+import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.LAZY;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
@@ -800,26 +806,21 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   private void validateSchema() throws HoodieUpsertException, HoodieInsertException {
 
-    if (!shouldValidateAvroSchema() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
+    boolean shouldValidate = config.shouldValidateAvroSchema();
+    boolean allowProjection = config.shouldAllowAutoEvolutionColumnDrop();
+    if ((!shouldValidate && allowProjection)
+        || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
       // Check not required
       return;
     }
 
-    Schema tableSchema;
-    Schema writerSchema;
-    boolean isValid;
     try {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(getMetaClient());
-      writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
-      tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaResolver.getTableAvroSchemaWithoutMetadataFields());
-      isValid = isSchemaCompatible(tableSchema, writerSchema, config.shouldAllowAutoEvolutionColumnDrop());
+      Schema writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
+      Schema tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaResolver.getTableAvroSchema(false));
+      AvroSchemaUtils.checkSchemaCompatible(tableSchema, writerSchema, shouldValidate, allowProjection, getDropPartitionColNames());
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
-    }
-
-    if (!isValid) {
-      throw new HoodieException("Failed schema compatibility check for writerSchema :" + writerSchema
-          + ", table schema :" + tableSchema + ", base path :" + metaClient.getBasePath());
     }
   }
 
@@ -872,7 +873,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp) {
-    return getMetadataWriter(triggeringInstantTimestamp, Option.empty());
+    return getMetadataWriter(
+        triggeringInstantTimestamp, EAGER, Option.empty());
   }
 
   /**
@@ -896,6 +898,29 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   /**
+   * Gets the metadata writer for async indexer.
+   *
+   * @param triggeringInstantTimestamp The instant that is triggering this metadata write.
+   * @return An instance of {@link HoodieTableMetadataWriter}.
+   */
+  public Option<HoodieTableMetadataWriter> getIndexingMetadataWriter(String triggeringInstantTimestamp) {
+    return getMetadataWriter(triggeringInstantTimestamp, LAZY, Option.empty());
+  }
+
+  /**
+   * Gets the metadata writer for regular writes.
+   *
+   * @param triggeringInstantTimestamp The instant that is triggering this metadata write.
+   * @param actionMetadata             Optional action metadata.
+   * @param <R>                        Action metadata type.
+   * @return An instance of {@link HoodieTableMetadataWriter}.
+   */
+  public <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(
+      String triggeringInstantTimestamp, Option<R> actionMetadata) {
+    return getMetadataWriter(triggeringInstantTimestamp, EAGER, actionMetadata);
+  }
+
+  /**
    * Get Table metadata writer.
    * <p>
    * Note:
@@ -905,11 +930,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * are blocked from doing the similar initial metadata table creation and
    * the bootstrapping.
    *
-   * @param triggeringInstantTimestamp - The instant that is triggering this metadata write
+   * @param triggeringInstantTimestamp The instant that is triggering this metadata write
+   * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @return instance of {@link HoodieTableMetadataWriter}
    */
-  public <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
-                                                                                            Option<R> actionMetadata) {
+  protected <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(
+      String triggeringInstantTimestamp,
+      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+      Option<R> actionMetadata) {
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();
@@ -1011,11 +1039,15 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return Functions.noop();
   }
 
-  private boolean shouldValidateAvroSchema() {
-    // TODO(HUDI-4772) re-enable validations in case partition columns
-    //                 being dropped from the data-file after fixing the write schema
-    Boolean shouldDropPartitionColumns = metaClient.getTableConfig().shouldDropPartitionColumns();
-
-    return config.shouldValidateAvroSchema() && !shouldDropPartitionColumns;
+  private Set<String> getDropPartitionColNames() {
+    boolean shouldDropPartitionColumns = metaClient.getTableConfig().shouldDropPartitionColumns();
+    if (!shouldDropPartitionColumns) {
+      return Collections.emptySet();
+    }
+    Option<String[]> partitionFields = metaClient.getTableConfig().getPartitionFields();
+    if (!partitionFields.isPresent()) {
+      return Collections.emptySet();
+    }
+    return new HashSet<>(Arrays.asList(partitionFields.get()));
   }
 }

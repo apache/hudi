@@ -182,6 +182,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups");
 
+  public static final ConfigProperty<Boolean> PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + ".single.group.clustering.enabled")
+      .defaultValue(true)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Whether to generate clustering plan when there is only one file group involved, by default true");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_SORT_COLUMNS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "sort.columns")
       .noDefaultValue()
@@ -466,6 +472,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withClusteringPlanStrategyClass(String clusteringStrategyClass) {
       clusteringConfig.setValue(PLAN_STRATEGY_CLASS_NAME, clusteringStrategyClass);
+      return this;
+    }
+
+    public Builder withSingleGroupClusteringEnabled(Boolean enabled) {
+      clusteringConfig.setValue(PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED, String.valueOf(enabled));
       return this;
     }
 

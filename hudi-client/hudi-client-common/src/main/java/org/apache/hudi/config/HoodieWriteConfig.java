@@ -127,6 +127,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
 
+  public static final ConfigProperty<String> TAGGED_RECORD_STORAGE_LEVEL_VALUE = ConfigProperty
+       .key("hoodie.write.tagged.record.storage.level")
+       .defaultValue("MEMORY_AND_DISK_SER")
+       .withDocumentation("Determine what level of persistence is used to cache write RDDs. "
+          + "Refer to org.apache.spark.storage.StorageLevel for different values");
+
   public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
       .defaultValue("ts")
@@ -614,6 +620,19 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to enable commit conflict checking or not during early "
           + "conflict detection.");
 
+  public static final ConfigProperty<String> MUTLI_WRITER_SOURCE_CHECKPOINT_ID = ConfigProperty
+      .key("hoodie.deltastreamer.multiwriter.source.checkpoint.id")
+      .noDefaultValue()
+      .withDocumentation("Unique Id to be used for multiwriter deltastreamer scenario. This is the "
+          + "scenario when multiple deltastreamers are used to write to the same target table. If you are just using "
+          + "a single deltastreamer for a table then you do not need to set this config.");
+
+  public static final ConfigProperty<String> SENSITIVE_CONFIG_KEYS_FILTER = ConfigProperty
+      .key("hoodie.sensitive.config.keys")
+      .defaultValue("ssl,tls,sasl,auth,credentials")
+      .withDocumentation("Comma separated list of filters for sensitive config keys. Delta Streamer "
+          + "will not print any configuration which contains the configured filter. For example with "
+          + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -1067,6 +1086,10 @@ public class HoodieWriteConfig extends HoodieConfig {
       return getString(WRITE_SCHEMA_OVERRIDE);
     }
     return getSchema();
+  }
+
+  public String getTaggedRecordStorageLevel() {
+    return getString(TAGGED_RECORD_STORAGE_LEVEL_VALUE);
   }
 
   public String getInternalSchema() {
@@ -1591,8 +1614,20 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST);
   }
 
+  public boolean isSingleGroupClusteringEnabled() {
+    return getBoolean(HoodieClusteringConfig.PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED);
+  }
+
+  public boolean shouldClusteringSingleGroup() {
+    return isClusteringSortEnabled() || isSingleGroupClusteringEnabled();
+  }
+
   public String getClusteringSortColumns() {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS);
+  }
+
+  public boolean isClusteringSortEnabled() {
+    return !StringUtils.isNullOrEmpty(getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS));
   }
 
   public HoodieClusteringConfig.LayoutOptimizationStrategy getLayoutOptimizationStrategy() {
@@ -2076,12 +2111,20 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_JOBNAME);
   }
 
+  public String getPushGatewayLabels() {
+    return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_LABELS);
+  }
+
   public boolean getPushGatewayRandomJobNameSuffix() {
     return getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX);
   }
 
   public String getMetricReporterMetricsNamePrefix() {
     return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
+  }
+
+  public String getMetricReporterFileBasedConfigs() {
+    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_FILE_BASED_CONFIGS_PATH);
   }
 
   /**

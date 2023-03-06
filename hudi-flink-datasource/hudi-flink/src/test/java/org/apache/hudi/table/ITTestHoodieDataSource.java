@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
 import org.apache.hudi.table.catalog.HoodieHiveCatalog;
@@ -360,6 +361,36 @@ public class ITTestHoodieDataSource {
   }
 
   @Test
+  void testAppendWriteWithClusteringBatchRead() throws Exception {
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source", 4);
+    streamTableEnv.executeSql(createSource);
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, "insert")
+        .option(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED,true)
+        .option(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true)
+        .option(FlinkOptions.CLUSTERING_DELTA_COMMITS,2)
+        .option(FlinkOptions.CLUSTERING_TASKS, 1)
+        .option(FlinkOptions.CLEAN_RETAIN_COMMITS, 1)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    streamTableEnv.getConfig().getConfiguration()
+            .setBoolean("table.dynamic-table-options.enabled", true);
+    final String query = String.format("select * from t1/*+ options('read.start-commit'='%s')*/",
+            FlinkOptions.START_COMMIT_EARLIEST);
+
+    List<Row> rows = execSelectSql(streamTableEnv, query, 10);
+    // batch read will not lose data when cleaned clustered files.
+    assertRowsEquals(rows, CollectionUtils.combine(TestData.DATA_SET_SOURCE_INSERT_FIRST_COMMIT,
+        TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT));
+  }
+
+  @Test
   void testStreamWriteWithCleaning() {
     // create filesystem table named source
 
@@ -678,14 +709,16 @@ public class ITTestHoodieDataSource {
         + "(1,'Danny',TIMESTAMP '2021-12-01 01:02:01.100001'),\n"
         + "(2,'Stephen',TIMESTAMP '2021-12-02 03:04:02.200002'),\n"
         + "(3,'Julian',TIMESTAMP '2021-12-03 13:14:03.300003'),\n"
-        + "(4,'Fabian',TIMESTAMP '2021-12-04 15:16:04.400004')";
+        + "(4,'Fabian',TIMESTAMP '2021-12-04 15:16:04.400004'),\n"
+        + "(5,'Tom',TIMESTAMP '2721-12-04 15:16:04.500005')";
     execInsertSql(streamTableEnv, insertInto);
 
     final String expected = "["
         + "+I[1, Danny, 2021-12-01T01:02:01.100001], "
         + "+I[2, Stephen, 2021-12-02T03:04:02.200002], "
         + "+I[3, Julian, 2021-12-03T13:14:03.300003], "
-        + "+I[4, Fabian, 2021-12-04T15:16:04.400004]]";
+        + "+I[4, Fabian, 2021-12-04T15:16:04.400004], "
+        + "+I[5, Tom, 2721-12-04T15:16:04.500005]]";
 
     List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
     assertRowsEquals(result, expected);
@@ -1333,6 +1366,7 @@ public class ITTestHoodieDataSource {
     conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, 4);
     conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, 2);
     conf.setString("hoodie.commits.archival.batch", "1");
+    conf.setBoolean(FlinkOptions.METADATA_ENABLED, false);
 
     // write 10 batches of data set
     for (int i = 0; i < 20; i += 2) {
@@ -1346,6 +1380,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.READ_START_COMMIT, secondArchived)
+        .option(FlinkOptions.METADATA_ENABLED, false)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 

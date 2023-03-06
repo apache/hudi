@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.metrics.Registry;
@@ -381,12 +382,18 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
-  protected void releaseResources() {
+  protected void releaseResources(String instantTime) {
     // If we do not explicitly release the resource, spark will automatically manage the resource and clean it up automatically
     // see: https://spark.apache.org/docs/latest/rdd-programming-guide.html#removing-data
     if (config.areReleaseResourceEnabled()) {
-      ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
-          .forEach(JavaRDD::unpersist);
+      HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) context;
+      Map<Integer, JavaRDD<?>> allCachedRdds = sparkEngineContext.getJavaSparkContext().getPersistentRDDs();
+      List<Integer> dataIds = sparkEngineContext.removeCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime));
+      for (int id : dataIds) {
+        if (allCachedRdds.containsKey(id)) {
+          allCachedRdds.get(id).unpersist();
+        }
+      }
     }
   }
 }

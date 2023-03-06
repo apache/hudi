@@ -116,6 +116,9 @@ public class HoodieClientTestUtils {
     if (evlogDir != null) {
       sparkConf.set("spark.eventLog.enabled", "true");
       sparkConf.set("spark.eventLog.dir", evlogDir);
+      sparkConf.set("spark.ui.enabled", "true");
+    } else {
+      sparkConf.set("spark.ui.enabled", "false");
     }
 
     return SparkRDDReadClient.addHoodieSupport(sparkConf);

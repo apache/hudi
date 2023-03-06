@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,24 +16,35 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.adapter;
-
-import org.apache.flink.table.expressions.CallExpression;
-import org.apache.flink.table.expressions.ResolvedExpression;
-import org.apache.flink.table.functions.BuiltInFunctionDefinition;
-import org.apache.flink.table.types.DataType;
-
-import java.util.List;
-
-/**
- * Call Expression creator for test goals.
- */
-public class TestCallExpressions {
-
-  public static CallExpression permanent(
-      BuiltInFunctionDefinition builtInFunctionDefinition,
-      List<ResolvedExpression> args,
-      DataType dataType) {
-    return CallExpression.permanent(builtInFunctionDefinition, args, dataType);
-  }
+{
+  "type": "record",
+  "name": "Person",
+  "fields": [
+    {
+      "name": "@firstname",
+      "type": "string"
+    },
+    {
+      "name": "9lastname",
+      "type": "string"
+    },
+    {
+      "name": "address",
+      "type": {
+        "type": "record",
+        "name": "@Address",
+        "fields": [
+          {
+            "name": "@stree9add*ress",
+            "type": ["string", "null"],
+            "default": "@@@any_address"
+          },
+          {
+            "name": "cit.y.",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ]
 }

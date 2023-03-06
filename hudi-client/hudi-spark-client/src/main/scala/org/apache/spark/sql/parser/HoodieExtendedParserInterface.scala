@@ -16,29 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.adapter;
+package org.apache.spark.sql.parser
 
-import org.apache.flink.table.expressions.CallExpression;
-import org.apache.flink.table.expressions.ResolvedExpression;
-import org.apache.flink.table.functions.BuiltInFunctionDefinition;
-import org.apache.flink.table.functions.FunctionIdentifier;
-import org.apache.flink.table.types.DataType;
-
-import java.util.List;
+import org.apache.spark.sql.catalyst.parser.ParserInterface
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 
 /**
- * Call Expression creator for test goals.
+ * This trait helps us to bridge compatibility gap of [[ParserInterface]] b/w different
+ * Spark versions
  */
-public class TestCallExpressions {
+trait HoodieExtendedParserInterface extends ParserInterface {
 
-  public static CallExpression permanent(
-      BuiltInFunctionDefinition builtInFunctionDefinition,
-      List<ResolvedExpression> args,
-      DataType dataType) {
-    return new CallExpression(
-        FunctionIdentifier.of(builtInFunctionDefinition.getName()),
-        builtInFunctionDefinition,
-        args,
-        dataType);
+  def parseQuery(sqlText: String): LogicalPlan = {
+    throw new UnsupportedOperationException(s"Unsupported, parseQuery is implemented in Spark >= 3.3.0")
   }
+
+  def parseMultipartIdentifier(sqlText: String): Seq[String] = {
+    throw new UnsupportedOperationException(s"Unsupported, parseMultipartIdentifier is implemented in Spark >= 3.0.0")
+  }
+
 }

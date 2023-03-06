@@ -30,7 +30,7 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTabl
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.TableNotFoundException
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSinkCheckpoint}
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
@@ -49,7 +49,7 @@ import scala.concurrent.{Await, Future}
 /**
  * Basic tests on the spark datasource for structured streaming sink
  */
-class TestStructuredStreaming extends HoodieClientTestBase {
+class TestStructuredStreaming extends HoodieSparkClientTestBase {
   private val log = LogManager.getLogger(getClass)
 
   var spark: SparkSession = _

@@ -41,7 +41,7 @@ import java.util.concurrent.TimeoutException;
  * Step1 and Step2 is handled by {@link FailSafeConsistencyGuard}.
  *
  * We are simplifying these steps with {@link OptimisticConsistencyGuard}.
- * Step1: Check if all files adhere to visibility event. If yes, proceed to Sptep 3.
+ * Step1: Check if all files adhere to visibility event. If yes, proceed to Step 3.
  * Step2: If not, Sleep for a configured threshold and then proceed to next step.
  * Step3: issue deletes.
  *

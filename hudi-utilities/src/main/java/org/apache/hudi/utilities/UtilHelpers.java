@@ -54,6 +54,7 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
+import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
@@ -214,7 +215,7 @@ public class UtilHelpers {
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), cfgPath);
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);
@@ -228,7 +229,7 @@ public class UtilHelpers {
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), null);
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);
@@ -484,7 +485,7 @@ public class UtilHelpers {
     return originalProvider;
   }
 
-  public static SchemaProviderWithPostProcessor wrapSchemaProviderWithPostProcessor(SchemaProvider provider,
+  public static SchemaProvider wrapSchemaProviderWithPostProcessor(SchemaProvider provider,
                                                                                     TypedProperties cfg, JavaSparkContext jssc, List<String> transformerClassNames) {
 
     if (provider == null) {
@@ -492,7 +493,7 @@ public class UtilHelpers {
     }
 
     if (provider instanceof SchemaProviderWithPostProcessor) {
-      return (SchemaProviderWithPostProcessor) provider;
+      return provider;
     }
 
     String schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, null);
@@ -503,8 +504,19 @@ public class UtilHelpers {
       schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();
     }
 
+    if (schemaPostProcessorClass == null || schemaPostProcessorClass.isEmpty()) {
+      return provider;
+    }
+
     return new SchemaProviderWithPostProcessor(provider,
         Option.ofNullable(createSchemaPostProcessor(schemaPostProcessorClass, cfg, jssc)));
+  }
+
+  public static SchemaProvider getSchemaProviderForKafkaSource(SchemaProvider provider, TypedProperties cfg, JavaSparkContext jssc) {
+    if (KafkaOffsetPostProcessor.Config.shouldAddOffsets(cfg)) {
+      return new SchemaProviderWithPostProcessor(provider, Option.ofNullable(new KafkaOffsetPostProcessor(cfg, jssc)));
+    }
+    return provider;
   }
 
   public static SchemaProvider createRowBasedSchemaProvider(StructType structType, TypedProperties cfg, JavaSparkContext jssc) {

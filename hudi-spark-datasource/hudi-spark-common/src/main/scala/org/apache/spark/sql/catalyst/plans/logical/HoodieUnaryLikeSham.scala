@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,32 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.spark.sql.catalyst.plans.logical
 
-import java.util.function.Function;
+import org.apache.spark.sql.catalyst.trees.TreeNode
 
-public class MappingIterator<T, R> implements ClosableIterator<R> {
+/**
+ * NOTE: This is a sham trait providing a stub method definition which is not used anywhere.
+ * This is required just to be able to compile the code that relies on [[UnaryLike]]
+ * (introduced in Spark 3.2) against Spark < 3.2
+ */
+trait HoodieUnaryLikeSham[T <: TreeNode[T]] { self: TreeNode[T] =>
 
-  private final ClosableIterator<T> sourceIterator;
-  private final Function<T, R> mapper;
+  protected def withNewChildInternal(newChild: T): T
 
-  public MappingIterator(ClosableIterator<T> sourceIterator, Function<T, R> mapper) {
-    this.sourceIterator = sourceIterator;
-    this.mapper = mapper;
-  }
-
-  @Override
-  public boolean hasNext() {
-    return sourceIterator.hasNext();
-  }
-
-  @Override
-  public R next() {
-    return mapper.apply(sourceIterator.next());
-  }
-
-  @Override
-  public void close() {
-    sourceIterator.close();
-  }
 }

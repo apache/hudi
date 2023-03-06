@@ -20,7 +20,7 @@ package org.apache.hudi.table.format.cow;
 
 import java.util.Comparator;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.DataTypeUtils;

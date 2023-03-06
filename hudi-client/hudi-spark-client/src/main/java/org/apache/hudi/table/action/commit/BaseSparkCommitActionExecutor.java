@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -148,10 +149,10 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords) {
     // Cache the tagged records, so we don't end up computing both
-    // TODO: Consistent contract in HoodieWriteClient regarding preppedRecord storage level handling
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
     if (inputRDD.getStorageLevel() == StorageLevel.NONE()) {
-      inputRDD.persist(StorageLevel.MEMORY_AND_DISK_SER());
+      HoodieJavaRDD.of(inputRDD).persist(config.getTaggedRecordStorageLevel(),
+          context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     } else {
       LOG.info("RDD PreppedRecords was persisted at: " + inputRDD.getStorageLevel());
     }
@@ -163,7 +164,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     if (isWorkloadProfileNeeded()) {
       context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
       workloadProfile = new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
-      LOG.info("Input workload profile :" + workloadProfile);
+      LOG.debug("Input workload profile :" + workloadProfile);
     }
 
     // partition using the insert partitioner
@@ -258,7 +259,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   protected HoodieData<WriteStatus> updateIndex(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
     // RDD actions that are performed after updating the index.
-    writeStatuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE));
+    writeStatuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     Instant indexStartTime = Instant.now();
     // Update the index back
     HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
