@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.flink.table.catalog.Column;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -68,7 +69,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   @Override
   public DynamicTableSource createDynamicTableSource(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
-    ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
+    ResolvedSchema schema = ResolvedSchema.of(context.getCatalogTable().getResolvedSchema().getColumns().stream().filter(c-> !(c instanceof Column.ComputedColumn)).collect(Collectors.toList()));
+
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
 
