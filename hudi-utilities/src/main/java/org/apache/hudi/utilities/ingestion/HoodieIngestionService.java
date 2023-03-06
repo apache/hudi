@@ -51,6 +51,10 @@ public abstract class HoodieIngestionService extends HoodieAsyncService {
 
   /**
    * Entrypoint to start ingestion.
+   * <p>
+   * Depends on the ingestion mode, this method will
+   * <li>either start a loop as implemented in {@link #startService()} for continuous mode
+   * <li>or do one-time ingestion as implemented in {@link #ingestOnce()} for non-continuous mode
    */
   public void startIngestion() {
     if (ingestionConfig.getBoolean(INGESTION_IS_CONTINUOUS)) {
@@ -127,6 +131,7 @@ public abstract class HoodieIngestionService extends HoodieAsyncService {
 
   /**
    * A callback method to be invoked after ingestion completes.
+   * <p>
    * For continuous mode, this is invoked once after exiting the ingestion loop.
    */
   protected boolean onIngestionCompletes(boolean hasError) {

@@ -45,6 +45,7 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -878,17 +879,13 @@ public class HoodieDeltaStreamer implements Serializable {
       return props;
     }
 
-    /**
-     * This API is for testing only.
-     */
+    @VisibleForTesting
     public DeltaSync getDeltaSync() {
       return deltaSync;
     }
   }
 
-  /**
-   * This API is for testing only.
-   */
+  @VisibleForTesting
   public HoodieIngestionService getIngestionService() {
     return ingestionService.get();
   }
