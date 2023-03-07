@@ -21,6 +21,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hudi.AutoRecordKeyGenerationUtils.{mayBeAutoGenerateRecordKeys, validateParamsForAutoGenerationOfRecordKeys}
 import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
 import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
 import org.apache.hudi.DataSourceWriteOptions._
@@ -50,6 +51,7 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileNullability
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{SparkKeyGeneratorInterface, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metrics.Metrics
@@ -65,7 +67,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.{SPARK_VERSION, SparkContext}
+import org.apache.spark.{SPARK_VERSION, SparkContext, TaskContext}
 import org.slf4j.LoggerFactory
 
 import java.util.function.BiConsumer
@@ -312,6 +314,7 @@ object HoodieSparkSqlWriter {
             val writerSchema = deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, parameters)
 
             validateSchemaForHoodieIsDeleted(writerSchema)
+            validateParamsForAutoGenerationOfRecordKeys(parameters, hoodieConfig)
 
             // Short-circuit if bulk_insert via row is enabled.
             // scalastyle:off
@@ -350,7 +353,7 @@ object HoodieSparkSqlWriter {
             // Convert to RDD[HoodieRecord]
             val hoodieRecords =
               createHoodieRecordRdd(df, writeConfig, parameters, avroRecordName, avroRecordNamespace, writerSchema,
-                dataFileSchema, operation)
+                dataFileSchema, operation, instantTime)
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
               asyncCompactionTriggerFn.get.apply(client)
@@ -806,7 +809,8 @@ object HoodieSparkSqlWriter {
     }
 
     val shouldDropPartitionColumns = hoodieConfig.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
-    val hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(df, writeConfig, bulkInsertPartitionerRows, shouldDropPartitionColumns)
+    val hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(df, writeConfig, bulkInsertPartitionerRows, shouldDropPartitionColumns,
+      instantTime)
 
     val optsOverrides = Map(
       HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED ->
@@ -1095,10 +1099,12 @@ object HoodieSparkSqlWriter {
                                     recordNameSpace: String,
                                     writerSchema: Schema,
                                     dataFileSchema: Schema,
-                                    operation: WriteOperationType) = {
+                                    operation: WriteOperationType,
+                                    instantTime: String) = {
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps))
     val recordType = config.getRecordMerger.getRecordType
+    val autoGenerateRecordKeys : Boolean = !parameters.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
 
     val shouldCombine = parameters(INSERT_DROP_DUPS.key()).toBoolean ||
       operation.equals(WriteOperationType.UPSERT) ||
@@ -1118,24 +1124,39 @@ object HoodieSparkSqlWriter {
           Some(writerSchema))
 
         avroRecords.mapPartitions(it => {
+          val sparkPartitionId = TaskContext.getPartitionId()
+
           val dataFileSchema = new Schema.Parser().parse(dataFileSchemaStr)
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
 
-          it.map { avroRecord =>
+          // generate record keys if auto generation is enabled.
+          val recordsWithRecordKeyOverride = mayBeAutoGenerateRecordKeys(autoGenerateRecordKeys, it, instantTime, sparkPartitionId)
+
+          // handle dropping partition columns
+          recordsWithRecordKeyOverride.map { avroRecordRecordKeyOverRide =>
             val processedRecord = if (shouldDropPartitionColumns) {
-              HoodieAvroUtils.rewriteRecord(avroRecord, dataFileSchema)
+              HoodieAvroUtils.rewriteRecord(avroRecordRecordKeyOverRide._1, dataFileSchema)
             } else {
-              avroRecord
+              avroRecordRecordKeyOverRide._1
             }
+
+            // Generate HoodieKey for records
+            val hoodieKey = if (autoGenerateRecordKeys) {
+              // fetch record key from the recordKeyOverride if auto generation is enabled.
+              new HoodieKey(avroRecordRecordKeyOverRide._2.get, keyGenerator.getKey(avroRecordRecordKeyOverRide._1).getPartitionPath)
+            } else {
+              keyGenerator.getKey(avroRecordRecordKeyOverRide._1)
+            }
+
             val hoodieRecord = if (shouldCombine) {
-              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRecord, config.getString(PRECOMBINE_FIELD),
+              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRecordRecordKeyOverRide._1, config.getString(PRECOMBINE_FIELD),
                 false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
-              DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, keyGenerator.getKey(avroRecord),
+              DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getString(PAYLOAD_CLASS_NAME))
             } else {
-              DataSourceUtils.createHoodieRecord(processedRecord, keyGenerator.getKey(avroRecord),
+              DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey,
                 config.getString(PAYLOAD_CLASS_NAME))
             }
             hoodieRecord
@@ -1143,6 +1164,7 @@ object HoodieSparkSqlWriter {
         }).toJavaRDD()
 
       case HoodieRecord.HoodieRecordType.SPARK =>
+        // TODO: fix auto generation of record keys
         val sparkKeyGenerator = keyGenerator.asInstanceOf[SparkKeyGeneratorInterface]
         val dataFileSchema = new Schema.Parser().parse(dataFileSchemaStr)
         val dataFileStructType = HoodieInternalRowUtils.getCachedSchema(dataFileSchema)

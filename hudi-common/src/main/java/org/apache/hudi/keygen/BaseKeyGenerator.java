@@ -37,6 +37,7 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
   protected final boolean encodePartitionPath;
   protected final boolean hiveStylePartitioning;
   protected final boolean consistentLogicalTimestampEnabled;
+  private boolean autoGenerateRecordKeys;
 
   protected BaseKeyGenerator(TypedProperties config) {
     super(config);
@@ -63,7 +64,7 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
    */
   @Override
   public final HoodieKey getKey(GenericRecord record) {
-    if (getRecordKeyFieldNames() == null || getPartitionPathFields() == null) {
+    if (!autoGenerateRecordKeys() && (getRecordKeyFieldNames() == null || getPartitionPathFields() == null)) {
       throw new HoodieKeyException("Unable to find field names for record key or partition path in cfg");
     }
     return new HoodieKey(getRecordKey(record), getPartitionPath(record));
@@ -80,5 +81,13 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
 
   public boolean isConsistentLogicalTimestampEnabled() {
     return consistentLogicalTimestampEnabled;
+  }
+
+  public boolean autoGenerateRecordKeys() {
+    return this.autoGenerateRecordKeys;
+  }
+
+  public void setAutoGenerateRecordKeys(boolean autoGenerateRecordKeys) {
+    this.autoGenerateRecordKeys = autoGenerateRecordKeys;
   }
 }

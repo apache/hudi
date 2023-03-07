@@ -61,10 +61,11 @@ public class KeyGenUtils {
    */
   public static KeyGeneratorType inferKeyGeneratorType(
       String recordsKeyFields, String partitionFields) {
+    boolean autoGenerateRecordKeys = recordsKeyFields == null;
     if (!StringUtils.isNullOrEmpty(partitionFields)) {
       int numPartFields = partitionFields.split(",").length;
-      int numRecordKeyFields = recordsKeyFields.split(",").length;
-      if (numPartFields == 1 && numRecordKeyFields == 1) {
+      int numRecordKeyFields = autoGenerateRecordKeys ? 0 : recordsKeyFields.split(",").length;
+      if (numPartFields == 1 && (autoGenerateRecordKeys || numRecordKeyFields == 1)) {
         return KeyGeneratorType.SIMPLE;
       }
       return KeyGeneratorType.COMPLEX;

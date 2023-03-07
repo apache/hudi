@@ -90,16 +90,6 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     }
 
     {
-      // Record's key field not specified
-      val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "partitionField")
-
-      assertThrows(classOf[IllegalArgumentException]) {
-        new SimpleKeyGenerator(props)
-      }
-    }
-
-    {
       // nested field as record key and partition path
       val keyGen = new SimpleKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.isAdmin", "false"))
 
@@ -257,17 +247,6 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       keyGen.getKey(baseRecord)
       keyGen.getRecordKey(baseRow)
       keyGen.getRecordKey(internalRow, structType)
-    }
-
-    // Record's key field not specified
-    assertThrows(classOf[IllegalArgumentException]) {
-      val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
-      val keyGen = new ComplexKeyGenerator(props)
-
-      keyGen.getKey(baseRecord)
-      keyGen.getPartitionPath(baseRow)
-      keyGen.getPartitionPath(internalRow, structType)
     }
 
     {
@@ -485,16 +464,6 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
       assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
       assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
-    }
-
-    {
-      // Record's key field not specified
-      val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
-
-      assertThrows(classOf[IllegalArgumentException]) {
-        new GlobalDeleteKeyGenerator(props)
-      }
     }
 
     {

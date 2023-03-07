@@ -27,10 +27,12 @@ import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.SparkHoodieIndexFactory
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{BuiltinKeyGenerator, SparkKeyGeneratorInterface}
 import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
+import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}
@@ -60,9 +62,11 @@ object HoodieDatasetBulkInsertHelper
   def prepareForBulkInsert(df: DataFrame,
                            config: HoodieWriteConfig,
                            partitioner: BulkInsertPartitioner[Dataset[Row]],
-                           shouldDropPartitionColumns: Boolean): Dataset[Row] = {
+                           shouldDropPartitionColumns: Boolean,
+                           instantTime: String): Dataset[Row] = {
     val populateMetaFields = config.populateMetaFields()
     val schema = df.schema
+    val autoGenerateRecordKeys = !config.getProps.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
 
     val metaFields = Seq(
       StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, StringType),
@@ -82,9 +86,19 @@ object HoodieDatasetBulkInsertHelper
           val keyGenerator =
             ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps))
               .asInstanceOf[SparkKeyGeneratorInterface]
+          val partitionId = TaskContext.getPartitionId()
+          var rowId = 0
 
           iter.map { row =>
-            val recordKey = keyGenerator.getRecordKey(row, schema)
+            // auto generate record keys if needed
+            val recordKey = if (autoGenerateRecordKeys) {
+              val recKey = HoodieRecord.generateSequenceId(instantTime, partitionId, rowId)
+              rowId += 1
+              UTF8String.fromString(recKey)
+            }
+            else { // else use key generator to fetch record key
+              keyGenerator.getRecordKey(row, schema)
+            }
             val partitionPath = keyGenerator.getPartitionPath(row, schema)
             val commitTimestamp = UTF8String.EMPTY_UTF8
             val commitSeqNo = UTF8String.EMPTY_UTF8

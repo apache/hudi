@@ -60,11 +60,6 @@ public class TestGlobalDeleteRecordGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testNullRecordKeyFields() {
-    Assertions.assertThrows(IllegalArgumentException.class, () -> new GlobalDeleteKeyGenerator(getPropertiesWithoutRecordKeyProp()));
-  }
-
-  @Test
   public void testWrongRecordKeyField() {
     GlobalDeleteKeyGenerator keyGenerator = new GlobalDeleteKeyGenerator(getWrongRecordKeyFieldProps());
     Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));

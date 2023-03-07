@@ -26,6 +26,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 /**
@@ -55,7 +56,12 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
 
   public CustomAvroKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.setAutoGenerateRecordKeys(!props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
+    if (autoGenerateRecordKeys()) {
+      this.recordKeyFields = Collections.emptyList();
+    } else {
+      this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
+    }
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
   }
 

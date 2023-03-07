@@ -431,7 +431,11 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     private final HoodieUnsafeRowUtils.NestedFieldPath[] partitionPathFieldsPaths;
 
     SparkRowAccessor(StructType schema) {
-      this.recordKeyFieldsPaths = resolveNestedFieldPaths(getRecordKeyFieldNames(), schema, false);
+      if (autoGenerateRecordKeys()) {
+        this.recordKeyFieldsPaths = new HoodieUnsafeRowUtils.NestedFieldPath[0];
+      } else {
+        this.recordKeyFieldsPaths = resolveNestedFieldPaths(getRecordKeyFieldNames(), schema, false);
+      }
       // Sometimes, we need to extract the recordKey from the partition-dropped data
       // To be consistent with avro key generator
       // ParquetBootstrapMetadataHandler

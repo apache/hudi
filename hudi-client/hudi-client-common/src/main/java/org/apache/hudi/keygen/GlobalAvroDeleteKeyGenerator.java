@@ -23,6 +23,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -35,7 +36,12 @@ public class GlobalAvroDeleteKeyGenerator extends BaseKeyGenerator {
 
   public GlobalAvroDeleteKeyGenerator(TypedProperties config) {
     super(config);
-    this.recordKeyFields = Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","));
+    this.setAutoGenerateRecordKeys(!config.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
+    if (autoGenerateRecordKeys()) {
+      this.recordKeyFields = Collections.emptyList();
+    } else {
+      this.recordKeyFields = Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","));
+    }
   }
 
   @Override
