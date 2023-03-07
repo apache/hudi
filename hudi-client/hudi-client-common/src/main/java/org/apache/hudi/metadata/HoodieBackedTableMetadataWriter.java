@@ -93,6 +93,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
@@ -721,10 +722,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount) throws IOException {
-    final List<Integer> list = new ArrayList<>(fileGroupCount);
-    for (int i = 0; i < fileGroupCount; ++i) {
-      list.add(i);
-    }
+    final List<Integer> list = IntStream.range(0, fileGroupCount).boxed().collect(Collectors.toList());
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Initializing metadata table file groups: " + metadataPartition);
     engineContext.parallelize(list, fileGroupCount).map(x -> {
       final HashMap<HeaderMetadataType, String> blockHeader = new HashMap<>();
