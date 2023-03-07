@@ -71,11 +71,6 @@ shown below.
 
 ## [Release 0.12.1](https://github.com/apache/hudi/releases/tag/release-0.12.1) ([docs](/docs/0.12.1/quick-start-guide))
 
-## Long Term Support
-
-We aim to maintain 0.12 for a longer period of time and provide a stable release through the latest 0.12.x release for
-users to migrate to.  The latest 0.12 release is [0.12.2](/releases/release-0.12.2).
-
 ## Migration Guide
 
 * This release (0.12.1) does not introduce any new table version, thus no migration is needed if you are on 0.12.0.
@@ -127,11 +122,6 @@ Recommended to upgrading to 0.12.1 to avoid getting duplicate records in your pi
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12352182)
 
 ## [Release 0.12.0](https://github.com/apache/hudi/releases/tag/release-0.12.0) ([docs](/docs/0.12.0/quick-start-guide))
-
-## Long Term Support
-
-We aim to maintain 0.12 for a longer period of time and provide a stable release through the latest 0.12.x release for
-users to migrate to.  The latest 0.12 release is [0.12.2](/releases/release-0.12.2).
 
 ## Migration Guide
 
