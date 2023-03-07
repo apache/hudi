@@ -343,12 +343,14 @@ public class HoodieMetadataTableValidator implements Serializable {
     sparkConf.set("spark.executor.memory", cfg.sparkMemory);
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
 
-    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, cfg);
-
     try {
+      HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, cfg);
       validator.run();
+    } catch (TableNotFoundException e) {
+      LOG.warn(String.format("The Hudi data table is not found: [%s]. "
+          + "Skipping the validation of the metadata table.", cfg.basePath), e);
     } catch (Throwable throwable) {
-      LOG.error("Fail to do hoodie metadata table validation for " + validator.cfg, throwable);
+      LOG.error("Fail to do hoodie metadata table validation for " + cfg, throwable);
     } finally {
       jsc.stop();
     }
