@@ -445,41 +445,45 @@ public class HoodieMetadataTableValidator implements Serializable {
       return true;
     }
 
-    HoodieMetadataValidationContext metadataTableBasedContext =
-        new HoodieMetadataValidationContext(engineContext, cfg, metaClient, true);
-    HoodieMetadataValidationContext fsBasedContext =
-        new HoodieMetadataValidationContext(engineContext, cfg, metaClient, false);
-
-    Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
-    List<Pair<Boolean, String>> result = engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
-      try {
-        validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
-        LOG.info(String.format("Metadata table validation succeeded for partition %s (partition %s)", partitionPath, taskLabels));
-        return Pair.of(true, "");
-      } catch (HoodieValidationException e) {
-        LOG.error(
-            String.format("Metadata table validation failed for partition %s due to HoodieValidationException (partition %s)",
-                partitionPath, taskLabels), e);
-        if (!cfg.ignoreFailed) {
-          throw e;
+    try (HoodieMetadataValidationContext metadataTableBasedContext =
+             new HoodieMetadataValidationContext(engineContext, cfg, metaClient, true);
+         HoodieMetadataValidationContext fsBasedContext =
+             new HoodieMetadataValidationContext(engineContext, cfg, metaClient, false)) {
+      Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
+      List<Pair<Boolean, String>> result = engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
+        try {
+          validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
+          LOG.info(String.format("Metadata table validation succeeded for partition %s (partition %s)", partitionPath, taskLabels));
+          return Pair.of(true, "");
+        } catch (HoodieValidationException e) {
+          LOG.error(
+              String.format("Metadata table validation failed for partition %s due to HoodieValidationException (partition %s)",
+                  partitionPath, taskLabels), e);
+          if (!cfg.ignoreFailed) {
+            throw e;
+          }
+          return Pair.of(false, e.getMessage() + " for partition: " + partitionPath);
         }
-        return Pair.of(false, e.getMessage() + " for partition: " + partitionPath);
-      }
-    }).collectAsList();
+      }).collectAsList();
 
-    for (Pair<Boolean, String> res : result) {
-      finalResult &= res.getKey();
-      if (res.getKey().equals(false)) {
-        LOG.error("Metadata Validation failed for table: " + cfg.basePath + " with error: " + res.getValue());
+      for (Pair<Boolean, String> res : result) {
+        finalResult &= res.getKey();
+        if (res.getKey().equals(false)) {
+          LOG.error("Metadata Validation failed for table: " + cfg.basePath + " with error: " + res.getValue());
+        }
       }
-    }
 
-    if (finalResult) {
-      LOG.info(String.format("Metadata table validation succeeded (%s).", taskLabels));
+      if (finalResult) {
+        LOG.info(String.format("Metadata table validation succeeded (%s).", taskLabels));
+        return true;
+      } else {
+        LOG.warn(String.format("Metadata table validation failed (%s).", taskLabels));
+        return false;
+      }
+    } catch (Exception e) {
+      LOG.warn("Error closing HoodieMetadataValidationContext, "
+          + "ignoring the error as the validation is successful.", e);
       return true;
-    } else {
-      LOG.warn(String.format("Metadata table validation failed (%s).", taskLabels));
-      return false;
     }
   }
 
@@ -1020,7 +1024,7 @@ public class HoodieMetadataTableValidator implements Serializable {
    * the same information regardless of whether metadata table is enabled, which is
    * verified in the {@link HoodieMetadataTableValidator}.
    */
-  private static class HoodieMetadataValidationContext implements Serializable {
+  private static class HoodieMetadataValidationContext implements AutoCloseable, Serializable {
 
     private static final Logger LOG = LogManager.getLogger(HoodieMetadataValidationContext.class);
 
@@ -1146,6 +1150,12 @@ public class HoodieMetadataTableValidator implements Serializable {
           .setFilename(filename)
           .setBloomFilter(ByteBuffer.wrap(bloomFilter.serializeToString().getBytes()))
           .build());
+    }
+
+    @Override
+    public void close() throws Exception {
+      tableMetadata.close();
+      fileSystemView.close();
     }
   }
 }
