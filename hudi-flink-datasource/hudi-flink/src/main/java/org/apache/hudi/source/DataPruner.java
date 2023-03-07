@@ -29,6 +29,7 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 
+import java.io.Serializable;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +39,9 @@ import static org.apache.hudi.util.EvaluatorUtils.fromExpression;
 /**
  * Utility to do data skipping.
  */
-public class DataPruner {
+public class DataPruner implements Serializable {
+  private static final long serialVersionUID = 1L;
+
   private final String[] referencedCols;
   private final List<Evaluator> evaluators;
 
@@ -81,10 +84,10 @@ public class DataPruner {
   }
 
   public static Map<String, ColumnStats> convertColumnStats(RowData indexRow, RowType.RowField[] queryFields) {
-    Map<String, ColumnStats> mapping = new LinkedHashMap<>();
     if (indexRow == null || queryFields == null) {
-      return mapping;
+      throw new AssertionError();
     }
+    Map<String, ColumnStats> mapping = new LinkedHashMap<>();
     for (int i = 0; i < queryFields.length; i++) {
       String name = queryFields[i].getName();
       int startPos = 2 + i * 3;

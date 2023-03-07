@@ -21,7 +21,6 @@ package org.apache.hudi.source;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -66,7 +65,7 @@ public class FileIndex {
   private List<String> partitionPaths;      // cache of partition paths
   private List<ResolvedExpression> filters; // push down filters
   private final boolean tableExists;
-  private Option<DataPruner> dataPrunerOpt; // utility to do data skipping, which is lazy initialized
+  private DataPruner dataPruner;
 
   private FileIndex(Path path, Configuration conf, RowType rowType) {
     this.path = path;
@@ -191,6 +190,7 @@ public class FileIndex {
   public void setFilters(List<ResolvedExpression> filters) {
     if (filters.size() > 0) {
       this.filters = new ArrayList<>(filters);
+      this.dataPruner = initializeDataPruner(filters);
     }
   }
 
@@ -213,15 +213,9 @@ public class FileIndex {
    */
   @Nullable
   private Set<String> candidateFilesInMetadataTable(FileStatus[] allFileStatus) {
-    // initialize data skipper if it's not initialized yet
-    if (this.dataPrunerOpt == null) {
-      DataPruner dataPruner = initializeDataPruner();
-      this.dataPrunerOpt = Option.ofNullable(dataPruner);
-    }
-    if (!this.dataPrunerOpt.isPresent()) {
+    if (dataPruner == null) {
       return null;
     }
-    DataPruner dataPruner = this.dataPrunerOpt.get();
     try {
       String[] referencedCols = dataPruner.getReferencedCols();
       final List<RowData> colStats = ColumnStatsIndices.readColumnStatsIndex(path.toString(), metadataConfig, referencedCols);
@@ -297,7 +291,7 @@ public class FileIndex {
     return filters;
   }
 
-  private DataPruner initializeDataPruner() {
+  private DataPruner initializeDataPruner(List<ResolvedExpression> filters) {
     // NOTE: Data Skipping is only effective when it references columns that are indexed w/in
     //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
     //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
@@ -308,6 +302,6 @@ public class FileIndex {
       validateConfig();
       return null;
     }
-    return DataPruner.newInstance(this.filters);
+    return DataPruner.newInstance(filters);
   }
 }
