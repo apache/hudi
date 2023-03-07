@@ -165,7 +165,7 @@ public class ConfigProperty<T> implements Serializable {
   }
 
   public ConfigProperty<T> makeEssential(boolean isEssential) {
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, Option.of(inferFunction), validValues, isEssential, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, isEssential, alternatives);
   }
 
   /**
