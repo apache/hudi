@@ -19,13 +19,13 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.common.config.{ConfigProperty, DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
+import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
+import org.apache.hudi.common.util.{Option, StringUtils}
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -35,9 +35,9 @@ import org.apache.hudi.util.JFunction
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
-import java.util.function.{Function => JavaFunction}
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
+import scala.util.control.Breaks.break
 
 /**
  * List of options that can be passed to the Hoodie datasource,
@@ -68,6 +68,7 @@ object DataSourceReadOptions {
     .key("hoodie.datasource.query.incremental.format")
     .defaultValue(INCREMENTAL_FORMAT_LATEST_STATE_VAL)
     .withValidValues(INCREMENTAL_FORMAT_LATEST_STATE_VAL, INCREMENTAL_FORMAT_CDC_VAL)
+    .sinceVersion("0.13.0")
     .withDocumentation("This config is used alone with the 'incremental' query type." +
       "When set to 'latest_state', it returns the latest records' values." +
       "When set to 'cdc', it returns the cdc data.")
@@ -99,6 +100,7 @@ object DataSourceReadOptions {
   val START_OFFSET: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.streaming.startOffset")
     .defaultValue("earliest")
+    .sinceVersion("0.13.0")
     .withDocumentation("Start offset to pull data from hoodie streaming source. allow earliest, latest, and " +
       "specified start instant time")
 
@@ -155,7 +157,7 @@ object DataSourceReadOptions {
   val FILE_INDEX_LISTING_MODE_LAZY = "lazy"
 
   val FILE_INDEX_LISTING_MODE_OVERRIDE: ConfigProperty[String] =
-    ConfigProperty.key("hoodie.datasource.read.file.index.listing.mode.override")
+    ConfigProperty.key("hoodie.datasource.read.file.index.listing.mode")
       .defaultValue(FILE_INDEX_LISTING_MODE_LAZY)
       .withValidValues(FILE_INDEX_LISTING_MODE_LAZY, FILE_INDEX_LISTING_MODE_EAGER)
       .sinceVersion("0.13.0")
@@ -286,38 +288,42 @@ object DataSourceWriteOptions {
     .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.")
 
   /**
-    * Translate spark parameters to hudi parameters
+    * May be derive partition path from incoming df if not explicitly set.
     *
     * @param optParams Parameters to be translated
     * @return Parameters after translation
     */
-  def translateSqlOptions(optParams: Map[String, String]): Map[String, String] = {
+  def mayBeDerivePartitionPath(optParams: Map[String, String]): Map[String, String] = {
     var translatedOptParams = optParams
     // translate the api partitionBy of spark DataFrameWriter to PARTITIONPATH_FIELD
-    if (optParams.contains(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)) {
+    // we should set hoodie's partition path only if its not set by the user.
+    if (optParams.contains(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
+      && !optParams.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())) {
       val partitionColumns = optParams.get(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
         .map(SparkDataSourceUtils.decodePartitioningColumns)
         .getOrElse(Nil)
       val keyGeneratorClass = optParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key(),
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.defaultValue)
 
-      val partitionPathField =
-        keyGeneratorClass match {
-          // Only CustomKeyGenerator needs special treatment, because it needs to be specified in a way
-          // such as "field1:PartitionKeyType1,field2:PartitionKeyType2".
-          // partitionBy can specify the partition like this: partitionBy("p1", "p2:SIMPLE", "p3:TIMESTAMP")
-          case c if c == classOf[CustomKeyGenerator].getName =>
-            partitionColumns.map(e => {
-              if (e.contains(":")) {
-                e
-              } else {
-                s"$e:SIMPLE"
-              }
-            }).mkString(",")
-          case _ =>
-            partitionColumns.mkString(",")
-        }
-      translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD.key -> partitionPathField)
+      keyGeneratorClass match {
+        // CustomKeyGenerator needs special treatment, because it needs to be specified in a way
+        // such as "field1:PartitionKeyType1,field2:PartitionKeyType2".
+        // partitionBy can specify the partition like this: partitionBy("p1", "p2:SIMPLE", "p3:TIMESTAMP")
+        case c if (c.nonEmpty && c == classOf[CustomKeyGenerator].getName) =>
+          val partitionPathField = partitionColumns.map(e => {
+            if (e.contains(":")) {
+              e
+            } else {
+              s"$e:SIMPLE"
+            }
+          }).mkString(",")
+          translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD.key -> partitionPathField)
+        case c if (c.isEmpty || !keyGeneratorClass.equals(classOf[NonpartitionedKeyGenerator].getName)) =>
+          // for any key gen other than NonPartitioned key gen, we can override the partition field config.
+          val partitionPathField = partitionColumns.mkString(",")
+          translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD.key -> partitionPathField)
+        case _ => // no op incase of NonPartitioned Key gen.
+      }
     }
     translatedOptParams
   }
@@ -339,6 +345,17 @@ object DataSourceWriteOptions {
    * This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective
    */
   val PAYLOAD_CLASS_NAME = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME
+
+  /**
+   * HoodieMerger will replace the payload to process the merge of data
+   * and provide the same capabilities as the payload
+   */
+  val RECORD_MERGER_IMPLS = HoodieWriteConfig.RECORD_MERGER_IMPLS
+
+  /**
+   * Id of merger strategy
+   */
+  val RECORD_MERGER_STRATEGY = HoodieWriteConfig.RECORD_MERGER_STRATEGY
 
   /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value
@@ -434,23 +451,22 @@ object DataSourceWriteOptions {
       + " within a streaming microbatch. Turning this on, could hide the write status errors while the spark checkpoint moves ahead." +
       "So, would recommend users to use this with caution.")
 
+  val STREAMING_CHECKPOINT_IDENTIFIER: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.write.streaming.checkpoint.identifier")
+    .defaultValue("default_single_writer")
+    .sinceVersion("0.13.0")
+    .withDocumentation("A stream identifier used for HUDI to fetch the right checkpoint(`batch id` to be more specific) "
+      + "corresponding this writer. Please note that keep the identifier an unique value for different writer "
+      + "if under multi-writer scenario. If the value is not set, will only keep the checkpoint info in the memory. "
+      + "This could introduce the potential issue that the job is restart(`batch id` is lost) while spark checkpoint write fails, "
+      + "causing spark will retry and rewrite the data.")
+
   val META_SYNC_CLIENT_TOOL_CLASS_NAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.meta.sync.client.tool.class")
     .defaultValue(classOf[HiveSyncTool].getName)
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
 
   val RECONCILE_SCHEMA: ConfigProperty[Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
-
-  // NOTE: This is an internal config that is not exposed to the public
-  private[hudi] val CANONICALIZE_SCHEMA: ConfigProperty[Boolean] =
-    ConfigProperty.key("hoodie.datasource.write.schema.canonicalize")
-      .defaultValue(true)
-      .sinceVersion("0.13.0")
-      .withDocumentation("Controls whether incoming batch's schema's nullability constraints should be canonicalized "
-        + "relative to the table's schema. For ex, in case field A is marked as null-able in table's schema, but is marked "
-        + "as non-null in the incoming batch, w/o canonicalization such write might fail as we won't be able to read existing "
-        + "null records from the table (for updating, for ex). Note, that this config has only effect when "
-        + "'hoodie.datasource.write.reconcile.schema' is set to false.")
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
@@ -817,6 +833,33 @@ object DataSourceOptionsHelper {
       }
     })
     translatedOpt.toMap
+  }
+
+  /**
+   * Some config keys differ from what user sets and whats part of table Config. this method assists in fetching the
+   * right table config and populating write configs.
+   * @param tableConfig table config of interest.
+   * @param params incoming write params.
+   * @return missing params that needs to be added to incoming write params
+   */
+  def fetchMissingWriteConfigsFromTableConfig(tableConfig: HoodieTableConfig, params: Map[String, String]) : Map[String, String] = {
+    val missingWriteConfigs = scala.collection.mutable.Map[String, String]()
+    if (!params.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) && tableConfig.getRecordKeyFieldProp != null) {
+      missingWriteConfigs ++= Map(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> tableConfig.getRecordKeyFieldProp)
+    }
+    if (!params.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) && tableConfig.getPartitionFieldProp != null) {
+      missingWriteConfigs ++= Map(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> tableConfig.getPartitionFieldProp)
+    }
+    if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
+      missingWriteConfigs ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)
+    }
+    if (!params.contains(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()) && tableConfig.getPreCombineField != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key -> tableConfig.getPreCombineField)
+    }
+    if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
+    }
+    missingWriteConfigs.toMap
   }
 
   def parametersWithReadDefaults(parameters: Map[String, String]): Map[String, String] = {

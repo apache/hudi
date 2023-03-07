@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
@@ -64,70 +65,77 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
 
     val basePath = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, Map.empty)
 
-    var willCompactionInstants: Seq[String] = Seq.empty
-    operation match {
-      case "schedule" =>
-        val instantTime = instantTimestamp.map(_.toString).getOrElse(HoodieActiveTimeline.createNewInstantTime)
-        if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
-          willCompactionInstants = Seq(instantTime)
-        }
-      case "run" =>
-        // Do compaction
-        val timeLine = metaClient.getActiveTimeline
-        val pendingCompactionInstants = timeLine.getWriteTimeline.getInstants.iterator().asScala
-          .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
-          .map(_.getTimestamp)
-          .toSeq.sortBy(f => f)
-        willCompactionInstants = if (instantTimestamp.isEmpty) {
-          if (pendingCompactionInstants.nonEmpty) {
-            pendingCompactionInstants
-          } else { // If there are no pending compaction, schedule to generate one.
-            // CompactionHoodiePathCommand will return instanceTime for SCHEDULE.
-            val instantTime = HoodieActiveTimeline.createNewInstantTime()
-            if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
-              Seq(instantTime)
+    var client: SparkRDDWriteClient[_] = null
+    try {
+      client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, Map.empty)
+      var willCompactionInstants: Seq[String] = Seq.empty
+      operation match {
+        case "schedule" =>
+          val instantTime = instantTimestamp.map(_.toString).getOrElse(HoodieActiveTimeline.createNewInstantTime)
+          if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
+            willCompactionInstants = Seq(instantTime)
+          }
+        case "run" =>
+          // Do compaction
+          val timeLine = metaClient.getActiveTimeline
+          val pendingCompactionInstants = timeLine.getWriteTimeline.getInstants.iterator().asScala
+            .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
+            .map(_.getTimestamp)
+            .toSeq.sortBy(f => f)
+          willCompactionInstants = if (instantTimestamp.isEmpty) {
+            if (pendingCompactionInstants.nonEmpty) {
+              pendingCompactionInstants
+            } else { // If there are no pending compaction, schedule to generate one.
+              // CompactionHoodiePathCommand will return instanceTime for SCHEDULE.
+              val instantTime = HoodieActiveTimeline.createNewInstantTime()
+              if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
+                Seq(instantTime)
+              } else {
+                Seq.empty
+              }
+            }
+          } else {
+            // Check if the compaction timestamp has exists in the pending compaction
+            if (pendingCompactionInstants.contains(instantTimestamp.get.toString)) {
+              Seq(instantTimestamp.get.toString)
             } else {
-              Seq.empty
+              throw new IllegalArgumentException(s"Compaction instant: ${instantTimestamp.get} is not found in " +
+                s"$basePath, Available pending compaction instants are: ${pendingCompactionInstants.mkString(",")} ")
             }
           }
-        } else {
-          // Check if the compaction timestamp has exists in the pending compaction
-          if (pendingCompactionInstants.contains(instantTimestamp.get.toString)) {
-            Seq(instantTimestamp.get.toString)
+
+          if (willCompactionInstants.isEmpty) {
+            logInfo(s"No need to compaction on $basePath")
           } else {
-            throw new IllegalArgumentException(s"Compaction instant: ${instantTimestamp.get} is not found in " +
-              s"$basePath, Available pending compaction instants are: ${pendingCompactionInstants.mkString(",")} ")
+            logInfo(s"Run compaction at instants: [${willCompactionInstants.mkString(",")}] on $basePath")
+            val timer = HoodieTimer.start
+            willCompactionInstants.foreach { compactionInstant =>
+              val writeResponse = client.compact(compactionInstant)
+              handleResponse(writeResponse.getCommitMetadata.get())
+              client.commitCompaction(compactionInstant, writeResponse.getCommitMetadata.get(), HOption.empty())
+            }
+            logInfo(s"Finish Run compaction at instants: [${willCompactionInstants.mkString(",")}]," +
+              s" spend: ${timer.endTimer()}ms")
           }
-        }
+        case _ => throw new UnsupportedOperationException(s"Unsupported compaction operation: $operation")
+      }
 
-        if (willCompactionInstants.isEmpty) {
-          logInfo(s"No need to compaction on $basePath")
-        } else {
-          logInfo(s"Run compaction at instants: [${willCompactionInstants.mkString(",")}] on $basePath")
-          val timer = HoodieTimer.start
-          willCompactionInstants.foreach { compactionInstant =>
-            val writeResponse = client.compact(compactionInstant)
-            handleResponse(writeResponse.getCommitMetadata.get())
-            client.commitCompaction(compactionInstant, writeResponse.getCommitMetadata.get(), HOption.empty())
-          }
-          logInfo(s"Finish Run compaction at instants: [${willCompactionInstants.mkString(",")}]," +
-            s" spend: ${timer.endTimer()}ms")
-        }
-      case _ => throw new UnsupportedOperationException(s"Unsupported compaction operation: $operation")
-    }
+      val compactionInstants = metaClient.reloadActiveTimeline().getInstantsAsStream.iterator().asScala
+        .filter(instant => willCompactionInstants.contains(instant.getTimestamp))
+        .toSeq
+        .sortBy(p => p.getTimestamp)
+        .reverse
 
-    val compactionInstants = metaClient.reloadActiveTimeline().getInstantsAsStream.iterator().asScala
-      .filter(instant => willCompactionInstants.contains(instant.getTimestamp))
-      .toSeq
-      .sortBy(p => p.getTimestamp)
-      .reverse
-
-    compactionInstants.map(instant =>
-      (instant, CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp))
-    ).map { case (instant, plan) =>
-      Row(instant.getTimestamp, plan.getOperations.size(), instant.getState.name())
+      compactionInstants.map(instant =>
+        (instant, CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp))
+      ).map { case (instant, plan) =>
+        Row(instant.getTimestamp, plan.getOperations.size(), instant.getState.name())
+      }
+    } finally {
+      if (client != null) {
+        client.close()
+      }
     }
   }
 

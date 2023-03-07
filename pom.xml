@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>0.13.0-SNAPSHOT</version>
+  <version>0.14.0-SNAPSHOT</version>
   <description>Apache Hudi brings stream style processing on big data</description>
   <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
@@ -61,6 +61,7 @@
     <module>hudi-kafka-connect</module>
     <module>packaging/hudi-flink-bundle</module>
     <module>packaging/hudi-kafka-connect-bundle</module>
+    <module>packaging/hudi-cli-bundle</module>
     <module>hudi-tests-common</module>
   </modules>
 
@@ -91,6 +92,7 @@
     <maven-docker-plugin.version>0.37.0</maven-docker-plugin.version>
 
     <java.version>1.8</java.version>
+    <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.version>2.6.7</fasterxml.version>
     <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
     <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
@@ -129,14 +131,17 @@
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
     <spark2.version>2.4.4</spark2.version>
-    <spark3.version>3.3.0</spark3.version>
+    <spark3.version>3.3.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
+    <flink1.16.version>1.16.0</flink1.16.version>
     <flink1.15.version>1.15.1</flink1.15.version>
     <flink1.14.version>1.14.5</flink1.14.version>
     <flink1.13.version>1.13.6</flink1.13.version>
-    <flink.version>${flink1.15.version}</flink.version>
-    <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
-    <flink.bundle.version>1.15</flink.bundle.version>
+    <flink.version>${flink1.16.version}</flink.version>
+    <hudi.flink.module>hudi-flink1.16.x</hudi.flink.module>
+    <flink.bundle.version>1.16</flink.bundle.version>
+    <!-- This is fixed to match with version from flink-avro -->
+    <flink.avro.version>1.10.0</flink.avro.version>
     <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
@@ -150,8 +155,8 @@
     <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
     <rocksdbjni.version>5.17.2</rocksdbjni.version>
     <spark31.version>3.1.3</spark31.version>
-    <spark32.version>3.2.2</spark32.version>
-    <spark33.version>3.3.0</spark33.version>
+    <spark32.version>3.2.3</spark32.version>
+    <spark33.version>3.3.1</spark33.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <!-- NOTE: Different Spark versions might require different number of shared
                modules being incorporated, hence we're creating multiple placeholders
@@ -160,6 +165,7 @@
     <hudi.spark.common.modules.2/>
     <avro.version>1.8.2</avro.version>
     <caffeine.version>2.9.1</caffeine.version>
+    <commons.io.version>2.11.0</commons.io.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
     <scala.version>${scala11.version}</scala.version>
@@ -275,7 +281,8 @@
           </dependency>
         </dependencies>
         <configuration>
-          <consoleOutput>true</consoleOutput>
+          <!-- Set consoleOutput to true to see minor checkstyle issues -->
+          <consoleOutput>false</consoleOutput>
           <encoding>UTF-8</encoding>
           <configLocation>style/checkstyle.xml</configLocation>
           <suppressionsLocation>style/checkstyle-suppressions.xml</suppressionsLocation>
@@ -288,7 +295,7 @@
           </sourceDirectories>
           <!-- NOTE: This property is only available in Maven >= 3.3.1 -->
           <propertyExpansion>basedir=${maven.multiModuleProjectDirectory}</propertyExpansion>
-          <excludes>**\/generated-sources\/</excludes>
+          <excludes>**\/generated-sources\/,org/apache/hudi/metaserver/thrift/*</excludes>
         </configuration>
         <executions>
           <execution>
@@ -435,38 +442,118 @@
           <!-- common to all bundles -->
           <artifactSet>
             <includes>
-              <!-- com.esotericsoftware:kryo-shaded -->
-              <include>com.esotericsoftware:kryo-shaded</include>
-              <include>com.esotericsoftware:minlog</include>
-              <include>org.objenesis:objenesis</include>
               <!-- org.apache.httpcomponents -->
               <include>org.apache.httpcomponents:httpclient</include>
               <include>org.apache.httpcomponents:httpcore</include>
               <include>org.apache.httpcomponents:fluent-hc</include>
+              <!-- hbase -->
+              <include>org.apache.hbase:hbase-client</include>
+              <include>org.apache.hbase:hbase-common</include>
+              <include>org.apache.hbase:hbase-hadoop-compat</include>
+              <include>org.apache.hbase:hbase-hadoop2-compat</include>
+              <include>org.apache.hbase:hbase-metrics</include>
+              <include>org.apache.hbase:hbase-metrics-api</include>
+              <include>org.apache.hbase:hbase-protocol</include>
+              <include>org.apache.hbase:hbase-protocol-shaded</include>
+              <include>org.apache.hbase:hbase-server</include>
+              <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
+              <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
+              <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+              <include>org.apache.htrace:htrace-core4</include>
             </includes>
           </artifactSet>
           <relocations>
-            <!-- com.esotericsoftware:kryo-shaded -->
-            <relocation>
-              <pattern>com.esotericsoftware.kryo.</pattern>
-              <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>com.esotericsoftware.reflectasm.</pattern>
-              <shadedPattern>org.apache.hudi.com.esotericsoftware.reflectasm.</shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>com.esotericsoftware.minlog.</pattern>
-              <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.objenesis.</pattern>
-              <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
-            </relocation>
             <!-- org.apache.httpcomponents -->
             <relocation>
               <pattern>org.apache.http.</pattern>
               <shadedPattern>org.apache.hudi.org.apache.http.</shadedPattern>
+            </relocation>
+            <!-- hbase -->
+            <relocation>
+              <pattern>org.apache.hadoop.hbase.</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
+              <excludes>
+                <exclude>org.apache.hadoop.hbase.KeyValue$KeyComparator</exclude>
+              </excludes>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hbase.</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hbase.</shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.htrace.</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
+            </relocation>
+            <!-- hbase
+                 The classes below in org.apache.hadoop.metrics2 package come from
+                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
+                 instead of shading all classes under org.apache.hadoop.metrics2 including ones
+                 from hadoop. -->
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
+              </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.MetricsExecutor</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricsExecutor
+              </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.impl.JmxCacheBuster</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.impl.JmxCacheBuster
+              </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper</pattern>
+              <shadedPattern>
+                org.apache.hudi.org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper
+              </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry
+              </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.lib.MetricsExecutorImpl</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MetricsExecutorImpl
+              </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.lib.MutableFastCounter</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableFastCounter
+              </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.lib.MutableHistogram</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableHistogram
+              </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.lib.MutableRangeHistogram</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableRangeHistogram
+              </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.lib.MutableSizeHistogram</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableSizeHistogram
+              </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.lib.MutableTimeHistogram</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableTimeHistogram
+              </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.util.MetricQuantile</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricQuantile
+              </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
+              </shadedPattern>
             </relocation>
           </relocations>
         </configuration>
@@ -492,7 +579,7 @@
         <plugin>
           <groupId>org.scalatest</groupId>
           <artifactId>scalatest-maven-plugin</artifactId>
-          <version>1.0</version>
+          <version>2.2.0</version>
           <configuration>
             <skipTests>${skipUTs}</skipTests>
             <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
@@ -675,6 +762,7 @@
             </execution>
           </executions>
           <configuration>
+            <protocArtifact>com.google.protobuf:protoc:${proto.version}</protocArtifact>
             <protocVersion>${protoc.version}</protocVersion>
             <includeStdTypes>true</includeStdTypes>
           </configuration>
@@ -1519,6 +1607,14 @@
         <scope>test</scope>
       </dependency>
 
+      <!-- Kryo -->
+      <dependency>
+        <groupId>com.esotericsoftware</groupId>
+        <artifactId>kryo-shaded</artifactId>
+        <version>${kryo.shaded.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
       <dependency>
         <!--Used to test execution in task executor after de-serializing-->
         <groupId>com.esotericsoftware</groupId>
@@ -1778,6 +1874,19 @@
       </build>
     </profile>
     <profile>
+      <id>hudi-platform-service</id>
+      <activation>
+        <property>
+          <name>deployArtifacts</name>
+          <value>true</value>
+        </property>
+      </activation>
+      <modules>
+        <module>hudi-platform-service</module>
+        <module>packaging/hudi-metaserver-server-bundle</module>
+      </modules>
+    </profile>
+    <profile>
       <id>integration-tests</id>
       <activation>
         <property>
@@ -2025,6 +2134,7 @@
       </modules>
       <properties>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
+        <avro.version>1.8.2</avro.version>
       </properties>
       <activation>
         <activeByDefault>true</activeByDefault>
@@ -2045,6 +2155,7 @@
       <properties>
         <sparkbundle.version>2.4</sparkbundle.version>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
+        <avro.version>1.8.2</avro.version>
       </properties>
       <activation>
         <property>
@@ -2071,7 +2182,7 @@
     <profile>
       <id>spark3</id>
       <properties>
-        <spark3.version>3.3.0</spark3.version>
+        <spark3.version>${spark33.version}</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>3</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
@@ -2114,7 +2225,7 @@
     <profile>
       <id>spark3.1</id>
       <properties>
-        <spark3.version>3.1.3</spark3.version>
+        <spark3.version>${spark31.version}</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>3.1</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
@@ -2153,7 +2264,7 @@
     <profile>
       <id>spark3.2</id>
       <properties>
-        <spark3.version>3.2.1</spark3.version>
+        <spark3.version>${spark32.version}</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>3.2</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
@@ -2195,7 +2306,7 @@
     <profile>
       <id>spark3.3</id>
       <properties>
-        <spark3.version>3.3.0</spark3.version>
+        <spark3.version>${spark33.version}</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>3.3</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
@@ -2236,8 +2347,22 @@
     </profile>
 
     <profile>
+      <id>flink1.16</id>
+      <properties>
+        <orc.flink.version>1.5.6</orc.flink.version>
+      </properties>
+      <activation>
+        <property>
+          <name>flink1.16</name>
+        </property>
+      </activation>
+    </profile>
+    <profile>
       <id>flink1.15</id>
       <properties>
+        <flink.version>${flink1.15.version}</flink.version>
+        <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
+        <flink.bundle.version>1.15</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
       </properties>
       <activation>
@@ -2306,6 +2431,7 @@
         </property>
       </activation>
     </profile>
+
   </profiles>
 
 </project>

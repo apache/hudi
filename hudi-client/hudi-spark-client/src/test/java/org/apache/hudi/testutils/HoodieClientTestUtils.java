@@ -18,6 +18,7 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -36,6 +37,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieHFileUtils;
@@ -67,7 +69,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.io.storage.HoodieHFileReader.SCHEMA_KEY;
+import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
 
 /**
  * Utility methods to aid testing inside the HoodieClient module.
@@ -92,14 +94,31 @@ public class HoodieClientTestUtils {
    */
   public static SparkConf getSparkConfForTest(String appName) {
     SparkConf sparkConf = new SparkConf().setAppName(appName)
-        .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").setMaster("local[4]")
+        .setMaster("local[4]")
+        .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+        .set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
         .set("spark.sql.shuffle.partitions", "4")
         .set("spark.default.parallelism", "4");
+
+    // NOTE: This utility is used in modules where this class might not be present, therefore
+    //       to avoid littering output w/ [[ClassNotFoundException]]s we will skip adding it
+    //       in case this utility is used in the module not providing it
+    if (canLoadClass("org.apache.spark.sql.hudi.HoodieSparkSessionExtension")) {
+      sparkConf.set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
+    }
+
+    if (canLoadClass("org.apache.spark.sql.hudi.catalog.HoodieCatalog") && HoodieSparkUtils.gteqSpark3_2()) {
+      sparkConf.set("spark.sql.catalog.spark_catalog",
+          "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
+    }
 
     String evlogDir = System.getProperty("SPARK_EVLOG_DIR");
     if (evlogDir != null) {
       sparkConf.set("spark.eventLog.enabled", "true");
       sparkConf.set("spark.eventLog.dir", evlogDir);
+      sparkConf.set("spark.ui.enabled", "true");
+    } else {
+      sparkConf.set("spark.ui.enabled", "false");
     }
 
     return SparkRDDReadClient.addHoodieSupport(sparkConf);
@@ -315,6 +334,14 @@ public class HoodieClientTestUtils {
       return Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema from commit metadata", e);
+    }
+  }
+
+  private static boolean canLoadClass(String className) {
+    try {
+      return ReflectionUtils.getClass(className) != null;
+    } catch (Exception e) {
+      return false;
     }
   }
 }

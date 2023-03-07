@@ -79,9 +79,8 @@ public class FSUtils {
   private static final Logger LOG = LogManager.getLogger(FSUtils.class);
   // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1_1-0-1
   // Archive log files are of this pattern - .commits_.archive.1_1-0-1
-  private static final Pattern LOG_FILE_PATTERN =
-      Pattern.compile("\\.(.+)_(.*)\\.(.+)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
-  private static final String LOG_FILE_PREFIX = ".";
+  public static final Pattern LOG_FILE_PATTERN =
+      Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
   private static final long MIN_CLEAN_TO_KEEP = 10;
   private static final long MIN_ROLLBACK_TO_KEEP = 10;
@@ -462,12 +461,21 @@ public class FSUtils {
     return Integer.parseInt(matcher.group(4));
   }
 
+  public static String getSuffixFromLogPath(Path path) {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+    if (!matcher.find()) {
+      throw new InvalidHoodiePathException(path, "LogFile");
+    }
+    String val = matcher.group(10);
+    return val == null ? "" : val;
+  }
+
   public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
       String writeToken) {
     String suffix = (writeToken == null)
         ? String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version)
         : String.format("%s_%s%s.%d_%s", fileId, baseCommitTime, logFileExtension, version, writeToken);
-    return LOG_FILE_PREFIX + suffix;
+    return HoodieLogFile.LOG_FILE_PREFIX + suffix;
   }
 
   public static boolean isBaseFile(Path path) {
@@ -574,7 +582,7 @@ public class FSUtils {
   /**
    * When a file was opened and the task died without closing the stream, another task executor cannot open because the
    * existing lease will be active. We will try to recover the lease, from HDFS. If a data node went down, it takes
-   * about 10 minutes for the lease to be rocovered. But if the client dies, this should be instant.
+   * about 10 minutes for the lease to be recovered. But if the client dies, this should be instant.
    */
   public static boolean recoverDFSFileLease(final DistributedFileSystem dfs, final Path p)
       throws IOException, InterruptedException {

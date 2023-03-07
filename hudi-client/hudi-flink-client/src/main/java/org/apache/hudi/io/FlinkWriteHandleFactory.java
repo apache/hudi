@@ -18,9 +18,9 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -39,7 +39,7 @@ public class FlinkWriteHandleFactory {
   /**
    * Returns the write handle factory with given write config.
    */
-  public static <T extends HoodieRecordPayload, I, K, O> Factory<T, I, K, O> getFactory(
+  public static <T, I, K, O> Factory<T, I, K, O> getFactory(
       HoodieTableConfig tableConfig,
       HoodieWriteConfig writeConfig) {
     if (writeConfig.allowDuplicateInserts()) {
@@ -58,7 +58,7 @@ public class FlinkWriteHandleFactory {
   //  Inner Class
   // -------------------------------------------------------------------------
 
-  public interface Factory<T extends HoodieRecordPayload, I, K, O> {
+  public interface Factory<T, I, K, O> {
     /**
      * Get or create a new write handle in order to reuse the file handles.
      *
@@ -74,7 +74,7 @@ public class FlinkWriteHandleFactory {
      * @return Existing write handle or create a new one
      */
     HoodieWriteHandle<?, ?, ?, ?> create(
-        final Map<String, HoodieWriteHandle<?, ?, ?, ?>> bucketToHandles,
+        Map<String, Path> bucketToHandles,
         HoodieRecord<T> record,
         HoodieWriteConfig config,
         String instantTime,
@@ -87,10 +87,10 @@ public class FlinkWriteHandleFactory {
    * Base clazz for commit write handle factory,
    * it encapsulates the handle switching logic: INSERT OR UPSERT.
    */
-  private abstract static class BaseCommitWriteHandleFactory<T extends HoodieRecordPayload, I, K, O> implements Factory<T, I, K, O> {
+  private abstract static class BaseCommitWriteHandleFactory<T, I, K, O> implements Factory<T, I, K, O> {
     @Override
     public HoodieWriteHandle<?, ?, ?, ?> create(
-        Map<String, HoodieWriteHandle<?, ?, ?, ?>> bucketToHandles,
+        Map<String, Path> bucketToHandles,
         HoodieRecord<T> record,
         HoodieWriteConfig config,
         String instantTime,
@@ -100,11 +100,11 @@ public class FlinkWriteHandleFactory {
       final String fileID = loc.getFileId();
       final String partitionPath = record.getPartitionPath();
 
-      if (bucketToHandles.containsKey(fileID)) {
-        MiniBatchHandle lastHandle = (MiniBatchHandle) bucketToHandles.get(fileID);
+      Path writePath = bucketToHandles.get(fileID);
+      if (writePath != null) {
         HoodieWriteHandle<?, ?, ?, ?> writeHandle =
-            createReplaceHandle(config, instantTime, table, recordItr, partitionPath, fileID, lastHandle.getWritePath());
-        bucketToHandles.put(fileID, writeHandle); // override with new replace handle
+            createReplaceHandle(config, instantTime, table, recordItr, partitionPath, fileID, writePath);
+        bucketToHandles.put(fileID, ((MiniBatchHandle) writeHandle).getWritePath()); // override with new replace handle
         return writeHandle;
       }
 
@@ -115,7 +115,7 @@ public class FlinkWriteHandleFactory {
       } else {
         writeHandle = createMergeHandle(config, instantTime, table, recordItr, partitionPath, fileID);
       }
-      bucketToHandles.put(fileID, writeHandle);
+      bucketToHandles.put(fileID, ((MiniBatchHandle) writeHandle).getWritePath());
       return writeHandle;
     }
 
@@ -140,12 +140,12 @@ public class FlinkWriteHandleFactory {
   /**
    * Write handle factory for commit.
    */
-  private static class CommitWriteHandleFactory<T extends HoodieRecordPayload, I, K, O>
+  private static class CommitWriteHandleFactory<T, I, K, O>
       extends BaseCommitWriteHandleFactory<T, I, K, O> {
     private static final CommitWriteHandleFactory<?, ?, ?, ?> INSTANCE = new CommitWriteHandleFactory<>();
 
     @SuppressWarnings("unchecked")
-    public static <T extends HoodieRecordPayload, I, K, O> CommitWriteHandleFactory<T, I, K, O> getInstance() {
+    public static <T, I, K, O> CommitWriteHandleFactory<T, I, K, O> getInstance() {
       return (CommitWriteHandleFactory<T, I, K, O>) INSTANCE;
     }
 
@@ -178,12 +178,12 @@ public class FlinkWriteHandleFactory {
   /**
    * Write handle factory for inline clustering.
    */
-  private static class ClusterWriteHandleFactory<T extends HoodieRecordPayload, I, K, O>
+  private static class ClusterWriteHandleFactory<T, I, K, O>
       extends BaseCommitWriteHandleFactory<T, I, K, O> {
     private static final ClusterWriteHandleFactory<?, ?, ?, ?> INSTANCE = new ClusterWriteHandleFactory<>();
 
     @SuppressWarnings("unchecked")
-    public static <T extends HoodieRecordPayload, I, K, O> ClusterWriteHandleFactory<T, I, K, O> getInstance() {
+    public static <T, I, K, O> ClusterWriteHandleFactory<T, I, K, O> getInstance() {
       return (ClusterWriteHandleFactory<T, I, K, O>) INSTANCE;
     }
 
@@ -216,12 +216,12 @@ public class FlinkWriteHandleFactory {
   /**
    * Write handle factory for commit, the write handle supports logging change logs.
    */
-  private static class CdcWriteHandleFactory<T extends HoodieRecordPayload, I, K, O>
+  private static class CdcWriteHandleFactory<T, I, K, O>
       extends BaseCommitWriteHandleFactory<T, I, K, O> {
     private static final CdcWriteHandleFactory<?, ?, ?, ?> INSTANCE = new CdcWriteHandleFactory<>();
 
     @SuppressWarnings("unchecked")
-    public static <T extends HoodieRecordPayload, I, K, O> CdcWriteHandleFactory<T, I, K, O> getInstance() {
+    public static <T, I, K, O> CdcWriteHandleFactory<T, I, K, O> getInstance() {
       return (CdcWriteHandleFactory<T, I, K, O>) INSTANCE;
     }
 
@@ -254,17 +254,17 @@ public class FlinkWriteHandleFactory {
   /**
    * Write handle factory for delta commit.
    */
-  private static class DeltaCommitWriteHandleFactory<T extends HoodieRecordPayload, I, K, O> implements Factory<T, I, K, O> {
+  private static class DeltaCommitWriteHandleFactory<T, I, K, O> implements Factory<T, I, K, O> {
     private static final DeltaCommitWriteHandleFactory<?, ?, ?, ?> INSTANCE = new DeltaCommitWriteHandleFactory<>();
 
     @SuppressWarnings("unchecked")
-    public static <T extends HoodieRecordPayload, I, K, O> DeltaCommitWriteHandleFactory<T, I, K, O> getInstance() {
+    public static <T, I, K, O> DeltaCommitWriteHandleFactory<T, I, K, O> getInstance() {
       return (DeltaCommitWriteHandleFactory<T, I, K, O>) INSTANCE;
     }
 
     @Override
     public HoodieWriteHandle<?, ?, ?, ?> create(
-        Map<String, HoodieWriteHandle<?, ?, ?, ?>> bucketToHandles,
+        Map<String, Path> bucketToHandles,
         HoodieRecord<T> record,
         HoodieWriteConfig config,
         String instantTime,
@@ -272,12 +272,8 @@ public class FlinkWriteHandleFactory {
         Iterator<HoodieRecord<T>> recordItr) {
       final String fileID = record.getCurrentLocation().getFileId();
       final String partitionPath = record.getPartitionPath();
-
-      final HoodieWriteHandle<?, ?, ?, ?> writeHandle =
-          new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, recordItr,
-              table.getTaskContextSupplier());
-      bucketToHandles.put(fileID, writeHandle);
-      return writeHandle;
+      final TaskContextSupplier contextSupplier = table.getTaskContextSupplier();
+      return new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, recordItr, contextSupplier);
     }
   }
 }

@@ -16,21 +16,22 @@
  */
 package org.apache.hudi
 
-import com.fasterxml.jackson.annotation.JsonInclude.Include
-import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSinkCheckpoint.SINK_CHECKPOINT_KEY
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.model.HoodieRecordPayload
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecordPayload, WriteConcurrencyMode}
+import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.ValidationUtils.checkArgument
-import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, StringUtils}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.common.util.ValidationUtils.{checkArgument, checkState}
+import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, JsonUtils, StringUtils}
+import org.apache.hudi.config.{HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
@@ -39,7 +40,7 @@ import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 
 import java.lang
-import java.util.function.Function
+import java.util.function.{BiConsumer, Function}
 import scala.collection.JavaConversions._
 import scala.util.{Failure, Success, Try}
 
@@ -75,8 +76,6 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     STREAMING_RETRY_INTERVAL_MS.defaultValue).toLong
   private val ignoreFailedBatch = options.getOrDefault(STREAMING_IGNORE_FAILED_BATCH.key,
     STREAMING_IGNORE_FAILED_BATCH.defaultValue).toBoolean
-  // This constant serves as the checkpoint key for streaming sink so that each microbatch is processed exactly-once.
-  private val SINK_CHECKPOINT_KEY = "_hudi_streaming_sink_checkpoint"
 
   private var isAsyncCompactorServiceShutdownAbnormally = false
   private var isAsyncClusteringServiceShutdownAbnormally = false
@@ -90,7 +89,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
   private var asyncCompactorService: AsyncCompactService = _
   private var asyncClusteringService: AsyncClusteringService = _
-  private var writeClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty
+  private var writeClient: Option[SparkRDDWriteClient[_]] = Option.empty
   private var hoodieTableConfig: Option[HoodieTableConfig] = Option.empty
 
   override def addBatch(batchId: Long, data: DataFrame): Unit = this.synchronized {
@@ -115,18 +114,38 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     var updatedOptions = options.updated(HoodieWriteConfig.MARKERS_TYPE.key(), MarkerType.DIRECT.name())
     // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
     updatedOptions = updatedOptions.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
-    // Add batchId as checkpoint to the extra metadata. To enable same checkpoint metadata structure for multi-writers,
-    // SINK_CHECKPOINT_KEY holds a map of batchId to writer context (composed of applicationId and queryId), e.g.
-    // "_hudi_streaming_sink_checkpoint" : "{\"$batchId\":\"${sqlContext.sparkContext.applicationId}-$queryId\"}"
-    // NOTE: In case of multi-writers, this map should be mutable and sorted by key to facilitate merging of batchIds.
-    //       HUDI-4432 tracks the implementation of checkpoint management for multi-writer.
-    val checkpointMap = Map(batchId.toString -> s"${sqlContext.sparkContext.applicationId}-$queryId")
-    updatedOptions = updatedOptions.updated(SINK_CHECKPOINT_KEY, HoodieSinkCheckpoint.toJson(checkpointMap))
 
     retry(retryCnt, retryIntervalMs)(
       Try(
         HoodieSparkSqlWriter.write(
-          sqlContext, mode, updatedOptions, data, hoodieTableConfig, writeClient, Some(triggerAsyncCompactor), Some(triggerAsyncClustering))
+          sqlContext, mode, updatedOptions, data, hoodieTableConfig, writeClient, Some(triggerAsyncCompactor), Some(triggerAsyncClustering),
+          extraPreCommitFn = Some(new BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata] {
+
+            override def accept(metaClient: HoodieTableMetaClient,
+                                newCommitMetadata: HoodieCommitMetadata): Unit = {
+              getStreamIdentifier(options) match {
+                case Some(identifier) =>
+                  // Fetch the latestCommit with checkpoint Info again to avoid concurrency issue in multi-write scenario.
+                  val lastCheckpointCommitMetadata = CommitUtils.getLatestCommitMetadataWithValidCheckpointInfo(
+                    metaClient.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY)
+                  var checkpointString = ""
+                  if (lastCheckpointCommitMetadata.isPresent) {
+                    val lastCheckpoint = lastCheckpointCommitMetadata.get.getMetadata(SINK_CHECKPOINT_KEY)
+                    if (!StringUtils.isNullOrEmpty(lastCheckpoint)) {
+                      checkpointString = HoodieSinkCheckpoint.toJson(HoodieSinkCheckpoint.fromJson(lastCheckpoint) + (identifier -> batchId.toString))
+                    } else {
+                      checkpointString = HoodieSinkCheckpoint.toJson(Map(identifier -> batchId.toString))
+                    }
+                  } else {
+                    checkpointString = HoodieSinkCheckpoint.toJson(Map(identifier -> batchId.toString))
+                  }
+
+                  newCommitMetadata.addMetadata(SINK_CHECKPOINT_KEY, checkpointString)
+                case None =>
+                  // No op since keeping batch id in memory only.
+              }
+            }
+          }))
       )
       match {
         case Success((true, commitOps, compactionInstantOps, clusteringInstant, client, tableConfig)) =>
@@ -207,6 +226,17 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
+  private def getStreamIdentifier(options: Map[String, String]) : Option[String] = {
+    if (WriteConcurrencyMode.valueOf(options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
+      WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.SINGLE_WRITER) {
+      // for single writer model, we will fetch default if not set.
+      Some(options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue()))
+    } else {
+      // incase of multi-writer scenarios, there is not default.
+      options.get(STREAMING_CHECKPOINT_IDENTIFIER.key())
+    }
+  }
+
   override def toString: String = s"HoodieStreamingSink[${options("path")}]"
 
   @annotation.tailrec
@@ -223,7 +253,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
-  protected def triggerAsyncCompactor(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]): Unit = {
+  protected def triggerAsyncCompactor(client: SparkRDDWriteClient[_]): Unit = {
     if (null == asyncCompactorService) {
       log.info("Triggering Async compaction !!")
       asyncCompactorService = new SparkStreamingAsyncCompactService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
@@ -252,7 +282,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
-  protected def triggerAsyncClustering(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]): Unit = {
+  protected def triggerAsyncClustering(client: SparkRDDWriteClient[_]): Unit = {
     if (null == asyncClusteringService) {
       log.info("Triggering async clustering!")
       asyncClusteringService = new SparkStreamingAsyncClusteringService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
@@ -298,14 +328,19 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
   private def canSkipBatch(incomingBatchId: Long, operationType: String): Boolean = {
     if (!DELETE_OPERATION_OPT_VAL.equals(operationType)) {
-      // get the latest checkpoint from the commit metadata to check if the microbatch has already been prcessed or not
-      val commitMetadata = CommitUtils.getLatestCommitMetadataWithValidCheckpointInfo(
-        metaClient.get.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY)
-      if (commitMetadata.isPresent) {
-        val lastCheckpoint = commitMetadata.get.getMetadata(SINK_CHECKPOINT_KEY)
-        if (!StringUtils.isNullOrEmpty(lastCheckpoint)) {
-          latestCommittedBatchId = HoodieSinkCheckpoint.fromJson(lastCheckpoint).keys.head.toLong
-        }
+      getStreamIdentifier(options) match {
+        case Some(identifier) =>
+          // get the latest checkpoint from the commit metadata to check if the microbatch has already been prcessed or not
+          val commitMetadata = CommitUtils.getLatestCommitMetadataWithValidCheckpointInfo(
+            metaClient.get.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY)
+          if (commitMetadata.isPresent) {
+            val lastCheckpoint = commitMetadata.get.getMetadata(SINK_CHECKPOINT_KEY)
+            if (!StringUtils.isNullOrEmpty(lastCheckpoint)) {
+              HoodieSinkCheckpoint.fromJson(lastCheckpoint).get(identifier).foreach(commitBatchId =>
+                latestCommittedBatchId = commitBatchId.toLong)
+            }
+          }
+        case None =>
       }
       latestCommittedBatchId >= incomingBatchId
     } else {
@@ -322,12 +357,13 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 object HoodieSinkCheckpoint {
 
   lazy val mapper: ObjectMapper = {
-    val _mapper = new ObjectMapper
-    _mapper.setSerializationInclusion(Include.NON_ABSENT)
-    _mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+    val _mapper = JsonUtils.getObjectMapper
     _mapper.registerModule(DefaultScalaModule)
     _mapper
   }
+
+  // This constant serves as the checkpoint key for streaming sink so that each microbatch is processed exactly-once.
+  val SINK_CHECKPOINT_KEY = "_hudi_streaming_sink_checkpoint"
 
   def toJson(checkpoint: Map[String, String]): String = {
     mapper.writeValueAsString(checkpoint)

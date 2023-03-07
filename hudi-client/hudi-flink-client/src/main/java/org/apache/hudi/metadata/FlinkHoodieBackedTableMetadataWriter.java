@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -42,6 +43,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
+
 /**
  * Flink hoodie backed table metadata writer.
  */
@@ -58,7 +61,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                                 HoodieWriteConfig writeConfig,
                                                                                 HoodieEngineContext context,
                                                                                 Option<T> actionMetadata) {
-    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, context, actionMetadata, Option.empty());
+    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, EAGER, context, actionMetadata, Option.empty());
   }
 
   public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
@@ -66,15 +69,27 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                                 HoodieEngineContext context,
                                                                                 Option<T> actionMetadata,
                                                                                 Option<String> inFlightInstantTimestamp) {
-    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, context, actionMetadata, inFlightInstantTimestamp);
+    return new FlinkHoodieBackedTableMetadataWriter(
+        conf, writeConfig, EAGER, context, actionMetadata, inFlightInstantTimestamp);
+  }
+
+  public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
+                                                                                HoodieWriteConfig writeConfig,
+                                                                                HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                                                                HoodieEngineContext context,
+                                                                                Option<T> actionMetadata,
+                                                                                Option<String> inFlightInstantTimestamp) {
+    return new FlinkHoodieBackedTableMetadataWriter(
+        conf, writeConfig, failedWritesCleaningPolicy, context, actionMetadata, inFlightInstantTimestamp);
   }
 
   <T extends SpecificRecordBase> FlinkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
                                                                       HoodieWriteConfig writeConfig,
+                                                                      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                                       HoodieEngineContext engineContext,
                                                                       Option<T> actionMetadata,
                                                                       Option<String> inFlightInstantTimestamp) {
-    super(hadoopConf, writeConfig, engineContext, actionMetadata, inFlightInstantTimestamp);
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, actionMetadata, inFlightInstantTimestamp);
   }
 
   @Override

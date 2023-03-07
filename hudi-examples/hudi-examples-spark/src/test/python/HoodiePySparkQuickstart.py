@@ -255,6 +255,7 @@ if __name__ == "__main__":
             .builder \
             .appName("Hudi Spark basic example") \
             .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer") \
+            .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar") \
             .config("spark.kryoserializer.buffer.max", "512m") \
             .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension") \
             .getOrCreate()

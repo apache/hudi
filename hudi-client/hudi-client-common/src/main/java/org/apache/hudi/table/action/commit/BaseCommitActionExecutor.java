@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -43,6 +42,7 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
@@ -63,6 +63,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +71,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I, K, O, R>
+public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     extends BaseActionExecutor<T, I, K, O, R> {
 
   private static final Logger LOG = LogManager.getLogger(BaseCommitActionExecutor.class);
@@ -78,9 +79,9 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   protected final Option<Map<String, String>> extraMetadata;
   protected final WriteOperationType operationType;
   protected final TaskContextSupplier taskContextSupplier;
-  protected final TransactionManager txnManager;
-  protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxn;
-  protected Set<String> pendingInflightAndRequestedInstants;
+  protected final Option<TransactionManager> txnManagerOption;
+  protected final Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxn;
+  protected final Set<String> pendingInflightAndRequestedInstants;
 
   public BaseCommitActionExecutor(HoodieEngineContext context, HoodieWriteConfig config,
                                   HoodieTable<T, I, K, O> table, String instantTime, WriteOperationType operationType,
@@ -90,11 +91,16 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     this.extraMetadata = extraMetadata;
     this.taskContextSupplier = context.getTaskContextSupplier();
     // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link BaseHoodieWriteClient}.
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
-    this.lastCompletedTxn = txnManager.isOptimisticConcurrencyControlEnabled() 
-        ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient()) : Option.empty();
-    this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(table.getMetaClient());
-    this.pendingInflightAndRequestedInstants.remove(instantTime);
+    this.txnManagerOption = config.shouldAutoCommit() ? Option.of(new TransactionManager(config, table.getMetaClient().getFs())) : Option.empty();
+    if (this.txnManagerOption.isPresent() && this.txnManagerOption.get().isOptimisticConcurrencyControlEnabled()) {
+      // these txn metadata are only needed for auto commit when optimistic concurrent control is also enabled
+      this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
+      this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(table.getMetaClient());
+      this.pendingInflightAndRequestedInstants.remove(instantTime);
+    } else {
+      this.lastCompletedTxn = Option.empty();
+      this.pendingInflightAndRequestedInstants = Collections.emptySet();
+    }
     if (!table.getStorageLayout().writeOperationSupported(operationType)) {
       throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName()
           + " is not compatible with table layout " + table.getStorageLayout().getClass().getSimpleName());
@@ -157,7 +163,6 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     return  table.getMetaClient().getCommitActionType();
   }
 
-
   /**
    * Check if any validators are configured and run those validations. If any of the validations fail, throws HoodieValidationException.
    */
@@ -182,16 +187,18 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   protected void autoCommit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<O> result) {
     final Option<HoodieInstant> inflightInstant = Option.of(new HoodieInstant(State.INFLIGHT,
         getCommitActionType(), instantTime));
-    this.txnManager.beginTransaction(inflightInstant,
+    ValidationUtils.checkState(this.txnManagerOption.isPresent(), "The transaction manager has not been initialized");
+    TransactionManager txnManager = this.txnManagerOption.get();
+    txnManager.beginTransaction(inflightInstant,
         lastCompletedTxn.isPresent() ? Option.of(lastCompletedTxn.get().getLeft()) : Option.empty());
     try {
       setCommitMetadata(result);
       // reload active timeline so as to get all updates after current transaction have started. hence setting last arg to true.
-      TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
-          result.getCommitMetadata(), config, this.txnManager.getLastCompletedTransactionOwner(), true, pendingInflightAndRequestedInstants);
+      TransactionUtils.resolveWriteConflictIfAny(table, txnManager.getCurrentTransactionOwner(),
+          result.getCommitMetadata(), config, txnManager.getLastCompletedTransactionOwner(), true, pendingInflightAndRequestedInstants);
       commit(extraMetadata, result);
     } finally {
-      this.txnManager.endTransaction(inflightInstant);
+      txnManager.endTransaction(inflightInstant);
     }
   }
 
@@ -292,5 +299,4 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
           + " write statuses");
     }
   }
-
 }

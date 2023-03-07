@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -28,11 +30,17 @@ import com.beust.jcommander.ParametersDelegate;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 
+import javax.annotation.concurrent.Immutable;
+
 import java.util.Properties;
 
 /**
  * Configs needed to sync data into the Hive Metastore.
  */
+@Immutable
+@ConfigClassProperty(name = "Hive Sync Configs",
+    groupName = ConfigGroups.Names.META_SYNC,
+    description = "Configurations used by the Hudi to sync metadata to Hive Metastore.")
 public class HiveSyncConfig extends HoodieSyncConfig {
 
   /*
@@ -64,6 +72,18 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   public static final ConfigProperty<Boolean> HIVE_SYNC_BUCKET_SYNC = HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
   public static final ConfigProperty<String> HIVE_SYNC_BUCKET_SYNC_SPEC = HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
   public static final ConfigProperty<String> HIVE_SYNC_COMMENT = HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
+  public static final ConfigProperty<String> HIVE_SYNC_TABLE_STRATEGY = HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
+
+  public static final ConfigProperty<Boolean> HIVE_SYNC_FILTER_PUSHDOWN_ENABLED = ConfigProperty
+      .key("hoodie.datasource.hive_sync.filter_pushdown_enabled")
+      .defaultValue(false)
+      .withDocumentation("Whether to enable push down partitions by filter");
+
+  public static final ConfigProperty<Integer> HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.filter_pushdown_max_size")
+      .defaultValue(1000)
+      .withDocumentation("Max size limit to push down partition filters, if the estimate push down "
+          + "filters exceed this size, will directly try to fetch all partitions");
 
   public static String getBucketSpec(String bucketCols, int bucketNum) {
     return "CLUSTERED BY (" + bucketCols + " INTO " + bucketNum + " BUCKETS";
@@ -78,8 +98,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     super(props, hadoopConf);
     HiveConf hiveConf = hadoopConf instanceof HiveConf
         ? (HiveConf) hadoopConf : new HiveConf(hadoopConf, HiveConf.class);
-    // HiveConf needs to load fs conf to allow instantiation via AWSGlueClientFactory
-    hiveConf.addResource(getHadoopFileSystem().getConf());
     setHadoopConf(hiveConf);
     validateParameters();
   }
@@ -145,8 +163,9 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     public String bucketSpec;
     @Parameter(names = {"--sync-comment"}, description = "synchronize table comments to hive")
     public Boolean syncComment;
-    @Parameter(names = {"--with-operation-field"}, description = "Whether to include the '_hoodie_operation' field in the metadata fields")
-    public Boolean withOperationField; // TODO remove this as it's not used
+
+    @Parameter(names = {"--sync-strategy"}, description = "Hive table synchronization strategy. Available option: ONLY_RO, ONLY_RT, ALL")
+    public Boolean syncStrategy;
 
     public boolean isHelp() {
       return hoodieSyncConfigParams.isHelp();
@@ -175,6 +194,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(HIVE_SYNC_BUCKET_SYNC.key(), bucketSync);
       props.setPropertyIfNonNull(HIVE_SYNC_BUCKET_SYNC_SPEC.key(), bucketSpec);
       props.setPropertyIfNonNull(HIVE_SYNC_COMMENT.key(), syncComment);
+      props.setPropertyIfNonNull(HIVE_SYNC_TABLE_STRATEGY.key(), syncStrategy);
       return props;
     }
   }

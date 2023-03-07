@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util;
 
+import java.util.function.Supplier;
+
 /**
  * Simple utility to test validation conditions (to replace Guava's PreConditions)
  */
@@ -39,6 +41,13 @@ public class ValidationUtils {
     if (!expression) {
       throw new IllegalArgumentException(errorMessage);
     }
+  }
+
+  /**
+   * Ensures the truth of an expression, throwing the custom errorMessage otherwise.
+   */
+  public static void checkArgument(final boolean expression, final Supplier<String> errorMessageSupplier) {
+    checkArgument(expression, errorMessageSupplier.get());
   }
 
   /**

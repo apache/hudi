@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.LogCompactionExecutionHelper;
@@ -91,9 +90,10 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
             .collect(Collectors.toList()))
         .withLatestInstantTime(maxInstantTime)
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
-        .withUseScanV2(true)
+        .withOptimizedLogBlocksScan(true)
+        .withRecordMerger(writeConfig.getRecordMerger())
         .build();
-    scanner.scanInternal(Option.empty(), true);
+    scanner.scan(true);
     int totalBlocks = scanner.getCurrentInstantLogBlocks().size();
     LOG.info("Total blocks seen are " + totalBlocks);
 

@@ -21,18 +21,18 @@ import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieLogFile
+import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieLogFile, HoodieRecordPayload}
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.common.util.{HoodieRecordUtils, ValidationUtils}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieMemoryConfig}
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
-
 import java.util.Objects
 import java.util.function.Supplier
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import scala.collection.JavaConverters._
 
 class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuilder {
@@ -73,12 +73,13 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
         .withReverseReader(java.lang.Boolean.parseBoolean(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue))
         .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue)
         .withMaxMemorySizeInBytes(HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
-        .withSpillableMapBasePath(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue)
+        .withSpillableMapBasePath(HoodieMemoryConfig.getDefaultSpillableMapBasePath)
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue)
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue)
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(classOf[HoodieAvroRecordMerger].getName))
         .build
       scanner.asScala.foreach(hoodieRecord => {
-        val record = hoodieRecord.getData.getInsertValue(schema).get()
+        val record = hoodieRecord.getData.asInstanceOf[HoodieRecordPayload[_]].getInsertValue(schema).get()
         if (allRecords.size() < limit) {
           allRecords.add(record)
         }
@@ -92,10 +93,10 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
             val block = reader.next()
             block match {
               case dataBlock: HoodieDataBlock =>
-                val recordItr = dataBlock.getRecordIterator
+                val recordItr = dataBlock.getRecordIterator(HoodieRecordType.AVRO)
                 recordItr.asScala.foreach(record => {
                   if (allRecords.size() < limit) {
-                    allRecords.add(record)
+                    allRecords.add(record.getData.asInstanceOf[IndexedRecord])
                   }
                 })
                 recordItr.close()

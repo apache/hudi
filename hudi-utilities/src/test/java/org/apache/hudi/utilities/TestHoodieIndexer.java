@@ -21,18 +21,25 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -56,6 +63,10 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.reload;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS;
+import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.METADATA_INDEXER_TIME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
@@ -122,7 +133,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
-    initializeWriteClient(metadataConfigBuilder.build(), tableName);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
 
     // validate table config
     assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
@@ -137,13 +148,147 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(false, false).withMetadataIndexBloomFilter(true);
-    initializeWriteClient(metadataConfigBuilder.build(), tableName);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
 
     // validate table config
     assertFalse(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
 
     // build indexer config which has only files enabled
     indexMetadataPartitionsAndAssert(FILES, Collections.emptyList(), Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName);
+  }
+
+  @Test
+  public void testIndexerWithWriterFinishingFirst() throws IOException {
+    // Test the case where the indexer is running, i.e., the delta commit in the metadata table
+    // is inflight, while the regular writer is updating metadata table.
+    // The delta commit from the indexer should not be rolled back.
+    String tableName = "indexer_with_writer_finishing_first";
+    // Enable files and bloom_filters on the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder =
+        getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
+    HoodieMetadataConfig metadataConfig = metadataConfigBuilder.build();
+    upsertToTable(metadataConfig, tableName);
+
+    // Validate table config
+    assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
+    assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
+
+    // Run async indexer, creating a new indexing instant in the data table and a new delta commit
+    // in the metadata table, with the suffix "004"
+    scheduleAndExecuteIndexing(COLUMN_STATS, tableName);
+
+    HoodieInstant indexingInstant = metaClient.getActiveTimeline()
+        .filter(i -> HoodieTimeline.INDEXING_ACTION.equals(i.getAction()))
+        .getInstants().get(0);
+    HoodieIndexPlan indexPlan = TimelineMetadataUtils.deserializeIndexPlan(
+        metaClient.getActiveTimeline().readIndexPlanAsBytes(indexingInstant).get());
+    String indexUptoInstantTime = indexPlan.getIndexPartitionInfos().get(0).getIndexUptoInstant();
+    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
+        context(), metadataConfig, metaClient.getBasePathV2().toString(),
+        getWriteConfigBuilder(basePath(), tableName).build().getSpillableMapBasePath());
+    HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
+    String mdtCommitTime = indexUptoInstantTime + METADATA_INDEXER_TIME_SUFFIX;
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtCommitTime));
+
+    // Reverts both instants to inflight state, to simulate inflight indexing instants
+    metaClient.getActiveTimeline().revertToInflight(indexingInstant);
+    metaClient = reload(metaClient);
+
+    HoodieInstant mdtIndexingCommit = metadataMetaClient.getActiveTimeline()
+        .filter(i -> i.getTimestamp().equals(mdtCommitTime))
+        .getInstants().get(0);
+    metadataMetaClient.getActiveTimeline().revertToInflight(mdtIndexingCommit);
+    metadataMetaClient = reload(metadataMetaClient);
+    // Simulate heartbeats for ongoing write from async indexer in the metadata table
+    HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(
+        metadataMetaClient.getFs(), metadataMetaClient.getBasePathV2().toString(),
+        CLIENT_HEARTBEAT_INTERVAL_IN_MS.defaultValue().longValue(),
+        CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES.defaultValue());
+    heartbeatClient.start(mdtCommitTime);
+
+    upsertToTable(metadataConfig, tableName);
+    metaClient = reload(metaClient);
+    metadataMetaClient = reload(metadataMetaClient);
+    // The delta commit from async indexer in metadata table should not be rolled back
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtIndexingCommit.getTimestamp()));
+    assertTrue(metadataMetaClient.getActiveTimeline().getRollbackTimeline().empty());
+
+    // Simulate heartbeat timeout
+    heartbeatClient.stop(mdtCommitTime);
+    upsertToTable(metadataConfig, tableName);
+    metaClient = reload(metaClient);
+    metadataMetaClient = reload(metadataMetaClient);
+    // The delta commit from async indexer in metadata table should be rolled back now
+    assertFalse(metadataMetaClient.getActiveTimeline().containsInstant(mdtIndexingCommit.getTimestamp()));
+    assertEquals(1, metadataMetaClient.getActiveTimeline().getRollbackTimeline().countInstants());
+    HoodieInstant rollbackInstant = metadataMetaClient.getActiveTimeline()
+        .getRollbackTimeline().firstInstant().get();
+    HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
+        metadataMetaClient.getActiveTimeline().readRollbackInfoAsBytes(rollbackInstant).get());
+    assertEquals(mdtCommitTime, rollbackMetadata.getInstantsRollback()
+        .stream().findFirst().get().getCommitTime());
+  }
+
+  @Test
+  public void testIndexerWithWriterFinishingLast() throws IOException {
+    // Test the case where a regular write updating the metadata table is in progress,
+    // i.e., a delta commit in the metadata table is inflight, and the async indexer
+    // finishes the original delta commit.  In this case, the async indexer should not
+    // trigger the rollback on other inflight writes in the metadata table.
+    String tableName = "indexer_with_writer_finishing_first";
+    // Enable files and bloom_filters on the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder =
+        getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
+    HoodieMetadataConfig metadataConfig = metadataConfigBuilder.build();
+    upsertToTable(metadataConfig, tableName);
+    upsertToTable(metadataConfig, tableName);
+
+    // Transition the last commit to inflight
+    HoodieInstant commit = metaClient.getActiveTimeline().lastInstant().get();
+    String commitTime = commit.getTimestamp();
+    metaClient.getActiveTimeline().revertToInflight(commit);
+
+    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
+        context(), metadataConfig, metaClient.getBasePathV2().toString(),
+        getWriteConfigBuilder(basePath(), tableName).build().getSpillableMapBasePath());
+    HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
+    HoodieInstant mdtCommit = metadataMetaClient.getActiveTimeline()
+        .filter(i -> i.getTimestamp().equals(commitTime))
+        .getInstants().get(0);
+    metadataMetaClient.getActiveTimeline().revertToInflight(mdtCommit);
+
+    // Run async indexer, creating a new indexing instant in the data table and a new delta commit
+    // in the metadata table, with the suffix "004"
+    HoodieIndexer.Config config = new HoodieIndexer.Config();
+    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
+    config.basePath = basePath();
+    config.tableName = tableName;
+    config.indexTypes = COLUMN_STATS.name();
+    config.runningMode = SCHEDULE_AND_EXECUTE;
+    config.propsFilePath = propsPath;
+    config.configs.add(HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.key() + "=" + colStatsFileGroupCount);
+    config.configs.add(HoodieMetadataConfig.METADATA_INDEX_CHECK_TIMEOUT_SECONDS + "=1");
+
+    // start the indexer and validate files index is completely built out
+    HoodieIndexer indexer = new HoodieIndexer(jsc(), config);
+    // The catchup won't finish due to inflight delta commit, and this is expected
+    assertEquals(-1, indexer.start(0));
+
+    // Now, make sure that the inflight delta commit happened before the async indexer
+    // is intact
+    metaClient = reload(metaClient);
+    metadataMetaClient = reload(metadataMetaClient);
+
+    assertTrue(metaClient.getActiveTimeline().containsInstant(commitTime));
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(commitTime));
+    assertTrue(metaClient.getActiveTimeline()
+        .filter(i -> i.getTimestamp().equals(commitTime))
+        .getInstants().get(0).isInflight());
+    assertTrue(metadataMetaClient.getActiveTimeline()
+        .filter(i -> i.getTimestamp().equals(commitTime))
+        .getInstants().get(0).isInflight());
+    assertTrue(metaClient.getActiveTimeline().getRollbackTimeline().empty());
+    assertTrue(metadataMetaClient.getActiveTimeline().getRollbackTimeline().empty());
   }
 
   private static Stream<Arguments> colStatsFileGroupCountParams() {
@@ -162,7 +307,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(false, false).withMetadataIndexBloomFilter(true);
-    initializeWriteClient(metadataConfigBuilder.build(), tableName);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
 
     // validate table config
     assertFalse(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
@@ -175,7 +320,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
     List<FileSlice> partitionFileSlices =
-        HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, COLUMN_STATS.getPartitionPath());
+        HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
+            metadataMetaClient, getFileSystemView(metadataMetaClient), COLUMN_STATS.getPartitionPath());
     assertEquals(partitionFileSlices.size(), colStatsFileGroupCount);
   }
 
@@ -188,7 +334,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(false, false);
-    initializeWriteClient(metadataConfigBuilder.build(), tableName);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
     // validate table config
     assertFalse(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
 
@@ -220,16 +366,17 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
     List<FileSlice> partitionFileSlices =
-        HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, COLUMN_STATS.getPartitionPath());
+        HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
+            metadataMetaClient, getFileSystemView(metadataMetaClient), COLUMN_STATS.getPartitionPath());
     assertEquals(partitionFileSlices.size(), HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.defaultValue());
   }
 
-  private void initializeWriteClient(HoodieMetadataConfig metadataConfig, String tableName) {
+  private void upsertToTable(HoodieMetadataConfig metadataConfig, String tableName) {
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath(), tableName);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfig).build();
     // do one upsert with synchronous metadata update
     SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
-    String instant = "0001";
+    String instant = HoodieActiveTimeline.createNewInstantTime();
     writeClient.startCommitWithTime(instant);
     List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
     JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
@@ -237,8 +384,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertNoWriteErrors(statuses);
   }
 
-  private void indexMetadataPartitionsAndAssert(MetadataPartitionType partitionTypeToIndex, List<MetadataPartitionType> alreadyCompletedPartitions, List<MetadataPartitionType> nonExistantPartitions,
-                                                String tableName) {
+  private void scheduleAndExecuteIndexing(MetadataPartitionType partitionTypeToIndex, String tableName) {
     HoodieIndexer.Config config = new HoodieIndexer.Config();
     String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
     config.basePath = basePath();
@@ -255,6 +401,13 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
     // validate table config
     metaClient = reload(metaClient);
+  }
+
+  private void indexMetadataPartitionsAndAssert(MetadataPartitionType partitionTypeToIndex, List<MetadataPartitionType> alreadyCompletedPartitions, List<MetadataPartitionType> nonExistantPartitions,
+                                                String tableName) {
+    scheduleAndExecuteIndexing(partitionTypeToIndex, tableName);
+
+    // validate table config
     Set<String> completedPartitions = metaClient.getTableConfig().getMetadataPartitions();
     assertTrue(completedPartitions.contains(partitionTypeToIndex.getPartitionPath()));
     alreadyCompletedPartitions.forEach(entry -> assertTrue(completedPartitions.contains(entry.getPartitionPath())));
@@ -274,7 +427,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
-    String instant = "0001";
+    String instant = HoodieActiveTimeline.createNewInstantTime();
     writeClient.startCommitWithTime(instant);
     List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
     JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
@@ -328,7 +481,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
-    String instant = "0001";
+    String instant = HoodieActiveTimeline.createNewInstantTime();
     writeClient.startCommitWithTime(instant);
     List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
     JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);

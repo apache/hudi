@@ -30,11 +30,12 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.DataSourceTestUtils
+import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{expr, lit}
@@ -45,7 +46,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, 
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
-import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
@@ -95,20 +96,17 @@ class TestHoodieSparkSqlWriter {
 
   /**
    * Utility method for initializing the spark context.
+   *
+   * TODO rebase this onto existing base class to avoid duplication
    */
   def initSparkContext(): Unit = {
-    val sparkConf = new SparkConf()
-    if (HoodieSparkUtils.gteqSpark3_2) {
-      sparkConf.set("spark.sql.catalog.spark_catalog",
-        "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
-    }
+    val sparkConf = getSparkConfForTest(getClass.getSimpleName)
+
     spark = SparkSession.builder()
-      .appName(hoodieFooTableName)
-      .master("local[2]")
       .withExtensions(new HoodieSparkSessionExtension)
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config(sparkConf)
       .getOrCreate()
+
     sc = spark.sparkContext
     sc.setLogLevel("ERROR")
     sqlContext = spark.sqlContext
@@ -640,10 +638,10 @@ class TestHoodieSparkSqlWriter {
       .setBaseFileFormat(fooTableParams.getOrElse(HoodieWriteConfig.BASE_FILE_FORMAT.key,
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name))
       .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
-      .setPayloadClassName(fooTableParams(PAYLOAD_CLASS_NAME.key))
-      .setPreCombineField(fooTableParams(PRECOMBINE_FIELD.key))
+      .setPayloadClassName(PAYLOAD_CLASS_NAME.key)
+      .setPreCombineField(fooTableParams.getOrElse(PRECOMBINE_FIELD.key, PRECOMBINE_FIELD.defaultValue()))
       .setPartitionFields(fooTableParams(DataSourceWriteOptions.PARTITIONPATH_FIELD.key))
-      .setKeyGeneratorClassProp(fooTableParams(KEYGENERATOR_CLASS_NAME.key))
+      .setKeyGeneratorClassProp(fooTableParams.getOrElse(KEYGENERATOR_CLASS_NAME.key, KEYGENERATOR_CLASS_NAME.defaultValue()))
       if(addBootstrapPath) {
         tableMetaClientBuilder
           .setBootstrapBasePath(fooTableParams(HoodieBootstrapConfig.BASE_PATH.key))
@@ -659,13 +657,21 @@ class TestHoodieSparkSqlWriter {
    * @param tableType Type of table
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testSchemaEvolutionForTableType(tableType: String): Unit = {
+  @CsvSource(value = Array(
+    "COPY_ON_WRITE,true",
+    "COPY_ON_WRITE,false",
+    "MERGE_ON_READ,true",
+    "MERGE_ON_READ,false"
+  ))
+  def testSchemaEvolutionForTableType(tableType: String, allowColumnDrop: Boolean): Unit = {
+    val opts = getCommonParams(tempPath, hoodieFooTableName, tableType) ++ Map(
+      HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> allowColumnDrop.toString
+    )
+
     // Create new table
     // NOTE: We disable Schema Reconciliation by default (such that Writer's
     //       schema is favored over existing Table's schema)
-    val noReconciliationOpts = getCommonParams(tempPath, hoodieFooTableName, tableType)
-      .updated(DataSourceWriteOptions.RECONCILE_SCHEMA.key, "false")
+    val noReconciliationOpts = opts.updated(DataSourceWriteOptions.RECONCILE_SCHEMA.key, "false")
 
     // Generate 1st batch
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -750,22 +756,29 @@ class TestHoodieSparkSqlWriter {
     recordsSeq = convertRowListToSeq(records)
 
     val df5 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df5)
 
-    val snapshotDF5 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    if (allowColumnDrop) {
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df5)
 
-    assertEquals(35, snapshotDF5.count())
+      val snapshotDF5 = spark.read.format("org.apache.hudi")
+        .load(tempBasePath + "/*/*/*/*")
 
-    assertEquals(df5.intersect(dropMetaFields(snapshotDF5)).except(df5).count, 0)
+      assertEquals(35, snapshotDF5.count())
 
-    val fifthBatchActualSchema = fetchActualSchema()
-    val fifthBatchExpectedSchema = {
-      val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
-      AvroConversionUtils.convertStructTypeToAvroSchema(df5.schema, structName, nameSpace)
+      assertEquals(df5.intersect(dropMetaFields(snapshotDF5)).except(df5).count, 0)
+
+      val fifthBatchActualSchema = fetchActualSchema()
+      val fifthBatchExpectedSchema = {
+        val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
+        AvroConversionUtils.convertStructTypeToAvroSchema(df5.schema, structName, nameSpace)
+      }
+
+      assertEquals(fifthBatchExpectedSchema, fifthBatchActualSchema)
+    } else {
+      assertThrows[SchemaCompatibilityException] {
+        HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df5)
+      }
     }
-
-    assertEquals(fifthBatchExpectedSchema, fifthBatchActualSchema)
   }
 
   /**
@@ -943,8 +956,9 @@ class TestHoodieSparkSqlWriter {
     df_update.write.format("hudi")
       .options(options.updated(DataSourceWriteOptions.OPERATION.key, "upsert"))
       .mode(SaveMode.Append).save(tempBasePath)
-    assert(spark.read.format("hudi").load(tempBasePath).count() == 10)
-    assert(spark.read.format("hudi").load(tempBasePath).where("age >= 2000").count() == 10)
+    val df_result = spark.read.format("hudi").load(tempBasePath)
+    assert(df_result.count() == 10)
+    assert(df_result.where("age >= 2000").count() == 10)
   }
 
   /**
@@ -974,7 +988,8 @@ class TestHoodieSparkSqlWriter {
          | ) using hudi
          | partitioned by (dt)
          | options (
-         |  primaryKey = 'id'
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts'
          | )
          | location '$tablePath1'
        """.stripMargin)
@@ -988,7 +1003,8 @@ class TestHoodieSparkSqlWriter {
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
       .mode(SaveMode.Append).save(tablePath1)
-    assert(spark.read.format("hudi").load(tablePath1 + "/*").count() == 1)
+    val hudiDf = spark.read.format("hudi").load(tablePath1)
+    assert(hudiDf.count() == 1)
 
     // case 2: test table which created by dataframe
     val (tableName2, tablePath2) = ("hoodie_test_params_2", s"$tempBasePath" + "_2")
@@ -1023,20 +1039,19 @@ class TestHoodieSparkSqlWriter {
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName2)
       .mode(SaveMode.Append).save(tablePath2)
-    val data = spark.read.format("hudi").load(tablePath2 + "/*")
+    val data = spark.read.format("hudi").load(tablePath2)
     assert(data.count() == 2)
     assert(data.select("_hoodie_partition_path").map(_.getString(0)).distinct.collect.head == "2021-10-16")
   }
 
   @Test
-  def testNonpartitonedToDefaultKeyGen(): Unit = {
+  def testNonpartitonedWithResuseTableConfig(): Unit = {
     val _spark = spark
     import _spark.implicits._
     val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts"
     )
 
     // case 1: When commit C1 specificies a key generator and commit C2 does not specify key generator
@@ -1050,15 +1065,12 @@ class TestHoodieSparkSqlWriter {
       .mode(SaveMode.Overwrite).save(tablePath1)
 
     val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
-    // raise exception when no KEYGENERATOR_CLASS_NAME is specified and it is expected to default to SimpleKeyGenerator
-    val configConflictException = intercept[HoodieException] {
-      df2.write.format("hudi")
-        .options(options)
-        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
-        .mode(SaveMode.Append).save(tablePath1)
-    }
-    assert(configConflictException.getMessage.contains("Config conflict"))
-    assert(configConflictException.getMessage.contains(s"KeyGenerator:\t${classOf[SimpleKeyGenerator].getName}\t${classOf[NonpartitionedKeyGenerator].getName}"))
+    // In first commit, we explicitly over-ride it to Nonpartitioned, where as in 2nd batch, since re-using of table configs
+    // come into play, no exception should be thrown even if we don't supply any key gen class.
+    df2.write.format("hudi")
+      .options(options)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+      .mode(SaveMode.Append).save(tablePath1)
   }
 
   @Test
@@ -1212,7 +1224,7 @@ class TestHoodieSparkSqlWriter {
       .setConf(spark.sparkContext.hadoopConfiguration)
       .setBasePath(tempBasePath)
       .build()
-    new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
+    new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false)
   }
 }
 

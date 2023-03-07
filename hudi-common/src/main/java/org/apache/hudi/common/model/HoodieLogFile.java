@@ -39,6 +39,7 @@ public class HoodieLogFile implements Serializable {
 
   private static final long serialVersionUID = 1L;
   public static final String DELTA_EXTENSION = ".log";
+  public static final String LOG_FILE_PREFIX = ".";
   public static final Integer LOGFILE_BASE_VERSION = 1;
 
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
@@ -96,6 +97,10 @@ public class HoodieLogFile implements Serializable {
 
   public String getFileExtension() {
     return FSUtils.getFileExtensionFromLog(getPath());
+  }
+
+  public String getSuffix() {
+    return FSUtils.getSuffixFromLogPath(getPath());
   }
 
   public Path getPath() {
@@ -164,8 +169,16 @@ public class HoodieLogFile implements Serializable {
       if (baseInstantTime1.equals(baseInstantTime2)) {
 
         if (o1.getLogVersion() == o2.getLogVersion()) {
+
+          int compareWriteToken = getWriteTokenComparator().compare(o1.getLogWriteToken(), o2.getLogWriteToken());
+          if (compareWriteToken == 0) {
+
+            // Compare by suffix when write token is same
+            return o1.getSuffix().compareTo(o2.getSuffix());
+          }
+
           // Compare by write token when base-commit and log-version is same
-          return getWriteTokenComparator().compare(o1.getLogWriteToken(), o2.getLogWriteToken());
+          return compareWriteToken;
         }
 
         // compare by log-version when base-commit is same

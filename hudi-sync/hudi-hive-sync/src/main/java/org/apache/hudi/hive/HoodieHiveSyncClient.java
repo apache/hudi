@@ -34,6 +34,7 @@ import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
+import org.apache.hudi.sync.common.util.ConfigUtils;
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
@@ -56,6 +57,7 @@ import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_R
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
@@ -182,6 +184,19 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   @Override
+  public List<Partition> getPartitionsByFilter(String tableName, String filter) {
+    try {
+      return client.listPartitionsByFilter(databaseName, tableName, filter, (short)-1)
+          .stream()
+          .map(p -> new Partition(p.getValues(), p.getSd().getLocation()))
+          .collect(Collectors.toList());
+    } catch (TException e) {
+      throw new HoodieHiveSyncException("Failed to get partitions for table "
+          + tableId(databaseName, tableName) + " with filter " + filter, e);
+    }
+  }
+
+  @Override
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
                           String outputFormatClass, String serdeClass,
                           Map<String, String> serdeProperties, Map<String, String> tableProperties) {
@@ -299,6 +314,11 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     if (lastCommitSynced.isPresent()) {
       try {
         Table table = client.getTable(databaseName, tableName);
+        String basePath = config.getString(META_SYNC_BASE_PATH);
+        StorageDescriptor sd = table.getSd();
+        sd.setLocation(basePath);
+        SerDeInfo serdeInfo = sd.getSerdeInfo();
+        serdeInfo.putToParameters(ConfigUtils.TABLE_SERDE_PATH, basePath);
         table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
         client.alter_table(databaseName, tableName, table);
       } catch (Exception e) {

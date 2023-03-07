@@ -30,6 +30,7 @@ import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql._
+import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 
 /**
  * Command for insert into Hudi table.
@@ -86,19 +87,29 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
           refreshTable: Boolean = true,
           extraOptions: Map[String, String] = Map.empty): Boolean = {
     val catalogTable = new HoodieCatalogTable(sparkSession, table)
-    val config = buildHoodieInsertConfig(catalogTable, sparkSession, overwrite, partitionSpec, extraOptions)
 
-    // NOTE: In case of partitioned table we override specified "overwrite" parameter
-    //       to instead append to the dataset
-    val mode = if (overwrite && catalogTable.partitionFields.isEmpty) {
-      SaveMode.Overwrite
+    var mode = SaveMode.Append
+    var isOverWriteTable = false
+    var isOverWritePartition = false
+    if (overwrite && partitionSpec.isEmpty) {
+      // insert overwrite table
+      mode = SaveMode.Overwrite
+      isOverWriteTable = true
     } else {
-      SaveMode.Append
+      // for insert into or insert overwrite partition we use append mode.
+      mode = SaveMode.Append
+      isOverWritePartition = overwrite
     }
+
+    val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions)
 
     val alignedQuery = alignQueryOutput(query, catalogTable, partitionSpec, sparkSession.sessionState.conf)
 
     val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, Dataset.ofRows(sparkSession, alignedQuery))
+
+    if (!success) {
+      throw new HoodieException("Insert Into to Hudi table failed")
+    }
 
     if (success && refreshTable) {
       sparkSession.catalog.refreshTable(table.identifier.unquotedString)
@@ -128,9 +139,8 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     val targetPartitionSchema = catalogTable.partitionSchema
     val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
 
-    validate(removeMetaFields(query.schema), partitionsSpec, catalogTable)
     // Make sure we strip out meta-fields from the incoming dataset (these will have to be discarded anyway)
-    val cleanedQuery = stripMetaFields(query)
+    val cleanedQuery = stripMetaFieldAttributes(query)
     // To validate and align properly output of the query, we simply filter out partition columns with already
     // provided static values from the table's schema
     //
@@ -140,6 +150,8 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     //       positionally for example
     val expectedQueryColumns = catalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name))
     val coercedQueryOutput = coerceQueryOutputColumns(StructType(expectedQueryColumns), cleanedQuery, catalogTable, conf)
+    // After potential reshaping validate that the output of the query conforms to the table's schema
+    validate(removeMetaFields(coercedQueryOutput.schema), partitionsSpec, catalogTable)
 
     val staticPartitionValuesExprs = createStaticPartitionValuesExpressions(staticPartitionValues, targetPartitionSchema, conf)
 
@@ -185,7 +197,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
       .filter(pf => staticPartitionValues.contains(pf.name))
       .map(pf => {
         val staticPartitionValue = staticPartitionValues(pf.name)
-        val castExpr = castIfNeeded(Literal.create(staticPartitionValue), pf.dataType, conf)
+        val castExpr = castIfNeeded(Literal.create(staticPartitionValue), pf.dataType)
 
         Alias(castExpr, pf.name)()
       })
@@ -200,15 +212,6 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
           // Make sure we can cast source column to the target column type
           Cast.canCast(sourceColumn.dataType, targetColumn.dataType)
       }
-    }
-  }
-
-  def stripMetaFields(query: LogicalPlan): LogicalPlan = {
-    val filteredOutput = query.output.filterNot(attr => isMetaField(attr.name))
-    if (filteredOutput == query.output) {
-      query
-    } else {
-      Project(filteredOutput, query)
     }
   }
 

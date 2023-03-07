@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -121,5 +122,12 @@ public class HoodieInMemoryHashIndex
   @Override
   public boolean isImplicitWithStorage() {
     return false;
+  }
+
+  @VisibleForTesting
+  public static void clear() {
+    if (recordLocationMap != null) {
+      recordLocationMap.clear();
+    }
   }
 }

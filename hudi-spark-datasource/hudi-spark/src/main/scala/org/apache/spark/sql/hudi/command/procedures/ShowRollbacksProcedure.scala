@@ -25,8 +25,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
-import org.apache.hudi.common.util.CollectionUtils
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, TimelineMetadataUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -74,7 +73,7 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
 
     val basePath = getBasePath(tableName)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val activeTimeline = new RollbackTimeline(metaClient)
+    val activeTimeline = metaClient.getActiveTimeline
     if (showDetails) {
       val instantTime = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[String]
       getRollbackDetail(activeTimeline, instantTime, limit)
@@ -85,13 +84,9 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
 
   override def build: Procedure = new ShowRollbacksProcedure(showDetails)
 
-  class RollbackTimeline(metaClient: HoodieTableMetaClient) extends HoodieActiveTimeline(metaClient,
-    CollectionUtils.createImmutableSet(HoodieTimeline.ROLLBACK_EXTENSION)) {
-  }
-
-  def getRollbackDetail(activeTimeline: RollbackTimeline,
-                  instantTime: String,
-                  limit: Int): Seq[Row] = {
+  def getRollbackDetail(activeTimeline: HoodieActiveTimeline,
+                        instantTime: String,
+                        limit: Int): Seq[Row] = {
     val rows = new util.ArrayList[Row]
     val metadata = TimelineMetadataUtils.deserializeAvroMetadata(activeTimeline.getInstantDetails(
       new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, instantTime)).get, classOf[HoodieRollbackMetadata])
@@ -106,7 +101,7 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
   }
 
-  def getRollbacks(activeTimeline: RollbackTimeline,
+  def getRollbacks(activeTimeline: HoodieActiveTimeline,
                    limit: Int): Seq[Row] = {
     val rows = new util.ArrayList[Row]
     val rollback = activeTimeline.getRollbackTimeline.filterCompletedInstants

@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -93,6 +94,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.convertValueForSpecificDataTypes;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
@@ -109,6 +111,23 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_FILES = "files";
   public static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
   public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
+
+  // This suffix used by the delta commits from async indexer (`HoodieIndexer`),
+  // when the `indexUptoInstantTime` already exists in the metadata table,
+  // to avoid collision.
+  public static final String METADATA_INDEXER_TIME_SUFFIX = "004";
+
+  /**
+   * Returns whether the files partition of metadata table is ready for read.
+   *
+   * @param metaClient {@link HoodieTableMetaClient} instance.
+   * @return true if the files partition of metadata table is ready for read,
+   * based on the table config; false otherwise.
+   */
+  public static boolean isFilesPartitionAvailable(HoodieTableMetaClient metaClient) {
+    return metaClient.getTableConfig().getMetadataPartitions()
+        .contains(HoodieTableMetadataUtil.PARTITION_NAME_FILES);
+  }
 
   /**
    * Collects {@link HoodieColumnRangeMetadata} for the provided collection of records, pretending
@@ -147,6 +166,8 @@ public class HoodieTableMetadataUtil {
         final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), false);
         final Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name());
 
+        colStats.valueCount++;
+
         if (fieldVal != null && canCompare(fieldSchema)) {
           // Set the min value of the field
           if (colStats.minValue == null
@@ -158,8 +179,6 @@ public class HoodieTableMetadataUtil {
           if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldVal, colStats.maxValue, fieldSchema) > 0) {
             colStats.maxValue = fieldVal;
           }
-
-          colStats.valueCount++;
         } else {
           colStats.nullCount++;
         }
@@ -170,23 +189,23 @@ public class HoodieTableMetadataUtil {
         Collectors.toMap(colRangeMetadata -> colRangeMetadata.getColumnName(), Function.identity());
 
     return (Map<String, HoodieColumnRangeMetadata<Comparable>>) targetFields.stream()
-      .map(field -> {
-        ColumnStats colStats = allColumnStats.get(field.name());
-        return HoodieColumnRangeMetadata.<Comparable>create(
-            filePath,
-            field.name(),
-            colStats == null ? null : coerceToComparable(field.schema(), colStats.minValue),
-            colStats == null ? null : coerceToComparable(field.schema(), colStats.maxValue),
-            colStats == null ? 0 : colStats.nullCount,
-            colStats == null ? 0 : colStats.valueCount,
-            // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
-            //       mixing up those provided by Parquet with the ones from other encodings,
-            //       since those are not directly comparable
-            0,
-            0
-        );
-      })
-      .collect(collector);
+        .map(field -> {
+          ColumnStats colStats = allColumnStats.get(field.name());
+          return HoodieColumnRangeMetadata.<Comparable>create(
+              filePath,
+              field.name(),
+              colStats == null ? null : coerceToComparable(field.schema(), colStats.minValue),
+              colStats == null ? null : coerceToComparable(field.schema(), colStats.maxValue),
+              colStats == null ? 0 : colStats.nullCount,
+              colStats == null ? 0 : colStats.valueCount,
+              // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
+              //       mixing up those provided by Parquet with the ones from other encodings,
+              //       since those are not directly comparable
+              0,
+              0
+          );
+        })
+        .collect(collector);
   }
 
   /**
@@ -417,8 +436,8 @@ public class HoodieTableMetadataUtil {
       }
 
       final Path writeFilePath = new Path(recordsGenerationParams.getDataMetaClient().getBasePath(), pathWithPartition);
-      try (HoodieFileReader<IndexedRecord> fileReader =
-               HoodieFileReaderFactory.getFileReader(recordsGenerationParams.getDataMetaClient().getHadoopConf(), writeFilePath)) {
+      try (HoodieFileReader fileReader =
+               HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(recordsGenerationParams.getDataMetaClient().getHadoopConf(), writeFilePath)) {
         try {
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {
@@ -877,8 +896,8 @@ public class HoodieTableMetadataUtil {
         }
         final String pathWithPartition = partitionName + "/" + appendedFile;
         final Path appendedFilePath = new Path(recordsGenerationParams.getDataMetaClient().getBasePath(), pathWithPartition);
-        try (HoodieFileReader<IndexedRecord> fileReader =
-                 HoodieFileReaderFactory.getFileReader(recordsGenerationParams.getDataMetaClient().getHadoopConf(), appendedFilePath)) {
+        try (HoodieFileReader fileReader =
+                 HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(recordsGenerationParams.getDataMetaClient().getHadoopConf(), appendedFilePath)) {
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {
             LOG.error("Failed to read bloom filter for " + appendedFilePath);
@@ -991,13 +1010,15 @@ public class HoodieTableMetadataUtil {
    * just before the compaction instant time. The list of file slices returned is
    * sorted in the correct order of file group name.
    *
-   * @param metaClient - Instance of {@link HoodieTableMetaClient}.
-   * @param partition  - The name of the partition whose file groups are to be loaded.
+   * @param metaClient Instance of {@link HoodieTableMetaClient}.
+   * @param fsView     Metadata table filesystem view.
+   * @param partition  The name of the partition whose file groups are to be loaded.
    * @return List of latest file slices for all file groups in a given partition.
    */
-  public static List<FileSlice> getPartitionLatestMergedFileSlices(HoodieTableMetaClient metaClient, String partition) {
+  public static List<FileSlice> getPartitionLatestMergedFileSlices(
+      HoodieTableMetaClient metaClient, HoodieTableFileSystemView fsView, String partition) {
     LOG.info("Loading latest merged file slices for metadata table partition " + partition);
-    return getPartitionFileSlices(metaClient, Option.empty(), partition, true);
+    return getPartitionFileSlices(metaClient, Option.of(fsView), partition, true);
   }
 
   /**
@@ -1364,5 +1385,19 @@ public class HoodieTableMetadataUtil {
     Set<String> inflightAndCompletedPartitions = getInflightMetadataPartitions(tableConfig);
     inflightAndCompletedPartitions.addAll(tableConfig.getMetadataPartitions());
     return inflightAndCompletedPartitions;
+  }
+
+  /**
+   * Checks if a delta commit in metadata table is written by async indexer.
+   * <p>
+   * TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks in the
+   *  metadata table is landed.
+   *
+   * @param instantTime Instant time to check.
+   * @return {@code true} if from async indexer; {@code false} otherwise.
+   */
+  public static boolean isIndexingCommit(String instantTime) {
+    return instantTime.length() == MILLIS_INSTANT_ID_LENGTH + METADATA_INDEXER_TIME_SUFFIX.length()
+        && instantTime.endsWith(METADATA_INDEXER_TIME_SUFFIX);
   }
 }

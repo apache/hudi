@@ -20,19 +20,23 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
-import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 
@@ -42,8 +46,11 @@ import java.util.List;
  * <p>The cdc about logic is copied from {@link HoodieMergeHandleWithChangeLog},
  * we should refactor it out when there are good abstractions.
  */
-public class FlinkMergeAndReplaceHandleWithChangeLog<T extends HoodieRecordPayload, I, K, O>
+public class FlinkMergeAndReplaceHandleWithChangeLog<T, I, K, O>
     extends FlinkMergeAndReplaceHandle<T, I, K, O> {
+
+  private static final Logger LOG = LogManager.getLogger(FlinkMergeAndReplaceHandleWithChangeLog.class);
+
   private final HoodieCDCLogger cdcLogger;
 
   public FlinkMergeAndReplaceHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -61,19 +68,28 @@ public class FlinkMergeAndReplaceHandleWithChangeLog<T extends HoodieRecordPaylo
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> indexedRecord) {
-    final boolean result = super.writeUpdateRecord(hoodieRecord, oldRecord, indexedRecord);
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema)
+      throws IOException {
+    // TODO [HUDI-5019] Remove these unnecessary newInstance invocations
+    Option<HoodieRecord> savedCombineRecordOp = combineRecordOpt.map(HoodieRecord::newInstance);
+    final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecordOpt, writerSchema);
     if (result) {
-      boolean isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
-      cdcLogger.put(hoodieRecord, oldRecord, isDelete ? Option.empty() : indexedRecord);
+      boolean isDelete = HoodieOperation.isDelete(newRecord.getOperation());
+      Option<IndexedRecord> avroRecordOpt = savedCombineRecordOp.flatMap(r ->
+          toAvroRecord(r, writerSchema, config.getPayloadConfig().getProps()));
+      cdcLogger.put(newRecord, (GenericRecord) oldRecord.getData(), isDelete ? Option.empty() : avroRecordOpt);
     }
     return result;
   }
 
-  protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> insertRecord) {
-    super.writeInsertRecord(hoodieRecord, insertRecord);
-    if (!HoodieOperation.isDelete(hoodieRecord.getOperation())) {
-      cdcLogger.put(hoodieRecord, null, insertRecord);
+  protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
+    Schema schema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
+    // TODO Remove these unnecessary newInstance invocations
+    HoodieRecord<T> savedRecord = newRecord.newInstance();
+    super.writeInsertRecord(newRecord);
+    if (!HoodieOperation.isDelete(newRecord.getOperation())) {
+      cdcLogger.put(newRecord, null, savedRecord.toIndexedRecord(schema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData));
+      newRecord.deflate();
     }
   }
 

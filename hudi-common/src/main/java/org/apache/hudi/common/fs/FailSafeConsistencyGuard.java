@@ -139,7 +139,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   }
 
   /**
-   * Retries the predicate for condfigurable number of times till we the predicate returns success.
+   * Retries the predicate for configurable number of times till we the predicate returns success.
    *
    * @param dir directory of interest in which list of files are checked for visibility
    * @param files List of files to check for visibility

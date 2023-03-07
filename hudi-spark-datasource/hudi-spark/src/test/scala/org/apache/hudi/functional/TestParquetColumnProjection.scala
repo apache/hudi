@@ -18,12 +18,13 @@
 package org.apache.hudi.functional
 
 import org.apache.avro.Schema
+import org.apache.calcite.runtime.SqlFunctions.abs
 import org.apache.hudi.HoodieBaseRelation.projectSchema
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.{HadoopMapRedUtils, HoodieTestDataGenerator}
-import org.apache.hudi.config.{HoodieStorageConfig, HoodieWriteConfig}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils, HoodieUnsafeRDD}
@@ -31,7 +32,7 @@ import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.{Dataset, HoodieUnsafeUtils, Row, SaveMode}
-import org.junit.jupiter.api.Assertions.{assertEquals, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.{Disabled, Tag, Test}
 
 import scala.collection.JavaConverters._
@@ -236,9 +237,9 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     else if (HoodieSparkUtils.isSpark2)
     // TODO re-enable tests (these tests are very unstable currently)
       Array(
-        ("rider", -1),
-        ("rider,driver", -1),
-        ("rider,driver,tip_history", -1))
+        ("rider", 14160),
+        ("rider,driver", 14160),
+        ("rider,driver,tip_history", 14160))
     else
       fail("Only Spark 3 and Spark 2 are currently supported")
 
@@ -327,11 +328,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
         else targetRecordCount
 
       assertEquals(expectedRecordCount, rows.length)
-      if (expectedBytesRead != -1) {
-        assertEquals(expectedBytesRead, bytesRead)
-      } else {
-        logWarning(s"Not matching bytes read ($bytesRead)")
-      }
+      // verify within 10% of margin.
+      assertTrue((abs(expectedBytesRead - bytesRead) / expectedBytesRead) < 0.1)
 
       val readColumns = targetColumns ++ relation.mandatoryFields
       val (_, projectedStructType, _) = projectSchema(Left(tableState.schema), readColumns)

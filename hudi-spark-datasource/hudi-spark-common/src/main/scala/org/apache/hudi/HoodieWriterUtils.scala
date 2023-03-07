@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.DataSourceWriteOptions.{RECORD_MERGER_IMPLS, _}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -29,7 +29,6 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
-
 import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
@@ -38,10 +37,6 @@ import scala.collection.JavaConverters._
  * WriterUtils to assist in write path in Datasource and tests.
  */
 object HoodieWriterUtils {
-
-  def javaParametersWithWriteDefaults(parameters: java.util.Map[String, String]): java.util.Map[String, String] = {
-    mapAsJavaMap(parametersWithWriteDefaults(parameters.asScala.toMap))
-  }
 
   /**
     * Add default options for unspecified write options keys.
@@ -71,7 +66,6 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_TABLE_NAME)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT)
-    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.METASTORE_URIS)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_USER)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_PASS)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_URL)
@@ -88,6 +82,21 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(RECONCILE_SCHEMA)
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
+    Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
+  }
+
+  /**
+   * Fetch params by translating alternatives if any. Do not set any default as this method is intended to be called
+   * before validation.
+   * @param parameters hash map of parameters.
+   * @return hash map of raw with translated parameters.
+   */
+  def getParamsWithAlternatives(parameters: Map[String, String]): Map[String, String] = {
+    val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
+    val props = new Properties()
+    props.putAll(parameters)
+    val hoodieConfig: HoodieConfig = new HoodieConfig(props)
+    // do not set any default as this is called before validation.
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
@@ -148,8 +157,7 @@ object HoodieWriterUtils {
 
         val datasourcePreCombineKey = params.getOrElse(PRECOMBINE_FIELD.key(), null)
         val tableConfigPreCombineKey = tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD)
-        if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey
-          && datasourcePreCombineKey != tableConfigPreCombineKey) {
+        if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey && datasourcePreCombineKey != tableConfigPreCombineKey) {
           diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
         }
 
@@ -224,7 +232,8 @@ object HoodieWriterUtils {
     PRECOMBINE_FIELD -> HoodieTableConfig.PRECOMBINE_FIELD,
     PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
     RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
-    PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME
+    PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,
+    RECORD_MERGER_STRATEGY -> HoodieTableConfig.RECORD_MERGER_STRATEGY
   )
   def mappingSparkDatasourceConfigsToTableConfigs(options: Map[String, String]): Map[String, String] = {
     val includingTableConfigs = scala.collection.mutable.Map() ++ options

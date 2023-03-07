@@ -18,17 +18,18 @@
 
 package org.apache.hudi.functional.cdc
 
+import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.op_key_only
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
+import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
-
 import org.apache.spark.sql.SaveMode
-
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import scala.collection.JavaConversions._
 
@@ -43,10 +44,10 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    * Step6: Bluk_Insert 20
    */
   @ParameterizedTest
-  @CsvSource(Array("cdc_op_key", "cdc_data_before", "cdc_data_before_after"))
-  def testCOWDataSourceWrite(cdcSupplementalLoggingMode: String): Unit = {
+  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
+  def testCOWDataSourceWrite(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
     val options = commonOpts ++ Map(
-      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> cdcSupplementalLoggingMode
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode.name()
     )
 
     var totalInsertedCnt = 0L
@@ -69,8 +70,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     val schemaResolver = new TableSchemaResolver(metaClient)
     val dataSchema = schemaResolver.getTableAvroSchema(false)
-    val cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
-      HoodieCDCSupplementalLoggingMode.parse(cdcSupplementalLoggingMode), dataSchema)
+    val cdcSchema = schemaBySupplementalLoggingMode(loggingMode, dataSchema)
 
     totalInsertedCnt += 100
     val instant1 = metaClient.reloadActiveTimeline.lastInstant().get()
@@ -97,7 +97,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // check the num of cdc data
     assertEquals(cdcDataFromCDCLogFile2.size, 50)
     // check record key, before, after according to the supplemental logging mode
-    checkCDCDataForInsertOrUpdate(cdcSupplementalLoggingMode, cdcSchema, dataSchema,
+    checkCDCDataForInsertOrUpdate(loggingMode, cdcSchema, dataSchema,
       cdcDataFromCDCLogFile2, hoodieRecords2, HoodieCDCOperation.UPDATE)
 
     val commitTime2 = instant2.getTimestamp
@@ -224,11 +224,11 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    * Step7: Upsert 30 With CLean
    */
   @ParameterizedTest
-  @CsvSource(Array("cdc_op_key", "cdc_data_before", "cdc_data_before_after"))
-  def testMORDataSourceWrite(cdcSupplementalLoggingMode: String): Unit = {
+  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
+  def testMORDataSourceWrite(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
     val options = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key() -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
-      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> cdcSupplementalLoggingMode
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode.name()
     )
 
     var totalInsertedCnt = 0L
@@ -251,8 +251,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     val schemaResolver = new TableSchemaResolver(metaClient)
     val dataSchema = schemaResolver.getTableAvroSchema(false)
-    val cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
-      HoodieCDCSupplementalLoggingMode.parse(cdcSupplementalLoggingMode), dataSchema)
+    val cdcSchema = schemaBySupplementalLoggingMode(loggingMode, dataSchema)
 
     totalInsertedCnt += 100
     val instant1 = metaClient.reloadActiveTimeline.lastInstant().get()
@@ -278,8 +277,8 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val cdcDataFromCDCLogFile2 = getCDCLogFile(instant2).flatMap(readCDCLogFile(_, cdcSchema))
     assertEquals(cdcDataFromCDCLogFile2.size, 50)
     // check op
-    assertEquals(cdcDataFromCDCLogFile2.count(r => r.get(0).toString == "u"), 30)
-    assertEquals(cdcDataFromCDCLogFile2.count(r => r.get(0).toString == "i"), 20)
+    assertEquals(cdcDataFromCDCLogFile2.count(r => r.getData.asInstanceOf[GenericRecord].get(0).toString == "u"), 30)
+    assertEquals(cdcDataFromCDCLogFile2.count(r => r.getData.asInstanceOf[GenericRecord].get(0).toString == "i"), 20)
 
     val commitTime2 = instant2.getTimestamp
     var currentSnapshotData = spark.read.format("hudi").load(basePath)
@@ -428,14 +427,14 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    */
   @ParameterizedTest
   @CsvSource(Array(
-    "COPY_ON_WRITE,cdc_data_before_after", "MERGE_ON_READ,cdc_data_before_after",
-    "COPY_ON_WRITE,cdc_data_before", "MERGE_ON_READ,cdc_data_before",
-    "COPY_ON_WRITE,cdc_op_key", "MERGE_ON_READ,cdc_op_key"))
-  def testDataSourceWriteWithPartitionField(tableType: String, cdcSupplementalLoggingMode: String): Unit = {
+    "COPY_ON_WRITE,data_before_after", "MERGE_ON_READ,data_before_after",
+    "COPY_ON_WRITE,data_before", "MERGE_ON_READ,data_before",
+    "COPY_ON_WRITE,op_key_only", "MERGE_ON_READ,op_key_only"))
+  def testDataSourceWriteWithPartitionField(tableType: String, loggingMode: String): Unit = {
     val options = commonOpts ++ Map(
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> cdcSupplementalLoggingMode
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode
     )
 
     var totalInsertedCnt = 0L
@@ -544,9 +543,9 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(Array("cdc_op_key", "cdc_data_before", "cdc_data_before_after"))
-  def testCDCWithMultiBlocksAndLogFiles(cdcSupplementalLoggingMode: String): Unit = {
-    val (blockSize, logFileSize) = if (cdcSupplementalLoggingMode == "cdc_op_key") {
+  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
+  def testCDCWithMultiBlocksAndLogFiles(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
+    val (blockSize, logFileSize) = if (loggingMode == op_key_only) {
       // only op and key will be stored in cdc log file, we set the smaller values for the two configs.
       // so that it can also write out more than one cdc log file
       // and each of cdc log file has more that one data block as we expect.
@@ -555,7 +554,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       (2048, 5120)
     }
     val options = commonOpts ++ Map(
-      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> cdcSupplementalLoggingMode,
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode.name(),
       "hoodie.logfile.data.block.max.size" -> blockSize.toString,
       "hoodie.logfile.max.size" -> logFileSize.toString
     )
@@ -575,8 +574,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     val schemaResolver = new TableSchemaResolver(metaClient)
     val dataSchema = schemaResolver.getTableAvroSchema(false)
-    val cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
-      HoodieCDCSupplementalLoggingMode.parse(cdcSupplementalLoggingMode), dataSchema)
+    val cdcSchema = schemaBySupplementalLoggingMode(loggingMode, dataSchema)
 
     // Upsert Operation
     val hoodieRecords2 = dataGen.generateUniqueUpdates("001", 50)
@@ -594,7 +592,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // check the num of cdc data
     assertEquals(cdcDataFromCDCLogFile2.size, 50)
     // check record key, before, after according to the supplemental logging mode
-    checkCDCDataForInsertOrUpdate(cdcSupplementalLoggingMode, cdcSchema, dataSchema,
+    checkCDCDataForInsertOrUpdate(loggingMode, cdcSchema, dataSchema,
       cdcDataFromCDCLogFile2, hoodieRecords2, HoodieCDCOperation.UPDATE)
 
     val commitTime2 = instant2.getTimestamp

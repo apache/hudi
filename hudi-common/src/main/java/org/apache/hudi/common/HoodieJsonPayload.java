@@ -41,8 +41,8 @@ import java.util.zip.InflaterInputStream;
  */
 public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload> {
 
-  private byte[] jsonDataCompressed;
-  private int dataSize;
+  private final byte[] jsonDataCompressed;
+  private final int dataSize;
 
   public HoodieJsonPayload(String json) throws IOException {
     this.jsonDataCompressed = compressData(json);
