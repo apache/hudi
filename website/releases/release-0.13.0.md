@@ -8,7 +8,7 @@ last_modified_at: 2022-02-22T13:00:00-08:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# [Release 0.13.0](https://github.com/apache/hudi/releases/tag/release-0.13.0) ([docs](/docs/0.13.0/quick-start-guide))
+# [Release 0.13.0](https://github.com/apache/hudi/releases/tag/release-0.13.0) ([docs](/docs/quick-start-guide))
 
 Apache Hudi 0.13.0 release introduces a number of new features including [Metaserver](#metaserver),
 [Change Data Capture](#change-data-capture), [new Record Merge API](#optimizing-record-payload-handling),
@@ -387,7 +387,7 @@ to support this out-of-the-box so users can use this implementation instead of h
 ### Consistent Hashing Index
 
 We introduce the Consistent Hashing Index as yet another indexing option for your writes with Hudi. This is an
-enhancement to [Bucket Index](/releases/release-0.11.0#bucket-index) which is added in the 0.11.0 release. With Bucket
+enhancement to [Bucket Index](/releases/older-releases#bucket-index) which is added in the 0.11.0 release. With Bucket
 Index, buckets/file groups per partition are statically allocated, whereas with Consistent Hashing Index, buckets can
 grow dynamically and so users don't need to sweat about data skews. Buckets will expand and shrink depending on the load
 factor for each partition. You can find the [RFC](https://github.com/apache/hudi/blob/master/rfc/rfc-42/rfc-42.md) for
