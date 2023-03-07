@@ -48,6 +48,9 @@ public class KeyGenUtils {
   public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
   public static final String DEFAULT_COMPOSITE_KEY_FILED_VALUE = ":";
 
+  public static final String RECORD_KEY_GEN_PARTITION_ID_CONFIG = "_hoodie.record.key.gen.partition.id";
+  public static final String RECORD_KEY_GEN_INSTANT_TIME_CONFIG = "_hoodie.record.key.gen.instant.time";
+
   /**
    * Infers the key generator type based on the record key and partition fields.
    * <p>
@@ -60,11 +63,28 @@ public class KeyGenUtils {
    * @return Inferred key generator type.
    */
   public static KeyGeneratorType inferKeyGeneratorType(
-      String recordsKeyFields, String partitionFields) {
+      Option<String> recordsKeyFields, String partitionFields) {
+    boolean autoGenerateRecordKeys = !recordsKeyFields.isPresent();
+    if (autoGenerateRecordKeys) {
+      return inferKeyGeneratorTypeForAutoKeyGen(partitionFields);
+    } else {
+      if (!StringUtils.isNullOrEmpty(partitionFields)) {
+        int numPartFields = partitionFields.split(",").length;
+        int numRecordKeyFields = recordsKeyFields.get().split(",").length;
+        if (numPartFields == 1 && numRecordKeyFields == 1) {
+          return KeyGeneratorType.SIMPLE;
+        }
+        return KeyGeneratorType.COMPLEX;
+      }
+      return KeyGeneratorType.NON_PARTITION;
+    }
+  }
+
+  // When auto record key gen is enabled, our inference will be based on partition path only.
+  private static KeyGeneratorType inferKeyGeneratorTypeForAutoKeyGen(String partitionFields) {
     if (!StringUtils.isNullOrEmpty(partitionFields)) {
       int numPartFields = partitionFields.split(",").length;
-      int numRecordKeyFields = recordsKeyFields.split(",").length;
-      if (numPartFields == 1 && numRecordKeyFields == 1) {
+      if (numPartFields == 1) {
         return KeyGeneratorType.SIMPLE;
       }
       return KeyGeneratorType.COMPLEX;

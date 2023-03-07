@@ -18,9 +18,11 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
@@ -40,10 +42,12 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
 
   public NonpartitionedKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
-        .split(","))
-        .map(String::trim)
-        .collect(Collectors.toList());
+    this.recordKeyFields = Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
+        .map(recordKeyConfigValue ->
+            Arrays.stream(recordKeyConfigValue.split(","))
+                .map(String::trim)
+                .collect(Collectors.toList())
+        ).orElse(Collections.emptyList());
     this.partitionPathFields = Collections.emptyList();
     this.nonpartitionedAvroKeyGenerator = new NonpartitionedAvroKeyGenerator(props);
   }

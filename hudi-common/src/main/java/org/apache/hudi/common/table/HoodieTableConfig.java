@@ -452,7 +452,6 @@ public class HoodieTableConfig extends HoodieConfig {
       if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
-
       hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
 
       storeProperties(hoodieConfig.getProps(), outputStream);
@@ -520,9 +519,13 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Option<String[]> getRecordKeyFields() {
-    String keyFieldsValue = getStringOrDefault(RECORDKEY_FIELDS, HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    return Option.of(Arrays.stream(keyFieldsValue.split(","))
-        .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
+    String keyFieldsValue = getStringOrDefault(RECORDKEY_FIELDS, null);
+    if (keyFieldsValue == null) {
+      return Option.empty();
+    } else {
+      return Option.of(Arrays.stream(keyFieldsValue.split(","))
+          .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
+    }
   }
 
   public Option<String[]> getPartitionFields() {
@@ -637,6 +640,13 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public String getRecordKeyFieldProp() {
     return getStringOrDefault(RECORDKEY_FIELDS, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+  }
+
+  /**
+   * @returns the record key field prop.
+   */
+  public String getRawRecordKeyFieldProp() {
+    return getStringOrDefault(RECORDKEY_FIELDS, null);
   }
 
   public boolean isCDCEnabled() {

@@ -19,6 +19,7 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.generic.GenericRecord;
@@ -29,6 +30,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -40,7 +42,10 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
   private final GlobalAvroDeleteKeyGenerator globalAvroDeleteKeyGenerator;
   public GlobalDeleteKeyGenerator(TypedProperties config) {
     super(config);
-    this.recordKeyFields = Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","));
+    this.recordKeyFields = Option.ofNullable(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
+        .map(recordKeyConfigValue ->
+            Arrays.asList(recordKeyConfigValue.split(","))
+        ).orElse(Collections.emptyList());
     this.globalAvroDeleteKeyGenerator = new GlobalAvroDeleteKeyGenerator(config);
   }
 

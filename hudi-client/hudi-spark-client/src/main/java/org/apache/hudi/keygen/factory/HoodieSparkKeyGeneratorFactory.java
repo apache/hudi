@@ -19,13 +19,16 @@
 package org.apache.hudi.keygen.factory;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
+import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.GlobalDeleteKeyGenerator;
+import org.apache.hudi.keygen.AutoRecordGenWrapperKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -72,8 +75,15 @@ public class HoodieSparkKeyGeneratorFactory {
 
   public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
     String keyGeneratorClass = getKeyGeneratorClassName(props);
+    boolean autoRecordKeyGen = !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
     try {
-      return (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
+      KeyGenerator keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
+      if (autoRecordKeyGen) {
+        return new AutoRecordGenWrapperKeyGenerator(props, (BuiltinKeyGenerator) keyGenerator);
+      } else {
+        // if user comes with their own key generator.
+        return keyGenerator;
+      }
     } catch (Throwable e) {
       throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
     }
@@ -112,7 +122,7 @@ public class HoodieSparkKeyGeneratorFactory {
   public static KeyGeneratorType inferKeyGeneratorTypeFromWriteConfig(TypedProperties props) {
     String partitionFields = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), null);
     String recordsKeyFields = props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null);
-    return inferKeyGeneratorType(recordsKeyFields, partitionFields);
+    return inferKeyGeneratorType(Option.ofNullable(recordsKeyFields), partitionFields);
   }
 
   public static String getKeyGeneratorClassName(TypedProperties props) {

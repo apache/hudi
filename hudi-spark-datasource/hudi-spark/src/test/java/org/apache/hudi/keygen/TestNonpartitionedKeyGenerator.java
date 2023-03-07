@@ -67,11 +67,6 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testNullRecordKeyFields() {
-    Assertions.assertThrows(IllegalArgumentException.class, () -> new NonpartitionedKeyGenerator(getPropertiesWithoutRecordKeyProp()));
-  }
-
-  @Test
   public void testNonNullPartitionPathFields() {
     TypedProperties properties = getPropertiesWithPartitionPathProp();
     NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);

@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen._
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
@@ -54,6 +55,7 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
     Option(props.getString(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, null))
       .map { originalKeyGenClassName =>
         checkArgument(originalKeyGenClassName.nonEmpty)
+        val autoRecordKeyGen = !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
 
         val convertedKeyGenClassName = HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(originalKeyGenClassName)
 
@@ -61,7 +63,12 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
         keyGenProps.remove(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME)
         keyGenProps.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, convertedKeyGenClassName)
 
-        KeyGenUtils.createKeyGeneratorByClassName(keyGenProps).asInstanceOf[SparkKeyGeneratorInterface]
+        val keyGenerator = KeyGenUtils.createKeyGeneratorByClassName(keyGenProps).asInstanceOf[SparkKeyGeneratorInterface]
+        if (autoRecordKeyGen) {
+          new AutoRecordGenWrapperKeyGenerator(keyGenProps, keyGenerator.asInstanceOf[BuiltinKeyGenerator])
+        } else {
+          keyGenerator
+        }
       }
 
   override def getRecordKey(record: GenericRecord): String =
