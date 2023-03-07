@@ -5,7 +5,7 @@ layout: releases
 toc: true
 last_modified_at: 2022-01-27T22:07:00+08:00
 ---
-# [Release 0.10.1](https://github.com/apache/hudi/releases/tag/release-0.10.1) ([docs](/docs/quick-start-guide))
+# [Release 0.10.1](https://github.com/apache/hudi/releases/tag/release-0.10.1) ([docs](/docs/0.10.1/quick-start-guide))
 
 ## Migration Guide
 
@@ -68,7 +68,7 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 shown below.
 :::
 
-# [Release 0.10.0](https://github.com/apache/hudi/releases/tag/release-0.10.0) ([docs](/docs/quick-start-guide))
+## [Release 0.10.0](https://github.com/apache/hudi/releases/tag/release-0.10.0) ([docs](/docs/0.10.0/quick-start-guide))
 
 ## Migration Guide
 - If migrating from an older release, please also check the upgrade instructions for each subsequent release below.

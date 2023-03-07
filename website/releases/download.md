@@ -24,7 +24,8 @@ last_modified_at: 2022-12-27T15:59:57-04:00
 * Release Note : ([Release Note for Apache Hudi 0.10.1](/releases/release-0.10.1))
 
 ### Older releases
-As new Hudi releases come out for each development stream, previous ones will be archived, but they are still available at [here](https://archive.apache.org/dist/hudi/). 
+As new Hudi releases come out for each development stream, previous ones will be archived, but they are still available
+at [here](https://archive.apache.org/dist/hudi/). You can find the release notes of older releases [here](/releases/older-releases).
 
 ## Verify Release
 

@@ -5,7 +5,7 @@ layout: releases
 toc: true
 last_modified_at: 2022-12-27T10:30:00+05:30
 ---
-# [Release 0.12.2](https://github.com/apache/hudi/releases/tag/release-0.12.2) ([docs](/docs/quick-start-guide))
+# [Release 0.12.2](https://github.com/apache/hudi/releases/tag/release-0.12.2) ([docs](/docs/0.12.2/quick-start-guide))
 
 ## Long Term Support
 
@@ -16,9 +16,9 @@ users to migrate to.  This release (0.12.2) is the latest 0.12 release.
 
 * This release (0.12.2) does not introduce any new table version, thus no migration is needed if you are on 0.12.0.
 * If migrating from an older release, please check the migration guide from the previous release notes, specifically
-  the upgrade instructions in [0.6.0](/releases/older-releases#migration-guide-for-this-release),
-  [0.9.0](/releases/release-0.9.0#migration-guide-for-this-release), [0.10.0](/releases/release-0.10.0#migration-guide),
-  [0.11.0](/releases/release-0.11.0#migration-guide), and [0.12.0](/releases/release-0.12.0#migration-guide).
+  the upgrade instructions in [0.6.0](/releases/older-releases#release-060-docs),
+  [0.9.0](/releases/older-releases#release-090-docs), [0.10.0](/releases/older-releases#release-0100-docs),
+  [0.11.0](/releases/older-releases#release-0110-docs), and [0.12.0](/releases/older-releases#release-0120-docs).
 
 ### Bug fixes
 
@@ -69,7 +69,7 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 shown below.
 :::
 
-# [Release 0.12.1](https://github.com/apache/hudi/releases/tag/release-0.12.1) ([docs](/docs/quick-start-guide))
+## [Release 0.12.1](https://github.com/apache/hudi/releases/tag/release-0.12.1) ([docs](/docs/0.12.1/quick-start-guide))
 
 ## Long Term Support
 
@@ -80,9 +80,9 @@ users to migrate to.  The latest 0.12 release is [0.12.2](/releases/release-0.12
 
 * This release (0.12.1) does not introduce any new table version, thus no migration is needed if you are on 0.12.0.
 * If migrating from an older release, please check the migration guide from the previous release notes, specifically
-  the upgrade instructions in [0.6.0](/releases/older-releases#migration-guide-for-this-release),
-  [0.9.0](/releases/release-0.9.0#migration-guide-for-this-release), [0.10.0](/releases/release-0.10.0#migration-guide),
-  [0.11.0](/releases/release-0.11.0#migration-guide), and [0.12.0](/releases/release-0.12.0#migration-guide).
+  the upgrade instructions in [0.6.0](/releases/older-releases#release-060-docs),
+  [0.9.0](/releases/older-releases#release-090-docs), [0.10.0](/releases/older-releases#release-0100-docs),
+  [0.11.0](/releases/older-releases#release-0110-docs), and [0.12.0](/releases/older-releases#release-0120-docs).
 
 
 ## Release Highlights
@@ -126,7 +126,7 @@ Recommended to upgrading to 0.12.1 to avoid getting duplicate records in your pi
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12352182)
 
-# [Release 0.12.0](https://github.com/apache/hudi/releases/tag/release-0.12.0) ([docs](/docs/quick-start-guide))
+## [Release 0.12.0](https://github.com/apache/hudi/releases/tag/release-0.12.0) ([docs](/docs/0.12.0/quick-start-guide))
 
 ## Long Term Support
 

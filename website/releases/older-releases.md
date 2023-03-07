@@ -9,7 +9,7 @@ last_modified_at: 2020-05-28T08:40:00-07:00
 This page contains older release information, for bookkeeping purposes. It's recommended that you upgrade to one of the 
 more recent releases listed [here](/releases/download)
 
-# [Release 0.12.1](https://github.com/apache/hudi/releases/tag/release-0.12.1) ([docs](/docs/quick-start-guide))
+## [Release 0.12.1](https://github.com/apache/hudi/releases/tag/release-0.12.1) ([docs](/docs/0.12.1/quick-start-guide))
 
 ## Long Term Support
 
@@ -20,9 +20,9 @@ users to migrate to.  The latest 0.12 release is [0.12.2](/releases/release-0.12
 
 * This release (0.12.1) does not introduce any new table version, thus no migration is needed if you are on 0.12.0.
 * If migrating from an older release, please check the migration guide from the previous release notes, specifically
-  the upgrade instructions in [0.6.0](/releases/older-releases#migration-guide-for-this-release),
-  [0.9.0](/releases/release-0.9.0#migration-guide-for-this-release), [0.10.0](/releases/release-0.10.0#migration-guide),
-  [0.11.0](/releases/release-0.11.0#migration-guide), and [0.12.0](/releases/release-0.12.0#migration-guide).
+  the upgrade instructions in [0.6.0](/releases/older-releases#release-060-docs),
+  [0.9.0](/releases/older-releases#release-090-docs), [0.10.0](/releases/older-releases#release-0100-docs),
+  [0.11.0](/releases/older-releases#release-0110-docs), and [0.12.0](/releases/older-releases#release-0120-docs).
 
 
 ## Release Highlights
@@ -66,7 +66,7 @@ Recommended to upgrading to 0.12.1 to avoid getting duplicate records in your pi
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12352182)
 
-# [Release 0.12.0](https://github.com/apache/hudi/releases/tag/release-0.12.0) ([docs](/docs/quick-start-guide))
+## [Release 0.12.0](https://github.com/apache/hudi/releases/tag/release-0.12.0) ([docs](/docs/0.12.0/quick-start-guide))
 
 ## Long Term Support
 
@@ -267,7 +267,7 @@ Sorry about the inconvenience caused.
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12351209).
 
-# [Release 0.11.0](https://github.com/apache/hudi/releases/tag/release-0.11.0) ([docs](/docs/quick-start-guide))
+## [Release 0.11.0](https://github.com/apache/hudi/releases/tag/release-0.11.0) ([docs](/docs/0.11.0/quick-start-guide))
 
 ## Migration Guide
 
@@ -467,7 +467,7 @@ tables. This is useful when tailing Hive tables in `HoodieDeltaStreamer` instead
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12350673)
 
-# [Release 0.10.0](https://github.com/apache/hudi/releases/tag/release-0.10.0) ([docs](/docs/quick-start-guide))
+## [Release 0.10.0](https://github.com/apache/hudi/releases/tag/release-0.10.0) ([docs](/docs/0.10.0/quick-start-guide))
 
 ## Migration Guide
 - If migrating from an older release, please also check the upgrade instructions for each subsequent release below.
@@ -702,7 +702,7 @@ from 0.11.0-SNAPSHOT on master.
 ## Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12350285)
 
-# [Release 0.9.0](https://github.com/apache/hudi/releases/tag/release-0.9.0) ([docs](/docs/quick-start-guide))
+## [Release 0.9.0](https://github.com/apache/hudi/releases/tag/release-0.9.0) ([docs](/docs/0.9.0/quick-start-guide))
 
 ## Migration Guide for this release
 - If migrating from an older release, please also check the upgrade instructions for each subsequent release below.
@@ -826,7 +826,7 @@ help with initial backfill/bootstrap scenarios. We have also added support for p
 ## Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12350027)
 
-# [Release 0.8.0](https://github.com/apache/hudi/releases/tag/release-0.8.0) ([docs](/docs/quick-start-guide))
+## [Release 0.8.0](https://github.com/apache/hudi/releases/tag/release-0.8.0) ([docs](/docs/0.8.0/quick-start-guide))
 
 ## Migration Guide for this release
 - If migrating from release older than 0.5.3, please also check the upgrade instructions for each subsequent release below.
@@ -870,7 +870,7 @@ for more implementation details and follow this [page](/docs/concurrency_control
 ### Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12349423)
 
-# [Release 0.7.0](https://github.com/apache/hudi/releases/tag/release-0.7.0) ([docs](/docs/quick-start-guide))
+## [Release 0.7.0](https://github.com/apache/hudi/releases/tag/release-0.7.0) ([docs](/docs/0.7.0/quick-start-guide))
 
 ## Migration Guide for this release
 - If migrating from release older than 0.5.3, please also check the upgrade instructions for each subsequent release below.
@@ -946,7 +946,7 @@ Specifically, the `HoodieFlinkStreamer` allows for Hudi Copy-On-Write table to b
 ### Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12348721)
 
-## [Release 0.6.0](https://github.com/apache/hudi/releases/tag/release-0.6.0) ([docs](/docs/quick-start-guide))
+## [Release 0.6.0](https://github.com/apache/hudi/releases/tag/release-0.6.0) ([docs](/docs/0.6.0/quick-start-guide))
 
 ## Migration Guide for this release
 - If migrating from release older than 0.5.3, please also check the upgrade instructions for each subsequent release below.
@@ -998,7 +998,7 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 ## Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346663)
 
-## [Release 0.5.3](https://github.com/apache/hudi/releases/tag/release-0.5.3) ([docs](/docs/quick-start-guide))
+## [Release 0.5.3](https://github.com/apache/hudi/releases/tag/release-0.5.3) ([docs](/docs/0.5.3/quick-start-guide))
 
 ## Migration Guide for this release
 * This is a bug fix only release and no special migration steps needed when upgrading from 0.5.2. If you are upgrading from earlier releases “X”, please make sure you read the migration guide for each subsequent release between “X” and 0.5.3
@@ -1042,7 +1042,7 @@ For example hudi-spark-bundle pom dependency would look like:
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12348256)
 
 
-## [Release 0.5.2-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating) ([docs](/docs/quick-start-guide))
+## [Release 0.5.2-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating) ([docs](/docs/0.5.2/quick-start-guide))
 
 ### Migration Guide for this release
 * Write Client restructuring has moved classes around ([HUDI-554](https://issues.apache.org/jira/browse/HUDI-554)). Package `client` now has all the various client classes, that do the transaction management. `func` renamed to `execution` and some helpers moved to `client/utils`. All compaction code under `io` now under `table/compact`. Rollback code under `table/rollback` and in general all code for individual operations under `table`. This change only affects the apps/projects depending on hudi-client. Users of deltastreamer/datasource will not need to change anything.
@@ -1064,7 +1064,7 @@ temp_query --sql "select Instant, NumInserts, NumWrites from satishkotha_debug w
 ### Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346606)
 
-## [Release 0.5.1-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating) ([docs](/docs/quick-start-guide))
+## [Release 0.5.1-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating) ([docs](/docs/0.5.1/quick-start-guide))
 
 ### Migration Guide for this release
 * Upgrade hudi readers (query engines) first with 0.5.1-incubating release before upgrading writer.
@@ -1105,7 +1105,7 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 ### Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346183)
 
-## [Release 0.5.0-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.0-incubating) ([docs](/docs/quick-start-guide))
+## [Release 0.5.0-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.0-incubating) ([docs](/docs/0.5.0/quick-start-guide))
 
 ### Release Highlights
 * Package and format renaming from com.uber.hoodie to org.apache.hudi (See migration guide section below)

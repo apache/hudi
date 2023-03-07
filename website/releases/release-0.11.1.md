@@ -5,15 +5,15 @@ layout: releases
 toc: true
 last_modified_at: 2022-06-19T23:30:00-07:00
 ---
-# [Release 0.11.1](https://github.com/apache/hudi/releases/tag/release-0.11.1) ([docs](/docs/quick-start-guide))
+# [Release 0.11.1](https://github.com/apache/hudi/releases/tag/release-0.11.1) ([docs](/docs/0.11.1/quick-start-guide))
 
 ## Migration Guide
 
 * This release (0.11.1) does not introduce any new table version, thus no migration is needed if you are on 0.11.0.
 * If migrating from an older release, please check the migration guide from the previous release notes, specifically
-the upgrade instructions in [0.6.0](/releases/older-releases#migration-guide-for-this-release),
-[0.9.0](/releases/release-0.9.0#migration-guide-for-this-release), [0.10.0](/releases/release-0.10.0#migration-guide), and 
-[0.11.0](/releases/release-0.11.0#migration-guide).
+the upgrade instructions in [0.6.0](/releases/older-releases#release-060-docs),
+  [0.9.0](/releases/older-releases#release-090-docs), [0.10.0](/releases/older-releases#release-0100-docs), and
+  [0.11.0](/releases/older-releases#release-0110-docs).
 
 
 ## Release Highlights
@@ -90,7 +90,7 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 shown below.
 :::
 
-# [Release 0.11.0](https://github.com/apache/hudi/releases/tag/release-0.11.0) ([docs](/docs/quick-start-guide))
+## [Release 0.11.0](https://github.com/apache/hudi/releases/tag/release-0.11.0) ([docs](/docs/0.11.0/quick-start-guide))
 
 ## Migration Guide
 
@@ -179,7 +179,7 @@ bring both compute and data throughput efficiencies when querying the data.
   substantially reducing wasted data throughput as well as compute spent on decompressing and decoding the data. This is
   significantly beneficial to "wide" MOR tables with 1000s of columns, for example.
 
-*See the [migration guide](#migration-guide) for the relevant configuration updates.*
+*See the [migration guide](#migration-guide-1) for the relevant configuration updates.*
 
 ### Schema-on-read for Spark
 
@@ -202,7 +202,7 @@ time. Spark SQL DDL support (experimental) was added for Spark 3.1.x and Spark 3
 - Spark 3.1 will continue to be supported via `hudi-spark3.1-bundle`.
 - Spark 2.4 will continue to be supported via `hudi-spark2.4-bundle` or `hudi-spark-bundle` (legacy bundle name).
 
-*See the [migration guide](#migration-guide) for usage updates.*
+*See the [migration guide](#migration-guide-1) for usage updates.*
 
 ### Slim Utilities Bundle
 

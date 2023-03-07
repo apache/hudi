@@ -8,7 +8,7 @@ last_modified_at: 2022-02-22T13:00:00-08:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# [Release 0.13.0](https://github.com/apache/hudi/releases/tag/release-0.13.0) ([docs](/docs/quick-start-guide))
+# [Release 0.13.0](https://github.com/apache/hudi/releases/tag/release-0.13.0) ([docs](/docs/0.13.0/quick-start-guide))
 
 Apache Hudi 0.13.0 release introduces a number of new features including [Metaserver](#metaserver),
 [Change Data Capture](#change-data-capture), [new Record Merge API](#optimizing-record-payload-handling),
@@ -19,7 +19,7 @@ down below on relevant [breaking changes](#migration-guide-breaking-changes) and
 
 ## Migration Guide: Overview
 
-This release keeps the same table version (`5`) as [0.12.0 release](/releases/release-0.12.0), and there is no need for
+This release keeps the same table version (`5`) as [0.12.0 release](/releases/release-0.12.2), and there is no need for
 a table version upgrade if you are upgrading from 0.12.0.  There are a few
 [breaking changes](#migration-guide-breaking-changes) and [behavior changes](#migration-guide-behavior-changes) as
 described below, and users are expected to take action accordingly before using 0.13.0 release.
