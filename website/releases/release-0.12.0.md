@@ -165,7 +165,7 @@ This version brings more improvements to make Hudi the most performant lake stor
 We recently benchmarked Hudi against TPC-DS workload.
 Please check out [our blog](/blog/2022/06/29/Apache-Hudi-vs-Delta-Lake-transparent-tpc-ds-lakehouse-performance-benchmarks) for more details.
 
-## Known Regressions:
+## Known Regressions
 
 We discovered a regression in Hudi 0.12 release related to Bloom
 Index metadata persisted w/in Parquet footers [HUDI-4992](https://issues.apache.org/jira/browse/HUDI-4992).
@@ -203,8 +203,8 @@ getting duplicate records in your pipeline:
 
 We also found another regression related to metadata table and timeline server interplay with streaming ingestion pipelines.
 
-The FileSystemView that Hudi maintains internally go out of sync due to a occasional race conditions when table services are involved
-(compaction, clustering) and could result in updates routed to older file versions and hence resulting in missed updates.
+The FileSystemView that Hudi maintains internally could go out of sync due to a occasional race conditions when table services are involved
+(compaction, clustering) and could result in updates and deletes routed to older file versions and hence resulting in missed updates and deletes.
 
 Here are the user-flows that could potentially be impacted with this.
 
@@ -213,13 +213,15 @@ Here are the user-flows that could potentially be impacted with this.
 - Among these write models, this could have an impact only when table services are enabled.
     - COW: clustering enabled (inline or async)
     - MOR: compaction enabled (by default, inline or async)
-- Also, the impact is applicable only when metadata table is enabled, and timeline server is enabled (which are defaults as of 0.13.0)
+- Also, the impact is applicable only when metadata table is enabled, and timeline server is enabled (which are defaults as of 0.12.0)
 
-Based on some production data, we expect roughly < 1% of updates to be missed, since its a race condition and table services are generally scheduled
-once every N commits. This percentage of update misses could be even less if the frequency of table services is less.
+Based on some production data, we expect this issue might impact roughly < 1% of updates to be missed, since its a race condition
+and table services are generally scheduled once every N commits. The percentage of update misses could be even less if the
+frequency of table services is less.
 
 [Here](https://issues.apache.org/jira/browse/HUDI-5863) is the jira for the issue of interest and the fix has already been landed in master.
-Next minor release should have the fix. Until we have a next minor release with the fix, we recommend you to disable metadata table to mitigate the issue.
+0.12.3 should have the [fix](https://github.com/apache/hudi/pull/8079). Until we have a 0.12.3 release, we recommend you to disable metadata table
+(`hoodie.metadata.enable=false`) to mitigate the issue.
 
 Sorry about the inconvenience caused. 
 
