@@ -93,10 +93,6 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
     super(record, orderingVal);
   }
 
-  public PartialUpdateAvroPayload(Option<GenericRecord> record) {
-    super(record); // natural order
-  }
-
   @Override
   public PartialUpdateAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue, Schema schema, Properties properties) {
     if (oldValue.recordBytes.length == 0) {
