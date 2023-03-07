@@ -282,13 +282,13 @@ REFRESH database.table_name
 ```
 
 ## Redshift Spectrum
-To set up Redshift Spectrum for querying Hudi, see the [Query Engine Setup](/docs/next/query_engine_setup#redshift-spectrum) page.
+To set up Redshift Spectrum for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#redshift-spectrum) page.
 
 ## Doris 
-To set up Doris for querying Hudi, see the [Query Engine Setup](/docs/next/query_engine_setup#doris) page.
+To set up Doris for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#doris) page.
 
 ## StarRocks
-To set up StarRocks for querying Hudi, see the [Query Engine Setup](/docs/next/query_engine_setup#starrocks) page.
+To set up StarRocks for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#starrocks) page.
 
 ## Support Matrix
 
