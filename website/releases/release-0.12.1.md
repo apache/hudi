@@ -58,6 +58,30 @@ Recommended to upgrading to 0.12.1 to avoid getting duplicate records in your pi
 * Flink engine
 * Unit, functional, integration tests and CI
 
+## Known Regressions:
+
+We discovered a regression in Hudi 0.12.1 release related to metadata table and timeline server interplay with streaming ingestion pipelines.
+
+The FileSystemView that Hudi maintains internally go out of sync due to a occasional race conditions when table services are involved
+(compaction, clustering) and could result in updates routed to older file versions and hence resulting in missed updates.
+
+Here are the user-flows that could potentially be impacted with this.
+
+- This impacts pipelines using Deltastreamer in **continuous mode** (sync once is not impacted), Spark streaming, or if you have been directly
+  using write client across batches/commits instead of the standard ways to write to Hudi. In other words, batch writes should not be impacted.
+- Among these write models, this could have an impact only when table services are enabled.
+    - COW: clustering enabled (inline or async)
+    - MOR: compaction enabled (by default, inline or async)
+- Also, the impact is applicable only when metadata table is enabled, and timeline server is enabled (which are defaults as of 0.13.0)
+
+Based on some production data, we expect roughly < 1% of updates to be missed, since its a race condition and table services are generally scheduled
+once every N commits. This percentage of update misses could be even less if the frequency of table services is less.
+
+[Here](https://issues.apache.org/jira/browse/HUDI-5863) is the jira for the issue of interest and the fix has already been landed in master.
+Next minor release should have the fix. Until we have a next minor release with the fix, we recommend you to disable metadata table to mitigate the issue.
+
+Sorry about the inconvenience caused.
+
 ## Raw Release Notes
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12352182)

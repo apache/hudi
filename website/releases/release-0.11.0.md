@@ -201,6 +201,17 @@ detailed settings.
 In 0.11.0, `org.apache.hudi.utilities.schema.HiveSchemaProvider` is added for getting schema from user-defined hive
 tables. This is useful when tailing Hive tables in `HoodieDeltaStreamer` instead of having to provide avro schema files.
 
+## Known Regression
+
+In 0.11.0 release, with the newly added support for Spark SQL features, the following performance regressions were
+inadvertently introduced:
+* Partition pruning for some of the COW tables is not applied properly
+* Spark SQL query caching (which caches parsed and resolved queries) was not working correctly resulting in additional
+* overhead to re-analyze the query every time when it's executed (listing the table contents, etc.)
+
+All of these issues have been addressed in 0.11.1 and are validated to be resolved by benchmarking the set of changes
+on TPC-DS against 0.10.1.
+
 ## Raw Release Notes
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12350673)
