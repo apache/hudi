@@ -19,7 +19,7 @@ down below on relevant [breaking changes](#migration-guide-breaking-changes) and
 
 ## Migration Guide: Overview
 
-This release keeps the same table version (`5`) as [0.12.0 release](/releases/release-0.12.0), and there is no need for
+This release keeps the same table version (`5`) as [0.12.0 release](/releases/release-0.12.2), and there is no need for
 a table version upgrade if you are upgrading from 0.12.0.  There are a few
 [breaking changes](#migration-guide-breaking-changes) and [behavior changes](#migration-guide-behavior-changes) as
 described below, and users are expected to take action accordingly before using 0.13.0 release.
@@ -387,7 +387,7 @@ to support this out-of-the-box so users can use this implementation instead of h
 ### Consistent Hashing Index
 
 We introduce the Consistent Hashing Index as yet another indexing option for your writes with Hudi. This is an
-enhancement to [Bucket Index](/releases/release-0.11.0#bucket-index) which is added in the 0.11.0 release. With Bucket
+enhancement to [Bucket Index](/releases/older-releases#bucket-index) which is added in the 0.11.0 release. With Bucket
 Index, buckets/file groups per partition are statically allocated, whereas with Consistent Hashing Index, buckets can
 grow dynamically and so users don't need to sweat about data skews. Buckets will expand and shrink depending on the load
 factor for each partition. You can find the [RFC](https://github.com/apache/hudi/blob/master/rfc/rfc-42/rfc-42.md) for
