@@ -2403,6 +2403,13 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
+   * Returns whether the explicit guard of lock is required.
+   */
+  public boolean needsLockGuard() {
+    return isMetadataTableEnabled() || getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+  }
+
+  /**
    * Layout configs.
    */
   public HoodieStorageLayout.LayoutType getLayoutType() {
@@ -2943,8 +2950,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
       // isLockProviderPropertySet must be fetched before setting defaults of HoodieLockConfig
       final TypedProperties writeConfigProperties = writeConfig.getProps();
-      final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME)
-          || writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_PROP);
+      final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key());
       writeConfig.setDefaultOnCondition(!isLockConfigSet,
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
@@ -2968,13 +2974,10 @@ public class HoodieWriteConfig extends HoodieConfig {
             // This is targeted at Single writer with async table services
             // If user does not set the lock provider, likely that the concurrency mode is not set either
             // Override the configs for metadata table
-            writeConfig.setValue(WRITE_CONCURRENCY_MODE.key(),
-                WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
             writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
                 InProcessLockProvider.class.getName());
-            LOG.info(String.format("Automatically set %s=%s and %s=%s since user has not set the "
+            LOG.info(String.format("Automatically set %s=%s since user has not set the "
                     + "lock provider for single writer with async table services",
-                WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value(),
                 HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
           }
         }

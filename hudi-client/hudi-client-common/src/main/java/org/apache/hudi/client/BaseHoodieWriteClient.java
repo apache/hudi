@@ -491,7 +491,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
-    this.lastCompletedTxnAndMetadata = txnManager.isOptimisticConcurrencyControlEnabled()
+    this.lastCompletedTxnAndMetadata = txnManager.isNeedsLockGuard()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
     this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     this.pendingInflightAndRequestedInstants.remove(instantTime);
@@ -1076,7 +1076,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *
    * @param extraMetadata Metadata to pass onto the scheduled service instant
    * @param tableServiceType Type of table service to schedule
-   * @return
+   *
+   * @return The given instant time option or empty if no table service plan is scheduled
    */
   public Option<String> scheduleTableService(Option<Map<String, String>> extraMetadata, TableServiceType tableServiceType) {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
@@ -1088,20 +1089,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *
    * @param extraMetadata Metadata to pass onto the scheduled service instant
    * @param tableServiceType Type of table service to schedule
-   * @return
+   *
+   * @return The given instant time option or empty if no table service plan is scheduled
    */
-  public Option<String> scheduleTableService(String instantTime, Option<Map<String, String>> extraMetadata,
-                                             TableServiceType tableServiceType) {
-    // A lock is required to guard against race conditions between an on-going writer and scheduling a table service.
-    final Option<HoodieInstant> inflightInstant = Option.of(new HoodieInstant(HoodieInstant.State.REQUESTED,
-        tableServiceType.getAction(), instantTime));
-    try {
-      this.txnManager.beginTransaction(inflightInstant, Option.empty());
-      LOG.info("Scheduling table service " + tableServiceType);
-      return tableServiceClient.scheduleTableServiceInternal(instantTime, extraMetadata, tableServiceType);
-    } finally {
-      this.txnManager.endTransaction(inflightInstant);
-    }
+  public Option<String> scheduleTableService(String instantTime, Option<Map<String, String>> extraMetadata, TableServiceType tableServiceType) {
+    return tableServiceClient.scheduleTableService(instantTime, extraMetadata, tableServiceType);
   }
 
   public HoodieMetrics getMetrics() {
