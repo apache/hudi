@@ -489,8 +489,6 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     setUp(IndexType.GLOBAL_SIMPLE, true, true);
     config = getConfigBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
-            .withGlobalSimpleIndexUpdatePartitionPath(true)
-            .withBloomIndexUpdatePartitionPath(true)
             .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)

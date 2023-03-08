@@ -69,6 +69,10 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexConfig.class);
 
+  public static final boolean DEFAULT_BLOOM_INDEX_UPDATE_PARTITION_PATH = true;
+  public static final boolean DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH = true;
+
+
   public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
       .key("hoodie.index.type")
       // Builder#getDefaultIndexType has already set it according to engine type
@@ -222,27 +226,6 @@ public class HoodieIndexConfig extends HoodieConfig {
       .defaultValue("MEMORY_AND_DISK_SER")
       .withDocumentation("Only applies when #simpleIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. "
           + "Refer to org.apache.spark.storage.StorageLevel for different values");
-
-  /**
-   * Only applies if index type is GLOBAL_BLOOM.
-   * <p>
-   * When set to true, an update to a record with a different partition from its existing one
-   * will insert the record to the new partition and delete it from the old partition.
-   * <p>
-   * When set to false, a record will be updated to the old partition.
-   */
-  public static final ConfigProperty<String> BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE = ConfigProperty
-      .key("hoodie.bloom.index.update.partition.path")
-      .defaultValue("true")
-      .withDocumentation("Only applies if index type is GLOBAL_BLOOM. "
-          + "When set to true, an update including the partition path of a record that already exists will result in "
-          + "inserting the incoming record into the new partition and deleting the original record in the old partition. "
-          + "When set to false, the original record will only be updated in the old partition");
-
-  public static final ConfigProperty<String> SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE = ConfigProperty
-      .key("hoodie.simple.index.update.partition.path")
-      .defaultValue("true")
-      .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE + ", but for simple index.");
 
   /**
    * ***** Bucket Index Configs *****
@@ -482,26 +465,6 @@ public class HoodieIndexConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_SIMPLE_INDEX_INPUT_STORAGE_LEVEL = SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE.defaultValue();
-  /**
-   * @deprecated Use {@link #BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE} and its methods instead
-   */
-  @Deprecated
-  public static final String BLOOM_INDEX_UPDATE_PARTITION_PATH = BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE.key();
-  /**
-   * @deprecated Use {@link #BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE} and its methods instead
-   */
-  @Deprecated
-  public static final String DEFAULT_BLOOM_INDEX_UPDATE_PARTITION_PATH = BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE.defaultValue();
-  /**
-   * @deprecated Use {@link #SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE} and its methods instead
-   */
-  @Deprecated
-  public static final String SIMPLE_INDEX_UPDATE_PARTITION_PATH = SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE.key();
-  /**
-   * @deprecated Use {@link #SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE} and its methods instead
-   */
-  @Deprecated
-  public static final String DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH = SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE.defaultValue();
 
   private EngineType engineType;
 
@@ -609,11 +572,6 @@ public class HoodieIndexConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withBloomIndexUpdatePartitionPath(boolean updatePartitionPath) {
-      hoodieIndexConfig.setValue(BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE, String.valueOf(updatePartitionPath));
-      return this;
-    }
-
     public Builder withSimpleIndexParallelism(int parallelism) {
       hoodieIndexConfig.setValue(SIMPLE_INDEX_PARALLELISM, String.valueOf(parallelism));
       return this;
@@ -631,11 +589,6 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withGlobalSimpleIndexParallelism(int parallelism) {
       hoodieIndexConfig.setValue(GLOBAL_SIMPLE_INDEX_PARALLELISM, String.valueOf(parallelism));
-      return this;
-    }
-
-    public Builder withGlobalSimpleIndexUpdatePartitionPath(boolean updatePartitionPath) {
-      hoodieIndexConfig.setValue(SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE, String.valueOf(updatePartitionPath));
       return this;
     }
 

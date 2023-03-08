@@ -230,7 +230,6 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
             .withIndexType(HoodieIndex.IndexType.GLOBAL_BLOOM)
-            .withBloomIndexUpdatePartitionPath(false)
             .build())
         .build();
     HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
@@ -351,7 +350,6 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
         .withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
             .withIndexType(HoodieIndex.IndexType.GLOBAL_BLOOM)
-            .withBloomIndexUpdatePartitionPath(true)
             .build())
         .build();
     HoodieGlobalBloomIndex index =

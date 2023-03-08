@@ -133,7 +133,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
   public ClusteringOperator(Configuration conf, RowType rowType) {
     this.conf = conf;
-    this.preserveHoodieMetadata = conf.getBoolean(HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.key(), HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.defaultValue());
+    this.preserveHoodieMetadata = HoodieClusteringConfig.DEFAULT_PRESERVE_COMMIT_METADATA;
     this.rowType = this.preserveHoodieMetadata
         ? BulkInsertWriterHelper.addMetadataFields(rowType, false)
         : rowType;

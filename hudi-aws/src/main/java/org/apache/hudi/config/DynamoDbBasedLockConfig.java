@@ -46,7 +46,7 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_TABLE_NAME = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table")
-      .noDefaultValue()
+      .defaultValue("hudi_locks")
       .sinceVersion("0.10.0")
       .withDocumentation("For DynamoDB based lock provider, the name of the DynamoDB table acting as lock table");
 
@@ -98,7 +98,7 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table_creation_timeout")
-      .defaultValue(String.valueOf(10 * 60 * 1000))
+      .defaultValue(String.valueOf(2 * 60 * 1000))
       .sinceVersion("0.10.0")
       .withDocumentation("For DynamoDB based lock provider, the maximum number of milliseconds to wait for creating DynamoDB table");
 

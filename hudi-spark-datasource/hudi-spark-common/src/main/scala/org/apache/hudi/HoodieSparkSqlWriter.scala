@@ -816,9 +816,7 @@ object HoodieSparkSqlWriter {
     val (targetFormat, customOpts) = if (HoodieSparkUtils.isSpark2) {
       ("org.apache.hudi.internal", Map())
     } else if (HoodieSparkUtils.isSpark3) {
-      ("org.apache.hudi.spark3.internal", Map(
-        HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key -> hoodieDF.schema.json
-      ))
+      ("org.apache.hudi.spark3.internal", Map.empty)
     } else {
       throw new HoodieException("Bulk insert using row writer is not supported with current Spark version."
         + " To use row writer please switch to spark 2 or spark 3")

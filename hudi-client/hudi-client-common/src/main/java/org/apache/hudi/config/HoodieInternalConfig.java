@@ -31,11 +31,6 @@ public class HoodieInternalConfig extends HoodieConfig {
   public static final String BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED = "hoodie.bulkinsert.are.partitioner.records.sorted";
   public static final Boolean DEFAULT_BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED = false;
 
-  public static final ConfigProperty<String> BULKINSERT_INPUT_DATA_SCHEMA_DDL = ConfigProperty
-      .key("hoodie.bulkinsert.schema.ddl")
-      .noDefaultValue()
-      .withDocumentation("Schema set for row writer/bulk insert.");
-
   /**
    * Returns if partition records are sorted or not.
    *

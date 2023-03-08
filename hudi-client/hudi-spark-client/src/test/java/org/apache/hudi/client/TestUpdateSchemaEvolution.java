@@ -80,7 +80,6 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness implement
   private WriteStatus prepareFirstRecordCommit(List<String> recordsStrs) throws IOException {
     // Create a bunch of records with an old version of schema
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.avsc");
-    config.setValue(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA, "false");
     final HoodieSparkTable table = HoodieSparkTable.create(config, context);
     final List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       List<HoodieRecord> insertRecords = new ArrayList<>();
