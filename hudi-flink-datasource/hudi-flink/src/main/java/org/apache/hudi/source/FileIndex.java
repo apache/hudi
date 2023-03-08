@@ -144,9 +144,16 @@ public class FileIndex {
       // no need to filter by col stats or error occurs.
       return allFileStatus;
     }
-    return Arrays.stream(allFileStatus).parallel()
+    FileStatus[] results = Arrays.stream(allFileStatus).parallel()
         .filter(fileStatus -> candidateFiles.contains(fileStatus.getPath().getName()))
         .toArray(FileStatus[]::new);
+    double totalFileSize = allFileStatus.length;
+    double resultFileSize = results.length;
+    double skippingPercent = totalFileSize != 0 ? (totalFileSize - resultFileSize) / totalFileSize : 0;
+    LOG.info("Total files: " + totalFileSize
+        + "; candidate files after data skipping: " + resultFileSize
+        + "; skipping percent " + skippingPercent);
+    return results;
   }
 
   /**
