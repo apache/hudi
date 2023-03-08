@@ -168,7 +168,7 @@ public class TestConfigProperty extends HoodieConfig {
     assertFalse(FAKE_BOOLEAN_CONFIG.isEssential());
     assertFalse(FAKE_BOOLEAN_CONFIG_NO_DEFAULT.isEssential());
 
-    assertTrue(FAKE_BOOLEAN_CONFIG.makeEssential(true).isEssential());
-    assertTrue(FAKE_BOOLEAN_CONFIG_NO_DEFAULT.makeEssential(true).isEssential());
+    assertTrue(FAKE_BOOLEAN_CONFIG.makeEssential().isEssential());
+    assertTrue(FAKE_BOOLEAN_CONFIG_NO_DEFAULT.makeEssential().isEssential());
   }
 }

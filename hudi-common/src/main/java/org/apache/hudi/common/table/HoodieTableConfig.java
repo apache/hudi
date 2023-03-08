@@ -91,13 +91,11 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> NAME = ConfigProperty
       .key(HOODIE_TABLE_NAME_KEY)
       .noDefaultValue()
-      .makeEssential(true)
       .withDocumentation("Table name that will be used for registering with Hive. Needs to be same across runs.");
 
   public static final ConfigProperty<HoodieTableType> TYPE = ConfigProperty
       .key("hoodie.table.type")
       .defaultValue(HoodieTableType.COPY_ON_WRITE)
-      .makeEssential(true)
       .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.");
 
   public static final ConfigProperty<HoodieTableVersion> VERSION = ConfigProperty

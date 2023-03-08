@@ -164,8 +164,8 @@ public class ConfigProperty<T> implements Serializable {
     return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, Option.of(inferFunction), validValues, essential, alternatives);
   }
 
-  public ConfigProperty<T> makeEssential(boolean isEssential) {
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, isEssential, alternatives);
+  public ConfigProperty<T> makeEssential() {
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, true, alternatives);
   }
 
   /**
@@ -182,9 +182,9 @@ public class ConfigProperty<T> implements Serializable {
   @Override
   public String toString() {
     return String.format(
-        "Key: '%s' , default: %s description: %s since version: %s deprecated after: %s , is essential: %s)",
-        key, defaultValue, doc, sinceVersion.isPresent() ? sinceVersion.get() : "version is not defined",
-        deprecatedVersion.isPresent() ? deprecatedVersion.get() : "version is not defined", essential);
+        "Key: '%s' , default: %s , is essential: %s , description: %s since version: %s deprecated after: %s )",
+        key, defaultValue, essential, doc, sinceVersion.isPresent() ? sinceVersion.get() : "version is not defined",
+        deprecatedVersion.isPresent() ? deprecatedVersion.get() : "version is not defined");
   }
 
   /**
