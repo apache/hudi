@@ -18,7 +18,6 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
 /**
