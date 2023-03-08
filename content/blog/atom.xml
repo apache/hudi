@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2023-03-08T01:27:57.781Z</updated>
+    <updated>2023-03-08T05:57:29.113Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
@@ -11,7 +11,7 @@
         <title type="html"><![CDATA[Automate schema evolution at scale with Apache Hudi in AWS Glue | Amazon Web Services]]></title>
         <id>/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue</id>
         <link href="https://hudi.apache.org/blog/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue"/>
-        <updated>2023-03-08T01:27:57.781Z</updated>
+        <updated>2023-03-08T05:57:29.113Z</updated>
         <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
         <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue/">Redirecting... please wait!! </div>]]></content>
         <author>
