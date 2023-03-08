@@ -95,10 +95,6 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      // NOTE: Currently only this setting is used like following by different MT partitions:
-      //          - Files: using it
-      //          - Column Stats: NOT using it (defaults to doing "point-lookups")
-      HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.key -> testCase.forceFullLogScan.toString,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ metadataOpts
 
@@ -647,14 +643,12 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
 
 object TestColumnStatsIndex {
 
-  case class ColumnStatsTestCase(tableType: HoodieTableType, forceFullLogScan: Boolean, shouldReadInMemory: Boolean)
+  case class ColumnStatsTestCase(tableType: HoodieTableType, shouldReadInMemory: Boolean)
 
   def testMetadataColumnStatsIndexParams: java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(HoodieTableType.values().toStream.flatMap(tableType =>
-      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = false, shouldReadInMemory = true)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = false, shouldReadInMemory = false)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = true, shouldReadInMemory = false)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = true, shouldReadInMemory = true)))
+      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true)),
+        Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false)))
     ): _*)
   }
 }

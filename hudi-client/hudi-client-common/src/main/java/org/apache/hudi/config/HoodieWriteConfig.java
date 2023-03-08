@@ -2266,10 +2266,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS);
   }
 
-  public boolean isMetadataAsyncClean() {
-    return getBoolean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE);
-  }
-
   public boolean isMetadataAsyncIndex() {
     return getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE);
   }
@@ -2280,10 +2276,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getMetadataMinCommitsToKeep() {
     return getInt(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP);
-  }
-
-  public int getMetadataCleanerCommitsRetained() {
-    return getInt(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED);
   }
 
   /**

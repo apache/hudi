@@ -76,6 +76,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_ENABLE_FULL_SCAN_LOG_FILES;
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
@@ -549,7 +550,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private boolean isFullScanAllowedForPartition(String partitionName) {
     switch (partitionName) {
       case PARTITION_NAME_FILES:
-        return HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.defaultValue();
+        return DEFAULT_ENABLE_FULL_SCAN_LOG_FILES;
 
       case PARTITION_NAME_COLUMN_STATS:
       case PARTITION_NAME_BLOOM_FILTERS:
