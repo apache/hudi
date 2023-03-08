@@ -175,7 +175,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |insert *
            |""".stripMargin)
 
-      checkAnswer(s"select id, name, data, count, ts from $targetTable")(
+      checkAnswer(s"select id, name, data, country, ts from $targetTable")(
         Seq(1, "lb", 6, "shu", 1646643196l)
       )
 
