@@ -683,6 +683,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public void reset() {
+    LOG.info("Sleeping for 5 seconds in reset() to simulate processing ...");
+    try {
+      Thread.sleep(5000);
+    } catch (InterruptedException e) {
+      LOG.warn("Sleep is interrupted", e);
+    }
+    LOG.info("Sleep in reset() is finished.");
     initIfNeeded();
     dataMetaClient.reloadActiveTimeline();
     if (metadataMetaClient != null) {
