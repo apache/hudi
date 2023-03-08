@@ -20,6 +20,8 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.exception.SchemaCompatibilityException
+import org.apache.spark.SparkConf
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.internal.SQLConf
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
@@ -112,6 +114,72 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
        """.stripMargin)
       val cnt = spark.sql(s"select * from $tableName where id = 1").count()
       assertResult(0)(cnt)
+    })
+  }
+
+  test("Test MergeInto with more than once update actions") {
+    withRecordType()(withTempDir {tmp =>
+      val conf = new SparkConf().setAppName("insertDatasToHudi").setMaster("local[*]")
+      val spark = SparkSession.builder().config(conf)
+        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+        .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
+        .getOrCreate()
+      import spark.implicits._
+      case class HudiDataWithData(id: Int, name: String, data: Int, country: String, ts: Long)
+      val targetTable = generateTableName
+      val incDF = Seq(
+        HudiDataWithData(1, "lb", 8, "shu", 1646643196l)
+      ).toDF
+      incDF.createOrReplaceTempView("inc_table")
+      spark.sql(
+        s"""
+           |create table ${targetTable} (
+           |  id int,
+           |  name string,
+           |  data int,
+           |  country string,
+           |  ts bigint
+           |) using hudi
+           |tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           |partitioned by (country)
+           |location '${tmp.getCanonicalPath}'
+           |""".stripMargin)
+      spark.sql(
+        s"""
+           |merge into ${targetTable} as target
+           |using (
+           |	select 1 as id, 'lb' as name, 6 as data, 'shu' as country, 1646643193 as ts
+           |) source
+           |on source.id = target.id
+           |when matched then
+           |update set *
+           |when not matched then
+           |insert *
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |merge into ${targetTable} as target
+           |using (
+           |	select id, name, data, country, ts from inc_table
+           |) source
+           |on source.id = target.id
+           |when matched and source.data > target.data then
+           |update set target.data = source.data, target.ts = source.ts
+           |when matched and source.data = 6 then
+           |update set target.data = source.data, target.ts = source.ts
+           |when not matched then
+           |insert *
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, data, count, ts from $targetTable")(
+        Seq(1, "lb", 6, "shu", 1646643196l)
+      )
+
     })
   }
 
