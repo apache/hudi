@@ -603,7 +603,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
 
   def validate(mit: MergeIntoTable): Unit = {
-    checkUpdatingActions(updatingActions)
     checkInsertingActions(insertingActions)
     checkDeletingActions(deletingActions)
   }
