@@ -45,19 +45,14 @@ public class SparkInsertOverwritePartitioner extends UpsertPartitioner {
   @Override
   public BucketInfo getBucketInfo(int bucketNumber) {
     BucketInfo bucketInfo = super.getBucketInfo(bucketNumber);
-    switch (config.getIndexType()) {
-      case BUCKET:
-        switch (bucketInfo.bucketType) {
-          case INSERT:
-            return bucketInfo;
-          case UPDATE:
-            // Insert overwrite always generates new bucket file id
-            return new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), bucketInfo.partitionPath);
-          default:
-            throw new AssertionError();
-        }
-      default:
+    switch (bucketInfo.bucketType) {
+      case INSERT:
         return bucketInfo;
+      case UPDATE:
+        // Insert overwrite always generates new bucket file id
+        return new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), bucketInfo.partitionPath);
+      default:
+        throw new AssertionError();
     }
   }
 

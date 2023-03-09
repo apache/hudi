@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import scala.Tuple2;
 
@@ -42,21 +43,25 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
+import static org.apache.hudi.common.model.WriteOperationType.INSERT_OVERWRITE;
+import static org.apache.hudi.common.model.WriteOperationType.INSERT_OVERWRITE_TABLE;
+
 /**
  * Packs incoming records to be inserted into buckets (1 bucket = 1 RDD partition).
  */
 public class SparkBucketIndexPartitioner<T> extends
     SparkHoodiePartitioner<T> {
 
-  protected final int numBuckets;
+  private final int numBuckets;
   private final String indexKeyField;
   private final int totalPartitionPaths;
-  protected final List<String> partitionPaths;
+  private final List<String> partitionPaths;
   /**
    * Helps get the RDD partition id, partition id is partition offset + bucket id.
    * The partition offset is a multiple of the bucket num.
    */
   private final Map<String, Integer> partitionPathOffset;
+  private final boolean isOverwrite;
 
   /**
    * Partition path and file groups in it pair. Decide the file group an incoming update should go to.
@@ -84,6 +89,8 @@ public class SparkBucketIndexPartitioner<T> extends
       i += numBuckets;
     }
     assignUpdates(profile);
+    WriteOperationType operationType = profile.getOperationType();
+    this.isOverwrite = INSERT_OVERWRITE.equals(operationType) || INSERT_OVERWRITE_TABLE.equals(operationType);
   }
 
   private void assignUpdates(WorkloadProfile profile) {
@@ -106,6 +113,10 @@ public class SparkBucketIndexPartitioner<T> extends
   public BucketInfo getBucketInfo(int bucketNumber) {
     String partitionPath = partitionPaths.get(bucketNumber / numBuckets);
     String bucketId = BucketIdentifier.bucketIdStr(bucketNumber % numBuckets);
+    // Insert overwrite always generates new bucket file id
+    if (isOverwrite) {
+      return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucketId), partitionPath);
+    }
     Option<String> fileIdOption = Option.fromJavaOptional(updatePartitionPathFileIds
         .getOrDefault(partitionPath, Collections.emptySet()).stream()
         .filter(e -> e.startsWith(bucketId))

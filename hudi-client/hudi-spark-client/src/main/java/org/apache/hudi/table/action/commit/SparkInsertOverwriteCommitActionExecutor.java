@@ -39,9 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.config.HoodieLayoutConfig.SIMPLE_BUCKET_LAYOUT_OVERWRITE_PARTITIONER_CLASS_NAME;
-import static org.apache.hudi.config.HoodieLayoutConfig.SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME;
-
 public class SparkInsertOverwriteCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
 
@@ -70,8 +67,6 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
   @Override
   protected Partitioner getPartitioner(WorkloadProfile profile) {
     return table.getStorageLayout().layoutPartitionerClass()
-        .map(
-            c -> SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME.equals(c) ? SIMPLE_BUCKET_LAYOUT_OVERWRITE_PARTITIONER_CLASS_NAME : c)
         .map(c -> getLayoutPartitioner(profile, c))
         .orElse(new SparkInsertOverwritePartitioner(profile, context, table, config));
   }
@@ -101,7 +96,7 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
       case INSERT:
         return handleInsert(binfo.fileIdPrefix, recordItr);
       default:
-        throw new AssertionError();
+        throw new AssertionError("Expect INSERT bucketType for insert overwrite, please correct the logical of " + partitioner.getClass().getName());
     }
   }
 }
