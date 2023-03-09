@@ -164,11 +164,11 @@ public class TestConfigProperty extends HoodieConfig {
   }
 
   @Test
-  public void testEssentialValue() {
-    assertFalse(FAKE_BOOLEAN_CONFIG.isEssential());
-    assertFalse(FAKE_BOOLEAN_CONFIG_NO_DEFAULT.isEssential());
+  public void testAdvancedValue() {
+    assertFalse(FAKE_BOOLEAN_CONFIG.isAdvanced());
+    assertFalse(FAKE_BOOLEAN_CONFIG_NO_DEFAULT.isAdvanced());
 
-    assertTrue(FAKE_BOOLEAN_CONFIG.makeEssential().isEssential());
-    assertTrue(FAKE_BOOLEAN_CONFIG_NO_DEFAULT.makeEssential().isEssential());
+    assertTrue(FAKE_BOOLEAN_CONFIG.markAdvanced().isAdvanced());
+    assertTrue(FAKE_BOOLEAN_CONFIG_NO_DEFAULT.markAdvanced().isAdvanced());
   }
 }
