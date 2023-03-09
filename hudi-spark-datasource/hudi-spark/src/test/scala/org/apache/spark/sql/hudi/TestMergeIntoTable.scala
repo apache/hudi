@@ -126,10 +126,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       import spark.implicits._
       case class HudiDataWithData(id: Int, name: String, data: Int, country: String, ts: Long)
       val targetTable = generateTableName
-      val incDF = Seq(
-        HudiDataWithData(1, "lb", 8, "shu", 1646643196L)
-      ).toDF
-      incDF.createOrReplaceTempView("inc_table")
       spark.sql(
         s"""
            |create table ${targetTable} (
@@ -159,12 +155,12 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |when not matched then
            |insert *
            |""".stripMargin)
-
+      HudiDataWithData(1, "lb", 8, "shu", 1646643196L)
       spark.sql(
         s"""
            |merge into ${targetTable} as target
            |using (
-           |select id, name, data, country, ts from inc_table
+           |select 1 as id, 'lb' as name, 8 as data, 'shu' as country, 1646643196 as ts
            |) source
            |on source.id = target.id
            |when matched and source.data > target.data then
