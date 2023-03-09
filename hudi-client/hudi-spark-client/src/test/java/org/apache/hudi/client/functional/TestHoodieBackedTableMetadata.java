@@ -230,7 +230,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   public void testMetadataRecordKeyExcludeFromPayload(final HoodieTableType tableType) throws Exception {
     initPath();
     writeConfig = getWriteConfigBuilder(true, true, false)
-        .withPopulateMetaFields(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withMaxNumDeltaCommitsBeforeCompaction(3)

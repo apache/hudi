@@ -453,9 +453,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get())
           .setBasePath(metadataWriteConfig.getBasePath()).build();
 
-      if (dataWriteConfig.populateMetaFields() != metadataMetaClient.getTableConfig().populateMetaFields()) {
+      if (DEFAULT_POPULATE_META_FIELDS != metadataMetaClient.getTableConfig().populateMetaFields()) {
         LOG.info("Re-initiating metadata table properties since populate meta fields have changed");
-        metadataMetaClient = initializeMetaClient(dataWriteConfig.populateMetaFields());
+        metadataMetaClient = initializeMetaClient(DEFAULT_POPULATE_META_FIELDS);
       }
 
       final Option<HoodieInstant> latestMetadataInstant =
@@ -569,7 +569,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     String createInstantTime = getInitialCommitInstantTime(dataMetaClient);
 
-    initializeMetaClient(dataWriteConfig.populateMetaFields());
+    initializeMetaClient(DEFAULT_POPULATE_META_FIELDS);
     initTableMetadata();
     // if async metadata indexing is enabled,
     // then only initialize files partition as other partitions will be built using HoodieIndexer

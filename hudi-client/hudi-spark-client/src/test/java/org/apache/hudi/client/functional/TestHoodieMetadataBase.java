@@ -341,7 +341,6 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     properties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withDeleteParallelism(2).withRollbackParallelism(2).withFinalizeWriteParallelism(2)
-        .withPopulateMetaFields(DEFAULT_POPULATE_META_FIELDS)
         .withAutoCommit(autoCommit)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
@@ -417,8 +416,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
         .withRollbackParallelism(parallelism)
         .withFinalizeWriteParallelism(parallelism)
         .withAllowMultiWriteOnSameInstant(true)
-        .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-        .withPopulateMetaFields(writeConfig.populateMetaFields());
+        .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName());
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();

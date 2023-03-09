@@ -554,21 +554,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     tableType = COPY_ON_WRITE;
     init(tableType, false);
 
+    // populateMeta fields is false by default
     writeConfig = getWriteConfigBuilder(true, true, false)
-        .withPopulateMetaFields(true)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .build())
-        .build();
-    initWriteConfigAndMetatableWriter(writeConfig, true);
-    doWriteOperation(testTable, "0000001", INSERT);
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(writeConfig.getBasePath() + "/.hoodie/metadata").setConf(hadoopConf).build();
-    assertTrue(metaClient.getTableConfig().populateMetaFields());
-
-    // update populateMeta fields to false.
-    writeConfig = getWriteConfigBuilder(true, true, false)
-        .withPopulateMetaFields(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .build())
@@ -735,7 +722,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     boolean populateMetaFields = false;
     init(MERGE_ON_READ, false);
     writeConfig = getWriteConfigBuilder(true, true, false)
-        .withPopulateMetaFields(populateMetaFields)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .enableMetrics(false)
@@ -906,7 +892,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableType tableType = COPY_ON_WRITE;
     init(tableType, false);
     writeConfig = getWriteConfigBuilder(false, true, false)
-        .withPopulateMetaFields(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .build())
@@ -982,7 +967,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   public void testMetadataRecordKeyExcludeFromPayload(final HoodieTableType tableType, final boolean enableMetaFields) throws Exception {
     initPath();
     writeConfig = getWriteConfigBuilder(true, true, false)
-        .withPopulateMetaFields(enableMetaFields)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withMaxNumDeltaCommitsBeforeCompaction(3)
@@ -1287,7 +1271,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     final int minArchiveCommitsMetadata = 2;
     final int minArchiveCommitsDataset = 4;
     writeConfig = getWriteConfigBuilder(true, true, false)
-        .withPopulateMetaFields(populateMateFields)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
             .archiveCommitsWith(minArchiveCommitsMetadata, minArchiveCommitsMetadata + 1)
             .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsBeforeCompaction)
