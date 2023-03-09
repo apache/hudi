@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.source.evaluator;
+package org.apache.hudi.source;
 
 import org.apache.hudi.source.stats.ColumnStats;
 import org.apache.hudi.utils.TestData;
@@ -41,14 +41,14 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.source.DataPruner.convertColumnStats;
-import static org.apache.hudi.util.EvaluatorUtils.fromExpression;
+import static org.apache.hudi.source.ExpressionEvaluators.fromExpression;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Test cases for {@link org.apache.hudi.source.evaluator.Evaluator}.
+ * Test cases for {@link org.apache.hudi.source.ExpressionEvaluators.Evaluator}.
  */
-public class TestExpressionEvaluator {
+public class TestExpressionEvaluators {
   private static final DataType ROW_DATA_TYPE = DataTypes.ROW(
       DataTypes.FIELD("f_tinyint", DataTypes.TINYINT()),
       DataTypes.FIELD("f_smallint", DataTypes.SMALLINT()),
@@ -82,7 +82,7 @@ public class TestExpressionEvaluator {
 
   @Test
   void testEqualTo() {
-    EqualTo equalTo = EqualTo.getInstance();
+    ExpressionEvaluators.EqualTo equalTo = ExpressionEvaluators.EqualTo.getInstance();
     FieldReferenceExpression rExpr = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
     ValueLiteralExpression vExpr = new ValueLiteralExpression(12);
 
@@ -118,7 +118,7 @@ public class TestExpressionEvaluator {
 
   @Test
   void testNotEqualTo() {
-    NotEqualTo notEqualTo = NotEqualTo.getInstance();
+    ExpressionEvaluators.NotEqualTo notEqualTo = ExpressionEvaluators.NotEqualTo.getInstance();
     FieldReferenceExpression rExpr = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
     ValueLiteralExpression vExpr = new ValueLiteralExpression(12);
 
@@ -154,7 +154,7 @@ public class TestExpressionEvaluator {
 
   @Test
   void testIsNull() {
-    IsNull isNull = IsNull.getInstance();
+    ExpressionEvaluators.IsNull isNull = ExpressionEvaluators.IsNull.getInstance();
     FieldReferenceExpression rExpr = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
 
     RowData indexRow1 = intIndexRow(11, 13);
@@ -169,7 +169,7 @@ public class TestExpressionEvaluator {
 
   @Test
   void testIsNotNull() {
-    IsNotNull isNotNull = IsNotNull.getInstance();
+    ExpressionEvaluators.IsNotNull isNotNull = ExpressionEvaluators.IsNotNull.getInstance();
     FieldReferenceExpression rExpr = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
 
     RowData indexRow1 = intIndexRow(11, 13);
@@ -184,7 +184,7 @@ public class TestExpressionEvaluator {
 
   @Test
   void testLessThan() {
-    LessThan lessThan = LessThan.getInstance();
+    ExpressionEvaluators.LessThan lessThan = ExpressionEvaluators.LessThan.getInstance();
     FieldReferenceExpression rExpr = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
     ValueLiteralExpression vExpr = new ValueLiteralExpression(12);
 
@@ -220,7 +220,7 @@ public class TestExpressionEvaluator {
 
   @Test
   void testGreaterThan() {
-    GreaterThan greaterThan = GreaterThan.getInstance();
+    ExpressionEvaluators.GreaterThan greaterThan = ExpressionEvaluators.GreaterThan.getInstance();
     FieldReferenceExpression rExpr = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
     ValueLiteralExpression vExpr = new ValueLiteralExpression(12);
 
@@ -256,7 +256,7 @@ public class TestExpressionEvaluator {
 
   @Test
   void testLessThanOrEqual() {
-    LessThanOrEqual lessThanOrEqual = LessThanOrEqual.getInstance();
+    ExpressionEvaluators.LessThanOrEqual lessThanOrEqual = ExpressionEvaluators.LessThanOrEqual.getInstance();
     FieldReferenceExpression rExpr = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
     ValueLiteralExpression vExpr = new ValueLiteralExpression(12);
 
@@ -292,7 +292,7 @@ public class TestExpressionEvaluator {
 
   @Test
   void testGreaterThanOrEqual() {
-    GreaterThanOrEqual greaterThanOrEqual = GreaterThanOrEqual.getInstance();
+    ExpressionEvaluators.GreaterThanOrEqual greaterThanOrEqual = ExpressionEvaluators.GreaterThanOrEqual.getInstance();
     FieldReferenceExpression rExpr = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
     ValueLiteralExpression vExpr = new ValueLiteralExpression(12);
 
@@ -328,7 +328,7 @@ public class TestExpressionEvaluator {
 
   @Test
   void testIn() {
-    In in = In.getInstance();
+    ExpressionEvaluators.In in = ExpressionEvaluators.In.getInstance();
     FieldReferenceExpression rExpr = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
 
     RowData indexRow1 = intIndexRow(11, 13);

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.source;
 
-import org.apache.hudi.source.evaluator.Evaluator;
 import org.apache.hudi.source.stats.ColumnStats;
 import org.apache.hudi.util.ExpressionUtils;
 
@@ -34,7 +33,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.util.EvaluatorUtils.fromExpression;
+import static org.apache.hudi.source.ExpressionEvaluators.fromExpression;
 
 /**
  * Utility to do data skipping.
@@ -43,9 +42,9 @@ public class DataPruner implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private final String[] referencedCols;
-  private final List<Evaluator> evaluators;
+  private final List<ExpressionEvaluators.Evaluator> evaluators;
 
-  private DataPruner(String[] referencedCols, List<Evaluator> evaluators) {
+  private DataPruner(String[] referencedCols, List<ExpressionEvaluators.Evaluator> evaluators) {
     this.referencedCols = referencedCols;
     this.evaluators = evaluators;
   }
@@ -59,7 +58,7 @@ public class DataPruner implements Serializable {
    */
   public boolean test(RowData indexRow, RowType.RowField[] queryFields) {
     Map<String, ColumnStats> columnStatsMap = convertColumnStats(indexRow, queryFields);
-    for (Evaluator evaluator : evaluators) {
+    for (ExpressionEvaluators.Evaluator evaluator : evaluators) {
       if (!evaluator.eval(columnStatsMap)) {
         return false;
       }
@@ -79,13 +78,13 @@ public class DataPruner implements Serializable {
     if (referencedCols.length == 0) {
       return null;
     }
-    List<Evaluator> evaluators = fromExpression(filters);
+    List<ExpressionEvaluators.Evaluator> evaluators = fromExpression(filters);
     return new DataPruner(referencedCols, evaluators);
   }
 
   public static Map<String, ColumnStats> convertColumnStats(RowData indexRow, RowType.RowField[] queryFields) {
     if (indexRow == null || queryFields == null) {
-      throw new AssertionError();
+      throw new IllegalArgumentException("Index Row and query fields could not be null.");
     }
     Map<String, ColumnStats> mapping = new LinkedHashMap<>();
     for (int i = 0; i < queryFields.length; i++) {
