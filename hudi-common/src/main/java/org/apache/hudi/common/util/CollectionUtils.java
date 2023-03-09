@@ -184,9 +184,10 @@ public class CollectionUtils {
   }
 
   /**
-   * Returns difference b/w {@code one} {@link Set} of elements and {@code another}
+   * Returns difference b/w {@code one} {@link Collection} of elements and {@code another}
+   * The elements in collection {@code one} are also duplicated and returned as a {@link Set}.
    */
-  public static <E> Set<E> diffSet(Set<E> one, Set<E> another) {
+  public static <E> Set<E> diffSet(Collection<E> one, Set<E> another) {
     Set<E> diff = new HashSet<>(one);
     diff.removeAll(another);
     return diff;
