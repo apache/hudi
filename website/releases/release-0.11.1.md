@@ -297,6 +297,10 @@ inadvertently introduced:
 All of these issues have been addressed in 0.11.1 and are validated to be resolved by benchmarking the set of changes
 on TPC-DS against 0.10.1.
 
+In HUDI-2761, HUDI-3576 and HUDI-4279, we did several attempts to optimize the efficiency of embedded timeline server,
+but in some cases, these changes would cause silent data loss, the affected table types include both COW and MOR table,
+this bug has been addressed in release 0.12.0.
+
 ## Raw Release Notes
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12350673)

@@ -58,6 +58,12 @@ frequency of table services is less.
 [Here](https://issues.apache.org/jira/browse/HUDI-5863) is the jira for the issue of interest and the fix has already been landed in master.
 Next minor release(0.12.3) should have the [fix](https://github.com/apache/hudi/pull/8079). Until we have a next minor release with the fix, we recommend you to disable metadata table
 (`hoodie.metadata.enable=false`) to mitigate the issue.
+
+We also discovered a regression for Flink streaming writer with the hive meta sync which is introduced by HUDI-3730, the refactoring to `HiveSyncConfig`
+causes the Hive `Resources` config objects leaking, which finally leads to an OOM exception for the JobManager if the streaming job runs continuously for weeks.
+0.12.3 should have the [fix](https://github.com/apache/hudi/pull/8050). Until we have a 0.12.3 release, we recommend you to cherry-pick the fix to local
+if hive meta sync is required.
+
 Sorry about the inconvenience caused.
 
 ## Raw Release Notes
