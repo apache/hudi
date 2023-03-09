@@ -160,19 +160,19 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            |merge into ${targetTable} as target
            |using (
-           |select 1 as id, 'lb' as name, 8 as data, 'shu' as country, 1646643196 as ts
+           |select 1 as id, 'lb' as name, 5 as data, 'shu' as country, 1646643196 as ts
            |) source
            |on source.id = target.id
            |when matched and source.data > target.data then
            |update set target.data = source.data, target.ts = source.ts
-           |when matched and source.data = 6 then
+           |when matched and source.data = 5 then
            |update set target.data = source.data, target.ts = source.ts
            |when not matched then
            |insert *
            |""".stripMargin)
 
       checkAnswer(s"select id, name, data, country, ts from $targetTable")(
-        Seq(1, "lb", 6, "shu", 1646643196L)
+        Seq(1, "lb", 5, "shu", 1646643196L)
       )
 
     })
