@@ -123,8 +123,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
         .getOrCreate()
-      import spark.implicits._
-      case class HudiDataWithData(id: Int, name: String, data: Int, country: String, ts: Long)
       val targetTable = generateTableName
       spark.sql(
         s"""
@@ -155,7 +153,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |when not matched then
            |insert *
            |""".stripMargin)
-      HudiDataWithData(1, "lb", 8, "shu", 1646643196L)
       spark.sql(
         s"""
            |merge into ${targetTable} as target
