@@ -1704,6 +1704,34 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result2, "[+I[3]]");
   }
 
+  @Test
+  void testWriteReadWithComputedColumnsInTheMiddle() {
+    TableEnvironment tableEnv = batchTableEnv;
+    String createTable = sql("t1")
+        .field("f0 int")
+        .field("f1 int")
+        .field("f2 as f0 + f1")
+        .field("f3 varchar(10)")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.PRECOMBINE_FIELD, "f1")
+        .pkField("f0")
+        .noPartition()
+        .end();
+    tableEnv.executeSql(createTable);
+
+    String insertInto = "insert into t1(f0, f1, f3) values\n"
+        + "(1, 2, 'abc')";
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result1, "[+I[1, 2, 3, abc]]");
+
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select f2 from t1").execute().collect());
+    assertRowsEquals(result2, "[+I[3]]");
+  }
+
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   void testWriteReadWithLocalTimestamp(HoodieTableType tableType) {
