@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.schema.postprocessor;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
 
 import org.apache.avro.Schema;
@@ -51,18 +52,14 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
     super(props, jssc);
   }
 
-  public static class Config {
-    public static final String DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP =
-        "hoodie.deltastreamer.schemaprovider.schema_post_processor.delete.columns";
-  }
-
   @Override
   public Schema processSchema(Schema schema) {
 
-    String columnToDeleteStr = this.config.getString(Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP);
+    String columnToDeleteStr = this.config.getString(HoodieDeltaStreamerSchemaProviderConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP.key());
 
     if (StringUtils.isNullOrEmpty(columnToDeleteStr)) {
-      LOG.warn(String.format("Param %s is null or empty, return original schema", Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP));
+      LOG.warn(String.format("Param %s is null or empty, return original schema",
+          HoodieDeltaStreamerSchemaProviderConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP.key()));
     }
 
     // convert field to lowerCase for compare purpose

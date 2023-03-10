@@ -31,12 +31,6 @@ import java.io.Serializable;
  */
 public abstract class SchemaPostProcessor implements Serializable {
 
-  /** Configs supported. */
-  public static class Config {
-    public static final String SCHEMA_POST_PROCESSOR_PROP =
-        "hoodie.deltastreamer.schemaprovider.schema_post_processor";
-  }
-
   private static final long serialVersionUID = 1L;
 
   protected TypedProperties config;

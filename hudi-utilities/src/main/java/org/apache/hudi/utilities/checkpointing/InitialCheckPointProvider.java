@@ -28,6 +28,7 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 
 /**
  * Provide the initial checkpoint for delta streamer.
@@ -38,17 +39,13 @@ public abstract class InitialCheckPointProvider {
   protected transient FileSystem fs;
   protected transient TypedProperties props;
 
-  static class Config {
-    private static String CHECKPOINT_PROVIDER_PATH_PROP = "hoodie.deltastreamer.checkpoint.provider.path";
-  }
-
   /**
    * Construct InitialCheckPointProvider.
    * @param props All properties passed to Delta Streamer
    */
   public InitialCheckPointProvider(TypedProperties props) {
     this.props = props;
-    this.path = new Path(props.getString(Config.CHECKPOINT_PROVIDER_PATH_PROP));
+    this.path = new Path(props.getString(HoodieDeltaStreamerConfig.CHECKPOINT_PROVIDER_PATH_PROP.key()));
   }
 
   /**

@@ -30,11 +30,6 @@ import org.apache.spark.sql.types.StructType;
  */
 public class SparkAvroPostProcessor extends SchemaPostProcessor {
 
-  public static class Config {
-    public static final String SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE =
-            "hoodie.deltastreamer.schemaprovider.spark_avro_post_processor.enable";
-  }
-
   public SparkAvroPostProcessor(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
   }

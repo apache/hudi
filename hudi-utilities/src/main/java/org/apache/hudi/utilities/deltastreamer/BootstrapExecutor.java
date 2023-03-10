@@ -39,6 +39,7 @@ import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.hadoop.conf.Configuration;
@@ -162,7 +163,7 @@ public class BootstrapExecutor implements Serializable {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       checkpointCommitMetadata.put(HoodieDeltaStreamer.CHECKPOINT_KEY, cfg.checkpoint);
       if (cfg.checkpoint != null) {
-        checkpointCommitMetadata.put(HoodieDeltaStreamer.CHECKPOINT_RESET_KEY, cfg.checkpoint);
+        checkpointCommitMetadata.put(HoodieDeltaStreamerConfig.CHECKPOINT_RESET_KEY.key(), cfg.checkpoint);
       }
       bootstrapClient.bootstrap(Option.of(checkpointCommitMetadata));
       syncHive();
