@@ -137,7 +137,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            | when matched and s0.id % 2 = 1 then update set id = s0.id, name = s0.name,
            |  price = s0.price + t0.price, ts = s0.ts, dt = s0.dt
          """.stripMargin
-      )("Merge into Hoodie table command failed")
+      )("assertion failed: Target table's field(price) cannot be the right-value of the update clause for MOR table.")
     })
   }
 

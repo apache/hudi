@@ -603,6 +603,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
 
   def validate(mit: MergeIntoTable): Unit = {
+    checkUpdatingActions(updatingActions)
     checkInsertingActions(insertingActions)
     checkDeletingActions(deletingActions)
   }
@@ -622,9 +623,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   private def checkUpdatingActions(updateActions: Seq[UpdateAction]): Unit = {
-    if (updateActions.length > 1) {
-      throw new AnalysisException(s"Only one updating action is supported in MERGE INTO statement (provided ${updateActions.length})")
-    }
 
     //updateActions.foreach(update =>
     //  assert(update.assignments.length == targetTableSchema.length,
