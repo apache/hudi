@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -39,6 +40,20 @@ public class SparkInsertOverwritePartitioner extends UpsertPartitioner {
   public SparkInsertOverwritePartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
                                          HoodieWriteConfig config) {
     super(profile, context, table, config);
+  }
+
+  @Override
+  public BucketInfo getBucketInfo(int bucketNumber) {
+    BucketInfo bucketInfo = super.getBucketInfo(bucketNumber);
+    switch (bucketInfo.bucketType) {
+      case INSERT:
+        return bucketInfo;
+      case UPDATE:
+        // Insert overwrite always generates new bucket file id
+        return new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), bucketInfo.partitionPath);
+      default:
+        throw new AssertionError();
+    }
   }
 
   /**
