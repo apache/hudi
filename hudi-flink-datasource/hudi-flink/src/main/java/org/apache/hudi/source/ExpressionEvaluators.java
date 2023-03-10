@@ -156,12 +156,20 @@ public class ExpressionEvaluators {
   public interface Evaluator extends Serializable {
 
     /**
-     * Decides whether it's possible to match based on the column stats.
+     * Evaluates whether it's possible to match based on the column stats.
      *
      * @param columnStatsMap column statistics
-     * @return
+     * @return false if it's not possible to match, true otherwise.
      */
     boolean eval(Map<String, ColumnStats> columnStatsMap);
+
+    /**
+     * Evaluates whether it matches based on the column values.
+     *
+     * @param columnValues column values
+     * @return true if it's matches, false otherwise.
+     */
+    boolean eval(Object[] columnValues);
   }
 
   /**
@@ -216,7 +224,18 @@ public class ExpressionEvaluators {
       }
     }
 
+    @Override
+    public final boolean eval(Object[] columnValues) {
+      if (this.val == null || columnValues[this.index] == null) {
+        return false;
+      } else {
+        return eval(this.val, columnValues[this.index], this.type);
+      }
+    }
+
     protected abstract boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type);
+
+    protected abstract boolean eval(@NotNull Object val, @NotNull Object columnValue, LogicalType type);
   }
 
   /**
@@ -241,6 +260,11 @@ public class ExpressionEvaluators {
       }
       return compare(maxVal, val, type) >= 0;
     }
+
+    @Override
+    protected boolean eval(@NotNull Object val, Object columnValue, LogicalType type) {
+      return compare(columnValue, val, type) == 0;
+    }
   }
 
   /**
@@ -259,6 +283,11 @@ public class ExpressionEvaluators {
       // notEq(col, X) with (X, Y) doesn't guarantee that X is a value in col.
       return true;
     }
+
+    @Override
+    protected boolean eval(@NotNull Object val, @NotNull Object columnValue, LogicalType type) {
+      return compare(columnValue, val, type) != 0;
+    }
   }
 
   /**
@@ -275,6 +304,11 @@ public class ExpressionEvaluators {
     public boolean eval(Map<String, ColumnStats> columnStatsMap) {
       ColumnStats columnStats = getColumnStats(columnStatsMap);
       return columnStats.getNullCnt() > 0;
+    }
+
+    @Override
+    public boolean eval(Object[] columnValues) {
+      return columnValues[this.index] == null;
     }
   }
 
@@ -293,6 +327,11 @@ public class ExpressionEvaluators {
       ColumnStats columnStats = getColumnStats(columnStatsMap);
       // should consider FLOAT/DOUBLE & NAN
       return columnStats.getMinVal() != null || columnStats.getNullCnt() <= 0;
+    }
+
+    @Override
+    public boolean eval(Object[] columnValues) {
+      return columnValues[this.index] != null;
     }
   }
 
@@ -314,6 +353,11 @@ public class ExpressionEvaluators {
       }
       return compare(minVal, val, type) < 0;
     }
+
+    @Override
+    protected boolean eval(@NotNull Object val, @NotNull Object columnValue, LogicalType type) {
+      return compare(columnValue, val, type) < 0;
+    }
   }
 
   /**
@@ -333,6 +377,11 @@ public class ExpressionEvaluators {
         return false;
       }
       return compare(maxVal, val, type) > 0;
+    }
+
+    @Override
+    protected boolean eval(@NotNull Object val, @NotNull Object columnValue, LogicalType type) {
+      return compare(columnValue, val, type) > 0;
     }
   }
 
@@ -354,6 +403,11 @@ public class ExpressionEvaluators {
       }
       return compare(minVal, val, type) <= 0;
     }
+
+    @Override
+    protected boolean eval(@NotNull Object val, @NotNull Object columnValue, LogicalType type) {
+      return compare(columnValue, val, type) <= 0;
+    }
   }
 
   /**
@@ -373,6 +427,11 @@ public class ExpressionEvaluators {
         return false;
       }
       return compare(maxVal, val, type) >= 0;
+    }
+
+    @Override
+    protected boolean eval(@NotNull Object val, @NotNull Object columnValue, LogicalType type) {
+      return compare(columnValue, val, type) >= 0;
     }
   }
 
@@ -411,6 +470,19 @@ public class ExpressionEvaluators {
           compare(minVal, v, this.type) <= 0 && compare(maxVal, v, this.type) >= 0);
     }
 
+    @Override
+    public boolean eval(Object[] columnValues) {
+      if (columnValues[index] == null) {
+        return false;
+      }
+      for (Object val : vals) {
+        if (val != null && compare(columnValues[index], val, this.type) == 0) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     public void bindVals(Object... vals) {
       this.vals = vals;
     }
@@ -428,6 +500,11 @@ public class ExpressionEvaluators {
 
     @Override
     public boolean eval(Map<String, ColumnStats> columnStatsMap) {
+      return false;
+    }
+
+    @Override
+    public boolean eval(Object[] columnValues) {
       return false;
     }
   }
@@ -449,6 +526,11 @@ public class ExpressionEvaluators {
     @Override
     public boolean eval(Map<String, ColumnStats> columnStatsMap) {
       return !this.evaluator.eval(columnStatsMap);
+    }
+
+    @Override
+    public boolean eval(Object[] columnValues) {
+      return !this.evaluator.eval(columnValues);
     }
 
     public Evaluator bindEvaluator(Evaluator evaluator) {
@@ -479,6 +561,16 @@ public class ExpressionEvaluators {
       return true;
     }
 
+    @Override
+    public boolean eval(Object[] values) {
+      for (Evaluator evaluator : evaluators) {
+        if (!evaluator.eval(values)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
     public Evaluator bindEvaluator(Evaluator... evaluators) {
       this.evaluators = evaluators;
       return this;
@@ -501,6 +593,16 @@ public class ExpressionEvaluators {
     public boolean eval(Map<String, ColumnStats> columnStatsMap) {
       for (Evaluator evaluator : evaluators) {
         if (evaluator.eval(columnStatsMap)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    @Override
+    public boolean eval(Object[] columnValues) {
+      for (Evaluator evaluator : evaluators) {
+        if (evaluator.eval(columnValues)) {
           return true;
         }
       }

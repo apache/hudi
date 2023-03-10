@@ -112,8 +112,13 @@ public class TestExpressionEvaluators {
     Map<String, ColumnStats> stats6 = convertColumnStats(indexRow6, queryFields(2));
     assertFalse(equalTo.eval(stats6), "12 <> null");
 
+    assertFalse(equalTo.eval(new Object[] {0, 0, 11}), "11 <> 12");
+    assertTrue(equalTo.eval(new Object[] {0, 0, 12}), "12 = 12");
+    assertFalse(equalTo.eval(new Object[] {0, 0, null}), "12 <> null");
+
     equalTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
     assertFalse(equalTo.eval(stats1), "It is not possible to test for NULL values with '=' operator");
+    assertFalse(equalTo.eval(new Object[] {0, 0, 12}), "It is not possible to test for NULL values with '=' operator");
   }
 
   @Test
@@ -148,8 +153,13 @@ public class TestExpressionEvaluators {
     Map<String, ColumnStats> stats6 = convertColumnStats(indexRow6, queryFields(2));
     assertTrue(notEqualTo.eval(stats6), "12 <> null");
 
+    assertTrue(notEqualTo.eval(new Object[] {0, 0, 11}), "11 <> 12");
+    assertFalse(notEqualTo.eval(new Object[] {0, 0, 12}), "12 = 12");
+    assertFalse(notEqualTo.eval(new Object[] {0, 0, null}), "12 <> null");
+
     notEqualTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
     assertFalse(notEqualTo.eval(stats1), "It is not possible to test for NULL values with '<>' operator");
+    assertFalse(notEqualTo.eval(new Object[] {0, 0, 12}), "It is not possible to test for NULL values with '<>' operator");
   }
 
   @Test
@@ -165,6 +175,9 @@ public class TestExpressionEvaluators {
     RowData indexRow2 = intIndexRow(12, 13, 0L);
     Map<String, ColumnStats> stats2 = convertColumnStats(indexRow2, queryFields(2));
     assertFalse(isNull.eval(stats2), "0 nulls");
+
+    assertTrue(isNull.eval(new Object[] {0, 0, null}), "null is null");
+    assertFalse(isNull.eval(new Object[] {0, 0, 12}), "12 is not null");
   }
 
   @Test
@@ -180,6 +193,9 @@ public class TestExpressionEvaluators {
     RowData indexRow2 = intIndexRow(null, null, 0L);
     Map<String, ColumnStats> stats2 = convertColumnStats(indexRow2, queryFields(2));
     assertTrue(isNotNull.eval(stats2), "min is null and 0 nulls");
+
+    assertFalse(isNotNull.eval(new Object[] {0, 0, null}), "null is null");
+    assertTrue(isNotNull.eval(new Object[] {0, 0, 12}), "12 is not null");
   }
 
   @Test
@@ -214,8 +230,14 @@ public class TestExpressionEvaluators {
     Map<String, ColumnStats> stats6 = convertColumnStats(indexRow6, queryFields(2));
     assertFalse(lessThan.eval(stats6), "12 <> null");
 
+    assertTrue(lessThan.eval(new Object[] {0, 0, 11}), "11 < 12");
+    assertFalse(lessThan.eval(new Object[] {0, 0, 12}), "12 = 12");
+    assertFalse(lessThan.eval(new Object[] {0, 0, 13}), "12 < 13");
+    assertFalse(lessThan.eval(new Object[] {0, 0, null}), "12 <> null");
+
     lessThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
     assertFalse(lessThan.eval(stats1), "It is not possible to test for NULL values with '<' operator");
+    assertFalse(lessThan.eval(new Object[] {0, 0, 12}), "It is not possible to test for NULL values with '<' operator");
   }
 
   @Test
@@ -250,8 +272,14 @@ public class TestExpressionEvaluators {
     Map<String, ColumnStats> stats6 = convertColumnStats(indexRow6, queryFields(2));
     assertFalse(greaterThan.eval(stats6), "12 <> null");
 
+    assertFalse(greaterThan.eval(new Object[] {0, 0, 11}), "11 < 12");
+    assertFalse(greaterThan.eval(new Object[] {0, 0, 12}), "12 = 12");
+    assertTrue(greaterThan.eval(new Object[] {0, 0, 13}), "12 < 13");
+    assertFalse(greaterThan.eval(new Object[] {0, 0, null}), "12 <> null");
+
     greaterThan.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
     assertFalse(greaterThan.eval(stats1), "It is not possible to test for NULL values with '>' operator");
+    assertFalse(greaterThan.eval(new Object[] {0, 0, 12}), "It is not possible to test for NULL values with '>' operator");
   }
 
   @Test
@@ -286,8 +314,14 @@ public class TestExpressionEvaluators {
     Map<String, ColumnStats> stats6 = convertColumnStats(indexRow6, queryFields(2));
     assertFalse(lessThanOrEqual.eval(stats6), "12 <> null");
 
+    assertTrue(lessThanOrEqual.eval(new Object[] {0, 0, 11}), "11 < 12");
+    assertTrue(lessThanOrEqual.eval(new Object[] {0, 0, 12}), "12 = 12");
+    assertFalse(lessThanOrEqual.eval(new Object[] {0, 0, 13}), "12 < 13");
+    assertFalse(lessThanOrEqual.eval(new Object[] {0, 0, null}), "12 <> null");
+
     lessThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
     assertFalse(lessThanOrEqual.eval(stats1), "It is not possible to test for NULL values with '<=' operator");
+    assertFalse(lessThanOrEqual.eval(new Object[] {0, 0, 12}), "It is not possible to test for NULL values with '<=' operator");
   }
 
   @Test
@@ -322,8 +356,14 @@ public class TestExpressionEvaluators {
     Map<String, ColumnStats> stats6 = convertColumnStats(indexRow6, queryFields(2));
     assertFalse(greaterThanOrEqual.eval(stats6), "12 <> null");
 
+    assertFalse(greaterThanOrEqual.eval(new Object[] {0, 0, 11}), "11 < 12");
+    assertTrue(greaterThanOrEqual.eval(new Object[] {0, 0, 12}), "12 = 12");
+    assertTrue(greaterThanOrEqual.eval(new Object[] {0, 0, 13}), "12 < 13");
+    assertFalse(greaterThanOrEqual.eval(new Object[] {0, 0, null}), "12 <> null");
+
     greaterThanOrEqual.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
     assertFalse(greaterThanOrEqual.eval(stats1), "It is not possible to test for NULL values with '>=' operator");
+    assertFalse(greaterThanOrEqual.eval(new Object[] {0, 0, 12}), "It is not possible to test for NULL values with '>=' operator");
   }
 
   @Test
@@ -357,8 +397,14 @@ public class TestExpressionEvaluators {
     Map<String, ColumnStats> stats6 = convertColumnStats(indexRow6, queryFields(2));
     assertFalse(in.eval(stats6), "12 <> null");
 
+    assertTrue(in.eval(new Object[] {0, 0, 11}), "11 = 12");
+    assertTrue(in.eval(new Object[] {0, 0, 12}), "12 = 12");
+    assertFalse(in.eval(new Object[] {0, 0, 13}), "12 <> 13 && 11 <> 13");
+    assertFalse(in.eval(new Object[] {0, 0, null}), "12 <> null");
+
     in.bindVals((Object) null);
     assertFalse(in.eval(stats1), "It is not possible to test for NULL values with 'in' operator");
+    assertFalse(in.eval(new Object[] {0, 0, 12}), "It is not possible to test for NULL values with 'in' operator");
   }
 
   @Test
@@ -383,6 +429,7 @@ public class TestExpressionEvaluators {
               DataTypes.BOOLEAN());
       // always return false if the literal value is null
       assertFalse(fromExpression(expr).eval(stats));
+      assertFalse(fromExpression(expr).eval(new Object[] {0, 0, 12}));
     }
   }
 
