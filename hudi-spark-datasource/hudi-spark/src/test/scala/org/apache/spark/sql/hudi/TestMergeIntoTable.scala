@@ -118,11 +118,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
 
   test("Test MergeInto with more than once update actions") {
     withRecordType()(withTempDir {tmp =>
-      val conf = new SparkConf().setAppName("insertDatasToHudi").setMaster("local[*]")
-      val spark = SparkSession.builder().config(conf)
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-        .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
-        .getOrCreate()
       val targetTable = generateTableName
       spark.sql(
         s"""
