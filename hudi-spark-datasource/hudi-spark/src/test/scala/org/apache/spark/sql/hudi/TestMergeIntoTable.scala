@@ -139,7 +139,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  preCombineField = 'ts'
            | )
            |partitioned by (country)
-           |location '${tmp.getCanonicalPath}'
+           |location '${tmp.getCanonicalPath}/$targetTable'
            |""".stripMargin)
       spark.sql(
         s"""
