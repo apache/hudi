@@ -70,7 +70,7 @@ public class TestDFSHoodieTestSuiteWriterAdapter extends UtilitiesTestBase {
 
   @AfterAll
   public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach

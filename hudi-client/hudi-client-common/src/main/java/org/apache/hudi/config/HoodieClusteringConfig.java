@@ -158,7 +158,9 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
           + PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
           + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
-          + PARTITION_FILTER_END_PARTITION.key() + "'].");
+          + PARTITION_FILTER_END_PARTITION.key() + "']."
+          + "DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, "
+          + "which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour.");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
@@ -179,6 +181,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .defaultValue(String.valueOf(1024 * 1024 * 1024L))
       .sinceVersion("0.7.0")
       .withDocumentation("Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups");
+
+  public static final ConfigProperty<Boolean> PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + ".single.group.clustering.enabled")
+      .defaultValue(true)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Whether to generate clustering plan when there is only one file group involved, by default true");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_SORT_COLUMNS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "sort.columns")
@@ -464,6 +472,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withClusteringPlanStrategyClass(String clusteringStrategyClass) {
       clusteringConfig.setValue(PLAN_STRATEGY_CLASS_NAME, clusteringStrategyClass);
+      return this;
+    }
+
+    public Builder withSingleGroupClusteringEnabled(Boolean enabled) {
+      clusteringConfig.setValue(PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED, String.valueOf(enabled));
       return this;
     }
 

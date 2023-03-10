@@ -29,10 +29,12 @@ WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
 # link the jar names to easier to use names
 ln -sf $JARS_DIR/hudi-hadoop-mr*.jar $JARS_DIR/hadoop-mr.jar
+ln -sf $JARS_DIR/hudi-flink*.jar $JARS_DIR/flink.jar
 ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
+ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
 
 
 ##
@@ -47,22 +49,24 @@ test_spark_hadoop_mr_bundles () {
     echo "::warning::validate.sh setting up hive metastore for spark & hadoop-mr bundles validation"
 
     $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
+    local DERBY_PID=$!
     $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
+    local HIVE_PID=$!
     echo "::warning::validate.sh Writing sample data via Spark DataSource and run Hive Sync..."
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/write.scala
 
     echo "::warning::validate.sh Query and validate the results using Spark SQL"
     # save Spark SQL query results
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar \
-      -i <(echo 'spark.sql("select * from trips").coalesce(1).write.csv("/tmp/sparksql/trips/results"); System.exit(0)')
-    numRecordsSparkSQL=$(cat /tmp/sparksql/trips/results/*.csv | wc -l)
-    if [ "$numRecordsSparkSQL" -ne 10 ]; then
+      -i <(echo 'spark.sql("select * from trips").coalesce(1).write.csv("/tmp/spark-bundle/sparksql/trips/results"); System.exit(0)')
+    numRecords=$(cat /tmp/spark-bundle/sparksql/trips/results/*.csv | wc -l)
+    if [ "$numRecords" -ne 10 ]; then
         echo "::error::validate.sh Spark SQL validation failed."
         exit 1
     fi
     echo "::warning::validate.sh Query and validate the results using HiveQL"
     # save HiveQL query results
-    hiveqlresultsdir=/tmp/hiveql/trips/results
+    hiveqlresultsdir=/tmp/hadoop-mr-bundle/hiveql/trips/results
     mkdir -p $hiveqlresultsdir
     $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
       -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
@@ -73,6 +77,7 @@ test_spark_hadoop_mr_bundles () {
         exit 1
     fi
     echo "::warning::validate.sh spark & hadoop-mr bundles validation was successful."
+    kill $DERBY_PID $HIVE_PID
 }
 
 
@@ -133,6 +138,30 @@ test_utilities_bundle () {
 
 
 ##
+# Function to test the flink bundle.
+#
+# env vars (defined in container):
+#   HADOOP_HOME: path to the hadoop directory
+#   FLINK_HOME: path to the flink directory
+##
+test_flink_bundle() {
+    export HADOOP_CLASSPATH=$($HADOOP_HOME/bin/hadoop classpath)
+    $FLINK_HOME/bin/start-cluster.sh
+    $FLINK_HOME/bin/sql-client.sh -j $JARS_DIR/flink.jar -f $WORKDIR/flink/insert.sql
+    sleep 10 # for test stability
+    $WORKDIR/flink/compact.sh $JARS_DIR/flink.jar
+    local EXIT_CODE=$?
+    $FLINK_HOME/bin/stop-cluster.sh
+    unset HADOOP_CLASSPATH
+    if [ "$EXIT_CODE" -ne 0 ]; then
+        echo "::error::validate.sh Flink bundle validation failed."
+        exit 1
+    fi
+    echo "::warning::validate.sh done validating Flink bundle validation was successful."
+}
+
+
+##
 # Function to test the kafka-connect bundle.
 # It runs zookeeper, kafka broker, schema registry, and connector worker.
 # After producing and consuming data, it checks successful commit under `.hoodie/`
@@ -147,13 +176,60 @@ test_kafka_connect_bundle() {
     KAFKA_CONNECT_JAR=$1
     cp $KAFKA_CONNECT_JAR $KAFKA_CONNECT_PLUGIN_PATH_LIB_PATH
     $CONFLUENT_HOME/bin/zookeeper-server-start $CONFLUENT_HOME/etc/kafka/zookeeper.properties &
+    local ZOOKEEPER_PID=$!
     $CONFLUENT_HOME/bin/kafka-server-start $CONFLUENT_HOME/etc/kafka/server.properties &
+    local KAFKA_SERVER_PID=$!
     sleep 10
     $CONFLUENT_HOME/bin/schema-registry-start $CONFLUENT_HOME/etc/schema-registry/schema-registry.properties &
+    local SCHEMA_REG_PID=$!
     sleep 10
     $CONFLUENT_HOME/bin/kafka-topics --create --topic hudi-control-topic --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092
     $WORKDIR/kafka/produce.sh
     $WORKDIR/kafka/consume.sh
+    local EXIT_CODE=$?
+    kill $ZOOKEEPER_PID $KAFKA_SERVER_PID $SCHEMA_REG_PID
+    if [ "$EXIT_CODE" -ne 0 ]; then
+        echo "::error::validate.sh Kafka Connect bundle validation failed."
+        exit 1
+    fi
+    echo "::warning::validate.sh done validating Kafka Connect bundle validation was successful."
+}
+
+##
+# Function to test the hudi metaserver bundles.
+#
+# env vars (defined in container):
+#   SPARK_HOME: path to the spark directory
+##
+test_metaserver_bundle () {
+    echo "::warning::validate.sh setting up Metaserver bundle validation"
+
+    echo "::warning::validate.sh Start Metaserver"
+    java -jar $JARS_DIR/metaserver.jar &
+    local METASEVER_PID=$!
+
+    echo "::warning::validate.sh Start hive server"
+    $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
+    local DERBY_PID=$!
+    $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
+    local HIVE_PID=$!
+
+    echo "::warning::validate.sh Writing sample data via Spark DataSource."
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/service/write.scala
+    ls /tmp/hudi-bundles/tests/trips
+
+    echo "::warning::validate.sh Query and validate the results using Spark DataSource"
+    # save Spark DataSource query results
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar  < $WORKDIR/service/read.scala
+    numRecords=$(cat /tmp/metaserver-bundle/sparkdatasource/trips/results/*.csv | wc -l)
+    echo $numRecords
+    if [ "$numRecords" -ne 10 ]; then
+        echo "::error::validate.sh Metaserver bundle validation failed."
+        exit 1
+    fi
+
+    echo "::warning::validate.sh Metaserver bundle validation was successful."
+    kill $DERBY_PID $HIVE_PID $METASEVER_PID
 }
 
 
@@ -187,9 +263,23 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
 
+echo "::warning::validate.sh validating flink bundle"
+test_flink_bundle
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+echo "::warning::validate.sh done validating flink bundle"
+
 echo "::warning::validate.sh validating kafka connect bundle"
 test_kafka_connect_bundle $JARS_DIR/kafka-connect.jar
 if [ "$?" -ne 0 ]; then
     exit 1
 fi
 echo "::warning::validate.sh done validating kafka connect bundle"
+
+echo "::warning::validate.sh validating metaserver bundle"
+test_metaserver_bundle
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+echo "::warning::validate.sh done validating metaserver bundle"

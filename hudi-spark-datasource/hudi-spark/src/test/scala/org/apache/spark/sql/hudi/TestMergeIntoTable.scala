@@ -17,13 +17,16 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.exception.SchemaCompatibilityException
+import org.apache.spark.sql.internal.SQLConf
 
-class TestMergeIntoTable extends HoodieSparkSqlTestBase {
+class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
   test("Test MergeInto Basic") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -109,11 +112,12 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
        """.stripMargin)
       val cnt = spark.sql(s"select * from $tableName where id = 1").count()
       assertResult(0)(cnt)
-    }
+    })
   }
 
   test("Test MergeInto with ignored record") {
-    withTempDir {tmp =>
+    withRecordType()(withTempDir {tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val sourceTable = generateTableName
       val targetTable = generateTableName
       // Create source table
@@ -187,11 +191,12 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 20.0, 1001),
         Seq(3, "a3", 12.0, 1000)
       )
-    }
+    })
   }
 
   test("Test MergeInto for MOR table ") {
-    withTempDir {tmp =>
+    withRecordType()(withTempDir {tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create a mor partitioned table.
       spark.sql(
@@ -276,7 +281,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
            |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001 as s_ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id
-           | when matched and s_ts = 1001 then update set *
+           | when matched and s_ts = 1001
+           | then update set id = s_id, name = s_name, price = s_price, ts = s_ts, t0.dt = s0.dt
          """.stripMargin
       )
       checkAnswer(s"select id,name,price,dt from $tableName order by id")(
@@ -285,7 +291,15 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
       )
 
       // Delete with condition expression.
-      spark.sql(
+      val errorMessage = if (HoodieSparkUtils.gteqSpark3_2) {
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.id = (s0.s_id + 1)`"
+      } else if (HoodieSparkUtils.gteqSpark3_1) {
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.`id` = (s0.`s_id` + 1)`"
+      } else {
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.`id` = (s0.`s_id` + 1)`;"
+      }
+
+      checkException(
         s"""
            | merge into $tableName t0
            | using (
@@ -294,15 +308,27 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
            | on t0.id = s0.s_id + 1
            | when matched and s_ts = 1001 then delete
          """.stripMargin
+      )(errorMessage)
+
+      spark.sql(
+        s"""
+           | merge into $tableName t0
+           | using (
+           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001 as ts, '2021-03-21' as dt
+           | ) s0
+           | on t0.id = s0.s_id
+           | when matched and s0.ts = 1001 then delete
+         """.stripMargin
       )
       checkAnswer(s"select id,name,price,dt from $tableName order by id")(
         Seq(1, "a1", 12, "2021-03-21")
       )
-    }
+    })
   }
 
   test("Test MergeInto with insert only") {
-    withTempDir {tmp =>
+    withRecordType()(withTempDir {tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       // Create a partitioned mor table
       val tableName = generateTableName
       spark.sql(
@@ -352,11 +378,12 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 10, "2021-03-21"),
         Seq(2, "a2", 10, "2021-03-20")
       )
-    }
+    })
   }
 
   test("Test MergeInto For PreCombineField") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       Seq("cow", "mor").foreach { tableType =>
         val tableName1 = generateTableName
         // Create a mor partitioned table.
@@ -425,11 +452,12 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 12, "2021-03-21", 1002)
         )
       }
-    }
+    })
   }
 
   test("Test MergeInto with preCombine field expression") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       Seq("cow", "mor").foreach { tableType =>
         val tableName1 = generateTableName
         spark.sql(
@@ -452,8 +480,10 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         // Insert data
         spark.sql(s"""insert into $tableName1 values(1, 'a1', 10, 1000, '2021-03-21')""")
 
+        //
         // Update data with a value expression on preCombine field
         // 1) set source column name to be same as target column
+        //
         spark.sql(
           s"""
              | merge into $tableName1 as t0
@@ -469,8 +499,16 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 22, "2021-03-21", 1001)
         )
 
+        //
         // 2) set source column name to be different with target column
-        spark.sql(
+        //
+        val errorMessage = if (HoodieSparkUtils.gteqSpark3_1) {
+          "Failed to resolve pre-combine field `v` w/in the source-table output"
+        } else {
+          "Failed to resolve pre-combine field `v` w/in the source-table output;"
+        }
+
+        checkException(
           s"""
              | merge into $tableName1 as t0
              | using (
@@ -479,17 +517,29 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
              | on t0.id = s0.s_id
              | when matched then update set id=s0.s_id, name=s0.s_name, price=s0.s_price*2, v=s0.s_v+2, dt=s0.dt
          """.stripMargin
+        )(errorMessage)
+
+        spark.sql(
+          s"""
+             | merge into $tableName1 as t0
+             | using (
+             |  select 1 as s_id, 'a1' as s_name, 12 as s_price, 1000 as v, '2021-03-21' as dt
+             | ) as s0
+             | on t0.id = s0.s_id
+             | when matched then update set id=s0.s_id, name=s0.s_name, price=s0.s_price*2, v=s0.v+2, dt=s0.dt
+         """.stripMargin
         )
         // Update success as new value 1002 is bigger than original value 1001
         checkAnswer(s"select id,name,price,dt,v from $tableName1")(
           Seq(1, "a1", 24, "2021-03-21", 1002)
         )
       }
-    }
+    })
   }
 
   test("Test MergeInto with primaryKey expression") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName1 = generateTableName
       spark.sql(
         s"""
@@ -513,15 +563,34 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
       spark.sql(s"""insert into $tableName1 values(2, 'a2', 20, 2000, '2021-03-21')""")
       spark.sql(s"""insert into $tableName1 values(1, 'a1', 10, 1000, '2021-03-21')""")
 
+      //
       // Delete data with a condition expression on primaryKey field
       // 1) set source column name to be same as target column
-      spark.sql(
-        s"""
-           | merge into $tableName1 t0
+      //
+      val complexConditionsErrorMessage = if (HoodieSparkUtils.gteqSpark3_2) {
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.id = (s0.id + 1)`"
+      } else if (HoodieSparkUtils.gteqSpark3_1) {
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.`id` = (s0.`id` + 1)`"
+      } else {
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.`id` = (s0.`id` + 1)`;"
+      }
+
+      checkException(
+        s"""merge into $tableName1 t0
            | using (
            |  select 1 as id, 'a1' as name, 15 as price, 1001 as v, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.id + 1
+           | when matched then delete
+       """.stripMargin)(complexConditionsErrorMessage)
+
+      spark.sql(
+        s"""
+           | merge into $tableName1 t0
+           | using (
+           |  select 2 as id, 'a2' as name, 20 as price, 2000 as v, '2021-03-21' as dt
+           | ) s0
+           | on t0.id = s0.id
            | when matched then delete
          """.stripMargin
       )
@@ -530,25 +599,47 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         Seq(3, "a3", 30, 3000, "2021-03-21")
       )
 
-      // 2) set source column name to be different with target column
+      //
+      // 2.a) set source column name to be different with target column (should fail unable to match pre-combine field)
+      //
+      val failedToResolveErrorMessage = if (HoodieSparkUtils.gteqSpark3_1) {
+        "Failed to resolve pre-combine field `v` w/in the source-table output"
+      } else {
+        "Failed to resolve pre-combine field `v` w/in the source-table output;"
+      }
+
+      checkException(
+        s"""merge into $tableName1 t0
+           | using (
+           |  select 3 as s_id, 'a3' as s_name, 30 as s_price, 3000 as s_v, '2021-03-21' as dt
+           | ) s0
+           | on t0.id = s0.s_id
+           | when matched then delete
+           |""".stripMargin)(failedToResolveErrorMessage)
+
+      //
+      // 2.b) set source column name to be different with target column
+      //
       spark.sql(
         s"""
            | merge into $tableName1 t0
            | using (
-           |  select 2 as s_id, 'a1' as s_name, 15 as s_price, 1001 as s_v, '2021-03-21' as dt
+           |  select 3 as s_id, 'a3' as s_name, 30 as s_price, 3000 as v, '2021-03-21' as dt
            | ) s0
-           | on t0.id = s0.s_id + 1
+           | on t0.id = s0.s_id
            | when matched then delete
          """.stripMargin
       )
+
       checkAnswer(s"select id,name,price,v,dt from $tableName1 order by id")(
         Seq(1, "a1", 10, 1000, "2021-03-21")
       )
-    }
+    })
   }
 
   test("Test MergeInto with combination of delete update insert") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val sourceTable = generateTableName
       val targetTable = generateTableName
       // Create source table
@@ -595,9 +686,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
            | merge into $targetTable as t0
            | using $sourceTable as s0
            | on t0.id = s0.id
-           | when matched and id = 10 then delete
-           | when matched and id < 10 then update set name='sxx', price=s0.price*2, ts=s0.ts+10000, dt=s0.dt
-           | when not matched and id > 10 then insert *
+           | when matched and s0.id = 10 then delete
+           | when matched and s0.id < 10 then update set id=s0.id, name='sxx', price=s0.price*2, ts=s0.ts+10000, dt=s0.dt
+           | when not matched and s0.id > 10 then insert *
          """.stripMargin)
       checkAnswer(s"select id,name,price,ts,dt from $targetTable order by id")(
         Seq(7, "a7", 70, 1007, "2021-03-21"),
@@ -606,11 +697,13 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         Seq(11, "s11", 110, 2011, "2021-03-21"),
         Seq(12, "s12", 120, 2012, "2021-03-21")
       )
-    }
+    })
   }
 
   test("Merge Hudi to Hudi") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
+      spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       Seq("cow", "mor").foreach { tableType =>
         val sourceTable = generateTableName
         spark.sql(
@@ -711,11 +804,12 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(2, "a2", 10, 1001)
         )
       }
-    }
+    })
   }
 
   test("Test Different Type of PreCombineField") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val typeAndValue = Seq(
         ("string", "'1000'"),
         ("int", 1000),
@@ -746,11 +840,10 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           s"""
              | merge into $tableName
              | using (
-             |  select 1 as id, 'a1' as name, 10 as price, $dataValue as c0, '1' as flag
+             |  select 1 as id, 'a1' as name, 10 as price, $dataValue as c, '1' as flag
              | ) s0
              | on s0.id = $tableName.id
-             | when matched and flag = '1' then update set
-             | id = s0.id, name = s0.name, price = s0.price, c = s0.c0
+             | when matched and flag = '1' then update set *
              | when not matched and flag = '1' then insert *
        """.stripMargin)
         checkAnswer(s"select id, name, price from $tableName")(
@@ -771,11 +864,12 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 20.0)
         )
       }
-    }
+    })
   }
 
   test("Test MergeInto For MOR With Compaction On") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -821,11 +915,12 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         Seq(3, "a3", 10.0, 1000),
         Seq(4, "a4", 11.0, 1000)
       )
-    }
+    })
   }
 
   test("Test MereInto With Null Fields") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val types = Seq(
         "string" ,
         "int",
@@ -866,11 +961,12 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", null, 1000)
         )
       }
-    }
+    })
   }
 
   test("Test MergeInto With All Kinds Of DataType") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val dataAndTypes = Seq(
         ("string", "'a1'"),
         ("int", "10"),
@@ -912,11 +1008,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", extractRawValue(dataValue), 1000)
         )
       }
-    }
+    })
   }
 
   test("Test MergeInto with no-full fields source") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -947,11 +1043,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, name, value, ts from $tableName")(
         Seq(1, "a1", 10, 1001)
       )
-    }
+    })
   }
 
   test("Test Merge Into with target matched columns cast-ed") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -1027,6 +1123,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, name, value, ts from $tableName")(
         Seq(1, "a1", 10, 1004)
       )
-    }
+    })
   }
 }

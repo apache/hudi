@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -37,12 +36,14 @@ import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
-
 import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionPlanGenerator;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.text.ParseException;
@@ -50,9 +51,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CollectionUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
-public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
+public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
 
   private static final Logger LOG = LogManager.getLogger(ScheduleCompactionActionExecutor.class);
   private WriteOperationType operationType;
@@ -109,7 +111,8 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
     }
 
     HoodieCompactionPlan plan = scheduleCompaction();
-    if (plan != null && (plan.getOperations() != null) && (!plan.getOperations().isEmpty())) {
+    Option<HoodieCompactionPlan> option = Option.empty();
+    if (plan != null && nonEmpty(plan.getOperations())) {
       extraMetadata.ifPresent(plan::setExtraMetadata);
       try {
         if (operationType.equals(WriteOperationType.COMPACT)) {
@@ -126,11 +129,13 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
       } catch (IOException ioe) {
         throw new HoodieIOException("Exception scheduling compaction", ioe);
       }
-      return Option.of(plan);
+      option = Option.of(plan);
     }
-    return Option.empty();
+
+    return option;
   }
 
+  @Nullable
   private HoodieCompactionPlan scheduleCompaction() {
     LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
     // judge if we need to compact according to num delta commits and time elapsed

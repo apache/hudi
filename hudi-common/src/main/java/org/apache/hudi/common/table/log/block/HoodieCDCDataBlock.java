@@ -18,10 +18,10 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
 
 import java.util.HashMap;
@@ -45,7 +45,7 @@ public class HoodieCDCDataBlock extends HoodieAvroDataBlock {
         Option.of(readerSchema), header, new HashMap<>(), keyField);
   }
 
-  public HoodieCDCDataBlock(List<IndexedRecord> records,
+  public HoodieCDCDataBlock(List<HoodieRecord> records,
                             Map<HeaderMetadataType, String> header,
                             String keyField) {
     super(records, header, keyField);

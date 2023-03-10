@@ -25,7 +25,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
@@ -36,9 +35,10 @@ import java.util.stream.Collectors;
  *
  * @param <T> Type of return value for checked function.
  */
-public class RetryHelper<T> implements Serializable {
+public class RetryHelper<T, R extends Exception> implements Serializable {
   private static final Logger LOG = LogManager.getLogger(RetryHelper.class);
-  private transient CheckedFunction<T> func;
+  private static final List<? extends Class<? extends Exception>> DEFAULT_RETRY_EXCEPTIONS = Arrays.asList(IOException.class, RuntimeException.class);
+  private transient CheckedFunction<T, R> func;
   private final int num;
   private final long maxIntervalTime;
   private final long initialIntervalTime;
@@ -50,7 +50,7 @@ public class RetryHelper<T> implements Serializable {
     this.initialIntervalTime = initialRetryIntervalMs;
     this.maxIntervalTime = maxRetryIntervalMs;
     if (StringUtils.isNullOrEmpty(retryExceptions)) {
-      this.retryExceptionsClasses = new ArrayList<>();
+      this.retryExceptionsClasses = DEFAULT_RETRY_EXCEPTIONS;
     } else {
       try {
         this.retryExceptionsClasses = Arrays.stream(retryExceptions.split(","))
@@ -59,7 +59,7 @@ public class RetryHelper<T> implements Serializable {
             .collect(Collectors.toList());
       } catch (HoodieException e) {
         LOG.error("Exception while loading retry exceptions classes '" + retryExceptions + "'.", e);
-        this.retryExceptionsClasses = new ArrayList<>();
+        this.retryExceptionsClasses = DEFAULT_RETRY_EXCEPTIONS;
       }
     }
   }
@@ -69,12 +69,12 @@ public class RetryHelper<T> implements Serializable {
     this.taskInfo = taskInfo;
   }
 
-  public RetryHelper<T> tryWith(CheckedFunction<T> func) {
+  public RetryHelper<T, R> tryWith(CheckedFunction<T, R> func) {
     this.func = func;
     return this;
   }
 
-  public T start(CheckedFunction<T> func) throws IOException {
+  public T start(CheckedFunction<T, R> func) throws R {
     int retries = 0;
     T functionResult = null;
 
@@ -83,16 +83,13 @@ public class RetryHelper<T> implements Serializable {
       try {
         functionResult = func.get();
         break;
-      } catch (IOException | RuntimeException e) {
+      } catch (Exception e) {
         if (!checkIfExceptionInRetryList(e)) {
           throw e;
         }
         if (retries++ >= num) {
           String message = "Still failed to " + taskInfo + " after retried " + num + " times.";
           LOG.error(message, e);
-          if (e instanceof IOException) {
-            throw new IOException(message, e);
-          }
           throw e;
         }
         LOG.warn("Catch Exception for " + taskInfo + ", will retry after " + waitTime + " ms.", e);
@@ -111,19 +108,12 @@ public class RetryHelper<T> implements Serializable {
     return functionResult;
   }
 
-  public T start() throws IOException {
+  public T start() throws R {
     return start(this.func);
   }
 
   private boolean checkIfExceptionInRetryList(Exception e) {
     boolean inRetryList = false;
-
-    // if users didn't set hoodie.filesystem.operation.retry.exceptions
-    // we will retry all the IOException and RuntimeException
-    if (retryExceptionsClasses.isEmpty()) {
-      return true;
-    }
-
     for (Class<? extends Exception> clazz : retryExceptionsClasses) {
       if (clazz.isInstance(e)) {
         inRetryList = true;
@@ -148,7 +138,7 @@ public class RetryHelper<T> implements Serializable {
    * @param <T> Type of return value.
    */
   @FunctionalInterface
-  public interface CheckedFunction<T> extends Serializable {
-    T get() throws IOException;
+  public interface CheckedFunction<T, R extends Exception> extends Serializable {
+    T get() throws R;
   }
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
@@ -85,11 +86,14 @@ case class TruncateHoodieTableCommand(
       // drop partitions to lazy clean
       val partitionsToDrop = getPartitionPathToDrop(hoodieCatalogTable, normalizedSpecs)
       val parameters = buildHoodieDropPartitionsConfig(sparkSession, hoodieCatalogTable, partitionsToDrop)
-      HoodieSparkSqlWriter.write(
+      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(
         sparkSession.sqlContext,
         SaveMode.Append,
         parameters,
         sparkSession.emptyDataFrame)
+      if (!success) {
+        throw new HoodieException("Truncate Hoodie Table command failed")
+      }
     }
 
     // After deleting the data, refresh the table to make sure we don't keep around a stale

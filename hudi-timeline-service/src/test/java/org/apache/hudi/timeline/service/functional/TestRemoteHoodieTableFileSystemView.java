@@ -93,9 +93,9 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
             .build());
     try {
       view.getLatestBaseFiles();
-      fail("Should be catch Exception 'Still failed to Sending request after retried 4 times.'");
+      fail("Should be catch Exception 'Connection refused (Connection refused)'");
     } catch (HoodieRemoteException e) {
-      assert e.getMessage().equalsIgnoreCase("Still failed to Sending request after retried 4 times.");
+      assert e.getMessage().contains("Connection refused (Connection refused)");
     }
     // Retry succeed after 2 or 3 tries.
     new Thread(() -> {

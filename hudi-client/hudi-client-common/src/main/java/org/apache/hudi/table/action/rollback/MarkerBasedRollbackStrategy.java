@@ -23,7 +23,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -48,7 +47,7 @@ import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STR
 /**
  * Performs rollback using marker files generated during the write..
  */
-public class MarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O> implements BaseRollbackPlanActionExecutor.RollbackStrategy {
+public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlanActionExecutor.RollbackStrategy {
 
   private static final Logger LOG = LogManager.getLogger(MarkerBasedRollbackStrategy.class);
 
@@ -94,7 +93,7 @@ public class MarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O>
             //          - Base file's file-id
             //          - Base file's commit instant
             //          - Partition path
-            return getRollbackRequestForAppend(WriteMarkers.stripMarkerSuffix(markerFilePath));
+            return getRollbackRequestForAppend(instantToRollback, WriteMarkers.stripMarkerSuffix(markerFilePath));
           default:
             throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
         }
@@ -104,7 +103,7 @@ public class MarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O>
     }
   }
 
-  protected HoodieRollbackRequest getRollbackRequestForAppend(String markerFilePath) throws IOException {
+  protected HoodieRollbackRequest getRollbackRequestForAppend(HoodieInstant instantToRollback, String markerFilePath) throws IOException {
     Path baseFilePathForAppend = new Path(basePath, markerFilePath);
     String fileId = FSUtils.getFileIdFromFilePath(baseFilePathForAppend);
     String baseCommitTime = FSUtils.getCommitTime(baseFilePathForAppend.getName());
@@ -116,6 +115,14 @@ public class MarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O>
     // TODO(HUDI-1517) use provided marker-file's path instead
     Option<HoodieLogFile> latestLogFileOption = FSUtils.getLatestLogFile(table.getMetaClient().getFs(), partitionPath, fileId,
         HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime);
+
+    // Log file can be deleted if the commit to rollback is also the commit that created the fileGroup
+    if (latestLogFileOption.isPresent() && baseCommitTime.equals(instantToRollback.getTimestamp())) {
+      Path fullDeletePath = new Path(partitionPath, latestLogFileOption.get().getFileName());
+      return new HoodieRollbackRequest(relativePartitionPath, EMPTY_STRING, EMPTY_STRING,
+          Collections.singletonList(fullDeletePath.toString()),
+          Collections.emptyMap());
+    }
     
     Map<String, Long> logFilesWithBlocsToRollback = new HashMap<>();
     if (latestLogFileOption.isPresent()) {

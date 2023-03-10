@@ -25,13 +25,12 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.InternalSchemaCache;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
@@ -46,7 +45,7 @@ import java.util.List;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 @SuppressWarnings("checkstyle:LineLength")
-public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
+public class RunCompactionActionExecutor<T> extends
     BaseActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieWriteMetadata<HoodieData<WriteStatus>>> {
 
   private final HoodieCompactor compactor;
@@ -97,7 +96,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
       HoodieData<WriteStatus> statuses = compactor.compact(
           context, compactionPlan, table, configCopy, instantTime, compactionHandler);
 
-      compactor.maybePersist(statuses, config);
+      compactor.maybePersist(statuses, context, config, instantTime);
       context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());
       List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collectAsList();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);

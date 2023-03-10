@@ -20,7 +20,9 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -31,6 +33,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -117,7 +120,7 @@ public class StreamerUtil {
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), cfgPath);
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);
@@ -134,6 +137,19 @@ public class StreamerUtil {
         .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
         .withPayloadOrderingField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
         .withPayloadEventTimeField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
+        .build();
+  }
+
+  /**
+   * Returns the index config with given configuration.
+   */
+  public static HoodieIndexConfig getIndexConfig(Configuration conf) {
+    return HoodieIndexConfig.newBuilder()
+        .withIndexType(OptionsResolver.getIndexType(conf))
+        .withBucketNum(String.valueOf(conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
+        .withRecordKeyField(conf.getString(FlinkOptions.RECORD_KEY_FIELD))
+        .withIndexKeyField(OptionsResolver.getIndexKeyField(conf))
+        .withEngineType(EngineType.FLINK)
         .build();
   }
 
@@ -188,6 +204,7 @@ public class StreamerUtil {
           .setTableCreateSchema(conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA))
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
+          .setDatabaseName(conf.getString(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
           .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
           .setPreCombineField(OptionsResolver.getPreCombineField(conf))
@@ -280,6 +297,22 @@ public class StreamerUtil {
    */
   public static HoodieTableMetaClient createMetaClient(Configuration conf) {
     return createMetaClient(conf.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(conf));
+  }
+
+  /**
+   * Returns the table config or empty if the table does not exist.
+   */
+  public static Option<HoodieTableConfig> getTableConfig(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
+    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
+    Path metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    try {
+      if (fs.exists(metaPath)) {
+        return Option.of(new HoodieTableConfig(fs, metaPath.toString(), null, null));
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Get table config error", e);
+    }
+    return Option.empty();
   }
 
   /**

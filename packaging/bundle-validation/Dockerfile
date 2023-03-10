@@ -25,5 +25,7 @@ RUN cp conf/hive-site.xml $HIVE_HOME/conf/
 RUN cp conf/hive-site.xml $SPARK_HOME/conf/
 RUN cp $DERBY_HOME/lib/derbyclient.jar $SPARK_HOME/jars/
 RUN cp conf/spark-defaults.conf $SPARK_HOME/conf/
-RUN if [[ $SPARK_HOME == *"spark-3.2"* ]] || [[ $SPARK_HOME == *"spark-3.3"* ]]; \
+RUN if [[ $SPARK_HOME =~ 'spark-3.2' ]] || [[ $SPARK_HOME =~ 'spark-3.3' ]]; \
     then printf "\nspark.sql.catalog.spark_catalog org.apache.spark.sql.hudi.catalog.HoodieCatalog\n" >> $SPARK_HOME/conf/spark-defaults.conf; fi
+RUN printf "\ntaskmanager.numberOfTaskSlots: 2\n" >> $FLINK_HOME/conf/flink-conf.yaml
+RUN printf "\nlocalhost\n" >> $FLINK_HOME/conf/workers

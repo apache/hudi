@@ -25,7 +25,6 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -37,6 +36,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -50,7 +50,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRollbackMetadata> {
+public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRollbackMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(BaseRollbackActionExecutor.class);
 
@@ -156,12 +156,13 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
     // since with LAZY rollback we support parallel writing which can allow a new inflight while rollback is ongoing
     // Remove this once we support LAZY rollback of failed writes by default as parallel writing becomes the default
     // writer mode.
-    if (config.getFailedWritesCleanPolicy().isEager()) {
+    if (config.getFailedWritesCleanPolicy().isEager()  && !HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
       final String instantTimeToRollback = instantToRollback.getTimestamp();
       HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
       HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
       // Make sure only the last n commits are being rolled back
       // If there is a commit in-between or after that is not rolled back, then abort
+      // this condition may not hold good for metadata table. since the order of commits applied to MDT is data table commits and the ordering could be different.
       if ((instantTimeToRollback != null) && !commitTimeline.empty()
           && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
         // check if remnants are from a previous LAZY rollback config, if yes, let out of order rollback continue

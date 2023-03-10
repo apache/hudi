@@ -22,7 +22,7 @@ import org.apache.hudi.HoodieSparkUtils.isSpark2
 class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test Update Table") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach {tableType =>
         val tableName = generateTableName
         // create table
@@ -60,11 +60,11 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 40.0, 1000)
         )
       }
-    }
+    })
   }
 
   test("Test Update Table On Non-PK Condition") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach {tableType =>
         /** non-partitioned table */
         val tableName = generateTableName
@@ -161,11 +161,11 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           Seq(3, "a2", 33.0, 1001, "2022")
         )
       }
-    }
+    })
   }
 
   test("Test ignoring case for Update Table") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach {tableType =>
         val tableName = generateTableName
         // create table
@@ -202,6 +202,40 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 40.0, 1000)
         )
       }
+    })
+  }
+
+  test("Test decimal type") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  ff decimal(38, 10)
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+     """.stripMargin)
+
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 10.0")
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 10.0, 1000)
+      )
+
+      spark.sql(s"update $tableName set price = 22 where id = 1")
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 22.0, 1000)
+      )
     }
   }
 }

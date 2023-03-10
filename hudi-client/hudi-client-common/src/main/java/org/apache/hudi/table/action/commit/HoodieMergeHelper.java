@@ -18,18 +18,15 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaCompatibility;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.client.utils.MergingIterator;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -43,7 +40,14 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.QueueBasedExecutorFactory;
+import org.apache.hudi.util.ExecutorFactory;
+
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaCompatibility;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -54,9 +58,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.isStrictProjectionOf;
-import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecordWithNewSchema;
 
-public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper {
+public class HoodieMergeHelper<T> extends BaseMergeHelper {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieMergeHelper.class);
 
   private HoodieMergeHelper() {
   }
@@ -76,15 +81,19 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
     Configuration hadoopConf = new Configuration(table.getHadoopConf());
-    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.getFileReader(hadoopConf, mergeHandle.getOldFilePath());
+    HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
+    HoodieFileReader baseFileReader = HoodieFileReaderFactory
+        .getReaderFactory(recordType)
+        .getFileReader(hadoopConf, mergeHandle.getOldFilePath());
+    HoodieFileReader bootstrapFileReader = null;
 
     Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
-    Schema readerSchema = reader.getSchema();
+    Schema readerSchema = baseFileReader.getSchema();
 
     // In case Advanced Schema Evolution is enabled we might need to rewrite currently
     // persisted records to adhere to an evolved schema
-    Option<Function<GenericRecord, GenericRecord>> schemaEvolutionTransformerOpt =
-        composeSchemaEvolutionTransformer(writerSchema, baseFile, writeConfig, table.getMetaClient());
+    Option<Function<HoodieRecord, HoodieRecord>> schemaEvolutionTransformerOpt =
+        composeSchemaEvolutionTransformer(readerSchema, writerSchema, baseFile, writeConfig, table.getMetaClient());
 
     // Check whether the writer schema is simply a projection of the file's one, ie
     //   - Its field-set is a proper subset (of the reader schema)
@@ -97,31 +106,49 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
         || !isPureProjection
         || baseFile.getBootstrapBaseFile().isPresent();
 
-    HoodieExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
+    HoodieExecutor<Void> wrapper = null;
 
     try {
-      Iterator<GenericRecord> recordIterator;
+      Iterator<HoodieRecord> recordIterator;
 
       // In case writer's schema is simply a projection of the reader's one we can read
       // the records in the projected schema directly
-      ClosableIterator<GenericRecord> baseFileRecordIterator =
-          reader.getRecordIterator(isPureProjection ? writerSchema : readerSchema);
+      ClosableIterator<HoodieRecord> baseFileRecordIterator =
+          baseFileReader.getRecordIterator(isPureProjection ? writerSchema : readerSchema);
+      Schema recordSchema;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         Path bootstrapFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
-        recordIterator = getMergingIterator(table, mergeHandle, bootstrapFilePath, baseFileRecordIterator);
-      } else if (schemaEvolutionTransformerOpt.isPresent()) {
-        recordIterator = new MappingIterator<>(baseFileRecordIterator,
-            schemaEvolutionTransformerOpt.get());
+        Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
+        bootstrapFileReader =
+            HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(bootstrapFileConfig, bootstrapFilePath);
+
+        recordIterator = new MergingIterator<>(
+            baseFileRecordIterator,
+            bootstrapFileReader.getRecordIterator(),
+            (left, right) ->
+                left.joinWith(right, mergeHandle.getWriterSchemaWithMetaFields()));
+        recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
       } else {
         recordIterator = baseFileRecordIterator;
+        recordSchema = isPureProjection ? writerSchema : readerSchema;
       }
 
-      wrapper = QueueBasedExecutorFactory.create(writeConfig, recordIterator, new UpdateHandler(mergeHandle), record -> {
-        if (shouldRewriteInWriterSchema) {
-          return rewriteRecordWithNewSchema(record, writerSchema);
+      boolean isBufferingRecords = ExecutorFactory.isBufferingRecords(writeConfig);
+
+      wrapper = ExecutorFactory.create(writeConfig, recordIterator, new UpdateHandler(mergeHandle), record -> {
+        HoodieRecord newRecord;
+        if (schemaEvolutionTransformerOpt.isPresent()) {
+          newRecord = schemaEvolutionTransformerOpt.get().apply(record);
+        } else if (shouldRewriteInWriterSchema) {
+          newRecord = record.rewriteRecordWithNewSchema(recordSchema, writeConfig.getProps(), writerSchema);
         } else {
-          return record;
+          newRecord = record;
         }
+
+        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+        //       it since these records will be put into queue of QueueBasedExecutorFactory.
+        return isBufferingRecords ? newRecord.copy() : newRecord;
       }, table.getPreExecuteRunnable());
 
       wrapper.execute();
@@ -130,7 +157,10 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
     } finally {
       // HUDI-2875: mergeHandle is not thread safe, we should totally terminate record inputting
       // and executor firstly and then close mergeHandle.
-      reader.close();
+      baseFileReader.close();
+      if (bootstrapFileReader != null) {
+        bootstrapFileReader.close();
+      }
       if (null != wrapper) {
         wrapper.shutdownNow();
         wrapper.awaitTermination();
@@ -139,20 +169,27 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
     }
   }
 
-  private Option<Function<GenericRecord, GenericRecord>> composeSchemaEvolutionTransformer(Schema writerSchema,
-                                                                                           HoodieBaseFile baseFile,
-                                                                                           HoodieWriteConfig writeConfig,
-                                                                                           HoodieTableMetaClient metaClient) {
+  private Option<Function<HoodieRecord, HoodieRecord>> composeSchemaEvolutionTransformer(Schema recordSchema,
+                                                                                         Schema writerSchema,
+                                                                                         HoodieBaseFile baseFile,
+                                                                                         HoodieWriteConfig writeConfig,
+                                                                                         HoodieTableMetaClient metaClient) {
     Option<InternalSchema> querySchemaOpt = SerDeHelper.fromJson(writeConfig.getInternalSchema());
     // TODO support bootstrap
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
       // check implicitly add columns, and position reorder(spark sql may change cols order)
       InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(writerSchema, querySchemaOpt.get());
       long commitInstantTime = Long.parseLong(baseFile.getCommitTime());
-      InternalSchema writeInternalSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, metaClient, writeConfig.getInternalSchemaCacheEnable());
-      if (writeInternalSchema.isEmptySchema()) {
-        throw new HoodieException(String.format("cannot find file schema for current commit %s", commitInstantTime));
+      InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, metaClient);
+      if (fileSchema.isEmptySchema() && writeConfig.getBoolean(HoodieCommonConfig.RECONCILE_SCHEMA)) {
+        TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
+        try {
+          fileSchema = AvroInternalSchemaConverter.convert(tableSchemaResolver.getTableAvroSchema(true));
+        } catch (Exception e) {
+          throw new HoodieException(String.format("Failed to get InternalSchema for given versionId: %s", commitInstantTime), e);
+        }
       }
+      final InternalSchema writeInternalSchema = fileSchema;
       List<String> colNamesFromQuerySchema = querySchema.getAllColsFullName();
       List<String> colNamesFromWriteSchema = writeInternalSchema.getAllColsFullName();
       List<String> sameCols = colNamesFromWriteSchema.stream()
@@ -174,7 +211,12 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends BaseMergeH
           || SchemaCompatibility.checkReaderWriterCompatibility(newWriterSchema, writeSchemaFromFile).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
       if (needToReWriteRecord) {
         Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(writeInternalSchema, querySchema);
-        return Option.of(record -> rewriteRecordWithNewSchema(record, newWriterSchema, renameCols));
+        return Option.of(record -> {
+          return record.rewriteRecordWithNewSchema(
+              recordSchema,
+              writeConfig.getProps(),
+              newWriterSchema, renameCols);
+        });
       } else {
         return Option.empty();
       }

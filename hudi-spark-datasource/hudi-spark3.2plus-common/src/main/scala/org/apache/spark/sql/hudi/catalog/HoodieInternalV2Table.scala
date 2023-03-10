@@ -21,7 +21,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.connector.catalog.TableCapability._
-import org.apache.spark.sql.connector.catalog._
+import org.apache.spark.sql.connector.catalog.{SupportsWrite, Table, TableCapability, V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.connector.write._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -85,19 +85,20 @@ case class HoodieInternalV2Table(spark: SparkSession,
 }
 
 private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
-                                     hoodieCatalogTable: HoodieCatalogTable,
-                                     spark: SparkSession)
+                                   hoodieCatalogTable: HoodieCatalogTable,
+                                   spark: SparkSession)
   extends SupportsTruncate with SupportsOverwrite with ProvidesHoodieConfig {
 
-  private var forceOverwrite = false
+  private var overwriteTable = false
+  private var overwritePartition = false
 
   override def truncate(): HoodieV1WriteBuilder = {
-    forceOverwrite = true
+    overwriteTable = true
     this
   }
 
   override def overwrite(filters: Array[Filter]): WriteBuilder = {
-    forceOverwrite = true
+    overwritePartition = true
     this
   }
 
@@ -105,25 +106,13 @@ private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
     override def toInsertableRelation: InsertableRelation = {
       new InsertableRelation {
         override def insert(data: DataFrame, overwrite: Boolean): Unit = {
-          val mode = if (forceOverwrite && hoodieCatalogTable.partitionFields.isEmpty) {
-            // insert overwrite non-partition table
-            SaveMode.Overwrite
-          } else {
-            // for insert into or insert overwrite partition we use append mode.
-            SaveMode.Append
-          }
-          alignOutputColumns(data).write.format("org.apache.hudi")
-            .mode(mode)
+          data.write.format("org.apache.hudi")
+            .mode(SaveMode.Append)
             .options(buildHoodieConfig(hoodieCatalogTable) ++
-              buildHoodieInsertConfig(hoodieCatalogTable, spark, forceOverwrite, Map.empty, Map.empty))
+              buildHoodieInsertConfig(hoodieCatalogTable, spark, overwritePartition, overwriteTable, Map.empty, Map.empty))
             .save()
         }
       }
     }
-  }
-
-  private def alignOutputColumns(data: DataFrame): DataFrame = {
-    val schema = hoodieCatalogTable.tableSchema
-    spark.createDataFrame(data.toJavaRDD, schema)
   }
 }

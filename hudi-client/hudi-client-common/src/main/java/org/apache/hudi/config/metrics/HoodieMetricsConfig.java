@@ -92,7 +92,14 @@ public class HoodieMetricsConfig extends HoodieConfig {
         }
         return Option.empty();
       })
+      .sinceVersion("0.13.0")
       .withDocumentation("Enable metrics for locking infra. Useful when operating in multiwriter mode");
+
+  public static final ConfigProperty<String> METRICS_REPORTER_FILE_BASED_CONFIGS_PATH = ConfigProperty
+      .key(METRIC_PREFIX + ".configs.properties")
+      .defaultValue("")
+      .sinceVersion("0.14.0")
+      .withDocumentation("Comma separated list of config file paths for metric exporter configs");
 
   /**
    * @deprecated Use {@link #TURN_METRICS_ON} and its methods instead

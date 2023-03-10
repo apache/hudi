@@ -143,7 +143,6 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       Schema schema,
       boolean isOldRecordNewer) throws IOException {
     Option<IndexedRecord> recordOption = getInsertValue(schema);
-
     if (!recordOption.isPresent()) {
       // use natural order for delete record
       return Option.empty();

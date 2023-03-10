@@ -20,9 +20,10 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
@@ -41,10 +42,21 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   private HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                          String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize,
                                          LogRecordScannerCallback callback, Option<InstantRange> instantRange, InternalSchema internalSchema,
-                                         boolean useScanV2) {
+                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange,
-        false, true, Option.empty(), internalSchema, useScanV2);
+        false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger);
     this.callback = callback;
+  }
+
+  /**
+   * Scans delta-log files processing blocks
+   */
+  public final void scan() {
+    scan(false);
+  }
+
+  public final void scan(boolean skipProcessingBlocks) {
+    scanInternal(Option.empty(), skipProcessingBlocks);
   }
 
   /**
@@ -55,9 +67,12 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   }
 
   @Override
-  protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws Exception {
+  protected <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception {
+    // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+    //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+    //       it since these records will be put into queue of BoundedInMemoryExecutor.
     // Just call callback without merging
-    callback.apply(hoodieRecord);
+    callback.apply(hoodieRecord.copy());
   }
 
   @Override
@@ -71,7 +86,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   @FunctionalInterface
   public interface LogRecordScannerCallback {
 
-    void apply(HoodieRecord<? extends HoodieRecordPayload> record) throws Exception;
+    void apply(HoodieRecord<?> record) throws Exception;
   }
 
   /**
@@ -90,7 +105,8 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     private Option<InstantRange> instantRange = Option.empty();
     // specific configurations
     private LogRecordScannerCallback callback;
-    private boolean useScanV2;
+    private boolean enableOptimizedLogBlocksScan;
+    private HoodieRecordMerger recordMerger;
 
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
@@ -151,16 +167,24 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     }
 
     @Override
-    public Builder withUseScanV2(boolean useScanV2) {
-      this.useScanV2 = useScanV2;
+    public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
+      this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
+      return this;
+    }
+
+    @Override
+    public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
+      this.recordMerger = recordMerger;
       return this;
     }
 
     @Override
     public HoodieUnMergedLogRecordScanner build() {
+      ValidationUtils.checkArgument(recordMerger != null);
+
       return new HoodieUnMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange,
-          internalSchema, useScanV2);
+          internalSchema, enableOptimizedLogBlocksScan, recordMerger);
     }
   }
 }

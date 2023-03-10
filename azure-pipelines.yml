@@ -19,7 +19,7 @@ trigger:
       - '*'  # must quote since "*" is a YAML reserved character; we want a string
 
 pool:
-  vmImage: 'ubuntu-18.04'
+  vmImage: 'ubuntu-22.04'
 
 parameters:
   - name: job1Modules
@@ -31,11 +31,12 @@ parameters:
       - 'hudi-flink-datasource/hudi-flink1.13.x'
       - 'hudi-flink-datasource/hudi-flink1.14.x'
       - 'hudi-flink-datasource/hudi-flink1.15.x'
+      - 'hudi-flink-datasource/hudi-flink1.16.x'
   - name: job2Modules
     type: object
     default:
       - 'hudi-client/hudi-spark-client'
-  - name: job3Modules
+  - name: job3UTModules
     type: object
     default:
       - 'hudi-spark-datasource'
@@ -43,7 +44,7 @@ parameters:
       - 'hudi-spark-datasource/hudi-spark2'
       - 'hudi-spark-datasource/hudi-spark2-common'
       - 'hudi-spark-datasource/hudi-spark-common'
-  - name: job4Modules
+  - name: job4UTModules
     type: object
     default:
       - '!hudi-client/hudi-spark-client'
@@ -58,24 +59,42 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink1.13.x'
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
+      - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
       - '!hudi-spark-datasource/hudi-spark2'
       - '!hudi-spark-datasource/hudi-spark2-common'
       - '!hudi-spark-datasource/hudi-spark-common'
+  - name: job4FTModules
+    type: object
+    default:
+      - '!hudi-client/hudi-spark-client'
+      - '!hudi-common'
+      - '!hudi-examples'
+      - '!hudi-examples/hudi-examples-common'
+      - '!hudi-examples/hudi-examples-flink'
+      - '!hudi-examples/hudi-examples-java'
+      - '!hudi-examples/hudi-examples-spark'
+      - '!hudi-flink-datasource'
+      - '!hudi-flink-datasource/hudi-flink'
+      - '!hudi-flink-datasource/hudi-flink1.13.x'
+      - '!hudi-flink-datasource/hudi-flink1.14.x'
+      - '!hudi-flink-datasource/hudi-flink1.15.x'
+      - '!hudi-flink-datasource/hudi-flink1.16.x'
 
 variables:
-  BUILD_PROFILES: '-Dscala-2.11 -Dspark2.4 -Dflink1.14'
+  BUILD_PROFILES: '-Dscala-2.11 -Dspark2.4 -Dflink1.16'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
-  MVN_OPTS_INSTALL: '-DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
+  MVN_OPTS_INSTALL: '-Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   SPARK_VERSION: '2.4.4'
   HADOOP_VERSION: '2.7'
   SPARK_ARCHIVE: spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
   JOB1_MODULES: ${{ join(',',parameters.job1Modules) }}
   JOB2_MODULES: ${{ join(',',parameters.job2Modules) }}
-  JOB3_MODULES: ${{ join(',',parameters.job3Modules) }}
-  JOB4_MODULES: ${{ join(',',parameters.job4Modules) }}
+  JOB3_MODULES: ${{ join(',',parameters.job3UTModules) }}
+  JOB4_UT_MODULES: ${{ join(',',parameters.job4UTModules) }}
+  JOB4_FT_MODULES: ${{ join(',',parameters.job4FTModules) }}
 
 stages:
   - stage: test
@@ -98,7 +117,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB1_MODULES),hudi-client/hudi-spark-client
-              publishJUnitResults: false
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
@@ -107,7 +126,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB1_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -131,15 +150,15 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_3
-        displayName: UT FT spark-datasource
-        timeoutInMinutes: '150'
+        displayName: UT spark-datasource
+        timeoutInMinutes: '180'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -155,16 +174,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB3_MODULES)
-              publishJUnitResults: false
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - task: Maven@4
-            displayName: FT spark-datasource
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB3_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -172,7 +182,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_4
         displayName: UT FT other modules
-        timeoutInMinutes: '150'
+        timeoutInMinutes: '180'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -187,8 +197,8 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_MODULES)
-              publishJUnitResults: false
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
@@ -196,8 +206,8 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_MODULES)
-              publishJUnitResults: false
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -221,7 +231,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test
-              publishJUnitResults: false
+              publishJUnitResults: true
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: AzureCLI@2

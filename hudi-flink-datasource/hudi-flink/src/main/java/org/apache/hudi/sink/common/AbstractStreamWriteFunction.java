@@ -148,7 +148,7 @@ public abstract class AbstractStreamWriteFunction<I>
             TypeInformation.of(WriteMetadataEvent.class)
         ));
 
-    this.ckpMetadata = CkpMetadata.getInstance(this.metaClient.getFs(), this.metaClient.getBasePath());
+    this.ckpMetadata = CkpMetadata.getInstance(this.metaClient, this.config.getString(FlinkOptions.WRITE_CLIENT_ID));
     this.currentInstant = lastPendingInstant();
     if (context.isRestored()) {
       restoreWriteMetadata();
@@ -217,8 +217,9 @@ public abstract class AbstractStreamWriteFunction<I>
       if (this.currentInstant != null) {
         LOG.info("Recover task[{}] for instant [{}] with attemptId [{}]", taskID, this.currentInstant, attemptId);
         this.currentInstant = null;
+        return;
       }
-      return;
+      // the JM may have also been rebooted, sends the bootstrap event either
     }
     this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);

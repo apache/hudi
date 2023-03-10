@@ -19,7 +19,6 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
@@ -32,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>
  * Please use this with caution. This can end up creating very large files if not used correctly.
  */
-public class SingleFileHandleCreateFactory<T extends HoodieRecordPayload, I, K, O> extends CreateHandleFactory<T, I, K, O> implements Serializable {
+public class SingleFileHandleCreateFactory<T, I, K, O> extends CreateHandleFactory<T, I, K, O> implements Serializable {
 
   private final AtomicBoolean isHandleCreated = new AtomicBoolean(false);
   private final String fileId;

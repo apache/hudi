@@ -19,6 +19,7 @@
 package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -28,6 +29,8 @@ import org.apache.hudi.util.AvroSchemaConverter;
 
 import org.apache.avro.Schema;
 import org.apache.flink.table.catalog.CatalogTable;
+import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -39,7 +42,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -49,6 +54,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
+import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
 
 /**
@@ -168,8 +174,10 @@ public class TableOptionProperties {
       CatalogTable catalogTable,
       Configuration hadoopConf,
       Map<String, String> properties,
-      List<String> partitionKeys) {
-    Schema schema = AvroSchemaConverter.convertToSchema(catalogTable.getSchema().toPhysicalRowDataType().getLogicalType());
+      List<String> partitionKeys,
+      boolean withOperationField) {
+    RowType rowType = supplementMetaFields((RowType) catalogTable.getSchema().toPhysicalRowDataType().getLogicalType(), withOperationField);
+    Schema schema = AvroSchemaConverter.convertToSchema(rowType);
     MessageType messageType = TableSchemaResolver.convertAvroSchemaToParquet(schema, hadoopConf);
     String sparkVersion = catalogTable.getOptions().getOrDefault(SPARK_VERSION, DEFAULT_SPARK_VERSION);
     Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(
@@ -182,6 +190,19 @@ public class TableOptionProperties {
         .filter(e -> KEY_MAPPING.containsKey(e.getKey()) && !catalogTable.getOptions().containsKey(KEY_MAPPING.get(e.getKey())))
         .collect(Collectors.toMap(e -> KEY_MAPPING.get(e.getKey()),
             e -> e.getKey().equalsIgnoreCase(FlinkOptions.TABLE_TYPE.key()) ? VALUE_MAPPING.get(e.getValue()) : e.getValue()));
+  }
+
+  private static RowType supplementMetaFields(RowType rowType, boolean withOperationField) {
+    Collection<String> metaFields = new ArrayList<>(HoodieRecord.HOODIE_META_COLUMNS);
+    if (withOperationField) {
+      metaFields.add(OPERATION_METADATA_FIELD);
+    }
+    ArrayList<RowType.RowField> rowFields = new ArrayList<>();
+    for (String metaField : metaFields) {
+      rowFields.add(new RowType.RowField(metaField, new VarCharType(10000)));
+    }
+    rowFields.addAll(rowType.getFields());
+    return new RowType(false, rowFields);
   }
 
   public static Map<String, String> translateSparkTableProperties2Flink(Map<String, String> options) {

@@ -25,7 +25,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -46,13 +45,15 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
-public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
+public class HoodieJavaWriteClient<T> extends
     BaseHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
-  public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig, JavaUpgradeDowngradeHelper.getInstance());
+  public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
+    super(context, writeConfig, JavaUpgradeDowngradeHelper.getInstance());
+    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig);
   }
 
   public HoodieJavaWriteClient(HoodieEngineContext context,
@@ -60,6 +61,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
                                boolean rollbackPending,
                                Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, JavaUpgradeDowngradeHelper.getInstance());
+    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig);
   }
 
   @Override
@@ -82,14 +84,21 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
                         List<WriteStatus> writeStatuses,
                         Option<Map<String, String>> extraMetadata,
                         String commitActionType,
-                        Map<String, List<String>> partitionToReplacedFileIds) {
+                        Map<String, List<String>> partitionToReplacedFileIds,
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds);
+    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
+        extraPreCommitFunc);
   }
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf) {
     return HoodieJavaTable.create(config, context);
+  }
+
+  @Override
+  protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
+    return HoodieJavaTable.create(config, context, metaClient);
   }
 
   @Override
@@ -197,7 +206,8 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
             result.getWriteStats().get().size());
       }
 
-      postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty(), true);
+      postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
+      mayBeCleanAndArchive(hoodieTable);
 
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }
@@ -228,13 +238,4 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
     throw new HoodieNotSupportedException("Cluster is not supported in HoodieJavaClient");
   }
-
-  @Override
-  protected HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
-    // new JavaUpgradeDowngrade(metaClient, config, context).run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
-
-    // Create a Hoodie table which encapsulated the commits and files visible
-    return HoodieJavaTable.create(config, (HoodieJavaEngineContext) context, metaClient);
-  }
-
 }

@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.config.HoodieCleanConfig
@@ -79,16 +80,24 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
       HoodieCleanConfig.CLEAN_TRIGGER_STRATEGY.key() -> getArgValueOrDefault(args, PARAMETERS(7)).get.toString,
       HoodieCleanConfig.CLEAN_MAX_COMMITS.key() -> getArgValueOrDefault(args, PARAMETERS(8)).get.toString
     )
-    val client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, props)
-    val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine, skipLocking)
 
-    if (hoodieCleanMeta == null) Seq.empty
-    else Seq(Row(hoodieCleanMeta.getStartCleanTime,
-      hoodieCleanMeta.getTimeTakenInMillis,
-      hoodieCleanMeta.getTotalFilesDeleted,
-      hoodieCleanMeta.getEarliestCommitToRetain,
-      JsonUtils.getObjectMapper.writeValueAsString(hoodieCleanMeta.getBootstrapPartitionMetadata),
-      hoodieCleanMeta.getVersion))
+    var client: SparkRDDWriteClient[_] = null
+    try {
+      client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, props)
+      val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine, skipLocking)
+
+      if (hoodieCleanMeta == null) Seq.empty
+      else Seq(Row(hoodieCleanMeta.getStartCleanTime,
+        hoodieCleanMeta.getTimeTakenInMillis,
+        hoodieCleanMeta.getTotalFilesDeleted,
+        hoodieCleanMeta.getEarliestCommitToRetain,
+        JsonUtils.getObjectMapper.writeValueAsString(hoodieCleanMeta.getBootstrapPartitionMetadata),
+        hoodieCleanMeta.getVersion))
+    } finally {
+      if (client != null) {
+        client.close()
+      }
+    }
   }
 }
 

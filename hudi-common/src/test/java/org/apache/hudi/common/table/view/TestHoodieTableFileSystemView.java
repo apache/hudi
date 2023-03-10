@@ -292,6 +292,54 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     testViewForFileSlicesWithAsyncCompaction(false, true, 2, 2, true, testBootstrap);
   }
 
+  @Test
+  protected void testInvalidLogFiles() throws Exception {
+    String partitionPath = "2016/05/01";
+    Paths.get(basePath, partitionPath).toFile().mkdirs();
+    String fileId = UUID.randomUUID().toString();
+
+    String instantTime1 = "1";
+    String deltaInstantTime1 = "2";
+    String deltaInstantTime2 = "3";
+    String fileName1 =
+        FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime1, 0, TEST_WRITE_TOKEN);
+    String fileName2 =
+        FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime1, 1, TEST_WRITE_TOKEN);
+    // create a dummy log file mimicing cloud stores marker files
+    String fileName3 = "_GCS_SYNCABLE_TEMPFILE_" + fileName1;
+    String fileName4 = "_DUMMY_" + fileName1.substring(1, fileName1.length());
+    // this file should not be deduced as a log file.
+
+    Paths.get(basePath, partitionPath, fileName1).toFile().createNewFile();
+    Paths.get(basePath, partitionPath, fileName2).toFile().createNewFile();
+    Paths.get(basePath, partitionPath, fileName3).toFile().createNewFile();
+    Paths.get(basePath, partitionPath, fileName4).toFile().createNewFile();
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
+    HoodieInstant deltaInstant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime1);
+    HoodieInstant deltaInstant3 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime2);
+
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, deltaInstant2, Option.empty());
+    saveAsComplete(commitTimeline, deltaInstant3, Option.empty());
+
+    refreshFsView();
+
+    List<HoodieBaseFile> dataFiles = roView.getLatestBaseFiles().collect(Collectors.toList());
+    assertTrue(dataFiles.isEmpty(), "No data file expected");
+    List<FileSlice> fileSliceList = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
+    assertEquals(1, fileSliceList.size());
+    FileSlice fileSlice = fileSliceList.get(0);
+    assertEquals(fileId, fileSlice.getFileId(), "File-Id must be set correctly");
+    assertFalse(fileSlice.getBaseFile().isPresent(), "Data file for base instant must be present");
+    assertEquals(instantTime1, fileSlice.getBaseInstantTime(), "Base Instant for file-group set correctly");
+    List<HoodieLogFile> logFiles = fileSlice.getLogFiles().collect(Collectors.toList());
+    assertEquals(2, logFiles.size(), "Correct number of log-files shows up in file-slice");
+    assertEquals(fileName2, logFiles.get(0).getFileName(), "Log File Order check");
+    assertEquals(fileName1, logFiles.get(1).getFileName(), "Log File Order check");
+  }
+
   /**
    * Returns all file-slices including uncommitted ones.
    *

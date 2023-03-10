@@ -240,4 +240,88 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+  test("Test Alter Table With OCC") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        // Create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '$tablePath'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.write.concurrency.mode='optimistic_concurrency_control',
+             |  hoodie.cleaner.policy.failed.writes='LAZY',
+             |  hoodie.write.lock.provider='org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider'
+             | )
+       """.stripMargin)
+
+        // change column comment
+        spark.sql(s"alter table $tableName change column id id int comment 'primary id'")
+        var catalogTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName))
+        assertResult("primary id") (
+          catalogTable.schema(catalogTable.schema.fieldIndex("id")).getComment().get
+        )
+        spark.sql(s"alter table $tableName change column name name string comment 'name column'")
+        spark.sessionState.catalog.refreshTable(new TableIdentifier(tableName))
+        catalogTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName))
+        assertResult("primary id") (
+          catalogTable.schema(catalogTable.schema.fieldIndex("id")).getComment().get
+        )
+        assertResult("name column") (
+          catalogTable.schema(catalogTable.schema.fieldIndex("name")).getComment().get
+        )
+
+        // alter table name.
+        val newTableName = s"${tableName}_1"
+        spark.sql(s"alter table $tableName rename to $newTableName")
+        assertResult(false)(
+          spark.sessionState.catalog.tableExists(new TableIdentifier(tableName))
+        )
+        assertResult(true) (
+          spark.sessionState.catalog.tableExists(new TableIdentifier(newTableName))
+        )
+
+        val hadoopConf = spark.sessionState.newHadoopConf()
+        val metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath)
+          .setConf(hadoopConf).build()
+        assertResult(newTableName) (metaClient.getTableConfig.getTableName)
+
+        // insert some data
+        spark.sql(s"insert into $newTableName values(1, 'a1', 10, 1000)")
+
+        // add column
+        spark.sql(s"alter table $newTableName add columns(ext0 string)")
+        catalogTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newTableName))
+        assertResult(Seq("id", "name", "price", "ts", "ext0")) {
+          HoodieSqlCommonUtils.removeMetaFields(catalogTable.schema).fields.map(_.name)
+        }
+        checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
+          Seq(1, "a1", 10.0, 1000, null)
+        )
+
+        // change column's data type
+        checkExceptionContain(s"alter table $newTableName change column id id bigint") (
+          "ALTER TABLE CHANGE COLUMN is not supported for changing column 'id'" +
+            " with type 'IntegerType' to 'id' with type 'LongType'"
+        )
+
+        // Insert data to the new table.
+        spark.sql(s"insert into $newTableName values(2, 'a2', 12, 1000, 'e0')")
+        checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
+          Seq(1, "a1", 10.0, 1000, null),
+          Seq(2, "a2", 12.0, 1000, "e0")
+        )
+      }
+    }
+  }
 }

@@ -20,6 +20,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
@@ -27,7 +28,6 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Test}
-
 import scala.collection.JavaConverters._
 
 @Tag("functional")

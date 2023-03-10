@@ -131,7 +131,7 @@ public class SparkInternalSchemaConverter {
       return Types.StringType.get();
     } else if (sparkType instanceof DateType) {
       return Types.DateType.get();
-      // spark 3.3.0 support TimeStampNTZ, to do support spark3.3.0
+      // TODO support spark 3.3.x as it supports TimeStampNTZ (SPARK-35662)
     } else if (sparkType instanceof TimestampType) {
       return Types.TimestampType.get();
     } else if (sparkType instanceof DecimalType) {
@@ -287,7 +287,7 @@ public class SparkInternalSchemaConverter {
 
   /**
    * Convert Int/long type to other Type.
-   * Now only support int/long -> long/float/double/string
+   * Now only support int/long -> long/float/double/string/Decimal
    * TODO: support more types
    */
   private static boolean convertIntLongType(WritableColumnVector oldV, WritableColumnVector newV, DataType newType, int len) {
@@ -321,7 +321,7 @@ public class SparkInternalSchemaConverter {
 
   /**
    * Convert float type to other Type.
-   * Now only support float -> double/String
+   * Now only support float -> double/String/Decimal
    * TODO: support more types
    */
   private static boolean convertFloatType(WritableColumnVector oldV, WritableColumnVector newV, DataType newType, int len) {

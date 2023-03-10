@@ -54,70 +54,79 @@ public class FlinkClusteringConfig extends Configuration {
   // ------------------------------------------------------------------------
   //  Clustering Options
   // ------------------------------------------------------------------------
-  @Parameter(names = {"--clustering-delta-commits"}, description = "Max delta commits needed to trigger clustering, default 4 commits", required = false)
+  @Parameter(names = {"--clustering-delta-commits"}, description = "Max delta commits needed to trigger clustering, default 1 commit")
   public Integer clusteringDeltaCommits = 1;
 
-  @Parameter(names = {"--clustering-tasks"}, description = "Parallelism of tasks that do actual clustering, default is -1", required = false)
+  @Parameter(names = {"--clustering-tasks"}, description = "Parallelism of tasks that do actual clustering, default is -1")
   public Integer clusteringTasks = -1;
 
-  @Parameter(names = {"--compaction-max-memory"}, description = "Max memory in MB for compaction spillable map, default 100MB.", required = false)
+  @Parameter(names = {"--compaction-max-memory"}, description = "Max memory in MB for compaction spillable map, default 100MB.")
   public Integer compactionMaxMemory = 100;
 
   @Parameter(names = {"--clean-retain-commits"},
       description = "Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
-          + "This also directly translates into how much you can incrementally pull on this table, default 10",
-      required = false)
+          + "This also directly translates into how much you can incrementally pull on this table, default 10")
   public Integer cleanRetainCommits = 10;
 
   @Parameter(names = {"--archive-min-commits"},
-      description = "Min number of commits to keep before archiving older commits into a sequential log, default 20.",
-      required = false)
+      description = "Min number of commits to keep before archiving older commits into a sequential log, default 20.")
   public Integer archiveMinCommits = 20;
 
   @Parameter(names = {"--archive-max-commits"},
-      description = "Max number of commits to keep before archiving older commits into a sequential log, default 30.",
-      required = false)
+      description = "Max number of commits to keep before archiving older commits into a sequential log, default 30.")
   public Integer archiveMaxCommits = 30;
 
   @Parameter(names = {"--schedule", "-sc"}, description = "Schedule the clustering plan in this job.\n"
-      + "Default is false", required = false)
+      + "Default is false")
   public Boolean schedule = false;
 
   @Parameter(names = {"--instant-time", "-it"}, description = "Clustering Instant time")
   public String clusteringInstantTime = null;
 
-  @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, disabled by default", required = false)
+  @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, disabled by default")
   public Boolean cleanAsyncEnable = false;
 
-  @Parameter(names = {"--plan-strategy-class"}, description = "Config to provide a strategy class to generator clustering plan", required = false)
+  @Parameter(names = {"--plan-strategy-class"}, description = "Config to provide a strategy class to generator clustering plan")
   public String planStrategyClass = FlinkSizeBasedClusteringPlanStrategy.class.getName();
 
-  @Parameter(names = {"--plan-partition-filter-mode"}, description = "Partition filter mode used in the creation of clustering plan", required = false)
+  @Parameter(names = {"--plan-partition-filter-mode"}, description = "Partition filter mode used in the creation of clustering plan")
   public String planPartitionFilterMode = "NONE";
 
-  @Parameter(names = {"--target-file-max-bytes"}, description = "Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups, default 1 GB", required = false)
+  @Parameter(names = {"--target-file-max-bytes"}, description = "Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups, default 1 GB")
   public Long targetFileMaxBytes = 1024 * 1024 * 1024L;
 
-  @Parameter(names = {"--small-file-limit"}, description = "Files smaller than the size specified here are candidates for clustering, default 600 MB", required = false)
+  @Parameter(names = {"--small-file-limit"}, description = "Files smaller than the size specified here are candidates for clustering, default 600 MB")
   public Long smallFileLimit = 600L;
 
-  @Parameter(names = {"--skip-from-latest-partitions"}, description = "Number of partitions to skip from latest when choosing partitions to create ClusteringPlan, default 0", required = false)
+  @Parameter(names = {"--skip-from-latest-partitions"}, description = "Number of partitions to skip from latest when choosing partitions to create ClusteringPlan, default 0")
   public Integer skipFromLatestPartitions = 0;
 
-  @Parameter(names = {"--sort-columns"}, description = "Columns to sort the data by when clustering.", required = false)
+  @Parameter(names = {"--sort-columns"}, description = "Columns to sort the data by when clustering.")
   public String sortColumns = "";
 
-  @Parameter(names = {"--max-num-groups"}, description = "Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism. default 30", required = false)
+  @Parameter(names = {"--max-num-groups"}, description = "Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism. default 30")
   public Integer maxNumGroups = 30;
 
-  @Parameter(names = {"--target-partitions"}, description = "Number of partitions to list to create ClusteringPlan, default 2", required = false)
+  @Parameter(names = {"--target-partitions"}, description = "Number of partitions to list to create ClusteringPlan, default 2")
   public Integer targetPartitions = 2;
+
+  @Parameter(names = {"--cluster-begin-partition"}, description = "Begin partition used to filter partition (inclusive)")
+  public String clusterBeginPartition = "";
+
+  @Parameter(names = {"--cluster-end-partition"}, description = "End partition used to filter partition (inclusive)")
+  public String clusterEndPartition = "";
+
+  @Parameter(names = {"--partition-regex-pattern"}, description = "Filter clustering partitions that matched regex pattern")
+  public String partitionRegexPattern = "";
+
+  @Parameter(names = {"--partition-selected"}, description = "Partitions to run clustering")
+  public String partitionSelected = "";
 
   public static final String SEQ_FIFO = "FIFO";
   public static final String SEQ_LIFO = "LIFO";
   @Parameter(names = {"--seq"}, description = "Clustering plan execution sequence, two options are supported:\n"
-      + "1). FIFO: execute the oldest plan first;\n"
-      + "2). LIFO: execute the latest plan first, by default FIFO", required = false)
+      + "1). FIFO: execute the oldest plan first, by default FIFO;\n"
+      + "2). LIFO: execute the latest plan first")
   public String clusteringSeq = SEQ_FIFO;
 
   @Parameter(names = {"--service"}, description = "Flink Clustering runs in service mode, disable by default")
@@ -176,6 +185,10 @@ public class FlinkClusteringConfig extends Configuration {
     conf.setLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES, config.targetFileMaxBytes);
     conf.setLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT, config.smallFileLimit);
     conf.setInteger(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST, config.skipFromLatestPartitions);
+    conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLUSTER_BEGIN_PARTITION, config.clusterBeginPartition);
+    conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLUSTER_END_PARTITION, config.clusterEndPartition);
+    conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_REGEX_PATTERN, config.partitionRegexPattern);
+    conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_SELECTED, config.partitionSelected);
     conf.setString(FlinkOptions.CLUSTERING_SORT_COLUMNS, config.sortColumns);
     conf.setInteger(FlinkOptions.CLUSTERING_MAX_NUM_GROUPS, config.maxNumGroups);
     conf.setInteger(FlinkOptions.CLUSTERING_TARGET_PARTITIONS, config.targetPartitions);
