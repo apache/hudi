@@ -23,8 +23,8 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.MappingIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 
@@ -71,7 +71,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     // NOTE: This is a workaround to avoid leveraging projection w/in [[AvroParquetReader]],
     //       until schema handling issues (nullability canonicalization, etc) are resolved
     ClosableIterator<IndexedRecord> iterator = getIndexedRecordIterator(readerSchema);
-    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
+    return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
   @Override

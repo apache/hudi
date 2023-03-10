@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.ProtoClassBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
@@ -50,7 +50,7 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
   private final String className;
 
   public ProtoKafkaSource(TypedProperties props, JavaSparkContext sparkContext,
-                          SparkSession sparkSession, SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
+                          SparkSession sparkSession, SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider, SourceType.PROTO, metrics);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(
         ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key()));
@@ -58,6 +58,9 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
     props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, ByteArrayDeserializer.class);
     className = props.getString(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key());
     this.offsetGen = new KafkaOffsetGen(props);
+    if (this.shouldAddOffsets) {
+      throw new HoodieException("Appending kafka offsets to ProtoKafkaSource is not supported");
+    }
   }
 
   @Override

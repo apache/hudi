@@ -686,6 +686,7 @@ public class TestHoodieRealtimeRecordReader {
       JobConf newJobConf = new JobConf(baseJobConf);
       List<Schema.Field> fields = schema.getFields();
       setHiveColumnNameProps(fields, newJobConf, false);
+      newJobConf.set("columns.types", "string,string,string,string,string,string,string,string,bigint,string,string");
       RecordReader<NullWritable, ArrayWritable> reader  = inputFormat.getRecordReader(splits[0], newJobConf, Reporter.NULL);
       // use reader to read log file.
       NullWritable key = reader.createKey();

@@ -22,7 +22,11 @@ package org.apache.hudi.gcp.bigquery;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.beust.jcommander.Parameter;
@@ -32,6 +36,11 @@ import javax.annotation.concurrent.Immutable;
 
 import java.io.Serializable;
 import java.util.Properties;
+
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
+import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
 
 /**
  * Configs needed to sync data into BigQuery.
@@ -50,6 +59,7 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
   public static final ConfigProperty<String> BIGQUERY_SYNC_DATASET_NAME = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.dataset_name")
       .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(DATABASE_NAME)))
       .withDocumentation("Name of the target dataset in BigQuery");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_DATASET_LOCATION = ConfigProperty
@@ -60,6 +70,8 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
   public static final ConfigProperty<String> BIGQUERY_SYNC_TABLE_NAME = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.table_name")
       .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HOODIE_TABLE_NAME_KEY))
+          .or(() -> Option.ofNullable(cfg.getString(HOODIE_WRITE_TABLE_NAME_KEY))))
       .withDocumentation("Name of the target table in BigQuery");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_SOURCE_URI = ConfigProperty
@@ -75,26 +87,32 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
   public static final ConfigProperty<String> BIGQUERY_SYNC_SYNC_BASE_PATH = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.base_path")
       .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(META_SYNC_BASE_PATH)))
       .withDocumentation("Base path of the hoodie table to sync");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_PARTITION_FIELDS = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.partition_fields")
       .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
+          .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
       .withDocumentation("Comma-delimited partition fields. Default to non-partitioned.");
 
   public static final ConfigProperty<Boolean> BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.use_file_listing_from_metadata")
-      .defaultValue(false)
+      .defaultValue(DEFAULT_METADATA_ENABLE_FOR_READERS)
+      .withInferFunction(cfg -> Option.of(cfg.getBooleanOrDefault(HoodieMetadataConfig.ENABLE, DEFAULT_METADATA_ENABLE_FOR_READERS)))
       .withDocumentation("Fetch file listing from Hudi's metadata");
 
-  public static final ConfigProperty<Boolean> BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING = ConfigProperty
+  public static final ConfigProperty<String> BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.assume_date_partitioning")
-      .defaultValue(false)
+      .defaultValue(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING.defaultValue())
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING)))
       .withDocumentation("Assume standard yyyy/mm/dd partitioning, this"
           + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter");
 
   public BigQuerySyncConfig(Properties props) {
     super(props);
+    setDefaults(BigQuerySyncConfig.class.getName());
   }
 
   public static class BigQuerySyncConfigParams {

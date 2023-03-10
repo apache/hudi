@@ -26,8 +26,9 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.stream.IntStream;
@@ -41,24 +42,20 @@ import static org.hamcrest.MatcherAssert.assertThat;
  */
 public class TestCkpMetadata {
 
-  private CkpMetadata metadata;
-
   @TempDir
   File tempFile;
 
   @BeforeEach
   public void beforeEach() throws Exception {
     String basePath = tempFile.getAbsolutePath();
-    FileSystem fs = FSUtils.getFs(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(new Configuration()));
-
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
     StreamerUtil.initTableIfNotExists(conf);
-
-    this.metadata = CkpMetadata.getInstance(fs, basePath);
   }
 
-  @Test
-  void testWriteAndReadMessage() {
+  @ParameterizedTest
+  @ValueSource(strings = {"", "1"})
+  void testWriteAndReadMessage(String uniqueId) {
+    CkpMetadata metadata = getCkpMetadata(uniqueId);
     // write and read 5 committed checkpoints
     IntStream.range(0, 3).forEach(i -> metadata.startInstant(i + ""));
 
@@ -73,5 +70,11 @@ public class TestCkpMetadata {
     metadata.commitInstant("6");
     metadata.abortInstant("7");
     assertThat(metadata.getMessages().size(), is(5));
+  }
+
+  private CkpMetadata getCkpMetadata(String uniqueId) {
+    String basePath = tempFile.getAbsolutePath();
+    FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(new Configuration()));
+    return CkpMetadata.getInstance(fs, basePath, uniqueId);
   }
 }

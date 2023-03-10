@@ -37,23 +37,22 @@ public class TransactionManager implements Serializable {
 
   protected static final Logger LOG = LogManager.getLogger(TransactionManager.class);
   protected final LockManager lockManager;
-  protected final boolean isOptimisticConcurrencyControlEnabled;
+  protected final boolean needsLockGuard;
   protected Option<HoodieInstant> currentTxnOwnerInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedTxnOwnerInstant = Option.empty();
 
   public TransactionManager(HoodieWriteConfig config, FileSystem fs) {
-    this(new LockManager(config, fs),
-        config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl());
+    this(new LockManager(config, fs), config.needsLockGuard());
   }
 
-  protected TransactionManager(LockManager lockManager, boolean isOptimisticConcurrencyControlEnabled) {
+  protected TransactionManager(LockManager lockManager, boolean needsLockGuard) {
     this.lockManager = lockManager;
-    this.isOptimisticConcurrencyControlEnabled = isOptimisticConcurrencyControlEnabled;
+    this.needsLockGuard = needsLockGuard;
   }
 
   public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant,
                                Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
-    if (isOptimisticConcurrencyControlEnabled) {
+    if (needsLockGuard) {
       LOG.info("Transaction starting for " + newTxnOwnerInstant
           + " with latest completed transaction instant " + lastCompletedTxnOwnerInstant);
       lockManager.lock();
@@ -64,7 +63,7 @@ public class TransactionManager implements Serializable {
   }
 
   public void endTransaction(Option<HoodieInstant> currentTxnOwnerInstant) {
-    if (isOptimisticConcurrencyControlEnabled) {
+    if (needsLockGuard) {
       LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstant);
       if (reset(currentTxnOwnerInstant, Option.empty(), Option.empty())) {
         lockManager.unlock();
@@ -85,7 +84,7 @@ public class TransactionManager implements Serializable {
   }
 
   public void close() {
-    if (isOptimisticConcurrencyControlEnabled) {
+    if (needsLockGuard) {
       lockManager.close();
       LOG.info("Transaction manager closed");
     }
@@ -103,7 +102,7 @@ public class TransactionManager implements Serializable {
     return currentTxnOwnerInstant;
   }
 
-  public boolean isOptimisticConcurrencyControlEnabled() {
-    return isOptimisticConcurrencyControlEnabled;
+  public boolean isNeedsLockGuard() {
+    return needsLockGuard;
   }
 }

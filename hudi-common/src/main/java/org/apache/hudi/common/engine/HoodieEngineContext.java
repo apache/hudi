@@ -21,6 +21,7 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
@@ -95,4 +96,9 @@ public abstract class HoodieEngineContext {
 
   public abstract void setJobStatus(String activeModule, String activityDescription);
 
+  public abstract void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids);
+
+  public abstract List<Integer> getCachedDataIds(HoodieDataCacheKey cacheKey);
+
+  public abstract List<Integer> removeCachedDataIds(HoodieDataCacheKey cacheKey);
 }

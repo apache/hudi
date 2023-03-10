@@ -19,15 +19,15 @@ package org.apache.spark.sql.catalyst.plans.logical
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 
-case class TimeTravelRelation(
-                               table: LogicalPlan,
-                               timestamp: Option[Expression],
-                               version: Option[String]) extends Command {
-  override def children: Seq[LogicalPlan] = Seq.empty
-
-  override def output: Seq[Attribute] = Nil
+case class TimeTravelRelation(relation: LogicalPlan,
+                              timestamp: Option[Expression],
+                              version: Option[String]) extends UnaryNode with HoodieUnaryLikeSham[LogicalPlan] {
 
   override lazy val resolved: Boolean = false
 
-  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): LogicalPlan = this
+  override def output: Seq[Attribute] = Nil
+  override def child: LogicalPlan = relation
+
+  override protected def withNewChildInternal(newChild: LogicalPlan): LogicalPlan =
+    copy(relation = newChild)
 }

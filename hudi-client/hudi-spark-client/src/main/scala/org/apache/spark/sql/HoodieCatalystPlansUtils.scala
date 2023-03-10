@@ -17,11 +17,10 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
-import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
@@ -49,46 +48,20 @@ trait HoodieCatalystPlansUtils {
   def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan
 
   /**
-   * Convert a AliasIdentifier to TableIdentifier.
-   */
-  def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier
-
-  /**
-   * Convert a UnresolvedRelation to TableIdentifier.
-   */
-  def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier
-
-  /**
    * Create Join logical plan.
    */
   def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join
 
   /**
-   * Test if the logical plan is a Insert Into LogicalPlan.
+   * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
+   * changes in Spark 3.3
    */
-  def isInsertInto(plan: LogicalPlan): Boolean
+  def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
 
   /**
-   * Get the member of the Insert Into LogicalPlan.
+   * Rebases instance of {@code InsertIntoStatement} onto provided instance of {@code targetTable} and {@code query}
    */
-  def getInsertIntoChildren(plan: LogicalPlan):
-    Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
-
-  /**
-   * if the logical plan is a TimeTravelRelation LogicalPlan.
-   */
-  def isRelationTimeTravel(plan: LogicalPlan): Boolean
-
-  /**
-   * Get the member of the TimeTravelRelation LogicalPlan.
-   */
-  def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])]
-
-  /**
-   * Create a Insert Into LogicalPlan.
-   */
-  def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
-                       query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan
+  def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan, query: LogicalPlan): LogicalPlan
 
   /**
    * Test if the logical plan is a Repair Table LogicalPlan.
@@ -98,6 +71,5 @@ trait HoodieCatalystPlansUtils {
   /**
    * Get the member of the Repair Table LogicalPlan.
    */
-  def getRepairTableChildren(plan: LogicalPlan):
-    Option[(TableIdentifier, Boolean, Boolean, String)]
+  def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)]
 }

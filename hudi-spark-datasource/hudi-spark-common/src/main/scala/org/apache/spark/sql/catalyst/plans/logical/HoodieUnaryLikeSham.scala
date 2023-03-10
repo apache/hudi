@@ -16,40 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.spark.sql.catalyst.plans.logical
 
-import org.apache.avro.Schema;
+import org.apache.spark.sql.catalyst.trees.TreeNode
 
-public class ClosableIteratorWithSchema<R> implements ClosableIterator<R> {
+/**
+ * NOTE: This is a sham trait providing a stub method definition which is not used anywhere.
+ * This is required just to be able to compile the code that relies on [[UnaryLike]]
+ * (introduced in Spark 3.2) against Spark < 3.2
+ */
+trait HoodieUnaryLikeSham[T <: TreeNode[T]] { self: TreeNode[T] =>
 
-  private final ClosableIterator<R> iter;
-  private final Schema schema;
+  protected def withNewChildInternal(newChild: T): T
 
-  public ClosableIteratorWithSchema(ClosableIterator<R> iter, Schema schema) {
-    this.iter = iter;
-    this.schema = schema;
-  }
-
-  public static <R> ClosableIteratorWithSchema<R> newInstance(ClosableIterator<R> iter, Schema schema) {
-    return new ClosableIteratorWithSchema<>(iter, schema);
-  }
-
-  public Schema getSchema() {
-    return schema;
-  }
-
-  @Override
-  public void close() {
-    iter.close();
-  }
-
-  @Override
-  public boolean hasNext() {
-    return iter.hasNext();
-  }
-
-  @Override
-  public R next() {
-    return iter.next();
-  }
 }

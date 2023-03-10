@@ -38,7 +38,7 @@ import java.io.IOException;
  * - For inserts, op=i
  * - For deletes, op=d
  * - For updates, op=u
- * - For snapshort inserts, op=r
+ * - For snapshot inserts, op=r
  * <p>
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  */
@@ -56,15 +56,19 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    IndexedRecord insertRecord = getInsertRecord(schema);
-    return handleDeleteOperation(insertRecord);
+    Option<IndexedRecord> insertValue = getInsertRecord(schema);
+    return insertValue.isPresent() ? handleDeleteOperation(insertValue.get()) : Option.empty();
   }
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
     // Step 1: If the time occurrence of the current record in storage is higher than the time occurrence of the
     // insert record (including a delete record), pick the current record.
-    if (shouldPickCurrentRecord(currentValue, getInsertRecord(schema), schema)) {
+    Option<IndexedRecord> insertValue = getInsertRecord(schema);
+    if (!insertValue.isPresent()) {
+      return Option.empty();
+    }
+    if (shouldPickCurrentRecord(currentValue, insertValue.get(), schema)) {
       return Option.of(currentValue);
     }
     // Step 2: Pick the insert record (as a delete record if its a deleted event)
@@ -84,7 +88,7 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
     return delete ? Option.empty() : Option.of(insertRecord);
   }
 
-  private IndexedRecord getInsertRecord(Schema schema) throws IOException {
-    return super.getInsertValue(schema).get();
+  private Option<IndexedRecord> getInsertRecord(Schema schema) throws IOException {
+    return super.getInsertValue(schema);
   }
 }

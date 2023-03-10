@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,32 +16,27 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.utilities.ingestion;
 
-import java.util.function.Function;
+import org.apache.hudi.exception.HoodieException;
 
-public class MappingIterator<T, R> implements ClosableIterator<R> {
+/**
+ * The root exception class for any failure with {@link HoodieIngestionService}.
+ */
+public class HoodieIngestionException extends HoodieException {
 
-  private final ClosableIterator<T> sourceIterator;
-  private final Function<T, R> mapper;
-
-  public MappingIterator(ClosableIterator<T> sourceIterator, Function<T, R> mapper) {
-    this.sourceIterator = sourceIterator;
-    this.mapper = mapper;
+  public HoodieIngestionException() {
   }
 
-  @Override
-  public boolean hasNext() {
-    return sourceIterator.hasNext();
+  public HoodieIngestionException(String message) {
+    super(message);
   }
 
-  @Override
-  public R next() {
-    return mapper.apply(sourceIterator.next());
+  public HoodieIngestionException(String message, Throwable t) {
+    super(message, t);
   }
 
-  @Override
-  public void close() {
-    sourceIterator.close();
+  public HoodieIngestionException(Throwable t) {
+    super(t);
   }
 }

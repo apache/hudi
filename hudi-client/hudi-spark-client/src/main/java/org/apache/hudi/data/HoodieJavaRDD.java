@@ -22,17 +22,20 @@ package org.apache.hudi.data;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
+
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.storage.StorageLevel;
-import scala.Tuple2;
 
 import java.util.Iterator;
 import java.util.List;
+
+import scala.Tuple2;
 
 /**
  * Holds a {@link JavaRDD} of objects.
@@ -82,7 +85,18 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
   }
 
   @Override
+  public int getId() {
+    return rddData.id();
+  }
+
+  @Override
   public void persist(String level) {
+    rddData.persist(StorageLevel.fromString(level));
+  }
+
+  @Override
+  public void persist(String level, HoodieEngineContext engineContext, HoodieDataCacheKey cacheKey) {
+    engineContext.putCachedDataIds(cacheKey, this.getId());
     rddData.persist(StorageLevel.fromString(level));
   }
 

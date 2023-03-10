@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -44,7 +46,6 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.util.WriteStatMerger;
@@ -274,6 +275,19 @@ public class HoodieFlinkWriteClient<T> extends
     // remove the async cleaning
   }
 
+  /**
+   * Refresh the last transaction metadata,
+   * should be called before the Driver starts a new transaction.
+   */
+  public void preTxn(HoodieTableMetaClient metaClient) {
+    if (txnManager.isNeedsLockGuard()) {
+      // refresh the meta client which is reused
+      metaClient.reloadActiveTimeline();
+      this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
+      this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
+    }
+  }
+
   @Override
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
     tableServiceClient.writeTableMetadata(table, instantTime, actionType, metadata);
@@ -322,30 +336,12 @@ public class HoodieFlinkWriteClient<T> extends
     return result.getWriteStatuses();
   }
 
-  /**
-   * Post commit is rewrite to be invoked after a successful commit.
-   *
-   * <p>The Flink write client is designed to write data set as buckets
-   * but cleaning action should trigger after all the write actions within a
-   * checkpoint finish.
-   *
-   * @param table         Table to commit on
-   * @param metadata      Commit Metadata corresponding to committed instant
-   * @param instantTime   Instant Time
-   * @param extraMetadata Additional Metadata passed by user
-   */
   @Override
-  protected void postCommit(HoodieTable table,
-                            HoodieCommitMetadata metadata,
-                            String instantTime,
-                            Option<Map<String, String>> extraMetadata) {
-    try {
-      // Delete the marker directory for the instant.
-      WriteMarkersFactory.get(config.getMarkersType(), createTable(config, hadoopConf), instantTime)
-          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-    } finally {
-      this.heartbeatClient.stop(instantTime);
-    }
+  protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
+    // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
+    // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
+    HoodieTable table = createTable(config, hadoopConf);
+    resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
   }
 
   @Override

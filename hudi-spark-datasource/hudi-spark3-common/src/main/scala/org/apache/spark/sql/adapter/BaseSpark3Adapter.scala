@@ -21,15 +21,18 @@ import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark3RowSerDe}
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieBaseRelation, Spark3RowSerDe}
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
-import org.apache.spark.sql.catalyst.parser.ParserInterface
+import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.connector.catalog.Table
+import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.SparkAdapter
@@ -40,7 +43,6 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
 import scala.collection.JavaConverters.mapAsScalaMapConverter
-import scala.util.control.NonFatal
 
 /**
  * Base implementation of [[SparkAdapter]] for Spark 3.x branch
@@ -54,13 +56,23 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     new Spark3RowSerDe(encoder)
   }
 
+  override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
+    super.resolveHoodieTable(plan).orElse {
+      EliminateSubqueryAliases(plan) match {
+        // First, we need to weed out unresolved plans
+        case plan if !plan.resolved => None
+        // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
+        //       on top of it
+        case PhysicalOperation(_, _, DataSourceV2Relation(v2: V2TableWithV1Fallback, _, _, _, _)) if isHoodieTable(v2.v1Table) =>
+          Some(v2.v1Table)
+        case _ => None
+      }
+    }
+  }
+
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
   override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark3ParsePartitionUtil
-
-  override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
-    parser.parseMultipartIdentifier(sqlText)
-  }
 
   /**
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
@@ -70,31 +82,6 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
       partitionedFiles: Seq[PartitionedFile],
       maxSplitBytes: Long): Seq[FilePartition] = {
     FilePartition.getFilePartitions(sparkSession, partitionedFiles, maxSplitBytes)
-  }
-
-  override def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
-    super.isHoodieTable(table, spark) ||
-      // NOTE: Following checks extending the logic of the base class specifically for Spark 3.x
-      (unfoldSubqueryAliases(table) match {
-        case DataSourceV2Relation(table: Table, _, _, _, _) => isHoodieTable(table.properties())
-        // This is to handle the cases when table is loaded by providing
-        // the path to the Spark DS and not from the catalog
-        //
-        // NOTE: This logic can't be relocated to the hudi-spark-client
-        case LogicalRelation(_: HoodieBaseRelation, _, _, _) => true
-
-        case relation: UnresolvedRelation =>
-          // TODO(HUDI-4503) clean-up try catch
-          try {
-            isHoodieTable(getCatalystPlanUtils.toTableIdentifier(relation), spark)
-          } catch {
-            case NonFatal(e) =>
-              logWarning("Failed to determine whether the table is a hoodie table", e)
-              false
-          }
-
-        case _ => false
-      })
   }
 
   override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {

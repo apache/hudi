@@ -382,8 +382,9 @@ public class HoodieDropPartitionsTool implements Serializable {
     }
     hiveConf.addResource(fs.getConf());
     LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
-    HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig.getProps(), hiveConf);
-    hiveSyncTool.syncHoodieTable();
+    try (HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig.getProps(), hiveConf)) {
+      hiveSyncTool.syncHoodieTable();
+    }
   }
 
   /**

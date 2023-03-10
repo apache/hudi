@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{Option, StringUtils}
-import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -37,6 +37,7 @@ import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataS
 
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
+import scala.util.control.Breaks.break
 
 /**
  * List of options that can be passed to the Hoodie datasource,
@@ -287,38 +288,42 @@ object DataSourceWriteOptions {
     .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.")
 
   /**
-    * Translate spark parameters to hudi parameters
+    * May be derive partition path from incoming df if not explicitly set.
     *
     * @param optParams Parameters to be translated
     * @return Parameters after translation
     */
-  def translateSqlOptions(optParams: Map[String, String]): Map[String, String] = {
+  def mayBeDerivePartitionPath(optParams: Map[String, String]): Map[String, String] = {
     var translatedOptParams = optParams
     // translate the api partitionBy of spark DataFrameWriter to PARTITIONPATH_FIELD
-    if (optParams.contains(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)) {
+    // we should set hoodie's partition path only if its not set by the user.
+    if (optParams.contains(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
+      && !optParams.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())) {
       val partitionColumns = optParams.get(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
         .map(SparkDataSourceUtils.decodePartitioningColumns)
         .getOrElse(Nil)
       val keyGeneratorClass = optParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key(),
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.defaultValue)
 
-      val partitionPathField =
-        keyGeneratorClass match {
-          // Only CustomKeyGenerator needs special treatment, because it needs to be specified in a way
-          // such as "field1:PartitionKeyType1,field2:PartitionKeyType2".
-          // partitionBy can specify the partition like this: partitionBy("p1", "p2:SIMPLE", "p3:TIMESTAMP")
-          case c if c == classOf[CustomKeyGenerator].getName =>
-            partitionColumns.map(e => {
-              if (e.contains(":")) {
-                e
-              } else {
-                s"$e:SIMPLE"
-              }
-            }).mkString(",")
-          case _ =>
-            partitionColumns.mkString(",")
-        }
-      translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD.key -> partitionPathField)
+      keyGeneratorClass match {
+        // CustomKeyGenerator needs special treatment, because it needs to be specified in a way
+        // such as "field1:PartitionKeyType1,field2:PartitionKeyType2".
+        // partitionBy can specify the partition like this: partitionBy("p1", "p2:SIMPLE", "p3:TIMESTAMP")
+        case c if (c.nonEmpty && c == classOf[CustomKeyGenerator].getName) =>
+          val partitionPathField = partitionColumns.map(e => {
+            if (e.contains(":")) {
+              e
+            } else {
+              s"$e:SIMPLE"
+            }
+          }).mkString(",")
+          translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD.key -> partitionPathField)
+        case c if (c.isEmpty || !keyGeneratorClass.equals(classOf[NonpartitionedKeyGenerator].getName)) =>
+          // for any key gen other than NonPartitioned key gen, we can override the partition field config.
+          val partitionPathField = partitionColumns.mkString(",")
+          translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD.key -> partitionPathField)
+        case _ => // no op incase of NonPartitioned Key gen.
+      }
     }
     translatedOptParams
   }
@@ -828,6 +833,33 @@ object DataSourceOptionsHelper {
       }
     })
     translatedOpt.toMap
+  }
+
+  /**
+   * Some config keys differ from what user sets and whats part of table Config. this method assists in fetching the
+   * right table config and populating write configs.
+   * @param tableConfig table config of interest.
+   * @param params incoming write params.
+   * @return missing params that needs to be added to incoming write params
+   */
+  def fetchMissingWriteConfigsFromTableConfig(tableConfig: HoodieTableConfig, params: Map[String, String]) : Map[String, String] = {
+    val missingWriteConfigs = scala.collection.mutable.Map[String, String]()
+    if (!params.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) && tableConfig.getRecordKeyFieldProp != null) {
+      missingWriteConfigs ++= Map(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> tableConfig.getRecordKeyFieldProp)
+    }
+    if (!params.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) && tableConfig.getPartitionFieldProp != null) {
+      missingWriteConfigs ++= Map(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> tableConfig.getPartitionFieldProp)
+    }
+    if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
+      missingWriteConfigs ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)
+    }
+    if (!params.contains(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()) && tableConfig.getPreCombineField != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key -> tableConfig.getPreCombineField)
+    }
+    if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
+    }
+    missingWriteConfigs.toMap
   }
 
   def parametersWithReadDefaults(parameters: Map[String, String]): Map[String, String] = {

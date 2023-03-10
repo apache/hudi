@@ -17,10 +17,13 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
+import org.apache.spark.sql.catalyst.expressions.codegen.{GenerateMutableProjection, GenerateUnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeEq, AttributeReference, Cast, Expression, Like, Literal, MutableProjection, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, AttributeSet, CreateStruct, Expression, GetStructField, Like, Literal, Projection, SubqueryExpression, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.internal.SQLConf
@@ -43,6 +46,9 @@ trait HoodieCatalystExpressionUtils {
    * so we do not need to worry about case sensitivity anymore
    */
   def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression]
+
+  // TODO scala-doc
+  def matchCast(expr: Expression): Option[(Expression, DataType, Option[String])]
 
   /**
    * Matches an expression iff
@@ -75,7 +81,7 @@ trait HoodieCatalystExpressionUtils {
   def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)]
 }
 
-object HoodieCatalystExpressionUtils {
+object HoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   /**
    * Convenience extractor allowing to untuple [[Cast]] across Spark versions
@@ -84,6 +90,12 @@ object HoodieCatalystExpressionUtils {
     def unapply(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)] =
       sparkAdapter.getCatalystExpressionUtils.unapplyCastExpression(expr)
   }
+
+  /**
+   * Leverages [[AttributeEquals]] predicate on 2 provided [[Attribute]]s
+   */
+  def attributeEquals(one: Attribute, other: Attribute): Boolean =
+    new AttributeEq(one).equals(new AttributeEq(other))
 
   /**
    * Generates instance of [[UnsafeProjection]] projecting row of one [[StructType]] into another [[StructType]]
