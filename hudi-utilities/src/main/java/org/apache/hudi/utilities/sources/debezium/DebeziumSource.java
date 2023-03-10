@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig;
-import org.apache.hudi.utilities.ingestion.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.RowSource;
