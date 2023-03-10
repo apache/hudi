@@ -93,8 +93,8 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(FSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 100);
     FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, "");
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
-    assertEquals(fs.getDefaultReplication(),3);
-    assertEquals(fs.getDefaultReplication(new Path(basePath)),3);
+    assertEquals(fs.getDefaultReplication(), 3);
+    assertEquals(fs.getDefaultReplication(new Path(basePath)), 3);
   }
 
   /**
