@@ -63,7 +63,14 @@ public class HoodieArchivalConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.archive.delete.parallelism")
       .defaultValue(100)
-      .withDocumentation("Parallelism for deleting archived hoodie commits.");
+      .withDocumentation("When performing archival operation, Hudi needs to delete the files of "
+          + "the archived instants in the active timeline in .hoodie folder. The file deletion "
+          + "also happens after merging small archived files into larger ones if enabled. "
+          + "This config limits the Spark parallelism for deleting files in both cases, i.e., "
+          + "parallelism of deleting files does not go above the configured value and the "
+          + "parallelism is the number of files to delete if smaller than the "
+          + "configured value.  If you see that the file deletion in archival operation is slow "
+          + "because of the limited parallelism, you can increase this to tune the performance.");
 
   public static final ConfigProperty<String> MIN_COMMITS_TO_KEEP = ConfigProperty
       .key("hoodie.keep.min.commits")
