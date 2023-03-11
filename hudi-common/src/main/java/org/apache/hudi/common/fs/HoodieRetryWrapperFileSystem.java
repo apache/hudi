@@ -254,4 +254,14 @@ public class HoodieRetryWrapperFileSystem extends FileSystem {
   public Configuration getConf() {
     return fileSystem.getConf();
   }
+
+  @Override
+  public short getDefaultReplication() {
+    return fileSystem.getDefaultReplication();
+  }
+
+  @Override
+  public short getDefaultReplication(Path path) {
+    return fileSystem.getDefaultReplication(path);
+  }
 }
