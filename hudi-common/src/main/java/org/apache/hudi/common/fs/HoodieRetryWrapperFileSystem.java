@@ -270,4 +270,15 @@ public class HoodieRetryWrapperFileSystem extends FileSystem {
   public String getScheme() {
     return fileSystem.getScheme();
   }
+
+  @Override
+  public short getDefaultReplication() {
+    return fileSystem.getDefaultReplication();
+  }
+
+  @Override
+  public short getDefaultReplication(Path path) {
+    return fileSystem.getDefaultReplication(path);
+  }
+
 }
