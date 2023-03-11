@@ -533,7 +533,19 @@ public class HoodieMetadataTableValidator implements Serializable {
       Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
       if (instantOption.isPresent()) {
         String instantTime = instantOption.get();
-        return completedTimeline.containsOrBeforeTimelineStarts(instantTime);
+        // There are two cases where the created commit time is written to the partition metadata:
+        // (1) Commit C1 creates the partition and C1 succeeds, the partition metadata has C1 as
+        // the created commit time.
+        // (2) Commit C1 creates the partition, the partition metadata is written, and C1 fails
+        // during writing data files.  Next time, C2 adds new data to the same partition after C1
+        // is rolled back. In this case, the partition metadata still has C1 as the created commit
+        // time, since Hudi does not rewrite the partition metadata in C2.
+        if (!completedTimeline.containsOrBeforeTimelineStarts(instantTime)) {
+          Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
+          return lastInstant.isPresent()
+              && lastInstant.get().getTimestamp().compareTo(instantTime) >= 0;
+        }
+        return true;
       } else {
         return false;
       }
