@@ -92,6 +92,7 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthority;
 
 /**
@@ -543,7 +544,8 @@ public class HoodieMetadataTableValidator implements Serializable {
         if (!completedTimeline.containsOrBeforeTimelineStarts(instantTime)) {
           Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
           return lastInstant.isPresent()
-              && lastInstant.get().getTimestamp().compareTo(instantTime) >= 0;
+              && HoodieTimeline.compareTimestamps(
+              instantTime, LESSER_THAN_OR_EQUALS, lastInstant.get().getTimestamp());
         }
         return true;
       } else {
