@@ -24,6 +24,9 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.source.prune.PartitionPruner;
+import org.apache.hudi.source.prune.StaticPartitionPruner;
 import org.apache.hudi.source.stats.ColumnStatsIndices;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
@@ -61,11 +64,12 @@ public class FileIndex {
   private final Path path;
   private final RowType rowType;
   private final HoodieMetadataConfig metadataConfig;
-  private final boolean dataSkippingEnabled;
+  private PartitionPruner partitionPruner;
   private List<String> partitionPaths;      // cache of partition paths
-  private List<ResolvedExpression> filters; // push down filters
-  private final boolean tableExists;
+  private final boolean dataSkippingEnabled;
+  private List<ResolvedExpression> dataFilters; // push down filters
   private DataPruner dataPruner;
+  private final boolean tableExists;
 
   private FileIndex(Path path, Configuration conf, RowType rowType) {
     this.path = path;
@@ -176,6 +180,7 @@ public class FileIndex {
   @VisibleForTesting
   public void reset() {
     this.partitionPaths = null;
+    this.partitionPruner = null;
   }
 
   // -------------------------------------------------------------------------
@@ -183,21 +188,29 @@ public class FileIndex {
   // -------------------------------------------------------------------------
 
   /**
-   * Sets up explicit partition paths for pruning.
+   * Sets up explicit partition pruner.
    */
-  public void setPartitionPaths(@Nullable Set<String> partitionPaths) {
-    if (partitionPaths != null) {
-      this.partitionPaths = new ArrayList<>(partitionPaths);
+  public void setPartitionPruner(@Nullable PartitionPruner partitionPruner) {
+    if (partitionPruner != null) {
+      this.partitionPruner = partitionPruner;
+      Set<String> prunedPartitionPaths;
+      if (this.partitionPruner instanceof StaticPartitionPruner) {
+        prunedPartitionPaths = ((StaticPartitionPruner) this.partitionPruner).getRequiredPartitions();
+      } else {
+        List<String> allPartitionPaths = getAllPartitionPaths();
+        prunedPartitionPaths = this.partitionPruner.filter(allPartitionPaths);
+      }
+      this.partitionPaths = new ArrayList<>(prunedPartitionPaths);
     }
   }
 
   /**
    * Sets up pushed down filters.
    */
-  public void setFilters(List<ResolvedExpression> filters) {
-    if (filters.size() > 0) {
-      this.filters = new ArrayList<>(filters);
-      this.dataPruner = initializeDataPruner(filters);
+  public void setDataFilters(List<ResolvedExpression> dataFilters) {
+    if (dataFilters.size() > 0) {
+      this.dataFilters = new ArrayList<>(dataFilters);
+      this.dataPruner = initializeDataPruner(dataFilters);
     }
   }
 
@@ -277,11 +290,16 @@ public class FileIndex {
   public List<String> getOrBuildPartitionPaths() {
     if (this.partitionPaths != null) {
       return this.partitionPaths;
+    } else {
+      this.partitionPaths = getAllPartitionPaths();
+      return this.partitionPaths;
     }
-    this.partitionPaths = this.tableExists
+  }
+
+  private List<String> getAllPartitionPaths() {
+    return this.tableExists
         ? FSUtils.getAllPartitionPaths(HoodieFlinkEngineContext.DEFAULT, metadataConfig, path.toString())
         : Collections.emptyList();
-    return this.partitionPaths;
   }
 
   private static HoodieMetadataConfig metadataConfig(org.apache.flink.configuration.Configuration conf) {
@@ -294,8 +312,8 @@ public class FileIndex {
   }
 
   @VisibleForTesting
-  public List<ResolvedExpression> getFilters() {
-    return filters;
+  public List<ResolvedExpression> getDataFilters() {
+    return dataFilters;
   }
 
   private DataPruner initializeDataPruner(List<ResolvedExpression> filters) {

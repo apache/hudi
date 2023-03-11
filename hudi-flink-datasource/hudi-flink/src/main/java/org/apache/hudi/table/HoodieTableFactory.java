@@ -77,12 +77,21 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
-    return new HoodieTableSource(
-        schema,
-        path,
-        context.getCatalogTable().getPartitionKeys(),
-        conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
-        conf);
+    if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && conf.getBoolean(FlinkOptions.READ_STREAMING_CONTINUOUS_PARTITION_PRUNE)) {
+      return new HoodieContinuousPartitionTableSource(
+          schema,
+          path,
+          context.getCatalogTable().getPartitionKeys(),
+          conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
+          conf);
+    } else {
+      return new HoodieTableSource(
+          schema,
+          path,
+          context.getCatalogTable().getPartitionKeys(),
+          conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
+          conf);
+    }
   }
 
   @Override

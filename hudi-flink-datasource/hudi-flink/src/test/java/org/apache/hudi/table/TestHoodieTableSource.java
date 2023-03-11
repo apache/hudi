@@ -145,7 +145,7 @@ public class TestHoodieTableSource {
     List<ResolvedExpression> expectedFilters = Collections.singletonList(mockExpression);
     tableSource.applyFilters(expectedFilters);
     HoodieTableSource copiedSource = (HoodieTableSource) tableSource.copy();
-    List<ResolvedExpression> actualFilters = copiedSource.getFileIndex().getFilters();
+    List<ResolvedExpression> actualFilters = copiedSource.getFileIndex().getDataFilters();
     assertEquals(expectedFilters, actualFilters);
   }
 

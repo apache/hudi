@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -26,6 +27,7 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.RowType;
 
 import javax.annotation.Nullable;
 
@@ -35,8 +37,12 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoField;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Utilities for expression resolving.
@@ -175,6 +181,121 @@ public class ExpressionUtils {
         return expr.getValueAs(BigDecimal.class).orElse(null);
       default:
         throw new UnsupportedOperationException("Unsupported type: " + logicalType);
+    }
+  }
+
+  public static List<ResolvedExpression> filterSimpleCallExpression(List<ResolvedExpression> exprs) {
+    return exprs.stream()
+        .filter(ExpressionUtils::isSimpleCallExpression)
+        .collect(Collectors.toList());
+  }
+
+  public static Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> extractPartitionPredicateList(
+      List<ResolvedExpression> exprs,
+      List<String> partitionKeys,
+      RowType tableRowType) {
+    if (partitionKeys.isEmpty()) {
+      return Tuple2.of(exprs, Collections.emptyList());
+    } else {
+      List<ResolvedExpression> partitionFilters = new ArrayList<>();
+      List<ResolvedExpression> nonPartitionFilters = new ArrayList<>();
+      int[] partitionIdxMapping = tableRowType.getFieldNames().stream().mapToInt(partitionKeys::indexOf).toArray();
+      for (ResolvedExpression expr : exprs) {
+        for (CallExpression e : splitByAnd(expr)) {
+          CallExpression convertedExpr = applyMapping(e, partitionIdxMapping);
+          if (convertedExpr != null) {
+            partitionFilters.add(convertedExpr);
+          } else {
+            nonPartitionFilters.add(e);
+          }
+        }
+      }
+      return Tuple2.of(nonPartitionFilters, partitionFilters);
+    }
+  }
+
+  private static List<CallExpression> splitByAnd(ResolvedExpression expr) {
+    List<CallExpression> result = new ArrayList<>();
+    splitByAnd(expr, result);
+    return result;
+  }
+
+  private static void splitByAnd(
+      ResolvedExpression expr,
+      List<CallExpression> result) {
+    if (!(expr instanceof CallExpression)) {
+      return;
+    }
+    CallExpression callExpr = (CallExpression) expr;
+    FunctionDefinition funcDef = callExpr.getFunctionDefinition();
+
+    if (funcDef == BuiltInFunctionDefinitions.AND) {
+      callExpr.getChildren().stream()
+          .filter(child -> child instanceof CallExpression)
+          .forEach(child -> splitByAnd((CallExpression) child, result));
+    } else {
+      result.add(callExpr);
+    }
+  }
+
+  private static CallExpression applyMapping(CallExpression expr, int[] fieldIdxMapping) {
+    FunctionDefinition funcDef = expr.getFunctionDefinition();
+    if (funcDef == BuiltInFunctionDefinitions.IN
+        || funcDef == BuiltInFunctionDefinitions.EQUALS
+        || funcDef == BuiltInFunctionDefinitions.NOT_EQUALS
+        || funcDef == BuiltInFunctionDefinitions.IS_NULL
+        || funcDef == BuiltInFunctionDefinitions.IS_NOT_NULL
+        || funcDef == BuiltInFunctionDefinitions.LESS_THAN
+        || funcDef == BuiltInFunctionDefinitions.GREATER_THAN
+        || funcDef == BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL
+        || funcDef == BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL) {
+      List<Expression> children = expr.getChildren();
+      List<ResolvedExpression> newChildren = children.stream()
+          .map(
+              child -> {
+                if (child instanceof FieldReferenceExpression) {
+                  FieldReferenceExpression refExpr = (FieldReferenceExpression) child;
+                  int target = fieldIdxMapping[refExpr.getFieldIndex()];
+                  if (target >= 0) {
+                    return new FieldReferenceExpression(
+                        refExpr.getName(),
+                        refExpr.getOutputDataType(),
+                        refExpr.getInputIndex(),
+                        target);
+                  } else {
+                    return null;
+                  }
+                } else {
+                  return (ResolvedExpression) child;
+                }
+              })
+          .filter(Objects::nonNull)
+          .collect(Collectors.toList());
+      if (newChildren.size() == children.size()) {
+        return new CallExpression(
+            expr.getFunctionDefinition(),
+            newChildren,
+            expr.getOutputDataType());
+      } else {
+        return null;
+      }
+    } else if (funcDef == BuiltInFunctionDefinitions.OR
+        || funcDef == BuiltInFunctionDefinitions.AND) {
+      List<Expression> children = expr.getChildren();
+      List<ResolvedExpression> newChildren = children.stream()
+          .map(child -> applyMapping((CallExpression) child, fieldIdxMapping))
+          .filter(Objects::nonNull)
+          .collect(Collectors.toList());
+      if (newChildren.size() == children.size()) {
+        return new CallExpression(
+            expr.getFunctionDefinition(),
+            newChildren,
+            expr.getOutputDataType());
+      } else {
+        return null;
+      }
+    } else {
+      throw new UnsupportedOperationException("Unsupported function: " + funcDef);
     }
   }
 }

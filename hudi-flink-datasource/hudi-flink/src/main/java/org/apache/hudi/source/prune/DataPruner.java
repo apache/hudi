@@ -16,8 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.source;
+package org.apache.hudi.source.prune;
 
+import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.stats.ColumnStats;
 import org.apache.hudi.util.ExpressionUtils;
 
