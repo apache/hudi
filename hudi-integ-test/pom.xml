@@ -52,14 +52,14 @@
     </dependency>
 
     <!-- Jetty -->
-    <dependency>
+    <!--dependency-->
       <!-- Needs to be at the top to ensure we get the correct dependency versions for jetty-server -->
-      <groupId>org.eclipse.jetty.aggregate</groupId>
+      <!--groupId>org.eclipse.jetty.aggregate</groupId>
       <artifactId>jetty-all</artifactId>
       <version>${jetty.version}</version>
       <classifier>uber</classifier>
       <scope>test</scope>
-    </dependency>
+    </dependency-->
 
     <dependency>
       <groupId>org.apache.spark</groupId>

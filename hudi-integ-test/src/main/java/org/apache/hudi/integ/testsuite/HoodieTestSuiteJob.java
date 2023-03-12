@@ -220,6 +220,7 @@ public class HoodieTestSuiteJob {
       log.error("Failed to run Test Suite ", e);
       throw new HoodieException("Failed to run Test Suite ", e);
     } finally {
+      log.info("Finally block in HoodieTestSuite ");
       if (writerContext != null) {
         writerContext.shutdownResources();
       }

@@ -183,7 +183,11 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public void shutdownGracefully() {
-    ingestionService.ifPresent(ds -> ds.shutdown(false));
+    ingestionService.ifPresent(ds -> {
+      ds.shutdown(false);
+      LOG.info("shutting down DS. async service shutdown complete. closing DeltaSync ");
+      ds.close();
+    });
   }
 
   /**
