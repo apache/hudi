@@ -149,7 +149,7 @@ public class HiveTestUtil {
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
-    ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig);
+    ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig, null);
 
     clear();
   }

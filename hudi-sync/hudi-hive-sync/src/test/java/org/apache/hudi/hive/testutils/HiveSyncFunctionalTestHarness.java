@@ -116,7 +116,7 @@ public class HiveSyncFunctionalTestHarness {
     hiveSyncConfig.setValue(META_SYNC_DATABASE_NAME, database);
     for (String table : tables) {
       hiveSyncConfig.setValue(META_SYNC_TABLE_NAME, table);
-      new HiveQueryDDLExecutor(hiveSyncConfig).runSQL("drop table if exists " + table);
+      new HiveQueryDDLExecutor(hiveSyncConfig, null).runSQL("drop table if exists " + table);
     }
   }
 
@@ -124,7 +124,7 @@ public class HiveSyncFunctionalTestHarness {
     HiveSyncConfig hiveSyncConfig = hiveSyncConf();
     for (String database : databases) {
       hiveSyncConfig.setValue(META_SYNC_DATABASE_NAME, database);
-      new HiveQueryDDLExecutor(hiveSyncConfig).runSQL("drop database if exists " + database);
+      new HiveQueryDDLExecutor(hiveSyncConfig, null).runSQL("drop database if exists " + database);
     }
   }
 
