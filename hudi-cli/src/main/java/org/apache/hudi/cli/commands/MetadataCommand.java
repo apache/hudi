@@ -25,6 +25,8 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -54,6 +56,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * CLI commands to operate on the Metadata Table.
@@ -132,7 +138,7 @@ public class MetadataCommand {
 
   @ShellMethod(key = "metadata delete", value = "Remove the Metadata Table")
   public String delete() throws Exception {
-    HoodieCLI.getTableMetaClient();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     Path metadataPath = new Path(getMetadataTableBasePath(HoodieCLI.basePath));
     try {
       FileStatus[] statuses = HoodieCLI.fs.listStatus(metadataPath);
@@ -142,6 +148,11 @@ public class MetadataCommand {
     } catch (FileNotFoundException e) {
       // Metadata directory does not exist
     }
+
+    LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
+    metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);
+    metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS_INFLIGHT.key(), EMPTY_STRING);
+    HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
 
     return String.format("Removed Metadata Table from %s", metadataPath);
   }
