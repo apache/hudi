@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConcurrentOperation;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -78,8 +79,13 @@ public class TransactionUtils {
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElse(new HoodieCommitMetadata()));
       instantStream.forEach(instant -> {
         try {
-          ConcurrentOperation otherOperation = new ConcurrentOperation(instant, TimelineUtils.getCommitMetadata(instant, reloadActiveTimeline
-              ? table.getMetaClient().reloadActiveTimeline() : table.getActiveTimeline()));
+          ConcurrentOperation otherOperation;
+          if (resolutionStrategy.getClass().getName().equals(BucketIndexConcurrentFileWritesConflictResolutionStrategy.class.getName())) {
+            otherOperation = new ConcurrentOperation(instant, TimelineUtils.getCommitMetadata(instant,
+                reloadActiveTimeline ? table.getMetaClient().reloadActiveTimeline() : table.getActiveTimeline()));
+          } else {
+            otherOperation = new ConcurrentOperation(instant, table.getMetaClient());
+          }
           if (resolutionStrategy.hasConflict(thisOperation, otherOperation)) {
             LOG.info("Conflict encountered between current instant = " + thisOperation + " and instant = "
                 + otherOperation + ", attempting to resolve it...");
