@@ -62,7 +62,6 @@ HMS mode uses the hive metastore client to sync Hudi table using thrift APIs dir
 To use this mode, pass `--sync-mode=hms` to `run_sync_tool` and set `--use-jdbc=false`. 
 Additionally, if you are using remote metastore, then `hive.metastore.uris` need to be set in hive-site.xml configuration file.
 Otherwise, the tool assumes that metastore is running locally on port 9083 by default. 
-Support for HMS mode with Spark datasource will be [enabled soon](https://issues.apache.org/jira/browse/HUDI-2491).
 
 #### HIVEQL
 
