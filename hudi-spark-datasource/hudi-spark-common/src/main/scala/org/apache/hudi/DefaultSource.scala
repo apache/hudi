@@ -261,7 +261,7 @@ object DefaultSource {
         !parameters.getOrDefault(SCHEMA_EVOLUTION_ENABLED.key(), SCHEMA_EVOLUTION_ENABLED.defaultValue().toString).toBoolean &&
         parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue()).equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
       if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
-        new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
+        new EmptyRelation(sqlContext, new StructType())
       } else if (isCdcQuery) {
         if (useNewParquetFileFormat) {
           if (tableType == COPY_ON_WRITE) {
