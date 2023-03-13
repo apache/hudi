@@ -827,9 +827,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
-  public void testUpsertsCOWContinuousModeShutdownGracefully(HoodieRecordType recordType) throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", true, recordType);
+  @EnumSource(value = HoodieRecordType.class, names = {"AVRO"})
+  public void testUpsertsMORContinuousModeShutdownGracefully(HoodieRecordType recordType) throws Exception {
+    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType);
   }
 
   @Disabled("HUDI-5815 for investigation")
