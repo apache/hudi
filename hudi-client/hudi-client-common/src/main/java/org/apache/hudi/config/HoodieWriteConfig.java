@@ -256,7 +256,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "is explicitly configured by the user, the user-configured parallelism is "
           + "used in defining the actual parallelism. If you observe small files from the insert "
           + "operation, we suggest configuring this shuffle parallelism explicitly, so that the "
-          + "parallelism is around total_input_data_size/500MB.");
+          + "parallelism is around total_input_data_size/120MB.");
 
   public static final ConfigProperty<String> BULKINSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.bulkinsert.shuffle.parallelism")
@@ -270,7 +270,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "is explicitly configured by the user, the user-configured parallelism is "
           + "used in defining the actual parallelism. If you observe small files from the bulk insert "
           + "operation, we suggest configuring this shuffle parallelism explicitly, so that the "
-          + "parallelism is around total_input_data_size/500MB.");
+          + "parallelism is around total_input_data_size/120MB.");
 
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS = ConfigProperty
       .key("hoodie.bulkinsert.user.defined.partitioner.sort.columns")
@@ -297,7 +297,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "is explicitly configured by the user, the user-configured parallelism is "
           + "used in defining the actual parallelism. If you observe small files from the upsert "
           + "operation, we suggest configuring this shuffle parallelism explicitly, so that the "
-          + "parallelism is around total_input_data_size/500MB.");
+          + "parallelism is around total_input_data_size/120MB.");
 
   public static final ConfigProperty<String> DELETE_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.delete.shuffle.parallelism")
