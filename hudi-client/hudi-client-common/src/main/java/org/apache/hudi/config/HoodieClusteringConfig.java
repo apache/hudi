@@ -47,9 +47,7 @@ import java.util.Properties;
     description = "Configurations that control the clustering table service in hudi, "
         + "which optimizes the storage layout for better query performance by sorting and sizing data files.")
 public class HoodieClusteringConfig extends HoodieConfig {
-
-  public static final boolean DEFAULT_PRESERVE_COMMIT_METADATA = true;
-
+  
   // Any strategy specific params can be saved with this prefix
   public static final String CLUSTERING_STRATEGY_PARAM_PREFIX = "hoodie.clustering.plan.strategy.";
   public static final String SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =

@@ -34,7 +34,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
@@ -117,7 +116,7 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
       final Option<Pair<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record.getRight();
       if (recordLocationHoodieKeyPair.isPresent()) {
         // Record key matched to file
-        if (HoodieIndexConfig.DEFAULT_BLOOM_INDEX_UPDATE_PARTITION_PATH
+        if (config.getBloomIndexUpdatePartitionPath()
             && !recordLocationHoodieKeyPair.get().getRight().getPartitionPath().equals(hoodieRecord.getPartitionPath())) {
           // Create an empty record to delete the record in the old partition
           HoodieRecord<R> deleteRecord = new HoodieAvroRecord(recordLocationHoodieKeyPair.get().getRight(),

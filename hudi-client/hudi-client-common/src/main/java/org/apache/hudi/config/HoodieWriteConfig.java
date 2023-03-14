@@ -1862,6 +1862,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieIndexConfig.BLOOM_INDEX_KEYS_PER_BUCKET);
   }
 
+  public boolean getBloomIndexUpdatePartitionPath() {
+    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE);
+  }
+
   public int getSimpleIndexParallelism() {
     return getInt(HoodieIndexConfig.SIMPLE_INDEX_PARALLELISM);
   }
@@ -1872,6 +1876,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getGlobalSimpleIndexParallelism() {
     return getInt(HoodieIndexConfig.GLOBAL_SIMPLE_INDEX_PARALLELISM);
+  }
+
+  public boolean getGlobalSimpleIndexUpdatePartitionPath() {
+    return getBoolean(HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE);
   }
 
   public int getBucketIndexNumBuckets() {
@@ -2292,6 +2300,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   /**
    * Hoodie Client Lock Configs.
+   *
    * @return
    */
   public boolean isAutoAdjustLockConfigs() {

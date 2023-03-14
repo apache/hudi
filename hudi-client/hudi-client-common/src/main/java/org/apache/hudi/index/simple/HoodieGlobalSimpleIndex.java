@@ -34,7 +34,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -131,7 +130,7 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
           if (partitionPathLocationPair.isPresent()) {
             String partitionPath = partitionPathLocationPair.get().getKey();
             HoodieRecordLocation location = partitionPathLocationPair.get().getRight();
-            if (HoodieIndexConfig.DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH && !(inputRecord.getPartitionPath().equals(partitionPath))) {
+            if (config.getGlobalSimpleIndexUpdatePartitionPath() && !(inputRecord.getPartitionPath().equals(partitionPath))) {
               // Create an empty record to delete the record in the old partition
               HoodieRecord<R> deleteRecord = new HoodieAvroRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), new EmptyHoodieRecordPayload());
               deleteRecord.setCurrentLocation(location);

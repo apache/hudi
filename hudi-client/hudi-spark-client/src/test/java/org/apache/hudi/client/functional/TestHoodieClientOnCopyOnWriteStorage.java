@@ -199,10 +199,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     return Arrays.stream(new Boolean[][] {{true}, {false}}).map(Arguments::of);
   }
 
-  private static Stream<Arguments> populateMetaFields() {
-    return Arrays.stream(new Boolean[] {true, false}).map(Arguments::of);
-  }
-
   private static Stream<Arguments> rollbackFailedCommitsParams() {
     return Stream.of(
         Arguments.of(HoodieFailedWritesCleaningPolicy.LAZY, true),
@@ -1511,7 +1507,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource("populateMetaFields")
+  @MethodSource("populateMetaFieldsParams")
   public void testSimpleClustering(boolean populateMetaFields) throws Exception {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
@@ -1626,7 +1622,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource("populateMetaFields")
+  @MethodSource("populateMetaFieldsParams")
   public void testClusteringWithSortColumns(boolean populateMetaFields) throws Exception {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
@@ -1637,7 +1633,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource("populateMetaFields")
+  @MethodSource("populateMetaFieldsParams")
   public void testClusteringWithSortOneFilePerGroup(boolean populateMetaFields) throws Exception {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
