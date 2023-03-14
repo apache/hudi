@@ -19,7 +19,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -44,11 +43,12 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -71,7 +71,7 @@ import java.util.stream.Collectors;
  */
 public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
-  private static final Logger LOG = LogManager.getLogger(BaseTableMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseTableMetadata.class);
 
   protected static final long MAX_MEMORY_SIZE_IN_BYTES = 1024 * 1024 * 1024;
   // NOTE: Buffer-size is deliberately set pretty low, since MT internally is relying

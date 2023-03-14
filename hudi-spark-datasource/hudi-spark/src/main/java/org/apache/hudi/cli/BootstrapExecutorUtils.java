@@ -48,9 +48,9 @@ import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -79,7 +79,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
  */
 public class BootstrapExecutorUtils implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(BootstrapExecutorUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BootstrapExecutorUtils.class);
 
   /**
    * Config.

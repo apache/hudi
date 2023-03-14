@@ -70,11 +70,11 @@ import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -104,7 +104,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 public class HoodieDeltaStreamer implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieDeltaStreamer.class);
   private static final List<String> DEFAULT_SENSITIVE_CONFIG_KEYS = Arrays.asList(
       HoodieWriteConfig.SENSITIVE_CONFIG_KEYS_FILTER.defaultValue().split(","));
   private static final String SENSITIVE_VALUES_MASKED = "SENSITIVE_INFO_MASKED";

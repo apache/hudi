@@ -43,10 +43,10 @@ import org.apache.hadoop.hive.metastore.api.SerDeInfo;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
@@ -67,7 +67,7 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
  */
 public class HoodieHiveSyncClient extends HoodieSyncClient {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieHiveSyncClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieHiveSyncClient.class);
   protected final HiveSyncConfig config;
   private final String databaseName;
   DDLExecutor ddlExecutor;

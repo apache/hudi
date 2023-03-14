@@ -49,11 +49,11 @@ import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -70,7 +70,7 @@ import java.util.stream.StreamSupport;
  */
 public abstract class SingleSparkJobExecutionStrategy<T>
     extends ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
-  private static final Logger LOG = LogManager.getLogger(SingleSparkJobExecutionStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SingleSparkJobExecutionStrategy.class);
 
   public SingleSparkJobExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);

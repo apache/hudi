@@ -34,8 +34,8 @@ import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, S
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.hudi.util.JFunction
-import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
@@ -789,7 +789,7 @@ object DataSourceWriteOptions {
 
 object DataSourceOptionsHelper {
 
-  private val log = LogManager.getLogger(DataSourceOptionsHelper.getClass)
+  private val log = LoggerFactory.getLogger(DataSourceOptionsHelper.getClass)
 
   // put all the configs with alternatives here
   val allConfigsWithAlternatives = List(

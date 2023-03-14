@@ -67,12 +67,12 @@ import com.beust.jcommander.Parameter;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -147,7 +147,7 @@ import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthorit
  */
 public class HoodieMetadataTableValidator implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMetadataTableValidator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataTableValidator.class);
 
   // Spark context
   private transient JavaSparkContext jsc;
@@ -360,7 +360,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   public boolean run() {
     boolean result = false;
     try {
-      LOG.info(cfg);
+      LOG.info(cfg.toString());
       if (cfg.continuous) {
         LOG.info(" ****** do hoodie metadata table validation in CONTINUOUS mode ******");
         doHoodieMetadataTableValidationContinuous();
@@ -1040,7 +1040,7 @@ public class HoodieMetadataTableValidator implements Serializable {
    */
   private static class HoodieMetadataValidationContext implements AutoCloseable, Serializable {
 
-    private static final Logger LOG = LogManager.getLogger(HoodieMetadataValidationContext.class);
+    private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataValidationContext.class);
 
     private final HoodieTableMetaClient metaClient;
     private final HoodieTableFileSystemView fileSystemView;

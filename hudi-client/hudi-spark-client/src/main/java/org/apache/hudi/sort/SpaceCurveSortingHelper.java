@@ -22,8 +22,7 @@ import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.optimize.HilbertCurveUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
@@ -50,10 +49,11 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.davidmoten.hilbert.HilbertCurve;
-import scala.collection.JavaConversions;
-import scala.collection.mutable.WrappedArray;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -61,9 +61,12 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import scala.collection.JavaConversions;
+import scala.collection.mutable.WrappedArray;
+
 public class SpaceCurveSortingHelper {
 
-  private static final Logger LOG = LogManager.getLogger(SpaceCurveSortingHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SpaceCurveSortingHelper.class);
 
   /**
    * Orders provided {@link Dataset} by mapping values of the provided list of columns

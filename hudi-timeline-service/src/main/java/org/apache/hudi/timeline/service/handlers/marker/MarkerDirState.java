@@ -36,8 +36,8 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.util.StringUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -63,7 +63,7 @@ import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
  * The operations inside this class is designed to be thread-safe.
  */
 public class MarkerDirState implements Serializable {
-  private static final Logger LOG = LogManager.getLogger(MarkerDirState.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MarkerDirState.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   // Marker directory
   private final String markerDirPath;

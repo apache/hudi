@@ -36,8 +36,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -63,7 +63,7 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PA
  * entries).
  */
 public class TimelineServerBasedWriteMarkers extends WriteMarkers {
-  private static final Logger LOG = LogManager.getLogger(TimelineServerBasedWriteMarkers.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TimelineServerBasedWriteMarkers.class);
   private final ObjectMapper mapper;
   private final String timelineServerHost;
   private final int timelineServerPort;

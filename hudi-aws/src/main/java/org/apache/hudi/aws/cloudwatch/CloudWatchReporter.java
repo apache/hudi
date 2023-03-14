@@ -38,8 +38,8 @@ import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.ScheduledReporter;
 import com.codahale.metrics.Timer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -61,7 +61,7 @@ public class CloudWatchReporter extends ScheduledReporter {
   static final String DIMENSION_GAUGE_TYPE_VALUE = "gauge";
   static final String DIMENSION_COUNT_TYPE_VALUE = "count";
 
-  private static final Logger LOG = LogManager.getLogger(CloudWatchReporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CloudWatchReporter.class);
 
   private final AmazonCloudWatchAsync cloudWatchClientAsync;
   private final Clock clock;

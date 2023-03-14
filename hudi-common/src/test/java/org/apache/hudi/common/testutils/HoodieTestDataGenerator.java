@@ -50,9 +50,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.orc.TypeDescription;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -92,7 +92,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final int BYTES_PER_RECORD = (int) (1.2 * 1024);
   // with default bloom filter with 60,000 entries and 0.000000001 FPRate
   public static final int BLOOM_FILTER_BYTES = 323495;
-  private static Logger logger = LogManager.getLogger(HoodieTestDataGenerator.class);
+  private static Logger logger = LoggerFactory.getLogger(HoodieTestDataGenerator.class);
   public static final String NO_PARTITION_PATH = "";
   public static final String DEFAULT_FIRST_PARTITION_PATH = "2016/03/15";
   public static final String DEFAULT_SECOND_PARTITION_PATH = "2015/03/16";

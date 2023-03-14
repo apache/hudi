@@ -57,9 +57,9 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -79,7 +79,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_S
 
 public class TestHoodieMetadataBase extends HoodieClientTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(TestHoodieMetadataBase.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMetadataBase.class);
 
   protected static HoodieTestTable testTable;
   protected String metadataTableBasePath;

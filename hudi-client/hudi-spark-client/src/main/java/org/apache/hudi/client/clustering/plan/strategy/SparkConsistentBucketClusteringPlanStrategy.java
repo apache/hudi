@@ -43,9 +43,9 @@ import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -64,7 +64,7 @@ import java.util.stream.Stream;
 public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordPayload<T>>
     extends PartitionAwareClusteringPlanStrategy<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
-  private static final Logger LOG = LogManager.getLogger(SparkConsistentBucketClusteringPlanStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkConsistentBucketClusteringPlanStrategy.class);
 
   public static final String METADATA_PARTITION_KEY = "clustering.group.partition";
   public static final String METADATA_CHILD_NODE_KEY = "clustering.group.child.node";

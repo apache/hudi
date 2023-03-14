@@ -30,12 +30,12 @@ import org.apache.hudi.utilities.sources.AvroSource;
 import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -49,7 +49,7 @@ import java.util.stream.Stream;
 
 public abstract class AbstractBaseTestSource extends AvroSource {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractBaseTestSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractBaseTestSource.class);
 
   public static final int DEFAULT_PARTITION_NUM = 0;
 

@@ -46,8 +46,8 @@ import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -65,7 +65,7 @@ import java.util.stream.Collectors;
 public abstract class BaseJavaCommitActionExecutor<T> extends
     BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, HoodieWriteMetadata> {
 
-  private static final Logger LOG = LogManager.getLogger(BaseJavaCommitActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseJavaCommitActionExecutor.class);
 
   public BaseJavaCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteConfig config,

@@ -18,18 +18,19 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.sql.Row;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URLDecoder;
@@ -45,7 +46,7 @@ import java.util.List;
  */
 public class CloudObjectsSelectorCommon {
 
-  private static final Logger LOG = LogManager.getLogger(CloudObjectsSelectorCommon.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CloudObjectsSelectorCommon.class);
 
   /**
    * Return a function that extracts filepaths from a list of Rows.

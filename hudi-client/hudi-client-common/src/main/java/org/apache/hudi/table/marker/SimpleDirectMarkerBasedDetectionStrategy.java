@@ -27,8 +27,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ConcurrentModificationException;
@@ -44,7 +44,7 @@ import java.util.stream.Stream;
  */
 public class SimpleDirectMarkerBasedDetectionStrategy extends DirectMarkerBasedDetectionStrategy {
 
-  private static final Logger LOG = LogManager.getLogger(SimpleDirectMarkerBasedDetectionStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SimpleDirectMarkerBasedDetectionStrategy.class);
   private final String basePath;
   private final boolean checkCommitConflict;
   private final Set<HoodieInstant> completedCommitInstants;

@@ -41,8 +41,8 @@ import org.apache.hudi.table.action.BaseActionExecutor;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -57,7 +57,7 @@ import java.util.stream.Stream;
 public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieCleanMetadata> {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(CleanActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CleanActionExecutor.class);
   private final TransactionManager txnManager;
   private final boolean skipLocking;
 

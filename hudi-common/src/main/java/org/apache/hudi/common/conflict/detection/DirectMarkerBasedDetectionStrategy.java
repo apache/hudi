@@ -31,8 +31,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -46,7 +46,7 @@ import java.util.stream.Stream;
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class DirectMarkerBasedDetectionStrategy implements EarlyConflictDetectionStrategy {
 
-  private static final Logger LOG = LogManager.getLogger(DirectMarkerBasedDetectionStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DirectMarkerBasedDetectionStrategy.class);
 
   protected final FileSystem fs;
   protected final String partitionPath;

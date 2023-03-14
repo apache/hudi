@@ -76,8 +76,9 @@ import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -96,7 +97,7 @@ import java.util.Map;
 public class HoodieSparkCopyOnWriteTable<T>
     extends HoodieSparkTable<T> implements HoodieCompactionHandler<T> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieSparkCopyOnWriteTable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkCopyOnWriteTable.class);
 
   public HoodieSparkCopyOnWriteTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);

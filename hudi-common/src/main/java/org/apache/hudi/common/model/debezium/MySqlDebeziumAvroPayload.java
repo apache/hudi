@@ -24,8 +24,8 @@ import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -44,7 +44,7 @@ import java.util.Objects;
  */
 public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
-  private static final Logger LOG = LogManager.getLogger(MySqlDebeziumAvroPayload.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MySqlDebeziumAvroPayload.class);
 
   public MySqlDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);

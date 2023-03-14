@@ -18,16 +18,17 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -38,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestInProcessLockProvider {
 
-  private static final Logger LOG = LogManager.getLogger(TestInProcessLockProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestInProcessLockProvider.class);
   private final Configuration hadoopConfiguration = new Configuration();
   private final LockConfiguration lockConfiguration1;
   private final LockConfiguration lockConfiguration2;

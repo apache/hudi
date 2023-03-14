@@ -46,8 +46,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Column;
@@ -56,6 +54,8 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -80,7 +80,7 @@ public class HoodieSnapshotExporter {
 
   }
 
-  private static final Logger LOG = LogManager.getLogger(HoodieSnapshotExporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSnapshotExporter.class);
 
   public static class OutputFormatValidator implements IValueValidator<String> {
 

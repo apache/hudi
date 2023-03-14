@@ -59,8 +59,8 @@ import org.apache.hudi.util.Transient;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -90,7 +90,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
  */
 public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadata.class);
 
   private final String metadataBasePath;
 

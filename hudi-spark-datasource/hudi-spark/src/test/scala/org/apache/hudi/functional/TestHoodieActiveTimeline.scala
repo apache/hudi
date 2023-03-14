@@ -23,13 +23,10 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
-
-import org.apache.log4j.LogManager
-
 import org.apache.spark.sql._
-
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
 
@@ -40,7 +37,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = null
 
-  private val log = LogManager.getLogger(classOf[TestHoodieActiveTimeline])
+  private val log = LoggerFactory.getLogger(classOf[TestHoodieActiveTimeline])
 
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",

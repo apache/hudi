@@ -27,8 +27,8 @@ import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.time.DateTimeException;
@@ -46,7 +46,7 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_E
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public class WriteStatus implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(WriteStatus.class);
+  private static final Logger LOG = LoggerFactory.getLogger(WriteStatus.class);
   private static final long serialVersionUID = 1L;
   private static final long RANDOM_SEED = 9038412832L;
 

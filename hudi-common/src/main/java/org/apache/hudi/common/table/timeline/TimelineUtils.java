@@ -28,8 +28,8 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -53,7 +53,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACT
  * 2) Incremental reads - InputFormats can use this API to query
  */
 public class TimelineUtils {
-  private static final Logger LOG = LogManager.getLogger(TimelineUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TimelineUtils.class);
 
   /**
    * Returns partitions that have new data strictly after commitTime.

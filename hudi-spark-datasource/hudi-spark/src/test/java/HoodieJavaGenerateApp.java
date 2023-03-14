@@ -31,13 +31,13 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrameWriter;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -92,7 +92,7 @@ public class HoodieJavaGenerateApp {
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
 
-  private static final Logger LOG = LogManager.getLogger(HoodieJavaGenerateApp.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaGenerateApp.class);
 
   public static void main(String[] args) throws Exception {
     HoodieJavaGenerateApp cli = new HoodieJavaGenerateApp();

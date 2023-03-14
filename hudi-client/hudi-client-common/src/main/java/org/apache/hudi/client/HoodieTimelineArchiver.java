@@ -69,8 +69,8 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -95,7 +95,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimest
  */
 public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieTimelineArchiver.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieTimelineArchiver.class);
 
   private final Path archiveFilePath;
   private final HoodieWriteConfig config;

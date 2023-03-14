@@ -44,8 +44,8 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -58,7 +58,7 @@ import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
  */
 public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteHandle.class);
 
   /**
    * Schema used to write records into data files

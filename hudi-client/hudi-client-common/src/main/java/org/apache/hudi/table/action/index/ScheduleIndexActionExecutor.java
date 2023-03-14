@@ -36,8 +36,8 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.EnumSet;
@@ -61,7 +61,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  */
 public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieIndexPlan>> {
 
-  private static final Logger LOG = LogManager.getLogger(ScheduleIndexActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ScheduleIndexActionExecutor.class);
   private static final Integer INDEX_PLAN_VERSION_1 = 1;
   private static final Integer LATEST_INDEX_PLAN_VERSION = INDEX_PLAN_VERSION_1;
 

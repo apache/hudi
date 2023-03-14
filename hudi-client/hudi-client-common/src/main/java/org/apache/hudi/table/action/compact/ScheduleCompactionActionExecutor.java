@@ -40,8 +40,8 @@ import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompaction
 import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionPlanGenerator;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -56,7 +56,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
 
-  private static final Logger LOG = LogManager.getLogger(ScheduleCompactionActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ScheduleCompactionActionExecutor.class);
   private WriteOperationType operationType;
   private final Option<Map<String, String>> extraMetadata;
   private BaseHoodieCompactionPlanGenerator planGenerator;

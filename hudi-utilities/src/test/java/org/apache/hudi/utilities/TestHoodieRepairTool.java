@@ -33,8 +33,6 @@ import org.apache.hudi.testutils.providers.SparkProvider;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -46,6 +44,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.provider.Arguments;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.security.SecureRandom;
@@ -67,7 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieRepairTool extends HoodieCommonTestHarness implements SparkProvider {
-  private static final Logger LOG = LogManager.getLogger(TestHoodieRepairTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieRepairTool.class);
   // Instant time -> List<Pair<relativePartitionPath, fileId>>
   private static final Map<String, List<Pair<String, String>>> BASE_FILE_INFO = new HashMap<>();
   private static final Map<String, List<Pair<String, String>>> LOG_FILE_INFO = new HashMap<>();

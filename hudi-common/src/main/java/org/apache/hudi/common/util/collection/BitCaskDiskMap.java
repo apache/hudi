@@ -26,8 +26,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -67,7 +67,7 @@ import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
 public final class BitCaskDiskMap<T extends Serializable, R extends Serializable> extends DiskMap<T, R> {
 
   public static final int BUFFER_SIZE = 128 * 1024;  // 128 KB
-  private static final Logger LOG = LogManager.getLogger(BitCaskDiskMap.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BitCaskDiskMap.class);
   // Caching byte compression/decompression to avoid creating instances for every operation
   private static final ThreadLocal<CompressionHandler> DISK_COMPRESSION_REF =
       ThreadLocal.withInitial(CompressionHandler::new);

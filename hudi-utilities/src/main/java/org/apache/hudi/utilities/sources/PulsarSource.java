@@ -28,8 +28,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.util.Lazy;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.PulsarClient;
@@ -44,6 +43,8 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.pulsar.JsonUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -59,7 +60,7 @@ import static org.apache.hudi.common.util.ThreadUtils.collectActiveThreads;
  */
 public class PulsarSource extends RowSource implements Closeable {
 
-  private static final Logger LOG = LogManager.getLogger(PulsarSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PulsarSource.class);
 
   private static final Duration GRACEFUL_SHUTDOWN_TIMEOUT = Duration.ofSeconds(20);
 

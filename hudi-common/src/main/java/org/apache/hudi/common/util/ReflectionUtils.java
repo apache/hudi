@@ -20,8 +20,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -43,7 +43,7 @@ import java.util.stream.Stream;
  */
 public class ReflectionUtils {
 
-  private static final Logger LOG = LogManager.getLogger(ReflectionUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ReflectionUtils.class);
 
   private static final Map<String, Class<?>> CLAZZ_CACHE = new HashMap<>();
 

@@ -25,12 +25,12 @@ import org.apache.hudi.utilities.config.SqlTransformerConfig;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Scanner;
@@ -56,7 +56,7 @@ import java.util.UUID;
  */
 public class SqlFileBasedTransformer implements Transformer {
 
-  private static final Logger LOG = LogManager.getLogger(SqlFileBasedTransformer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SqlFileBasedTransformer.class);
 
   private static final String SRC_PATTERN = "<SRC>";
   private static final String TMP_TABLE = "HOODIE_SRC_TMP_TABLE_";

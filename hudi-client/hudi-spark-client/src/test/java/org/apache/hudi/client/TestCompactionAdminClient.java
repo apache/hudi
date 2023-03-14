@@ -35,11 +35,11 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.compact.OperationResult;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -58,7 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestCompactionAdminClient extends HoodieClientTestBase {
 
-  private static final Logger LOG = LogManager.getLogger(TestCompactionAdminClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestCompactionAdminClient.class);
 
   private HoodieTableMetaClient metaClient;
   private CompactionAdminClient client;

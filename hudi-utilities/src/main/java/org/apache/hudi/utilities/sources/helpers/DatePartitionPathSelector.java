@@ -30,9 +30,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -69,7 +69,7 @@ import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelecto
  */
 public class DatePartitionPathSelector extends DFSPathSelector {
 
-  private static volatile Logger LOG = LogManager.getLogger(DatePartitionPathSelector.class);
+  private static volatile Logger LOG = LoggerFactory.getLogger(DatePartitionPathSelector.class);
 
   private final String dateFormat;
   private final int datePartitionDepth;

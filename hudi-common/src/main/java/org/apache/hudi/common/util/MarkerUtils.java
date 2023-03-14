@@ -35,8 +35,8 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -61,7 +61,7 @@ import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
 public class MarkerUtils {
   public static final String MARKERS_FILENAME_PREFIX = "MARKERS";
   public static final String MARKER_TYPE_FILENAME = MARKERS_FILENAME_PREFIX + ".type";
-  private static final Logger LOG = LogManager.getLogger(MarkerUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MarkerUtils.class);
 
   /**
    * Strips the folder prefix of the marker file path corresponding to a data file.

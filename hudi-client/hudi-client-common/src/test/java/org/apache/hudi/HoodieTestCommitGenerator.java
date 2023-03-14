@@ -33,8 +33,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -50,7 +50,7 @@ import static org.apache.hudi.common.table.log.HoodieLogFormat.DEFAULT_WRITE_TOK
 public class HoodieTestCommitGenerator {
   public static final String BASE_FILE_WRITE_TOKEN = "1-0-1";
   public static final String LOG_FILE_WRITE_TOKEN = DEFAULT_WRITE_TOKEN;
-  private static final Logger LOG = LogManager.getLogger(HoodieTestCommitGenerator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieTestCommitGenerator.class);
 
   public static void initCommitInfoForRepairTests(
       Map<String, List<Pair<String, String>>> baseFileInfo,

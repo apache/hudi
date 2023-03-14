@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
@@ -32,15 +30,18 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataHandler {
-  private static final Logger LOG = LogManager.getLogger(ParquetBootstrapMetadataHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ParquetBootstrapMetadataHandler.class);
   protected HoodieWriteConfig config;
   protected HoodieTable table;
   protected HoodieFileStatus srcFileStatus;

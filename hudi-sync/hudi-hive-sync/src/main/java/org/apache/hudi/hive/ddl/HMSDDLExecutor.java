@@ -43,10 +43,10 @@ import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -68,7 +68,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
  */
 public class HMSDDLExecutor implements DDLExecutor {
 
-  private static final Logger LOG = LogManager.getLogger(HMSDDLExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HMSDDLExecutor.class);
 
   private final HiveSyncConfig syncConfig;
   private final String databaseName;

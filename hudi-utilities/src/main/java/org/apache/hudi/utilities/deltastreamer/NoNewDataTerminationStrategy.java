@@ -23,16 +23,16 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Post writer termination strategy for deltastreamer in continuous mode. This strategy is based on no new data for consecutive number of times.
  */
 public class NoNewDataTerminationStrategy implements PostWriteTerminationStrategy {
 
-  private static final Logger LOG = LogManager.getLogger(NoNewDataTerminationStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(NoNewDataTerminationStrategy.class);
 
   public static final String MAX_ROUNDS_WITHOUT_NEW_DATA_TO_SHUTDOWN = "max.rounds.without.new.data.to.shutdown";
   public static final int DEFAULT_MAX_ROUNDS_WITHOUT_NEW_DATA_TO_SHUTDOWN = 3;

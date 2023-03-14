@@ -30,12 +30,13 @@ import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,7 +52,7 @@ import java.util.UUID;
  */
 public class BulkInsertDataInternalWriterHelper {
 
-  private static final Logger LOG = LogManager.getLogger(BulkInsertDataInternalWriterHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BulkInsertDataInternalWriterHelper.class);
 
   private final String instantTime;
   private final int taskPartitionId;

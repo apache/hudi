@@ -38,10 +38,10 @@ import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -62,7 +62,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  */
 public class RDDConsistentBucketPartitioner<T> extends RDDBucketIndexPartitioner<T> {
 
-  private static final Logger LOG = LogManager.getLogger(RDDConsistentBucketPartitioner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RDDConsistentBucketPartitioner.class);
 
   private final HoodieTable table;
   private final List<String> indexKeyFields;

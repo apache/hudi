@@ -33,9 +33,9 @@ import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSystemView {
 
-  private static final Logger LOG = LogManager.getLogger(TestRemoteHoodieTableFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestRemoteHoodieTableFileSystemView.class);
 
   private TimelineService server;
   private RemoteHoodieTableFileSystemView view;
