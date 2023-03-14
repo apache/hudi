@@ -662,18 +662,19 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     // Now delete partially written files
     context.setJobStatus(this.getClass().getSimpleName(), "Delete invalid files generated during the write operation: " + config.getTableName());
     context.map(invalidFilesByPartition.values().stream()
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList()), partitionFilePair -> {
-      final FileSystem fileSystem = metaClient.getFs();
-      LOG.info("Deleting invalid data file=" + partitionFilePair);
-      // Delete
-      try {
-        fileSystem.delete(new Path(partitionFilePair.getValue()), false);
-      } catch (IOException e) {
-        throw new HoodieIOException(e.getMessage(), e);
-      }
-      return true;
-    }, config.getFinalizeWriteParallelism());
+            .flatMap(Collection::stream)
+            .collect(Collectors.toList()),
+        partitionFilePair -> {
+          final FileSystem fileSystem = metaClient.getFs();
+          LOG.info("Deleting invalid data file=" + partitionFilePair);
+          // Delete
+          try {
+            fileSystem.delete(new Path(partitionFilePair.getValue()), false);
+          } catch (IOException e) {
+            throw new HoodieIOException(e.getMessage(), e);
+          }
+          return true;
+        }, config.getFinalizeWriteParallelism());
   }
 
   /**
