@@ -316,7 +316,10 @@ public class SparkBootstrapCommitActionExecutor<T>
     HoodieBootstrapSchemaProvider sourceSchemaProvider = new HoodieSparkBootstrapSchemaProvider(config);
     bootstrapSchema = sourceSchemaProvider.getBootstrapSchema(context, folders).toString();
     LOG.info("Bootstrap Schema :" + bootstrapSchema);
-
+    if (table.getConfig().getSchema() == null) {
+      // Set the schema for the table's config to avoid parsing schema failures during bulkInsert
+      table.getConfig().setSchema(bootstrapSchema);
+    }
     BootstrapModeSelector selector =
         (BootstrapModeSelector) ReflectionUtils.loadClass(config.getBootstrapModeSelectorClass(), config);
 
