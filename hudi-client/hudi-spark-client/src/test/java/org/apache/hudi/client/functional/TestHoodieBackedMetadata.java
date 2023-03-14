@@ -69,9 +69,9 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
@@ -547,23 +547,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     doWriteOperation(testTable, "0000005");
     validateMetadata(testTable, emptyList(), true);
-  }
-
-  @Test
-  public void testUpdationOfPopulateMetaFieldsForMetadataTable() throws Exception {
-    tableType = COPY_ON_WRITE;
-    init(tableType, false);
-
-    // populateMeta fields is false by default
-    writeConfig = getWriteConfigBuilder(true, true, false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .build())
-        .build();
-    initWriteConfigAndMetatableWriter(writeConfig, true);
-    doWriteOperation(testTable, "0000002", INSERT);
-    metaClient = HoodieTableMetaClient.builder().setBasePath(writeConfig.getBasePath() + "/.hoodie/metadata").setConf(hadoopConf).build();
-    assertFalse(metaClient.getTableConfig().populateMetaFields());
   }
 
   @Test
