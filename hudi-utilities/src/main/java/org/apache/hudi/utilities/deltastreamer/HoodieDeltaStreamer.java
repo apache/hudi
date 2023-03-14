@@ -268,8 +268,9 @@ public class HoodieDeltaStreamer implements Serializable {
         + "Default: No limit, e.g: DFS-Source => max bytes to read, Kafka-Source => max events to read")
     public long sourceLimit = Long.MAX_VALUE;
 
-    @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
-        + "is purely new data/inserts to gain speed)", converter = OperationConverter.class)
+    @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT, "
+        + "BULK_INSERT, INSERT_OVERWRITE, INSERT_OVERWRITE_TABLE, DELETE_PARTITION",
+        converter = OperationConverter.class)
     public WriteOperationType operation = WriteOperationType.UPSERT;
 
     @Parameter(names = {"--filter-dupes"},
