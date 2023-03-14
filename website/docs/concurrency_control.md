@@ -69,7 +69,7 @@ hoodie.write.lock.zookeeper.base_path
 **`HiveMetastore`** based lock provider
 
 ```
-hoodie.write.lock.provider=org.apache.hudi.hive.HiveMetastoreBasedLockProvider
+hoodie.write.lock.provider=org.apache.hudi.hive.transaction.lock.HiveMetastoreBasedLockProvider
 hoodie.write.lock.hivemetastore.database
 hoodie.write.lock.hivemetastore.table
 ```
