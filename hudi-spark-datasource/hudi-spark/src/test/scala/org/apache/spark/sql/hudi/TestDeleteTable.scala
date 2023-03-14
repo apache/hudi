@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils.isSpark2
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.spark.sql.SaveMode
 
 class TestDeleteTable extends HoodieSparkSqlTestBase {
@@ -240,7 +239,6 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt")
           .option(URL_ENCODE_PARTITIONING.key(), urlencode)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)

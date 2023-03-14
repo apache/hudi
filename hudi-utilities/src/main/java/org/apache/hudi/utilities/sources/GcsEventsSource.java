@@ -18,16 +18,17 @@
 
 package org.apache.hudi.utilities.sources;
 
-import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
 import org.apache.hudi.utilities.sources.helpers.gcs.MessageBatch;
 import org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity;
 import org.apache.hudi.utilities.sources.helpers.gcs.MetadataMessage;
+import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
+
+import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -35,6 +36,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -75,7 +77,6 @@ absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
 --allow-commit-on-no-checkpoint-change \
 --hoodie-conf hoodie.datasource.write.insert.drop.duplicates=true \
 --hoodie-conf hoodie.combine.before.insert=true \
---hoodie-conf hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.ComplexKeyGenerator \
 --hoodie-conf hoodie.datasource.write.partitionpath.field=bucket \
 --hoodie-conf hoodie.deltastreamer.source.gcs.project.id=infra-dev-358110 \
 --hoodie-conf hoodie.deltastreamer.source.gcs.subscription.id=gcs-obj-8-sub-1 \

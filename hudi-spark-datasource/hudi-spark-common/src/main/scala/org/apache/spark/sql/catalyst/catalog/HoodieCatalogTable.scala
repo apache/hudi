@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.catalyst.catalog
 
+import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
@@ -25,8 +26,9 @@ import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
+import org.apache.hudi.keygen.KeyGenUtils.inferKeyGeneratorType
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassNameFromType
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -300,7 +302,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       val primaryKeys = table.properties.getOrElse(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName, table.storage.properties.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName)).toString
       val partitions = table.partitionColumnNames.mkString(",")
       extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
-        DataSourceOptionsHelper.inferKeyGenClazz(primaryKeys, partitions)
+        getKeyGeneratorClassNameFromType(inferKeyGeneratorType(primaryKeys, partitions))
     }
     extraConfig.toMap
   }

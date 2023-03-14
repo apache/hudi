@@ -18,14 +18,12 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
-import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils}
+import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -104,7 +102,6 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt")
           .option(URL_ENCODE_PARTITIONING.key(), urlencode)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -154,7 +151,6 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt")
           .option(URL_ENCODE_PARTITIONING.key(), urlencode)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -252,7 +248,6 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "year,month,day")
           .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -302,7 +297,6 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "year,month,day")
           .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)

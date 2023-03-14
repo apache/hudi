@@ -30,6 +30,7 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import org.slf4j.Logger;
@@ -39,6 +40,9 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+
+import static org.apache.hudi.config.HoodieWriteConfig.KEYGENERATOR_TYPE;
+import static org.apache.hudi.keygen.KeyGenUtils.inferKeyGeneratorType;
 
 /**
  * Factory help to create {@link org.apache.hudi.keygen.KeyGenerator}.
@@ -75,40 +79,60 @@ public class HoodieSparkKeyGeneratorFactory {
     }
   }
 
+  /**
+   * @param type {@link KeyGeneratorType} enum.
+   * @return The key generator class name for Spark based on the {@link KeyGeneratorType}.
+   */
+  public static String getKeyGeneratorClassNameFromType(KeyGeneratorType type) {
+    switch (type) {
+      case SIMPLE:
+        return SimpleKeyGenerator.class.getName();
+      case COMPLEX:
+        return ComplexKeyGenerator.class.getName();
+      case TIMESTAMP:
+        return TimestampBasedKeyGenerator.class.getName();
+      case CUSTOM:
+        return CustomKeyGenerator.class.getName();
+      case NON_PARTITION:
+        return NonpartitionedKeyGenerator.class.getName();
+      case GLOBAL_DELETE:
+        return GlobalDeleteKeyGenerator.class.getName();
+      default:
+        throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + type);
+    }
+  }
+
+  /**
+   * Infers the key generator type based on the record key and partition fields.
+   * If neither of the record key and partition fields are set, the default type is returned.
+   *
+   * @param props Properties from the write config.
+   * @return Inferred key generator type.
+   */
+  public static KeyGeneratorType inferKeyGeneratorTypeFromWriteConfig(TypedProperties props) {
+    String partitionFields = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), null);
+    String recordsKeyFields = props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null);
+    return inferKeyGeneratorType(recordsKeyFields, partitionFields);
+  }
+
   public static String getKeyGeneratorClassName(TypedProperties props) {
     String keyGeneratorClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), null);
 
     if (StringUtils.isNullOrEmpty(keyGeneratorClass)) {
-      String keyGeneratorType = props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), KeyGeneratorType.SIMPLE.name());
-      LOG.info("The value of {} is empty, use SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE.key());
+      String keyGeneratorType = props.getString(KEYGENERATOR_TYPE.key(), null);
       KeyGeneratorType keyGeneratorTypeEnum;
-      try {
-        keyGeneratorTypeEnum = KeyGeneratorType.valueOf(keyGeneratorType.toUpperCase(Locale.ROOT));
-      } catch (IllegalArgumentException e) {
-        throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + keyGeneratorType);
-      }
-      switch (keyGeneratorTypeEnum) {
-        case SIMPLE:
-          keyGeneratorClass = SimpleKeyGenerator.class.getName();
-          break;
-        case COMPLEX:
-          keyGeneratorClass = ComplexKeyGenerator.class.getName();
-          break;
-        case TIMESTAMP:
-          keyGeneratorClass = TimestampBasedKeyGenerator.class.getName();
-          break;
-        case CUSTOM:
-          keyGeneratorClass = CustomKeyGenerator.class.getName();
-          break;
-        case NON_PARTITION:
-          keyGeneratorClass = NonpartitionedKeyGenerator.class.getName();
-          break;
-        case GLOBAL_DELETE:
-          keyGeneratorClass = GlobalDeleteKeyGenerator.class.getName();
-          break;
-        default:
+      if (StringUtils.isNullOrEmpty(keyGeneratorType)) {
+        keyGeneratorTypeEnum = inferKeyGeneratorTypeFromWriteConfig(props);
+        LOG.info("The value of {} is empty; inferred to be {}",
+            KEYGENERATOR_TYPE.key(), keyGeneratorTypeEnum);
+      } else {
+        try {
+          keyGeneratorTypeEnum = KeyGeneratorType.valueOf(keyGeneratorType.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
           throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + keyGeneratorType);
+        }
       }
+      keyGeneratorClass = getKeyGeneratorClassNameFromType(keyGeneratorTypeEnum);
     }
     return keyGeneratorClass;
   }

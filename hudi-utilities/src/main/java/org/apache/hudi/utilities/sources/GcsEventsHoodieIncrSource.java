@@ -27,6 +27,7 @@ import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpo
 import org.apache.hudi.utilities.sources.helpers.gcs.FileDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.gcs.FilePathsFetcher;
 import org.apache.hudi.utilities.sources.helpers.gcs.QueryInfo;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -80,7 +81,6 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
   --hoodie-conf hoodie.deltastreamer.source.cloud.data.ignore.relpath.substring="blah" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=id \
   --hoodie-conf hoodie.datasource.write.partitionpath.field= \
-  --hoodie-conf hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.ComplexKeyGenerator \
   --filter-dupes \
   --hoodie-conf hoodie.datasource.write.insert.drop.duplicates=true \
   --hoodie-conf hoodie.combine.before.insert=true \
