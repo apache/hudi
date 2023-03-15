@@ -69,7 +69,7 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
       .key(CALLBACK_PREFIX + "http.timeout.seconds")
       .defaultValue(30)
       .sinceVersion("0.6.0")
-      .withDocumentation("Callback timeout in seconds. 3 by default");
+      .withDocumentation("Callback timeout in seconds.");
 
   /**
    * @deprecated Use {@link #TURN_CALLBACK_ON} and its methods instead
