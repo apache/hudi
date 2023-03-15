@@ -216,9 +216,10 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private void rolloverIfNeeded() throws IOException {
     // Roll over if the size is past the threshold
-    if (getCurrentSize() > sizeThreshold) {
-      LOG.info("CurrentSize " + getCurrentSize() + " has reached threshold " + sizeThreshold
-          + ". Rolling over to the next version");
+    long currentSize = fs.getFileStatus(logFile.getPath()).getLen();
+    if (currentSize > sizeThreshold) {
+      LOG.info("CurrentSize " + currentSize + " has reached threshold " + sizeThreshold
+              + ". Rolling over to the next version");
       rollOver();
     }
   }
