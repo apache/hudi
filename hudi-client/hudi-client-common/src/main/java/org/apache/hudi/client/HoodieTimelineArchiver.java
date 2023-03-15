@@ -183,8 +183,10 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         mergeArchiveFilesIfNecessary(context);
       }
       return success;
-    } finally {
+    }catch (IOException e){
       close();
+      throw e;
+    }finally {
       if (acquireLock) {
         txnManager.endTransaction(Option.empty());
       }
