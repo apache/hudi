@@ -25,15 +25,12 @@ import org.apache.hudi.hive.util.HivePartitionUtil;
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.metadata.Hive;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -58,13 +55,9 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private SessionState sessionState;
   private Driver hiveDriver;
 
-  public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) throws HiveException, MetaException {
+  public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) {
     super(config);
-    if (metaStoreClient == null) {
-      this.metaStoreClient = IMetaStoreClientUtil.getMSC(config.getHiveConf());
-    } else {
-      this.metaStoreClient = metaStoreClient;
-    }
+    this.metaStoreClient = metaStoreClient;
     try {
       this.sessionState = new SessionState(config.getHiveConf(),
           UserGroupInformation.getCurrentUser().getShortUserName());

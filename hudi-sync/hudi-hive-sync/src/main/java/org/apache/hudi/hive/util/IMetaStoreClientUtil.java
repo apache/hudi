@@ -26,7 +26,14 @@ import org.apache.hadoop.hive.ql.metadata.HiveException;
 
 import java.lang.reflect.InvocationTargetException;
 
+/**
+ * Utilities for fetching Hive metastore client.
+ */
 public class IMetaStoreClientUtil {
+
+  /**
+   * Returns the Hive metastore client with given Hive conf.
+   */
   public static IMetaStoreClient getMSC(HiveConf hiveConf) throws HiveException, MetaException {
     IMetaStoreClient metaStoreClient;
     try {

@@ -26,7 +26,6 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
-import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
@@ -79,11 +78,7 @@ public class HMSDDLExecutor implements DDLExecutor {
   public HMSDDLExecutor(HiveSyncConfig syncConfig, IMetaStoreClient metaStoreClient) throws HiveException, MetaException {
     this.syncConfig = syncConfig;
     this.databaseName = syncConfig.getStringOrDefault(META_SYNC_DATABASE_NAME);
-    if (metaStoreClient == null) {
-      this.client = IMetaStoreClientUtil.getMSC(syncConfig.getHiveConf());
-    } else {
-      this.client = metaStoreClient;
-    }
+    this.client = metaStoreClient;
     try {
       this.partitionValueExtractor =
           (PartitionValueExtractor) Class.forName(syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
