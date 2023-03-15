@@ -96,7 +96,15 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .key("hoodie.bootstrap.parallelism")
       .defaultValue("1500")
       .sinceVersion("0.6.0")
-      .withDocumentation("Parallelism value to be used to bootstrap data into hudi");
+      .withDocumentation("For metadata-only bootstrap, Hudi parallelizes the operation so that "
+          + "each table partition is handled by one Spark task. This config limits the number "
+          + "of parallelism. We pick the configured parallelism if the number of table partitions "
+          + "is larger than this configured value. The parallelism is assigned to the number of "
+          + "table partitions if it is smaller than the configured value. For full-record "
+          + "bootstrap, i.e., BULK_INSERT operation of the records, this configured value is "
+          + "passed as the BULK_INSERT shuffle parallelism (`hoodie.bulkinsert.shuffle.parallelism`), "
+          + "determining the BULK_INSERT write behavior. If you see that the bootstrap is slow "
+          + "due to the limited parallelism, you can increase this.");
 
   public static final ConfigProperty<String> PARTITION_SELECTOR_REGEX_PATTERN = ConfigProperty
       .key("hoodie.bootstrap.mode.selector.regex")
