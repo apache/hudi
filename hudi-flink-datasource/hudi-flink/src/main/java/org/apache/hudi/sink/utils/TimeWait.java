@@ -54,10 +54,11 @@ public class TimeWait {
   public void waitFor() {
     try {
       if (waitingTime > timeout) {
-        throw new HoodieException("Timeout(" + waitingTime + "ms) while waiting for " + action);
+        LOG.warn("Timeout(" + waitingTime + "ms) while waiting for " + action);
+      } else {
+        TimeUnit.MILLISECONDS.sleep(interval);
+        waitingTime += interval;
       }
-      TimeUnit.MILLISECONDS.sleep(interval);
-      waitingTime += interval;
     } catch (InterruptedException e) {
       throw new HoodieException("Error while waiting for " + action, e);
     }
@@ -67,7 +68,7 @@ public class TimeWait {
    * Builder.
    */
   public static class Builder {
-    private long timeout = 5 * 60 * 1000L; // default 5 minutes
+    private long timeout = 10 * 60 * 1000L; // default 10 minutes
     private long interval = 1000;
     private String action;
 

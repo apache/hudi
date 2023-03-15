@@ -110,7 +110,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     final String instant = instantToWrite(true);
     if (instant == null) {
       // in case there are empty checkpoints that has no input data
-      throw new HoodieException("No inflight instant when flushing data!");
+      throw new HoodieException("No inflight instant when init WriterHelper!");
     }
     this.writerHelper = new BulkInsertWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
         instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
@@ -127,6 +127,13 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       this.currentInstant = instantToWrite(false);
       LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, this.currentInstant);
     }
+
+    if (this.currentInstant == null) {
+      // in case there are empty checkpoints that has no input data
+      LOG.info("No inflight instant when flushing data, skip.");
+      return;
+    }
+
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .instantTime(this.currentInstant)

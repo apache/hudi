@@ -30,7 +30,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -457,8 +456,10 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.currentInstant = instantToWrite(hasData());
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
-      throw new HoodieException("No inflight instant when flushing data!");
+      LOG.info("No inflight instant when flushing data!");
+      return;
     }
+
     final List<WriteStatus> writeStatus;
     if (buckets.size() > 0) {
       writeStatus = new ArrayList<>();

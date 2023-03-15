@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -166,6 +167,10 @@ public class BulkInsertWriteFunction<I>
 
   private void initWriterHelper() {
     String instant = instantToWrite();
+    if (instant == null) {
+      // in case there are empty checkpoints that has no input data
+      throw new HoodieException("No inflight instant when init WriterHelper!");
+    }
     this.writerHelper = WriterHelpers.getWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
         instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
         this.rowType);
@@ -195,7 +200,7 @@ public class BulkInsertWriteFunction<I>
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
     TimeWait timeWait = TimeWait.builder()
         .timeout(config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))
-        .action("instant initialize")
+        .action("BulkInsertWrite instant initialize")
         .build();
     while (instant == null || instant.equals(this.initInstant)) {
       // wait condition:
