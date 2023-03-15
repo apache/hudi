@@ -92,6 +92,7 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthority;
 
 /**
@@ -533,7 +534,20 @@ public class HoodieMetadataTableValidator implements Serializable {
       Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
       if (instantOption.isPresent()) {
         String instantTime = instantOption.get();
-        return completedTimeline.containsOrBeforeTimelineStarts(instantTime);
+        // There are two cases where the created commit time is written to the partition metadata:
+        // (1) Commit C1 creates the partition and C1 succeeds, the partition metadata has C1 as
+        // the created commit time.
+        // (2) Commit C1 creates the partition, the partition metadata is written, and C1 fails
+        // during writing data files.  Next time, C2 adds new data to the same partition after C1
+        // is rolled back. In this case, the partition metadata still has C1 as the created commit
+        // time, since Hudi does not rewrite the partition metadata in C2.
+        if (!completedTimeline.containsOrBeforeTimelineStarts(instantTime)) {
+          Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
+          return lastInstant.isPresent()
+              && HoodieTimeline.compareTimestamps(
+              instantTime, LESSER_THAN_OR_EQUALS, lastInstant.get().getTimestamp());
+        }
+        return true;
       } else {
         return false;
       }

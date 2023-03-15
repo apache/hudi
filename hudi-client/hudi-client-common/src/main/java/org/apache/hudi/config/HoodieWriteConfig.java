@@ -68,6 +68,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
@@ -3062,7 +3063,9 @@ public class HoodieWriteConfig extends HoodieConfig {
           if (writeConfig.isEmbeddedTimelineServerEnabled()) {
             return MarkerType.TIMELINE_SERVER_BASED.toString();
           } else {
-            LOG.warn("Embedded timeline server is disabled, fallback to use direct marker type for spark");
+            if (!HoodieTableMetadata.isMetadataTable(writeConfig.getBasePath())) {
+              LOG.warn("Embedded timeline server is disabled, fallback to use direct marker type for spark");
+            }
             return MarkerType.DIRECT.toString();
           }
         case FLINK:

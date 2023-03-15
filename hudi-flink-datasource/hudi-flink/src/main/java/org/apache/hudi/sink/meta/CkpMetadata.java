@@ -228,6 +228,10 @@ public class CkpMetadata implements Serializable {
   }
 
   private List<CkpMessage> scanCkpMetadata(Path ckpMetaPath) throws IOException {
+    // This is required when the storage is minio
+    if (!this.fs.exists(ckpMetaPath)) {
+      return new ArrayList<>();
+    }
     return Arrays.stream(this.fs.listStatus(ckpMetaPath)).map(CkpMessage::new)
         .collect(Collectors.groupingBy(CkpMessage::getInstant)).values().stream()
         .map(messages -> messages.stream().reduce((x, y) -> {
