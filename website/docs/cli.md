@@ -5,8 +5,44 @@ last_modified_at: 2021-08-18T15:59:57-04:00
 ---
 
 ### Local set up
-Once hudi has been built, the shell can be fired by via  `cd hudi-cli && ./hudi-cli.sh`. A hudi table resides on DFS, in a location referred to as the `basePath` and
+Once hudi has been built, the shell can be fired by via  `cd hudi-cli && ./hudi-cli.sh`.
+
+### Hudi CLI Bundle setup
+In release `0.13.0` we have now added another way of launching the `hudi cli`, which is using the `hudi-cli-bundle`. (Note this is only supported for Spark3,
+for Spark2 please see the above Local setup section)
+
+There are a couple of requirements when using this approach such as having `spark` installed locally on your machine. 
+It is required to use a spark distribution with hadoop dependencies packaged such as `spark-3.3.1-bin-hadoop2.tgz` from https://archive.apache.org/dist/spark/.
+We also recommend you set an env variable `$SPARK_HOME` to the path of where spark is installed on your machine. 
+One important thing to note is that the `hudi-spark-bundle` should also be present when using the `hudi-cli-bundle`.  
+To provide the locations of these bundle jars you can set them in your shell like so:
+`export CLI_BUNDLE_JAR=<path-to-cli-bundle-jar-to-use>` , `export SPARK_BUNDLE_JAR=<path-to-spark-bundle-jar-to-use>`.
+
+For steps see below if you are not compiling the project and downloading the jars: 
+
+1. Create an empty folder as a new directory
+2. Copy the hudi-cli-bundle jars and hudi-spark*-bundle jars to this directory
+3. Copy the following script and folder to this directory
+```
+packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh
+packaging/hudi-cli-bundle/conf .  the `conf` folder should be in this directory.
+```
+
+4. Start Hudi CLI shell with environment variables set
+```
+export SPARK_HOME=<spark-home-folder>
+export CLI_BUNDLE_JAR=<cli-bundle-jar-to-use>
+export SPARK_BUNDLE_JAR=<spark-bundle-jar-to-use>
+
+./hudi-cli-with-bundle.sh
+
+```
+
+### Base path
+A hudi table resides on DFS, in a location referred to as the `basePath` and
 we would need this location in order to connect to a Hudi table. Hudi library effectively manages this table internally, using `.hoodie` subfolder to track all metadata.
+
+
 
 
 ### Using Hudi-cli in S3
