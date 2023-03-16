@@ -39,7 +39,6 @@ import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.hadoop.conf.Configuration;
@@ -66,6 +65,7 @@ import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIEL
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 
 /**
  * Performs bootstrap from a non-hudi source.
@@ -163,7 +163,7 @@ public class BootstrapExecutor implements Serializable {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       checkpointCommitMetadata.put(HoodieDeltaStreamer.CHECKPOINT_KEY, cfg.checkpoint);
       if (cfg.checkpoint != null) {
-        checkpointCommitMetadata.put(HoodieDeltaStreamerConfig.CHECKPOINT_RESET_KEY.key(), cfg.checkpoint);
+        checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
       }
       bootstrapClient.bootstrap(Option.of(checkpointCommitMetadata));
       syncHive();

@@ -32,7 +32,7 @@ import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig;
+import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.JsonDFSSource;
 
@@ -53,9 +53,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL;
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL;
 
 /**
  * Wrapper over HoodieDeltaStreamer.java class.
@@ -164,33 +161,34 @@ public class HoodieMultiTableDeltaStreamer {
   }
 
   private void populateTargetRegistryProp(TypedProperties typedProperties) {
-    String schemaRegistryTargetUrl = typedProperties.getString(TARGET_SCHEMA_REGISTRY_URL.key(), null);
+    String schemaRegistryTargetUrl = typedProperties.getString(HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL.key(), null);
     if (StringUtils.isNullOrEmpty(schemaRegistryTargetUrl)) {
-      String schemaRegistryBaseUrl = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL.key());
-      String schemaRegistrySuffix = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_URL_SUFFIX.key(), null);
+      String schemaRegistryBaseUrl = typedProperties.getString(HoodieSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL.key());
+      String schemaRegistrySuffix = typedProperties.getString(HoodieSchemaProviderConfig.SCHEMA_REGISTRY_URL_SUFFIX.key(), null);
       String targetSchemaRegistrySuffix;
       if (StringUtils.isNullOrEmpty(schemaRegistrySuffix)) {
-        targetSchemaRegistrySuffix = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_TARGET_URL_SUFFIX.key());
+        targetSchemaRegistrySuffix = typedProperties.getString(HoodieSchemaProviderConfig.SCHEMA_REGISTRY_TARGET_URL_SUFFIX.key());
       } else {
         targetSchemaRegistrySuffix = schemaRegistrySuffix;
       }
-      typedProperties.setProperty(TARGET_SCHEMA_REGISTRY_URL.key(),
+      typedProperties.setProperty(HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL.key(),
           schemaRegistryBaseUrl + typedProperties.getString(HoodieDeltaStreamerConfig.KAFKA_TOPIC.key()) + targetSchemaRegistrySuffix);
     }
   }
 
   private void populateSourceRegistryProp(TypedProperties typedProperties) {
-    String schemaRegistrySourceUrl = typedProperties.getString(SRC_SCHEMA_REGISTRY_URL.key(), null);
+    String schemaRegistrySourceUrl = typedProperties.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key(), null);
     if (StringUtils.isNullOrEmpty(schemaRegistrySourceUrl)) {
-      String schemaRegistryBaseUrl = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL.key());
-      String schemaRegistrySuffix = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_URL_SUFFIX.key(), null);
+      String schemaRegistryBaseUrl = typedProperties.getString(HoodieSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL.key());
+      String schemaRegistrySuffix = typedProperties.getString(HoodieSchemaProviderConfig.SCHEMA_REGISTRY_URL_SUFFIX.key(), null);
       String sourceSchemaRegistrySuffix;
       if (StringUtils.isNullOrEmpty(schemaRegistrySuffix)) {
-        sourceSchemaRegistrySuffix = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_SOURCE_URL_SUFFIX.key());
+        sourceSchemaRegistrySuffix = typedProperties.getString(HoodieSchemaProviderConfig.SCHEMA_REGISTRY_SOURCE_URL_SUFFIX.key());
       } else {
         sourceSchemaRegistrySuffix = schemaRegistrySuffix;
       }
-      typedProperties.setProperty(SRC_SCHEMA_REGISTRY_URL.key(), schemaRegistryBaseUrl + typedProperties.getString(HoodieDeltaStreamerConfig.KAFKA_TOPIC.key()) + sourceSchemaRegistrySuffix);
+      typedProperties.setProperty(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key(),
+          schemaRegistryBaseUrl + typedProperties.getString(HoodieDeltaStreamerConfig.KAFKA_TOPIC.key()) + sourceSchemaRegistrySuffix);
     }
   }
 

@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.schema.postprocessor;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig;
+import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 
@@ -55,11 +55,11 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
   @Override
   public Schema processSchema(Schema schema) {
 
-    String columnToDeleteStr = this.config.getString(HoodieDeltaStreamerSchemaProviderConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key());
+    String columnToDeleteStr = this.config.getString(HoodieSchemaProviderConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key());
 
     if (StringUtils.isNullOrEmpty(columnToDeleteStr)) {
       LOG.warn(String.format("Param %s is null or empty, return original schema",
-          HoodieDeltaStreamerSchemaProviderConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key()));
+          HoodieSchemaProviderConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key()));
     }
 
     // convert field to lowerCase for compare purpose

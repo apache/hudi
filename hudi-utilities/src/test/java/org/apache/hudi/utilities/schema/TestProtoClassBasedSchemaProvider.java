@@ -20,7 +20,7 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig;
+import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
 import org.apache.hudi.utilities.test.proto.Parent;
 import org.apache.hudi.utilities.test.proto.Sample;
 import org.apache.hudi.utilities.test.proto.WithOneOf;
@@ -36,7 +36,7 @@ public class TestProtoClassBasedSchemaProvider {
   @Test
   public void validateDefaultSchemaGeneration() throws IOException {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
+    properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
     Schema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
     Schema.Parser parser = new Schema.Parser();
@@ -47,9 +47,9 @@ public class TestProtoClassBasedSchemaProvider {
   @Test
   public void validateWrappedPrimitiveAndTimestampsAsRecordSchemaGeneration() throws IOException {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
-    properties.setProperty(HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
-    properties.setProperty(HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS.key(), "true");
+    properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
+    properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
+    properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS.key(), "true");
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
     Schema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
     Schema.Parser parser = new Schema.Parser();
@@ -60,8 +60,8 @@ public class TestProtoClassBasedSchemaProvider {
   @Test
   public void validateRecursiveSchemaGeneration_depth2() throws IOException {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Parent.class.getName());
-    properties.setProperty(HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH.key(), String.valueOf(2));
+    properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Parent.class.getName());
+    properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH.key(), String.valueOf(2));
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
     Schema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
     Schema.Parser parser = new Schema.Parser();
@@ -72,7 +72,7 @@ public class TestProtoClassBasedSchemaProvider {
   @Test
   public void validateRecursiveSchemaGeneration_defaultDepth() throws IOException {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Parent.class.getName());
+    properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Parent.class.getName());
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
     Schema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
     Schema.Parser parser = new Schema.Parser();
@@ -83,7 +83,7 @@ public class TestProtoClassBasedSchemaProvider {
   @Test
   public void validateOneOfSchemaGeneration() throws IOException {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), WithOneOf.class.getName());
+    properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), WithOneOf.class.getName());
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
     Schema protoSchema = protoToAvroSchemaProvider.getSourceSchema();
     Schema.Parser parser = new Schema.Parser();

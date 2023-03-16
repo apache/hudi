@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig;
+import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
@@ -126,9 +126,9 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertEquals("_row_key", executionContext.getProperties().getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()));
     assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), executionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key()));
     assertEquals("uber_hive_dummy_table", executionContext.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.HIVE_SYNC_TABLE_PROP));
-    assertEquals("http://localhost:8081/subjects/random-value/versions/latest", executionContext.getProperties().getString(HoodieDeltaStreamerSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
+    assertEquals("http://localhost:8081/subjects/random-value/versions/latest", executionContext.getProperties().getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
     assertEquals("http://localhost:8081/subjects/topic2-value/versions/latest",
-        streamer.getTableExecutionContexts().get(0).getProperties().getString(HoodieDeltaStreamerSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
+        streamer.getTableExecutionContexts().get(0).getProperties().getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
   }
 
   @Test
