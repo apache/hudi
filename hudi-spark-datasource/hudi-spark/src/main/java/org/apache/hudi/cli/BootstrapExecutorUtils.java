@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -43,6 +44,8 @@ import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 import org.apache.hudi.util.SparkKeyGenUtils;
 
 import org.apache.hadoop.conf.Configuration;
@@ -54,9 +57,14 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
@@ -182,16 +190,28 @@ public class BootstrapExecutorUtils implements Serializable {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       checkpointCommitMetadata.put(CHECKPOINT_KEY, Config.checkpoint);
       bootstrapClient.bootstrap(Option.of(checkpointCommitMetadata));
-      syncHive();
+      metaSync();
     }
   }
 
   /**
-   * Sync to Hive.
+   * Sync meta.
    */
-  private void syncHive() {
+  public void metaSync() {
+    Set<String> syncClientToolClasses = new HashSet<>(
+            Arrays.asList(props.getString("hoodie.meta.sync.client.tool.class").split(",")));
+
+    boolean metaSyncEnabled = props.getBoolean(
+            HoodieSyncConfig.META_SYNC_ENABLED.key(),
+            Boolean.valueOf(HoodieSyncConfig.META_SYNC_ENABLED.defaultValue()));
+    TypedProperties metaProps = new TypedProperties();
     if (cfg.enableHiveSync) {
-      TypedProperties metaProps = new TypedProperties();
+      metaSyncEnabled = true;
+      syncClientToolClasses.add(HiveSyncTool.class.getName());
+    }
+
+    if (metaSyncEnabled) {
+      FileSystem fs = FSUtils.getFs(cfg.basePath, jssc.hadoopConfiguration());
       metaProps.putAll(props);
       metaProps.put(META_SYNC_DATABASE_NAME.key(), cfg.database);
       metaProps.put(META_SYNC_BASE_PATH.key(), cfg.basePath);
@@ -201,8 +221,18 @@ public class BootstrapExecutorUtils implements Serializable {
             props.getInteger(BUCKET_INDEX_NUM_BUCKETS.key())));
       }
 
-      try (HiveSyncTool hiveSyncTool = new HiveSyncTool(metaProps, configuration)) {
-        hiveSyncTool.syncHoodieTable();
+      //Collect exceptions in list because we want all sync to run. Then we can throw
+      List<HoodieException> metaSyncExceptions = new ArrayList<>();
+      for (String impl : syncClientToolClasses) {
+        try {
+          SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, configuration, fs, cfg.basePath, cfg.baseFileFormat);
+        } catch (HoodieException e) {
+          LOG.info("SyncTool class " + impl.trim() + " failed with exception", e);
+          metaSyncExceptions.add(e);
+        }
+      }
+      if (!metaSyncExceptions.isEmpty()) {
+        throw SyncUtilHelpers.getExceptionFromList(metaSyncExceptions);
       }
     }
   }
