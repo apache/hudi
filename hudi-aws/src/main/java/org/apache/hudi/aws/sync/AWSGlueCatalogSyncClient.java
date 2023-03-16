@@ -18,9 +18,12 @@
 
 package org.apache.hudi.aws.sync;
 
+import com.amazonaws.ClientConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.GlueSyncConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.Partition;
@@ -92,7 +95,13 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
     super(config);
-    this.awsGlue = AWSGlueClientBuilder.standard().build();
+    String regionValue = config.getString(GlueSyncConfig.GLUE_AWS_REGION);
+    ClientConfiguration configuration = new ClientConfiguration().withMaxConnections(config.getIntOrDefault(GlueSyncConfig.GLUE_MAX_CONNECTIONS));
+    AWSGlueClientBuilder builder = AWSGlueClientBuilder.standard().withClientConfiguration(configuration);
+    if (!StringUtils.isNullOrEmpty(regionValue)) {
+      builder.withRegion(regionValue);
+    }
+    this.awsGlue = builder.build();
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
   }
 

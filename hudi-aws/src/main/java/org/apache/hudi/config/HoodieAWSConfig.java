@@ -63,6 +63,11 @@ public class HoodieAWSConfig extends HoodieConfig {
         .sinceVersion("0.10.0")
         .withDocumentation("AWS session token");
 
+  public static final ConfigProperty<String> AWS_REGION = ConfigProperty
+          .key("hoodie.aws.region")
+          .noDefaultValue()
+          .withDocumentation("AWS region");
+
   private HoodieAWSConfig() {
     super();
   }
