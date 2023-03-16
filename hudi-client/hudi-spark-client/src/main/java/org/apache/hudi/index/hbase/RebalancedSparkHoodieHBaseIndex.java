@@ -30,10 +30,7 @@ public class RebalancedSparkHoodieHBaseIndex extends SparkHoodieHBaseIndex  {
   }
 
   @Override
-  /*
-   * @VisibleForTesting
-   */
-  public String getHBaseKey(String originalKey) {
+  protected String getHBaseKey(String originalKey) {
     int bucket = Math.abs(originalKey.hashCode()) % config.getHBaseIndexRegionCount();
     String bucketStr = String.format("%0" + String.valueOf(config.getHBaseIndexRegionCount() - 1).length() + "d", bucket);
     return bucketStr + originalKey;
