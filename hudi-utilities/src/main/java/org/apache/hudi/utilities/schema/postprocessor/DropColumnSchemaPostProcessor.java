@@ -52,6 +52,13 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
     super(props, jssc);
   }
 
+  @Deprecated
+  public static class Config {
+    @Deprecated
+    public static final String DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP =
+        HoodieSchemaProviderConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key();
+  }
+
   @Override
   public Schema processSchema(Schema schema) {
 

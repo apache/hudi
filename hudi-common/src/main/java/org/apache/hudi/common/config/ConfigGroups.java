@@ -64,7 +64,7 @@ public class ConfigGroups {
 
     SCHEMA_PROVIDER(
         "DeltaStreamer Schema Provider Configs",
-        "Configurations tjat control thw schema provider for DeltaStreamer."),
+        "Configurations that control the schema provider for DeltaStreamer."),
 
     NONE(
         "None",

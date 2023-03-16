@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.schema;
 
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 
@@ -36,8 +37,12 @@ import java.util.stream.Collectors;
 public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
 
   public static class Config {
+    @Deprecated
+    public static final ConfigProperty<String> KAFKA_APPEND_OFFSETS =
+        HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS;
+
     public static boolean shouldAddOffsets(TypedProperties props) {
-      return  props.getBoolean(HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS.key(), Boolean.parseBoolean(HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS.defaultValue()));
+      return props.getBoolean(HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS.key(), Boolean.parseBoolean(HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS.defaultValue()));
     }
   }
 

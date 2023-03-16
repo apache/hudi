@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
@@ -35,6 +36,25 @@ import java.util.Collections;
  * A schema provider that takes in a class name for a generated protobuf class that is on the classpath.
  */
 public class ProtoClassBasedSchemaProvider extends SchemaProvider {
+  /**
+   * Configs supported.
+   */
+  @Deprecated
+  public static class Config {
+    // Use {@link ProtoClassBasedSchemaProviderConfig} instead
+    @Deprecated
+    public static final ConfigProperty<String> PROTO_SCHEMA_CLASS_NAME =
+        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME;
+    @Deprecated
+    public static final ConfigProperty<Boolean> PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS =
+        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS;
+    @Deprecated
+    public static final ConfigProperty<Boolean> PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS =
+        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS;
+    @Deprecated
+    public static final ConfigProperty<Integer> PROTO_SCHEMA_MAX_RECURSION_DEPTH =
+        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH;
+  }
 
   private final String schemaString;
 

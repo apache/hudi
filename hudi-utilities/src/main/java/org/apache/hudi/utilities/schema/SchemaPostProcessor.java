@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -30,6 +31,16 @@ import java.io.Serializable;
  * add marker fields in records with no fields, make everything optional, ...
  */
 public abstract class SchemaPostProcessor implements Serializable {
+
+  /**
+   * Configs supported.
+   */
+  @Deprecated
+  public static class Config {
+    @Deprecated
+    public static final String SCHEMA_POST_PROCESSOR_PROP =
+        HoodieSchemaProviderConfig.SCHEMA_POST_PROCESSOR.key();
+  }
 
   private static final long serialVersionUID = 1L;
 

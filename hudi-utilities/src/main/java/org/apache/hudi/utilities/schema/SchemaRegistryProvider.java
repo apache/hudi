@@ -62,6 +62,15 @@ public class SchemaRegistryProvider extends SchemaProvider {
    * Configs supported.
    */
   public static class Config {
+    @Deprecated
+    public static final String SRC_SCHEMA_REGISTRY_URL_PROP =
+        HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key();
+    @Deprecated
+    public static final String TARGET_SCHEMA_REGISTRY_URL_PROP =
+        HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL.key();
+    @Deprecated
+    public static final String SCHEMA_CONVERTER_PROP =
+        HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key();
     public static final String SSL_KEYSTORE_LOCATION_PROP = "schema.registry.ssl.keystore.location";
     public static final String SSL_TRUSTSTORE_LOCATION_PROP = "schema.registry.ssl.truststore.location";
     public static final String SSL_KEYSTORE_PASSWORD_PROP = "schema.registry.ssl.keystore.password";

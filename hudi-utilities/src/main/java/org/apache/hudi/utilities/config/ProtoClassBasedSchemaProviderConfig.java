@@ -28,8 +28,11 @@ import javax.annotation.concurrent.Immutable;
 
 import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMAPROVIDER_CONFIG_PREFIX;
 
+/**
+ * JDBC-based Schema Provider Configs.
+ */
 @Immutable
-@ConfigClassProperty(name = "Proto Schema Provider Configs",
+@ConfigClassProperty(name = "JDBC-based Schema Provider Configs",
     groupName = ConfigGroups.Names.DELTA_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.SCHEMA_PROVIDER,
     description = "Configurations for Proto schema provider.")

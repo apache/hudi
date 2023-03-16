@@ -28,6 +28,9 @@ import javax.annotation.concurrent.Immutable;
 
 import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMAPROVIDER_CONFIG_PREFIX;
 
+/**
+ * Hive Schema Provider Configs.
+ */
 @Immutable
 @ConfigClassProperty(name = "Hive Schema Provider Configs",
     groupName = ConfigGroups.Names.DELTA_STREAMER,

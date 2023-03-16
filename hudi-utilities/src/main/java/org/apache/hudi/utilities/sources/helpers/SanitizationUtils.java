@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -47,6 +48,17 @@ import java.util.stream.Collectors;
 public class SanitizationUtils {
 
   private static final ObjectMapper OM = new ObjectMapper();
+
+  @Deprecated
+  public static class Config {
+    @Deprecated
+    public static final ConfigProperty<Boolean> SANITIZE_SCHEMA_FIELD_NAMES =
+        HoodieDeltaStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
+
+    @Deprecated
+    public static final ConfigProperty<String> SCHEMA_FIELD_NAME_INVALID_CHAR_MASK =
+        HoodieDeltaStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
+  }
 
   private static final String AVRO_FIELD_NAME_KEY = "name";
 

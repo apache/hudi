@@ -164,9 +164,9 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
   @ParameterizedTest
   @MethodSource("configParams")
   public void testAddPrimitiveTypeColumn(String type) {
-    properties.put(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME.key(), "primitive_column");
-    properties.put(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_TYPE.key(), type);
-    properties.put(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_DOC.key(), "primitive column test");
+    properties.put(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP.key(), "primitive_column");
+    properties.put(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_TYPE_PROP.key(), type);
+    properties.put(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_DOC_PROP.key(), "primitive column test");
 
     AddPrimitiveColumnSchemaPostProcessor processor = new AddPrimitiveColumnSchemaPostProcessor(properties, null);
     Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
@@ -180,7 +180,7 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     assertNotEquals(type, newColumn.schema().getType().getName());
 
     // test not nullable
-    properties.put(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NULLABLE.key(), false);
+    properties.put(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NULLABLE_PROP.key(), false);
     targetSchema = processor.processSchema(schema);
     newColumn = targetSchema.getField("primitive_column");
     assertEquals(type, newColumn.schema().getType().getName());

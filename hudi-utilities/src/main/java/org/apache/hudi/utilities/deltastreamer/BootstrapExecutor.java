@@ -65,7 +65,6 @@ import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIEL
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
-import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 
 /**
  * Performs bootstrap from a non-hudi source.
@@ -163,7 +162,7 @@ public class BootstrapExecutor implements Serializable {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       checkpointCommitMetadata.put(HoodieDeltaStreamer.CHECKPOINT_KEY, cfg.checkpoint);
       if (cfg.checkpoint != null) {
-        checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
+        checkpointCommitMetadata.put(HoodieDeltaStreamer.CHECKPOINT_RESET_KEY, cfg.checkpoint);
       }
       bootstrapClient.bootstrap(Option.of(checkpointCommitMetadata));
       syncHive();
