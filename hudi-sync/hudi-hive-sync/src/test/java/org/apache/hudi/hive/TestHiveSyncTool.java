@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
+import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
@@ -45,7 +46,6 @@ import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
-import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -196,7 +196,7 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
-    IMetaStoreClient client = Hive.get(getHiveConf()).getMSC();
+    IMetaStoreClient client = IMetaStoreClientUtil.getMSC(getHiveConf());
     Option<String> locationOption = getMetastoreLocation(client, HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME);
     assertTrue(locationOption.isPresent(),
         "The location of Table " + HiveTestUtil.TABLE_NAME + " is not present in metastore");
