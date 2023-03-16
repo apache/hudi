@@ -18,11 +18,13 @@
 
 package org.apache.hudi.utilities.transform;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.config.SqlTransformerConfig;
+
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -66,10 +68,10 @@ public class SqlFileBasedTransformer implements Transformer {
       final Dataset<Row> rowDataset,
       final TypedProperties props) {
 
-    final String sqlFile = props.getString(Config.TRANSFORMER_SQL_FILE);
+    final String sqlFile = props.getString(SqlTransformerConfig.TRANSFORMER_SQL_FILE.key());
     if (null == sqlFile) {
       throw new IllegalArgumentException(
-          "Missing required configuration : (" + Config.TRANSFORMER_SQL_FILE + ")");
+          "Missing required configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL_FILE.key() + ")");
     }
 
     final FileSystem fs = FSUtils.getFs(sqlFile, jsc.hadoopConfiguration(), true);
@@ -98,11 +100,5 @@ public class SqlFileBasedTransformer implements Transformer {
     } finally {
       sparkSession.catalog().dropTempView(tmpTable);
     }
-  }
-
-  /** Configs supported. */
-  private static class Config {
-
-    private static final String TRANSFORMER_SQL_FILE = "hoodie.deltastreamer.transformer.sql.file";
   }
 }
