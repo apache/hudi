@@ -78,3 +78,11 @@ fired by via `cd hudi-cli && ./hudi-cli.sh`.
 hudi->bootstrap run --srcPath /tmp/source_table --targetPath /tmp/hoodie/bootstrap_table --tableName bootstrap_table --tableType COPY_ON_WRITE --rowKeyField ${KEY_FIELD} --partitionPathField ${PARTITION_FIELD} --sparkMaster local --hoodieConfigs hoodie.datasource.write.hive_style_partitioning=true --selectorClass org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
 ```
 Unlike deltaStream, FULL_RECORD or METADATA_ONLY is set with --selectorClass, see detalis with help "bootstrap run".
+
+**Option 4**
+You can load an existing table into a Hudi managed one only through SQL.
+Here is an example of using the `spark-sql` script to execute bootstrap through the SQL of `call run_bootstrap`
+
+```
+spark-sql> call run_bootstrap(table => 'bootstrap_table',table_type => 'COPY_ON_WRITE',bootstrap_path => '/tmp/source_table',base_path => '/tmp/hoodie/bootstrap_table', rowKey_field => '${KEY_FIELD}',partition_path_field => '${PARTITION_FIELD}',selector_class => 'org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector', bootstrap_overwrite => true);
+```
