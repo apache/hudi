@@ -497,8 +497,8 @@ public class UtilHelpers {
       return provider;
     }
 
-    String schemaPostProcessorClass = cfg.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_POST_PROCESSOR_PROP.key(), null);
-    boolean enableSparkAvroPostProcessor = Boolean.parseBoolean(cfg.getString(HoodieDeltaStreamerSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE.key(), "true"));
+    String schemaPostProcessorClass = cfg.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_POST_PROCESSOR.key(), null);
+    boolean enableSparkAvroPostProcessor = Boolean.parseBoolean(cfg.getString(HoodieDeltaStreamerSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE.key(), "true"));
 
     if (transformerClassNames != null && !transformerClassNames.isEmpty()
         && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {

@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig;
+import org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -38,15 +38,15 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
 
   public JdbcbasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    options.put("url", props.getString(HoodieDeltaStreamerSchemaProviderConfig.SOURCE_SCHEMA_JDBC_CONNECTION_URL.key()));
-    options.put("driver", props.getString(HoodieDeltaStreamerSchemaProviderConfig.SOURCE_SCHEMA_JDBC_DRIVER_TYPE.key()));
-    options.put("user", props.getString(HoodieDeltaStreamerSchemaProviderConfig.SOURCE_SCHEMA_JDBC_USERNAME.key()));
-    options.put("password", props.getString(HoodieDeltaStreamerSchemaProviderConfig.SOURCE_SCHEMA_JDBC_PASSWORD.key()));
-    options.put("dbtable", props.getString(HoodieDeltaStreamerSchemaProviderConfig.SOURCE_SCHEMA_JDBC_DBTABLE.key()));
+    options.put("url", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_CONNECTION_URL.key()));
+    options.put("driver", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_DRIVER_TYPE.key()));
+    options.put("user", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_USERNAME.key()));
+    options.put("password", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_PASSWORD.key()));
+    options.put("dbtable", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_DBTABLE.key()));
     // the number of seconds the driver will wait for a Statement object to execute to the given
     // number of seconds. Zero means there is no limit.
-    options.put("queryTimeout", props.getString(HoodieDeltaStreamerSchemaProviderConfig.SOURCE_SCHEMA_JDBC_TIMEOUT.key(), "0"));
-    options.put("nullable", props.getString(HoodieDeltaStreamerSchemaProviderConfig.SOURCE_SCHEMA_JDBC_NULLABLE.key(), "true"));
+    options.put("queryTimeout", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_TIMEOUT.key(), "0"));
+    options.put("nullable", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_NULLABLE.key(), "true"));
   }
 
   @Override

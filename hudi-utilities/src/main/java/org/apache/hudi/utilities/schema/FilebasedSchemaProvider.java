@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig;
+import org.apache.hudi.utilities.config.FilebasedSchemaProviderConfig;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import org.apache.avro.Schema;
@@ -48,14 +48,14 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   public FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HoodieDeltaStreamerSchemaProviderConfig.SOURCE_SCHEMA_FILE_PROP.key()));
-    String sourceFile = props.getString(HoodieDeltaStreamerSchemaProviderConfig.SOURCE_SCHEMA_FILE_PROP.key());
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE.key()));
+    String sourceFile = props.getString(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE.key());
     boolean shouldSanitize = SanitizationUtils.getShouldSanitize(props);
     String invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
     this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
     this.sourceSchema = readAvroSchemaFromFile(sourceFile, this.fs, shouldSanitize, invalidCharMask);
-    if (props.containsKey(HoodieDeltaStreamerSchemaProviderConfig.TARGET_SCHEMA_FILE_PROP.key())) {
-      this.targetSchema = readAvroSchemaFromFile(props.getString(HoodieDeltaStreamerSchemaProviderConfig.TARGET_SCHEMA_FILE_PROP.key()), this.fs, shouldSanitize, invalidCharMask);
+    if (props.containsKey(FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE.key())) {
+      this.targetSchema = readAvroSchemaFromFile(props.getString(FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE.key()), this.fs, shouldSanitize, invalidCharMask);
     }
   }
 

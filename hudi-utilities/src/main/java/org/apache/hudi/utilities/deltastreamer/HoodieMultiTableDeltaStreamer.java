@@ -18,29 +18,29 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import com.beust.jcommander.Parameter;
 import org.apache.hudi.client.utils.OperationConverter;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.IdentitySplitter;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
+import org.apache.hudi.utilities.sources.JsonDFSSource;
 
 import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.utilities.sources.JsonDFSSource;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -54,8 +54,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL_PROP;
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL_PROP;
+import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL;
+import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL;
 
 /**
  * Wrapper over HoodieDeltaStreamer.java class.
@@ -132,7 +132,7 @@ public class HoodieMultiTableDeltaStreamer {
       //copy all the values from config to cfg
       String targetBasePath = resetTarget(config, database, currentTable);
       Helpers.deepCopyConfigs(config, cfg);
-      String overriddenTargetBasePath = tableProperties.getString(HoodieDeltaStreamerConfig.TARGET_BASE_PATH_PROP.key(), "");
+      String overriddenTargetBasePath = tableProperties.getString(HoodieDeltaStreamerConfig.TARGET_BASE_PATH.key(), "");
       cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
       if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), ""))) {
         throw new HoodieException("Meta sync table field not provided!");
@@ -148,7 +148,7 @@ public class HoodieMultiTableDeltaStreamer {
   }
 
   private List<String> getTablesToBeIngested(TypedProperties properties) {
-    String combinedTablesString = properties.getString(HoodieDeltaStreamerConfig.TABLES_TO_BE_INGESTED_PROP.key());
+    String combinedTablesString = properties.getString(HoodieDeltaStreamerConfig.TABLES_TO_BE_INGESTED.key());
     if (combinedTablesString == null) {
       return new ArrayList<>();
     }
@@ -164,33 +164,33 @@ public class HoodieMultiTableDeltaStreamer {
   }
 
   private void populateTargetRegistryProp(TypedProperties typedProperties) {
-    String schemaRegistryTargetUrl = typedProperties.getString(TARGET_SCHEMA_REGISTRY_URL_PROP.key(), null);
+    String schemaRegistryTargetUrl = typedProperties.getString(TARGET_SCHEMA_REGISTRY_URL.key(), null);
     if (StringUtils.isNullOrEmpty(schemaRegistryTargetUrl)) {
-      String schemaRegistryBaseUrl = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL_PROP.key());
-      String schemaRegistrySuffix = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_URL_SUFFIX_PROP.key(), null);
+      String schemaRegistryBaseUrl = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL.key());
+      String schemaRegistrySuffix = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_URL_SUFFIX.key(), null);
       String targetSchemaRegistrySuffix;
       if (StringUtils.isNullOrEmpty(schemaRegistrySuffix)) {
         targetSchemaRegistrySuffix = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_TARGET_URL_SUFFIX.key());
       } else {
         targetSchemaRegistrySuffix = schemaRegistrySuffix;
       }
-      typedProperties.setProperty(TARGET_SCHEMA_REGISTRY_URL_PROP.key(),
-          schemaRegistryBaseUrl + typedProperties.getString(HoodieDeltaStreamerConfig.KAFKA_TOPIC_PROP.key()) + targetSchemaRegistrySuffix);
+      typedProperties.setProperty(TARGET_SCHEMA_REGISTRY_URL.key(),
+          schemaRegistryBaseUrl + typedProperties.getString(HoodieDeltaStreamerConfig.KAFKA_TOPIC.key()) + targetSchemaRegistrySuffix);
     }
   }
 
   private void populateSourceRegistryProp(TypedProperties typedProperties) {
-    String schemaRegistrySourceUrl = typedProperties.getString(SRC_SCHEMA_REGISTRY_URL_PROP.key(), null);
+    String schemaRegistrySourceUrl = typedProperties.getString(SRC_SCHEMA_REGISTRY_URL.key(), null);
     if (StringUtils.isNullOrEmpty(schemaRegistrySourceUrl)) {
-      String schemaRegistryBaseUrl = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL_PROP.key());
-      String schemaRegistrySuffix = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_URL_SUFFIX_PROP.key(), null);
+      String schemaRegistryBaseUrl = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL.key());
+      String schemaRegistrySuffix = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_URL_SUFFIX.key(), null);
       String sourceSchemaRegistrySuffix;
       if (StringUtils.isNullOrEmpty(schemaRegistrySuffix)) {
         sourceSchemaRegistrySuffix = typedProperties.getString(HoodieDeltaStreamerSchemaProviderConfig.SCHEMA_REGISTRY_SOURCE_URL_SUFFIX.key());
       } else {
         sourceSchemaRegistrySuffix = schemaRegistrySuffix;
       }
-      typedProperties.setProperty(SRC_SCHEMA_REGISTRY_URL_PROP.key(), schemaRegistryBaseUrl + typedProperties.getString(HoodieDeltaStreamerConfig.KAFKA_TOPIC_PROP.key()) + sourceSchemaRegistrySuffix);
+      typedProperties.setProperty(SRC_SCHEMA_REGISTRY_URL.key(), schemaRegistryBaseUrl + typedProperties.getString(HoodieDeltaStreamerConfig.KAFKA_TOPIC.key()) + sourceSchemaRegistrySuffix);
     }
   }
 
@@ -250,7 +250,7 @@ public class HoodieMultiTableDeltaStreamer {
 
     if (config.targetTableName != null) {
       logger.warn(String.format("--target-table is deprecated and will be removed in a future release due to it's useless;"
-              + " please use %s to configure multiple target tables", HoodieDeltaStreamerConfig.TABLES_TO_BE_INGESTED_PROP.key()));
+          + " please use %s to configure multiple target tables", HoodieDeltaStreamerConfig.TABLES_TO_BE_INGESTED.key()));
     }
 
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-delta-streamer", Constants.LOCAL_SPARK_MASTER);

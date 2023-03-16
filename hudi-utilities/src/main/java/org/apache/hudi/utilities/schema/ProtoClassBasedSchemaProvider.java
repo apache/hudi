@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig;
+import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
 import org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil;
 
 import org.apache.avro.Schema;
@@ -46,13 +46,13 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
   public ProtoClassBasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(
-        HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key()));
-    String className = config.getString(HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key());
-    boolean wrappedPrimitivesAsRecords = props.getBoolean(HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(),
-        HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.defaultValue());
+        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key()));
+    String className = config.getString(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key());
+    boolean wrappedPrimitivesAsRecords = props.getBoolean(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(),
+        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.defaultValue());
     int maxRecursionDepth = props.getInteger(
-        HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH.key(), HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH.defaultValue());
-    boolean timestampsAsRecords = props.getBoolean(HoodieDeltaStreamerSchemaProviderConfig.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS.key(), false);
+        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH.key(), ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH.defaultValue());
+    boolean timestampsAsRecords = props.getBoolean(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS.key(), false);
     ProtoConversionUtil.SchemaConfig schemaConfig = new ProtoConversionUtil.SchemaConfig(wrappedPrimitivesAsRecords, maxRecursionDepth, timestampsAsRecords);
     try {
       schemaString = ProtoConversionUtil.getAvroSchemaForMessageClass(ReflectionUtils.getClass(className), schemaConfig).toString();

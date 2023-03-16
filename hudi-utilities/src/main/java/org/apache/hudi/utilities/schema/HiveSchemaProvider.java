@@ -22,7 +22,7 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.HoodieDeltaStreamerSchemaProviderConfig;
+import org.apache.hudi.utilities.config.HiveSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaProviderException;
 
 import org.apache.avro.Schema;
@@ -45,9 +45,9 @@ public class HiveSchemaProvider extends SchemaProvider {
 
   public HiveSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HoodieDeltaStreamerSchemaProviderConfig.SOURCE_SCHEMA_TABLE_PROP.key()));
-    String sourceSchemaDatabaseName = props.getString(HoodieDeltaStreamerSchemaProviderConfig.SOURCE_SCHEMA_DATABASE_PROP.key(), "default");
-    String sourceSchemaTableName = props.getString(HoodieDeltaStreamerSchemaProviderConfig.SOURCE_SCHEMA_TABLE_PROP.key());
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HiveSchemaProviderConfig.SOURCE_SCHEMA_TABLE.key()));
+    String sourceSchemaDatabaseName = props.getString(HiveSchemaProviderConfig.SOURCE_SCHEMA_DATABASE.key(), "default");
+    String sourceSchemaTableName = props.getString(HiveSchemaProviderConfig.SOURCE_SCHEMA_TABLE.key());
     SparkSession spark = SparkSession.builder().config(jssc.getConf()).enableHiveSupport().getOrCreate();
 
     // source schema
@@ -63,9 +63,9 @@ public class HiveSchemaProvider extends SchemaProvider {
     }
 
     // target schema
-    if (props.containsKey(HoodieDeltaStreamerSchemaProviderConfig.TARGET_SCHEMA_TABLE_PROP.key())) {
-      String targetSchemaDatabaseName = props.getString(HoodieDeltaStreamerSchemaProviderConfig.TARGET_SCHEMA_DATABASE_PROP.key(), "default");
-      String targetSchemaTableName = props.getString(HoodieDeltaStreamerSchemaProviderConfig.TARGET_SCHEMA_TABLE_PROP.key());
+    if (props.containsKey(HiveSchemaProviderConfig.TARGET_SCHEMA_TABLE.key())) {
+      String targetSchemaDatabaseName = props.getString(HiveSchemaProviderConfig.TARGET_SCHEMA_DATABASE.key(), "default");
+      String targetSchemaTableName = props.getString(HiveSchemaProviderConfig.TARGET_SCHEMA_TABLE.key());
       try {
         TableIdentifier targetSchemaTable = new TableIdentifier(targetSchemaTableName, scala.Option.apply(targetSchemaDatabaseName));
         StructType targetSchema = spark.sessionState().catalog().getTableMetadata(targetSchemaTable).schema();

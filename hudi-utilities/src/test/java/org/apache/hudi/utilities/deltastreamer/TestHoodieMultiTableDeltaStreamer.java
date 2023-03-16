@@ -122,13 +122,13 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertEquals(2, streamer.getTableExecutionContexts().size());
     assertEquals(basePath + "/multi_table_dataset/uber_db/dummy_table_uber", executionContext.getConfig().targetBasePath);
     assertEquals("uber_db.dummy_table_uber", executionContext.getConfig().targetTableName);
-    assertEquals("topic1", executionContext.getProperties().getString(HoodieDeltaStreamerConfig.KAFKA_TOPIC_PROP.key()));
+    assertEquals("topic1", executionContext.getProperties().getString(HoodieDeltaStreamerConfig.KAFKA_TOPIC.key()));
     assertEquals("_row_key", executionContext.getProperties().getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()));
     assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), executionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key()));
     assertEquals("uber_hive_dummy_table", executionContext.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.HIVE_SYNC_TABLE_PROP));
-    assertEquals("http://localhost:8081/subjects/random-value/versions/latest", executionContext.getProperties().getString(HoodieDeltaStreamerSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL_PROP.key()));
+    assertEquals("http://localhost:8081/subjects/random-value/versions/latest", executionContext.getProperties().getString(HoodieDeltaStreamerSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
     assertEquals("http://localhost:8081/subjects/topic2-value/versions/latest",
-            streamer.getTableExecutionContexts().get(0).getProperties().getString(HoodieDeltaStreamerSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL_PROP.key()));
+        streamer.getTableExecutionContexts().get(0).getProperties().getString(HoodieDeltaStreamerSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
   }
 
   @Test

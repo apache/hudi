@@ -119,7 +119,7 @@ public abstract class DebeziumSource extends RowSource {
       return Pair.of(Option.of(sparkSession.emptyDataFrame()), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr);
     } else {
       try {
-        String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(props.getString(HoodieDeltaStreamerSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL_PROP.key()));
+        String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(props.getString(HoodieDeltaStreamerSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
         Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
         LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
         LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
