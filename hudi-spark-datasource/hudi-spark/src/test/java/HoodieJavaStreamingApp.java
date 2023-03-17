@@ -366,7 +366,7 @@ public class HoodieJavaStreamingApp {
    */
   public void stream(Dataset<Row> streamingInput, String operationType, String checkpointLocation) throws Exception {
 
-    DataStreamWriter<Row> writer = streamingInput.writeStream().format("org.apache.hudi")
+    DataStreamWriter<Row> writer = streamingInput.writeStream().format("hudi")
         .option("hoodie.insert.shuffle.parallelism", "2").option("hoodie.upsert.shuffle.parallelism", "2")
         .option("hoodie.delete.shuffle.parallelism", "2")
         .option(DataSourceWriteOptions.OPERATION().key(), operationType)

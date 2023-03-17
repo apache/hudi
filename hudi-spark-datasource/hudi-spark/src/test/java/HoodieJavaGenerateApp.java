@@ -171,7 +171,7 @@ public class HoodieJavaGenerateApp {
 
     // Save as hoodie dataset (copy on write)
     // specify the hoodie source
-    DataFrameWriter<Row> writer = inputDF1.write().format("org.apache.hudi")
+    DataFrameWriter<Row> writer = inputDF1.write().format("hudi")
         // any hoodie client config can be passed like this
         .option("hoodie.insert.shuffle.parallelism", "2")
         // full list in HoodieWriteConfig & its package

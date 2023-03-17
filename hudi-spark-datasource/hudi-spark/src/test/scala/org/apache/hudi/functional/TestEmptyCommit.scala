@@ -55,7 +55,7 @@ class TestEmptyCommit extends HoodieSparkClientTestBase {
   @ValueSource(booleans = Array(true, false))
   def testWithEmptyInput(allowEmptyCommit: Boolean): Unit = {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(Seq.empty[String], 1))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), allowEmptyCommit.toString)
