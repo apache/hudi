@@ -80,3 +80,22 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
     }
   }
 }
+
+
+/**
+The KafkaSource class also constructs a source object. It extends the Source class and provides a way to read data from Apache Kafka.
+    The KafkaSource class is abstract, so it provides a template for other classes to implement their own Kafka source.
+The constructor for the KafkaSource class takes in several parameters, including TypedProperties, JavaSparkContext, SparkSession, SchemaProvider, SourceType, and HoodieDeltaStreamerMetrics.
+    These parameters are used to set up the Kafka source and provide context for the data that will be read.
+The KafkaSource class contains several protected fields:
+   including a metrics object that tracks the performance of the source
+   a schemaProvider object that provides the schema for the data
+   and a shouldAddOffsets flag that determines whether the Kafka offset should be added to the data.
+The fetchNewData method in the KafkaSource class is responsible for retrieving new data from Kafka. It takes in the last checkpoint string and a source limit as parameters.
+   It then uses the offsetGen object to retrieve the next offset range and reads the corresponding data from Kafka.
+   The data is returned as a JavaRDD object, wrapped in an InputBatch object that includes the checkpoint string.
+The toRDD method is an abstract method that subclasses must implement.
+   It takes in an array of offset ranges and converts the data for those ranges to a JavaRDD object.
+The onCommit method is responsible for committing the last checkpoint string to Kafka.
+    It checks whether Kafka commit offset is enabled in the configuration, and if so, calls the commitOffsetToKafka method on the offsetGen object.
+ */

@@ -35,6 +35,8 @@ import java.util.stream.Collectors;
  * */
 public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
 
+  // Look into using this at FC! --
+  // Have to also set hoodie.deltastreamer.schemaprovider.schema_post_processor to KafkaOffsetPostProcessor
   public static class Config {
     public static final ConfigProperty<String> KAFKA_APPEND_OFFSETS = ConfigProperty
         .key("hoodie.deltastreamer.source.kafka.append.offsets")

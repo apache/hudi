@@ -57,3 +57,16 @@ public abstract class SchemaProvider implements Serializable {
     return getSourceSchema();
   }
 }
+
+/**
+ * The SchemaProvider class is declared as an abstract class, meaning that it cannot be instantiated directly but must be subclassed by concrete implementations.
+ *    It also implements the Serializable interface, which means that instances of the class can be serialized and deserialized.
+ * The class has two protected instance variables: config, which is a TypedProperties object used to hold configuration properties for the schema provider, and jssc, which is a JavaSparkContext object.
+ * The constructor of the SchemaProvider class takes a TypedProperties object as its argument and initializes the config variable with it.
+ *    There is also a protected constructor that takes both a TypedProperties object and a JavaSparkContext object, which initializes both config and jssc instance variables.
+ *      A protected constructor is a type of constructor in object-oriented programming languages that can only be accessed by subclasses or classes within the same package as the class that defines it.
+ *      In other words, only the class itself, its subclasses, and other classes in the same package can create an instance of the class using a protected constructor.
+ * The SchemaProvider class provides two abstract methods that must be implemented by concrete subclasses:
+ *    getSourceSchema(), which returns the schema of the data source
+ *    getTargetSchema(), which returns the schema of the target Hoodie table.
+ */

@@ -193,3 +193,15 @@ public class SchemaRegistryProvider extends SchemaProvider {
     }
   }
 }
+
+/**
+ * This class is a schema provider implementation that fetches the latest schema from Confluent/Kafka schema registry using the registry API.
+ * The class has a method parseSchemaFromRegistry that accepts a registryUrl and returns a Schema object parsed from the schema fetched from the registry. The schema registry URL is passed to the method as a string.
+ * The class also has a method fetchSchemaFromRegistry that takes a registry URL and returns the schema in the form of a string fetched from the registry.
+ *    This method also checks if the provided URL contains user info credentials (e.g "https://foo:bar@schemaregistry.org") and extracts those credentials to set them on the request as an Authorization header.
+ * The class has a nested class Config that defines the supported configuration properties.
+ * The class has a functional interface SchemaConverter that defines a single abstract method convert that is used to convert the original schema string to an Avro schema string.
+ *    This interface is used by the parseSchemaFromRegistry method to convert the schema fetched from the registry.
+ *    The conversion implementation can be provided via the configuration property hoodie.deltastreamer.schemaprovider.registry.schemaconverter.
+ * The class also defines a few methods used to establish a connection to the schema registry, set user info credentials as an Authorization header on the request, and get an input stream from the HTTP response.
+ */

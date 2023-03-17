@@ -123,6 +123,7 @@ public class UtilHelpers {
     return recordMerger;
   }
 
+  // Returns type Source, of which Ours will be AvroKafkaSource
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
       SparkSession sparkSession, SchemaProvider schemaProvider,
       HoodieDeltaStreamerMetrics metrics) throws IOException {

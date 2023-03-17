@@ -589,6 +589,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
   /**
    * Syncs data either in single-run or in continuous mode.
+   * Where write is handled?
    */
   public static class DeltaSyncService extends HoodieAsyncService {
 
@@ -640,6 +641,10 @@ public class HoodieDeltaStreamer implements Serializable {
 
     private final Option<PostWriteTerminationStrategy> postWriteTerminationStrategy;
 
+    /**
+     * Note Constructor method
+     * Wrapper for calling a DeltaSync object repeatedly
+     */
     public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                             Option<TypedProperties> properties) throws IOException {
       this.cfg = cfg;
@@ -685,6 +690,7 @@ public class HoodieDeltaStreamer implements Serializable {
       this.props = properties.get();
       LOG.info(toSortedTruncatedString(props));
 
+      // where the schemaProvider class name is injected in
       this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc, cfg.transformerClassNames);
 
