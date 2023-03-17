@@ -1046,7 +1046,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .lastInstant().orElseThrow(() -> new HoodieMetadataException("No completed deltacommit in metadata table"))
         .getTimestamp();
     List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
-        .findInstantsBefore(latestDeltaCommitTimeInMetadataTable).getInstants();
+        // ignore pending indexing action
+        .filter(i -> !HoodieTimeline.INDEXING_ACTION.equals(i.getAction()))
+        .findInstantsBeforeOrEquals(latestDeltaCommitTimeInMetadataTable).getInstants();
 
     if (!pendingInstants.isEmpty()) {
       LOG.info(String.format(
