@@ -277,7 +277,7 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
-  void testSyncMetadataTableWithReusedInstant() throws Exception {
+  void testSyncMetadataTableWithRollback() throws Exception {
     // reset
     reset();
     // override the default configuration
@@ -311,12 +311,14 @@ public class TestStreamWriteOperatorCoordinator {
     metadataTableMetaClient.reloadActiveTimeline();
 
     // write another commit with existing instant on the metadata timeline
-    instant = mockWriteWithMetadata();
+    mockWriteWithMetadata();
     metadataTableMetaClient.reloadActiveTimeline();
 
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
-    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(3));
-    assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
+    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(4));
+    assertThat(completedTimeline.nthFromLastInstant(1).get().getTimestamp(), is(instant));
+    assertThat("The pending instant should be rolled back first",
+        completedTimeline.lastInstant().get().getAction(), is(HoodieTimeline.ROLLBACK_ACTION));
   }
 
   @Test
