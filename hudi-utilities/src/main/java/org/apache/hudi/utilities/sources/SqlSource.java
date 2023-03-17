@@ -23,7 +23,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.config.SqlSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -64,8 +66,8 @@ public class SqlSource extends RowSource {
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
     DataSourceUtils.checkRequiredProperties(
-        props, Collections.singletonList(SqlSource.Config.SOURCE_SQL));
-    sourceSql = props.getString(SqlSource.Config.SOURCE_SQL);
+        props, Collections.singletonList(SqlSourceConfig.SOURCE_SQL.key()));
+    sourceSql = props.getString(SqlSourceConfig.SOURCE_SQL.key());
     spark = sparkSession;
   }
 
@@ -84,13 +86,5 @@ public class SqlSource extends RowSource {
                 .toArray(String[]::new));
     }
     return Pair.of(Option.of(source), null);
-  }
-
-  /**
-   * Configs supported.
-   */
-  private static class Config {
-
-    private static final String SOURCE_SQL = "hoodie.deltastreamer.source.sql.sql.query";
   }
 }

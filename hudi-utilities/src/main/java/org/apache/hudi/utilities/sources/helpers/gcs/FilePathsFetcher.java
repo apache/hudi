@@ -21,7 +21,9 @@ package org.apache.hudi.utilities.sources.helpers.gcs;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -30,11 +32,8 @@ import org.apache.spark.sql.Row;
 
 import java.io.Serializable;
 import java.util.List;
+
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.CLOUD_DATAFILE_EXTENSION;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.IGNORE_RELATIVE_PATH_PREFIX;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.IGNORE_RELATIVE_PATH_SUBSTR;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.SELECT_RELATIVE_PATH_PREFIX;
 
 /**
  * Extracts a list of fully qualified GCS filepaths from a given Spark Dataset as input.
@@ -93,13 +92,16 @@ public class FilePathsFetcher implements Serializable {
   private String createFilter() {
     StringBuilder filter = new StringBuilder("size > 0");
 
-    getPropVal(SELECT_RELATIVE_PATH_PREFIX).ifPresent(val -> filter.append(" and name like '" + val + "%'"));
-    getPropVal(IGNORE_RELATIVE_PATH_PREFIX).ifPresent(val -> filter.append(" and name not like '" + val + "%'"));
-    getPropVal(IGNORE_RELATIVE_PATH_SUBSTR).ifPresent(val -> filter.append(" and name not like '%" + val + "%'"));
+    getPropVal(CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX.key())
+        .ifPresent(val -> filter.append(" and name like '" + val + "%'"));
+    getPropVal(CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX.key())
+        .ifPresent(val -> filter.append(" and name not like '" + val + "%'"));
+    getPropVal(CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR.key())
+        .ifPresent(val -> filter.append(" and name not like '%" + val + "%'"));
 
     // Match files with a given extension, or use the fileFormat as the default.
-    getPropVal(CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
-            .map(val -> filter.append(" and name like '%" + val + "'"));
+    getPropVal(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key()).or(() -> Option.of(fileFormat))
+        .map(val -> filter.append(" and name like '%" + val + "'"));
 
     return filter.toString();
   }

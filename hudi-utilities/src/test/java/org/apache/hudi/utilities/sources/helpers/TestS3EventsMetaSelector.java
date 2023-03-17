@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.utilities.config.S3SourceConfig;
 import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 
 import com.amazonaws.services.sqs.AmazonSQS;
@@ -44,8 +45,6 @@ import org.mockito.MockitoAnnotations;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_REGION;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS_ATTR_APPROX_MESSAGES;
 import static org.apache.hudi.utilities.sources.helpers.TestCloudObjectsSelector.REGION_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,8 +72,8 @@ public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
 
     props = new TypedProperties();
     sqsUrl = "test-queue";
-    props.setProperty(S3_SOURCE_QUEUE_URL, sqsUrl);
-    props.setProperty(S3_SOURCE_QUEUE_REGION, REGION_NAME);
+    props.setProperty(S3SourceConfig.S3_SOURCE_QUEUE_URL.key(), sqsUrl);
+    props.setProperty(S3SourceConfig.S3_SOURCE_QUEUE_REGION.key(), REGION_NAME);
   }
 
   @AfterEach

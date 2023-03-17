@@ -27,16 +27,13 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Row;
 
 import java.util.Objects;
-
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT;
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.MISSING_CHECKPOINT_STRATEGY;
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 
 public class IncrSourceHelper {
 
@@ -148,14 +145,16 @@ public class IncrSourceHelper {
    */
   public static MissingCheckpointStrategy getMissingCheckpointStrategy(TypedProperties props) {
     boolean readLatestOnMissingCkpt = props.getBoolean(
-            READ_LATEST_INSTANT_ON_MISSING_CKPT, DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT);
+        HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT.key(),
+        HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT.defaultValue());
 
     if (readLatestOnMissingCkpt) {
       return MissingCheckpointStrategy.READ_LATEST;
     }
 
-    if (props.containsKey(MISSING_CHECKPOINT_STRATEGY)) {
-      return MissingCheckpointStrategy.valueOf(props.getString(MISSING_CHECKPOINT_STRATEGY));
+    if (props.containsKey(HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY.key())) {
+      return MissingCheckpointStrategy.valueOf(
+          props.getString(HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY.key()));
     }
 
     return null;

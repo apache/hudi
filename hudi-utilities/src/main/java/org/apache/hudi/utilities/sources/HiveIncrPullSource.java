@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
+import org.apache.hudi.utilities.config.HiveIncrPullSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.avro.generic.GenericRecord;
@@ -67,19 +68,11 @@ public class HiveIncrPullSource extends AvroSource {
 
   private final String incrPullRootPath;
 
-  /**
-   * Configs supported.
-   */
-  static class Config {
-
-    private static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.incrpull.root";
-  }
-
   public HiveIncrPullSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.ROOT_INPUT_PATH_PROP));
-    this.incrPullRootPath = props.getString(Config.ROOT_INPUT_PATH_PROP);
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HiveIncrPullSourceConfig.ROOT_INPUT_PATH.key()));
+    this.incrPullRootPath = props.getString(HiveIncrPullSourceConfig.ROOT_INPUT_PATH.key());
     this.fs = FSUtils.getFs(incrPullRootPath, sparkContext.hadoopConfiguration());
   }
 

@@ -25,6 +25,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
+import org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -41,10 +43,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.utilities.sources.helpers.DFSPathSelector.Config.ROOT_INPUT_PATH_PROP;
-import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DATE_FORMAT;
 import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DATE_PARTITION_DEPTH;
-import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DEFAULT_DATE_FORMAT;
 import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DEFAULT_DATE_PARTITION_DEPTH;
 import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DEFAULT_LOOKBACK_DAYS;
 import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DEFAULT_PARTITIONS_LIST_PARALLELISM;
@@ -76,25 +75,39 @@ public class DatePartitionPathSelector extends DFSPathSelector {
   private final int numPrevDaysToList;
   private final int partitionsListParallelism;
 
-  /** Configs supported. */
+  /**
+   * Configs supported.
+   * <p>
+   * Please use {@link DatePartitionPathSelectorConfig} instead.
+   */
+  @Deprecated
   public static class Config {
-    public static final String DATE_FORMAT = "hoodie.deltastreamer.source.dfs.datepartitioned.date.format";
-    public static final String DEFAULT_DATE_FORMAT = "yyyy-MM-dd";
-
+    @Deprecated
+    public static final String DATE_FORMAT = DatePartitionPathSelectorConfig.DATE_FORMAT.key();
+    @Deprecated
+    public static final String DEFAULT_DATE_FORMAT =
+        DatePartitionPathSelectorConfig.DATE_FORMAT.defaultValue();
+    @Deprecated
     public static final String DATE_PARTITION_DEPTH =
-        "hoodie.deltastreamer.source.dfs.datepartitioned.selector.depth";
-    public static final int DEFAULT_DATE_PARTITION_DEPTH = 0; // Implies no (date) partition
-
+        DatePartitionPathSelectorConfig.DATE_PARTITION_DEPTH.key();
+    @Deprecated
+    public static final int DEFAULT_DATE_PARTITION_DEPTH =
+        DatePartitionPathSelectorConfig.DATE_PARTITION_DEPTH.defaultValue();
+    @Deprecated
     public static final String LOOKBACK_DAYS =
-        "hoodie.deltastreamer.source.dfs.datepartitioned.selector.lookback.days";
-    public static final int DEFAULT_LOOKBACK_DAYS = 2;
-
+        DatePartitionPathSelectorConfig.LOOKBACK_DAYS.key();
+    @Deprecated
+    public static final int DEFAULT_LOOKBACK_DAYS =
+        DatePartitionPathSelectorConfig.LOOKBACK_DAYS.defaultValue();
+    @Deprecated
     public static final String CURRENT_DATE =
-        "hoodie.deltastreamer.source.dfs.datepartitioned.selector.currentdate";
-
+        DatePartitionPathSelectorConfig.CURRENT_DATE.key();
+    @Deprecated
     public static final String PARTITIONS_LIST_PARALLELISM =
-        "hoodie.deltastreamer.source.dfs.datepartitioned.selector.parallelism";
-    public static final int DEFAULT_PARTITIONS_LIST_PARALLELISM = 20;
+        DatePartitionPathSelectorConfig.PARTITIONS_LIST_PARALLELISM.key();
+    @Deprecated
+    public static final int DEFAULT_PARTITIONS_LIST_PARALLELISM =
+        DatePartitionPathSelectorConfig.PARTITIONS_LIST_PARALLELISM.defaultValue();
   }
 
   public DatePartitionPathSelector(TypedProperties props, Configuration hadoopConf) {
@@ -103,7 +116,8 @@ public class DatePartitionPathSelector extends DFSPathSelector {
      * datePartitionDepth = 0 is same as basepath and there is no partition. In which case
      * this path selector would be a no-op and lists all paths under the table basepath.
      */
-    dateFormat = props.getString(DATE_FORMAT, DEFAULT_DATE_FORMAT);
+    dateFormat = props.getString(DatePartitionPathSelectorConfig.DATE_FORMAT.key(),
+        DatePartitionPathSelectorConfig.DATE_FORMAT.defaultValue());
     datePartitionDepth = props.getInteger(DATE_PARTITION_DEPTH, DEFAULT_DATE_PARTITION_DEPTH);
     numPrevDaysToList = props.getInteger(LOOKBACK_DAYS, DEFAULT_LOOKBACK_DAYS);
     partitionsListParallelism = props.getInteger(PARTITIONS_LIST_PARALLELISM, DEFAULT_PARTITIONS_LIST_PARALLELISM);
@@ -119,7 +133,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
     // obtain all eligible files under root folder.
     LOG.info(
         "Root path => "
-            + props.getString(ROOT_INPUT_PATH_PROP)
+            + props.getString(DFSPathSelectorConfig.ROOT_INPUT_PATH.key())
             + " source limit => "
             + sourceLimit
             + " depth of day partition => "
@@ -131,7 +145,8 @@ public class DatePartitionPathSelector extends DFSPathSelector {
     long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(sparkContext);
     SerializableConfiguration serializedConf = new SerializableConfiguration(fs.getConf());
-    List<String> prunedPartitionPaths = pruneDatePartitionPaths(context, fs, props.getString(ROOT_INPUT_PATH_PROP), currentDate);
+    List<String> prunedPartitionPaths = pruneDatePartitionPaths(
+        context, fs, props.getString(DFSPathSelectorConfig.ROOT_INPUT_PATH.key()), currentDate);
 
     List<FileStatus> eligibleFiles = context.flatMap(prunedPartitionPaths,
         path -> {

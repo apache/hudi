@@ -22,11 +22,14 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.config.CloudSourceConfig;
+import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy;
 import org.apache.hudi.utilities.sources.helpers.gcs.FileDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.gcs.FilePathsFetcher;
 import org.apache.hudi.utilities.sources.helpers.gcs.QueryInfo;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -40,13 +43,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.DEFAULT_NUM_INSTANTS_PER_FETCH;
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.DEFAULT_SOURCE_FILE_FORMAT;
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.NUM_INSTANTS_PER_FETCH;
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.SOURCE_FILE_FORMAT;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.DATAFILE_FORMAT;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.DEFAULT_ENABLE_EXISTS_CHECK;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.ENABLE_EXISTS_CHECK;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.calculateBeginAndEndInstants;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMissingCheckpointStrategy;
 
@@ -113,8 +111,9 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
                                    SchemaProvider schemaProvider) {
 
     this(props, jsc, spark, schemaProvider,
-            new FilePathsFetcher(props, getSourceFileFormat(props)),
-            new FileDataFetcher(props, props.getString(DATAFILE_FORMAT, DEFAULT_SOURCE_FILE_FORMAT))
+        new FilePathsFetcher(props, getSourceFileFormat(props)),
+        new FileDataFetcher(props, props.getString(CloudSourceConfig.DATAFILE_FORMAT.key(),
+            CloudSourceConfig.DATAFILE_FORMAT.defaultValue()))
     );
   }
 
@@ -126,7 +125,8 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
     srcPath = props.getString(HOODIE_SRC_BASE_PATH);
     missingCheckpointStrategy = getMissingCheckpointStrategy(props);
     numInstantsPerFetch = props.getInteger(NUM_INSTANTS_PER_FETCH, DEFAULT_NUM_INSTANTS_PER_FETCH);
-    checkIfFileExists = props.getBoolean(ENABLE_EXISTS_CHECK, DEFAULT_ENABLE_EXISTS_CHECK);
+    checkIfFileExists = props.getBoolean(CloudSourceConfig.ENABLE_EXISTS_CHECK.key(),
+        CloudSourceConfig.ENABLE_EXISTS_CHECK.defaultValue());
 
     this.filePathsFetcher = filePathsFetcher;
     this.fileDataFetcher = fileDataFetcher;
@@ -193,7 +193,8 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   }
 
   private static String getSourceFileFormat(TypedProperties props) {
-    return props.getString(SOURCE_FILE_FORMAT, DEFAULT_SOURCE_FILE_FORMAT);
+    return props.getString(HoodieIncrSourceConfig.SOURCE_FILE_FORMAT.key(),
+        HoodieIncrSourceConfig.SOURCE_FILE_FORMAT.defaultValue());
   }
 
 }
