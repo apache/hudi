@@ -570,6 +570,22 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           "Insert Overwrite Partition can not use bulk insert."
         )
       }
+
+      withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        val tableName4 = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName4 (
+             |  id int,
+             |  name string,
+             |  price double
+             |) using hudi
+             | tblproperties (primaryKey = 'id')
+        """.stripMargin)
+        checkException(s"insert into table $tableName4 values(1, 'a1', 10)")(
+          "Table without preCombineKey can not use upsert operation."
+        )
+      }
     }
   }
 

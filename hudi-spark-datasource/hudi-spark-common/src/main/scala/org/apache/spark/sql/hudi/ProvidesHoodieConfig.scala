@@ -141,28 +141,30 @@ trait ProvidesHoodieConfig extends Logging {
     // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
     //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
     val operationOverride = combinedOpts.get(DataSourceWriteOptions.OPERATION.key)
-    val operation = operationOverride.getOrElse {
-      (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
-        case (true, _, _, _, false, _) =>
-          throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
-        case (true, true, _, _, _, true) =>
-          throw new IllegalArgumentException(s"Insert Overwrite Partition can not use bulk insert.")
-        case (true, _, _, true, _, _) =>
-          throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
-            s" Please disable $INSERT_DROP_DUPS and try again.")
-        // if enableBulkInsert is true, use bulk insert for the insert overwrite non-partitioned table.
-        case (true, false, true, _, _, false) => BULK_INSERT_OPERATION_OPT_VAL
-        // insert overwrite table
-        case (false, false, true, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
-        // insert overwrite partition
-        case (_, true, false, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
-        // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
-        case (false, false, false, false, false, _) if hasPrecombineColumn => UPSERT_OPERATION_OPT_VAL
-        // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
-        case (true, _, _, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
-        // for the rest case, use the insert operation
-        case _ => INSERT_OPERATION_OPT_VAL
-      }
+    val operation = (operationOverride, enableBulkInsert, isOverwritePartition,
+                     isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable, hasPrecombineColumn) match {
+      case (Some(UPSERT_OPERATION_OPT_VAL), _, _, _, _, _, _, false) =>
+        throw new IllegalArgumentException(s"Table without preCombineKey can not use upsert operation.")
+      case (Some(operation), _, _, _, _, _, _, _)  => operation
+      case (None, true, _, _, _, false, _, _) =>
+        throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
+      case (None, true, true, _, _, _, true, _) =>
+        throw new IllegalArgumentException(s"Insert Overwrite Partition can not use bulk insert.")
+      case (None, true, _, _, true, _, _, _) =>
+        throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
+          s" Please disable $INSERT_DROP_DUPS and try again.")
+      // if enableBulkInsert is true, use bulk insert for the insert overwrite non-partitioned table.
+      case (None, true, false, true, _, _, false, _) => BULK_INSERT_OPERATION_OPT_VAL
+      // insert overwrite table
+      case (None, false, false, true, _, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
+      // insert overwrite partition
+      case (None, _, true, false, _, _, true, _) => INSERT_OVERWRITE_OPERATION_OPT_VAL
+      // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
+      case (None, false, false, false, false, false, _, true) => UPSERT_OPERATION_OPT_VAL
+      // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
+      case (None, true, _, _, _, true, _, _) => BULK_INSERT_OPERATION_OPT_VAL
+      // for the rest case, use the insert operation
+      case _ => INSERT_OPERATION_OPT_VAL
     }
 
     val payloadClassName = if (operation == UPSERT_OPERATION_OPT_VAL &&
