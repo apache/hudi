@@ -34,7 +34,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSinkCheckpoint}
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
-import org.apache.spark.sql.streaming.{DataStreamWriter, OutputMode, StreamingQuery, Trigger}
+import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -81,7 +81,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
 
     streamingInput
       .writeStream
-      .format("org.apache.hudi")
+      .format("hudi")
       .options(hudiOptions)
       .trigger(Trigger.ProcessingTime(1000))
       .option("checkpointLocation", basePath + "/checkpoint")
@@ -146,7 +146,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, destPath, "000"))
       val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, destPath)
       // Read RO View
-      val hoodieROViewDF1 = spark.read.format("org.apache.hudi")
+      val hoodieROViewDF1 = spark.read.format("hudi")
         .load(destPath + "/*/*/*/*")
       assert(hoodieROViewDF1.count() == 100)
 
@@ -164,14 +164,14 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       }
       assertEquals(numExpectedCommits, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
       // Read RO View
-      val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
+      val hoodieROViewDF2 = spark.read.format("hudi")
         .load(destPath + "/*/*/*/*")
       assertEquals(100, hoodieROViewDF2.count()) // still 100, since we only updated
 
       // Read Incremental View
       // we have 2 commits, try pulling the first commit (which is not the latest)
       val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").get(0)
-      val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
+      val hoodieIncViewDF1 = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
         .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
@@ -183,7 +183,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       assertEquals(firstCommit, countsPerCommit(0).get(0))
 
       // pull the latest commit
-      val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
+      val hoodieIncViewDF2 = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime1)
         .load(destPath)
@@ -276,7 +276,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .schema(schema)
       .json(sourcePath)
       .writeStream
-      .format("org.apache.hudi")
+      .format("hudi")
       .options(opts)
       .outputMode(OutputMode.Append)
       .option(STREAMING_CHECKPOINT_IDENTIFIER.key(), "streaming_identifier1")
@@ -299,7 +299,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .schema(schema)
       .json(sourcePath)
       .writeStream
-      .format("org.apache.hudi")
+      .format("hudi")
       .options(opts)
       .outputMode(OutputMode.Append)
       .option(STREAMING_CHECKPOINT_IDENTIFIER.key(), "streaming_identifier2")
@@ -329,7 +329,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .schema(schema)
       .json(sourcePath)
       .writeStream
-      .format("org.apache.hudi")
+      .format("hudi")
       .options(commonOpts)
       .outputMode(OutputMode.Append)
       .option("checkpointLocation", s"$basePath/checkpoint1")
@@ -392,7 +392,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       assertTrue(getLatestFileGroupsFileId(partitionOfRecords).size > 0)
 
       // Validate data after clustering
-      val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
+      val hoodieROViewDF2 = spark.read.format("hudi")
         .load(destPath + "/*/*/*/*")
       assertEquals(200, hoodieROViewDF2.count())
       val countsPerCommit = hoodieROViewDF2.groupBy("_hoodie_commit_time").count().collect()

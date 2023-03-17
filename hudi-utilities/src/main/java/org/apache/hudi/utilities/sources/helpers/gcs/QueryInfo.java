@@ -67,15 +67,15 @@ public class QueryInfo {
   }
 
   private DataFrameReader snapshotQuery(SparkSession sparkSession) {
-    return sparkSession.read().format("org.apache.hudi")
-            .option(QUERY_TYPE().key(), QUERY_TYPE_SNAPSHOT_OPT_VAL());
+    return sparkSession.read().format("hudi")
+        .option(QUERY_TYPE().key(), QUERY_TYPE_SNAPSHOT_OPT_VAL());
   }
 
   private DataFrameReader incrementalQuery(SparkSession sparkSession) {
-    return sparkSession.read().format("org.apache.hudi")
-            .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-            .option(BEGIN_INSTANTTIME().key(), getStartInstant())
-            .option(END_INSTANTTIME().key(), getEndInstant());
+    return sparkSession.read().format("hudi")
+        .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
+        .option(BEGIN_INSTANTTIME().key(), getStartInstant())
+        .option(END_INSTANTTIME().key(), getEndInstant());
   }
 
   public boolean isIncremental() {

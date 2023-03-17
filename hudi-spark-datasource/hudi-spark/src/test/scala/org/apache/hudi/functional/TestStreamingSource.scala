@@ -60,7 +60,7 @@ class TestStreamingSource extends StreamTest {
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
-        .format("org.apache.hudi")
+        .format("hudi")
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
@@ -111,7 +111,7 @@ class TestStreamingSource extends StreamTest {
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
-        .format("org.apache.hudi")
+        .format("hudi")
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
@@ -156,7 +156,7 @@ class TestStreamingSource extends StreamTest {
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
-        .format("org.apache.hudi")
+        .format("hudi")
         .option(START_OFFSET.key(), "latest")
         .load(tablePath)
         .select("id", "name", "price", "ts")
@@ -192,7 +192,7 @@ class TestStreamingSource extends StreamTest {
       val timestamp = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
         .firstInstant().get().getTimestamp
       val df = spark.readStream
-        .format("org.apache.hudi")
+        .format("hudi")
         .option(START_OFFSET.key(), timestamp)
         .load(tablePath)
         .select("id", "name", "price", "ts")
@@ -208,7 +208,7 @@ class TestStreamingSource extends StreamTest {
   private def addData(inputPath: String, rows: Seq[(String, String, String, String)]): Unit = {
     rows.toDF(columns: _*)
       .write
-      .format("org.apache.hudi")
+      .format("hudi")
       .options(commonOptions)
       .option(TBL_NAME.key, getTableName(inputPath))
       .mode(SaveMode.Append)

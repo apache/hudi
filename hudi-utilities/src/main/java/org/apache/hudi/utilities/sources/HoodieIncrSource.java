@@ -141,7 +141,7 @@ public class HoodieIncrSource extends RowSource {
     Dataset<Row> source = null;
     // Do Incr pull. Set end instant if available
     if (queryTypeAndInstantEndpts.getKey().equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())) {
-      source = sparkSession.read().format("org.apache.hudi")
+      source = sparkSession.read().format("hudi")
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
           .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), queryTypeAndInstantEndpts.getValue().getLeft())
           .option(DataSourceReadOptions.END_INSTANTTIME().key(), queryTypeAndInstantEndpts.getValue().getRight())
@@ -151,7 +151,7 @@ public class HoodieIncrSource extends RowSource {
           .load(srcPath);
     } else {
       // if checkpoint is missing from source table, and if strategy is set to READ_UPTO_LATEST_COMMIT, we have to issue snapshot query
-      source = sparkSession.read().format("org.apache.hudi")
+      source = sparkSession.read().format("hudi")
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
           .load(srcPath)
           // add filtering so that only interested records are returned.

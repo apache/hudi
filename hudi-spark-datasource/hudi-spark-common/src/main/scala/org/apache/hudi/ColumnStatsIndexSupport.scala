@@ -338,7 +338,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   private def loadFullColumnStatsIndexInternal(): DataFrame = {
     val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePathV2.toString)
     // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
-    val colStatsDF = spark.read.format("org.apache.hudi")
+    val colStatsDF = spark.read.format("hudi")
       .options(metadataConfig.getProps.asScala)
       .load(s"$metadataTablePath/${MetadataPartitionType.COLUMN_STATS.getPartitionPath}")
 

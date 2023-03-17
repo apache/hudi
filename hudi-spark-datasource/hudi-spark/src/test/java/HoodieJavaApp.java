@@ -143,7 +143,7 @@ public class HoodieJavaApp {
 
     // Save as hoodie dataset (copy on write)
     // specify the hoodie source
-    DataFrameWriter<Row> writer = inputDF1.write().format("org.apache.hudi")
+    DataFrameWriter<Row> writer = inputDF1.write().format("hudi")
         // any hoodie client config can be passed like this
         .option("hoodie.insert.shuffle.parallelism", "2")
         // full list in HoodieWriteConfig & its package
@@ -182,7 +182,7 @@ public class HoodieJavaApp {
     recordsSoFar.addAll(recordsToBeUpdated);
     List<String> records2 = recordsToStrings(recordsToBeUpdated);
     Dataset<Row> inputDF2 = spark.read().json(jssc.parallelize(records2, 2));
-    writer = inputDF2.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
+    writer = inputDF2.write().format("hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
         .option(DataSourceWriteOptions.TABLE_TYPE().key(), tableType) // Hoodie Table Type
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
@@ -208,7 +208,7 @@ public class HoodieJavaApp {
         .map(hr -> "{\"_row_key\":\"" + hr.getRecordKey() + "\",\"partition\":\"" + hr.getPartitionPath() + "\"}")
         .collect(Collectors.toList());
     Dataset<Row> inputDF3 = spark.read().json(jssc.parallelize(deletes, 2));
-    writer = inputDF3.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
+    writer = inputDF3.write().format("hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
         .option("hoodie.delete.shuffle.parallelism", "2")
         .option(DataSourceWriteOptions.TABLE_TYPE().key(), tableType) // Hoodie Table Type
@@ -232,7 +232,7 @@ public class HoodieJavaApp {
     /**
      * Read & do some queries
      */
-    Dataset<Row> snapshotQueryDF = spark.read().format("org.apache.hudi")
+    Dataset<Row> snapshotQueryDF = spark.read().format("hudi")
         // pass any path glob, can include hoodie & non-hoodie
         // datasets
         .load(tablePath + (nonPartitionedTable ? "/*" : "/*/*/*/*"));
@@ -245,7 +245,7 @@ public class HoodieJavaApp {
       /**
        * Consume incrementally, only changes in commit 2 above. Currently only supported for COPY_ON_WRITE TABLE
        */
-      Dataset<Row> incQueryDF = spark.read().format("org.apache.hudi")
+      Dataset<Row> incQueryDF = spark.read().format("hudi")
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
           // Only changes in write 2 above
           .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), commitInstantTime1)

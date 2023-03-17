@@ -76,7 +76,7 @@ class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
 
   def assertQueryResult(expected: Any,
                         tablePath: String): Unit = {
-    val actual = spark.read.format("org.apache.hudi").option("hoodie.datasource.query.type", "read_optimized").load(tablePath).count()
+    val actual = spark.read.format("hudi").option("hoodie.datasource.query.type", "read_optimized").load(tablePath).count()
     assertResult(expected)(actual)
   }
 }

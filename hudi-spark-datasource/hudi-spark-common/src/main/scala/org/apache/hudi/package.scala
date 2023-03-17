@@ -25,14 +25,14 @@ package object hudi {
     * Adds a method, `hoodie`, to DataFrameWriter
     */
   implicit class AvroDataFrameWriter[T](writer: DataFrameWriter[T]) {
-    def avro: String => Unit = writer.format("org.apache.hudi").save
+    def avro: String => Unit = writer.format("hudi").save
   }
 
   /**
     * Adds a method, `hoodie`, to DataFrameReader
     */
   implicit class AvroDataFrameReader(reader: DataFrameReader) {
-    def avro: String => DataFrame = reader.format("org.apache.hudi").load
+    def avro: String => DataFrame = reader.format("hudi").load
   }
 
 }

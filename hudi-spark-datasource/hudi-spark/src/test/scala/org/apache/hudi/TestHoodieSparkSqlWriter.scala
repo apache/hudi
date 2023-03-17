@@ -18,10 +18,6 @@
 package org.apache.hudi
 
 import org.apache.avro.Schema
-
-import java.io.IOException
-import java.time.Instant
-import java.util.{Collections, Date, UUID}
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils.gteqSpark3_0
@@ -36,12 +32,12 @@ import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
+import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
-import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -682,7 +678,7 @@ class TestHoodieSparkSqlWriter {
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, noReconciliationOpts, df1)
 
-    val snapshotDF1 = spark.read.format("org.apache.hudi")
+    val snapshotDF1 = spark.read.format("hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF1.count())
 
@@ -693,7 +689,7 @@ class TestHoodieSparkSqlWriter {
     val df2 = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df2)
 
-    val snapshotDF2 = spark.read.format("org.apache.hudi")
+    val snapshotDF2 = spark.read.format("hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF2.count())
 
@@ -710,7 +706,7 @@ class TestHoodieSparkSqlWriter {
     // write to Hudi with new column
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df3)
 
-    val snapshotDF3 = spark.read.format("org.apache.hudi")
+    val snapshotDF3 = spark.read.format("hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(15, snapshotDF3.count())
 
@@ -730,7 +726,7 @@ class TestHoodieSparkSqlWriter {
     val df4 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, reconciliationOpts, df4)
 
-    val snapshotDF4 = spark.read.format("org.apache.hudi")
+    val snapshotDF4 = spark.read.format("hudi")
       .load(tempBasePath + "/*/*/*/*")
 
     assertEquals(25, snapshotDF4.count())
@@ -760,7 +756,7 @@ class TestHoodieSparkSqlWriter {
     if (allowColumnDrop) {
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df5)
 
-      val snapshotDF5 = spark.read.format("org.apache.hudi")
+      val snapshotDF5 = spark.read.format("hudi")
         .load(tempBasePath + "/*/*/*/*")
 
       assertEquals(35, snapshotDF5.count())
@@ -854,7 +850,7 @@ class TestHoodieSparkSqlWriter {
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     // write to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableModifier, df1)
-    val snapshotDF1 = spark.read.format("org.apache.hudi")
+    val snapshotDF1 = spark.read.format("hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF1.count())
     // remove metadata columns so that expected and actual DFs can be compared as is
@@ -865,7 +861,7 @@ class TestHoodieSparkSqlWriter {
     val updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
     // write updates to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, updatesDf)
-    val snapshotDF2 = spark.read.format("org.apache.hudi")
+    val snapshotDF2 = spark.read.format("hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF2.count())
     // remove metadata columns so that expected and actual DFs can be compared as is
@@ -898,7 +894,7 @@ class TestHoodieSparkSqlWriter {
 
     fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, recordsToDelete)
-    val snapshotDF3 = spark.read.format("org.apache.hudi")
+    val snapshotDF3 = spark.read.format("hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(0, snapshotDF3.filter(entry => {
       val partitionPath = entry.getString(3)
@@ -920,7 +916,7 @@ class TestHoodieSparkSqlWriter {
     fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
     val recordsToDelete = spark.emptyDataFrame
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, recordsToDelete)
-    val snapshotDF3 = spark.read.format("org.apache.hudi")
+    val snapshotDF3 = spark.read.format("hudi")
       .load(tempBasePath + "/*/*/*/*")
     snapshotDF3.show()
     assertEquals(0, snapshotDF3.filter(entry => {

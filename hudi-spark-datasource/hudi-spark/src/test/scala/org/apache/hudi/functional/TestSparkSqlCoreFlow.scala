@@ -119,7 +119,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     // we have 2 commits, try pulling the first commit (which is not the latest)
     //HUDI-5266
     val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, tableBasePath, "000").get(0)
-    val hoodieIncViewDf1 = spark.read.format("org.apache.hudi")
+    val hoodieIncViewDf1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
       .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
@@ -135,7 +135,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
     //another incremental query with commit2 and commit3
     //HUDI-5266
-    val hoodieIncViewDf2 = spark.read.format("org.apache.hudi")
+    val hoodieIncViewDf2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime2)
       .option(DataSourceReadOptions.END_INSTANTTIME.key(), commitInstantTime3)
@@ -151,7 +151,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
       spark.sql(s"select * from $tableName timestamp as of '$commitInstantTime2'")
     } else {
       //HUDI-5265
-      spark.read.format("org.apache.hudi")
+      spark.read.format("hudi")
         .option("as.of.instant", commitInstantTime2)
         .load(tableBasePath)
     }
@@ -314,7 +314,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
   }
 
   def doMORReadOptimizedQuery(isMetadataEnabledOnRead: Boolean, basePath: String): sql.DataFrame = {
-    spark.read.format("org.apache.hudi")
+    spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .option(HoodieMetadataConfig.ENABLE.key(), isMetadataEnabledOnRead)
       .load(basePath)
