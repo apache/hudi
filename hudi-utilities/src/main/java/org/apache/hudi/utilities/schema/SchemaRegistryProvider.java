@@ -73,6 +73,10 @@ public class SchemaRegistryProvider extends SchemaProvider {
     public static final String SSL_KEY_PASSWORD_PROP = "schema.registry.ssl.key.password";
   }
 
+  // Does this have to be public? I want to be able to set this from elsewhere in clearCaches()?
+  // In this context, what does it mean to make it static?
+  public static Schema cachedSchema;
+
   @FunctionalInterface
   public interface SchemaConverter {
     /**
@@ -83,13 +87,18 @@ public class SchemaRegistryProvider extends SchemaProvider {
      */
     String convert(String schema) throws IOException;
   }
-
+  // This is what I need to cache(?)
+  // Should I be caching the output of Parse, or the output of Fetch?
   public Schema parseSchemaFromRegistry(String registryUrl) throws IOException {
+    if (cachedSchema != null) {
+      return cachedSchema;
+    }
     String schema = fetchSchemaFromRegistry(registryUrl);
     SchemaConverter converter = config.containsKey(Config.SCHEMA_CONVERTER_PROP)
-        ? ReflectionUtils.loadClass(config.getString(Config.SCHEMA_CONVERTER_PROP))
-        : s -> s;
-    return new Schema.Parser().parse(converter.convert(schema));
+            ? ReflectionUtils.loadClass(config.getString(Config.SCHEMA_CONVERTER_PROP))
+            : s -> s;
+    cachedSchema = new Schema.Parser().parse(converter.convert(schema));
+    return cachedSchema;
   }
 
   /**
@@ -190,6 +199,13 @@ public class SchemaRegistryProvider extends SchemaProvider {
       return parseSchemaFromRegistry(targetRegistryUrl);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading target schema from registry :" + registryUrl, ioe);
+    }
+  }
+
+  // Clears the cachedSchema for this SchemaRegistryProvider Object.
+  public static void clearCaches() {
+    if (cachedSchema != null) {
+      cachedSchema = null;
     }
   }
 }

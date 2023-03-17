@@ -75,6 +75,12 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
         UtilHelpers.getSchemaProviderForKafkaSource(schemaProvider, props, sparkContext),
         SourceType.AVRO, metrics);
     this.originalSchemaProvider = schemaProvider;
+    /*
+      Invalidate local cache of the SourceSchema.
+      SHOULD(?) do nothing if not using SchemaRegistryProvider?
+     */
+    clearCaches(); // Is this how I just call the parent method of clear caches?
+
 
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
     deserializerClassName = props.getString(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().key(),
@@ -127,6 +133,11 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
       return kafkaRDD.map(consumerRecord -> (GenericRecord) consumerRecord.value());
     }
   }
+
+  //@Override
+//  public void clearCaches() {
+//    SchemaProvider.clearCaches();
+//  }
 }
 
 /**

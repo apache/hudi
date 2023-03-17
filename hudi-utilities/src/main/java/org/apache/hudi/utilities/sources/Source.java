@@ -66,6 +66,14 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
   protected abstract InputBatch<T> fetchNewData(Option<String> lastCkptStr, long sourceLimit);
 
   /**
+   * Clear any cached resources used by this Source.
+   */
+  // DO I need this in the Source Class?
+  public void clearCaches(){
+    SchemaProvider.clearCaches();
+  }
+
+  /**
    * Main API called by Hoodie Delta Streamer to fetch records.
    * 
    * @param lastCkptStr Last Checkpoint

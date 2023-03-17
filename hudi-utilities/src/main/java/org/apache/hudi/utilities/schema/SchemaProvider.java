@@ -56,6 +56,10 @@ public abstract class SchemaProvider implements Serializable {
     // by default, use source schema as target for hoodie table as well
     return getSourceSchema();
   }
+  // I think in its current config, this won't be able to be overriden by SchemaRegistryProcessor
+  // As the method isn't abstract?
+  public static void clearCaches() {
+  }
 }
 
 /**

@@ -79,6 +79,8 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
       offsetGen.commitOffsetToKafka(lastCkptStr);
     }
   }
+  
+  //public abstract void clearCaches();
 }
 
 
