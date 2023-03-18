@@ -19,6 +19,8 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
+import org.apache.hudi.QuickstartUtils.{DataGenerator, convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
@@ -31,7 +33,7 @@ import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -128,5 +130,146 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       .load(basePath)
     assertEquals(100, hudiSnapshotDF3.count())
     assertEquals(updatedVerificationVal, hudiSnapshotDF3.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
+  }
+
+  @Test
+  def testMergeOnReadStorageWithGlobalIndexUpdatePartition(): Unit = {
+    val tableName = "hudi_trips_mor_global"
+    val dataGen = new DataGenerator()
+    val inserts = convertToStringList(dataGen.generateInserts(1000))
+    val df0 = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+    log.info(">>> First insert")
+    df0.withColumn("col1",org.apache.spark.sql.functions.lit("batch1")).
+      withColumn("partitionpath",org.apache.spark.sql.functions.lit("path1")).
+      write.format("hudi").
+      options(getQuickstartWriteConfigs).
+      option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+      option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+      option(PARTITIONPATH_FIELD_OPT_KEY, "col1").
+      option("hoodie.metadata.enable","false").
+      option("hoodie.datasource.write.table.type","MERGE_ON_READ").
+      option(HoodieWriteConfig.TBL_NAME.key, tableName).
+      mode(SaveMode.Overwrite).
+      save(basePath)
+
+    var result = spark.read.format("hudi").load(basePath)
+
+    result.createOrReplaceTempView("tbl1")
+    spark.sql("select col1, count(*) from  tbl1 group by 1 order by 2 desc").show(false)
+
+    assertEquals(1000, result.filter("col1 = 'batch1'").count())
+
+    var updates = convertToStringList(dataGen.generateUniqueUpdates(1000))
+    var df1 = spark.read.json(spark.sparkContext.parallelize(updates, 2))
+    log.info(">>> First update")
+    df1.withColumn("col1",org.apache.spark.sql.functions.lit("batch1")).
+      withColumn("partitionpath",org.apache.spark.sql.functions.lit("path1")).
+      write.format("hudi").
+      options(getQuickstartWriteConfigs).
+      option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+      option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+      option(PARTITIONPATH_FIELD_OPT_KEY, "col1").
+      option("hoodie.metadata.enable","false").
+      option("hoodie.datasource.write.table.type","MERGE_ON_READ").
+      option("hoodie.index.type","GLOBAL_SIMPLE").
+      option(HoodieWriteConfig.TBL_NAME.key, tableName).
+      mode(SaveMode.Append).
+      save(basePath)
+
+    result = spark.read.format("hudi").load(basePath)
+
+    result.createOrReplaceTempView("tbl2")
+    spark.sql("select col1, count(*) from  tbl2 group by 1 order by 2 desc").show(false)
+
+    assertEquals(1000, result.filter("col1 = 'batch1'").count())
+
+    updates = convertToStringList(dataGen.generateUniqueUpdates(1000))
+    df1 = spark.read.json(spark.sparkContext.parallelize(updates, 2))
+    log.info(">>> Second update: partition from batch1 to batch2")
+    df1.withColumn("col1",org.apache.spark.sql.functions.lit("batch2")).
+      withColumn("partitionpath",org.apache.spark.sql.functions.lit("path1")).
+      write.format("hudi").
+      options(getQuickstartWriteConfigs).
+      option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+      option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+      option(PARTITIONPATH_FIELD_OPT_KEY, "col1").
+      option("hoodie.metadata.enable","false").
+      option("hoodie.datasource.write.table.type","MERGE_ON_READ").
+      option("hoodie.index.type","GLOBAL_SIMPLE").
+      option(HoodieWriteConfig.TBL_NAME.key, tableName).
+      mode(SaveMode.Append).
+      save(basePath)
+
+
+    result = spark.read.format("hudi").load(basePath)
+
+    result.createOrReplaceTempView("tbl3")
+    spark.sql("select col1, count(*) from  tbl3 group by 1 order by 2 desc").show(false)
+
+    assertEquals(0, result.filter("col1 = 'batch1'").count())
+    assertEquals(1000, result.filter("col1 = 'batch2'").count())
+
+    updates = convertToStringList(dataGen.generateUniqueUpdates(1000))
+    log.info(">>> Third update: same partition batch2")
+    df1 = spark.read.json(spark.sparkContext.parallelize(updates, 2))
+    df1.withColumn("col1",org.apache.spark.sql.functions.lit("batch2")).
+      withColumn("partitionpath",org.apache.spark.sql.functions.lit("path1")).
+      write.format("hudi").
+      options(getQuickstartWriteConfigs).
+      option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+      option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+      option(PARTITIONPATH_FIELD_OPT_KEY, "col1").
+      option("hoodie.metadata.enable","false").
+      option("hoodie.datasource.write.table.type","MERGE_ON_READ").
+      option("hoodie.index.type","GLOBAL_SIMPLE").
+      option(HoodieWriteConfig.TBL_NAME.key, tableName).
+      mode(SaveMode.Append).
+      save(basePath)
+
+    result = spark.read.format("hudi").load(basePath)
+
+    result.createOrReplaceTempView("tbl4")
+    spark.sql("select col1, count(*) from  tbl4 group by 1 order by 2 desc").show(false)
+    spark.sql("select * from (select uuid, count(*) as count from tbl4 group by 1) where count > 1").show(false)
+
+    assertEquals(0, result.filter("col1 = 'batch1'").count())
+    assertEquals(1000, result.filter("col1 = 'batch2'").count())
+
+    updates = convertToStringList(dataGen.generateUniqueUpdates(1000))
+    df1 = spark.read.json(spark.sparkContext.parallelize(updates, 2))
+    log.info(">>> Fourth update: from partition batch2 to batch3")
+    df1.withColumn("col1",org.apache.spark.sql.functions.lit("batch3")).
+      withColumn("partitionpath",org.apache.spark.sql.functions.lit("path1")).
+      write.format("hudi").
+      options(getQuickstartWriteConfigs).
+      option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+      option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+      option(PARTITIONPATH_FIELD_OPT_KEY, "col1").
+      option("hoodie.metadata.enable","false").
+      option("hoodie.datasource.write.table.type","MERGE_ON_READ").
+      option("hoodie.index.type","GLOBAL_SIMPLE").
+      option(HoodieWriteConfig.TBL_NAME.key, tableName).
+      mode(SaveMode.Append).
+      save(basePath)
+
+
+    log.info(">>> Done updating partitions.")
+    result = spark.read.format("hudi").load(basePath)
+
+    result.createOrReplaceTempView("tbl5")
+    spark.sql("select col1, count(*) from  tbl5 group by 1 order by 2 desc").show(false)
+
+    assertEquals(0, result.filter("col1 = 'batch1'").count())
+    assertEquals(0, result.filter("col1 = 'batch2'").count())
+    assertEquals(1000, result.filter("col1 = 'batch3'").count())
+
+    val dupsDf = spark.sql("select * from (select uuid, count(*) as count from tbl5 group by 1) where count > 1")
+    dupsDf.show(false)
+
+    spark.sql("select count(*) from (select uuid, count(*) as count from tbl5 group by 1) where count > 1").show(false)
+
+    val dupsUuid = dupsDf.select("uuid").limit(5)
+    val tbl5Df = spark.sql("select * from tbl5")
+    tbl5Df.join(dupsUuid, "uuid").show(false)
   }
 }

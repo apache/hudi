@@ -18,12 +18,11 @@
 
 package org.apache.hudi.io;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -38,6 +37,9 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -45,9 +47,14 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
+import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
+import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
 
 @NotThreadSafe
 public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
@@ -62,6 +69,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
   private final boolean preserveMetadata;
+  private final boolean deduplicateInserts;
+  private final Set<HoodieKey> writtenRecordKeys;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -93,6 +102,9 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     writeStatus.setStat(new HoodieWriteStat());
 
     this.path = makeNewPath(partitionPath);
+    this.deduplicateInserts =
+        (GLOBAL_SIMPLE.equals(config.getIndexType()) && config.getGlobalSimpleIndexUpdatePartitionPath()) || (GLOBAL_BLOOM.equals(config.getIndexType()) && config.getBloomIndexUpdatePartitionPath());
+    this.writtenRecordKeys = new HashSet<>();
 
     try {
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
@@ -137,23 +149,25 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           return;
         }
 
-        MetadataValues metadataValues = new MetadataValues().setFileName(path.getName());
-        HoodieRecord populatedRecord =
-            record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, config.getProps());
+        if (!deduplicateInserts || writtenRecordKeys.add(record.getKey())) {
+          MetadataValues metadataValues = new MetadataValues().setFileName(path.getName());
+          HoodieRecord populatedRecord =
+              record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, config.getProps());
 
-        if (preserveMetadata) {
-          fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
-        } else {
-          fileWriter.writeWithMetadata(record.getKey(), populatedRecord, writeSchemaWithMetaFields);
+          if (preserveMetadata) {
+            fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
+          } else {
+            fileWriter.writeWithMetadata(record.getKey(), populatedRecord, writeSchemaWithMetaFields);
+          }
+
+          // Update the new location of record, so we know where to find it next
+          record.unseal();
+          record.setNewLocation(new HoodieRecordLocation(instantTime, writeStatus.getFileId()));
+          record.seal();
+
+          recordsWritten++;
+          insertRecordsWritten++;
         }
-
-        // Update the new location of record, so we know where to find it next
-        record.unseal();
-        record.setNewLocation(new HoodieRecordLocation(instantTime, writeStatus.getFileId()));
-        record.seal();
-
-        recordsWritten++;
-        insertRecordsWritten++;
       } else {
         recordsDeleted++;
       }

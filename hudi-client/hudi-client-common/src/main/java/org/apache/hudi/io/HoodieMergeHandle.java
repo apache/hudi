@@ -66,6 +66,9 @@ import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
+import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
+
 @SuppressWarnings("Duplicates")
 /**
  * Handle to merge incoming records to those in storage.
@@ -114,6 +117,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected boolean useWriterSchemaForCompaction;
   protected Option<BaseKeyGenerator> keyGeneratorOpt;
   private HoodieBaseFile baseFileToMerge;
+  private boolean deduplicateInserts;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
@@ -164,6 +168,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   private void init(String fileId, String partitionPath, HoodieBaseFile baseFileToMerge) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
     this.baseFileToMerge = baseFileToMerge;
+    this.deduplicateInserts =
+        (GLOBAL_SIMPLE.equals(config.getIndexType()) && config.getGlobalSimpleIndexUpdatePartitionPath()) || (GLOBAL_BLOOM.equals(config.getIndexType()) && config.getBloomIndexUpdatePartitionPath());
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
     try {
@@ -287,6 +293,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema, Properties prop)
       throws IOException {
     if (writeRecord(newRecord, Option.of(newRecord), schema, prop, HoodieOperation.isDelete(newRecord.getOperation()))) {
+      if (deduplicateInserts) {
+        writtenRecordKeys.add(newRecord.getRecordKey());
+      }
       insertRecordsWritten++;
     }
   }
