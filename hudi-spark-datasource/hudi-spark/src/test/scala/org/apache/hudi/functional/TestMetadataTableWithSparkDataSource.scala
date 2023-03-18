@@ -24,9 +24,13 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.JavaConverters._
 
@@ -45,8 +49,11 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
-  @Test
-  def testReadability(): Unit = {
+  override def conf: SparkConf = conf(getSparkSqlConf)
+
+  @ParameterizedTest
+  @ValueSource(ints = Array(1, 5))
+  def testReadability(compactNumDeltaCommits: Int): Unit = {
     val dataGen = new HoodieTestDataGenerator()
 
     val metadataOpts: Map[String, String] = Map(
@@ -55,7 +62,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     )
 
     val combinedOpts: Map[String, String] = commonOpts ++ metadataOpts ++
-      Map(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1")
+      Map(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> compactNumDeltaCommits.toString)
 
     // Insert records
     val newRecords = dataGen.generateInserts("001", 100)
