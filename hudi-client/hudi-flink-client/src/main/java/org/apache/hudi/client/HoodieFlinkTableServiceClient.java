@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
@@ -62,8 +63,10 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
    */
   private HoodieBackedTableMetadataWriter metadataWriter;
 
-  protected HoodieFlinkTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig);
+  protected HoodieFlinkTableServiceClient(HoodieEngineContext context,
+                                          HoodieWriteConfig clientConfig,
+                                          Option<EmbeddedTimelineService> timelineService) {
+    super(context, clientConfig, timelineService);
   }
 
   @Override
