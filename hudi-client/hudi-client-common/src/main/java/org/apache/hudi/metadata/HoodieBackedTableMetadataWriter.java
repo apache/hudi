@@ -162,7 +162,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
       enabled = true;
 
-      // Inline compaction and auto clean is required as we dont expose this table outside
+      // Inline compaction and auto clean is required as we do not expose this table outside
       ValidationUtils.checkArgument(!this.metadataWriteConfig.isAutoClean(),
           "Cleaning is controlled internally for Metadata table.");
       ValidationUtils.checkArgument(!this.metadataWriteConfig.inlineCompactionEnabled(),
@@ -1060,7 +1060,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // metadata table.
     final String compactionInstantTime = latestDeltaCommitTimeInMetadataTable + METADATA_COMPACTION_TIME_SUFFIX;
     // we need to avoid checking compaction w/ same instant again.
-    // lets say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
+    // let's say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
     // and again w/ C6, we will re-attempt compaction at which point latest delta commit is C4 in MDT.
     // and so we try compaction w/ instant C4001. So, we can avoid compaction if we already have compaction w/ same instant time.
     if (!metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime)
@@ -1105,7 +1105,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
 
-    // skip file system listing to populate metadata records if its a fresh table.
+    // skip file system listing to populate metadata records if it's a fresh table.
     // this is applicable only if the table already has N commits and metadata is enabled at a later point in time.
     if (createInstantTime.equals(SOLO_COMMIT_TIMESTAMP)) { // SOLO_COMMIT_TIMESTAMP will be the initial commit time in MDT for a fresh table.
       // If not, last completed commit in data table will be chosen as the initial commit time.

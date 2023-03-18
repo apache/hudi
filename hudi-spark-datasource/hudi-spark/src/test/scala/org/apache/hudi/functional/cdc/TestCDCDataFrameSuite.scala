@@ -41,7 +41,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    * Step3: Delete 20 With Clustering
    * Step4: Insert Overwrite 50
    * Step5: Upsert 30 With Clean
-   * Step6: Bluk_Insert 20
+   * Step6: Bulk_Insert 20
    */
   @ParameterizedTest
   @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
@@ -218,7 +218,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    * Step1: Insert 100
    * Step2: Upsert 50
    * Step3: Delete 20 With Compaction
-   * Step4: Bluk_Insert 100
+   * Step4: Bulk_Insert 100
    * Step5: Upsert 60 With Clustering
    * Step6: Insert Overwrite 70
    * Step7: Upsert 30 With CLean

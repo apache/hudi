@@ -447,7 +447,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Deduplication Logic for write function.
    *
-   * @param writeFn One of HoddieWriteClient non-prepped write APIs
+   * @param writeFn One of HoodieWriteClient non-prepped write APIs
    * @throws Exception in case of failure
    */
   private void testDeduplication(
@@ -1018,7 +1018,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   /**
    * This test ensures in a global bloom when update partition path is set to true in config, if an incoming record has mismatched partition
-   * compared to whats in storage, then appropriate actions are taken. i.e. old record is deleted in old partition and new one is inserted
+   * compared to what is in storage, then appropriate actions are taken. i.e. old record is deleted in old partition and new one is inserted
    * in the new partition.
    * test structure:
    * 1. insert 1 batch
@@ -1555,7 +1555,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       replaceCommitMetadata.getPartitionToWriteStats()
               .forEach((k,v) -> v.forEach(entry -> filesFromReplaceCommit.add(entry.getPath())));
 
-      // find all parquet files created as part of clustering. Verify it matces w/ whats found in replace commit metadata.
+      // find all parquet files created as part of clustering. Verify it matches w/ what is found in replace commit metadata.
       FileStatus[] fileStatuses = fs.listStatus(new Path(basePath + "/" + partitionPath));
       List<String> clusteredFiles = Arrays.stream(fileStatuses).filter(entry -> entry.getPath().getName().contains(replaceCommitInstant.getTimestamp()))
           .map(fileStatus -> partitionPath + "/" + fileStatus.getPath().getName()).collect(Collectors.toList());
@@ -2474,7 +2474,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieTestUtils.init(hadoopConf, basePath);
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
 
-    // perform 1 successfull commit
+    // perform 1 successful commit
     writeBatch(client, "100", "100", Option.of(Arrays.asList("100")), "100",
         100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
         0, true);
@@ -2612,7 +2612,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     ExecutorService service = Executors.newFixedThreadPool(2);
     HoodieTestUtils.init(hadoopConf, basePath);
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
-    // perform 1 successfull write
+    // perform 1 successful write
     writeBatch(client, "100", "100", Option.of(Arrays.asList("100")), "100",
         100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 100,
         0, true);
@@ -2629,7 +2629,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     client.close();
     // refresh data generator to delete records generated from failed commits
     dataGen = new HoodieTestDataGenerator();
-    // Create a succesful commit
+    // Create a successful commit
     Future<JavaRDD<WriteStatus>> commit3 = service.submit(() -> writeBatch(new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)),
             "400", "300", Option.of(Arrays.asList("400")), "300", 100, dataGen::generateInserts,
             SparkRDDWriteClient::bulkInsert, false, 100, 100, 0, true));

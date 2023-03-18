@@ -18,18 +18,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -47,9 +35,23 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.utils.MetadataConversionUtils.getHoodieCommitMetadata;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -142,7 +144,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               // (A.2) Failed recurring commit - Inserts/Updates written to log files. In this scenario,
               // HoodieWriteStat will have the baseCommitTime for the first log file written, add rollback blocks.
               // (A.3) Rollback triggered for first commit - Inserts were written to the log files but the commit is
-              // being reverted. In this scenario, HoodieWriteStat will be `null` for the attribute prevCommitTime and
+              // being reverted. In this scenario, HoodieWriteStat will be `null` for the attribute prevCommitTime
               // and hence will end up deleting these log files. This is done so there are no orphan log files
               // lying around.
               // (A.4) Rollback triggered for recurring commits - Inserts/Updates are being rolled back, the actions
@@ -156,7 +158,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               // this scenario, perform (A.1) and for updates written to log files, write rollback blocks.
               // (B.3) Rollback triggered for first commit - Same as (B.1)
               // (B.4) Rollback triggered for recurring commits - Same as (B.2) plus we need to delete the log files
-              // as well if the base base file gets deleted.
+              // as well if the base file gets deleted.
               HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
                   table.getMetaClient().getCommitTimeline().getInstantDetails(instantToRollback).get(),
                   HoodieCommitMetadata.class);
