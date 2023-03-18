@@ -30,6 +30,8 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.validation.constraints.NotNull;
 
@@ -260,6 +262,9 @@ public class ExpressionEvaluators {
       if (minVal == null || maxVal == null) {
         return false;
       }
+      // return false if min == max == val, otherwise return true.
+      // because the bounds are not necessarily a min or max value, this cannot be answered using them.
+      // notEq(col, X) with (X, Y) doesn't guarantee that X is a value in col.
       return compare(minVal, val, type) != 0 || compare(maxVal, val, type) != 0;
     }
   }
@@ -384,6 +389,9 @@ public class ExpressionEvaluators {
    */
   public static class In extends LeafEvaluator {
     private static final long serialVersionUID = 1L;
+    private static final Logger LOGGER = LoggerFactory.getLogger(In.class);
+
+    private static final int IN_PREDICATE_LIMIT = 200;
 
     public static In getInstance() {
       return new In();
@@ -400,7 +408,13 @@ public class ExpressionEvaluators {
       Object minVal = columnStats.getMinVal();
       Object maxVal = columnStats.getMaxVal();
       if (minVal == null) {
-        return false;
+        return false; // values are all null and literalSet cannot contain null.
+      }
+
+      if (vals.length > IN_PREDICATE_LIMIT) {
+        // skip evaluating the predicate if the number of values is too big
+        LOGGER.warn("Skip evaluating in predicate because the number of values is too big!");
+        return true;
       }
 
       return Arrays.stream(vals).anyMatch(v ->
