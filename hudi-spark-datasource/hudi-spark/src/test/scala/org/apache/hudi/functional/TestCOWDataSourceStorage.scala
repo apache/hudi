@@ -29,7 +29,9 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -57,6 +59,8 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
 
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
+
+  override def conf: SparkConf = conf(getSparkSqlConf)
 
   @ParameterizedTest
   @CsvSource(value = Array(
