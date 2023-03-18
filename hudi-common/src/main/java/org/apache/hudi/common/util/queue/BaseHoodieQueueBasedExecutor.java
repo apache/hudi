@@ -168,8 +168,12 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
     //          2. We shut down producer and consumer (if present), and after that
     //          3. We shut down the executors
     //
-    producingFuture.cancel(true);
-    consumingFuture.cancel(true);
+    if (producingFuture != null) {
+      producingFuture.cancel(true);
+    }
+    if (consumingFuture != null) {
+      consumingFuture.cancel(true);
+    }
     // Clean up resources associated w/ producers/consumers
     producers.forEach(HoodieProducer::close);
     consumer.ifPresent(HoodieConsumer::finish);
