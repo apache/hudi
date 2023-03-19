@@ -32,6 +32,7 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, Join, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24LegacyHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
@@ -206,5 +207,11 @@ class Spark2Adapter extends SparkAdapter {
     val batch = new ColumnarBatch(vectors)
     batch.setNumRows(numRows)
     batch
+  }
+
+  override def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
+                                                 queryExecution: QueryExecution,
+                                                 name: Option[String])(body: => T): T = {
+    SQLExecution.withNewExecutionId(sparkSession, queryExecution)(body)
   }
 }

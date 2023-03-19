@@ -29,6 +29,7 @@ import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSch
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -101,5 +102,11 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch = {
     new ColumnarBatch(vectors, numRows)
+  }
+
+  override def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
+                                                 queryExecution: QueryExecution,
+                                                 name: Option[String])(body: => T): T = {
+      SQLExecution.withNewExecutionId(queryExecution, name)(body)
   }
 }

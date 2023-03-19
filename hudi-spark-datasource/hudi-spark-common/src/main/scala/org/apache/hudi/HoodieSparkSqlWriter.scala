@@ -68,6 +68,8 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
+import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.{SPARK_VERSION, SparkContext}
@@ -115,6 +117,7 @@ object HoodieSparkSqlWriter {
   private var tableExists: Boolean = false
   private var asyncCompactionTriggerFnDefined: Boolean = false
   private var asyncClusteringTriggerFnDefined: Boolean = false
+  lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
 
   def write(sqlContext: SQLContext,
             mode: SaveMode,
@@ -122,6 +125,24 @@ object HoodieSparkSqlWriter {
             sourceDf: DataFrame,
             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
             hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
+  (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
+    //TODO reuse DataWritingCommand sparkPlan, reduce the number of sql list in SPARK UI SQL tag, rendering raw DAG
+    val executionId = getExecutionId(sqlContext.sparkContext, sourceDf.queryExecution)
+    if (executionId.isEmpty) {
+      sparkAdapter.sqlExecutionWithNewExecutionId(sourceDf.sparkSession, sourceDf.queryExecution, Option("hudiCommand"))(
+        writeInternal(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient)
+      )
+    } else {
+      writeInternal(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient)
+    }
+  }
+
+  private def writeInternal(sqlContext: SQLContext,
+                            mode: SaveMode,
+                            optParams: Map[String, String],
+                            sourceDf: DataFrame,
+                            streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
+                            hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
 
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
@@ -1161,5 +1182,12 @@ object HoodieSparkSqlWriter {
     } else {
       Map.empty
     }
+  }
+
+  private def getExecutionId(context: SparkContext, newQueryExecution: QueryExecution): Option[Long] = {
+    // If the `QueryExecution` does not match the current execution ID, it means the execution ID
+    // belongs to another (parent) query, and we should not call update UI in this query.
+    Option(context.getLocalProperty(SQLExecution.EXECUTION_ID_KEY))
+      .map(_.toLong).filter(SQLExecution.getQueryExecution(_) eq newQueryExecution)
   }
 }
