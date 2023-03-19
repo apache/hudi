@@ -20,6 +20,7 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -548,6 +549,24 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeRequestedCleanerFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
+  }
+
+  public static void createCleanFile(String basePath, String instantTime, String earliestInstant, Configuration configuration)
+          throws IOException {
+    HoodieCleanMetadata metadata = HoodieCleanMetadata.newBuilder()
+        .setEarliestCommitToRetain(earliestInstant)
+        .setStartCleanTime(instantTime)
+        .setTimeTakenInMillis(1)
+        .setTotalFilesDeleted(1)
+        .setPartitionMetadata(Collections.emptyMap())
+        .setBootstrapPartitionMetadata(Collections.emptyMap())
+        .build();
+    Path filePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + HoodieTimeline.makeCleanerFileName(instantTime));
+    FileSystem fs = FSUtils.getFs(basePath, configuration);
+    FSDataOutputStream os = fs.create(filePath, true);
+    os.write(TimelineMetadataUtils.serializeCleanMetadata(metadata).get());
+    os.close();
   }
 
   private static void createEmptyFile(String basePath, Path filePath, Configuration configuration) throws IOException {

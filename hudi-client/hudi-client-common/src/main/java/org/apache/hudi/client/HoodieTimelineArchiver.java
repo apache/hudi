@@ -20,6 +20,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
@@ -422,6 +423,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
     Set<String> savepointTimestamps = table.getSavepointTimestamps();
     if (!commitTimeline.empty() && commitTimeline.countInstants() > maxInstantsToKeep) {
+      Option<String> latestCleanRetainedInstant = getLatestCleanRetainedInstant();
+
       // For Merge-On-Read table, inline or async compaction is enabled
       // We need to make sure that there are enough delta commits in the active timeline
       // to trigger compaction scheduling, when the trigger strategy of compaction is
@@ -474,11 +477,34 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               oldestInstantToRetainForClustering.map(instantToRetain ->
                       HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
                   .orElse(true)
+          ).filter(s ->
+              latestCleanRetainedInstant.map(instant ->
+                      compareTimestamps(s.getTimestamp(), LESSER_THAN, instant))
+                  .orElse(true)
           );
       return instantToArchiveStream.limit(commitTimeline.countInstants() - minInstantsToKeep);
     } else {
       return Stream.empty();
     }
+  }
+
+  /**
+   * Get earliest retained instant of last clean plan.
+   */
+  private Option<String> getLatestCleanRetainedInstant() throws IOException {
+    Option<String> latestCleanRetainedInstant = Option.empty();
+    HoodieTimeline cleanTimeline = table.getCleanTimeline().filterCompletedInstants();
+    if (config.incrementalCleanerModeEnabled()
+        && cleanTimeline.lastInstant().isPresent()
+        && !cleanTimeline.isEmpty(cleanTimeline.lastInstant().get())) {
+      HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
+          .deserializeHoodieCleanMetadata(cleanTimeline.getInstantDetails(cleanTimeline.lastInstant().get()).get());
+      if ((cleanMetadata.getEarliestCommitToRetain() != null)
+          && (cleanMetadata.getEarliestCommitToRetain().length() > 0)) {
+        latestCleanRetainedInstant = Option.of(cleanMetadata.getEarliestCommitToRetain());
+      }
+    }
+    return latestCleanRetainedInstant;
   }
 
   private Stream<HoodieInstant> getInstantsToArchive() throws IOException {

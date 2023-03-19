@@ -896,6 +896,49 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     assertFalse(wrapperFs.exists(markerPath));
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testArchiveCommitTimelineWithIncrementalClean(boolean incrementalClean) throws Exception {
+    init();
+    HoodieWriteConfig cfg =
+            HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+                    .withParallelism(2, 2).forTable("test-trip-table")
+                    .withCleanConfig(HoodieCleanConfig.newBuilder()
+                            .withIncrementalCleaningMode(incrementalClean).retainCommits(1).build())
+                    .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+                    .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+                            .withRemoteServerPort(timelineServicePort).build())
+                    .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+                    .build();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    HoodieTestDataGenerator.createCommitFile(basePath, "1", wrapperFs.getConf());
+    HoodieInstant instant1 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieTestDataGenerator.createCommitFile(basePath, "2", wrapperFs.getConf());
+    HoodieInstant instant2 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "2");
+    HoodieTestDataGenerator.createCleanFile(basePath, "3", "2", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "4", wrapperFs.getConf());
+    HoodieInstant instant4 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "4");
+
+    HoodieTestDataGenerator.createCommitFile(basePath, "5", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "6", wrapperFs.getConf());
+
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+    boolean result = archiver.archiveIfRequired(context);
+    assertTrue(result);
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+
+    if (incrementalClean) {
+      // only archive instant time 1 which is lesser than latest clean instant time 2
+      assertEquals(new HashSet<>(Collections.singletonList(instant1)),
+              archivedTimeline.filterCompletedInstants().getInstantsAsStream().collect(Collectors.toSet()));
+    } else {
+      assertEquals(new HashSet<>(Arrays.asList(instant1, instant2, instant4)),
+              archivedTimeline.filterCompletedInstants().getInstantsAsStream().collect(Collectors.toSet()));
+    }
+  }
+
   private void verifyInflightInstants(HoodieTableMetaClient metaClient, int expectedTotalInstants) {
     HoodieTimeline timeline = metaClient.getActiveTimeline().reload()
         .getTimelineOfActions(Collections.singleton(HoodieTimeline.CLEAN_ACTION)).filterInflights();
