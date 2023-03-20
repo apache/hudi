@@ -449,7 +449,10 @@ public class StreamSync implements Serializable, Closeable {
 
       result = writeToSinkAndDoMetaSync(instantTime, inputBatch, metrics, overallTimerContext);
     }
-
+    // refresh schemas if need be before next batch
+    if (schemaProvider != null) {
+      schemaProvider.refresh();
+    }
     metrics.updateStreamerSyncMetrics(System.currentTimeMillis());
     return result;
   }

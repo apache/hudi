@@ -45,6 +45,11 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   private final FileSystem fs;
 
+  private final String sourceFile;
+  private final String targetFile;
+  private final boolean shouldSanitize;
+  private final String invalidCharMask;
+
   protected Schema sourceSchema;
 
   protected Schema targetSchema;
@@ -52,16 +57,19 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   public FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     checkRequiredConfigProperties(props, Collections.singletonList(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE));
-    String sourceFile = getStringWithAltKeys(props, FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE);
-    boolean shouldSanitize = SanitizationUtils.shouldSanitize(props);
-    String invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
+    this.sourceFile = getStringWithAltKeys(props, FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE);
+    this.targetFile = getStringWithAltKeys(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE, sourceFile);
+    this.shouldSanitize = SanitizationUtils.shouldSanitize(props);
+    this.invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
     this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
-    this.sourceSchema = readAvroSchemaFromFile(sourceFile, this.fs, shouldSanitize, invalidCharMask);
+    this.sourceSchema = parseSchema(this.sourceFile);
     if (containsConfigProperty(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE)) {
-      this.targetSchema = readAvroSchemaFromFile(
-          getStringWithAltKeys(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE),
-          this.fs, shouldSanitize, invalidCharMask);
+      this.targetSchema = parseSchema(this.targetFile);
     }
+  }
+
+  private Schema parseSchema(String schemaFile) {
+    return readAvroSchemaFromFile(schemaFile, this.fs, shouldSanitize, invalidCharMask);
   }
 
   @Override
@@ -86,5 +94,12 @@ public class FilebasedSchemaProvider extends SchemaProvider {
       throw new HoodieSchemaProviderException(String.format("Error reading schema from file %s", schemaPath), ioe);
     }
     return SanitizationUtils.parseAvroSchema(schemaStr, sanitizeSchema, invalidCharMask);
+  }
+
+  // Per write batch, refresh the schemas from the file
+  @Override
+  public void refresh() {
+    this.sourceSchema = parseSchema(this.sourceFile);
+    this.targetSchema = parseSchema(this.targetFile);
   }
 }
