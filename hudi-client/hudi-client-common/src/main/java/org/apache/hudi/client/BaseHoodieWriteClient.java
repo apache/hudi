@@ -1236,12 +1236,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   @Override
   public void close() {
+    LOG.info("XXX Closing WriteClient ");
     // Stop timeline-server if running
     super.close();
     // Calling this here releases any resources used by your index, so make sure to finish any related operations
     // before this point
     this.index.close();
     this.tableServiceClient.close();
+    LOG.info("XXX Completed closing write client");
   }
 
   private void setWriteTimer(HoodieTable table) {
