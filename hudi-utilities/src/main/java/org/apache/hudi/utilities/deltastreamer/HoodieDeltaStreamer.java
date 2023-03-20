@@ -85,6 +85,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -147,6 +148,42 @@ public class HoodieDeltaStreamer implements Serializable {
           UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, this.properties);
       checkPointProvider.init(conf);
       cfg.checkpoint = checkPointProvider.getCheckpoint();
+    }
+
+    if (fs.exists(new Path(cfg.targetBasePath)) && cfg.tableMigrationType != Config.TableMigrationType.NONE) {
+      HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
+              .setConf(new Configuration(fs.getConf()))
+              .setBasePath(cfg.targetBasePath)
+              .setLoadActiveTimelineOnLoad(false)
+              .build();
+      Properties tableProps = new Properties();
+      tableProps.load(fs.open(new Path(cfg.targetBasePath + "/.hoodie/hoodie.properties")));
+      switch (cfg.tableMigrationType) {
+        case COW_TO_MOR:
+          if (meta.getTableType() == HoodieTableType.MERGE_ON_READ) {
+            LOG.info("table type is already MOR, no need to migrate");
+            break;
+          }
+          checkArgument(meta.getTableType() == HoodieTableType.COPY_ON_WRITE, "Hoodie table is of type " + meta.getTableType() + " but wanted to migrate to mor.");
+          LOG.info("old COW table props: " + tableProps.toString());
+          tableProps.setProperty("hoodie.table.type", HoodieTableType.MERGE_ON_READ.name());
+          LOG.info("new MOR table props: " + tableProps.toString());
+          HoodieTableConfig.create(fs, new Path(meta.getMetaPath()), tableProps);
+          break;
+        case MOR_TO_COW:
+          // TODO change mor to cow
+          if (meta.getTableType() == HoodieTableType.COPY_ON_WRITE) {
+            LOG.info("table type is already COW, no need to migrate");
+            break;
+          }
+          throw new HoodieException("currently not support migrating from mor to cow");
+        case NONE:
+          // do nothing
+          break;
+        default:
+          throw new HoodieException("not supported table migration type: " + cfg.tableMigrationType
+                  + ". currently only support COW_TO_MOR");
+      }
     }
 
     this.cfg = cfg;
@@ -393,6 +430,15 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--ingestion-metrics-class"}, description = "Ingestion metrics class for reporting metrics during ingestion lifecycles.")
     public String ingestionMetricsClass = HoodieDeltaStreamerMetrics.class.getCanonicalName();
+
+    public enum TableMigrationType {
+      NONE,
+      COW_TO_MOR,
+      MOR_TO_COW  // TODO support migrate from mor to cow
+    }
+
+    @Parameter(names = {"--migration-type"}, description = "table migration type: NONE, COW_TO_MOR, default NONE")
+    public TableMigrationType tableMigrationType = TableMigrationType.NONE;
 
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
