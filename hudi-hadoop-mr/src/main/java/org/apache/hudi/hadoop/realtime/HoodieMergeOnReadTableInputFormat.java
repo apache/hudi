@@ -282,7 +282,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
           inMemoryHosts == null
               ? super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts)
               : super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts, inMemoryHosts);
-      return createRealtimeBoostrapBaseFileSplit(
+      return createRealtimeBootstrapBaseFileSplit(
           (BootstrapBaseFileSplit) bf,
           path.getBasePath(),
           path.getDeltaLogFiles(),
@@ -312,7 +312,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     }
   }
 
-  private static HoodieRealtimeBootstrapBaseFileSplit createRealtimeBoostrapBaseFileSplit(BootstrapBaseFileSplit split,
+  private static HoodieRealtimeBootstrapBaseFileSplit createRealtimeBootstrapBaseFileSplit(BootstrapBaseFileSplit split,
                                                                                           String basePath,
                                                                                           List<HoodieLogFile> logFiles,
                                                                                           String maxInstantTime,

@@ -18,6 +18,9 @@
 
 package org.apache.spark.sql
 
+import org.apache.spark.sql.catalyst.analysis.ResolvedTable
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, TimeTravelRelation}
@@ -26,18 +29,11 @@ import org.apache.spark.sql.types.StructType
 
 object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
-  override def isRelationTimeTravel(plan: LogicalPlan): Boolean = {
-    plan.isInstanceOf[TimeTravelRelation]
-  }
-
-  override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
+  def unapplyResolvedTable(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)] =
     plan match {
-      case timeTravel: TimeTravelRelation =>
-        Some((timeTravel.table, timeTravel.timestamp, timeTravel.version))
-      case _ =>
-        None
+      case ResolvedTable(catalog, identifier, table, _) => Some((catalog, identifier, table))
+      case _ => None
     }
-  }
 
   override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema =
     ProjectionOverSchema(schema, output)

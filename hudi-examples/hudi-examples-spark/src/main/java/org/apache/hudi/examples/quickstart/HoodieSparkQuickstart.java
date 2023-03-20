@@ -115,7 +115,7 @@ public final class HoodieSparkQuickstart {
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
     Dataset<Row> df = spark.read().json(jsc.parallelize(inserts, 1));
 
-    df.write().format("org.apache.hudi")
+    df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
         .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
@@ -135,7 +135,7 @@ public final class HoodieSparkQuickstart {
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInsertsOnPartition(commitTime, 20, HoodieExampleDataGenerator.DEFAULT_THIRD_PARTITION_PATH));
     Dataset<Row> df = spark.read().json(jsc.parallelize(inserts, 1));
 
-    df.write().format("org.apache.hudi")
+    df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
         .option("hoodie.datasource.write.operation", WriteOperationType.INSERT_OVERWRITE.name())
         .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
@@ -154,7 +154,7 @@ public final class HoodieSparkQuickstart {
                                HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
     Dataset<Row> roViewDF = spark
         .read()
-        .format("org.apache.hudi")
+        .format("hudi")
         .load(tablePath + "/*/*/*/*");
 
     roViewDF.createOrReplaceTempView("hudi_ro_table");
@@ -186,7 +186,7 @@ public final class HoodieSparkQuickstart {
     String commitTime = Long.toString(System.currentTimeMillis());
     List<String> updates = dataGen.convertToStringList(dataGen.generateUniqueUpdates(commitTime));
     Dataset<Row> df = spark.read().json(jsc.parallelize(updates, 1));
-    df.write().format("org.apache.hudi")
+    df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
         .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
@@ -202,12 +202,12 @@ public final class HoodieSparkQuickstart {
    */
   public static Dataset<Row> delete(SparkSession spark, String tablePath, String tableName) {
 
-    Dataset<Row> roViewDF = spark.read().format("org.apache.hudi").load(tablePath + "/*/*/*/*");
+    Dataset<Row> roViewDF = spark.read().format("hudi").load(tablePath + "/*/*/*/*");
     roViewDF.createOrReplaceTempView("hudi_ro_table");
     Dataset<Row> toBeDeletedDf = spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table limit 2");
     Dataset<Row> df = toBeDeletedDf.select("uuid", "partitionpath", "ts");
 
-    df.write().format("org.apache.hudi")
+    df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
         .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
@@ -224,7 +224,7 @@ public final class HoodieSparkQuickstart {
    */
   public static void deleteByPartition(SparkSession spark, String tablePath, String tableName) {
     Dataset<Row> df = spark.emptyDataFrame();
-    df.write().format("org.apache.hudi")
+    df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
         .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
@@ -253,7 +253,7 @@ public final class HoodieSparkQuickstart {
     // incrementally query data
     Dataset<Row> incViewDF = spark
         .read()
-        .format("org.apache.hudi")
+        .format("hudi")
         .option("hoodie.datasource.query.type", "incremental")
         .option("hoodie.datasource.read.begin.instanttime", beginTime)
         .load(tablePath);
@@ -278,7 +278,7 @@ public final class HoodieSparkQuickstart {
     String endTime = commits.get(commits.size() - 1); // commit time we are interested in
 
     //incrementally query data
-    Dataset<Row> incViewDF = spark.read().format("org.apache.hudi")
+    Dataset<Row> incViewDF = spark.read().format("hudi")
         .option("hoodie.datasource.query.type", "incremental")
         .option("hoodie.datasource.read.begin.instanttime", beginTime)
         .option("hoodie.datasource.read.end.instanttime", endTime)

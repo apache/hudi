@@ -817,7 +817,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  private Option<byte[]> readDataFromPath(Path detailPath) {
+  protected Option<byte[]> readDataFromPath(Path detailPath) {
     try (FSDataInputStream is = metaClient.getFs().open(detailPath)) {
       return Option.of(FileIOUtils.readAsByteArray(is));
     } catch (IOException e) {

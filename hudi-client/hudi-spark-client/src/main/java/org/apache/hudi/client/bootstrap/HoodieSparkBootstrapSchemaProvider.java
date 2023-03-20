@@ -60,7 +60,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
           } else if (ORC.getFileExtension().equals(extension)) {
             return getBootstrapSourceSchemaOrc(writeConfig, context, filePath);
           } else {
-            throw new HoodieException("Could not determine schema from the data files.");
+            throw new HoodieException("Could not determine schema from the data files, supported file formats: [ORC, PARQUET].");
           }
         }
     ).filter(Objects::nonNull).findAny()
@@ -92,7 +92,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     try {
       orcReader = OrcFile.createReader(filePath, OrcFile.readerOptions(context.getHadoopConf().get()));
     } catch (IOException e) {
-      throw new HoodieException("Could not determine schema from the data files.");
+      throw new HoodieException("Could not determine schema from the ORC data files.");
     }
     TypeDescription orcSchema = orcReader.getSchema();
     String tableName = HoodieAvroUtils.sanitizeName(writeConfig.getTableName());

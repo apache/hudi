@@ -80,7 +80,7 @@ public class FSUtils {
   // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1_1-0-1
   // Archive log files are of this pattern - .commits_.archive.1_1-0-1
   public static final Pattern LOG_FILE_PATTERN =
-      Pattern.compile("\\.(.+)_(.*)\\.(.+)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
+      Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
   private static final long MIN_CLEAN_TO_KEEP = 10;
   private static final long MIN_ROLLBACK_TO_KEEP = 10;
@@ -582,7 +582,7 @@ public class FSUtils {
   /**
    * When a file was opened and the task died without closing the stream, another task executor cannot open because the
    * existing lease will be active. We will try to recover the lease, from HDFS. If a data node went down, it takes
-   * about 10 minutes for the lease to be rocovered. But if the client dies, this should be instant.
+   * about 10 minutes for the lease to be recovered. But if the client dies, this should be instant.
    */
   public static boolean recoverDFSFileLease(final DistributedFileSystem dfs, final Path p)
       throws IOException, InterruptedException {

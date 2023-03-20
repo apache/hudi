@@ -21,6 +21,7 @@ package org.apache.hudi.table.format.cow.vector.reader;
 import org.apache.hudi.table.format.cow.vector.ParquetDecimalVector;
 
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.columnar.ColumnarRowData;
 import org.apache.flink.table.data.columnar.vector.ColumnVector;
 import org.apache.flink.table.data.columnar.vector.VectorizedColumnBatch;
@@ -266,7 +267,7 @@ public class ParquetColumnarRowSplitReader implements Closeable {
     return !ensureBatch();
   }
 
-  public ColumnarRowData nextRecord() {
+  public RowData nextRecord() {
     // return the next row
     row.setRowId(this.nextRow++);
     return row;

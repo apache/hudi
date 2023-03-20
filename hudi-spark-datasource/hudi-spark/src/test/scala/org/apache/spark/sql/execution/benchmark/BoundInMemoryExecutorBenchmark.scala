@@ -39,6 +39,7 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
     .appName(this.getClass.getCanonicalName)
     .withExtensions(new HoodieSparkSessionExtension)
     .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
     .config("spark.sql.session.timeZone", "CTT")
     .config(sparkConf())
     .getOrCreate()

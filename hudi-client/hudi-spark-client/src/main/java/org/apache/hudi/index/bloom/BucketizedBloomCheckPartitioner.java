@@ -18,6 +18,7 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -63,7 +64,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
   /**
    * Stores the final mapping of a file group to a list of partitions for its keys.
    */
-  private Map<String, List<Integer>> fileGroupToPartitions;
+  private Map<HoodieFileGroupId, List<Integer>> fileGroupToPartitions;
 
   /**
    * Create a partitioner that computes a plan based on provided workload characteristics.
@@ -72,11 +73,11 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
    * @param fileGroupToComparisons number of expected comparisons per file group
    * @param keysPerBucket maximum number of keys to pack in a single bucket
    */
-  public BucketizedBloomCheckPartitioner(int targetPartitions, Map<String, Long> fileGroupToComparisons,
+  public BucketizedBloomCheckPartitioner(int targetPartitions, Map<HoodieFileGroupId, Long> fileGroupToComparisons,
       int keysPerBucket) {
     this.fileGroupToPartitions = new HashMap<>();
 
-    Map<String, Integer> bucketsPerFileGroup = new HashMap<>();
+    Map<HoodieFileGroupId, Integer> bucketsPerFileGroup = new HashMap<>();
     // Compute the buckets needed per file group, using simple uniform distribution
     fileGroupToComparisons.forEach((f, c) -> bucketsPerFileGroup.put(f, (int) Math.ceil((c * 1.0) / keysPerBucket)));
     int totalBuckets = bucketsPerFileGroup.values().stream().mapToInt(i -> i).sum();
@@ -90,9 +91,9 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     int minBucketsPerPartition = Math.max((int) Math.floor((1.0 * totalBuckets) / partitions), 1);
     LOG.info(String.format("TotalBuckets %d, min_buckets/partition %d", totalBuckets, minBucketsPerPartition));
     int[] bucketsFilled = new int[partitions];
-    Map<String, AtomicInteger> bucketsFilledPerFileGroup = new HashMap<>();
+    Map<HoodieFileGroupId, AtomicInteger> bucketsFilledPerFileGroup = new HashMap<>();
     int partitionIndex = 0;
-    for (Map.Entry<String, Integer> e : bucketsPerFileGroup.entrySet()) {
+    for (Map.Entry<HoodieFileGroupId, Integer> e : bucketsPerFileGroup.entrySet()) {
       for (int b = 0; b < Math.max(1, e.getValue() - 1); b++) {
         // keep filled counts upto date
         bucketsFilled[partitionIndex]++;
@@ -115,7 +116,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     // PHASE 2 : for remaining unassigned buckets, round robin over partitions once. Since we withheld 1 bucket from
     // each file group uniformly, this remaining is also an uniform mix across file groups. We just round robin to
     // optimize for goal 2.
-    for (Map.Entry<String, Integer> e : bucketsPerFileGroup.entrySet()) {
+    for (Map.Entry<HoodieFileGroupId, Integer> e : bucketsPerFileGroup.entrySet()) {
       int remaining = e.getValue() - bucketsFilledPerFileGroup.get(e.getKey()).intValue();
       for (int r = 0; r < remaining; r++) {
         // mark this partition against the file group
@@ -142,7 +143,8 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
 
   @Override
   public int getPartition(Object key) {
-    final Pair<String, String> parts = (Pair<String, String>) key;
+    final Pair<HoodieFileGroupId, String> parts = (Pair<HoodieFileGroupId, String>) key;
+    // TODO replace w/ more performant hash
     final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", parts.getRight());
     final List<Integer> candidatePartitions = fileGroupToPartitions.get(parts.getLeft());
     final int idx = (int) Math.floorMod((int) hashOfKey, candidatePartitions.size());
@@ -150,7 +152,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     return candidatePartitions.get(idx);
   }
 
-  Map<String, List<Integer>> getFileGroupToPartitions() {
+  Map<HoodieFileGroupId, List<Integer>> getFileGroupToPartitions() {
     return fileGroupToPartitions;
   }
 }

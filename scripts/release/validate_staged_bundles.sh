@@ -29,6 +29,9 @@ VERSION=$2
 STAGING_REPO="https://repository.apache.org/content/repositories/${REPO}/org/apache/hudi"
 
 declare -a BUNDLE_URLS=(
+"${STAGING_REPO}/hudi-aws-bundle/${VERSION}/hudi-aws-bundle-${VERSION}.jar"
+"${STAGING_REPO}/hudi-cli-bundle_2.11/${VERSION}/hudi-cli-bundle_2.11-${VERSION}.jar"
+"${STAGING_REPO}/hudi-cli-bundle_2.12/${VERSION}/hudi-cli-bundle_2.12-${VERSION}.jar"
 "${STAGING_REPO}/hudi-datahub-sync-bundle/${VERSION}/hudi-datahub-sync-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-flink1.13-bundle/${VERSION}/hudi-flink1.13-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-flink1.14-bundle/${VERSION}/hudi-flink1.14-bundle-${VERSION}.jar"
@@ -39,6 +42,7 @@ declare -a BUNDLE_URLS=(
 "${STAGING_REPO}/hudi-hive-sync-bundle/${VERSION}/hudi-hive-sync-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-integ-test-bundle/${VERSION}/hudi-integ-test-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-kafka-connect-bundle/${VERSION}/hudi-kafka-connect-bundle-${VERSION}.jar"
+"${STAGING_REPO}/hudi-metaserver-server-bundle/${VERSION}/hudi-metaserver-server-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-presto-bundle/${VERSION}/hudi-presto-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-spark-bundle_2.11/${VERSION}/hudi-spark-bundle_2.11-${VERSION}.jar"
 "${STAGING_REPO}/hudi-spark-bundle_2.12/${VERSION}/hudi-spark-bundle_2.12-${VERSION}.jar"

@@ -57,7 +57,7 @@ class SparkDeletePartitionNode(dagNodeConfig: Config) extends DagNode[RDD[WriteS
     println("Generating input data for node {}", this.getName)
 
     context.getWriterContext.getSparkSession.emptyDataFrame.write.format("hudi")
-      .options(DataSourceWriteOptions.translateSqlOptions(context.getWriterContext.getProps.asScala.toMap))
+      .options(DataSourceWriteOptions.mayBeDerivePartitionPath(context.getWriterContext.getProps.asScala.toMap))
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), SchemaUtils.SOURCE_ORDERING_FIELD)
       .option(DataSourceWriteOptions.TABLE_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.tableType)

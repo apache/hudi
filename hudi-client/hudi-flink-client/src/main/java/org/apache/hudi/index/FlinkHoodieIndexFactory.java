@@ -46,8 +46,10 @@ public final class FlinkHoodieIndexFactory {
       return (HoodieIndex) instance;
     }
 
-    // TODO more indexes to be added
     switch (config.getIndexType()) {
+      case FLINK_STATE:
+        // Flink state index stores the index mappings with a state-backend,
+        // instantiates an in-memory HoodieIndex component as a placeholder.
       case INMEMORY:
         return new FlinkInMemoryStateIndex(context, config);
       case BLOOM:

@@ -20,6 +20,7 @@ package org.apache.hudi.sink.meta;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -75,12 +76,13 @@ public class CkpMetadata implements Serializable {
   private List<String> instantCache;
 
   private CkpMetadata(Configuration config) {
-    this(FSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)), config.getString(FlinkOptions.PATH));
+    this(FSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)),
+        config.getString(FlinkOptions.PATH), config.getString(FlinkOptions.WRITE_CLIENT_ID));
   }
 
-  private CkpMetadata(FileSystem fs, String basePath) {
+  private CkpMetadata(FileSystem fs, String basePath, String uniqueId) {
     this.fs = fs;
-    this.path = new Path(ckpMetaPath(basePath));
+    this.path = new Path(ckpMetaPath(basePath, uniqueId));
   }
 
   public void close() {
@@ -208,12 +210,17 @@ public class CkpMetadata implements Serializable {
     return new CkpMetadata(config);
   }
 
-  public static CkpMetadata getInstance(FileSystem fs, String basePath) {
-    return new CkpMetadata(fs, basePath);
+  public static CkpMetadata getInstance(HoodieTableMetaClient metaClient, String uniqueId) {
+    return new CkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId);
   }
 
-  protected static String ckpMetaPath(String basePath) {
-    return basePath + Path.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + Path.SEPARATOR + CKP_META;
+  public static CkpMetadata getInstance(FileSystem fs, String basePath, String uniqueId) {
+    return new CkpMetadata(fs, basePath, uniqueId);
+  }
+
+  protected static String ckpMetaPath(String basePath, String uniqueId) {
+    String metaPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + Path.SEPARATOR + CKP_META;
+    return StringUtils.isNullOrEmpty(uniqueId) ? metaPath : metaPath + "_" + uniqueId;
   }
 
   private Path fullPath(String fileName) {
@@ -221,6 +228,10 @@ public class CkpMetadata implements Serializable {
   }
 
   private List<CkpMessage> scanCkpMetadata(Path ckpMetaPath) throws IOException {
+    // This is required when the storage is minio
+    if (!this.fs.exists(ckpMetaPath)) {
+      return new ArrayList<>();
+    }
     return Arrays.stream(this.fs.listStatus(ckpMetaPath)).map(CkpMessage::new)
         .collect(Collectors.groupingBy(CkpMessage::getInstant)).values().stream()
         .map(messages -> messages.stream().reduce((x, y) -> {

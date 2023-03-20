@@ -83,10 +83,16 @@ public interface TableChange {
     protected final InternalSchema internalSchema;
     protected final Map<Integer, Integer> id2parent;
     protected final Map<Integer, ArrayList<ColumnPositionChange>> positionChangeMap = new HashMap<>();
+    protected final boolean caseSensitive;
 
     BaseColumnChange(InternalSchema schema) {
+      this(schema, false);
+    }
+
+    BaseColumnChange(InternalSchema schema, boolean caseSensitive) {
       this.internalSchema = schema;
       this.id2parent = InternalSchemaBuilder.getBuilder().index2Parents(schema.getRecord());
+      this.caseSensitive = caseSensitive;
     }
 
     /**

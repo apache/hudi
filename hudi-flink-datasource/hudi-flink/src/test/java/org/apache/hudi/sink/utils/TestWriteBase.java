@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
@@ -38,13 +39,16 @@ import org.hamcrest.MatcherAssert;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -121,23 +125,25 @@ public class TestWriteBase {
     private Configuration conf;
     private TestFunctionWrapper<RowData> pipeline;
 
+    private CkpMetadata ckpMetadata;
+
     private String lastPending;
     private String lastComplete;
 
     public TestHarness preparePipeline(File basePath, Configuration conf) throws Exception {
-      preparePipeline(basePath, conf, false);
-      return this;
-    }
-
-    public TestHarness preparePipeline(File basePath, Configuration conf, boolean append) throws Exception {
       this.baseFile = basePath;
       this.basePath = this.baseFile.getAbsolutePath();
       this.conf = conf;
-      this.pipeline = append
-          ? new InsertFunctionWrapper<>(this.basePath, conf)
-          : new StreamWriteFunctionWrapper<>(this.basePath, conf);
+      if (OptionsResolver.isAppendMode(conf)) {
+        this.pipeline = new InsertFunctionWrapper<>(this.basePath, conf);
+      } else if (OptionsResolver.isBucketIndexType(conf)) {
+        this.pipeline = new BucketStreamWriteFunctionWrapper<>(this.basePath, conf);
+      } else {
+        this.pipeline = new StreamWriteFunctionWrapper<>(this.basePath, conf);
+      }
       // open the function and ingest data
       this.pipeline.openFunction();
+      this.ckpMetadata = CkpMetadata.getInstance(conf);
       return this;
     }
 
@@ -258,10 +264,23 @@ public class TestWriteBase {
       this.lastPending = lastPendingInstant();
       this.pipeline.checkpointComplete(checkpointId);
       // started a new instant already
-      checkInflightInstant();
+      String newInflight = checkInflightInstant();
       checkInstantState(HoodieInstant.State.COMPLETED, lastPending);
       this.lastComplete = lastPending;
-      this.lastPending = lastPendingInstant(); // refresh last pending instant
+      this.lastPending = newInflight; // refresh last pending instant
+      return this;
+    }
+
+    /**
+     * Asserts the checkpoint with id {@code checkpointId} throws when completes .
+     */
+    public TestHarness checkpointCompleteThrows(long checkpointId, Class<?> cause, String msg) {
+      this.pipeline.checkpointComplete(checkpointId);
+      assertTrue(this.pipeline.getCoordinatorContext().isJobFailed(), "Job should have been failed");
+      Throwable throwable = this.pipeline.getCoordinatorContext().getJobFailureReason().getCause();
+      assertThat(throwable, instanceOf(cause));
+      assertThat(throwable.getMessage(), containsString(msg));
+      // assertThrows(HoodieException.class, () -> , msg);
       return this;
     }
 
@@ -318,10 +337,26 @@ public class TestWriteBase {
      * Asserts the data files are empty.
      */
     public TestHarness assertEmptyDataFiles() {
-      File[] dataFiles = baseFile.listFiles(file -> !file.getName().startsWith("."));
-      assertNotNull(dataFiles);
-      assertThat(dataFiles.length, is(0));
+      assertFalse(fileExists(), "No data files should have been created");
       return this;
+    }
+
+    private boolean fileExists() {
+      List<File> dirsToCheck = new ArrayList<>();
+      dirsToCheck.add(baseFile);
+      while (!dirsToCheck.isEmpty()) {
+        File dir = dirsToCheck.remove(0);
+        for (File file : Objects.requireNonNull(dir.listFiles())) {
+          if (!file.getName().startsWith(".")) {
+            if (file.isDirectory()) {
+              dirsToCheck.add(file);
+            } else {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
     }
 
     public TestHarness checkWrittenData(Map<String, String> expected) throws Exception {
@@ -385,12 +420,13 @@ public class TestWriteBase {
     }
 
     private String lastPendingInstant() {
-      return TestUtils.getLastPendingInstant(basePath);
+      return this.ckpMetadata.lastPendingInstant();
     }
 
-    private void checkInflightInstant() {
-      final String instant = TestUtils.getLastPendingInstant(basePath);
+    private String checkInflightInstant() {
+      final String instant = this.ckpMetadata.lastPendingInstant();
       assertNotNull(instant);
+      return instant;
     }
 
     private void checkInstantState(HoodieInstant.State state, String instantStr) {

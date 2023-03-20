@@ -45,6 +45,7 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
     .config("spark.driver.memory", "4G")
     .config("spark.executor.memory", "4G")
     .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
     .config("hoodie.insert.shuffle.parallelism", "2")
     .config("hoodie.upsert.shuffle.parallelism", "2")
     .config("hoodie.delete.shuffle.parallelism", "2")

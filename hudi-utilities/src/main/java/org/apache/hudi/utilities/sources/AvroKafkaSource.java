@@ -22,15 +22,17 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -51,13 +53,19 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
   public static final String KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA = KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX + "schema";
   private final String deserializerClassName;
 
+  //other schema provider may have kafka offsets
+  protected final SchemaProvider originalSchemaProvider;
+
   public AvroKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-      SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
-    super(props, sparkContext, sparkSession, schemaProvider, SourceType.AVRO, metrics);
+                         SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
+    super(props, sparkContext, sparkSession,
+        UtilHelpers.getSchemaProviderForKafkaSource(schemaProvider, props, sparkContext),
+        SourceType.AVRO, metrics);
+    this.originalSchemaProvider = schemaProvider;
 
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
     deserializerClassName = props.getString(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().key(),
-            DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().defaultValue());
+        DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().defaultValue());
 
     try {
       props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName).getName());
@@ -77,16 +85,31 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
 
   @Override
   JavaRDD<GenericRecord> toRDD(OffsetRange[] offsetRanges) {
+    JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD;
     if (deserializerClassName.equals(ByteArrayDeserializer.class.getName())) {
       if (schemaProvider == null) {
         throw new HoodieException("Please provide a valid schema provider class when use ByteArrayDeserializer!");
       }
-      AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceSchema());
-      return KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-              LocationStrategies.PreferConsistent()).map(obj -> convertor.fromAvroBinary(obj.value()));
+
+      //Don't want kafka offsets here so we use originalSchemaProvider
+      AvroConvertor convertor = new AvroConvertor(originalSchemaProvider.getSourceSchema());
+      kafkaRDD = KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
+          LocationStrategies.PreferConsistent()).map(obj ->
+          new ConsumerRecord<>(obj.topic(), obj.partition(), obj.offset(),
+              obj.key(), convertor.fromAvroBinary(obj.value())));
     } else {
-      return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-              LocationStrategies.PreferConsistent()).map(obj -> (GenericRecord) obj.value());
+      kafkaRDD = KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
+          LocationStrategies.PreferConsistent());
+    }
+    return maybeAppendKafkaOffsets(kafkaRDD);
+  }
+
+  protected JavaRDD<GenericRecord> maybeAppendKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {
+    if (this.shouldAddOffsets) {
+      AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceSchema());
+      return kafkaRDD.map(convertor::withKafkaFieldsAppended);
+    } else {
+      return kafkaRDD.map(consumerRecord -> (GenericRecord) consumerRecord.value());
     }
   }
 }

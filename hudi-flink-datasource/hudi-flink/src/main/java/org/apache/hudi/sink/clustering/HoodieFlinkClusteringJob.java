@@ -191,6 +191,9 @@ public class HoodieFlinkClusteringJob {
       // set table schema
       CompactionUtil.setAvroSchema(conf, metaClient);
 
+      // infer metadata config
+      CompactionUtil.inferMetadataConf(conf, metaClient);
+
       this.writeClient = FlinkWriteClients.createWriteClientV2(conf);
       this.writeConfig = writeClient.getConfig();
       this.table = writeClient.getHoodieTable();

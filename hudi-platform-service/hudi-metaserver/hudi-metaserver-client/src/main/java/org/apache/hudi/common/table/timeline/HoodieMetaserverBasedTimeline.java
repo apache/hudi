@@ -70,7 +70,8 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
     throw new HoodieException("Unsupported now");
   }
 
-  public Option<byte[]> readDataFromPath(Path detailPath) {
+  @Override
+  protected Option<byte[]> readDataFromPath(Path detailPath) {
     FileStatus status = new FileStatus();
     status.setPath(detailPath);
     HoodieInstant instant = new HoodieInstant(status);

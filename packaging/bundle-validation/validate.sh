@@ -34,6 +34,7 @@ ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
+ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
 
 
 ##
@@ -57,15 +58,15 @@ test_spark_hadoop_mr_bundles () {
     echo "::warning::validate.sh Query and validate the results using Spark SQL"
     # save Spark SQL query results
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar \
-      -i <(echo 'spark.sql("select * from trips").coalesce(1).write.csv("/tmp/sparksql/trips/results"); System.exit(0)')
-    numRecordsSparkSQL=$(cat /tmp/sparksql/trips/results/*.csv | wc -l)
-    if [ "$numRecordsSparkSQL" -ne 10 ]; then
+      -i <(echo 'spark.sql("select * from trips").coalesce(1).write.csv("/tmp/spark-bundle/sparksql/trips/results"); System.exit(0)')
+    numRecords=$(cat /tmp/spark-bundle/sparksql/trips/results/*.csv | wc -l)
+    if [ "$numRecords" -ne 10 ]; then
         echo "::error::validate.sh Spark SQL validation failed."
         exit 1
     fi
     echo "::warning::validate.sh Query and validate the results using HiveQL"
     # save HiveQL query results
-    hiveqlresultsdir=/tmp/hiveql/trips/results
+    hiveqlresultsdir=/tmp/hadoop-mr-bundle/hiveql/trips/results
     mkdir -p $hiveqlresultsdir
     $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
       -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
@@ -152,7 +153,11 @@ test_flink_bundle() {
     local EXIT_CODE=$?
     $FLINK_HOME/bin/stop-cluster.sh
     unset HADOOP_CLASSPATH
-    exit $EXIT_CODE
+    if [ "$EXIT_CODE" -ne 0 ]; then
+        echo "::error::validate.sh Flink bundle validation failed."
+        exit 1
+    fi
+    echo "::warning::validate.sh done validating Flink bundle validation was successful."
 }
 
 
@@ -183,6 +188,48 @@ test_kafka_connect_bundle() {
     $WORKDIR/kafka/consume.sh
     local EXIT_CODE=$?
     kill $ZOOKEEPER_PID $KAFKA_SERVER_PID $SCHEMA_REG_PID
+    if [ "$EXIT_CODE" -ne 0 ]; then
+        echo "::error::validate.sh Kafka Connect bundle validation failed."
+        exit 1
+    fi
+    echo "::warning::validate.sh done validating Kafka Connect bundle validation was successful."
+}
+
+##
+# Function to test the hudi metaserver bundles.
+#
+# env vars (defined in container):
+#   SPARK_HOME: path to the spark directory
+##
+test_metaserver_bundle () {
+    echo "::warning::validate.sh setting up Metaserver bundle validation"
+
+    echo "::warning::validate.sh Start Metaserver"
+    java -jar $JARS_DIR/metaserver.jar &
+    local METASEVER_PID=$!
+
+    echo "::warning::validate.sh Start hive server"
+    $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
+    local DERBY_PID=$!
+    $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
+    local HIVE_PID=$!
+
+    echo "::warning::validate.sh Writing sample data via Spark DataSource."
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/service/write.scala
+    ls /tmp/hudi-bundles/tests/trips
+
+    echo "::warning::validate.sh Query and validate the results using Spark DataSource"
+    # save Spark DataSource query results
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar  < $WORKDIR/service/read.scala
+    numRecords=$(cat /tmp/metaserver-bundle/sparkdatasource/trips/results/*.csv | wc -l)
+    echo $numRecords
+    if [ "$numRecords" -ne 10 ]; then
+        echo "::error::validate.sh Metaserver bundle validation failed."
+        exit 1
+    fi
+
+    echo "::warning::validate.sh Metaserver bundle validation was successful."
+    kill $DERBY_PID $HIVE_PID $METASEVER_PID
 }
 
 
@@ -229,3 +276,10 @@ if [ "$?" -ne 0 ]; then
     exit 1
 fi
 echo "::warning::validate.sh done validating kafka connect bundle"
+
+echo "::warning::validate.sh validating metaserver bundle"
+test_metaserver_bundle
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+echo "::warning::validate.sh done validating metaserver bundle"

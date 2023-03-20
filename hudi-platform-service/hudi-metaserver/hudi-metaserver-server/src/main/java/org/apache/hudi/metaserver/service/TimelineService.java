@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metaserver.service;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metaserver.store.MetaserverStorage;
 import org.apache.hudi.metaserver.thrift.HoodieInstantChangeResult;
 import org.apache.hudi.metaserver.thrift.MetaserverException;
@@ -29,7 +30,6 @@ import org.apache.hudi.metaserver.thrift.TState;
 import org.apache.hudi.metaserver.util.MetaserverTableUtils;
 
 import org.apache.log4j.Logger;
-import org.apache.thrift.TException;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
@@ -54,7 +54,7 @@ public class TimelineService implements Serializable {
     this.store = metaserverStorage;
   }
 
-  public List<THoodieInstant> listInstants(String db, String tb, int num) throws TException {
+  public List<THoodieInstant> listInstants(String db, String tb, int num) throws MetaserverStorageException, NoSuchObjectException {
     Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     List<THoodieInstant> completeds = store.scanInstants(tableId, TState.COMPLETED, num);
     List<THoodieInstant> pendings = store.scanInstants(tableId, PENDING_STATES, -1);
@@ -62,9 +62,10 @@ public class TimelineService implements Serializable {
     return completeds;
   }
 
-  public ByteBuffer getInstantMetadata(String db, String tb, THoodieInstant instant) throws TException {
+  public ByteBuffer getInstantMetadata(String db, String tb, THoodieInstant instant) throws MetaserverStorageException, NoSuchObjectException {
     Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
-    return ByteBuffer.wrap(store.getInstantMetadata(tableId, instant));
+    Option<byte[]> instantMetadata = store.getInstantMetadata(tableId, instant);
+    return ByteBuffer.wrap(instantMetadata.orElse(new byte[0]));
   }
 
   public String createNewInstantTime(String db, String tb) throws MetaserverStorageException, NoSuchObjectException {
@@ -72,7 +73,7 @@ public class TimelineService implements Serializable {
     return store.createNewTimestamp(tableId);
   }
 
-  public HoodieInstantChangeResult createNewInstantWithTime(String db, String tb, THoodieInstant instant, ByteBuffer content) throws TException {
+  public HoodieInstantChangeResult createNewInstantWithTime(String db, String tb, THoodieInstant instant, ByteBuffer content) throws MetaserverStorageException, NoSuchObjectException {
     checkArgument(instant.getState().equals(TState.REQUESTED));
     Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     HoodieInstantChangeResult result = new HoodieInstantChangeResult();
@@ -86,7 +87,8 @@ public class TimelineService implements Serializable {
     return result;
   }
 
-  public HoodieInstantChangeResult transitionInstantState(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata) throws TException {
+  public HoodieInstantChangeResult transitionInstantState(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata)
+      throws MetaserverStorageException, NoSuchObjectException, MetaserverException {
     switch (fromInstant.getState()) {
       case REQUESTED:
         return transitionRequestedToInflight(db, tb, fromInstant, toInstant, metadata);
@@ -97,7 +99,8 @@ public class TimelineService implements Serializable {
     }
   }
 
-  private HoodieInstantChangeResult transitionRequestedToInflight(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata) throws TException {
+  private HoodieInstantChangeResult transitionRequestedToInflight(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata)
+      throws MetaserverStorageException, NoSuchObjectException {
     checkArgument(fromInstant.getState().equals(TState.REQUESTED));
     checkArgument(toInstant.getState().equals(TState.INFLIGHT));
     HoodieInstantChangeResult result = new HoodieInstantChangeResult();
@@ -113,7 +116,8 @@ public class TimelineService implements Serializable {
     return result;
   }
 
-  private HoodieInstantChangeResult transitionInflightToCompleted(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata) throws TException {
+  private HoodieInstantChangeResult transitionInflightToCompleted(String db, String tb, THoodieInstant fromInstant, THoodieInstant toInstant, ByteBuffer metadata)
+      throws MetaserverStorageException, NoSuchObjectException {
     checkArgument(fromInstant.getState().equals(TState.INFLIGHT));
     checkArgument(toInstant.getState().equals(TState.COMPLETED));
     HoodieInstantChangeResult result = new HoodieInstantChangeResult();
@@ -130,7 +134,7 @@ public class TimelineService implements Serializable {
     return result;
   }
 
-  public HoodieInstantChangeResult deleteInstant(String db, String tb, THoodieInstant instant) throws TException {
+  public HoodieInstantChangeResult deleteInstant(String db, String tb, THoodieInstant instant) throws MetaserverStorageException, NoSuchObjectException {
     Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     HoodieInstantChangeResult result = new HoodieInstantChangeResult();
     if (store.instantExists(tableId, instant)) {

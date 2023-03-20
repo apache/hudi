@@ -18,23 +18,13 @@
 
 package org.apache.hudi.utilities.sources.debezium;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.Schema.Type;
-import org.apache.avro.generic.GenericRecord;
-
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.RowSource;
@@ -42,6 +32,10 @@ import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
+import org.apache.avro.Schema.Type;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -56,6 +50,11 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Base class for Debezium streaming source which expects change events as Kafka Avro records.
@@ -72,14 +71,14 @@ public abstract class DebeziumSource extends RowSource {
   private static final String DATE_CONNECT_NAME = "custom.debezium.DateString";
 
   private final KafkaOffsetGen offsetGen;
-  private final HoodieDeltaStreamerMetrics metrics;
+  private final HoodieIngestionMetrics metrics;
   private final SchemaRegistryProvider schemaRegistryProvider;
   private final String deserializerClassName;
 
   public DebeziumSource(TypedProperties props, JavaSparkContext sparkContext,
                         SparkSession sparkSession,
                         SchemaProvider schemaProvider,
-                        HoodieDeltaStreamerMetrics metrics) {
+                        HoodieIngestionMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider);
 
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());

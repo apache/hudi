@@ -23,14 +23,11 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.metadata.Hive;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -38,7 +35,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -59,16 +55,9 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private SessionState sessionState;
   private Driver hiveDriver;
 
-  public HiveQueryDDLExecutor(HiveSyncConfig config) throws HiveException, MetaException {
+  public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) {
     super(config);
-    HiveConf hiveConf = config.getHiveConf();
-    IMetaStoreClient tempMetaStoreClient;
-    try {
-      tempMetaStoreClient = ((Hive) Hive.class.getMethod("getWithoutRegisterFns", HiveConf.class).invoke(null, hiveConf)).getMSC();
-    } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
-      tempMetaStoreClient = Hive.get(hiveConf).getMSC();
-    }
-    this.metaStoreClient = tempMetaStoreClient;
+    this.metaStoreClient = metaStoreClient;
     try {
       this.sessionState = new SessionState(config.getHiveConf(),
           UserGroupInformation.getCurrentUser().getShortUserName());

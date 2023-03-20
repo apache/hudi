@@ -148,7 +148,7 @@ public abstract class AbstractStreamWriteFunction<I>
             TypeInformation.of(WriteMetadataEvent.class)
         ));
 
-    this.ckpMetadata = CkpMetadata.getInstance(this.metaClient.getFs(), this.metaClient.getBasePath());
+    this.ckpMetadata = CkpMetadata.getInstance(this.metaClient, this.config.getString(FlinkOptions.WRITE_CLIENT_ID));
     this.currentInstant = lastPendingInstant();
     if (context.isRestored()) {
       restoreWriteMetadata();

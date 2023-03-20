@@ -18,6 +18,10 @@
 
 package org.apache.hudi.metaserver.store;
 
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metaserver.store.bean.InstantBean;
 import org.apache.hudi.metaserver.store.bean.TableBean;
 import org.apache.hudi.metaserver.store.jdbc.WrapperDao;
@@ -27,10 +31,7 @@ import org.apache.hudi.metaserver.thrift.TState;
 import org.apache.hudi.metaserver.thrift.Table;
 
 import java.io.Serializable;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -105,30 +106,25 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
 
   @Override
   public String createNewTimestamp(long tableId) throws MetaserverStorageException {
-    // todo: support SSS
-    SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
     String oldTimestamp;
     String newTimestamp;
     boolean success;
-    try {
+    do {
+      oldTimestamp = getLatestTimestamp(tableId);
       do {
-        oldTimestamp = getLatestTimestamp(tableId);
-        newTimestamp = oldTimestamp == null
-            ? sdf.format(new Date())
-            : sdf.format(Math.max(new Date().getTime(), sdf.parse(oldTimestamp).getTime() + 1000));
-        Map<String, Object> params = new HashMap<>();
-        params.put("tableId", tableId);
-        params.put("oldTimestamp", oldTimestamp);
-        params.put("newTimestamp", newTimestamp);
-        if (oldTimestamp == null) {
-          success = timelineDao.insertBySql("insertTimestamp", params) == 1;
-        } else {
-          success = timelineDao.updateBySql("updateTimestamp", params) == 1;
-        }
-      } while (!success);
-    } catch (ParseException e) {
-      throw new MetaserverStorageException("Fail to parse the timestamp, " + e.getMessage());
-    }
+        newTimestamp = HoodieInstantTimeGenerator.createNewInstantTime(0L);
+      } while (oldTimestamp != null && HoodieTimeline.compareTimestamps(newTimestamp,
+          HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldTimestamp));
+      Map<String, Object> params = new HashMap<>();
+      params.put("tableId", tableId);
+      params.put("oldTimestamp", oldTimestamp);
+      params.put("newTimestamp", newTimestamp);
+      if (oldTimestamp == null) {
+        success = timelineDao.insertBySql("insertTimestamp", params) == 1;
+      } else {
+        success = timelineDao.updateBySql("updateTimestamp", params) == 1;
+      }
+    } while (!success);
     return newTimestamp;
   }
 
@@ -219,10 +215,10 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
   }
 
   @Override
-  public byte[] getInstantMetadata(long tableId, THoodieInstant instant) throws MetaserverStorageException {
+  public Option<byte[]> getInstantMetadata(long tableId, THoodieInstant instant) throws MetaserverStorageException {
     InstantBean instantBean = new InstantBean(tableId, instant);
     Map<String, Object> result = timelineDao.queryForObjectBySql("selectInstantMetadata", instantBean);
-    return result == null ? null : (byte[]) result.get("data");
+    return result == null ? Option.empty() : Option.of((byte[]) result.get("data"));
   }
 
   @Override

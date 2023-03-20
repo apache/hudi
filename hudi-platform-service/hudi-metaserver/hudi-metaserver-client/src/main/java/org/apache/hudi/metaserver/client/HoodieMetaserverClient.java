@@ -24,13 +24,14 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metaserver.thrift.Table;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
  * Hoodie meta server client, is to get/put instants, instant meta, snapshot from/to hoodie meta server.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
-public interface HoodieMetaserverClient {
+public interface HoodieMetaserverClient extends Serializable, AutoCloseable {
 
   Table getTable(String db, String tb);
 

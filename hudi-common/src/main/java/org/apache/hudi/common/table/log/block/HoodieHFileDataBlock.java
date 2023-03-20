@@ -23,8 +23,8 @@ import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.MappingIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -202,7 +202,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator =
         fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
 
-    return new MappingIterator<>(recordIterator, data -> (HoodieRecord<T>) data);
+    return new CloseableMappingIterator<>(recordIterator, data -> (HoodieRecord<T>) data);
   }
 
   private byte[] serializeRecord(HoodieRecord<?> record, Schema schema) throws IOException {

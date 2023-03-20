@@ -44,6 +44,7 @@ import org.rocksdb.WriteOptions;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -69,7 +70,7 @@ public class RocksDBDAO {
 
   public RocksDBDAO(String basePath, String rocksDBBasePath) {
     this.rocksDBBasePath =
-        String.format("%s/%s/%s", rocksDBBasePath, basePath.replace("/", "_"), UUID.randomUUID().toString());
+        String.format("%s/%s/%s", rocksDBBasePath, URI.create(basePath).getPath().replace(":","").replace("/", "_"), UUID.randomUUID().toString());
     init();
     totalBytesWritten = 0L;
   }

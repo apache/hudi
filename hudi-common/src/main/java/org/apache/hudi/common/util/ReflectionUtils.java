@@ -189,4 +189,16 @@ public class ReflectionUtils {
       throw new HoodieException(String.format("Unable to invoke the methond %s of the class %s ",  methodName, clazz), e);
     }
   }
+
+  /**
+   * Checks if the given class with the name is a subclass of another class.
+   *
+   * @param aClazzName Class name.
+   * @param superClazz Super class to check.
+   * @return {@code true} if {@code aClazzName} is a subclass of {@code superClazz};
+   * {@code false} otherwise.
+   */
+  public static boolean isSubClass(String aClazzName, Class<?> superClazz) {
+    return superClazz.isAssignableFrom(getClass(aClazzName));
+  }
 }

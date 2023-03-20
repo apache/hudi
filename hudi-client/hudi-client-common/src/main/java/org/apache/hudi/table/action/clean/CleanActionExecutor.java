@@ -126,11 +126,11 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
    */
   List<HoodieCleanStat> clean(HoodieEngineContext context, HoodieCleanerPlan cleanerPlan) {
     int cleanerParallelism = Math.min(
-        (int) (cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).count()),
+        cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum(),
         config.getCleanerParallelism());
     LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Perform cleaning of partitions: " + config.getTableName());
+    context.setJobStatus(this.getClass().getSimpleName(), "Perform cleaning of table: " + config.getTableName());
 
     Stream<Pair<String, CleanFileInfo>> filesToBeDeletedPerPartition =
         cleanerPlan.getFilePathsToBeDeletedPerPartition().entrySet().stream()

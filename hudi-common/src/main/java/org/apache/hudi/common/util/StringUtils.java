@@ -142,4 +142,20 @@ public class StringUtils {
     }
     return Stream.of(input.split(delimiter)).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
   }
+
+  public static String getSuffixBy(String input, int ch) {
+    int i = input.lastIndexOf(ch);
+    if (i == -1) {
+      return input;
+    }
+    return input.substring(i);
+  }
+
+  public static String removeSuffixBy(String input, int ch) {
+    int i = input.lastIndexOf(ch);
+    if (i == -1) {
+      return input;
+    }
+    return input.substring(0, i);
+  }
 }

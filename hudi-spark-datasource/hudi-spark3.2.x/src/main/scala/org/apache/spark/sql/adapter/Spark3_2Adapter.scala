@@ -25,11 +25,12 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable}
+import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark32PlusHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
-import org.apache.spark.sql.parser.HoodieSpark3_2ExtendedSqlParser
-import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_2ExtendedSqlParser}
+import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarUtils
 
 /**
@@ -39,11 +40,16 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
 
   override def isColumnarBatchRow(r: InternalRow): Boolean = ColumnarUtils.isColumnarBatchRow(r)
 
+  def createCatalystMetadataForMetaField: Metadata =
+    new MetadataBuilder()
+      .putBoolean(METADATA_COL_ATTR_KEY, value = true)
+      .build()
+
   override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark32CatalogUtils
 
-  override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark32CatalystExpressionUtils
-
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark32CatalystPlanUtils
+
+  override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark32CatalystExpressionUtils
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark3_2AvroSerializer(rootCatalystType, rootAvroType, nullable)
@@ -51,11 +57,8 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
   override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
     new HoodieSpark3_2AvroDeserializer(rootAvroType, rootCatalystType)
 
-  override def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = {
-    Some(
-      (spark: SparkSession, delegate: ParserInterface) => new HoodieSpark3_2ExtendedSqlParser(spark, delegate)
-    )
-  }
+  override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
+    new HoodieSpark3_2ExtendedSqlParser(spark, delegate)
 
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark32PlusHoodieParquetFileFormat(appendPartitionValues))
@@ -67,13 +70,6 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
                                        readDataSchema: StructType,
                                        metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
     new Spark32HoodieFileScanRDD(sparkSession, readFunction, filePartitions)
-  }
-
-  override def resolveDeleteFromTable(deleteFromTable: Command,
-                                      resolveExpression: Expression => Expression): DeleteFromTable = {
-    val deleteFromTableCommand = deleteFromTable.asInstanceOf[DeleteFromTable]
-    val resolvedCondition = deleteFromTableCommand.condition.map(resolveExpression)
-    DeleteFromTable(deleteFromTableCommand.table, resolvedCondition)
   }
 
   override def extractDeleteCondition(deleteFromTable: Command): Expression = {

@@ -67,6 +67,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.InputFormatSourceFunction;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DynamicTableSource;
@@ -153,8 +154,8 @@ public class HoodieTableSource implements
       @Nullable Long limit,
       @Nullable HoodieTableMetaClient metaClient,
       @Nullable InternalSchemaManager internalSchemaManager) {
-    this.schema = schema;
-    this.tableRowType = (RowType) schema.toPhysicalRowDataType().notNull().getLogicalType();
+    this.schema = ResolvedSchema.of(schema.getColumns().stream().filter(Column::isPhysical).collect(Collectors.toList()));
+    this.tableRowType = (RowType) this.schema.toSourceRowDataType().notNull().getLogicalType();
     this.path = path;
     this.partitionKeys = partitionKeys;
     this.defaultPartName = defaultPartName;
@@ -215,6 +216,7 @@ public class HoodieTableSource implements
   @Override
   public ChangelogMode getChangelogMode() {
     // when read as streaming and changelog mode is enabled, emit as FULL mode;
+    // when read as incremental and cdc is enabled, emit as FULL mode;
     // when all the changes are compacted or read as batch, emit as INSERT mode.
     return OptionsResolver.emitChangelog(conf) ? ChangelogModes.FULL : ChangelogMode.insertOnly();
   }
@@ -380,14 +382,18 @@ public class HoodieTableSource implements
             .rowType(this.tableRowType)
             .maxCompactionMemoryInBytes(maxCompactionMemoryInBytes)
             .requiredPartitions(getRequiredPartitionPaths()).build();
-        final IncrementalInputSplits.Result result = incrementalInputSplits.inputSplits(metaClient, hadoopConf);
+        final boolean cdcEnabled = this.conf.getBoolean(FlinkOptions.CDC_ENABLED);
+        final IncrementalInputSplits.Result result = incrementalInputSplits.inputSplits(metaClient, hadoopConf, cdcEnabled);
         if (result.isEmpty()) {
           // When there is no input splits, just return an empty source.
           LOG.warn("No input splits generate for incremental read, returns empty collection instead");
           return InputFormats.EMPTY_INPUT_FORMAT;
+        } else if (cdcEnabled) {
+          return cdcInputFormat(rowType, requiredRowType, tableAvroSchema, rowDataType, result.getInputSplits());
+        } else {
+          return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
+              rowDataType, result.getInputSplits(), false);
         }
-        return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
-            rowDataType, result.getInputSplits(), false);
       default:
         String errMsg = String.format("Invalid query type : '%s', options ['%s', '%s', '%s'] are supported now", queryType,
             FlinkOptions.QUERY_TYPE_SNAPSHOT, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED, FlinkOptions.QUERY_TYPE_INCREMENTAL);
@@ -403,19 +409,22 @@ public class HoodieTableSource implements
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
 
     final String queryType = this.conf.getString(FlinkOptions.QUERY_TYPE);
-    if (FlinkOptions.QUERY_TYPE_SNAPSHOT.equals(queryType)) {
-      final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.getString(FlinkOptions.TABLE_TYPE));
-      boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
-      if (this.conf.getBoolean(FlinkOptions.CDC_ENABLED)) {
-        return cdcInputFormat(rowType, requiredRowType, tableAvroSchema, rowDataType, Collections.emptyList());
-      } else {
-        return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
-            rowDataType, Collections.emptyList(), emitDelete);
-      }
+    switch (queryType) {
+      case FlinkOptions.QUERY_TYPE_SNAPSHOT:
+      case FlinkOptions.QUERY_TYPE_INCREMENTAL:
+        final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.getString(FlinkOptions.TABLE_TYPE));
+        boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
+        if (this.conf.getBoolean(FlinkOptions.CDC_ENABLED)) {
+          return cdcInputFormat(rowType, requiredRowType, tableAvroSchema, rowDataType, Collections.emptyList());
+        } else {
+          return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
+              rowDataType, Collections.emptyList(), emitDelete);
+        }
+      default:
+        String errMsg = String.format("Invalid query type : '%s', options ['%s', '%s'] are supported now", queryType,
+            FlinkOptions.QUERY_TYPE_SNAPSHOT, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+        throw new HoodieException(errMsg);
     }
-    String errMsg = String.format("Invalid query type : '%s', options ['%s'] are supported now", queryType,
-        FlinkOptions.QUERY_TYPE_SNAPSHOT);
-    throw new HoodieException(errMsg);
   }
 
   /**

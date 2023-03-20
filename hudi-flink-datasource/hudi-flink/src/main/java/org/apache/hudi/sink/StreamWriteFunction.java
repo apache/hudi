@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
@@ -47,11 +46,12 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
+import java.util.NoSuchElementException;
 import java.util.Random;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -144,7 +144,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   @Override
   public void close() {
     if (this.writeClient != null) {
-      this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
     }
   }
@@ -400,10 +399,9 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       }
     } else if (flushBuffer) {
       // find the max size bucket and flush it out
-      List<DataBucket> sortedBuckets = this.buckets.values().stream()
-          .sorted((b1, b2) -> Long.compare(b2.detector.totalSize, b1.detector.totalSize))
-          .collect(Collectors.toList());
-      final DataBucket bucketToFlush = sortedBuckets.get(0);
+      DataBucket bucketToFlush = this.buckets.values().stream()
+          .max(Comparator.comparingLong(b -> b.detector.totalSize))
+          .orElseThrow(NoSuchElementException::new);
       if (flushBucket(bucketToFlush)) {
         this.tracer.countDown(bucketToFlush.detector.totalSize);
         bucketToFlush.reset();
@@ -431,10 +429,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     List<HoodieRecord> records = bucket.writeBuffer();
     ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
     if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
-      Properties props = new Properties();
-      config.addAllToProperties(props);
       records = (List<HoodieRecord>) FlinkWriteHelper.newInstance()
-          .deduplicateRecords(records, (HoodieIndex) null, -1, this.writeClient.getConfig().getSchema(), props, recordMerger);
+          .deduplicateRecords(records, null, -1, this.writeClient.getConfig().getSchema(), this.writeClient.getConfig().getProps(), recordMerger);
     }
     bucket.preWrite(records);
     final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
@@ -469,10 +465,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
             List<HoodieRecord> records = bucket.writeBuffer();
             if (records.size() > 0) {
               if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
-                Properties props = new Properties();
-                config.addAllToProperties(props);
                 records = (List<HoodieRecord>) FlinkWriteHelper.newInstance()
-                    .deduplicateRecords(records, (HoodieIndex) null, -1, this.writeClient.getConfig().getSchema(), props, recordMerger);
+                    .deduplicateRecords(records, null, -1, this.writeClient.getConfig().getSchema(), this.writeClient.getConfig().getProps(), recordMerger);
               }
               bucket.preWrite(records);
               writeStatus.addAll(writeFunction.apply(records, currentInstant));

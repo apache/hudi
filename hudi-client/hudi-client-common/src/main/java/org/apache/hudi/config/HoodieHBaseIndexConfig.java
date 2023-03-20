@@ -31,6 +31,7 @@ import java.util.Properties;
 
 @ConfigClassProperty(name = "HBase Index Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
+    subGroupName = ConfigGroups.SubGroupNames.INDEX,
     description = "Configurations that control indexing behavior "
         + "(when HBase based indexing is enabled), which tags incoming "
         + "records as either inserts or updates to older records.")

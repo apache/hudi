@@ -144,7 +144,6 @@ public class BulkInsertDataInternalWriterHelper {
     try {
       UTF8String partitionPath = extractPartitionPath(row);
       if (lastKnownPartitionPath == null || !Objects.equals(lastKnownPartitionPath, partitionPath) || !handle.canWrite()) {
-        LOG.info("Creating new file for partition path " + partitionPath);
         handle = getRowCreateHandle(partitionPath.toString());
         // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
         //       a mutable underlying buffer
@@ -167,6 +166,7 @@ public class BulkInsertDataInternalWriterHelper {
 
   public void close() throws IOException {
     for (HoodieRowCreateHandle rowCreateHandle : handles.values()) {
+      LOG.info("Closing bulk insert file " + rowCreateHandle.getFileName());
       writeStatusList.add(rowCreateHandle.close());
     }
     handles.clear();
@@ -194,11 +194,14 @@ public class BulkInsertDataInternalWriterHelper {
       if (arePartitionRecordsSorted) {
         close();
       }
+
+      LOG.info("Creating new file for partition path " + partitionPath);
       HoodieRowCreateHandle rowCreateHandle = createHandle(partitionPath);
       handles.put(partitionPath, rowCreateHandle);
     } else if (!handles.get(partitionPath).canWrite()) {
       // even if there is a handle to the partition path, it could have reached its max size threshold. So, we close the handle here and
       // create a new one.
+      LOG.info("Rolling max-size file for partition path " + partitionPath);
       writeStatusList.add(handles.remove(partitionPath).close());
       HoodieRowCreateHandle rowCreateHandle = createHandle(partitionPath);
       handles.put(partitionPath, rowCreateHandle);

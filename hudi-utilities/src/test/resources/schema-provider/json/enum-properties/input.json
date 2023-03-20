@@ -1,0 +1,19 @@
+{
+  "$id": "https://my-example.com/user.schema.json",
+  "description": "User info",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "gender": {
+      "description": "the gender",
+      "type": "string",
+      "enum": ["Male", "Female"]
+    },
+    "address": {
+      "type": "string"
+    }
+  },
+  "required": ["name", "gender"]
+}

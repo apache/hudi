@@ -26,6 +26,7 @@ import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
+import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -116,7 +117,7 @@ public class HiveSyncFunctionalTestHarness {
     hiveSyncConfig.setValue(META_SYNC_DATABASE_NAME, database);
     for (String table : tables) {
       hiveSyncConfig.setValue(META_SYNC_TABLE_NAME, table);
-      new HiveQueryDDLExecutor(hiveSyncConfig).runSQL("drop table if exists " + table);
+      new HiveQueryDDLExecutor(hiveSyncConfig, IMetaStoreClientUtil.getMSC(hiveSyncConfig.getHiveConf())).runSQL("drop table if exists " + table);
     }
   }
 
@@ -124,7 +125,7 @@ public class HiveSyncFunctionalTestHarness {
     HiveSyncConfig hiveSyncConfig = hiveSyncConf();
     for (String database : databases) {
       hiveSyncConfig.setValue(META_SYNC_DATABASE_NAME, database);
-      new HiveQueryDDLExecutor(hiveSyncConfig).runSQL("drop database if exists " + database);
+      new HiveQueryDDLExecutor(hiveSyncConfig, IMetaStoreClientUtil.getMSC(hiveSyncConfig.getHiveConf())).runSQL("drop database if exists " + database);
     }
   }
 

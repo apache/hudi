@@ -48,6 +48,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests {@link BulkInsertPartitioner}s with Rows.
@@ -172,9 +173,14 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
       return;
     }
     Dataset<Row> actualRecords = (Dataset<Row>) partitioner.repartitionRecords(rows, numPartitions);
-    assertEquals(
-        enforceNumOutputPartitions ? numPartitions : rows.rdd().getNumPartitions(),
-        actualRecords.rdd().getNumPartitions());
+    if (isGloballySorted) {
+      // For GLOBAL_SORT, `df.sort` may generate smaller number of partitions than the specified parallelism
+      assertTrue(actualRecords.rdd().getNumPartitions() <= numPartitions);
+    } else {
+      assertEquals(
+          enforceNumOutputPartitions ? numPartitions : rows.rdd().getNumPartitions(),
+          actualRecords.rdd().getNumPartitions());
+    }
 
     List<Row> collectedActualRecords = actualRecords.collectAsList();
     if (isGloballySorted) {

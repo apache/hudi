@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -386,9 +387,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         if (!parameters.containsKey(FlinkOptions.HIVE_STYLE_PARTITIONING.key())) {
           // read the table config first
           final boolean hiveStyle;
-          HoodieTableConfig tableConfig = StreamerUtil.getTableConfig(path, hiveConf);
-          if (tableConfig != null && tableConfig.contains(FlinkOptions.HIVE_STYLE_PARTITIONING.key())) {
-            hiveStyle = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
+          Option<HoodieTableConfig> tableConfig = StreamerUtil.getTableConfig(path, hiveConf);
+          if (tableConfig.isPresent() && tableConfig.get().contains(FlinkOptions.HIVE_STYLE_PARTITIONING.key())) {
+            hiveStyle = Boolean.parseBoolean(tableConfig.get().getHiveStylePartitioningEnable());
           } else {
             // fallback to the partition path pattern
             Path hoodieTablePath = new Path(path);
@@ -416,11 +417,11 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     String path = hiveTable.getSd().getLocation();
     Map<String, String> parameters = hiveTable.getParameters();
     Schema latestTableSchema = StreamerUtil.getLatestTableSchema(path, hiveConf);
-    String pkColumnsStr = parameters.get(FlinkOptions.RECORD_KEY_FIELD.key());
-    List<String> pkColumns = StringUtils.isNullOrEmpty(pkColumnsStr)
-        ? null : StringUtils.split(pkColumnsStr, ",");
     org.apache.flink.table.api.Schema schema;
     if (latestTableSchema != null) {
+      String pkColumnsStr = parameters.get(FlinkOptions.RECORD_KEY_FIELD.key());
+      List<String> pkColumns = StringUtils.isNullOrEmpty(pkColumnsStr)
+          ? null : StringUtils.split(pkColumnsStr, ",");
       // if the table is initialized from spark, the write schema is nullable for pk columns.
       DataType tableDataType = DataTypeUtils.ensureColumnsAsNonNullable(
           AvroSchemaConverter.convertToDataType(latestTableSchema), pkColumns);
@@ -596,7 +597,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     serdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(!useRealTimeInputFormat));
     serdeProperties.put("serialization.format", "1");
 
-    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark(catalogTable, hiveConf, properties, partitionKeys));
+    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark(catalogTable, hiveConf, properties, partitionKeys, withOperationField));
 
     sd.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
 
@@ -842,7 +843,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     } catch (Exception e) {
       throw new CatalogException(
           String.format(
-              "Failed to drop partition %s of table %s", partitionSpec, tablePath));
+              "Failed to drop partition %s of table %s", partitionSpec, tablePath), e);
     }
   }
 

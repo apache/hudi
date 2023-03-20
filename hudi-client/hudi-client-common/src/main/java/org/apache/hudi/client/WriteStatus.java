@@ -101,7 +101,18 @@ public class WriteStatus implements Serializable {
       String eventTimeVal = optionalRecordMetadata.get().getOrDefault(METADATA_EVENT_TIME_KEY, null);
       try {
         if (!StringUtils.isNullOrEmpty(eventTimeVal)) {
-          long eventTime = DateTimeUtils.parseDateTime(eventTimeVal).toEpochMilli();
+          int length = eventTimeVal.length();
+          long millisEventTime;
+          // eventTimeVal in seconds unit
+          if (length == 10) {
+            millisEventTime = Long.parseLong(eventTimeVal) * 1000;
+          } else if (length == 13) {
+            // eventTimeVal in millis unit
+            millisEventTime = Long.parseLong(eventTimeVal);
+          } else {
+            throw new IllegalArgumentException("not support event_time format:" + eventTimeVal);
+          }
+          long eventTime = DateTimeUtils.parseDateTime(Long.toString(millisEventTime)).toEpochMilli();
           stat.setMinEventTime(eventTime);
           stat.setMaxEventTime(eventTime);
         }

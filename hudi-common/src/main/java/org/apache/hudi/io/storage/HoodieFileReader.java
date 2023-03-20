@@ -21,7 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.avro.Schema;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import java.io.IOException;
 import java.util.Set;

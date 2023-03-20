@@ -17,11 +17,18 @@
 
 package org.apache.spark.sql
 
-import HoodieSparkTypeUtils.isCastPreservingOrdering
+import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
 import org.apache.spark.sql.catalyst.expressions.{Add, AnsiCast, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
 import org.apache.spark.sql.types.DataType
 
-object HoodieSpark32CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
+object HoodieSpark32CatalystExpressionUtils extends HoodieSpark3CatalystExpressionUtils {
+
+  override def matchCast(expr: Expression): Option[(Expression, DataType, Option[String])] =
+    expr match {
+      case Cast(child, dataType, timeZoneId, _) => Some((child, dataType, timeZoneId))
+      case AnsiCast(child, dataType, timeZoneId) => Some((child, dataType, timeZoneId))
+      case _ => None
+    }
 
   override def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference] = {
     expr match {

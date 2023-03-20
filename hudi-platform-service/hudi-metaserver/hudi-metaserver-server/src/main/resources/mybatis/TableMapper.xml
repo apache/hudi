@@ -21,7 +21,7 @@
 <mapper namespace="TableMapper">
 
     <insert id="insertDB" parameterType="java.util.Map" useGeneratedKeys="true" keyProperty="db_id">
-        INSERT INTO dbs (name, desc, location_uri, owner_name, owner_type)
+        INSERT INTO dbs (name, description, location_uri, owner_name, owner_type)
         VALUES(#{databaseName}, null, null, null, null)
     </insert>
 

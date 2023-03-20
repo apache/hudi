@@ -86,8 +86,9 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     // generate 200 records
-    HoodieRecord[] hoodieRecords1 = SchemaTestUtil.generateHoodieTestRecords(0, 100, schema).toArray(new HoodieRecord[100]);
-    HoodieRecord[] hoodieRecords2 = SchemaTestUtil.generateHoodieTestRecords(100, 100, schema).toArray(new HoodieRecord[100]);
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    HoodieRecord[] hoodieRecords1 = testUtil.generateHoodieTestRecords(0, 100, schema).toArray(new HoodieRecord[100]);
+    HoodieRecord[] hoodieRecords2 = testUtil.generateHoodieTestRecords(100, 100, schema).toArray(new HoodieRecord[100]);
 
     // generate duplicates
     HoodieRecord[] dupRecords = Arrays.copyOf(hoodieRecords1, 10);

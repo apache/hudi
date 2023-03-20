@@ -35,7 +35,9 @@ import java.io.IOException;
 
 public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
+
   private HoodieWriteHelper() {
+    super(HoodieData::getNumPartitions);
   }
 
   private static class WriteHelperHolder {
@@ -79,5 +81,4 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       return reducedRecord.newInstance(reducedKey);
     }, reduceParallelism).map(Pair::getRight);
   }
-
 }

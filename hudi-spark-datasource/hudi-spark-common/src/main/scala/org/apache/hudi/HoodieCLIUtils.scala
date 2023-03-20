@@ -39,7 +39,7 @@ object HoodieCLIUtils {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
       .setConf(sparkSession.sessionState.newHadoopConf()).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val schemaStr = schemaUtil.getTableAvroSchemaWithoutMetadataFields.toString
+    val schemaStr = schemaUtil.getTableAvroSchema(false).toString
     val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
       withSparkConf(sparkSession, Map.empty)(
         conf + (DataSourceWriteOptions.TABLE_TYPE.key() -> metaClient.getTableType.name()))

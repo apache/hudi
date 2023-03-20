@@ -39,7 +39,9 @@ import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.text.SimpleDateFormat
+import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
@@ -66,6 +68,7 @@ import scala.util.{Failure, Success, Try}
  *
  * TODO rename to HoodieSparkSqlFileIndex
  */
+@NotThreadSafe
 case class HoodieFileIndex(spark: SparkSession,
                            metaClient: HoodieTableMetaClient,
                            schemaSpec: Option[StructType],
@@ -82,6 +85,12 @@ case class HoodieFileIndex(spark: SparkSession,
   )
     with FileIndex {
 
+  @transient private var hasPushedDownPartitionPredicates: Boolean = false
+
+  /**
+   * NOTE: [[ColumnStatsIndexSupport]] is a transient state, since it's only relevant while logical plan
+   *       is handled by the Spark's driver
+   */
   @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
   override def rootPaths: Seq[Path] = getQueryPaths.asScala
@@ -161,6 +170,8 @@ case class HoodieFileIndex(spark: SparkSession,
     logInfo(s"Total base files: $totalFileSize; " +
       s"candidate files after data skipping: $candidateFileSize; " +
       s"skipping percentage $skippingRatio")
+
+    hasPushedDownPartitionPredicates = true
 
     if (shouldReadAsPartitionedTable()) {
       listedPartitions
@@ -245,6 +256,7 @@ case class HoodieFileIndex(spark: SparkSession,
   override def refresh(): Unit = {
     super.refresh()
     columnStatsIndex.invalidateCaches()
+    hasPushedDownPartitionPredicates = false
   }
 
   override def inputFiles: Array[String] =
@@ -252,8 +264,11 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def sizeInBytes: Long = getTotalCachedFilesSize
 
+  def hasPredicatesPushedDown: Boolean =
+    hasPushedDownPartitionPredicates
+
   private def isDataSkippingEnabled: Boolean = getConfigValue(options, spark.sessionState.conf,
-    DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false").toBoolean
+    DataSourceReadOptions.ENABLE_DATA_SKIPPING.key, DataSourceReadOptions.ENABLE_DATA_SKIPPING.defaultValue.toString).toBoolean
 
   private def isMetadataTableEnabled: Boolean = metadataConfig.enabled()
 
@@ -297,11 +312,19 @@ object HoodieFileIndex extends Logging {
     val properties = new TypedProperties()
     properties.putAll(options.filter(p => p._2 != null).asJava)
 
+    // TODO(HUDI-5361) clean up properties carry-over
+
     // To support metadata listing via Spark SQL we allow users to pass the config via SQL Conf in spark session. Users
     // would be able to run SET hoodie.metadata.enable=true in the spark sql session to enable metadata listing.
     val isMetadataTableEnabled = getConfigValue(options, sqlConf, HoodieMetadataConfig.ENABLE.key, null)
     if (isMetadataTableEnabled != null) {
       properties.setProperty(HoodieMetadataConfig.ENABLE.key(), String.valueOf(isMetadataTableEnabled))
+    }
+
+    val listingModeOverride = getConfigValue(options, sqlConf,
+      DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, null)
+    if (listingModeOverride != null) {
+      properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, listingModeOverride)
     }
 
     properties

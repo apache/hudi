@@ -1,3 +1,4 @@
+
 <!--
   Licensed to the Apache Software Foundation (ASF) under one or more
   contributor license agreements.  See the NOTICE file distributed with
@@ -67,7 +68,8 @@ mvn clean package -DskipTests
 # Start command
 spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
   --jars `ls packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar` \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 
 To build for integration tests that include `hudi-integ-test-bundle`, use `-Dintegration-tests`.
@@ -111,15 +113,31 @@ Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specifie
 
 ### Build with different Flink versions
 
-The default Flink version supported is 1.14. Refer to the table below for building with different Flink and Scala versions.
+The default Flink version supported is 1.16. The default Flink 1.16.x version, corresponding to `flink1.16` profile is 1.16.0.
+Flink is Scala-free since 1.15.x, there is no need to specify the Scala version for Flink 1.15.x and above versions.
+Refer to the table below for building with different Flink and Scala versions.
 
-| Maven build options        | Expected Flink bundle jar name | Notes                                           |
-|:---------------------------|:-------------------------------|:------------------------------------------------|
-| (empty)                    | hudi-flink1.14-bundle_2.11     | For Flink 1.14 and Scala 2.11 (default options) |
-| `-Dflink1.14`              | hudi-flink1.14-bundle_2.11     | For Flink 1.14 and Scala 2.11 (same as default) |
-| `-Dflink1.14 -Dscala-2.12` | hudi-flink1.14-bundle_2.12     | For Flink 1.14 and Scala 2.12                   |
-| `-Dflink1.13`              | hudi-flink1.13-bundle_2.11     | For Flink 1.13 and Scala 2.11                   |
-| `-Dflink1.13 -Dscala-2.12` | hudi-flink1.13-bundle_2.12     | For Flink 1.13 and Scala 2.12                   |
+| Maven build options        | Expected Flink bundle jar name | Notes                            |
+|:---------------------------|:-------------------------------|:---------------------------------|
+| (empty)                    | hudi-flink1.16-bundle          | For Flink 1.16 (default options) |
+| `-Dflink1.16`              | hudi-flink1.16-bundle          | For Flink 1.16 (same as default) |
+| `-Dflink1.15`              | hudi-flink1.15-bundle          | For Flink 1.15                   |
+| `-Dflink1.14 -Dscala-2.12` | hudi-flink1.14-bundle          | For Flink 1.14 and Scala 2.12    |
+| `-Dflink1.14`              | hudi-flink1.14-bundle          | For Flink 1.14 and Scala 2.11    |
+| `-Dflink1.13 -Dscala-2.12` | hudi-flink1.13-bundle          | For Flink 1.13 and Scala 2.12    |
+| `-Dflink1.13`              | hudi-flink1.13-bundle          | For Flink 1.13 and Scala 2.11    |
+
+For example,
+```
+# Build against Flink 1.15.x
+mvn clean package -DskipTests -Dflink1.15
+
+# Build against Flink 1.14.x and Scala 2.11
+mvn clean package -DskipTests -Dflink1.14
+
+# Build against Flink 1.13.x and Scala 2.12
+mvn clean package -DskipTests -Dflink1.13 -Dscala-2.12
+```
 
 ## Running Tests
 

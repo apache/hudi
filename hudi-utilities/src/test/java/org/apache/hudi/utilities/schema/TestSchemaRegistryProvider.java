@@ -18,10 +18,12 @@
 
 package org.apache.hudi.utilities.schema;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
 import org.apache.hudi.common.config.TypedProperties;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -39,30 +41,33 @@ import static org.mockito.Mockito.verify;
 
 class TestSchemaRegistryProvider {
 
-  private final String basicAuth = "foo:bar";
+  private static final String BASIC_AUTH = "foo:bar";
 
-  private final String json = "{\"schema\":\"{\\\"type\\\": \\\"record\\\", \\\"namespace\\\": \\\"example\\\", "
+  private static final String REGISTRY_RESPONSE = "{\"schema\":\"{\\\"type\\\": \\\"record\\\", \\\"namespace\\\": \\\"example\\\", "
       + "\\\"name\\\": \\\"FullName\\\",\\\"fields\\\": [{ \\\"name\\\": \\\"first\\\", \\\"type\\\": "
       + "\\\"string\\\" }]}\"}";
+  private static final String CONVERTED_SCHEMA = "{\"type\": \"record\", \"namespace\": \"com.example.hoodie\", "
+      + "\"name\": \"FullName\",\"fields\": [{ \"name\": \"first\", \"type\": "
+      + "\"string\" }]}";
 
-  private TypedProperties getProps() {
-    return new TypedProperties() {{
-        put("hoodie.deltastreamer.schemaprovider.registry.baseUrl", "http://" + basicAuth + "@localhost");
+  private static Schema getExpectedSchema() {
+    return new Schema.Parser().parse(CONVERTED_SCHEMA);
+  }
+
+  private static TypedProperties getProps() {
+    return new TypedProperties() {
+      {
+        put("hoodie.deltastreamer.schemaprovider.registry.baseUrl", "http://" + BASIC_AUTH + "@localhost");
         put("hoodie.deltastreamer.schemaprovider.registry.urlSuffix", "-value");
         put("hoodie.deltastreamer.schemaprovider.registry.url", "http://foo:bar@localhost");
+        put("hoodie.deltastreamer.schemaprovider.registry.schemaconverter", DummySchemaConverter.class.getName());
         put("hoodie.deltastreamer.source.kafka.topic", "foo");
       }
     };
   }
 
-  private Schema getExpectedSchema(String response) throws IOException {
-    ObjectMapper mapper = new ObjectMapper();
-    JsonNode node = mapper.readTree(new ByteArrayInputStream(response.getBytes(StandardCharsets.UTF_8)));
-    return (new Schema.Parser()).parse(node.get("schema").asText());
-  }
-
-  private SchemaRegistryProvider getUnderTest(TypedProperties props) throws IOException {
-    InputStream is = new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
+  private static SchemaRegistryProvider getUnderTest(TypedProperties props) throws IOException {
+    InputStream is = new ByteArrayInputStream(REGISTRY_RESPONSE.getBytes(StandardCharsets.UTF_8));
     SchemaRegistryProvider spyUnderTest = Mockito.spy(new SchemaRegistryProvider(props, null));
     Mockito.doReturn(is).when(spyUnderTest).getStream(Mockito.any());
     return spyUnderTest;
@@ -73,8 +78,8 @@ class TestSchemaRegistryProvider {
     SchemaRegistryProvider spyUnderTest = getUnderTest(getProps());
     Schema actual = spyUnderTest.getSourceSchema();
     assertNotNull(actual);
-    assertEquals(actual, getExpectedSchema(json));
-    verify(spyUnderTest, times(1)).setAuthorizationHeader(eq(basicAuth),
+    assertEquals(getExpectedSchema(), actual);
+    verify(spyUnderTest, times(1)).setAuthorizationHeader(eq(BASIC_AUTH),
         Mockito.any(HttpURLConnection.class));
   }
 
@@ -83,8 +88,8 @@ class TestSchemaRegistryProvider {
     SchemaRegistryProvider spyUnderTest = getUnderTest(getProps());
     Schema actual = spyUnderTest.getTargetSchema();
     assertNotNull(actual);
-    assertEquals(actual, getExpectedSchema(json));
-    verify(spyUnderTest, times(1)).setAuthorizationHeader(eq(basicAuth),
+    assertEquals(getExpectedSchema(), actual);
+    verify(spyUnderTest, times(1)).setAuthorizationHeader(eq(BASIC_AUTH),
         Mockito.any(HttpURLConnection.class));
   }
 
@@ -95,7 +100,7 @@ class TestSchemaRegistryProvider {
     SchemaRegistryProvider spyUnderTest = getUnderTest(props);
     Schema actual = spyUnderTest.getSourceSchema();
     assertNotNull(actual);
-    assertEquals(actual, getExpectedSchema(json));
+    assertEquals(getExpectedSchema(), actual);
     verify(spyUnderTest, times(0)).setAuthorizationHeader(Mockito.any(), Mockito.any());
   }
 
@@ -106,7 +111,18 @@ class TestSchemaRegistryProvider {
     SchemaRegistryProvider spyUnderTest = getUnderTest(props);
     Schema actual = spyUnderTest.getTargetSchema();
     assertNotNull(actual);
-    assertEquals(actual, getExpectedSchema(json));
+    assertEquals(getExpectedSchema(), actual);
     verify(spyUnderTest, times(0)).setAuthorizationHeader(Mockito.any(), Mockito.any());
+  }
+
+  public static class DummySchemaConverter implements SchemaRegistryProvider.SchemaConverter {
+
+    @Override
+    public String convert(String schema) throws IOException {
+      return ((ObjectNode) new ObjectMapper()
+          .readTree(schema))
+          .set("namespace", TextNode.valueOf("com.example.hoodie"))
+          .toString();
+    }
   }
 }

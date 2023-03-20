@@ -92,6 +92,7 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthority;
 
 /**
@@ -343,18 +344,21 @@ public class HoodieMetadataTableValidator implements Serializable {
     sparkConf.set("spark.executor.memory", cfg.sparkMemory);
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
 
-    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, cfg);
-
     try {
+      HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, cfg);
       validator.run();
+    } catch (TableNotFoundException e) {
+      LOG.warn(String.format("The Hudi data table is not found: [%s]. "
+          + "Skipping the validation of the metadata table.", cfg.basePath), e);
     } catch (Throwable throwable) {
-      LOG.error("Fail to do hoodie metadata table validation for " + validator.cfg, throwable);
+      LOG.error("Fail to do hoodie metadata table validation for " + cfg, throwable);
     } finally {
       jsc.stop();
     }
   }
 
-  public void run() {
+  public boolean run() {
+    boolean result = false;
     try {
       LOG.info(cfg);
       if (cfg.continuous) {
@@ -362,7 +366,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         doHoodieMetadataTableValidationContinuous();
       } else {
         LOG.info(" ****** do hoodie metadata table validation once ******");
-        doHoodieMetadataTableValidationOnce();
+        result = doHoodieMetadataTableValidationOnce();
       }
     } catch (Exception e) {
       throw new HoodieException("Unable to do hoodie metadata table validation in " + cfg.basePath, e);
@@ -371,17 +375,19 @@ public class HoodieMetadataTableValidator implements Serializable {
       if (asyncMetadataTableValidateService.isPresent()) {
         asyncMetadataTableValidateService.get().shutdown(true);
       }
+      return result;
     }
   }
 
-  private void doHoodieMetadataTableValidationOnce() {
+  private boolean doHoodieMetadataTableValidationOnce() {
     try {
-      doMetadataTableValidation();
-    } catch (HoodieValidationException e) {
+      return doMetadataTableValidation();
+    } catch (Throwable e) {
       LOG.error("Metadata table validation failed to HoodieValidationException", e);
       if (!cfg.ignoreFailed) {
         throw e;
       }
+      return false;
     }
   }
 
@@ -396,7 +402,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     });
   }
 
-  public void doMetadataTableValidation() {
+  public boolean doMetadataTableValidation() {
     boolean finalResult = true;
     metaClient.reloadActiveTimeline();
     String basePath = metaClient.getBasePath();
@@ -404,7 +410,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     // check metadata table is available to read.
     if (!checkMetadataTableIsAvailable()) {
-      return;
+      return true;
     }
 
     if (cfg.skipDataFilesForCleaning) {
@@ -437,39 +443,48 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     if (allPartitions.isEmpty()) {
       LOG.warn("The result of getting all partitions is null or empty, skip current validation.");
-      return;
+      return true;
     }
 
-    HoodieMetadataValidationContext metadataTableBasedContext =
-        new HoodieMetadataValidationContext(engineContext, cfg, metaClient, true);
-    HoodieMetadataValidationContext fsBasedContext =
-        new HoodieMetadataValidationContext(engineContext, cfg, metaClient, false);
-
-    Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
-    List<Boolean> result = engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
-      try {
-        validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
-        LOG.info(String.format("Metadata table validation succeeded for partition %s (partition %s)", partitionPath, taskLabels));
-        return true;
-      } catch (HoodieValidationException e) {
-        LOG.error(
-            String.format("Metadata table validation failed for partition %s due to HoodieValidationException (partition %s)",
-                partitionPath, taskLabels), e);
-        if (!cfg.ignoreFailed) {
-          throw e;
+    try (HoodieMetadataValidationContext metadataTableBasedContext =
+             new HoodieMetadataValidationContext(engineContext, cfg, metaClient, true);
+         HoodieMetadataValidationContext fsBasedContext =
+             new HoodieMetadataValidationContext(engineContext, cfg, metaClient, false)) {
+      Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
+      List<Pair<Boolean, String>> result = engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
+        try {
+          validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
+          LOG.info(String.format("Metadata table validation succeeded for partition %s (partition %s)", partitionPath, taskLabels));
+          return Pair.of(true, "");
+        } catch (HoodieValidationException e) {
+          LOG.error(
+              String.format("Metadata table validation failed for partition %s due to HoodieValidationException (partition %s)",
+                  partitionPath, taskLabels), e);
+          if (!cfg.ignoreFailed) {
+            throw e;
+          }
+          return Pair.of(false, e.getMessage() + " for partition: " + partitionPath);
         }
+      }).collectAsList();
+
+      for (Pair<Boolean, String> res : result) {
+        finalResult &= res.getKey();
+        if (res.getKey().equals(false)) {
+          LOG.error("Metadata Validation failed for table: " + cfg.basePath + " with error: " + res.getValue());
+        }
+      }
+
+      if (finalResult) {
+        LOG.info(String.format("Metadata table validation succeeded (%s).", taskLabels));
+        return true;
+      } else {
+        LOG.warn(String.format("Metadata table validation failed (%s).", taskLabels));
         return false;
       }
-    }).collectAsList();
-
-    for (Boolean res : result) {
-      finalResult &= res;
-    }
-
-    if (finalResult) {
-      LOG.info(String.format("Metadata table validation succeeded (%s).", taskLabels));
-    } else {
-      LOG.warn(String.format("Metadata table validation failed (%s).", taskLabels));
+    } catch (Exception e) {
+      LOG.warn("Error closing HoodieMetadataValidationContext, "
+          + "ignoring the error as the validation is successful.", e);
+      return true;
     }
   }
 
@@ -519,7 +534,20 @@ public class HoodieMetadataTableValidator implements Serializable {
       Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
       if (instantOption.isPresent()) {
         String instantTime = instantOption.get();
-        return completedTimeline.containsOrBeforeTimelineStarts(instantTime);
+        // There are two cases where the created commit time is written to the partition metadata:
+        // (1) Commit C1 creates the partition and C1 succeeds, the partition metadata has C1 as
+        // the created commit time.
+        // (2) Commit C1 creates the partition, the partition metadata is written, and C1 fails
+        // during writing data files.  Next time, C2 adds new data to the same partition after C1
+        // is rolled back. In this case, the partition metadata still has C1 as the created commit
+        // time, since Hudi does not rewrite the partition metadata in C2.
+        if (!completedTimeline.containsOrBeforeTimelineStarts(instantTime)) {
+          Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
+          return lastInstant.isPresent()
+              && HoodieTimeline.compareTimestamps(
+              instantTime, LESSER_THAN_OR_EQUALS, lastInstant.get().getTimestamp());
+        }
+        return true;
       } else {
         return false;
       }
@@ -1010,7 +1038,7 @@ public class HoodieMetadataTableValidator implements Serializable {
    * the same information regardless of whether metadata table is enabled, which is
    * verified in the {@link HoodieMetadataTableValidator}.
    */
-  private static class HoodieMetadataValidationContext implements Serializable {
+  private static class HoodieMetadataValidationContext implements AutoCloseable, Serializable {
 
     private static final Logger LOG = LogManager.getLogger(HoodieMetadataValidationContext.class);
 
@@ -1136,6 +1164,12 @@ public class HoodieMetadataTableValidator implements Serializable {
           .setFilename(filename)
           .setBloomFilter(ByteBuffer.wrap(bloomFilter.serializeToString().getBytes()))
           .build());
+    }
+
+    @Override
+    public void close() throws Exception {
+      tableMetadata.close();
+      fileSystemView.close();
     }
   }
 }

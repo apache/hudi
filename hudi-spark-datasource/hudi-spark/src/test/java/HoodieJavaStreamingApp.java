@@ -59,6 +59,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 
 /**
  * Sample program that writes & reads hoodie tables via the Spark datasource streaming.
@@ -136,9 +137,10 @@ public class HoodieJavaStreamingApp {
    * @throws Exception
    */
   public void run() throws Exception {
-    // Spark session setup..
-    SparkSession spark = SparkSession.builder().appName("Hoodie Spark Streaming APP")
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
+    SparkSession spark = SparkSession.builder()
+        .config(getSparkConfForTest("Hoodie Spark Streaming APP"))
+        .getOrCreate();
+
     JavaSparkContext jssc = new JavaSparkContext(spark.sparkContext());
 
     // folder path clean up and creation, preparing the environment
@@ -205,8 +207,11 @@ public class HoodieJavaStreamingApp {
     // Deletes Stream
     // Need to restart application to ensure spark does not assume there are multiple streams active.
     spark.close();
-    SparkSession newSpark = SparkSession.builder().appName("Hoodie Spark Streaming APP")
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
+
+    SparkSession newSpark = SparkSession.builder()
+        .config(getSparkConfForTest("Hoodie Spark Streaming APP"))
+        .getOrCreate();
+
     jssc = new JavaSparkContext(newSpark.sparkContext());
     String ckptPath2 = streamingCheckpointingPath + "/stream2";
     String srcPath2 = srcPath + "/stream2";

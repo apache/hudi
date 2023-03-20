@@ -19,13 +19,18 @@
 package org.apache.hudi.table.marker;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.conflict.detection.DirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
@@ -43,6 +48,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
 /**
  * Marker operations of directly accessing the file system to create and delete
@@ -152,6 +159,23 @@ public class DirectWriteMarkers extends WriteMarkers {
 
   @Override
   protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
+    return create(getMarkerPath(partitionPath, dataFileName, type), checkIfExists);
+  }
+
+  @Override
+  public Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
+                                                       HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
+    String strategyClassName = config.getEarlyConflictDetectionStrategyClassName();
+    if (!ReflectionUtils.isSubClass(strategyClassName, DirectMarkerBasedDetectionStrategy.class)) {
+      LOG.warn("Cannot use " + strategyClassName + " for direct markers.");
+      strategyClassName = getDefaultEarlyConflictDetectionStrategy(MarkerType.DIRECT);
+      LOG.warn("Falling back to " + strategyClassName);
+    }
+    DirectMarkerBasedDetectionStrategy strategy =
+        (DirectMarkerBasedDetectionStrategy) ReflectionUtils.loadClass(strategyClassName,
+            fs, partitionPath, fileId, instantTime, activeTimeline, config);
+
+    strategy.detectAndResolveConflictIfNecessary();
     return create(getMarkerPath(partitionPath, dataFileName, type), checkIfExists);
   }
 

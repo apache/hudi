@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics.datadog;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -47,8 +48,9 @@ public class DatadogHttpClient implements Closeable {
 
   private static final Logger LOG = LogManager.getLogger(DatadogHttpClient.class);
 
-  private static final String SERIES_URL_FORMAT = "https://app.datadoghq.%s/api/v1/series";
-  private static final String VALIDATE_URL_FORMAT = "https://app.datadoghq.%s/api/v1/validate";
+  private static final String DEFAULT_HOST = "app.us.datadoghq";
+  private static final String SERIES_URL_FORMAT = "https://%s.%s/api/v1/series";
+  private static final String VALIDATE_URL_FORMAT = "https://%s.%s/api/v1/validate";
   private static final String HEADER_KEY_API_KEY = "DD-API-KEY";
 
   private final String apiKey;
@@ -56,23 +58,27 @@ public class DatadogHttpClient implements Closeable {
   private final String validateUrl;
   private final CloseableHttpClient client;
 
-  public DatadogHttpClient(ApiSite apiSite, String apiKey, boolean skipValidation, CloseableHttpClient client) {
+  public DatadogHttpClient(ApiSite apiSite, String apiKey, boolean skipValidation, CloseableHttpClient client, Option<String> host) {
     this.apiKey = apiKey;
-    this.seriesUrl = String.format(SERIES_URL_FORMAT, apiSite.getDomain());
-    this.validateUrl = String.format(VALIDATE_URL_FORMAT, apiSite.getDomain());
+    this.seriesUrl = String.format(SERIES_URL_FORMAT, host.orElse(DEFAULT_HOST), apiSite.getDomain());
+    this.validateUrl = String.format(VALIDATE_URL_FORMAT, host.orElse(DEFAULT_HOST), apiSite.getDomain());
     this.client = client;
     if (!skipValidation) {
       validateApiKey();
     }
   }
 
-  public DatadogHttpClient(ApiSite apiSite, String apiKey, boolean skipValidation, int timeoutSeconds) {
+  public DatadogHttpClient(ApiSite apiSite, String apiKey, boolean skipValidation, CloseableHttpClient client) {
+    this(apiSite, apiKey, skipValidation, client,  Option.of(DEFAULT_HOST));
+  }
+
+  public DatadogHttpClient(ApiSite apiSite, String apiKey, boolean skipValidation, int timeoutSeconds, Option<String> host) {
     this(apiSite, apiKey, skipValidation, HttpClientBuilder.create()
         .setDefaultRequestConfig(RequestConfig.custom()
             .setConnectTimeout(timeoutSeconds * 1000)
             .setConnectionRequestTimeout(timeoutSeconds * 1000)
             .setSocketTimeout(timeoutSeconds * 1000).build())
-        .build());
+        .build(), host);
   }
 
   private void validateApiKey() {

@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
@@ -64,6 +65,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> INLINE_LOG_COMPACT = ConfigProperty
       .key("hoodie.log.compaction.inline")
       .defaultValue("false")
+      .sinceVersion("0.13.0")
       .withDocumentation("When set to true, logcompaction service is triggered after each write. While being "
           + " simpler operationally, this adds extra latency on the write path.");
 
@@ -119,6 +121,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<Long> COMPACTION_LOG_FILE_NUM_THRESHOLD = ConfigProperty
       .key("hoodie.compaction.logfile.num.threshold")
       .defaultValue(0L)
+      .sinceVersion("0.13.0")
       .withDocumentation("Only if the log file num is greater than the threshold,"
           + " the file group will be compacted.");
 
@@ -182,14 +185,15 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> LOG_COMPACTION_BLOCKS_THRESHOLD = ConfigProperty
       .key("hoodie.log.compaction.blocks.threshold")
       .defaultValue("5")
+      .sinceVersion("0.13.0")
       .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value. "
           + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
 
-  public static final ConfigProperty<String> USE_LOG_RECORD_READER_SCAN_V2 = ConfigProperty
-      .key("hoodie.log.record.reader.use.scanV2")
+  public static final ConfigProperty<String> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
+      .key("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN)
       .defaultValue("false")
       .sinceVersion("0.13.0")
-      .withDocumentation("ScanV2 logic address all the multiwriter challenges while appending to log files. "
+      .withDocumentation("New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. "
           + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
 
   /** @deprecated Use {@link #INLINE_COMPACT} and its methods instead */
@@ -429,8 +433,8 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withLogRecordReaderScanV2(String useLogRecordReaderScanV2) {
-      compactionConfig.setValue(USE_LOG_RECORD_READER_SCAN_V2, useLogRecordReaderScanV2);
+    public Builder withEnableOptimizedLogBlocksScan(String enableOptimizedLogBlocksScan) {
+      compactionConfig.setValue(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, enableOptimizedLogBlocksScan);
       return this;
     }
 

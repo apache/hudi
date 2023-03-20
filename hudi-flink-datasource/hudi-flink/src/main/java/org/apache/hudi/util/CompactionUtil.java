@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
 
@@ -139,12 +140,28 @@ public class CompactionUtil {
    * <p>We can improve the code if the changelog mode is set up as table config.
    *
    * @param conf The configuration
+   * @param metaClient The meta client
    */
-  public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
+  public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
     if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null) {
       conf.setBoolean(FlinkOptions.CHANGELOG_ENABLED, true);
+    }
+  }
+
+  /**
+   * Infers the metadata config based on the existence of metadata folder.
+   *
+   * <p>We can improve the code if the metadata config is set up as table config.
+   *
+   * @param conf The configuration
+   * @param metaClient The meta client
+   */
+  public static void inferMetadataConf(Configuration conf, HoodieTableMetaClient metaClient) {
+    String path = HoodieTableMetadata.getMetadataTableBasePath(conf.getString(FlinkOptions.PATH));
+    if (!StreamerUtil.tableExists(path, metaClient.getHadoopConf())) {
+      conf.setBoolean(FlinkOptions.METADATA_ENABLED, false);
     }
   }
 

@@ -137,8 +137,8 @@ public class ConsistencyGuardConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withInitialConsistencyCheckIntervalMs(int initialIntevalMs) {
-      consistencyGuardConfig.setValue(INITIAL_CHECK_INTERVAL_MS, String.valueOf(initialIntevalMs));
+    public Builder withInitialConsistencyCheckIntervalMs(int initialIntervalMs) {
+      consistencyGuardConfig.setValue(INITIAL_CHECK_INTERVAL_MS, String.valueOf(initialIntervalMs));
       return this;
     }
 

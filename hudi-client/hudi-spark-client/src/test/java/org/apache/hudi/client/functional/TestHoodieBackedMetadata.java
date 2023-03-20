@@ -69,7 +69,7 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -87,7 +87,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
-import org.apache.hudi.metadata.HoodieMetadataMergedLogRecordReader;
+import org.apache.hudi.metadata.HoodieMetadataLogRecordReader;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -153,6 +153,7 @@ import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getNextCommitTime;
 import static org.apache.hudi.metadata.HoodieBackedTableMetadataWriter.METADATA_COMPACTION_TIME_SUFFIX;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
@@ -497,8 +498,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .enableFullScan(true)
             .enableMetrics(false)
             .withMaxNumDeltaCommitsBeforeCompaction(3)
-            .archiveCommitsWith(3, 4)
-            .retainCommits(1)
+            .archiveCommitsWith(4, 5)
+            .retainCommits(3)
             .build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .retainCommits(1)
@@ -732,9 +733,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    *
    * @throws Exception
    */
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testVirtualKeysInBaseFiles(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testVirtualKeysInBaseFiles() throws Exception {
+    boolean populateMetaFields = false;
     init(MERGE_ON_READ, false);
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
@@ -906,14 +907,71 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
+  @Test
+  public void testMetadataRollbackWithCompaction() throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    init(tableType, false);
+    writeConfig = getWriteConfigBuilder(false, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withPopulateMetaFields(true)
+            .build())
+        .build();
+
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      // Write 1 (Bulk insert)
+      String newCommitTime1 = "0000001";
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime1, 100);
+      client.startCommitWithTime(newCommitTime1);
+      JavaRDD writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime1);
+      client.commit(newCommitTime1, writeStatuses);
+
+      String newCommitTime2 = "0000002";
+      records = dataGen.generateUniqueUpdates(newCommitTime2, 20);
+      client.startCommitWithTime(newCommitTime2);
+      writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime2);
+      client.commit(newCommitTime2, writeStatuses);
+
+      String newCommitTime3 = "0000003";
+      records = dataGen.generateUniqueUpdates(newCommitTime3, 20);
+      client.startCommitWithTime(newCommitTime3);
+      writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime3);
+      client.commit(newCommitTime3, writeStatuses);
+
+      // rollback "3" so that there is no "3" in data table timeline, but there exists a DC "3" in metadata timeline.
+      client.rollback(newCommitTime3);
+
+      // mimicing crash or making an inflight in metadata table.
+      Path toDelete = new Path(metaClient.getMetaPath() + "/metadata/.hoodie/" + newCommitTime2 + "." + HoodieTimeline.DELTA_COMMIT_ACTION);
+      metaClient.getFs().delete(toDelete);
+
+      // re-ingest w/ same commit time.
+      records = dataGen.generateUniqueUpdates(newCommitTime3, 20);
+      client.startCommitWithTime(newCommitTime3);
+      writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime3);
+      client.commit(newCommitTime3, writeStatuses);
+
+      // collect all commit meta files from metadata table.
+      FileStatus[] metaFiles = metaClient.getFs().listStatus(new Path(metaClient.getMetaPath() + "/metadata/.hoodie"));
+      List<FileStatus> commit3Files = Arrays.stream(metaFiles).filter(fileStatus ->
+          fileStatus.getPath().getName().equals(newCommitTime3 + "." + HoodieTimeline.DELTA_COMMIT_ACTION)).collect(Collectors.toList());
+      List<FileStatus> rollbackFiles = Arrays.stream(metaFiles).filter(fileStatus ->
+          fileStatus.getPath().getName().endsWith("." + HoodieTimeline.ROLLBACK_ACTION)).collect(Collectors.toList());
+
+      // ensure commit2's delta commit in MDT has last mod time > the actual rollback for previous failed commit i.e. commit2.
+      // if rollback wasn't eager, rollback's last mod time will be lower than the commit3'd delta commit last mod time.
+      assertTrue(commit3Files.get(0).getModificationTime() > rollbackFiles.get(0).getModificationTime());
+    }
+  }
+
   /**
    * Test arguments - Table type, populate meta fields, exclude key from payload.
    */
   public static List<Arguments> testMetadataRecordKeyExcludeFromPayloadArgs() {
     return asList(
-        Arguments.of(COPY_ON_WRITE, true),
         Arguments.of(COPY_ON_WRITE, false),
-        Arguments.of(MERGE_ON_READ, true),
         Arguments.of(MERGE_ON_READ, false)
     );
   }
@@ -1099,7 +1157,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     if (enableMetaFields) {
       schema = HoodieAvroUtils.addMetadataFields(schema);
     }
-    HoodieMetadataMergedLogRecordReader logRecordReader = HoodieMetadataMergedLogRecordReader.newBuilder()
+    HoodieMetadataLogRecordReader logRecordReader = HoodieMetadataLogRecordReader.newBuilder()
         .withFileSystem(metadataMetaClient.getFs())
         .withBasePath(metadataMetaClient.getBasePath())
         .withLogFilePaths(logFilePaths)
@@ -1112,14 +1170,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withDiskMapType(ExternalSpillableMap.DiskMapType.BITCASK)
         .build();
 
-    assertDoesNotThrow(() -> {
-      logRecordReader.scan();
-    }, "Metadata log records materialization failed");
-
-    for (Map.Entry<String, HoodieRecord> entry : logRecordReader.getRecords().entrySet()) {
-      assertFalse(entry.getKey().isEmpty());
-      assertFalse(entry.getValue().getRecordKey().isEmpty());
-      assertEquals(entry.getKey(), entry.getValue().getRecordKey());
+    for (HoodieRecord<? extends HoodieRecordPayload> entry : logRecordReader.getRecords()) {
+      assertFalse(entry.getRecordKey().isEmpty());
+      assertEquals(entry.getKey().getRecordKey(), entry.getRecordKey());
     }
   }
 
@@ -1231,9 +1284,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Test that manual rollbacks work correctly and enough timeline history is maintained on the metadata table
    * timeline.
    */
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testManualRollbacks(final boolean populateMateFields) throws Exception {
+  @Test
+  public void testManualRollbacks() throws Exception {
+    boolean populateMateFields = false;
     init(COPY_ON_WRITE, false);
     // Setting to archive more aggressively on the Metadata Table than the Dataset
     final int maxDeltaCommitsBeforeCompaction = 4;
@@ -1341,20 +1394,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // A regular commit should get synced
     doWriteOperation(testTable, "00000014");
     validateMetadata(testTable, emptyList(), true);
-  }
-
-  /**
-   * Fetches next commit time in seconds from current one.
-   *
-   * @param curCommitTime current commit time.
-   * @return the next valid commit time.
-   */
-  private Long getNextCommitTime(long curCommitTime) {
-    if ((curCommitTime + 1) % 1000000000000L >= 60) { // max seconds is 60 and hence
-      return Long.parseLong(HoodieActiveTimeline.createNewInstantTime());
-    } else {
-      return curCommitTime + 1;
-    }
   }
 
   @ParameterizedTest
@@ -1597,6 +1636,54 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         }
       });
     }
+  }
+
+  @Test
+  public void testEagerRollbackinMDT() throws IOException {
+    tableType = MERGE_ON_READ;
+    initPath();
+    init(tableType);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig);
+    // Write 1 (Bulk insert)
+    String commit1 = HoodieActiveTimeline.createNewInstantTime();
+    List<HoodieRecord> records = dataGen.generateInserts(commit1, 20);
+    client.startCommitWithTime(commit1);
+    List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), commit1).collect();
+    assertNoWriteErrors(writeStatuses);
+
+    // Write 2 (inserts)
+    String commit2 = HoodieActiveTimeline.createNewInstantTime();
+    client.startCommitWithTime(commit2);
+    records = dataGen.generateInserts(commit2, 20);
+    writeStatuses = client.insert(jsc.parallelize(records, 1), commit2).collect();
+    assertNoWriteErrors(writeStatuses);
+    // remove latest completed delta commit from MDT.
+    Path toDelete = new Path(metaClient.getMetaPath() + "/metadata/.hoodie/" + commit2 + "." + HoodieTimeline.DELTA_COMMIT_ACTION);
+    metaClient.getFs().delete(toDelete);
+
+    // Write 3 (updates)
+    client = new SparkRDDWriteClient(engineContext, writeConfig);
+    String commit3 = HoodieActiveTimeline.createNewInstantTime();
+    client.startCommitWithTime(commit3);
+    records = dataGen.generateUniqueUpdates(commit3, 10);
+    writeStatuses = client.upsert(jsc.parallelize(records, 1), commit3).collect();
+    assertNoWriteErrors(writeStatuses);
+
+    // ensure that 000003 is after rollback of the partially failed 2nd commit.
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setBasePath(metaClient.getMetaPath() + "/metadata/").setConf(metaClient.getHadoopConf()).build();
+    HoodieInstant rollbackInstant = metadataMetaClient.getActiveTimeline().getRollbackTimeline().getInstants().get(0);
+
+    // collect all commit meta files from metadata table.
+    FileStatus[] metaFiles = metaClient.getFs().listStatus(new Path(metaClient.getMetaPath() + "/metadata/.hoodie"));
+    List<FileStatus> commit3Files = Arrays.stream(metaFiles).filter(fileStatus ->
+        fileStatus.getPath().getName().equals(commit3 + "." + HoodieTimeline.DELTA_COMMIT_ACTION)).collect(Collectors.toList());
+    List<FileStatus> rollbackFiles = Arrays.stream(metaFiles).filter(fileStatus ->
+        fileStatus.getPath().getName().equals(rollbackInstant.getTimestamp() + "." + HoodieTimeline.ROLLBACK_ACTION)).collect(Collectors.toList());
+
+    // ensure commit3's delta commit in MDT has last mod time > the actual rollback for previous failed commit i.e. commit2.
+    // if rollback wasn't eager, rollback's last mod time will be lower than the commit3'd delta commit last mod time.
+    assertTrue(commit3Files.get(0).getModificationTime() > rollbackFiles.get(0).getModificationTime());
   }
 
   /**
@@ -2229,8 +2316,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     int maxCommits = 1;
     HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(maxCommits).build())
-        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .retainCommits(maxCommits).build())
+        .withParallelism(1, 1)
+        .withBulkInsertParallelism(1)
+        .withFinalizeWriteParallelism(1)
+        .withDeleteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();

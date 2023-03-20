@@ -64,13 +64,30 @@ public class HoodieConfig implements Serializable {
     props.putAll(properties);
   }
 
+  /**
+   * Sets the default value of a config if user does not set it already.
+   * The default value can only be set if the config property has a built-in
+   * default value or an infer function.  When the infer function is present,
+   * the infer function is used first to derive the config value based on other
+   * configs.  If the config value cannot be inferred, the built-in default value
+   * is used if present.
+   *
+   * @param configProperty Config to set a default value.
+   * @param <T>            Data type of the config.
+   */
   public <T> void setDefaultValue(ConfigProperty<T> configProperty) {
     if (!contains(configProperty)) {
       Option<T> inferValue = Option.empty();
-      if (configProperty.getInferFunc().isPresent()) {
-        inferValue = configProperty.getInferFunc().get().apply(this);
+      if (configProperty.hasInferFunction()) {
+        inferValue = configProperty.getInferFunction().get().apply(this);
       }
-      props.setProperty(configProperty.key(), inferValue.isPresent() ? inferValue.get().toString() : configProperty.defaultValue().toString());
+      if (inferValue.isPresent() || configProperty.hasDefaultValue()) {
+        props.setProperty(
+            configProperty.key(),
+            inferValue.isPresent()
+                ? inferValue.get().toString()
+                : configProperty.defaultValue().toString());
+      }
     }
   }
 
@@ -114,7 +131,7 @@ public class HoodieConfig implements Serializable {
         .forEach(f -> {
           try {
             ConfigProperty<?> cfgProp = (ConfigProperty<?>) f.get("null");
-            if (cfgProp.hasDefaultValue()) {
+            if (cfgProp.hasDefaultValue() || cfgProp.hasInferFunction()) {
               setDefaultValue(cfgProp);
             }
           } catch (IllegalAccessException e) {
@@ -134,14 +151,6 @@ public class HoodieConfig implements Serializable {
 
   public <T> List<String> getSplitStrings(ConfigProperty<T> configProperty, String delimiter) {
     return StringUtils.split(getString(configProperty), delimiter);
-  }
-
-  public <T> List<String> getSplitStringsOrDefault(ConfigProperty<T> configProperty) {
-    return getSplitStringsOrDefault(configProperty, ",");
-  }
-
-  public <T> List<String> getSplitStringsOrDefault(ConfigProperty<T> configProperty, String delimiter) {
-    return StringUtils.split(getStringOrDefault(configProperty), delimiter);
   }
 
   public String getString(String key) {

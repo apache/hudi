@@ -366,6 +366,19 @@ public class TestData {
     return inserts;
   }
 
+  public static List<RowData> dataSetUpsert(int... ids) {
+    List<RowData> inserts = new ArrayList<>();
+    Arrays.stream(ids).forEach(i -> {
+      inserts.add(
+          updateBeforeRow(StringData.fromString("id" + i), StringData.fromString("Danny"), 23,
+              TimestampData.fromEpochMillis(i), StringData.fromString("par1")));
+      inserts.add(
+          updateAfterRow(StringData.fromString("id" + i), StringData.fromString("Danny"), 23,
+              TimestampData.fromEpochMillis(i), StringData.fromString("par1")));
+    });
+    return inserts;
+  }
+
   public static List<RowData> filterOddRows(List<RowData> rows) {
     return filterRowsByIndexPredicate(rows, i -> i % 2 != 0);
   }

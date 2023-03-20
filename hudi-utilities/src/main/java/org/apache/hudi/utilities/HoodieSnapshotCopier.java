@@ -52,6 +52,8 @@ import java.util.stream.Stream;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
+
 /**
  * Hoodie snapshot copy job which copies latest files from all partitions to another place, for snapshot backup.
  *
@@ -183,8 +185,7 @@ public class HoodieSnapshotCopier implements Serializable {
         cfg.outputPath));
 
     // Create a spark job to do the snapshot copy
-    SparkConf sparkConf = new SparkConf().setAppName("Hoodie-snapshot-copier");
-    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+    SparkConf sparkConf = buildSparkConf("Hoodie-snapshot-copier", "local[*]");
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     LOG.info("Initializing spark job.");
 

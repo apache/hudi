@@ -59,13 +59,13 @@ public class TableService implements Serializable {
   }
 
   public void createTable(Table table) throws MetaserverStorageException, NoSuchObjectException, AlreadyExistException, MetaserverException {
-    Long dbId = store.getDatabaseId(table.getDbName());
+    Long dbId = store.getDatabaseId(table.getDatabaseName());
     if (dbId == null) {
-      createDatabase(table.getDbName());
-      dbId = store.getDatabaseId(table.getDbName());
+      createDatabase(table.getDatabaseName());
+      dbId = store.getDatabaseId(table.getDatabaseName());
     }
-    if (tableExists(table.getDbName(), table.getTableName())) {
-      throw new AlreadyExistException(table.getDbName() + "." + table.getTableName() + " already exists");
+    if (tableExists(table.getDatabaseName(), table.getTableName())) {
+      throw new AlreadyExistException(table.getDatabaseName() + "." + table.getTableName() + " already exists");
     }
     if (!store.createTable(dbId, table)) {
       throw new MetaserverException("Fail to create the table: " + table);

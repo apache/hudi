@@ -30,7 +30,7 @@ import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.testutils.DataSourceTestUtils;
-import org.apache.hudi.testutils.HoodieClientTestBase;
+import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.sql.Dataset;
@@ -67,7 +67,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * Tests {@link HoodieDatasetBulkInsertHelper}.
  */
 @Tag("functional")
-public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
+public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase {
 
   private String schemaStr;
   private transient Schema schema;

@@ -1296,7 +1296,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
             .withMaxNumDeltaCommitsBeforeCompaction(8)
-            .retainCommits(1).archiveCommitsWith(2, 4).build())
+            .retainCommits(3).archiveCommitsWith(4, 5).build())
         .forTable("test-trip-table").build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
 
@@ -1398,6 +1398,28 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
                     "000000" + String.format("%02d", j)))));
       }
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testPendingClusteringAfterArchiveCommit(boolean enableMetadata) throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 5, 2);
+    // timeline:0000000(completed)->00000001(completed)->00000002(replace&inflight)->00000003(completed)->...->00000007(completed)
+    HoodieTestDataGenerator.createPendingReplaceFile(basePath, "00000002", wrapperFs.getConf());
+    for (int i = 1; i < 8; i++) {
+      if (i != 2) {
+        testTable.doWriteOperation("0000000" + i, WriteOperationType.CLUSTER, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 2);
+      }
+      // archival
+      Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
+      List<HoodieInstant> originalCommits = commitsList.getKey();
+      List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
+      assertEquals(originalCommits, commitsAfterArchival);
+    }
+
+    HoodieTimeline timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
+    assertEquals(6, timeline.countInstants(),
+        "Since we have a pending clustering instant at 00000002, we should never archive any commit after 00000000");
   }
 
   private Pair<List<HoodieInstant>, List<HoodieInstant>> archiveAndGetCommitsList(HoodieWriteConfig writeConfig) throws IOException {

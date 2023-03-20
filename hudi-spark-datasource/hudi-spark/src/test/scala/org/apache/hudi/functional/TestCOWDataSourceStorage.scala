@@ -29,7 +29,9 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -58,6 +60,8 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
+  override def conf: SparkConf = conf(getSparkSqlConf)
+
   @ParameterizedTest
   @CsvSource(value = Array(
     "true|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key",
@@ -68,10 +72,12 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     "false|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key"
   ), delimiter = '|')
   def testCopyOnWriteStorage(isMetadataEnabled: Boolean, keyGenClass: String, recordKeys: String): Unit = {
-    var options: Map[String, String] = commonOpts +
-      (HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled)) +
-      (DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> keyGenClass) +
-      (DataSourceWriteOptions.RECORDKEY_FIELD.key() -> recordKeys)
+    var options: Map[String, String] = commonOpts ++ Map(
+      HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled),
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> keyGenClass,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeys,
+      HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true")
+
     val isTimestampBasedKeyGen: Boolean = classOf[TimestampBasedKeyGenerator].getName.equals(keyGenClass)
     if (isTimestampBasedKeyGen) {
       options += DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "_row_key"

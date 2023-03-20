@@ -84,8 +84,7 @@ class HiveSyncProcedure extends BaseProcedure with ProcedureBuilder
     hiveConf.addResource(hadoopConf)
 
     val tableConfig = hoodieCatalogTable.tableConfig
-    val hoodieProps = getHoodieProps(hoodieCatalogTable.catalogProperties, tableConfig, sqlConf)
-    val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
+    val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
     var hiveSyncTool: HiveSyncTool = null
     try {

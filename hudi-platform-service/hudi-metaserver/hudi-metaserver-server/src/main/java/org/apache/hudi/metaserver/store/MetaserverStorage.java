@@ -20,6 +20,7 @@ package org.apache.hudi.metaserver.store;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.TState;
@@ -67,7 +68,7 @@ public interface MetaserverStorage extends AutoCloseable {
 
   boolean deleteInstantAllMeta(long tableId, String timestamp) throws MetaserverStorageException;
 
-  byte[] getInstantMetadata(long tableId, THoodieInstant instant) throws MetaserverStorageException;
+  Option<byte[]> getInstantMetadata(long tableId, THoodieInstant instant) throws MetaserverStorageException;
 
   void close();
 

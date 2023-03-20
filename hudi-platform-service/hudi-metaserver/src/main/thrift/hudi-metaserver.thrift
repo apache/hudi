@@ -20,7 +20,7 @@
  // table related
  struct Table {
    1: string tableName,
-   2: string dbName,
+   2: string databaseName,
    3: string owner,
    4: i64 createTime,
    5: string location,
@@ -86,15 +86,15 @@ exception AlreadyExistException {
 
 service ThriftHoodieMetaserver {
   // table related
-  void createDatabase(1:string db)
-  void createTable(1:Table table)
-  Table getTable(1:string db, 2:string tb)
+  void createDatabase(1:string db) throws (1:MetaserverStorageException o1, 2:NoSuchObjectException o2, 3:AlreadyExistException o3)
+  void createTable(1:Table table) throws (1:MetaserverStorageException o1, 2:NoSuchObjectException o2, 3:AlreadyExistException o3, 4:MetaserverException o4)
+  Table getTable(1:string db, 2:string tb) throws (1:MetaserverStorageException o1, 2:NoSuchObjectException o2)
 
   // timeline related
-  list<THoodieInstant> listInstants(1:string db, 2:string tb, 3:i32 num)
-  binary getInstantMetadata(1:string db, 2:string tb, 3:THoodieInstant instant)
-  string createNewInstantTime(1:string db, 2:string tb)
-  HoodieInstantChangeResult createNewInstantWithTime(1:string db, 2:string tb, 3:THoodieInstant instant, 4:optional binary content)
-  HoodieInstantChangeResult transitionInstantState(1:string db, 2:string tb, 3: THoodieInstant fromInstant, 4: THoodieInstant toInstant, 5:optional binary metadata)
-  HoodieInstantChangeResult deleteInstant(1:string db, 2:string tb, 3:THoodieInstant instant)
+  list<THoodieInstant> listInstants(1:string db, 2:string tb, 3:i32 num) throws (1:MetaserverStorageException o1, 2:NoSuchObjectException o2)
+  binary getInstantMetadata(1:string db, 2:string tb, 3:THoodieInstant instant) throws (1:MetaserverStorageException o1, 2:NoSuchObjectException o2)
+  string createNewInstantTime(1:string db, 2:string tb) throws (1:MetaserverStorageException o1, 2:NoSuchObjectException o2)
+  HoodieInstantChangeResult createNewInstantWithTime(1:string db, 2:string tb, 3:THoodieInstant instant, 4:optional binary content) throws (1:MetaserverStorageException o1, 2:NoSuchObjectException o2)
+  HoodieInstantChangeResult transitionInstantState(1:string db, 2:string tb, 3: THoodieInstant fromInstant, 4: THoodieInstant toInstant, 5:optional binary metadata) throws (1:MetaserverStorageException o1, 2:NoSuchObjectException o2, 3:MetaserverException o3)
+  HoodieInstantChangeResult deleteInstant(1:string db, 2:string tb, 3:THoodieInstant instant) throws (1:MetaserverStorageException o1, 2:NoSuchObjectException o2)
 }

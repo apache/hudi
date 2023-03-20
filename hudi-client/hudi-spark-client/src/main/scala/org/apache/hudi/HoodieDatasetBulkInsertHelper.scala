@@ -22,26 +22,30 @@ import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.TaskContextSupplier
-import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload}
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.SparkHoodieIndexFactory
 import org.apache.hudi.keygen.{BuiltinKeyGenerator, SparkKeyGeneratorInterface}
+import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
-import org.apache.hudi.table.action.commit.BulkInsertDataInternalWriterHelper
+import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}
+import org.apache.spark.sql.HoodieUnsafeUtils.getNumPartitions
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Project
-import org.apache.spark.sql.types.{DataType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters.{asScalaBufferConverter, seqAsJavaListConverter}
 
-object HoodieDatasetBulkInsertHelper extends Logging {
+object HoodieDatasetBulkInsertHelper
+  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => getNumPartitions(df))) with Logging {
 
   /**
    * Prepares [[DataFrame]] for bulk-insert into Hudi table, taking following steps:
@@ -115,7 +119,10 @@ object HoodieDatasetBulkInsertHelper extends Logging {
       updatedDF
     }
 
-    partitioner.repartitionRecords(trimmedDF, config.getBulkInsertShuffleParallelism)
+    val targetParallelism =
+      deduceShuffleParallelism(trimmedDF, config.getBulkInsertShuffleParallelism)
+
+    partitioner.repartitionRecords(trimmedDF, targetParallelism)
   }
 
   /**
@@ -169,6 +176,7 @@ object HoodieDatasetBulkInsertHelper extends Logging {
     val partitionPathMetaFieldOrd = schema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
     // NOTE: Pre-combine field could be a nested field
     val preCombineFieldPath = composeNestedFieldPath(schema, preCombineFieldRef)
+      .getOrElse(throw new HoodieException(s"Pre-combine field $preCombineFieldRef is missing in $schema"))
 
     rdd.map { row =>
         val rowKey = if (isGlobalIndex) {
@@ -193,6 +201,17 @@ object HoodieDatasetBulkInsertHelper extends Logging {
           }
       }
       .values
+  }
+
+  override protected def deduceShuffleParallelism(input: DataFrame, configuredParallelism: Int): Int = {
+    val deduceParallelism = super.deduceShuffleParallelism(input, configuredParallelism)
+    // NOTE: In case parallelism deduction failed to accurately deduce parallelism level of the
+    //       incoming dataset we fallback to default parallelism level set for this Spark session
+    if (deduceParallelism > 0) {
+      deduceParallelism
+    } else {
+      input.sparkSession.sparkContext.defaultParallelism
+    }
   }
 
   private def dropPartitionColumns(df: DataFrame, config: HoodieWriteConfig): DataFrame = {

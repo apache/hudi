@@ -133,7 +133,8 @@ public class HiveSyncConfigHolder {
       .withDocumentation("Whether to sync the table column comments while syncing the table.");
 
   public static final ConfigProperty<String> HIVE_SYNC_TABLE_STRATEGY = ConfigProperty
-          .key("hoodie.datasource.hive_sync.table.strategy")
-          .defaultValue(HoodieSyncTableStrategy.ALL.name())
-          .withDocumentation("Hive table synchronization strategy. Available option: ONLY_RO, ONLY_RT, ALL.");
+      .key("hoodie.datasource.hive_sync.table.strategy")
+      .defaultValue(HoodieSyncTableStrategy.ALL.name())
+      .sinceVersion("0.13.0")
+      .withDocumentation("Hive table synchronization strategy. Available option: ONLY_RO, ONLY_RT, ALL.");
 }

@@ -32,8 +32,9 @@ import java.util.Properties;
  */
 @ConfigClassProperty(name = "Write commit callback configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Controls callback behavior into HTTP endpoints, to push "
-        + " notifications on commits on hudi tables.")
+    subGroupName = ConfigGroups.SubGroupNames.COMMIT_CALLBACK,
+    areCommonConfigs = true,
+    description = "")
 public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
 
   public static final String CALLBACK_PREFIX = "hoodie.write.commit.callback.";

@@ -59,7 +59,7 @@ public class HoodieCDCUtils {
   };
 
   /**
-   * The schema of cdc log file in the case `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_op_key'.
+   * The schema of cdc log file in the case `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#op_key_only}.
    */
   public static final String CDC_SCHEMA_OP_AND_RECORDKEY_STRING = "{\"type\":\"record\",\"name\":\"Record\","
       + "\"fields\":["
@@ -73,11 +73,11 @@ public class HoodieCDCUtils {
   public static Schema schemaBySupplementalLoggingMode(
       HoodieCDCSupplementalLoggingMode supplementalLoggingMode,
       Schema tableSchema) {
-    if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.OP_KEY) {
+    if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.op_key_only) {
       return CDC_SCHEMA_OP_AND_RECORDKEY;
-    } else if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.WITH_BEFORE) {
+    } else if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.data_before) {
       return createCDCSchema(tableSchema, false);
-    } else if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER) {
+    } else if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.data_before_after) {
       return createCDCSchema(tableSchema, true);
     } else {
       throw new HoodieException("not support this supplemental logging mode: " + supplementalLoggingMode);
@@ -109,7 +109,7 @@ public class HoodieCDCUtils {
   }
 
   /**
-   * Build the cdc record which has all the cdc fields when `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_data_before_after'.
+   * Build the cdc record which has all the cdc fields when `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#data_before_after}.
    */
   public static GenericData.Record cdcRecord(Schema cdcSchema, String op, String commitTime,
                                              GenericRecord before, GenericRecord after) {
@@ -122,7 +122,7 @@ public class HoodieCDCUtils {
   }
 
   /**
-   * Build the cdc record when `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_data_before'.
+   * Build the cdc record when `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#data_before}.
    */
   public static GenericData.Record cdcRecord(Schema cdcSchema, String op,
                                              String recordKey, GenericRecord before) {
@@ -134,7 +134,7 @@ public class HoodieCDCUtils {
   }
 
   /**
-   * Build the cdc record when `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_op_key'.
+   * Build the cdc record when `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#op_key_only}.
    */
   public static GenericData.Record cdcRecord(Schema cdcSchema, String op, String recordKey) {
     GenericData.Record record = new GenericData.Record(cdcSchema);

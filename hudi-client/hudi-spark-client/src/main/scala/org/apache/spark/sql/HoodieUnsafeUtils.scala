@@ -22,6 +22,8 @@ import org.apache.hudi.HoodieUnsafeRDD
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.physical.{Partitioning, UnknownPartitioning}
+import org.apache.spark.sql.execution.LogicalRDD
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.MutablePair
 
@@ -29,6 +31,29 @@ import org.apache.spark.util.MutablePair
  * Suite of utilities helping in handling instances of [[HoodieUnsafeRDD]]
  */
 object HoodieUnsafeUtils {
+
+  /**
+   * Fetches expected output [[Partitioning]] of the provided [[DataFrame]]
+   *
+   * NOTE: Invoking [[QueryExecution#executedPlan]] wouldn't actually execute the query (ie start pumping the data)
+   *       but instead will just execute Spark resolution, optimization and actual execution planning stages
+   *       returning instance of [[SparkPlan]] ready for execution
+   */
+  def getNumPartitions(df: DataFrame): Int = {
+    // NOTE: In general we'd rely on [[outputPartitioning]] of the executable [[SparkPlan]] to determine
+    //       number of partitions plan is going to be executed with.
+    //       However in case of [[LogicalRDD]] plan's output-partitioning will be stubbed as [[UnknownPartitioning]]
+    //       and therefore we will be falling back to determine number of partitions by looking at the RDD itself
+    df.queryExecution.logical match {
+      case LogicalRDD(_, rdd, outputPartitioning, _, _) =>
+        outputPartitioning match {
+          case _: UnknownPartitioning => rdd.getNumPartitions
+          case _ => outputPartitioning.numPartitions
+        }
+
+      case _ => df.queryExecution.executedPlan.outputPartitioning.numPartitions
+    }
+  }
 
   /**
    * Creates [[DataFrame]] from provided [[plan]]

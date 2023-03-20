@@ -35,7 +35,6 @@ import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 
-import java.io.Serializable;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -45,7 +44,7 @@ import java.util.stream.Collectors;
 /**
  * HoodieMetaserverClientImp based on thrift.
  */
-public class HoodieMetaserverClientImp implements HoodieMetaserverClient, AutoCloseable, Serializable {
+public class HoodieMetaserverClientImp implements HoodieMetaserverClient {
 
   private static final Logger LOG =  LogManager.getLogger(HoodieMetaserverClientImp.class);
   private final HoodieMetaserverConfig config;

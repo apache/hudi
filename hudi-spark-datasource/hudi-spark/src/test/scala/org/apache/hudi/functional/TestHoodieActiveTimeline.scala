@@ -21,7 +21,7 @@ import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
 
 import org.apache.log4j.LogManager
@@ -36,7 +36,7 @@ import scala.collection.JavaConversions._
 /**
  * Tests on HoodieActionTimeLine using the real hudi table.
  */
-class TestHoodieActiveTimeline extends HoodieClientTestBase {
+class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = null
 

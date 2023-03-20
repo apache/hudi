@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -98,11 +99,14 @@ public abstract class HoodieFlinkTable<T>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
-                                                                                            Option<T> actionMetadata) {
+  protected <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(
+      String triggeringInstantTimestamp,
+      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+      Option<T> actionMetadata) {
     if (config.isMetadataTableEnabled()) {
-      return Option.of(FlinkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
-          context, actionMetadata, Option.of(triggeringInstantTimestamp)));
+      return Option.of(FlinkHoodieBackedTableMetadataWriter.create(
+          context.getHadoopConf().get(), config, failedWritesCleaningPolicy, context,
+          actionMetadata, Option.of(triggeringInstantTimestamp)));
     } else {
       return Option.empty();
     }

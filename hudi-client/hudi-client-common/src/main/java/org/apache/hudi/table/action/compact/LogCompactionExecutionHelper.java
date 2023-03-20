@@ -80,7 +80,7 @@ public class LogCompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O
   }
 
   @Override
-  protected boolean useScanV2(HoodieWriteConfig writeConfig) {
+  protected boolean enableOptimizedLogBlockScan(HoodieWriteConfig writeConfig) {
     return true;
   }
 }

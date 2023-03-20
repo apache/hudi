@@ -20,8 +20,9 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
+import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 
@@ -37,17 +38,20 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   // these are native kafka's config. do not change the config names.
   protected static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
   protected static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
+  protected static final String METRIC_NAME_KAFKA_MESSAGE_IN_COUNT = "kafkaMessageInCount";
 
-  protected final HoodieDeltaStreamerMetrics metrics;
+  protected final HoodieIngestionMetrics metrics;
   protected final SchemaProvider schemaProvider;
   protected KafkaOffsetGen offsetGen;
 
-  protected KafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-                        SchemaProvider schemaProvider, SourceType sourceType, HoodieDeltaStreamerMetrics metrics) {
-    super(props, sparkContext, sparkSession, schemaProvider, sourceType);
+  protected final boolean shouldAddOffsets;
 
+  protected KafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
+                        SchemaProvider schemaProvider, SourceType sourceType, HoodieIngestionMetrics metrics) {
+    super(props, sparkContext, sparkSession, schemaProvider, sourceType);
     this.schemaProvider = schemaProvider;
     this.metrics = metrics;
+    this.shouldAddOffsets = KafkaOffsetPostProcessor.Config.shouldAddOffsets(props);
   }
 
   @Override
@@ -57,10 +61,10 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
       long totalNewMsgs = KafkaOffsetGen.CheckpointUtils.totalNewMessages(offsetRanges);
       LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
       if (totalNewMsgs <= 0) {
-        metrics.updateDeltaStreamerKafkaMessageInCount(0);
+        metrics.updateDeltaStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, 0);
         return new InputBatch<>(Option.empty(), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
       }
-      metrics.updateDeltaStreamerKafkaMessageInCount(totalNewMsgs);
+      metrics.updateDeltaStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, totalNewMsgs);
       JavaRDD<T> newDataRDD = toRDD(offsetRanges);
       return new InputBatch<>(Option.of(newDataRDD), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
     } catch (org.apache.kafka.common.errors.TimeoutException e) {

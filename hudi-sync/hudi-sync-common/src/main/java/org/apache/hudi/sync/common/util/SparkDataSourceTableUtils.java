@@ -98,8 +98,9 @@ public class SparkDataSourceTableUtils {
 
   public static Map<String, String> getSparkSerdeProperties(boolean readAsOptimized, String basePath) {
     Map<String, String> sparkSerdeProperties = new HashMap<>();
-    sparkSerdeProperties.put("path", basePath);
+    sparkSerdeProperties.put(ConfigUtils.TABLE_SERDE_PATH, basePath);
     sparkSerdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(readAsOptimized));
     return sparkSerdeProperties;
   }
+
 }

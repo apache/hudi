@@ -277,7 +277,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths) {
     List<String> matchedPartitionPaths;
     try {
-      matchedPartitionPaths = tableMetadata.getPartitionPathsWithPrefixes(relativePartitionPaths);
+      matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
     } catch (IOException e) {
       throw new HoodieIOException("Error fetching partition paths", e);
     }
@@ -342,7 +342,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             .collect(Collectors.toMap(Pair::getKey, p -> p.getRight().get()));
 
     Set<Path> missingPartitionPaths =
-        CollectionUtils.diff(partitionPaths, cachedPartitionPaths.keySet());
+        CollectionUtils.diffSet(partitionPaths, cachedPartitionPaths.keySet());
 
     // NOTE: We're constructing a mapping of absolute form of the partition-path into
     //       its relative one, such that we don't need to reconstruct these again later on

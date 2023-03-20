@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -48,6 +49,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -71,6 +73,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
 
 public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient implements RunsTableService {
 
@@ -85,8 +88,10 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
   protected Set<String> pendingInflightAndRequestedInstants;
 
-  protected BaseHoodieTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig, Option.empty());
+  protected BaseHoodieTableServiceClient(HoodieEngineContext context,
+                                         HoodieWriteConfig clientConfig,
+                                         Option<EmbeddedTimelineService> timelineService) {
+    super(context, clientConfig, timelineService);
   }
 
   protected void startAsyncCleanerService(BaseHoodieWriteClient writeClient) {
@@ -309,26 +314,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   }
 
   /**
-   * Schedules a new cleaning instant.
-   *
-   * @param extraMetadata Extra Metadata to be stored
-   */
-  protected Option<String> scheduleCleaning(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    return scheduleCleaningAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
-  }
-
-  /**
-   * Schedules a new cleaning instant with passed-in instant time.
-   *
-   * @param instantTime   cleaning Instant Time
-   * @param extraMetadata Extra Metadata to be stored
-   */
-  protected boolean scheduleCleaningAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    return scheduleTableService(instantTime, extraMetadata, TableServiceType.CLEAN).isPresent();
-  }
-
-  /**
    * Ensures clustering instant is in expected state and performs clustering for the plan stored in metadata.
    *
    * @param clusteringInstant Clustering Instant Time
@@ -527,16 +512,31 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    *
    * @param cleanInstantTime instant time for clean.
    * @param scheduleInline   true if needs to be scheduled inline. false otherwise.
-   * @param skipLocking      if this is triggered by another parent transaction, locking can be skipped.
    */
   @Nullable
+  @Deprecated
   public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline, boolean skipLocking) throws HoodieIOException {
+    return clean(cleanInstantTime, scheduleInline);
+  }
+
+  /**
+   * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
+   * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
+   * cleaned). This API provides the flexibility to schedule clean instant asynchronously via
+   * {@link BaseHoodieTableServiceClient#scheduleTableService(String, Option, TableServiceType)} and disable inline scheduling
+   * of clean.
+   *
+   * @param cleanInstantTime instant time for clean.
+   * @param scheduleInline   true if needs to be scheduled inline. false otherwise.
+   */
+  @Nullable
+  public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline) throws HoodieIOException {
     if (!tableServicesEnabled(config)) {
       return null;
     }
     final Timer.Context timerContext = metrics.getCleanCtx();
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
-        HoodieTimeline.CLEAN_ACTION, () -> rollbackFailedWrites(skipLocking));
+        HoodieTimeline.CLEAN_ACTION, () -> rollbackFailedWrites());
 
     HoodieTable table = createTable(config, hadoopConf);
     if (config.allowMultipleCleans() || !table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()) {
@@ -554,7 +554,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     }
 
     // Proceeds to execute any requested or inflight clean instances in the timeline
-    HoodieCleanMetadata metadata = table.clean(context, cleanInstantTime, skipLocking);
+    HoodieCleanMetadata metadata = table.clean(context, cleanInstantTime);
     if (timerContext != null && metadata != null) {
       long durationMs = metrics.getDurationInMs(timerContext.stop());
       metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
@@ -569,16 +569,15 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    * Trigger archival for the table. This ensures that the number of commits do not explode
    * and keep increasing unbounded over time.
    * @param table table to commit on.
-   * @param acquireLockForArchival true if lock has to be acquired for archival. false otherwise.
    */
-  protected void archive(HoodieTable table, boolean acquireLockForArchival) {
+  protected void archive(HoodieTable table) {
     if (!tableServicesEnabled(config)) {
       return;
     }
     try {
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
-      archiver.archiveIfRequired(context, acquireLockForArchival);
+      archiver.archiveIfRequired(context, true);
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to archive", ioe);
     }
@@ -666,23 +665,53 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   }
 
   /**
-   * Rollback all failed writes.
+   * Rolls back the failed delta commits corresponding to the indexing action.
+   * Such delta commits are identified based on the suffix `METADATA_INDEXER_TIME_SUFFIX` ("004").
+   * <p>
+   * TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks
+   *  in the metadata table is landed.
+   *
+   * @return {@code true} if rollback happens; {@code false} otherwise.
    */
-  protected Boolean rollbackFailedWrites() {
-    return rollbackFailedWrites(false);
+  protected boolean rollbackFailedIndexingCommits() {
+    HoodieTable table = createTable(config, hadoopConf);
+    List<String> instantsToRollback = getFailedIndexingCommitsToRollback(table.getMetaClient());
+    Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
+    instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
+    rollbackFailedWrites(pendingRollbacks);
+    return !pendingRollbacks.isEmpty();
+  }
+
+  protected List<String> getFailedIndexingCommitsToRollback(HoodieTableMetaClient metaClient) {
+    Stream<HoodieInstant> inflightInstantsStream = metaClient.getCommitsTimeline()
+        .filter(instant -> !instant.isCompleted()
+            && isIndexingCommit(instant.getTimestamp()))
+        .getInstantsAsStream();
+    return inflightInstantsStream.filter(instant -> {
+      try {
+        return heartbeatClient.isHeartbeatExpired(instant.getTimestamp());
+      } catch (IOException io) {
+        throw new HoodieException("Failed to check heartbeat for instant " + instant, io);
+      }
+    }).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
   }
 
   /**
    * Rollback all failed writes.
-   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
+   *
+   * @return true if rollback was triggered. false otherwise.
    */
-  protected Boolean rollbackFailedWrites(boolean skipLocking) {
+  protected Boolean rollbackFailedWrites() {
     HoodieTable table = createTable(config, hadoopConf);
     List<String> instantsToRollback = getInstantsToRollback(table.getMetaClient(), config.getFailedWritesCleanPolicy(), Option.empty());
     Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
     instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
-    rollbackFailedWrites(pendingRollbacks, skipLocking);
-    return true;
+    rollbackFailedWrites(pendingRollbacks);
+    return !pendingRollbacks.isEmpty();
+  }
+
+  protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback) {
+    rollbackFailedWrites(instantsToRollback, false);
   }
 
   protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback, boolean skipLocking) {
@@ -708,6 +737,19 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     Stream<HoodieInstant> inflightInstantsStream = getInflightTimelineExcludeCompactionAndClustering(metaClient)
         .getReverseOrderedInstants();
     if (cleaningPolicy.isEager()) {
+      // Metadata table uses eager cleaning policy, but we need to exclude inflight delta commits
+      // from the async indexer (`HoodieIndexer`).
+      // TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks in the
+      //  metadata table is landed.
+      if (HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString())) {
+        return inflightInstantsStream.map(HoodieInstant::getTimestamp).filter(entry -> {
+          if (curInstantTime.isPresent()) {
+            return !entry.equals(curInstantTime.get());
+          } else {
+            return !isIndexingCommit(entry);
+          }
+        }).collect(Collectors.toList());
+      }
       return inflightInstantsStream.map(HoodieInstant::getTimestamp).filter(entry -> {
         if (curInstantTime.isPresent()) {
           return !entry.equals(curInstantTime.get());

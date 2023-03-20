@@ -200,7 +200,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     jsc.setLogLevel("ERROR");
 
     hadoopConf = jsc.hadoopConfiguration();
-    context = new HoodieSparkEngineContext(jsc);
 
     sparkSession = SparkSession.builder()
         .withExtensions(JFunction.toScala(sparkSessionExtensions -> {
@@ -209,7 +208,13 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
         }))
         .config(jsc.getConf())
         .getOrCreate();
+
     sqlContext = new SQLContext(sparkSession);
+    context = new HoodieSparkEngineContext(jsc, sqlContext);
+
+    // NOTE: It's important to set Spark's `Tests.IS_TESTING` so that our tests are recognized
+    //       as such by Spark
+    System.setProperty("spark.testing", "true");
   }
 
   /**
@@ -228,11 +233,11 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
       LOG.info("Clearing sql context cache of spark-session used in previous test-case");
       sqlContext.clearCache();
       sqlContext = null;
+      sparkSession = null;
     }
 
     if (jsc != null) {
       LOG.info("Closing spark context used in previous test-case");
-      jsc.close();
       jsc.stop();
       jsc = null;
     }

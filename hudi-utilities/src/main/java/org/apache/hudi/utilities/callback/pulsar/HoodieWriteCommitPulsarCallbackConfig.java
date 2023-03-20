@@ -29,6 +29,7 @@ import static org.apache.hudi.config.HoodieWriteCommitCallbackConfig.CALLBACK_PR
  */
 @ConfigClassProperty(name = "Write commit pulsar callback configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
+    subGroupName = ConfigGroups.SubGroupNames.COMMIT_CALLBACK,
     description = "Controls notifications sent to pulsar, on events happening to a hudi table.")
 public class HoodieWriteCommitPulsarCallbackConfig extends HoodieConfig {
 

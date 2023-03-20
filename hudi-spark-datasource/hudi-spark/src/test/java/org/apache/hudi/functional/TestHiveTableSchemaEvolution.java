@@ -36,10 +36,11 @@ import org.apache.hudi.hadoop.realtime.RealtimeCompactedRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.hudi.HoodieSparkSessionExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
@@ -58,22 +59,15 @@ public class TestHiveTableSchemaEvolution {
   }
 
   private void initSparkContexts(String appName) {
-    SparkConf sparkConf = new SparkConf();
-    if (HoodieSparkUtils.gteqSpark3_2()) {
-      sparkConf.set("spark.sql.catalog.spark_catalog",
-          "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
-    }
-    sparkSession = SparkSession.builder().appName(appName)
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-        .withExtensions(new HoodieSparkSessionExtension())
-        .config("hoodie.insert.shuffle.parallelism", "4")
-        .config("hoodie.upsert.shuffle.parallelism", "4")
-        .config("hoodie.delete.shuffle.parallelism", "4")
+    SparkConf sparkConf = getSparkConfForTest(appName);
+
+    sparkSession = SparkSession.builder()
         .config("hoodie.support.write.lock", "false")
         .config("spark.sql.session.timeZone", "CTT")
         .config("spark.sql.hive.convertMetastoreParquet", "false")
         .config(sparkConf)
-        .master("local[1]").getOrCreate();
+        .getOrCreate();
+
     sparkSession.sparkContext().setLogLevel("ERROR");
   }
 

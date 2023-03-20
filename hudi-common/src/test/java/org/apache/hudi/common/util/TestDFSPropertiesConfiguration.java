@@ -73,11 +73,11 @@ public class TestDFSPropertiesConfiguration {
         "int.prop=123", "double.prop=113.4", "string.prop=str", "boolean.prop=true", "long.prop=1354354354"});
 
     filePath = new Path(dfsBasePath + "/t2.props");
-    writePropertiesFile(filePath, new String[] {"string.prop=ignored", "include=t1.props"});
+    writePropertiesFile(filePath, new String[] {"string.prop=ignored", "include=" + dfsBasePath + "/t1.props"});
 
     filePath = new Path(dfsBasePath + "/t3.props");
     writePropertiesFile(filePath,
-        new String[] {"double.prop=838.3", "include = t2.props", "double.prop=243.4", "string.prop=t3.value"});
+        new String[] {"double.prop=838.3", "include=" + "t2.props", "double.prop=243.4", "string.prop=t3.value"});
 
     filePath = new Path(dfsBasePath + "/t4.props");
     writePropertiesFile(filePath, new String[] {"double.prop=838.3", "include = t4.props"});

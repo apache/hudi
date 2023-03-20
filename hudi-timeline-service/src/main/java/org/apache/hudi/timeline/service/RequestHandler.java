@@ -56,6 +56,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
@@ -180,19 +181,20 @@ public class RequestHandler {
    * Syncs data-set view if local view is behind.
    */
   private boolean syncIfLocalViewBehind(Context ctx) {
-    if (isLocalViewBehind(ctx)) {
-      String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
-      String lastKnownInstantFromClient = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
-      SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
-      synchronized (view) {
-        if (isLocalViewBehind(ctx)) {
-          HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-          LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
-              + " as last known instant but server has the following last instant on timeline :"
-              + localTimeline.lastInstant());
-          view.sync();
-          return true;
-        }
+    String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
+    SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
+    synchronized (view) {
+      if (isLocalViewBehind(ctx)) {
+
+        String lastKnownInstantFromClient = ctx.queryParamAsClass(
+                RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class)
+            .getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
+        HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
+        LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
+            + " as last known instant but server has the following last instant on timeline :"
+            + localTimeline.lastInstant());
+        view.sync();
+        return true;
       }
     }
     return false;
@@ -272,6 +274,14 @@ public class RequestHandler {
       List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFilesBeforeOrOn(
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrThrow(e -> new HoodieException("MAX_INSTANT_PARAM is invalid")));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
+    app.get(RemoteHoodieTableFileSystemView.ALL_LATEST_BASE_FILES_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("ALL_LATEST_BASE_FILES_BEFORE_ON_INSTANT", 1);
+      Map<String, List<BaseFileDTO>> dtos = dataFileHandler.getAllLatestDataFilesBeforeOrOn(
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrThrow(e -> new HoodieException("MAX_INSTANT_PARAM is invalid")));
       writeValueAsString(ctx, dtos);
     }, true));
@@ -459,7 +469,8 @@ public class RequestHandler {
       ctx.future(markerHandler.createMarker(
           ctx,
           ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault(""),
-          ctx.queryParamAsClass(MarkerOperation.MARKER_NAME_PARAM, String.class).getOrDefault("")));
+          ctx.queryParamAsClass(MarkerOperation.MARKER_NAME_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(MarkerOperation.MARKER_BASEPATH_PARAM, String.class).getOrDefault("")));
     }, false));
 
     app.post(MarkerOperation.DELETE_MARKER_DIR_URL, new ViewHandler(ctx -> {

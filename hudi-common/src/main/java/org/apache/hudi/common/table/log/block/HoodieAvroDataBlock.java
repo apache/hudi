@@ -22,11 +22,8 @@ import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockContentLocation;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.MappingIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -143,7 +140,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     checkArgument(type != HoodieRecordType.SPARK, "Not support read avro to spark record");
     // TODO AvroSparkReader need
     RecordIterator iterator = RecordIterator.getInstance(this, content);
-    return new MappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
+    return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
   }
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {

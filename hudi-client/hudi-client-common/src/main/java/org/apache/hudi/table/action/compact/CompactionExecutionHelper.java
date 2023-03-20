@@ -71,8 +71,8 @@ public class CompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O> i
     return result;
   }
 
-  protected boolean useScanV2(HoodieWriteConfig writeConfig) {
-    return writeConfig.useScanV2ForLogRecordReader();
+  protected boolean enableOptimizedLogBlockScan(HoodieWriteConfig writeConfig) {
+    return writeConfig.enableOptimizedLogBlocksScan();
   }
 
 }

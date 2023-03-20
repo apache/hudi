@@ -56,6 +56,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 
 /**
  * Sample program that writes & reads hoodie tables via the Spark datasource.
@@ -112,10 +113,10 @@ public class HoodieJavaApp {
   }
 
   public void run() throws Exception {
+    SparkSession spark = SparkSession.builder()
+        .config(getSparkConfForTest("Hoodie Spark APP"))
+        .getOrCreate();
 
-    // Spark session setup..
-    SparkSession spark = SparkSession.builder().appName("Hoodie Spark APP")
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
     JavaSparkContext jssc = new JavaSparkContext(spark.sparkContext());
     spark.sparkContext().setLogLevel("WARN");
     FileSystem fs = FileSystem.get(jssc.hadoopConfiguration());

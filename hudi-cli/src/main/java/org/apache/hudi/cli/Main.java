@@ -26,7 +26,7 @@ import java.io.IOException;
 /**
  * Main class that delegates to Spring Shell's Bootstrap class in order to simplify debugging inside an IDE.
  */
-@SpringBootApplication
+@SpringBootApplication(exclude = {org.springframework.boot.autoconfigure.gson.GsonAutoConfiguration.class})
 public class Main {
 
   public static void main(String[] args) throws IOException {

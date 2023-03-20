@@ -22,7 +22,10 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -55,12 +58,40 @@ public abstract class WriteMarkers implements Serializable {
   /**
    * Creates a marker without checking if the marker already exists.
    *
-   * @param partitionPath partition path in the table
-   * @param dataFileName data file name
-   * @param type  write IO type
-   * @return the marker path
+   * @param partitionPath partition path in the table.
+   * @param dataFileName  data file name.
+   * @param type          write IO type.
+   * @return the marker path.
    */
   public Option<Path> create(String partitionPath, String dataFileName, IOType type) {
+    return create(partitionPath, dataFileName, type, false);
+  }
+
+  /**
+   * Creates a marker without checking if the marker already exists.
+   * This can invoke marker-based early conflict detection when enabled for multi-writers.
+   *
+   * @param partitionPath  partition path in the table
+   * @param dataFileName   data file name
+   * @param type           write IO type
+   * @param writeConfig    Hudi write configs.
+   * @param fileId         File ID.
+   * @param activeTimeline Active timeline for the write operation.
+   * @return the marker path.
+   */
+  public Option<Path> create(String partitionPath, String dataFileName, IOType type, HoodieWriteConfig writeConfig,
+                             String fileId, HoodieActiveTimeline activeTimeline) {
+    if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
+        && writeConfig.isEarlyConflictDetectionEnable()) {
+      HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
+      HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceTimeline();
+      // TODO If current is compact or clustering then create marker directly without early conflict detection.
+      // Need to support early conflict detection between table service and common writers.
+      if (pendingCompactionTimeline.containsInstant(instantTime) || pendingReplaceTimeline.containsInstant(instantTime)) {
+        return create(partitionPath, dataFileName, type, false);
+      }
+      return createWithEarlyConflictDetection(partitionPath, dataFileName, type, false, writeConfig, fileId, activeTimeline);
+    }
     return create(partitionPath, dataFileName, type, false);
   }
 
@@ -165,4 +196,20 @@ public abstract class WriteMarkers implements Serializable {
    * @return the marker path or empty option if already exists and {@code checkIfExists} is true
    */
   abstract Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists);
+
+  /**
+   * Creates a marker with early conflict detection for multi-writers. If conflict is detected,
+   * an exception is thrown to fail the write operation.
+   *
+   * @param partitionPath  partition path in the table.
+   * @param dataFileName   data file name.
+   * @param type           write IO type.
+   * @param checkIfExists  whether to check if the marker already exists.
+   * @param config         Hudi write configs.
+   * @param fileId         File ID.
+   * @param activeTimeline Active timeline for the write operation.
+   * @return the marker path or empty option if already exists and {@code checkIfExists} is true.
+   */
+  public abstract Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
+                                                                HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline);
 }

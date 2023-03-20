@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 

@@ -83,7 +83,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    *
    * @param writeStatus {@link HoodieData} of {@link WriteStatus}.
    */
-  public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config);
+  public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime);
 
   /**
    * Execute compaction operations and report back status.
@@ -199,7 +199,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
-        .withUseScanV2(executionHelper.useScanV2(config))
+        .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
         .withRecordMerger(config.getRecordMerger())
         .build();
 

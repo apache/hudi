@@ -205,6 +205,7 @@ spark-submit \
 --conf spark.rdd.compress=true  \
 --conf spark.kryoserializer.buffer.max=2000m \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
 --conf spark.memory.storageFraction=0.1 \
 --conf spark.shuffle.service.enabled=true  \
 --conf spark.sql.hive.convertMetastoreParquet=false  \
@@ -251,6 +252,7 @@ spark-submit \
 --conf spark.rdd.compress=true  \
 --conf spark.kryoserializer.buffer.max=2000m \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
 --conf spark.memory.storageFraction=0.1 \
 --conf spark.shuffle.service.enabled=true  \
 --conf spark.sql.hive.convertMetastoreParquet=false  \
@@ -443,6 +445,7 @@ spark-submit \
 --conf spark.rdd.compress=true  \
 --conf spark.kryoserializer.buffer.max=2000m \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
 --conf spark.memory.storageFraction=0.1 \
 --conf spark.shuffle.service.enabled=true  \
 --conf spark.sql.hive.convertMetastoreParquet=false  \
@@ -571,6 +574,7 @@ Sample spark-submit command to test one delta streamer and a spark data source w
 --conf spark.task.maxFailures=100 --conf spark.memory.fraction=0.4 \  
 --conf spark.rdd.compress=true  --conf spark.kryoserializer.buffer.max=2000m \ 
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
 --conf spark.memory.storageFraction=0.1 --conf spark.shuffle.service.enabled=true \  
 --conf spark.sql.hive.convertMetastoreParquet=false  --conf spark.driver.maxResultSize=12g \ 
 --conf spark.executor.heartbeatInterval=120s --conf spark.network.timeout=600s \
@@ -605,6 +609,7 @@ Sample spark-submit command to test one delta streamer and a spark data source w
 --conf spark.task.maxFailures=100 --conf spark.memory.fraction=0.4 \  
 --conf spark.rdd.compress=true  --conf spark.kryoserializer.buffer.max=2000m \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
 --conf spark.memory.storageFraction=0.1 --conf spark.shuffle.service.enabled=true  \
 --conf spark.sql.hive.convertMetastoreParquet=false  --conf spark.driver.maxResultSize=12g \
 --conf spark.executor.heartbeatInterval=120s --conf spark.network.timeout=600s \
@@ -663,6 +668,7 @@ Here is the full command:
 --conf spark.rdd.compress=true \
 --conf spark.kryoserializer.buffer.max=2000m \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
 --conf spark.memory.storageFraction=0.1 \
 --conf spark.shuffle.service.enabled=true \
 --conf spark.sql.hive.convertMetastoreParquet=false \

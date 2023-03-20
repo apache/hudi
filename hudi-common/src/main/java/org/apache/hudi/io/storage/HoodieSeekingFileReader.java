@@ -20,7 +20,7 @@ package org.apache.hudi.io.storage;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;

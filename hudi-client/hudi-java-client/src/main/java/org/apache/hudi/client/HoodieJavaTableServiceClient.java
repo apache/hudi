@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
@@ -34,8 +35,10 @@ import java.util.Map;
 
 public class HoodieJavaTableServiceClient extends BaseHoodieTableServiceClient<List<WriteStatus>> {
 
-  protected HoodieJavaTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig);
+  protected HoodieJavaTableServiceClient(HoodieEngineContext context,
+                                         HoodieWriteConfig clientConfig,
+                                         Option<EmbeddedTimelineService> timelineService) {
+    super(context, clientConfig, timelineService);
   }
 
   @Override

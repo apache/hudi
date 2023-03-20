@@ -39,5 +39,5 @@ public abstract class HoodieIOHandle<T, I, K, O> {
     this.fs = getFileSystem();
   }
 
-  protected abstract FileSystem getFileSystem();
+  public abstract FileSystem getFileSystem();
 }

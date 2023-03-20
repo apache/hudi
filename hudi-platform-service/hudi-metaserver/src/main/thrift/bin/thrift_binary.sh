@@ -16,24 +16,16 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-#
-# Usage: ./scripts/checkout_pr.sh
-#
-# Checkout a PR given the PR number into a local branch. PR branches are named
-# using the convention "pull/<PR_NUMBER>", to enable pr_push_command.sh to work
-# in tandem.
-#
-
 SUBDIR=../src/main/thrift/bin
 OS_VERSION=$1
 M1_MAC='m1_mac'
 DOCKER='docker'
 if [ "$OS_VERSION" = "$M1_MAC" ]
 then
-  sh $SUBDIR/thrift_in_mac_m1.sh
+  $SUBDIR/thrift_in_mac_m1.sh
 elif [ "$OS_VERSION" = "$DOCKER" ]
 then
-  sh $SUBDIR/thrift_in_docker.sh
+  $SUBDIR/thrift_in_docker.sh
 else
-  sh $SUBDIR/thrift_in_docker.sh
+  $SUBDIR/thrift_in_docker.sh
 fi

@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -41,7 +42,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * This filter will only work with hoodie table since it will only load partitions
@@ -74,7 +75,7 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
    */
 
   @Override
-  HoodieData<Pair<String, HoodieKey>> explodeRecordsWithFileComparisons(
+  HoodiePairData<HoodieFileGroupId, String> explodeRecordsWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       HoodiePairData<String, String> partitionRecordKeyPairs) {
 
@@ -87,10 +88,11 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
       String partitionPath = partitionRecordKeyPair.getLeft();
 
       return indexFileFilter.getMatchingFilesAndPartition(partitionPath, recordKey).stream()
-          .map(partitionFileIdPair -> (Pair<String, HoodieKey>) new ImmutablePair<>(partitionFileIdPair.getRight(),
-              new HoodieKey(recordKey, partitionFileIdPair.getLeft())))
-          .collect(Collectors.toList());
-    }).flatMap(List::iterator);
+          .map(partitionFileIdPair ->
+              new ImmutablePair<>(
+                  new HoodieFileGroupId(partitionFileIdPair.getLeft(), partitionFileIdPair.getRight()), recordKey));
+    })
+        .flatMapToPair(Stream::iterator);
   }
 
   /**

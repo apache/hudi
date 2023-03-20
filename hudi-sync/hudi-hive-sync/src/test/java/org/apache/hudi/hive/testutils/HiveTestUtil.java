@@ -51,6 +51,7 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
+import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -149,7 +150,7 @@ public class HiveTestUtil {
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
-    ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig);
+    ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig, IMetaStoreClientUtil.getMSC(hiveSyncConfig.getHiveConf()));
 
     clear();
   }

@@ -26,8 +26,10 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.log4j.LogManager
+import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -56,6 +58,8 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
 
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
+
+  override def conf: SparkConf = conf(getSparkSqlConf)
 
   @ParameterizedTest
   @CsvSource(Array(

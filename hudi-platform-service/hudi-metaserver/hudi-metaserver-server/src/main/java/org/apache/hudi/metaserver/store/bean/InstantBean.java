@@ -39,6 +39,13 @@ public class InstantBean {
     this.state = instant.getState().getValue();
   }
 
+  public InstantBean(String ts, int action, int state) {
+    this.ts = ts;
+    this.action = action;
+    this.state = state;
+  }
+
+  // for test with h2
   public InstantBean(String ts, Byte action, Byte state) {
     this.ts = ts;
     this.action = action & 0xFF;

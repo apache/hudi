@@ -154,7 +154,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
         .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
         .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
-        .setProperties(config.getProps()).build();
+        .setMetaserverConfig(config.getProps()).build();
   }
 
   public Option<EmbeddedTimelineService> getTimelineServer() {
@@ -170,7 +170,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    *
    * @param table A hoodie table instance created after transaction starts so that the latest commits and files are captured.
    * @param metadata Current committing instant's metadata
-   * @param pendingInflightAndRequestedInstants
+   * @param pendingInflightAndRequestedInstants Pending instants on the timeline
+   *
    * @see {@link BaseHoodieWriteClient#preCommit}
    * @see {@link BaseHoodieTableServiceClient#preCommit}
    */

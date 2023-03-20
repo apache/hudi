@@ -40,13 +40,18 @@ import scala.collection.immutable
 /**
  * @Experimental
  */
-class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
-                                     optParams: Map[String, String],
-                                     userSchema: Option[StructType],
-                                     metaClient: HoodieTableMetaClient)
-  extends MergeOnReadSnapshotRelation(sqlContext, optParams, userSchema, Seq(), metaClient) with HoodieIncrementalRelationTrait {
+case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
+                                          override val optParams: Map[String, String],
+                                          override val metaClient: HoodieTableMetaClient,
+                                          private val userSchema: Option[StructType],
+                                          private val prunedDataSchema: Option[StructType] = None)
+  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, Seq(), userSchema, prunedDataSchema)
+    with HoodieIncrementalRelationTrait {
 
-  override type FileSplit = HoodieMergeOnReadFileSplit
+  override type Relation = MergeOnReadIncrementalRelation
+
+  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
+    this.copy(prunedDataSchema = Some(prunedSchema))
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
     super.imbueConfigs(sqlContext)
@@ -72,7 +77,6 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
-    val hoodieTableState = getTableState
     // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
     //                 filtered, since file-reader might not be capable to perform filtering
     new HoodieMergeOnReadRDD(
@@ -81,7 +85,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       fileReaders = readers,
       tableSchema = tableSchema,
       requiredSchema = requiredSchema,
-      tableState = hoodieTableState,
+      tableState = tableState,
       mergeType = mergeType,
       fileSplits = fileSplits)
   }

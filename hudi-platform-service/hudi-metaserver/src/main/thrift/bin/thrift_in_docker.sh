@@ -17,13 +17,15 @@
 # limitations under the License.
 
 printf "====== INSTALL THRIFT START ======\n"
-DIR_PATH=$(dirname "$PWD")
-THRIFT_FILE_PATH=${DIR_PATH}/src/main/thrift
-THRIFT_OUT_PATH=$PWD/target/generated-sources
+PARENT_PATH=$(dirname "$PWD")
+THRIFT_FILE_PATH=${PARENT_PATH}/src/main/thrift
+THRIFT_OUT_PATH=${PARENT_PATH}/target/generated-sources
 THRIFT_VERSION=0.12.0
 THRIFT_IMAGE=thrift:$THRIFT_VERSION
 docker pull $THRIFT_IMAGE
 printf "====== INSTALL THRIFT END ======\n"
 printf "====== COMPILE THRIFT SOURCE FILE START ======\n"
 docker run -v "$THRIFT_FILE_PATH:/thrift" -v "$THRIFT_OUT_PATH:/output" $THRIFT_IMAGE thrift -o /output/ --gen java /thrift/hudi-metaserver.thrift
+printf "====== CHANGE OWNER TO CURRENT USER ======\n"
+chown -R "$USER:$(id -g -n)" $THRIFT_OUT_PATH
 printf "====== COMPILE THRIFT SOURCE FILE END ======\n"

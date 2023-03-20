@@ -48,6 +48,10 @@ public class TablePathUtils {
     }
   }
 
+  public static boolean isHoodieTablePath(FileSystem fs, Path path) {
+    return hasTableMetadataFolder(fs, path);
+  }
+
   public static Option<Path> getTablePath(FileSystem fs, Path path) throws HoodieException, IOException {
     LOG.info("Getting table path from path : " + path);
 

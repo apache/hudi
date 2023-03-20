@@ -18,10 +18,16 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.exception.SchemaCompatibilityException;
+
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestAvroSchemaUtils {
@@ -171,5 +177,56 @@ public class TestAvroSchemaUtils {
         AvroSchemaUtils.isCompatibleProjectionOf(
             Schema.createUnion(Schema.create(Schema.Type.NULL), sourceSchema),
             Schema.createUnion(Schema.create(Schema.Type.NULL), projectedNestedSchema)));
+  }
+
+  private static final Schema FULL_SCHEMA = new Schema.Parser().parse("{\n"
+      + "  \"type\" : \"record\",\n"
+      + "  \"name\" : \"record\",\n"
+      + "  \"fields\" : [ {\n"
+      + "    \"name\" : \"a\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  }, {\n"
+      + "    \"name\" : \"b\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  }, {\n"
+      + "    \"name\" : \"c\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  } ]\n"
+      + "}");
+
+  private static final Schema SHORT_SCHEMA = new Schema.Parser().parse("{\n"
+      + "  \"type\" : \"record\",\n"
+      + "  \"name\" : \"record\",\n"
+      + "  \"fields\" : [ {\n"
+      + "    \"name\" : \"a\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  }, {\n"
+      + "    \"name\" : \"b\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  } ]\n"
+      + "}\n");
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testIsCompatibleProjectionNotAllowed(boolean shouldValidate) {
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.emptySet()));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testIsCompatibleProjectionAllowed(boolean shouldValidate) {
+    AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, true, Collections.emptySet());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testIsCompatiblePartitionDropCols(boolean shouldValidate) {
+    AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.singleton("c"));
   }
 }

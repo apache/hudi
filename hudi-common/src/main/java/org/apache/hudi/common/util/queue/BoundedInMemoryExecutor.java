@@ -61,7 +61,7 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
       }
       LOG.info("All records from the queue have been consumed");
     } catch (Exception e) {
-      LOG.error("Error consuming records", e);
+      LOG.error("Failed consuming records", e);
       queue.markAsFailed(e);
       throw new HoodieException(e);
     }

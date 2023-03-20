@@ -22,8 +22,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -57,7 +57,7 @@ public abstract class TestAbstractDebeziumSource extends UtilitiesTestBase {
 
   private final String testTopicName = "hoodie_test_" + UUID.randomUUID();
 
-  private final HoodieDeltaStreamerMetrics metrics = mock(HoodieDeltaStreamerMetrics.class);
+  private final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
   private static KafkaTestUtils testUtils;
 
   @BeforeAll

@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.table.marker.WriteMarkersFactory
 import org.apache.spark.internal.Logging
@@ -47,8 +48,9 @@ class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Log
     val instantTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
     val basePath = getBasePath(tableName)
 
+    var client: SparkRDDWriteClient[_] = null
     val result = Try {
-      val client = createHoodieClient(jsc, basePath)
+      client = createHoodieClient(jsc, basePath)
       val config = client.getConfig
       val context = client.getEngineContext
       val table = HoodieSparkTable.create(config, context)
@@ -61,6 +63,10 @@ class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Log
       case Failure(e) =>
         logWarning(s"Failed: Could not clean marker instantTime: $instantTime.", e)
         false
+    }
+
+    if (client != null) {
+      client.close()
     }
 
     Seq(Row(result))

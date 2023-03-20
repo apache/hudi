@@ -135,8 +135,9 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    * (partition + curBucket) % numPartitions == this taskID belongs to this task.
    */
   public boolean isBucketToLoad(int bucketNumber, String partition) {
-    int globalHash = ((partition + bucketNumber).hashCode()) & Integer.MAX_VALUE;
-    return BucketIdentifier.mod(globalHash, parallelism) == taskID;
+    final int partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) % parallelism;
+    int globalIndex = partitionIndex + bucketNumber;
+    return BucketIdentifier.mod(globalIndex, parallelism)  == taskID;
   }
 
   /**
@@ -156,7 +157,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
     // Load existing fileID belongs to this task
     Map<Integer, String> bucketToFileIDMap = new HashMap<>();
-    this.writeClient.getHoodieTable().getFileSystemView().getAllFileGroups(partition).forEach(fileGroup -> {
+    this.writeClient.getHoodieTable().getHoodieView().getAllFileGroups(partition).forEach(fileGroup -> {
       String fileID = fileGroup.getFileGroupId().getFileId();
       int bucketNumber = BucketIdentifier.bucketIdFromFileId(fileID);
       if (isBucketToLoad(bucketNumber, partition)) {

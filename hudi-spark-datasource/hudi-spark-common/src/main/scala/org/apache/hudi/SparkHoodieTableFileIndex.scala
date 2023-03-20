@@ -43,6 +43,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
+import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 
@@ -56,6 +57,7 @@ import scala.language.implicitConversions
  * @param specifiedQueryInstant instant as of which table is being queried
  * @param fileStatusCache transient cache of fetched [[FileStatus]]es
  */
+@NotThreadSafe
 class SparkHoodieTableFileIndex(spark: SparkSession,
                                 metaClient: HoodieTableMetaClient,
                                 schemaSpec: Option[StructType],
@@ -221,7 +223,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       //       we might not be able to properly parse partition-values from the listed partition-paths.
       //       In that case, we simply could not apply partition pruning and will have to regress to scanning
       //       the whole table
-      if (haveProperPartitionValues(partitionPaths)) {
+      if (haveProperPartitionValues(partitionPaths) && partitionSchema.nonEmpty) {
         val predicate = partitionPruningPredicates.reduce(expressions.And)
         val boundPredicate = InterpretedPredicate(predicate.transform {
           case a: AttributeReference =>
@@ -239,7 +241,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         prunedPartitionPaths
       } else {
         logWarning(s"Unable to apply partition pruning, due to failure to parse partition values from the" +
-          s" following path(s): ${partitionPaths.filter(_.values.length == 0).head.path}")
+          s" following path(s): ${partitionPaths.find(_.values.length == 0).map(e => e.getPath)}")
 
         partitionPaths
       }

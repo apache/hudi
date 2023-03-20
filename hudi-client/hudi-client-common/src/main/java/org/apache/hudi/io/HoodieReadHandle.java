@@ -44,7 +44,7 @@ public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, 
   }
 
   @Override
-  protected FileSystem getFileSystem() {
+  public FileSystem getFileSystem() {
     return hoodieTable.getMetaClient().getFs();
   }
 

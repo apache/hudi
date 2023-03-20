@@ -103,7 +103,7 @@ public class TestHoodieLogFormatAppendFailure {
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
 
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
-        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive")
+        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
         .overBaseCommit("").withFs(fs).build();
 
     writer.appendBlock(dataBlock);
@@ -134,7 +134,7 @@ public class TestHoodieLogFormatAppendFailure {
     // Opening a new Writer right now will throw IOException. The code should handle this, rollover the logfile and
     // return a new writer with a bumped up logVersion
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
-        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive")
+        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
         .overBaseCommit("").withFs(fs).build();
     header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,

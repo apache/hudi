@@ -18,11 +18,16 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.exception.SchemaCompatibilityException;
+
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaCompatibility;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
@@ -36,10 +41,17 @@ public class AvroSchemaUtils {
   private AvroSchemaUtils() {}
 
   /**
-   * See {@link #isSchemaCompatible(Schema, Schema, boolean)} doc for more details
+   * See {@link #isSchemaCompatible(Schema, Schema, boolean, boolean)} doc for more details
    */
   public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema) {
     return isSchemaCompatible(prevSchema, newSchema, true);
+  }
+
+  /**
+   * See {@link #isSchemaCompatible(Schema, Schema, boolean, boolean)} doc for more details
+   */
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean allowProjection) {
+    return isSchemaCompatible(prevSchema, newSchema, true, allowProjection);
   }
 
   /**
@@ -50,13 +62,45 @@ public class AvroSchemaUtils {
    * @param newSchema new instance of the schema
    * @param checkNaming controls whether schemas fully-qualified names should be checked
    */
-  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean checkNaming) {
+  public static boolean isSchemaCompatible(Schema prevSchema, Schema newSchema, boolean checkNaming, boolean allowProjection) {
     // NOTE: We're establishing compatibility of the {@code prevSchema} and {@code newSchema}
     //       as following: {@code newSchema} is considered compatible to {@code prevSchema},
     //       iff data written using {@code prevSchema} could be read by {@code newSchema}
+
+    // In case schema projection is not allowed, new schema has to have all the same fields as the
+    // old schema
+    if (!allowProjection) {
+      if (!canProject(prevSchema, newSchema)) {
+        return false;
+      }
+    }
+
     AvroSchemaCompatibility.SchemaPairCompatibility result =
         AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema, checkNaming);
     return result.getType() == AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+  }
+
+  /**
+   * Check that each field in the prevSchema can be populated in the newSchema
+   * @param prevSchema prev schema.
+   * @param newSchema new schema
+   * @return true if prev schema is a projection of new schema.
+   */
+  public static boolean canProject(Schema prevSchema, Schema newSchema) {
+    return canProject(prevSchema, newSchema, Collections.emptySet());
+  }
+
+  /**
+   * Check that each field in the prevSchema can be populated in the newSchema except specified columns
+   * @param prevSchema prev schema.
+   * @param newSchema new schema
+   * @return true if prev schema is a projection of new schema.
+   */
+  public static boolean canProject(Schema prevSchema, Schema newSchema, Set<String> exceptCols) {
+    return prevSchema.getFields().stream()
+        .filter(f -> !exceptCols.contains(f.name()))
+        .map(oldSchemaField -> SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField))
+        .noneMatch(Objects::isNull);
   }
 
   /**
@@ -88,7 +132,7 @@ public class AvroSchemaUtils {
   private static boolean isAtomicSchemasCompatible(Schema oneAtomicType, Schema anotherAtomicType) {
     // NOTE: Checking for compatibility of atomic types, we should ignore their
     //       corresponding fully-qualified names (as irrelevant)
-    return isSchemaCompatible(oneAtomicType, anotherAtomicType, false);
+    return isSchemaCompatible(oneAtomicType, anotherAtomicType, false, true);
   }
 
   /**
@@ -251,6 +295,49 @@ public class AvroSchemaUtils {
       return field != null;
     } catch (Exception e) {
       return false;
+    }
+  }
+
+  /**
+   * Checks whether writer schema is compatible with table schema considering {@code AVRO_SCHEMA_VALIDATE_ENABLE}
+   * and {@code SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP} options.
+   * To avoid collision of {@code SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP} and {@code DROP_PARTITION_COLUMNS}
+   * partition column names should be passed as {@code dropPartitionColNames}.
+   * Passed empty set means {@code DROP_PARTITION_COLUMNS} is disabled.
+   *
+   * @param tableSchema the latest dataset schema
+   * @param writerSchema writer schema
+   * @param shouldValidate whether {@link AvroSchemaCompatibility} check being performed
+   * @param allowProjection whether column dropping check being performed
+   * @param dropPartitionColNames partition column names to being excluded from column dropping check
+   * @throws SchemaCompatibilityException if writer schema is not compatible
+   */
+  public static void checkSchemaCompatible(
+      Schema tableSchema,
+      Schema writerSchema,
+      boolean shouldValidate,
+      boolean allowProjection,
+      Set<String> dropPartitionColNames) throws SchemaCompatibilityException {
+
+    String errorMessage = null;
+
+    if (!allowProjection && !canProject(tableSchema, writerSchema, dropPartitionColNames)) {
+      errorMessage = "Column dropping is not allowed";
+    }
+
+    // TODO(HUDI-4772) re-enable validations in case partition columns
+    //                 being dropped from the data-file after fixing the write schema
+    if (dropPartitionColNames.isEmpty() && shouldValidate && !isSchemaCompatible(tableSchema, writerSchema)) {
+      errorMessage = "Failed schema compatibility check";
+    }
+
+    if (errorMessage != null) {
+      String errorDetails = String.format(
+          "%s\nwriterSchema: %s\ntableSchema: %s",
+          errorMessage,
+          writerSchema,
+          tableSchema);
+      throw new SchemaCompatibilityException(errorDetails);
     }
   }
 }
