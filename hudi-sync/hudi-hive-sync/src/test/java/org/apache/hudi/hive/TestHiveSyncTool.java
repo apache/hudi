@@ -602,7 +602,7 @@ public class TestHiveSyncTool {
     // Lets do the sync
     reSyncHiveTable();
     List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(commitTime1));
-    assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
+    assertEquals(6, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
     List<org.apache.hudi.sync.common.model.Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
@@ -934,7 +934,7 @@ public class TestHiveSyncTool {
 
     reInitHiveSyncClient();
     List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(instantTime));
-    assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
+    assertEquals(6, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
     List<org.apache.hudi.sync.common.model.Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
@@ -963,7 +963,7 @@ public class TestHiveSyncTool {
         "Table partitions should match the number of partitions we wrote");
     assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
-    assertEquals(1, hiveClient.getWrittenPartitionsSince(Option.of(commitTime2)).size());
+    assertEquals(2, hiveClient.getWrittenPartitionsSince(Option.of(commitTime2)).size());
   }
 
   @ParameterizedTest

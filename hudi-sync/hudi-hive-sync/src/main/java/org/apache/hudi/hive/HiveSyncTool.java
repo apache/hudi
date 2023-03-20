@@ -72,6 +72,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SPARK_VERSION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CURRENT_INSTANT_TS;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
@@ -237,7 +238,6 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
 
-
     // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
     // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
     // by the data source way (which will use the HoodieBootstrapRelation).
@@ -258,8 +258,15 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
     }
     LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
+    String currentInstantTs = config.getString(META_SYNC_CURRENT_INSTANT_TS);
+    if (lastCommitTimeSynced.isPresent() && !currentInstantTs.isEmpty()) {
+      // If occ is enabled, the commit time may be earlier than lastCommitTimeSynced.
+      // In this case, the metadata of the current instant cannot be synchronized, resulting in the loss of partition metadata.
+      lastCommitTimeSynced = currentInstantTs.compareTo(lastCommitTimeSynced.get()) < 0 ? Option.of(currentInstantTs) : lastCommitTimeSynced;
+      LOG.info("Reset lastCommitTimeSynced " + lastCommitTimeSynced.get());
+    }
     List<String> writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced);
-    LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
+    LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince);
 
     // Sync the partitions if needed
     // find dropped partitions, if any, in the latest commit

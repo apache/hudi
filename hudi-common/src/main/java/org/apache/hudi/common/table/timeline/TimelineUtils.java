@@ -234,6 +234,25 @@ public class TimelineUtils {
     return timeline.getCommitsTimeline()
         .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
   }
+
+  /**
+   * Returns a Hudi timeline with commits after the given instant time (include).
+   *
+   * @param metaClient                {@link HoodieTableMetaClient} instance.
+   * @param includeStartInstantTime Start instant time (include).
+   * @return Hudi timeline.
+   */
+  public static HoodieTimeline getCommitsTimelineAfterOrEquals(
+      HoodieTableMetaClient metaClient, String includeStartInstantTime) {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieDefaultTimeline timeline =
+        activeTimeline.isBeforeTimelineStarts(includeStartInstantTime)
+            ? metaClient.getArchivedTimeline(includeStartInstantTime)
+            .mergeTimeline(activeTimeline)
+            : activeTimeline;
+    return timeline.getCommitsTimeline()
+        .findInstantsAfterOrEquals(includeStartInstantTime, Integer.MAX_VALUE);
+  }
   
   /**
    * Returns the commit metadata of the given instant.

@@ -54,6 +54,7 @@ import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_SUPPORT_TIMESTAMP;
 import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE;
 import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_TABLE_PROPERTIES;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CURRENT_INSTANT_TS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SPARK_VERSION;
@@ -189,6 +190,13 @@ public class AdbSyncTool extends HoodieSyncTool {
     }
     LOG.info("Last commit time synced was found:{}", lastCommitTimeSynced.orElse("null"));
 
+    String currentInstantTs = config.getString(META_SYNC_CURRENT_INSTANT_TS);
+    if (lastCommitTimeSynced.isPresent() && !currentInstantTs.isEmpty()) {
+      // If occ is enabled, the commit time may be earlier than lastCommitTimeSynced.
+      // In this case, the metadata of the current instant cannot be synchronized, resulting in the loss of partition metadata.
+      lastCommitTimeSynced = currentInstantTs.compareTo(lastCommitTimeSynced.get()) < 0 ? Option.of(currentInstantTs) : lastCommitTimeSynced;
+      LOG.info("Reset lastCommitTimeSynced " + lastCommitTimeSynced.get());
+    }
     // Scan synced partitions
     List<String> writtenPartitionsSince;
     if (config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {

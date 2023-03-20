@@ -757,7 +757,7 @@ object HoodieSparkSqlWriter {
       } finally {
         writeClient.close()
       }
-      val metaSyncSuccess = metaSync(sqlContext.sparkSession, hoodieConfig, basePath, df.schema)
+      val metaSyncSuccess = metaSync(sqlContext.sparkSession, hoodieConfig, basePath, df.schema, null)
       metaSyncSuccess
     }
   }
@@ -828,7 +828,7 @@ object HoodieSparkSqlWriter {
       .mode(SaveMode.Append)
       .save()
 
-    val syncHiveSuccess = metaSync(sqlContext.sparkSession, writeConfig, basePath, df.schema)
+    val syncHiveSuccess = metaSync(sqlContext.sparkSession, writeConfig, basePath, df.schema, null)
     (syncHiveSuccess, common.util.Option.ofNullable(instantTime))
   }
 
@@ -866,7 +866,7 @@ object HoodieSparkSqlWriter {
   }
 
   private def metaSync(spark: SparkSession, hoodieConfig: HoodieConfig, basePath: Path,
-                       schema: StructType): Boolean = {
+                       schema: StructType, instantTime:String): Boolean = {
     val hiveSyncEnabled = hoodieConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_SYNC_ENABLED).toBoolean
     var metaSyncEnabled = hoodieConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_ENABLED).toBoolean
     var syncClientToolClassSet = scala.collection.mutable.Set[String]()
@@ -886,6 +886,9 @@ object HoodieSparkSqlWriter {
       properties.put(HiveSyncConfigHolder.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD.key, spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD).toString)
       properties.put(HoodieSyncConfig.META_SYNC_SPARK_VERSION.key, SPARK_VERSION)
       properties.put(HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA.key, hoodieConfig.getBoolean(HoodieMetadataConfig.ENABLE))
+      if (instantTime.nonEmpty) {
+        properties.put(HoodieSyncConfig.META_SYNC_CURRENT_INSTANT_TS.key, instantTime)
+      }
 
       // Collect exceptions in list because we want all sync to run. Then we can throw
       val metaSyncExceptions = new ListBuffer[HoodieException]()
@@ -987,7 +990,7 @@ object HoodieSparkSqlWriter {
       log.info(s"Clustering Scheduled is $clusteringInstant")
 
       val metaSyncSuccess = metaSync(spark, HoodieWriterUtils.convertMapToHoodieConfig(parameters),
-        tableInstantInfo.basePath, schema)
+        tableInstantInfo.basePath, schema, tableInstantInfo.instantTime)
 
       log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
       (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)

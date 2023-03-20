@@ -163,6 +163,11 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("")
       .withDocumentation("The spark version used when syncing with a metastore.");
 
+  public static final ConfigProperty<String> META_SYNC_CURRENT_INSTANT_TS = ConfigProperty
+      .key("hoodie.datasource.hive_sync.current_instant_ts")
+      .defaultValue("")
+      .withDocumentation("Sync current instant ts");
+
   private Configuration hadoopConf;
 
   public HoodieSyncConfig(Properties props) {
@@ -230,6 +235,8 @@ public class HoodieSyncConfig extends HoodieConfig {
     @Parameter(names = {"--help", "-h"}, help = true)
     public boolean help = false;
 
+    public String currentInstantTs;
+
     public boolean isHelp() {
       return help;
     }
@@ -247,6 +254,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       props.setPropertyIfNonNull(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), useFileListingFromMetadata);
       props.setPropertyIfNonNull(META_SYNC_CONDITIONAL_SYNC.key(), isConditionalSync);
       props.setPropertyIfNonNull(META_SYNC_SPARK_VERSION.key(), sparkVersion);
+      props.setPropertyIfNonNull(META_SYNC_CURRENT_INSTANT_TS.key(), currentInstantTs);
       return props;
     }
   }

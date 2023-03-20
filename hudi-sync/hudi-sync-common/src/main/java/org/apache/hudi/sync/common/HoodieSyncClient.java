@@ -125,7 +125,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
       return TimelineUtils.getWrittenPartitions(
-          TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get()));
+          TimelineUtils.getCommitsTimelineAfterOrEquals(metaClient, lastCommitTimeSynced.get()));
     }
   }
 
