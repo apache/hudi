@@ -262,6 +262,8 @@
         <artifactId>flatten-maven-plugin</artifactId>
         <version>1.4.0</version>
         <configuration>
+          <updatePomFile>true</updatePomFile>
+          <flattenMode>oss</flattenMode>
         </configuration>
         <executions>
           <!-- enable flattening -->
