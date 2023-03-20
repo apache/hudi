@@ -74,7 +74,7 @@ public final class SourceFormatAdapter implements Closeable {
   public SourceFormatAdapter(Source source) {
     this(source, Option.empty(), Option.empty());
   }
-  // this is where the AvroKafkaSource is being modified if appropriate, off of being instantiated by UtilHelpers.createSource()
+
   public SourceFormatAdapter(Source source, Option<BaseErrorTableWriter> errorTableWriter, Option<TypedProperties> props) {
     this.source = source;
     this.errorTableWriter = errorTableWriter;

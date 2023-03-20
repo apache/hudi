@@ -55,6 +55,9 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
 
   @Override
   protected InputBatch<JavaRDD<T>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
+    //Clear any cached resources used by this Source.
+    this.schemaProvider.clearCaches();
+
     try {
       OffsetRange[] offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
       long totalNewMsgs = KafkaOffsetGen.CheckpointUtils.totalNewMessages(offsetRanges);

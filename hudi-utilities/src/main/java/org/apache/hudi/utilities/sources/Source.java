@@ -66,14 +66,6 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
   protected abstract InputBatch<T> fetchNewData(Option<String> lastCkptStr, long sourceLimit);
 
   /**
-   * Clear any cached resources used by this Source.
-   */
-  // DO I need this in the Source Class?
-  public void clearCaches(){
-    SchemaProvider.clearCaches();
-  }
-
-  /**
    * Main API called by Hoodie Delta Streamer to fetch records.
    * 
    * @param lastCkptStr Last Checkpoint
@@ -95,14 +87,3 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     return sparkSession;
   }
 }
-/**
-This class represents a source from which we can tail data, and assumes a constructor that takes properties.
-        The class has a SourceType enum with four values: JSON, AVRO, ROW, and PROTO. This is used to indicate the type of data that is being sourced.
-        The class has a constructor that takes several parameters, including TypedProperties, JavaSparkContext, SparkSession, SchemaProvider, and an optional SourceType.
-        The constructor initializes these parameters, and the overriddenSchemaProvider is used to override the default schema provider if provided in the CLI.
-        The class has an abstract method fetchNewData that must be implemented by subclasses.
-        This method is used to fetch new data and return an InputBatch object, which contains the batch of data and the checkpoint for the next batch.
-        The class also has a public method fetchNext, which calls fetchNewData and returns an InputBatch object. If the overriddenSchemaProvider is not null, it creates a new InputBatch object using the overridden schema provider.
-        The class also has a getSourceType method to get the type of data being sourced, and a getSparkSession method to get the Spark session used by the source.
-        Finally, the class implements the SourceCommitCallback interface and is serializable.
-   */

@@ -589,7 +589,6 @@ public class HoodieDeltaStreamer implements Serializable {
 
   /**
    * Syncs data either in single-run or in continuous mode.
-   * Where write is handled?
    */
   public static class DeltaSyncService extends HoodieAsyncService {
 
@@ -642,7 +641,6 @@ public class HoodieDeltaStreamer implements Serializable {
     private final Option<PostWriteTerminationStrategy> postWriteTerminationStrategy;
 
     /**
-     * Note Constructor method
      * Wrapper for calling a DeltaSync object repeatedly
      */
     public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,

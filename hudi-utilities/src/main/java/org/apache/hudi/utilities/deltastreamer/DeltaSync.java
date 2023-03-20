@@ -297,7 +297,7 @@ public class DeltaSync implements Serializable, Closeable {
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
     this.formatAdapter = new SourceFormatAdapter(
-    // Is this what's instantiating the AvroKafkaSource object? -- YES
+
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics),
         this.errorTableWriter, Option.of(props));
   }

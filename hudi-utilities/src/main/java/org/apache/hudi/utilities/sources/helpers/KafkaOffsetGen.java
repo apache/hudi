@@ -217,7 +217,6 @@ public class KafkaOffsetGen {
   private KafkaResetOffsetStrategies autoResetValue;
   private final String kafkaCheckpointType;
 
-  //In Java, a constructor is a special method that has the same name as the class, and it is used to initialize the object's state. Constructors are called automatically when an object is created using the new keyword.
   public KafkaOffsetGen(TypedProperties props) {
     this.props = props;
     kafkaParams = excludeHoodieConfigs(props);
