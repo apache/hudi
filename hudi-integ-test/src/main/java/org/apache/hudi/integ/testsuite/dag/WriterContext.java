@@ -125,7 +125,6 @@ public class WriterContext {
   }
 
   public void shutdownResources() {
-    log.info("Shutting down resources in WriteContext ");
     this.hoodieTestSuiteWriter.shutdownResources();
     if (executorService != null) {
       executorService.shutdownNow();

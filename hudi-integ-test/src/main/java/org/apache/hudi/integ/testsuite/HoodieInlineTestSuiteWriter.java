@@ -66,14 +66,12 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
 
   public void shutdownResources() {
     if (cfg.useDeltaStreamer) {
-      log.info("XXX Shutting DS wrapper gracefully ");
+      log.info("Shutting down DS wrapper gracefully ");
       this.deltaStreamerWrapper.shutdownGracefully();
-      log.info("XXX Shutting DS wrapper completed ");
     }
     if (this.writeClient != null) {
-      log.info("XXX closing local write client");
+      log.info("Closing local write client");
       this.writeClient.close();
-      log.info("XXX closing local write client completed");
     }
   }
 
