@@ -215,6 +215,11 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
         // to be interrupted as well
         Thread.currentThread().interrupt();
       }
+      // throw if we have any other exception seen already. There is a chance that cancellation/closing of producers with CompeletableFuture wins before the actual exception
+      // is thrown.
+      if (this.queue.getThrowable() != null) {
+        throw new HoodieException(queue.getThrowable());
+      }
 
       throw new HoodieException(e);
     }
