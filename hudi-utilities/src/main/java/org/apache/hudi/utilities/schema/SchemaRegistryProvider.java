@@ -193,7 +193,10 @@ public class SchemaRegistryProvider extends SchemaProvider {
   public Schema getSourceSchema() {
     String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     try {
-      return parseSchemaFromRegistry(registryUrl);
+      if (cachedSchema == null) {
+        cachedSchema = parseSchemaFromRegistry(registryUrl);
+      }
+      return cachedSchema;
     } catch (Exception e) {
       throw new HoodieSchemaFetchException(String.format(
           "Error reading source schema from registry. Please check %s is configured correctly. Truncated URL: %s",

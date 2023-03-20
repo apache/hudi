@@ -39,6 +39,8 @@ public abstract class SchemaProvider implements Serializable {
 
   protected JavaSparkContext jssc;
 
+  protected Schema cachedSchema;
+
   public SchemaProvider(TypedProperties props) {
     this(props, null);
   }
@@ -55,5 +57,9 @@ public abstract class SchemaProvider implements Serializable {
   public Schema getTargetSchema() {
     // by default, use source schema as target for hoodie table as well
     return getSourceSchema();
+  }
+
+  public void clearCaches() {
+    cachedSchema = null;
   }
 }
