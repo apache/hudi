@@ -18,7 +18,9 @@
 
 package org.apache.hudi.client.transaction;
 
+import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieMetadataWrapper;
@@ -53,7 +55,7 @@ public class ConcurrentOperation {
   private final String actionState;
   private final String actionType;
   private final String instantTime;
-  private Set<String> mutatedFileIds = Collections.EMPTY_SET;
+  private Set<String> mutatedFileIds = Collections.emptySet();
 
   public ConcurrentOperation(HoodieInstant instant, HoodieTableMetaClient metaClient) throws IOException {
     this.metadataWrapper = new HoodieMetadataWrapper(MetadataConversionUtils.createMetaWrapper(instant, metaClient));
@@ -104,7 +106,7 @@ public class ConcurrentOperation {
           this.operationType = WriteOperationType.COMPACT;
           this.mutatedFileIds = this.metadataWrapper.getMetadataFromTimeline().getHoodieCompactionPlan().getOperations()
               .stream()
-              .map(op -> op.getFileId())
+              .map(HoodieCompactionOperation::getFileId)
               .collect(Collectors.toSet());
           break;
         case COMMIT_ACTION:
@@ -148,8 +150,12 @@ public class ConcurrentOperation {
       }
     } else {
       switch (getInstantActionType()) {
+        // the enumerations should be kept in sync with the timeline metadata fetching code path,
+        // e.g. when this.metadataWrapper.isAvroMetadata() is true.
+        case COMPACTION_ACTION:
         case COMMIT_ACTION:
         case DELTA_COMMIT_ACTION:
+        case REPLACE_COMMIT_ACTION:
         case LOG_COMPACTION_ACTION:
           this.mutatedFileIds = CommitUtils.getFileIdWithoutSuffixAndRelativePaths(this.metadataWrapper.getCommitMetadata().getPartitionToWriteStats()).keySet();
           this.operationType = this.metadataWrapper.getCommitMetadata().getOperationType();
@@ -165,7 +171,7 @@ public class ConcurrentOperation {
         .getClusteringPlan().getInputGroups()
         .stream()
         .flatMap(ig -> ig.getSlices().stream())
-        .map(file -> file.getFileId())
+        .map(HoodieSliceInfo::getFileId)
         .collect(Collectors.toSet());
   }
 

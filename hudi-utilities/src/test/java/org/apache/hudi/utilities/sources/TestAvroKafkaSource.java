@@ -24,8 +24,8 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -72,7 +72,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
 
   protected static String SCHEMA_PATH = "/tmp/schema_file.avsc";
 
-  protected final HoodieDeltaStreamerMetrics metrics = mock(HoodieDeltaStreamerMetrics.class);
+  protected final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
 
   protected SchemaProvider schemaProvider;
 

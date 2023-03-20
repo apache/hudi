@@ -23,16 +23,16 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -57,7 +57,7 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
   protected final SchemaProvider originalSchemaProvider;
 
   public AvroKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-                         SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
+                         SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
     super(props, sparkContext, sparkSession,
         UtilHelpers.getSchemaProviderForKafkaSource(schemaProvider, props, sparkContext),
         SourceType.AVRO, metrics);

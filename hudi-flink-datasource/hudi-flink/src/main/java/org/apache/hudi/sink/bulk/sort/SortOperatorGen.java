@@ -35,7 +35,7 @@ import java.util.Arrays;
 public class SortOperatorGen {
   private final int[] sortIndices;
   private final RowType rowType;
-  private final TableConfig tableConfig = new TableConfig();
+  private final TableConfig tableConfig = TableConfig.getDefault();
 
   public SortOperatorGen(RowType rowType, String[] sortFields) {
     this.sortIndices = Arrays.stream(sortFields).mapToInt(rowType::getFieldIndex).toArray();
