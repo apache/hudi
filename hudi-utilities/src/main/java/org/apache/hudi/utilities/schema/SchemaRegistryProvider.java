@@ -176,7 +176,10 @@ public class SchemaRegistryProvider extends SchemaProvider {
   public Schema getSourceSchema() {
     String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
     try {
-      return parseSchemaFromRegistry(registryUrl);
+      if (cachedSchema == null) {
+        cachedSchema = parseSchemaFromRegistry(registryUrl);
+      }
+      return cachedSchema;
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading source schema from registry :" + registryUrl, ioe);
     }
