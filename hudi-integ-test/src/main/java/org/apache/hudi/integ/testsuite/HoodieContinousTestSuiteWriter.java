@@ -85,7 +85,7 @@ public class HoodieContinousTestSuiteWriter extends HoodieTestSuiteWriter {
 
   @Override
   public void shutdownResources() {
-    if (cfg.useDeltaStreamer) {
+    if (this.deltaStreamerWrapper != null) {
       log.info("Shutting down DS wrapper gracefully ");
       this.deltaStreamerWrapper.shutdownGracefully();
     }
