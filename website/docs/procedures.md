@@ -908,14 +908,14 @@ Validate metadata table files of a hudi table.
 
 **Output**
 
-| Output Name           | Type    |
-|-----------------------|---------|
-| partition             | String  |
-| file_name             | String  |
-| is_present_in_fs      | Boolean |
-| is_resent_in_metadata | Boolean |
-| fs_size               | Long    |
-| metadata_size         | Long    |
+| Output Name            | Type    |
+|------------------------|---------|
+| partition              | String  |
+| file_name              | String  |
+| is_present_in_fs       | Boolean |
+| is_present_in_metadata | Boolean |
+| fs_size                | Long    |
+| metadata_size          | Long    |
 
 **Example**
 
@@ -923,9 +923,9 @@ Validate metadata table files of a hudi table.
 call validate_metadata_table_files(table => 'test_hudi_table');
 ```
 
-| partition     | file_name                                                           | is_present_in_fs | is_resent_in_metadata | fs_size | metadata_size |
-|---------------|---------------------------------------------------------------------|------------------|-----------------------|---------|---------------|
-| dt=2021-05-03 | ad1e5a3f-532f-4a13-9f60-223676798bf3-0_0-4-4_00000000000002.parquet | true             | true                  | 43523   | 43523         | 
+| partition     | file_name                                                           | is_present_in_fs | is_present_in_metadata | fs_size | metadata_size |
+|---------------|---------------------------------------------------------------------|------------------|------------------------|---------|---------------|
+| dt=2021-05-03 | ad1e5a3f-532f-4a13-9f60-223676798bf3-0_0-4-4_00000000000002.parquet | true             | true                   | 43523   | 43523         | 
 
 ## Table information
 
