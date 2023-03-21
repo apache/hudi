@@ -1182,6 +1182,10 @@ public class DeltaSync implements Serializable, Closeable {
     return commitTimelineOpt;
   }
 
+  public Option<HoodieTimeline> getDeltaCommitTimelineOpt() {
+    return deltaCommitTimelineOpt;
+  }
+
   public HoodieIngestionMetrics getMetrics() {
     return metrics;
   }
