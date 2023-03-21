@@ -95,7 +95,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
     private final String tableName;
 
     private CollectTableSink(
-            ResolvedSchema schema,
+        ResolvedSchema schema,
         String tableName) {
       this.schema = schema;
       this.tableName = tableName;
