@@ -32,5 +32,6 @@
 
   <modules>
     <module>hudi-metaserver</module>
+    <module>hudi-table-service-manager</module>
   </modules>
 </project>
