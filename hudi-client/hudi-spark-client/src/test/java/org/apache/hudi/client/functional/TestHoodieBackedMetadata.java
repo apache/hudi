@@ -1968,6 +1968,69 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(client);
   }
 
+  /**
+   * Validates that if an instant is completed in MDT, but crashed before commiting to DT, MDT compaction should not kick in based on the instant time
+   * since its not complete in DT yet.
+   * @throws Exception
+   */
+  @Test
+  public void testMDTCompactionWithFailedCommits() throws Exception {
+    tableType = HoodieTableType.COPY_ON_WRITE;
+    init(tableType);
+    context = new HoodieSparkEngineContext(jsc);
+    HoodieWriteConfig initialConfig = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProperties(initialConfig.getProps())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4).build()).build();
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+
+    // Write 1 (Bulk insert)
+    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
+    client.startCommitWithTime(newCommitTime);
+    List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
+    assertNoWriteErrors(writeStatuses);
+    validateMetadata(client);
+
+    // Write 2 (inserts)
+    newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    client.startCommitWithTime(newCommitTime);
+    records = dataGen.generateInserts(newCommitTime, 20);
+    writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
+    assertNoWriteErrors(writeStatuses);
+    validateMetadata(client);
+
+    // setup clustering config.
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
+        .withClusteringSortColumns("_row_key").withInlineClustering(true)
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
+
+    HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
+        .withAutoCommit(false)
+        .withClusteringConfig(clusteringConfig).build();
+
+    // trigger clustering
+    SparkRDDWriteClient newClient = getHoodieWriteClient(newWriteConfig);
+    String clusteringCommitTime = newClient.scheduleClustering(Option.empty()).get().toString();
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> clusterMetadata = newClient.cluster(clusteringCommitTime, true);
+
+    // manually remove clustering completed instant from .hoodie folder and to mimic succeeded clustering in metadata table, but failed in data table.
+    FileCreateUtils.deleteReplaceCommit(basePath, clusteringCommitTime);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieWriteConfig updatedWriteConfig = HoodieWriteConfig.newBuilder().withProperties(initialConfig.getProps())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4).build())
+        .withRollbackUsingMarkers(false).build();
+
+    client = getHoodieWriteClient(updatedWriteConfig);
+
+    newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    client.startCommitWithTime(newCommitTime);
+    records = dataGen.generateInserts(newCommitTime, 20);
+    writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
+    assertNoWriteErrors(writeStatuses);
+    validateMetadata(client, Option.of(clusteringCommitTime));
+  }
+
   @Test
   public void testMetadataReadWithNoCompletedCommits() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
@@ -2534,6 +2597,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   private void validateMetadata(SparkRDDWriteClient testClient) throws IOException {
+    validateMetadata(testClient, Option.empty());
+  }
+
+  private void validateMetadata(SparkRDDWriteClient testClient, Option<String> ignoreFilesWithCommit) throws IOException {
     HoodieWriteConfig config = testClient.getConfig();
 
     SparkRDDWriteClient client;
@@ -2582,7 +2649,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         } else {
           partitionPath = new Path(basePath, partition);
         }
+
         FileStatus[] fsStatuses = FSUtils.getAllDataFilesInPartition(fs, partitionPath);
+        if (ignoreFilesWithCommit.isPresent()) {
+          fsStatuses = Arrays.stream(fsStatuses).filter(fileStatus -> !fileStatus.getPath().getName().contains(ignoreFilesWithCommit.get()))
+              .collect(Collectors.toList()).toArray(new FileStatus[0]);
+        }
         FileStatus[] metaStatuses = tableMetadata.getAllFilesInPartition(partitionPath);
         List<String> fsFileNames = Arrays.stream(fsStatuses)
             .map(s -> s.getPath().getName()).collect(Collectors.toList());
