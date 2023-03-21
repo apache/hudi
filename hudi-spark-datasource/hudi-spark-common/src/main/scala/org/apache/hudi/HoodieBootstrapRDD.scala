@@ -56,18 +56,10 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
         val (iterator, schema) = if (bootstrapDataFileReader.schema.isEmpty) {
           // No data column to fetch, hence fetch only from skeleton file
           (bootstrapSkeletonFileReader.read(skeletonFile), bootstrapSkeletonFileReader.schema)
-        } else if (bootstrapSkeletonFileReader.schema.isEmpty) {
+        } else {
           // No metadata column to fetch, hence fetch only from data file
           (bootstrapDataFileReader.read(bootstrapPartition.split.dataFile), bootstrapDataFileReader.schema)
-        } else {
-          // Fetch from both data and skeleton file, and merge
-          val dataFileIterator = bootstrapDataFileReader.read(bootstrapPartition.split.dataFile)
-          val skeletonFileIterator = bootstrapSkeletonFileReader.read(skeletonFile)
-          val mergedSchema = StructType(bootstrapSkeletonFileReader.schema.fields ++ bootstrapDataFileReader.schema.fields)
-
-          (merge(skeletonFileIterator, dataFileIterator), mergedSchema)
         }
-
         // NOTE: Here we have to project the [[InternalRow]]s fetched into the expected target schema.
         //       These could diverge for ex, when requested schema contains partition columns which might not be
         //       persisted w/in the data file, but instead would be parsed from the partition path. In that case

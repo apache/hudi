@@ -125,7 +125,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       requiredDataSchema = new HoodieTableSchema(requiredBootstrapDataFileSchema, convertToAvroSchema(requiredBootstrapDataFileSchema, tableName).toString),
       // NOTE: For bootstrapped files we can't apply any filtering in case we'd need to merge it with
       //       a skeleton-file as we rely on matching ordering of the records across bootstrap- and skeleton-files
-      filters = if (requiredSkeletonFileSchema.isEmpty) filters else Seq(),
+      filters = filters,
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf(),
       // NOTE: Bootstrap relation have to always extract partition values from the partition-path as this is a
