@@ -163,7 +163,7 @@ object CreateHoodieTableCommand {
     // Create table in the catalog
     val enableHive = isUsingHiveCatalog(sparkSession)
     if (enableHive) {
-      createHiveDataSourceTable(sparkSession, newTable, ignoreIfExists)
+      createHiveDataSourceTable(sparkSession, newTable)
     } else {
       catalog.createTable(newTable, ignoreIfExists = false, validateLocation = false)
     }
@@ -177,8 +177,7 @@ object CreateHoodieTableCommand {
     * @param table
     * @param sparkSession
     */
-  private def createHiveDataSourceTable(sparkSession: SparkSession, table: CatalogTable,
-      ignoreIfExists: Boolean): Unit = {
+  private def createHiveDataSourceTable(sparkSession: SparkSession, table: CatalogTable): Unit = {
     val dbName = table.identifier.database.get
     // check database
     val dbExists = sparkSession.sessionState.catalog.databaseExists(dbName)
