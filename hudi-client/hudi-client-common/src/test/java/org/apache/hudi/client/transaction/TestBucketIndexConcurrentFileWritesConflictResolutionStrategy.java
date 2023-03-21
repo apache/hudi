@@ -132,10 +132,11 @@ public class TestBucketIndexConcurrentFileWritesConflictResolutionStrategy exten
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
 
-    // writer 1 conflicts with writer 2
+    // there should be 1 candidate instant
     Assertions.assertEquals(1, candidateInstants.size());
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), TimelineUtils.getCommitMetadata(candidateInstants.get(0), metaClient.getActiveTimeline().reload()));
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+    // there should be no conflict between writer 1 and writer 2
     Assertions.assertFalse(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
   }
 
