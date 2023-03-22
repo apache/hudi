@@ -128,7 +128,7 @@ public class TestPostgresDebeziumAvroPayload {
     // Insert record being merged with empty record.
     GenericRecord insertedRecord = createRecord(1, Operation.INSERT, 100L);
     PostgresDebeziumAvroPayload insertPayload = new PostgresDebeziumAvroPayload(insertedRecord, 100L);
-    PostgresDebeziumAvroPayload combinedPayload = (PostgresDebeziumAvroPayload) insertPayload.preCombine(emptyRecord.getData(), avroSchema, new TypedProperties());
+    PostgresDebeziumAvroPayload combinedPayload = (PostgresDebeziumAvroPayload) insertPayload.preCombine(emptyRecord.getData(), new TypedProperties());
     assertEquals(insertPayload, combinedPayload);
   }
 

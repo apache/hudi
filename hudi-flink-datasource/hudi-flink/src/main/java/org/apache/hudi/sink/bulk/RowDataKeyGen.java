@@ -93,9 +93,9 @@ public class RowDataKeyGen implements Serializable {
 
     this.hiveStylePartitioning = hiveStylePartitioning;
     this.encodePartitionPath = encodePartitionPath;
+    this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
     if (this.recordKeyFields.length == 1) {
       // efficient code path
-      this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
       this.simpleRecordKey = true;
       int recordKeyIdx = fieldNames.indexOf(this.recordKeyFields[0]);
       this.recordKeyFieldGetter = RowData.createFieldGetter(fieldTypes.get(recordKeyIdx), recordKeyIdx);

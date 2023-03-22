@@ -154,7 +154,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
       LOG.error("Got {} error records during clustering of instant {},\n"
           + "option '{}' is configured as false,"
           + "rolls back the clustering", numErrorRecords, instant, FlinkOptions.IGNORE_FAILED.key());
-      ClusteringUtil.rollbackClustering(table, writeClient, instant);
+      CompactionUtil.rollbackCompaction(table, instant);
       return;
     }
 
