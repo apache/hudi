@@ -41,6 +41,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
@@ -60,12 +61,10 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
   void testFilterInstantsWithRange() {
     HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient, true);
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
-    conf.set(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true);
     IncrementalInputSplits iis = IncrementalInputSplits.builder()
         .conf(conf)
         .path(new Path(basePath))
         .rowType(TestConfigurations.ROW_TYPE)
-        .skipClustering(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING))
         .build();
 
     HoodieInstant commit1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "1");
@@ -126,6 +125,6 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     conf.set(FlinkOptions.READ_END_COMMIT, "3");
     HoodieTimeline resTimeline = iis.filterInstantsByCondition(timeline);
     // will not filter cluster commit by default
-    assertEquals(3, resTimeline.getInstants().size());
+    assertEquals(3, resTimeline.getInstants().collect(Collectors.toList()).size());
   }
 }
