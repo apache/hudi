@@ -25,10 +25,6 @@ import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.spark.sql.SaveMode
-<<<<<<< HEAD
-=======
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
->>>>>>> 51d0351572 ([HUDI-5857] Insert overwrite into bucket table would generate new file group id (#8072))
 
 import java.io.File
 
