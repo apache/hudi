@@ -37,7 +37,8 @@ public class ConfigGroups {
     METRICS("Metrics Configs"),
     RECORD_PAYLOAD("Record Payload Config"),
     KAFKA_CONNECT("Kafka Connect Configs"),
-    AWS("Amazon Web Services Configs");
+    AWS("Amazon Web Services Configs"),
+    DELTA_STREAMER("DeltaStreamer Configs");
 
     public final String name;
 
