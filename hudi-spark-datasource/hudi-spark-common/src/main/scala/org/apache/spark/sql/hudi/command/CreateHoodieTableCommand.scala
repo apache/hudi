@@ -160,7 +160,7 @@ object CreateHoodieTableCommand {
       properties = newTblProperties
     )
 
-    // Create table in the catalog
+    // Create table in the catalog.
     val enableHive = isUsingHiveCatalog(sparkSession)
     if (enableHive) {
       createHiveDataSourceTable(sparkSession, newTable)
