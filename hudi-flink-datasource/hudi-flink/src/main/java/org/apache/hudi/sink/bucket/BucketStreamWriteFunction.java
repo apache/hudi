@@ -162,7 +162,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
       int bucketNumber = BucketIdentifier.bucketIdFromFileId(fileId);
       if (isBucketToLoad(bucketNumber, partition)) {
         LOG.info(String.format("Should load this partition bucket %s with fileId %s", bucketNumber, fileId));
-        // Ensure that one bucketId has only ONE fileId
+        // Validate that one bucketId has only ONE fileId
         if (bucketToFileIDMap.containsKey(bucketNumber)) {
           throw new RuntimeException(String.format("Duplicate fileId %s from bucket %s of partition %s found "
               + "during the BucketStreamWriteFunction index bootstrap.", fileId, bucketNumber, partition));
