@@ -482,45 +482,4 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
     }
   }
-
-  test("Prevent a partition from being dropped if there are pending LOG_COMPACT jobs") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      val basePath = s"${tmp.getCanonicalPath}t/$tableName"
-      // Using INMEMORY index type to ensure that deltacommits generate log files instead of parquet
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | options (
-           |  primaryKey ='id',
-           |  type = 'mor',
-           |  preCombineField = 'ts',
-           |  hoodie.index.type = 'INMEMORY'
-           | )
-           | partitioned by(ts)
-           | location '$basePath'
-           | """.stripMargin)
-      // Create 5 deltacommits to ensure that it is > default `hoodie.compact.inline.max.delta.commits`
-      // Write everything into the same FileGroup but into separate blocks
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
-      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
-      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000)")
-      val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
-
-      // Generate the first log_compaction plan
-      val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
-      assertTrue(client.scheduleLogCompactionAtInstant(firstScheduleInstant, HOption.empty()))
-
-      val partition = "ts=1000"
-      val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
-      checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
-    }
-  }
 }

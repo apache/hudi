@@ -25,7 +25,6 @@ import org.apache.hudi.table.HoodieTable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * A utility class for helper functions when performing a delete partition operation.
@@ -58,7 +57,7 @@ public class DeletePartitionUtils {
     SyncableFileSystemView fileSystemView = (SyncableFileSystemView) table.getSliceView();
 
     // separating the iteration of pending compaction operations from clustering as they return different stream types
-    Stream.concat(fileSystemView.getPendingCompactionOperations(), fileSystemView.getPendingLogCompactionOperations())
+    fileSystemView.getPendingCompactionOperations()
         .filter(op -> partitionsToDrop.contains(op.getRight().getPartitionPath()))
         .forEach(op -> instantsOfOffendingPendingTableServiceAction.add(op.getLeft()));
 

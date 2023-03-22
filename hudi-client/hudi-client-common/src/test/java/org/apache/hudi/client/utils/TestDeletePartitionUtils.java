@@ -50,7 +50,7 @@ public class TestDeletePartitionUtils {
   private final SyncableFileSystemView fileSystemView = Mockito.mock(SyncableFileSystemView.class);
 
   public static Stream<Arguments> generateTruthValues() {
-    int noOfVariables = 3;
+    int noOfVariables = 2;
     int noOfRows = 1 << noOfVariables;
     Object[][] truthValues = new Object[noOfRows][noOfVariables];
     for (int i = 0; i < noOfRows; i++) {
@@ -66,16 +66,14 @@ public class TestDeletePartitionUtils {
   @MethodSource("generateTruthValues")
   public void testDeletePartitionUtils(
       boolean hasPendingCompactionOperations,
-      boolean hasPendingLogCompactionOperations,
       boolean hasFileGroupsInPendingClustering) {
-    System.out.printf("hasPendingCompactionOperations: %s, hasPendingLogCompactionOperations: %s, hasFileGroupsInPendingClustering: %s%n",
-        hasPendingCompactionOperations, hasPendingLogCompactionOperations, hasFileGroupsInPendingClustering);
+    System.out.printf("hasPendingCompactionOperations: %s, hasFileGroupsInPendingClustering: %s%n",
+        hasPendingCompactionOperations, hasFileGroupsInPendingClustering);
     Mockito.when(table.getSliceView()).thenReturn(fileSystemView);
     Mockito.when(fileSystemView.getPendingCompactionOperations()).thenReturn(createPendingCompactionOperations(hasPendingCompactionOperations));
-    Mockito.when(fileSystemView.getPendingLogCompactionOperations()).thenReturn(createPendingCompactionOperations(hasPendingLogCompactionOperations));
     Mockito.when(fileSystemView.getFileGroupsInPendingClustering()).thenReturn(createFileGroupsInPendingClustering(hasFileGroupsInPendingClustering));
 
-    boolean shouldThrowException = hasPendingCompactionOperations || hasPendingLogCompactionOperations || hasFileGroupsInPendingClustering;
+    boolean shouldThrowException = hasPendingCompactionOperations || hasFileGroupsInPendingClustering;
 
     if (shouldThrowException) {
       assertThrows(HoodieDeletePartitionException.class,
