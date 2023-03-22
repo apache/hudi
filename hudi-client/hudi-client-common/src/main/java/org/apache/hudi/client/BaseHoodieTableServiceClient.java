@@ -782,6 +782,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
       }
     }).collect(Collectors.toList());
 
+    // Only return instants that haven't been completed by other writers
     return expiredInstants.stream()
         .filter(instant -> !metaClient.getActiveTimeline().isCompletedCommitFileExists(instant))
         .map(HoodieInstant::getTimestamp)
