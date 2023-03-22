@@ -27,7 +27,7 @@ object DataFrameUtil {
 
   /**
    * Creates a DataFrame out of RDD[InternalRow] that you can get
-   * using `df.queryExection.toRdd`
+   * using `df.queryExecution.toRdd`
    */
   def createFromInternalRows(sparkSession: SparkSession, schema:
   StructType, rdd: RDD[InternalRow]): DataFrame = {

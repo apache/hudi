@@ -18,10 +18,6 @@
 package org.apache.hudi
 
 import org.apache.avro.Schema
-
-import java.io.IOException
-import java.time.Instant
-import java.util.{Collections, Date, UUID}
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils.gteqSpark3_0
@@ -36,12 +32,12 @@ import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
+import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
-import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -1045,7 +1041,7 @@ class TestHoodieSparkSqlWriter {
   }
 
   @Test
-  def testNonpartitonedWithResuseTableConfig(): Unit = {
+  def testNonpartitonedWithReuseTableConfig(): Unit = {
     val _spark = spark
     import _spark.implicits._
     val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
@@ -1054,7 +1050,7 @@ class TestHoodieSparkSqlWriter {
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts"
     )
 
-    // case 1: When commit C1 specificies a key generator and commit C2 does not specify key generator
+    // case 1: When commit C1 specifies a key generator and commit C2 does not specify key generator
     val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
 
     // the first write need to specify KEYGENERATOR_CLASS_NAME params
@@ -1084,7 +1080,7 @@ class TestHoodieSparkSqlWriter {
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
     )
 
-    // case 1: When commit C1 does not specify key generator and commit C2 specificies a key generator
+    // case 1: When commit C1 does not specify key generator and commit C2 specifies a key generator
     val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
 
     // the first write need to specify KEYGENERATOR_CLASS_NAME params
@@ -1118,7 +1114,7 @@ class TestHoodieSparkSqlWriter {
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
     )
 
-    // case 1: When commit C1 specificies a key generator and commkt C2 does not specify key generator
+    // case 1: When commit C1 specifies a key generator and commkt C2 does not specify key generator
     val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
 
     // the first write need to specify KEYGENERATOR_CLASS_NAME params
@@ -1151,7 +1147,7 @@ class TestHoodieSparkSqlWriter {
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
     )
 
-    // case 1: When commit C1 specificies a key generator and commkt C2 does not specify key generator
+    // case 1: When commit C1 specifies a key generator and commkt C2 does not specify key generator
     val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
 
     // the first write need to specify KEYGENERATOR_CLASS_NAME params

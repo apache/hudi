@@ -19,9 +19,8 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, projectReader}
 import org.apache.hudi.HoodieBootstrapRelation.validate
-import org.apache.hudi.HoodieBaseRelation.convertToAvroSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.rdd.RDD
@@ -29,7 +28,7 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
@@ -37,21 +36,21 @@ case class HoodieBootstrapSplit(dataFile: PartitionedFile, skeletonFile: Option[
 
 /**
   * This is Spark relation that can be used for querying metadata/fully bootstrapped query hoodie tables, as well as
-  * non-bootstrapped tables. It implements PrunedFilteredScan interface in order to support column pruning and filter
-  * push-down. For metadata bootstrapped files, if we query columns from both metadata and actual data then it will
-  * perform a merge of both to return the result.
-  *
-  * Caveat: Filter push-down does not work when querying both metadata and actual data columns over metadata
-  * bootstrapped files, because then the metadata file and data file can return different number of rows causing errors
-  * merging.
-  *
-  * @param sqlContext Spark SQL Context
-  * @param userSchema User specified schema in the datasource query
-  * @param globPaths  The global paths to query. If it not none, read from the globPaths,
-  *                   else read data from tablePath using HoodiFileIndex.
-  * @param metaClient Hoodie table meta client
-  * @param optParams DataSource options passed by the user
-  */
+ * non-bootstrapped tables. It implements PrunedFilteredScan interface in order to support column pruning and filter
+ * push-down. For metadata bootstrapped files, if we query columns from both metadata and actual data then it will
+ * perform a merge of both to return the result.
+ *
+ * Caveat: Filter push-down does not work when querying both metadata and actual data columns over metadata
+ * bootstrapped files, because then the metadata file and data file can return different number of rows causing errors
+ * merging.
+ *
+ * @param sqlContext Spark SQL Context
+ * @param userSchema User specified schema in the datasource query
+ * @param globPaths  The global paths to query. If it not none, read from the globPaths,
+ *                   else read data from tablePath using HoodieFileIndex.
+ * @param metaClient Hoodie table meta client
+ * @param optParams  DataSource options passed by the user
+ */
 case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
                                    private val userSchema: Option[StructType],
                                    private val globPaths: Seq[Path],

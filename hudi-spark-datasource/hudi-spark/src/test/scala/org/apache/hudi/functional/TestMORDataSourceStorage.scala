@@ -68,11 +68,11 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     "false,",
     "false,fare.currency"
   ))
-  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preComineField: String) {
+  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preCombineField: String) {
     var options: Map[String, String] = commonOpts +
       (HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled))
-    if (!StringUtils.isNullOrEmpty(preComineField)) {
-      options += (DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> preComineField)
+    if (!StringUtils.isNullOrEmpty(preCombineField)) {
+      options += (DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> preCombineField)
     }
     val dataGen = new HoodieTestDataGenerator(0xDEEF)
     val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)

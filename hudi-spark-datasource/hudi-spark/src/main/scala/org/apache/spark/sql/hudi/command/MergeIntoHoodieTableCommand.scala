@@ -37,12 +37,12 @@ import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.combineOptions
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{CoercedAttributeReference, encodeAsBase64String, stripCasting, toStructType}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util.Base64
@@ -272,29 +272,29 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * will be applied:
    *
    * <ul>
-   *   <li>Expression for the "primary-key" column is extracted from the merge-on condition of the
-   *   MIT statement: Hudi's implementation of the statement restricts kind of merge-on condition
-   *   permitted to only such referencing primary-key column(s) of the target table; as such we're
-   *   leveraging matching side of such conditional expression (containing [[sourceTable]] attrobute)
-   *   interpreting it as a primary-key column in the [[sourceTable]]</li>
+   * <li>Expression for the "primary-key" column is extracted from the merge-on condition of the
+   * MIT statement: Hudi's implementation of the statement restricts kind of merge-on condition
+   * permitted to only such referencing primary-key column(s) of the target table; as such we're
+   * leveraging matching side of such conditional expression (containing [[sourceTable]] attribute)
+   * interpreting it as a primary-key column in the [[sourceTable]]</li>
    *
-   *   <li>Expression for the "pre-combine" column (optional) is extracted from the matching update
-   *   clause ({@code WHEN MATCHED ... THEN UPDATE ...}) as right-hand side of the expression referencing
-   *   pre-combine attribute of the target column</li>
+   * <li>Expression for the "pre-combine" column (optional) is extracted from the matching update
+   * clause ({@code WHEN MATCHED ... THEN UPDATE ...}) as right-hand side of the expression referencing
+   * pre-combine attribute of the target column</li>
    * <ul>
    *
    * For example, w/ the following statement (primary-key column is [[id]], while pre-combine column is [[ts]])
    * <pre>
-   *    MERGE INTO target
-   *    USING (SELECT 1 AS sid, 'A1' AS sname, 1000 AS sts) source
-   *    ON target.id = source.sid
-   *    WHEN MATCHED THEN UPDATE SET id = source.sid, name = source.sname, ts = source.sts
+   * MERGE INTO target
+   * USING (SELECT 1 AS sid, 'A1' AS sname, 1000 AS sts) source
+   * ON target.id = source.sid
+   * WHEN MATCHED THEN UPDATE SET id = source.sid, name = source.sname, ts = source.sts
    * </pre>
    *
    * We will append following columns to the source dataset:
    * <ul>
-   *   <li>{@code id = source.sid}</li>
-   *   <li>{@code ts = source.sts}</li>
+   * <li>{@code id = source.sid}</li>
+   * <li>{@code ts = source.sts}</li>
    * </ul>
    */
   def sourceDataset: DataFrame = {

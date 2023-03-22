@@ -47,7 +47,7 @@ import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Create handle with RowData for datasource implemention of bulk insert.
+ * Create handle with RowData for datasource implementation of bulk insert.
  */
 public class HoodieRowDataCreateHandle implements Serializable {
 

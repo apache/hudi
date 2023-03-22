@@ -473,7 +473,7 @@ object HoodieSparkSqlWriter {
           //       only incoming dataset's projection has to match the table's schema, and not the whole one
 
           if (mergeIntoWrites) {
-            // if its merge into writes, do not check for projection nor schema compatability. Writers down the line will
+            // if its merge into writes, do not check for projection nor schema compatibility. Writers down the line will
             // take care of it.
             canonicalizedSourceSchema
           } else {
