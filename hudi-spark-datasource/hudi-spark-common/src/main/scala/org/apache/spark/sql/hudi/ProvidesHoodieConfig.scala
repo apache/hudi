@@ -145,6 +145,11 @@ trait ProvidesHoodieConfig extends Logging {
                      isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable, hasPrecombineColumn) match {
       case (Some(UPSERT_OPERATION_OPT_VAL), _, _, _, _, _, _, false) =>
         throw new IllegalArgumentException(s"Table without preCombineKey can not use upsert operation.")
+      case (Some(UPSERT_OPERATION_OPT_VAL), _, _, _, true, _, _, _) =>
+        logWarning(s"$UPSERT_OPERATION_OPT_VAL is not applicable " +
+          s"when $INSERT_DROP_DUPS is set to be true, " +
+          s"overriding the $OPERATION to be $INSERT_OPERATION_OPT_VAL")
+        INSERT_OPERATION_OPT_VAL
       case (Some(operation), _, _, _, _, _, _, _)  => operation
       case (None, true, _, _, _, false, _, _) =>
         throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
