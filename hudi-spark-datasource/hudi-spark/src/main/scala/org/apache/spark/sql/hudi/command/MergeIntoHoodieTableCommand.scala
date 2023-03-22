@@ -623,6 +623,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   private def checkUpdatingActions(updateActions: Seq[UpdateAction]): Unit = {
+    if (updateActions.length > 1) {
+      val resolver = sparkSession.sessionState.analyzer.resolver
+      hoodieCatalogTable.preCombineKey.foreach { preCombineField =>
+        if (!mergeInto.sourceTable.output.exists(attr => resolver(attr.name, preCombineField))) {
+          throw new AnalysisException(s"only one updating action is supported in MERGE INTO statement, " +
+            s"because the preCombineKey '$preCombineField' not found in the source table. " +
+            s"Make sure contain all preCombineKey to support more updating actions")
+        }
+      }
+    }
 
     //updateActions.foreach(update =>
     //  assert(update.assignments.length == targetTableSchema.length,

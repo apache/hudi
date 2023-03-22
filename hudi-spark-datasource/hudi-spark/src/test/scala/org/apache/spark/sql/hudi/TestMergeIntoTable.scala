@@ -114,60 +114,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     })
   }
 
-  test("Test MergeInto with more than once update actions") {
-    withRecordType()(withTempDir {tmp =>
-      val targetTable = generateTableName
-      spark.sql(
-        s"""
-           |create table ${targetTable} (
-           |  id int,
-           |  name string,
-           |  data int,
-           |  country string,
-           |  ts bigint
-           |) using hudi
-           |tblproperties (
-           |  type = 'cow',
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts'
-           | )
-           |partitioned by (country)
-           |location '${tmp.getCanonicalPath}/$targetTable'
-           |""".stripMargin)
-      spark.sql(
-        s"""
-           |merge into ${targetTable} as target
-           |using (
-           |select 1 as id, 'lb' as name, 6 as data, 'shu' as country, 1646643193 as ts
-           |) source
-           |on source.id = target.id
-           |when matched then
-           |update set *
-           |when not matched then
-           |insert *
-           |""".stripMargin)
-      spark.sql(
-        s"""
-           |merge into ${targetTable} as target
-           |using (
-           |select 1 as id, 'lb' as name, 5 as data, 'shu' as country, 1646643196 as ts
-           |) source
-           |on source.id = target.id
-           |when matched and source.data > target.data then
-           |update set target.data = source.data, target.ts = source.ts
-           |when matched and source.data = 5 then
-           |update set target.data = source.data, target.ts = source.ts
-           |when not matched then
-           |insert *
-           |""".stripMargin)
-
-      checkAnswer(s"select id, name, data, country, ts from $targetTable")(
-        Seq(1, "lb", 5, "shu", 1646643196L)
-      )
-
-    })
-  }
-
   test("Test MergeInto with ignored record") {
     withRecordType()(withTempDir {tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
@@ -1177,5 +1123,261 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         Seq(1, "a1", 10, 1004)
       )
     })
+  }
+
+  test("Basic test mor MergeInto multi updateAction") {
+    withRecordType()(withTempDir { tmp =>
+      val cowTableName = generateTableName
+      // Create table
+      spark.sql(
+        s"""
+           |create table $cowTableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$cowTableName'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'mor',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $cowTableName values(1, 'a1', 10, 1000), (2, 'a2', 10, 1000)")
+
+      spark.sql(
+        s"""
+           | merge into $cowTableName t0
+           | using (
+           |  select 1 as id, 'a1_n' as name, 11 as price, 1001 as ts, '1' as flag union
+           |  select 2 as id, 'a2_n' as name, 11 as price, 1001 as ts, '2' as flag union
+           |  select 3 as id, 'a3_n' as name, 11 as price, 1001 as ts, '1' as flag union
+           |  select 4 as id, 'a4_n' as name, 11 as price, 1001 as ts, '2' as flag
+           | ) s0
+           | on s0.id = t0.id
+           | when matched and flag = '1' then update set *
+           | when matched and flag = '2' then update set
+           | id = s0.id, name = s0.name, price = s0.price + 1, ts = s0.ts
+           | when not matched and flag = '1' then insert *
+       """.stripMargin)
+      checkAnswer(s"select id, name, price, ts from $cowTableName")(
+        Seq(1, "a1_n", 11.0, 1001),
+        Seq(2, "a2_n", 12.0, 1001),
+        Seq(3, "a3_n", 11.0, 1001)
+      )
+
+      Thread.sleep(300000)
+    })
+  }
+
+  test("Basic test cow MergeInto with multi updateAction") {
+    withRecordType()(withTempDir { tmp =>
+      val cowTableName = generateTableName
+      // Create table
+      spark.sql(
+        s"""
+           |create table $cowTableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$cowTableName'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $cowTableName values(1, 'a1', 10, 1000), (2, 'a2', 10, 1000)")
+
+      // Partial column update in diff update action
+      spark.sql(
+        s"""
+           | merge into $cowTableName t0
+           | using (
+           |  select 1 as id, 'a1_n' as name, 11 as price, 1001 as ts, '1' as flag union
+           |  select 2 as id, 'a2_n' as name, 11 as price, 1001 as ts, '2' as flag union
+           |  select 3 as id, 'a3_n' as name, 11 as price, 1001 as ts, '1' as flag union
+           |  select 4 as id, 'a4_n' as name, 11 as price, 1001 as ts, '2' as flag
+           | ) s0
+           | on s0.id = t0.id
+           | when matched and flag = '1' then update set
+           | id = s0.id, name = s0.name, ts = s0.ts
+           | when matched and flag = '2' then update set
+           | id = s0.id, price = s0.price, ts = s0.ts
+           | when not matched and flag = '1' then insert *
+       """.stripMargin)
+      checkAnswer(s"select id, name, price, ts from $cowTableName")(
+        Seq(1, "a1_n", 10.0, 1001),
+        Seq(2, "a2", 11.0, 1001),
+        Seq(3, "a3_n", 11.0, 1001)
+      )
+
+      // source table without preCombineKey
+      checkExceptionContain(
+        s"""
+           | merge into $cowTableName t0
+           | using (
+           |  select 1 as id, 'a1_n_6' as name, 6 as price, 1010 as v_ts, '1' as flag union
+           |  select 2 as id, 'a2_n_6' as name, 6 as price, 1010 as v_ts, '2' as flag union
+           |  select 6 as id, 'a3_n_6' as name, 6 as price, 1010 as v_ts, '1' as flag
+           | ) s0
+           | on s0.id = t0.id
+           | when matched and flag = '1' then update set
+           | id = s0.id, name = s0.name, ts = 1003
+           | when matched and flag = '2' then update set
+           | id = s0.id, price = s0.price, ts = s0.v_ts + 2
+           | when not matched and flag = '1' then insert
+           |  (id, name, price, ts) values (s0.id, s0.name, s0.price, s0.v_ts)
+       """.stripMargin)(
+        "only one updating action is supported in MERGE INTO statement"
+      )
+    })
+  }
+
+  test("Test cow MergeInto with multi updateActions in diff preCombine expression") {
+    withTempDir {tmp =>
+      // target precombine key t0.key can not be right value
+      val cowTableName = generateTableName
+      // Create table
+      spark.sql(
+        s"""
+           |create table $cowTableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$cowTableName'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $cowTableName values(1, 'a1', 1, 1000), (2, 'a2', 1, 1000)")
+
+      // source table with preCombineKey, updateAction with diff preCombineValue expression
+      spark.sql(
+        s"""
+           | merge into $cowTableName t0
+           | using (
+           |  select 1 as id, 'a1_n_2' as name, 2 as price, 1001 as ts, '1' as flag union
+           |  select 2 as id, 'a2_n_2' as name, 2 as price, 1001 as ts, '2' as flag union
+           |  select 3 as id, 'a3_n_2' as name, 2 as price, 1001 as ts, '1' as flag
+           | ) s0
+           | on s0.id = t0.id
+           | when matched and flag = '1' then update set
+           | id = s0.id, name = s0.name, ts = s0.ts + 1
+           | when matched and flag = '2' then update set
+           | id = s0.id, price = s0.price, ts = s0.ts + 2
+           | when not matched and flag = '1' then insert *
+       """.stripMargin)
+      checkAnswer(s"select id, name, price, ts from $cowTableName")(
+        Seq(1, "a1_n_2", 1.0, 1002),
+        Seq(2, "a2", 2.0, 1003),
+        Seq(3, "a3_n_2", 2.0, 1001)
+      )
+
+      // source table with preCombineKey and dup primaryKey
+      spark.sql(
+        s"""
+           | merge into $cowTableName t0
+           | using (
+           |  select 1 as id, 'a1_n_4' as name, 4 as price, 1011 as ts, '1' as flag union
+           |  select 1 as id, 'a1_n_3' as name, 3 as price, 1010 as ts, '1' as flag union
+           |  select 2 as id, 'a2_n_3' as name, 3 as price, 1010 as ts, '2' as flag union
+           |  select 4 as id, 'a4_n_4' as name, 3 as price, 1010 as ts, '1' as flag
+           | ) s0
+           | on s0.id = t0.id
+           | when matched and flag = '1' then update set
+           | id = s0.id, name = s0.name, ts = 1013
+           | when matched and flag = '2' then update set
+           | id = s0.id, price = s0.price, ts = 1002
+           | when not matched and flag = '1' then insert *
+       """.stripMargin)
+      checkAnswer(s"select id, name, price, ts from $cowTableName")(
+        Seq(1, "a1_n_4", 1.0, 1013), // dup( 1011 > 1010), update action(Literal 1013 > raw 1002)
+        Seq(2, "a2", 2.0, 1003), // will not update, because update action Literal 1002 < row 1003)
+        Seq(3, "a3_n_2", 2.0, 1001),
+        Seq(4, "a4_n_4", 3.0, 1010)
+      )
+    }
+  }
+
+  test("Test mor MergeInto with multi updateActions in diff preCombine expression") {
+    withTempDir {tmp =>
+      // target precombine key t0.key can not be right value
+      val cowTableName = generateTableName
+      // Create table
+      spark.sql(
+        s"""
+           |create table $cowTableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$cowTableName'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'mor',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $cowTableName values(1, 'a1', 1, 1000), (2, 'a2', 1, 1000)")
+
+      // source table with preCombineKey, updateAction with diff preCombineValue expression
+      spark.sql(
+        s"""
+           | merge into $cowTableName t0
+           | using (
+           |  select 1 as id, 'a1_n_2' as name, 2 as price, 1001 as ts, '1' as flag union
+           |  select 2 as id, 'a2_n_2' as name, 2 as price, 1001 as ts, '2' as flag union
+           |  select 3 as id, 'a3_n_2' as name, 2 as price, 1001 as ts, '1' as flag
+           | ) s0
+           | on s0.id = t0.id
+           | when matched and flag = '1' then update set
+           | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts + 1
+           | when matched and flag = '2' then update set
+           | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts + 2
+           | when not matched and flag = '1' then insert *
+       """.stripMargin)
+      checkAnswer(s"select id, name, price, ts from $cowTableName")(
+        Seq(1, "a1_n_2", 2.0, 1002),
+        Seq(2, "a2_n_2", 2.0, 1003),
+        Seq(3, "a3_n_2", 2.0, 1001)
+      )
+
+      // source table with preCombineKey and dup primaryKey
+      spark.sql(
+        s"""
+           | merge into $cowTableName t0
+           | using (
+           |  select 1 as id, 'a1_n_4' as name, 4 as price, 1011 as ts, '1' as flag union
+           |  select 1 as id, 'a1_n_3' as name, 3 as price, 1010 as ts, '1' as flag union
+           |  select 2 as id, 'a2_n_3' as name, 3 as price, 1010 as ts, '2' as flag union
+           |  select 4 as id, 'a3_n_3' as name, 3 as price, 1010 as ts, '1' as flag
+           | ) s0
+           | on s0.id = t0.id
+           | when matched and flag = '1' then update set
+           | id = s0.id, name = s0.name, price = s0.price, ts = 1013
+           | when matched and flag = '2' then update set
+           | id = s0.id, name = s0.name, price = s0.price, ts = 1002
+           | when not matched and flag = '1' then insert *
+       """.stripMargin)
+      checkAnswer(s"select id, name, price, ts from $cowTableName")(
+        Seq(1, "a1_n_4", 4.0, 1013), // dup( 1011 > 1010), update action(Literal 1013 > raw 1002)
+        Seq(2, "a2_n_2", 2.0, 1003), // will not update, because update action Literal 1002 < row 1003)
+        Seq(3, "a3_n_2", 2.0, 1001),
+        Seq(4, "a3_n_3", 3.0, 1010)
+      )
+    }
   }
 }
