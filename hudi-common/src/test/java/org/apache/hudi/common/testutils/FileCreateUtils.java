@@ -101,7 +101,12 @@ public class FileCreateUtils {
   }
 
   public static String markerFileName(String instantTime, String fileId, IOType ioType, String fileExtension) {
-    return String.format("%s_%s_%s%s%s.%s", fileId, WRITE_TOKEN, instantTime, fileExtension, HoodieTableMetaClient.MARKER_EXTN, ioType);
+    return markerFileName(instantTime, fileId, ioType, fileExtension, WRITE_TOKEN);
+  }
+
+  public static String markerFileName(String instantTime, String fileId, IOType ioType, String fileExtension, String writeToken) {
+    return String.format("%s_%s_%s%s%s.%s", fileId, writeToken, instantTime, fileExtension,
+        HoodieTableMetaClient.MARKER_EXTN, ioType);
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix, FileSystem fs) throws IOException {
@@ -356,9 +361,14 @@ public class FileCreateUtils {
 
   public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType)
       throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
+    return createMarkerFile(basePath, partitionPath, instantTime, instantTime, fileId, ioType, WRITE_TOKEN);
+  }
+
+  public static String createMarkerFile(String basePath, String partitionPath, String commitInstant,
+      String instantTime, String fileId, IOType ioType, String writeToken) throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, commitInstant, partitionPath);
     Files.createDirectories(parentPath);
-    Path markerFilePath = parentPath.resolve(markerFileName(instantTime, fileId, ioType));
+    Path markerFilePath = parentPath.resolve(markerFileName(instantTime, fileId, ioType, BASE_FILE_EXTENSION, writeToken));
     if (Files.notExists(markerFilePath)) {
       Files.createFile(markerFilePath);
     }
