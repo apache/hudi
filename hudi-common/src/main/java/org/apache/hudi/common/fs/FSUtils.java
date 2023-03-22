@@ -799,7 +799,7 @@ public class FSUtils {
   public static boolean deleteSubPath(String subPathStr, SerializableConfiguration conf, boolean recursive) {
     try {
       Path subPath = new Path(subPathStr);
-      FileSystem fileSystem = subPath.getFileSystem(conf.get());
+      FileSystem fileSystem = FSUtils.getFs(subPath, conf.get());
       return fileSystem.delete(subPath, recursive);
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
@@ -833,7 +833,7 @@ public class FSUtils {
           pairOfSubPathAndConf -> {
             Path path = new Path(pairOfSubPathAndConf.getKey());
             try {
-              FileSystem fileSystem = path.getFileSystem(pairOfSubPathAndConf.getValue().get());
+              FileSystem fileSystem = FSUtils.getFs(path, pairOfSubPathAndConf.getValue().get());
               return Arrays.stream(fileSystem.listStatus(path))
                 .collect(Collectors.toList());
             } catch (IOException e) {
