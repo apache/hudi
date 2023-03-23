@@ -118,6 +118,11 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .sinceVersion("0.6.0")
       .withDocumentation("Implementation to use, for mapping a skeleton base file to a bootstrap base file.");
 
+  public static final ConfigProperty<String> DATA_QUERIES_ONLY = ConfigProperty
+      .key("hoodie.bootstrap.data.queries.only")
+      .defaultValue("true")
+      .withDocumentation("Improves query performance, but queries cannot use hudi metadata fields");
+
   /**
    * @deprecated Use {@link #BASE_PATH} and its methods instead
    */
