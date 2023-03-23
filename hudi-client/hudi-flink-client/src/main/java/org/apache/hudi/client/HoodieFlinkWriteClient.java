@@ -568,24 +568,20 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     final String partitionPath = record.getPartitionPath();
     final boolean insertClustering = config.allowDuplicateInserts();
 
-    if (bucketToHandles.containsKey(fileID)) {
-      MiniBatchHandle lastHandle = (MiniBatchHandle) bucketToHandles.get(fileID);
-      if (lastHandle.shouldReplace()) {
-        HoodieWriteHandle<?, ?, ?, ?> writeHandle = insertClustering
-            ? new FlinkConcatAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileID,
-                table.getTaskContextSupplier(), lastHandle.getWritePath())
-            : new FlinkMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileID,
-                table.getTaskContextSupplier(), lastHandle.getWritePath());
-        this.bucketToHandles.put(fileID, ((MiniBatchHandle) writeHandle).getWritePath()); // override with new replace handle
-        return writeHandle;
-      }
+    final boolean isDelta = table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ);
+    if (isDelta) {
+      return new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, recordItr,
+          table.getTaskContextSupplier());
     }
 
-    final boolean isDelta = table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ);
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle;
-    if (isDelta) {
-      writeHandle = new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, recordItr,
-          table.getTaskContextSupplier());
+    if (bucketToHandles.containsKey(fileID)) {
+      Path lastPath = bucketToHandles.get(fileID);
+      writeHandle = insertClustering
+          ? new FlinkConcatAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileID,
+          table.getTaskContextSupplier(), lastPath)
+          : new FlinkMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileID,
+          table.getTaskContextSupplier(), lastPath);
     } else if (loc.getInstantTime().equals("I")) {
       writeHandle = new FlinkCreateHandle<>(config, instantTime, table, partitionPath,
           fileID, table.getTaskContextSupplier());
