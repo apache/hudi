@@ -138,6 +138,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     val f2 = Future {
       inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process one microbatch
+
       val currNumCommits = waitTillAtleastNCommits(fs, destPath, 1, 120, 5)
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, destPath, "000"))
       val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, destPath)
@@ -149,6 +150,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       // When the compaction configs are added, one more commit of the compaction is expected
       val numExpectedCommits = if (addCompactionConfigs) currNumCommits + 2 else currNumCommits + 1
+
       waitTillAtleastNCommits(fs, destPath, numExpectedCommits, 120, 5)
 
       val commitInstantTime2 = if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -211,7 +213,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     var success = false
     while ({!success && (currTime - beginTime) < timeoutMsecs}) try {
       val timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, tablePath)
-      log.info("Timeline :" + timeline.getInstants.toArray)
+      log.info("Timeline :" + timeline.getInstants.toArray.mkString("Array(", ", ", ")"))
       if (timeline.countInstants >= numCommits) {
         numInstants = timeline.countInstants
         success = true
@@ -249,8 +251,6 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   @ValueSource(booleans = Array(true, false))
   def testStructuredStreamingWithCompaction(isAsyncCompaction: Boolean): Unit = {
     structuredStreamingTestRunner(HoodieTableType.MERGE_ON_READ, addCompactionConfigs = true, isAsyncCompaction)
-    structuredStreamingTestRunner(
-      HoodieTableType.MERGE_ON_READ, addCompactionConfigs = true, isAsyncCompaction = isAsyncCompaction)
   }
 
   def structuredStreamingForTestClusteringRunner(sourcePath: String, destPath: String, tableType: HoodieTableType,
@@ -260,8 +260,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     val records1 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, partitionOfRecords)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
 
-    // Second insert of data
-    val records2 = recordsToStrings(dataGen.generateInsertsForPartition("001", 100, partitionOfRecords)).toList
+    // Second batch updates of data
+    val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
 
     val hudiOptions = getClusteringOpts(
@@ -272,11 +272,13 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     val f2 = Future {
       inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process one microbatch
+
       var currNumCommits = waitTillAtleastNCommits(fs, destPath, 1, 120, 5)
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, destPath, "000"))
 
       inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process second microbatch
+
       currNumCommits = waitTillAtleastNCommits(fs, destPath, currNumCommits + 1, 120, 5)
 
       // Wait for the clustering to finish
