@@ -18,7 +18,9 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -168,8 +170,14 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     // Get schema from the header
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
+    HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
+    Configuration inlineConf = new Configuration(blockContentLoc.getHadoopConf());
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+    inlineConf.setClassLoader(InLineFileSystem.class.getClassLoader());
+
+    FileSystem fs = FSUtils.getFs(pathForReader.toString(), inlineConf);
     // Read the content
-    HoodieAvroHFileReader reader = new HoodieAvroHFileReader(null, pathForReader, content, Option.of(writerSchema));
+    HoodieAvroHFileReader reader = new HoodieAvroHFileReader(fs, pathForReader, content, Option.of(writerSchema));
     return unsafeCast(reader.getRecordIterator(readerSchema));
   }
 
