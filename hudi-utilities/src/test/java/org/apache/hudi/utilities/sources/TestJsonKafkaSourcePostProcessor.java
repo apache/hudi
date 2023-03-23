@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.config.JsonKafkaPostProcessorConfig;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -49,7 +50,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Objects;
 
-import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.JSON_KAFKA_PROCESSOR_CLASS_OPT;
+import static org.apache.hudi.utilities.config.JsonKafkaPostProcessorConfig.JSON_KAFKA_PROCESSOR_CLASS_OPT;
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecords;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -222,8 +223,8 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
 
     ObjectMapper mapper = new ObjectMapper();
     TypedProperties props = new TypedProperties();
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.DATABASE_NAME_REGEX_PROP.key(), "hudi(_)?[0-9]{0,2}");
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.TABLE_NAME_REGEX_PROP.key(), "hudi_maxwell(_)?[0-9]{0,2}");
+    props.setProperty(JsonKafkaPostProcessorConfig.DATABASE_NAME_REGEX_PROP.key(), "hudi(_)?[0-9]{0,2}");
+    props.setProperty(JsonKafkaPostProcessorConfig.TABLE_NAME_REGEX_PROP.key(), "hudi_maxwell(_)?[0-9]{0,2}");
 
     // test insert and update
     JavaRDD<String> inputInsertAndUpdate = jsc().parallelize(Arrays.asList(hudiMaxwell01Insert, hudiMaxwell01Update));
@@ -239,8 +240,8 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     });
 
     // test delete
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.PRECOMBINE_FIELD_TYPE_PROP.key(), "DATE_STRING");
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.PRECOMBINE_FIELD_FORMAT_PROP.key(), "yyyy-MM-dd HH:mm:ss");
+    props.setProperty(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE_PROP.key(), "DATE_STRING");
+    props.setProperty(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_FORMAT_PROP.key(), "yyyy-MM-dd HH:mm:ss");
     props.setProperty(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "update_time");
 
     JavaRDD<String> inputDelete = jsc().parallelize(Collections.singletonList(hudiMaxwell01Delete));
@@ -261,7 +262,7 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
         });
 
     // test preCombine field is not time
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.PRECOMBINE_FIELD_TYPE_PROP.key(), "NON_TIMESTAMP");
+    props.setProperty(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE_PROP.key(), "NON_TIMESTAMP");
     props.setProperty(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "id");
 
     JavaRDD<String> inputDelete2 = jsc().parallelize(Collections.singletonList(hudiMaxwell01Delete));
@@ -288,8 +289,8 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     assertEquals(0, ddlDataNum);
 
     // test table regex without database regex
-    props.remove(MaxwellJsonKafkaSourcePostProcessor.Config.DATABASE_NAME_REGEX_PROP.key());
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.TABLE_NAME_REGEX_PROP.key(), "hudi_maxwell(_)?[0-9]{0,2}");
+    props.remove(JsonKafkaPostProcessorConfig.DATABASE_NAME_REGEX_PROP.key());
+    props.setProperty(JsonKafkaPostProcessorConfig.TABLE_NAME_REGEX_PROP.key(), "hudi_maxwell(_)?[0-9]{0,2}");
 
     JavaRDD<String> dataWithoutDatabaseRegex = jsc().parallelize(Arrays.asList(hudiMaxwell01Insert, hudi02Maxwell01Insert));
     long countWithoutDatabaseRegex = processor.process(dataWithoutDatabaseRegex).count();

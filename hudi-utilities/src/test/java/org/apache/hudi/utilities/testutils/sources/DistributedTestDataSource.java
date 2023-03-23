@@ -20,9 +20,9 @@ package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
-import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -47,7 +47,7 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
     this.numTestSourcePartitions =
-        props.getInteger(SourceConfigs.NUM_SOURCE_PARTITIONS_PROP, SourceConfigs.DEFAULT_NUM_SOURCE_PARTITIONS);
+        props.getInteger(SourceTestConfig.NUM_SOURCE_PARTITIONS_PROP.key(), SourceTestConfig.NUM_SOURCE_PARTITIONS_PROP.defaultValue());
   }
 
   @Override
@@ -66,9 +66,9 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
 
     // Set the maxUniqueRecords per partition for TestDataSource
     int maxUniqueRecords =
-        props.getInteger(SourceConfigs.MAX_UNIQUE_RECORDS_PROP, SourceConfigs.DEFAULT_MAX_UNIQUE_RECORDS);
+        props.getInteger(SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.defaultValue());
     String maxUniqueRecordsPerPartition = String.valueOf(Math.max(1, maxUniqueRecords / numTestSourcePartitions));
-    newProps.setProperty(SourceConfigs.MAX_UNIQUE_RECORDS_PROP, maxUniqueRecordsPerPartition);
+    newProps.setProperty(SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), maxUniqueRecordsPerPartition);
     int perPartitionSourceLimit = Math.max(1, (int) (sourceLimit / numTestSourcePartitions));
     JavaRDD<GenericRecord> avroRDD =
         sparkContext.parallelize(IntStream.range(0, numTestSourcePartitions).boxed().collect(Collectors.toList()),

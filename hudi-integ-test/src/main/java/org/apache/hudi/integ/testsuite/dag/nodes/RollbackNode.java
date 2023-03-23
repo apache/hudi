@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.helpers.DFSTestSuitePathSelector;
+import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
 /**
@@ -59,7 +60,7 @@ public class RollbackNode extends DagNode<Option<HoodieInstant>> {
       if (lastInstant.isPresent()) {
         log.info("Rolling back last instant {}", lastInstant.get());
         log.info("Cleaning up generated data for the instant being rolled back {}", lastInstant.get());
-        ValidationUtils.checkArgument(executionContext.getWriterContext().getProps().getOrDefault(DFSPathSelector.Config.SOURCE_INPUT_SELECTOR,
+        ValidationUtils.checkArgument(executionContext.getWriterContext().getProps().getOrDefault(DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR.key(),
             DFSPathSelector.class.getName()).toString().equalsIgnoreCase(DFSTestSuitePathSelector.class.getName()), "Test Suite only supports DFSTestSuitePathSelector");
         executionContext.getHoodieTestSuiteWriter().getWriteClient(this).rollback(lastInstant.get().getTimestamp());
         metaClient.getFs().delete(new Path(executionContext.getWriterContext().getCfg().inputBasePath,

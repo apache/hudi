@@ -35,7 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.SPARK_DATASOURCE_OPTIONS;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.SPARK_DATASOURCE_OPTIONS;
 
 /**
  * Helper methods for when the incremental source is fetching from Cloud Storage, like AWS S3 buckets or GCS.
@@ -62,7 +62,7 @@ public class IncrSourceCloudStorageHelper {
   private static DataFrameReader getDataFrameReader(SparkSession spark, TypedProperties props, String fileFormat) {
     DataFrameReader dataFrameReader = spark.read().format(fileFormat);
 
-    if (isNullOrEmpty(props.getString(SPARK_DATASOURCE_OPTIONS, null))) {
+    if (isNullOrEmpty(props.getString(SPARK_DATASOURCE_OPTIONS.key(), null))) {
       return dataFrameReader;
     }
 
@@ -70,10 +70,10 @@ public class IncrSourceCloudStorageHelper {
     Map<String, String> sparkOptionsMap = null;
 
     try {
-      sparkOptionsMap = mapper.readValue(props.getString(SPARK_DATASOURCE_OPTIONS), Map.class);
+      sparkOptionsMap = mapper.readValue(props.getString(SPARK_DATASOURCE_OPTIONS.key()), Map.class);
     } catch (IOException e) {
       throw new HoodieException(String.format("Failed to parse sparkOptions: %s",
-              props.getString(SPARK_DATASOURCE_OPTIONS)), e);
+              props.getString(SPARK_DATASOURCE_OPTIONS.key())), e);
     }
 
     LOG.info(String.format("sparkOptions loaded: %s", sparkOptionsMap));

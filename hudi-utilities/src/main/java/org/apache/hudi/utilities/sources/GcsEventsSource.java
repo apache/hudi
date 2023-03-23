@@ -41,12 +41,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.ACK_MESSAGES;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.ACK_MESSAGES_DEFAULT_VALUE;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.BATCH_SIZE_CONF;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.DEFAULT_BATCH_SIZE;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.GOOGLE_PROJECT_ID;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.PUBSUB_SUBSCRIPTION_ID;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.ACK_MESSAGES;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.BATCH_SIZE_CONF;
+import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.GOOGLE_PROJECT_ID;
+import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.PUBSUB_SUBSCRIPTION_ID;
 import static org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity.ProcessingDecision.DO_SKIP;
 
 /*
@@ -110,8 +108,8 @@ public class GcsEventsSource extends RowSource {
     this(
             props, jsc, spark, schemaProvider,
             new PubsubMessagesFetcher(
-                    props.getString(GOOGLE_PROJECT_ID), props.getString(PUBSUB_SUBSCRIPTION_ID),
-                    props.getInteger(BATCH_SIZE_CONF, DEFAULT_BATCH_SIZE)
+                    props.getString(GOOGLE_PROJECT_ID.key()), props.getString(PUBSUB_SUBSCRIPTION_ID.key()),
+                    props.getInteger(BATCH_SIZE_CONF.key(), BATCH_SIZE_CONF.defaultValue())
             )
     );
   }
@@ -121,7 +119,7 @@ public class GcsEventsSource extends RowSource {
     super(props, jsc, spark, schemaProvider);
 
     this.pubsubMessagesFetcher = pubsubMessagesFetcher;
-    this.ackMessages = props.getBoolean(ACK_MESSAGES, ACK_MESSAGES_DEFAULT_VALUE);
+    this.ackMessages = props.getBoolean(ACK_MESSAGES.key(), ACK_MESSAGES.defaultValue());
 
     LOG.info("Created GcsEventsSource");
   }
