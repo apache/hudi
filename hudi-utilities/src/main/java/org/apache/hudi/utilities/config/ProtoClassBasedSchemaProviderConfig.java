@@ -37,30 +37,30 @@ import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA
     subGroupName = ConfigGroups.SubGroupNames.SCHEMA_PROVIDER,
     description = "Configurations for Proto schema provider.")
 public class ProtoClassBasedSchemaProviderConfig extends HoodieConfig {
-  private static final String PROTO_SCHEMA_PROVIDER_PREFIX = SCHEMAPROVIDER_CONFIG_PREFIX + "proto";
+  private static final String PROTO_SCHEMA_PROVIDER_PREFIX = SCHEMAPROVIDER_CONFIG_PREFIX + "proto.";
 
   public static final ConfigProperty<String> PROTO_SCHEMA_CLASS_NAME = ConfigProperty
-      .key(PROTO_SCHEMA_PROVIDER_PREFIX + ".class.name")
+      .key(PROTO_SCHEMA_PROVIDER_PREFIX + "class.name")
       .noDefaultValue()
       .sinceVersion("0.13.0")
       .withDocumentation("The Protobuf Message class used as the source for the schema.");
 
   public static final ConfigProperty<Boolean> PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS = ConfigProperty
-      .key(PROTO_SCHEMA_PROVIDER_PREFIX + ".flatten.wrappers")
+      .key(PROTO_SCHEMA_PROVIDER_PREFIX + "flatten.wrappers")
       .defaultValue(false)
       .sinceVersion("0.13.0")
       .withDocumentation("When set to true wrapped primitives like Int64Value are translated to a record with a single 'value' field. By default, the value is false and the wrapped primitives are "
           + "treated as a nullable value");
 
   public static final ConfigProperty<Boolean> PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS = ConfigProperty
-      .key(PROTO_SCHEMA_PROVIDER_PREFIX + ".timestamps.as.records")
+      .key(PROTO_SCHEMA_PROVIDER_PREFIX + "timestamps.as.records")
       .defaultValue(false)
       .sinceVersion("0.13.0")
       .withDocumentation("When set to true Timestamp fields are translated to a record with a seconds and nanos field. By default, the value is false and the timestamp is converted to a long with "
           + "the timestamp-micros logical type");
 
   public static final ConfigProperty<Integer> PROTO_SCHEMA_MAX_RECURSION_DEPTH = ConfigProperty
-      .key(PROTO_SCHEMA_PROVIDER_PREFIX + ".max.recursion.depth")
+      .key(PROTO_SCHEMA_PROVIDER_PREFIX + "max.recursion.depth")
       .defaultValue(5)
       .sinceVersion("0.13.0")
       .withDocumentation("The max depth to unravel the Proto schema when translating into an Avro schema. Setting this depth allows the user to convert a schema that is recursive in proto into "

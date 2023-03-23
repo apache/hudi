@@ -84,5 +84,6 @@ public class HoodieDeltaStreamerConfig extends HoodieConfig {
       .key(INGESTION_PREFIX + "targetBasePath")
       .noDefaultValue()
       .withDocumentation("The path to which a particular table is ingested. The config is specific to HoodieMultiTableDeltaStreamer"
-          + " and overrides path determined using option `--base-path-prefix` for a table");
+          + " and overrides path determined using option `--base-path-prefix` for a table. This config is ignored for a single"
+          + " table deltastreamer");
 }

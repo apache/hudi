@@ -40,11 +40,6 @@ import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.DELTA_S
 public class HoodieSchemaProviderConfig extends HoodieConfig {
   public static final String SCHEMAPROVIDER_CONFIG_PREFIX = DELTA_STREAMER_CONFIG_PREFIX + "schemaprovider.";
 
-  public static final ConfigProperty<String> SCHEMA_POST_PROCESSOR = ConfigProperty
-      .key(SCHEMAPROVIDER_CONFIG_PREFIX + "schema_post_processor")
-      .noDefaultValue()
-      .withDocumentation("The class name of the schema post processor.");
-
   public static final ConfigProperty<String> SRC_SCHEMA_REGISTRY_URL = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "registry.url")
       .noDefaultValue()
@@ -64,11 +59,6 @@ public class HoodieSchemaProviderConfig extends HoodieConfig {
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "spark_avro_post_processor.enable")
       .defaultValue(false)
       .withDocumentation("Whether to enable Spark Avro post processor.");
-
-  public static final ConfigProperty<String> DELETE_COLUMN_POST_PROCESSOR_COLUMN = ConfigProperty
-      .key(SCHEMAPROVIDER_CONFIG_PREFIX + "schema_post_processor.delete.columns")
-      .noDefaultValue()
-      .withDocumentation("Columns to delete in the schema post processor.");
 
   public static final ConfigProperty<String> SCHEMA_REGISTRY_BASE_URL = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "registry.baseUrl")

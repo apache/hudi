@@ -27,36 +27,49 @@ import org.apache.hudi.common.config.HoodieConfig;
 import javax.annotation.concurrent.Immutable;
 
 /**
- * Base configs to describe a primitive type column.
+ * Configurations for Schema Post Processor.
  */
 @Immutable
 @ConfigClassProperty(name = "Schema Post Processor Config Configs",
     groupName = ConfigGroups.Names.DELTA_STREAMER,
-    description = "Base configs to describe a primitive type column.")
-public class BaseSchemaPostProcessorConfig extends HoodieConfig {
+    subGroupName = ConfigGroups.SubGroupNames.SCHEMA_PROVIDER,
+    description = "Configurations for Schema Post Processor")
+public class SchemaProviderPostProcessorConfig extends HoodieConfig {
+
+  private static final String PREFIX = HoodieSchemaProviderConfig.SCHEMAPROVIDER_CONFIG_PREFIX + "schema_post_processor.";
+
+  public static final ConfigProperty<String> SCHEMA_POST_PROCESSOR = ConfigProperty
+      .key(HoodieSchemaProviderConfig.SCHEMAPROVIDER_CONFIG_PREFIX + "schema_post_processor")
+      .noDefaultValue()
+      .withDocumentation("The class name of the schema post processor.");
+
+  public static final ConfigProperty<String> DELETE_COLUMN_POST_PROCESSOR_COLUMN = ConfigProperty
+      .key(PREFIX + "delete.columns")
+      .noDefaultValue()
+      .withDocumentation("Columns to delete in the schema post processor.");
 
   public static final ConfigProperty<String> SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP = ConfigProperty
-      .key("hoodie.deltastreamer.schemaprovider.schema_post_processor.add.column.name")
+      .key(PREFIX + "add.column.name")
       .noDefaultValue()
       .withDocumentation("New column's name");
 
   public static final ConfigProperty<String> SCHEMA_POST_PROCESSOR_ADD_COLUMN_TYPE_PROP = ConfigProperty
-      .key("hoodie.deltastreamer.schemaprovider.schema_post_processor.add.column.type")
+      .key(PREFIX + "add.column.type")
       .noDefaultValue()
       .withDocumentation("New column's type");
 
   public static final ConfigProperty<Boolean> SCHEMA_POST_PROCESSOR_ADD_COLUMN_NULLABLE_PROP = ConfigProperty
-      .key("hoodie.deltastreamer.schemaprovider.schema_post_processor.add.column.nullable")
+      .key(PREFIX + "add.column.nullable")
       .defaultValue(true)
       .withDocumentation("New column's nullable");
 
   public static final ConfigProperty<String> SCHEMA_POST_PROCESSOR_ADD_COLUMN_DEFAULT_PROP = ConfigProperty
-      .key("hoodie.deltastreamer.schemaprovider.schema_post_processor.add.column.default")
+      .key(PREFIX + "add.column.default")
       .noDefaultValue()
       .withDocumentation("New column's default value");
 
   public static final ConfigProperty<String> SCHEMA_POST_PROCESSOR_ADD_COLUMN_DOC_PROP = ConfigProperty
-      .key("hoodie.deltastreamer.schemaprovider.schema_post_processor.add.column.doc")
+      .key(PREFIX + "add.column.doc")
       .noDefaultValue()
       .withDocumentation("Docs about new column");
 

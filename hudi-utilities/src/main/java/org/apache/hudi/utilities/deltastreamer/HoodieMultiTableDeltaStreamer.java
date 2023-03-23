@@ -442,10 +442,10 @@ public class HoodieMultiTableDeltaStreamer {
     }
   }
 
-  public static class Constants {
+  static class Constants {
     @Deprecated
-    public static final String KAFKA_TOPIC_PROP = HoodieDeltaStreamerConfig.KAFKA_TOPIC.key();
-    public static final String HIVE_SYNC_TABLE_PROP = "hoodie.datasource.hive_sync.table";
+    private static final String KAFKA_TOPIC_PROP = HoodieDeltaStreamerConfig.KAFKA_TOPIC.key();
+    static final String HIVE_SYNC_TABLE_PROP = "hoodie.datasource.hive_sync.table";
     private static final String INGESTION_CONFIG_SUFFIX = ".configFile";
     private static final String DEFAULT_CONFIG_FILE_NAME_SUFFIX = "_config.properties";
     private static final String LOCAL_SPARK_MASTER = "local[2]";
