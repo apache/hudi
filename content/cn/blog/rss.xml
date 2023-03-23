@@ -4,14 +4,14 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 22 Mar 2023 07:15:28 GMT</lastBuildDate>
+        <lastBuildDate>Thu, 23 Mar 2023 19:23:56 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <item>
             <title><![CDATA[Automate schema evolution at scale with Apache Hudi in AWS Glue | Amazon Web Services]]></title>
             <link>https://hudi.apache.org/cn/blog/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue</link>
             <guid>/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue</guid>
-            <pubDate>Wed, 22 Mar 2023 07:15:28 GMT</pubDate>
+            <pubDate>Thu, 23 Mar 2023 19:23:56 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue/">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
