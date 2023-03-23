@@ -83,6 +83,10 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       assertResult(10) {
         result.length
       }
+      spark.sql("set hoodie.datasource.write.row.writer.enable = false")
+      spark.sql(
+        s"""call run_clustering(table => '$tableName')""".stripMargin)
+      spark.sql(s"select * from $tableName").show(false)
     }
   }
 
