@@ -32,6 +32,7 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
@@ -446,7 +447,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Deduplication Logic for write function.
    *
-   * @param writeFn One of HoddieWriteClient non-prepped write APIs
+   * @param writeFn One of HoodieWriteClient non-prepped write APIs
    * @throws Exception in case of failure
    */
   private void testDeduplication(
@@ -878,6 +879,52 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   }
 
+  @Test
+  public void testPendingRestore() throws IOException {
+    HoodieWriteConfig config = getConfigBuilder().withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
+    Path completeRestoreFile = null;
+    Path backupCompletedRestoreFile = null;
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      final String commitTime1 = "001";
+      client.startCommitWithTime(commitTime1);
+      List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, 100);
+      JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 2);
+      List<WriteStatus> statuses = client.insert(insertRecordsRDD1, commitTime1).collect();
+      assertNoWriteErrors(statuses);
+
+      // inject a pending restore
+      client.savepoint("001", "user1","comment1");
+
+      client.restoreToInstant("001", false);
+      // remove completed restore instant from timeline to mimic pending restore.
+      HoodieInstant restoreCompleted = metaClient.reloadActiveTimeline().getRestoreTimeline().filterCompletedInstants().getInstants().get(0);
+      completeRestoreFile = new Path(config.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + restoreCompleted.getTimestamp()
+          + "." + HoodieTimeline.RESTORE_ACTION);
+      backupCompletedRestoreFile = new Path(config.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + restoreCompleted.getTimestamp()
+          + "." + HoodieTimeline.RESTORE_ACTION + ".backup");
+      metaClient.getFs().rename(completeRestoreFile, backupCompletedRestoreFile);
+    }
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      final String commitTime2 = "002";
+      // since restore is pending, should fail the commit
+      assertThrows(IllegalArgumentException.class, () -> client.startCommitWithTime(commitTime2));
+    }
+    // add back the restore file.
+    metaClient.getFs().rename(backupCompletedRestoreFile, completeRestoreFile);
+
+    // retrigger a new commit, should succeed.
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      final String commitTime3 = "003";
+      client.startCommitWithTime(commitTime3);
+      List<HoodieRecord> inserts3 = dataGen.generateInserts(commitTime3, 100);
+      JavaRDD<HoodieRecord> insertRecordsRDD3 = jsc.parallelize(inserts3, 2);
+      List<WriteStatus> statuses = client.insert(insertRecordsRDD3, commitTime3).collect();
+      assertNoWriteErrors(statuses);
+    }
+  }
+
   /**
    * Tests deletion of records.
    */
@@ -971,7 +1018,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   /**
    * This test ensures in a global bloom when update partition path is set to true in config, if an incoming record has mismatched partition
-   * compared to whats in storage, then appropriate actions are taken. i.e. old record is deleted in old partition and new one is inserted
+   * compared to what is in storage, then appropriate actions are taken. i.e. old record is deleted in old partition and new one is inserted
    * in the new partition.
    * test structure:
    * 1. insert 1 batch
@@ -1508,7 +1555,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       replaceCommitMetadata.getPartitionToWriteStats()
               .forEach((k,v) -> v.forEach(entry -> filesFromReplaceCommit.add(entry.getPath())));
 
-      // find all parquet files created as part of clustering. Verify it matces w/ whats found in replace commit metadata.
+      // find all parquet files created as part of clustering. Verify it matches w/ what is found in replace commit metadata.
       FileStatus[] fileStatuses = fs.listStatus(new Path(basePath + "/" + partitionPath));
       List<String> clusteredFiles = Arrays.stream(fileStatuses).filter(entry -> entry.getPath().getName().contains(replaceCommitInstant.getTimestamp()))
           .map(fileStatus -> partitionPath + "/" + fileStatus.getPath().getName()).collect(Collectors.toList());
@@ -2427,7 +2474,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieTestUtils.init(hadoopConf, basePath);
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
 
-    // perform 1 successfull commit
+    // perform 1 successful commit
     writeBatch(client, "100", "100", Option.of(Arrays.asList("100")), "100",
         100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
         0, true);
@@ -2565,7 +2612,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     ExecutorService service = Executors.newFixedThreadPool(2);
     HoodieTestUtils.init(hadoopConf, basePath);
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
-    // perform 1 successfull write
+    // perform 1 successful write
     writeBatch(client, "100", "100", Option.of(Arrays.asList("100")), "100",
         100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 100,
         0, true);
@@ -2582,7 +2629,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     client.close();
     // refresh data generator to delete records generated from failed commits
     dataGen = new HoodieTestDataGenerator();
-    // Create a succesful commit
+    // Create a successful commit
     Future<JavaRDD<WriteStatus>> commit3 = service.submit(() -> writeBatch(new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)),
             "400", "300", Option.of(Arrays.asList("400")), "300", 100, dataGen::generateInserts,
             SparkRDDWriteClient::bulkInsert, false, 100, 100, 0, true));

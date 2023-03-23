@@ -24,8 +24,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -60,6 +60,7 @@ import java.util.stream.Collectors;
 public class KafkaOffsetGen {
 
   private static final Logger LOG = LogManager.getLogger(KafkaOffsetGen.class);
+  private static final String METRIC_NAME_KAFKA_DELAY_COUNT = "kafkaDelayCount";
 
   /**
    * kafka checkpoint Pattern.
@@ -240,7 +241,7 @@ public class KafkaOffsetGen {
     }
   }
 
-  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieDeltaStreamerMetrics metrics) {
+  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieIngestionMetrics metrics) {
 
     // Obtain current metadata for the topic
     Map<TopicPartition, Long> fromOffsets;
@@ -259,7 +260,7 @@ public class KafkaOffsetGen {
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty() && checkTopicCheckpoint(lastCheckpointStr)) {
         fromOffsets = fetchValidOffsets(consumer, lastCheckpointStr, topicPartitions);
-        metrics.updateDeltaStreamerKafkaDelayCountMetrics(delayOffsetCalculation(lastCheckpointStr, topicPartitions, consumer));
+        metrics.updateDeltaStreamerSourceDelayCount(METRIC_NAME_KAFKA_DELAY_COUNT, delayOffsetCalculation(lastCheckpointStr, topicPartitions, consumer));
       } else {
         switch (autoResetValue) {
           case EARLIEST:

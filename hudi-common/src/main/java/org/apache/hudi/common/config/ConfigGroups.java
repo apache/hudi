@@ -37,7 +37,8 @@ public class ConfigGroups {
     METRICS("Metrics Configs"),
     RECORD_PAYLOAD("Record Payload Config"),
     KAFKA_CONNECT("Kafka Connect Configs"),
-    AWS("Amazon Web Services Configs");
+    AWS("Amazon Web Services Configs"),
+    DELTA_STREAMER("DeltaStreamer Configs");
 
     public final String name;
 
@@ -58,7 +59,7 @@ public class ConfigGroups {
             + " are auto managed internally."),
     COMMIT_CALLBACK(
         "Commit Callback Configs",
-        "Configurations controling callback behavior into HTTP endpoints, to push "
+        "Configurations controlling callback behavior into HTTP endpoints, to push "
             + "notifications on commits on hudi tables."),
     NONE(
         "None",

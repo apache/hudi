@@ -64,7 +64,7 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.storage.StorageLevel;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -96,6 +96,11 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
     dataGen = new HoodieTestDataGenerator();
+  }
+
+  @BeforeEach
+  void beforeEach() {
+    jsc().getPersistentRDDs().values().forEach(JavaRDD::unpersist);
   }
 
   // Check if record level metadata is aggregated properly at the end of write.
@@ -298,7 +303,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       Dataset<Row> actual = HoodieClientTestUtils.read(jsc(), basePath(), sqlContext(), fs(), fullPartitionPaths);
       List<Row> rows = actual.collectAsList();
       assertEquals(updatedRecords.size(), rows.size());
-      for (Row row: rows) {
+      for (Row row : rows) {
         assertEquals(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD), preserveCommitMeta ? newCommitTime : compactionInstantTime);
       }
     }
@@ -404,6 +409,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   public void testMetadataStatsOnCommit(Boolean rollbackUsingMarkers) throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY)
         .withAvroSchemaValidate(false)
+        .withAllowAutoEvolutionColumnDrop(true)
         .withAutoCommit(false)
         .build();
 
@@ -452,7 +458,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       inserts = 0;
       int upserts = 0;
       List<WriteStatus> writeStatusList = statuses.collect();
-      for (WriteStatus ws: writeStatusList) {
+      for (WriteStatus ws : writeStatusList) {
         inserts += ws.getStat().getNumInserts();
         upserts += ws.getStat().getNumUpdateWrites();
       }
@@ -685,51 +691,4 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertEquals(fewRecordsForDelete.size() - numRecordsInPartition, status.getTotalErrorRecords());
     }
   }
-
-  @Test
-  public void testReleaseResource() throws Exception {
-    HoodieWriteConfig.Builder builder = getConfigBuilder(true);
-    builder.withReleaseResourceEnabled(true);
-    builder.withAutoCommit(false);
-
-    setUp(builder.build().getProps());
-
-    /**
-     * Write 1 (test when RELEASE_RESOURCE_ENABLE is true)
-     */
-    try (SparkRDDWriteClient client = getHoodieWriteClient(builder.build())) {
-
-      String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
-
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
-      JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
-      writeRecords.persist(StorageLevel.MEMORY_AND_DISK());
-      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
-      client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
-      assertEquals(spark().sparkContext().persistentRdds().size(), 0);
-    }
-
-    builder.withReleaseResourceEnabled(false);
-
-    /**
-     * Write 2 (test when RELEASE_RESOURCE_ENABLE is false)
-     */
-    try (SparkRDDWriteClient client = getHoodieWriteClient(builder.build())) {
-      String newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
-
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
-      JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
-
-      writeRecords.persist(StorageLevel.MEMORY_AND_DISK());
-      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
-      client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
-      assertTrue(spark().sparkContext().persistentRdds().size() > 0);
-    }
-
-  }
 }
-

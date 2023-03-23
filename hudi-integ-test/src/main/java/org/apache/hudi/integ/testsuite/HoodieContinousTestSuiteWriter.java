@@ -85,8 +85,14 @@ public class HoodieContinousTestSuiteWriter extends HoodieTestSuiteWriter {
 
   @Override
   public void shutdownResources() {
-    log.info("Shutting down deltastreamer gracefully ");
-    this.deltaStreamerWrapper.shutdownGracefully();
+    if (this.deltaStreamerWrapper != null) {
+      log.info("Shutting down DS wrapper gracefully ");
+      this.deltaStreamerWrapper.shutdownGracefully();
+    }
+    if (this.writeClient != null) {
+      log.info("Closing local write client");
+      this.writeClient.close();
+    }
   }
 
   @Override

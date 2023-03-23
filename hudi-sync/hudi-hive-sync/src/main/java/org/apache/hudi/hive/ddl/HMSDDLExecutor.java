@@ -30,7 +30,6 @@ import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.common.StatsSetupConst;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.Database;
@@ -49,7 +48,6 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -77,17 +75,10 @@ public class HMSDDLExecutor implements DDLExecutor {
   private final IMetaStoreClient client;
   private final PartitionValueExtractor partitionValueExtractor;
 
-  public HMSDDLExecutor(HiveSyncConfig syncConfig) throws HiveException, MetaException {
+  public HMSDDLExecutor(HiveSyncConfig syncConfig, IMetaStoreClient metaStoreClient) throws HiveException, MetaException {
     this.syncConfig = syncConfig;
     this.databaseName = syncConfig.getStringOrDefault(META_SYNC_DATABASE_NAME);
-    HiveConf hiveConf = syncConfig.getHiveConf();
-    IMetaStoreClient tempMetaStoreClient;
-    try {
-      tempMetaStoreClient = ((Hive) Hive.class.getMethod("getWithoutRegisterFns", HiveConf.class).invoke(null, hiveConf)).getMSC();
-    } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
-      tempMetaStoreClient = Hive.get(hiveConf).getMSC();
-    }
-    this.client = tempMetaStoreClient;
+    this.client = metaStoreClient;
     try {
       this.partitionValueExtractor =
           (PartitionValueExtractor) Class.forName(syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
@@ -137,12 +128,12 @@ public class HMSDDLExecutor implements DDLExecutor {
 
       if (!syncConfig.getBoolean(HIVE_CREATE_MANAGED_TABLE)) {
         newTb.putToParameters("EXTERNAL", "TRUE");
+        newTb.setTableType(TableType.EXTERNAL_TABLE.toString());
       }
 
       for (Map.Entry<String, String> entry : tableProperties.entrySet()) {
         newTb.putToParameters(entry.getKey(), entry.getValue());
       }
-      newTb.setTableType(TableType.EXTERNAL_TABLE.toString());
       client.createTable(newTb);
     } catch (Exception e) {
       LOG.error("failed to create table " + tableName, e);

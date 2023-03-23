@@ -220,7 +220,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     queryParameters.forEach(builder::addParameter);
 
     String url = builder.toString();
-    LOG.info("Sending request : (" + url + ")");
+    LOG.debug("Sending request : (" + url + ")");
     Response response;
     int timeout = this.timeoutSecs * 1000; // msec
     switch (method) {

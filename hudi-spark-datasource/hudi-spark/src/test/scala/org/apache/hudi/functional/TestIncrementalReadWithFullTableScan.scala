@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGe
 import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.log4j.LogManager
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{AnalysisException, SaveMode, SparkSession}
@@ -37,7 +37,7 @@ import org.junit.jupiter.params.provider.EnumSource
 
 import scala.collection.JavaConversions.asScalaBuffer
 
-class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
+class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = null
   private val log = LogManager.getLogger(classOf[TestIncrementalReadWithFullTableScan])

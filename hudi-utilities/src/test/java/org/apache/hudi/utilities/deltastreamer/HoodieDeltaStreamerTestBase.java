@@ -259,8 +259,8 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     prepareParquetDFSFiles(numRecords, baseParquetPath, FIRST_PARQUET_FILE_NAME, false, null, null);
   }
 
-  protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath, String fileName, boolean useCustomSchema,
-                                               String schemaStr, Schema schema) throws IOException {
+  protected static HoodieTestDataGenerator prepareParquetDFSFiles(int numRecords, String baseParquetPath, String fileName, boolean useCustomSchema,
+                                                                        String schemaStr, Schema schema) throws IOException {
     String path = baseParquetPath + "/" + fileName;
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     if (useCustomSchema) {
@@ -270,6 +270,20 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     } else {
       Helpers.saveParquetToDFS(Helpers.toGenericRecords(
           dataGenerator.generateInserts("000", numRecords)), new Path(path));
+    }
+    return dataGenerator;
+  }
+
+  protected static void prepareParquetDFSUpdates(int numRecords, String baseParquetPath, String fileName, boolean useCustomSchema,
+                                                                  String schemaStr, Schema schema, HoodieTestDataGenerator dataGenerator, String timestamp) throws IOException {
+    String path = baseParquetPath + "/" + fileName;
+    if (useCustomSchema) {
+      Helpers.saveParquetToDFS(Helpers.toGenericRecords(
+          dataGenerator.generateUpdatesAsPerSchema(timestamp, numRecords, schemaStr),
+          schema), new Path(path), HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
+    } else {
+      Helpers.saveParquetToDFS(Helpers.toGenericRecords(
+          dataGenerator.generateUpdates(timestamp, numRecords)), new Path(path));
     }
   }
 

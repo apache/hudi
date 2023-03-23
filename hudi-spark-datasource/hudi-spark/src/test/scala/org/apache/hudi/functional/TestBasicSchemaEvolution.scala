@@ -25,7 +25,7 @@ import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.functional.TestBasicSchemaEvolution.{dropColumn, injectColumnAt}
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssertionSupport}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -40,7 +40,7 @@ import java.util.function.Consumer
 import scala.collection.JavaConversions.asScalaBuffer
 import scala.collection.JavaConverters._
 
-class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionSupport {
+class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAssertionSupport {
 
   var spark: SparkSession = null
   val commonOpts = Map(

@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
+import static org.apache.hudi.avro.HoodieAvroUtils.sanitizeName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -425,5 +426,15 @@ public class TestHoodieAvroUtils {
     Date now = new Date(System.currentTimeMillis());
     int days = HoodieAvroUtils.fromJavaDate(now);
     assertEquals(now.toLocalDate(), HoodieAvroUtils.toJavaDate(days).toLocalDate());
+  }
+
+  @Test
+  public void testSanitizeName() {
+    assertEquals("__23456", sanitizeName("123456"));
+    assertEquals("abcdef", sanitizeName("abcdef"));
+    assertEquals("_1", sanitizeName("_1"));
+    assertEquals("a*bc", sanitizeName("a.bc", "*"));
+    assertEquals("abcdef___", sanitizeName("abcdef_."));
+    assertEquals("__ab__cd__", sanitizeName("1ab*cd?"));
   }
 }

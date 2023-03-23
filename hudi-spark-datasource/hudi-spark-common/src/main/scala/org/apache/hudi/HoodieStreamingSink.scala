@@ -23,15 +23,15 @@ import org.apache.hudi.HoodieSinkCheckpoint.SINK_CHECKPOINT_KEY
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecordPayload, WriteConcurrencyMode}
-import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
+import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteConcurrencyMode}
 import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.ValidationUtils.{checkArgument, checkState}
+import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, JsonUtils, StringUtils}
-import org.apache.hudi.config.{HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
@@ -330,7 +330,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     if (!DELETE_OPERATION_OPT_VAL.equals(operationType)) {
       getStreamIdentifier(options) match {
         case Some(identifier) =>
-          // get the latest checkpoint from the commit metadata to check if the microbatch has already been prcessed or not
+          // get the latest checkpoint from the commit metadata to check if the microbatch has already been processed or not
           val commitMetadata = CommitUtils.getLatestCommitMetadataWithValidCheckpointInfo(
             metaClient.get.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY)
           if (commitMetadata.isPresent) {

@@ -67,6 +67,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.InputFormatSourceFunction;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DynamicTableSource;
@@ -153,8 +154,8 @@ public class HoodieTableSource implements
       @Nullable Long limit,
       @Nullable HoodieTableMetaClient metaClient,
       @Nullable InternalSchemaManager internalSchemaManager) {
-    this.schema = schema;
-    this.tableRowType = (RowType) schema.toPhysicalRowDataType().notNull().getLogicalType();
+    this.schema = ResolvedSchema.of(schema.getColumns().stream().filter(Column::isPhysical).collect(Collectors.toList()));
+    this.tableRowType = (RowType) this.schema.toSourceRowDataType().notNull().getLogicalType();
     this.path = path;
     this.partitionKeys = partitionKeys;
     this.defaultPartName = defaultPartName;

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -92,6 +93,10 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -100,7 +105,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.isSchemaCompatible;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.LAZY;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
@@ -657,23 +661,20 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private void deleteInvalidFilesByPartitions(HoodieEngineContext context, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
     // Now delete partially written files
     context.setJobStatus(this.getClass().getSimpleName(), "Delete invalid files generated during the write operation: " + config.getTableName());
-    context.map(new ArrayList<>(invalidFilesByPartition.values()), partitionWithFileList -> {
-      final FileSystem fileSystem = metaClient.getFs();
-      LOG.info("Deleting invalid data files=" + partitionWithFileList);
-      if (partitionWithFileList.isEmpty()) {
-        return true;
-      }
-      // Delete
-      partitionWithFileList.stream().map(Pair::getValue).forEach(file -> {
-        try {
-          fileSystem.delete(new Path(file), false);
-        } catch (IOException e) {
-          throw new HoodieIOException(e.getMessage(), e);
-        }
-      });
-
-      return true;
-    }, config.getFinalizeWriteParallelism());
+    context.map(invalidFilesByPartition.values().stream()
+            .flatMap(Collection::stream)
+            .collect(Collectors.toList()),
+        partitionFilePair -> {
+          final FileSystem fileSystem = metaClient.getFs();
+          LOG.info("Deleting invalid data file=" + partitionFilePair);
+          // Delete
+          try {
+            fileSystem.delete(new Path(partitionFilePair.getValue()), false);
+          } catch (IOException e) {
+            throw new HoodieIOException(e.getMessage(), e);
+          }
+          return true;
+        }, config.getFinalizeWriteParallelism());
   }
 
   /**
@@ -803,26 +804,21 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   private void validateSchema() throws HoodieUpsertException, HoodieInsertException {
 
-    if (!shouldValidateAvroSchema() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
+    boolean shouldValidate = config.shouldValidateAvroSchema();
+    boolean allowProjection = config.shouldAllowAutoEvolutionColumnDrop();
+    if ((!shouldValidate && allowProjection)
+        || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
       // Check not required
       return;
     }
 
-    Schema tableSchema;
-    Schema writerSchema;
-    boolean isValid;
     try {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(getMetaClient());
-      writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
-      tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaResolver.getTableAvroSchemaWithoutMetadataFields());
-      isValid = isSchemaCompatible(tableSchema, writerSchema, config.shouldAllowAutoEvolutionColumnDrop());
+      Schema writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
+      Schema tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaResolver.getTableAvroSchema(false));
+      AvroSchemaUtils.checkSchemaCompatible(tableSchema, writerSchema, shouldValidate, allowProjection, getDropPartitionColNames());
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
-    }
-
-    if (!isValid) {
-      throw new HoodieException("Failed schema compatibility check for writerSchema :" + writerSchema
-          + ", table schema :" + tableSchema + ", base path :" + metaClient.getBasePath());
     }
   }
 
@@ -1041,11 +1037,15 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return Functions.noop();
   }
 
-  private boolean shouldValidateAvroSchema() {
-    // TODO(HUDI-4772) re-enable validations in case partition columns
-    //                 being dropped from the data-file after fixing the write schema
-    Boolean shouldDropPartitionColumns = metaClient.getTableConfig().shouldDropPartitionColumns();
-
-    return config.shouldValidateAvroSchema() && !shouldDropPartitionColumns;
+  private Set<String> getDropPartitionColNames() {
+    boolean shouldDropPartitionColumns = metaClient.getTableConfig().shouldDropPartitionColumns();
+    if (!shouldDropPartitionColumns) {
+      return Collections.emptySet();
+    }
+    Option<String[]> partitionFields = metaClient.getTableConfig().getPartitionFields();
+    if (!partitionFields.isPresent()) {
+      return Collections.emptySet();
+    }
+    return new HashSet<>(Arrays.asList(partitionFields.get()));
   }
 }

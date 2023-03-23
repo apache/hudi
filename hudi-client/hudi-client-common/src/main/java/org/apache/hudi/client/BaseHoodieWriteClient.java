@@ -95,6 +95,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -102,13 +103,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 
 /**
  * Abstract Write Client providing functionality for performing commit, index updates and rollback
- * Reused for regular write operations like upsert/insert/bulk-insert.. as well as bootstrap
+ * Reused for regular write operations like upsert/insert/bulk-insert as well as bootstrap
  *
  * @param <T> Type of data
  * @param <I> Type of inputs
@@ -129,7 +131,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected transient Timer.Context writeTimer = null;
 
   protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
-  protected Set<String> pendingInflightAndRequestedInstants;
+  protected Set<String> pendingInflightAndRequestedInstants = Collections.emptySet();
 
   protected BaseHoodieTableServiceClient<O> tableServiceClient;
 
@@ -233,7 +235,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       commit(table, commitActionType, instantTime, metadata, stats);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
-      releaseResources();
+      releaseResources(instantTime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
@@ -474,9 +476,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
-   * de-duped and non existent keys will be removed before deleting.
+   * de-duped and non-existent keys will be removed before deleting.
    *
-   * @param keys {@link List} of {@link HoodieKey}s to be deleted
+   * @param keys        {@link List} of {@link HoodieKey}s to be deleted
    * @param instantTime Commit time handle
    * @return Collection of WriteStatus to inspect errors and counts
    */
@@ -491,7 +493,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
-    this.lastCompletedTxnAndMetadata = txnManager.isOptimisticConcurrencyControlEnabled()
+    this.lastCompletedTxnAndMetadata = txnManager.isNeedsLockGuard()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
     this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     this.pendingInflightAndRequestedInstants.remove(instantTime);
@@ -678,7 +680,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * NOTE : This action requires all writers (ingest and compact) to a table to be stopped before proceeding. Revert
    * the (inflight/committed) record changes for all commits after the provided instant time.
    *
-   * @param savepointToRestoreTimestamp savepoint intstant time to which restoration is requested
+   * @param savepointToRestoreTimestamp savepoint instant time to which restoration is requested
    */
   public HoodieRestoreMetadata restoreToInstant(final String savepointToRestoreTimestamp, boolean initialMetadataTableIfNecessary) throws HoodieRestoreException {
     LOG.info("Begin restore to instant " + savepointToRestoreTimestamp);
@@ -806,6 +808,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public String startCommit(String actionType, HoodieTableMetaClient metaClient) {
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites());
+
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     startCommit(instantTime, actionType, metaClient);
     return instantTime;
@@ -839,6 +842,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   private void startCommit(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
     LOG.info("Generate a new instant time: " + instantTime + " action: " + actionType);
+    // check there are no inflight restore before starting a new commit.
+    HoodieTimeline inflightRestoreTimeline = metaClient.getActiveTimeline().getRestoreTimeline().filterInflightsAndRequested();
+    ValidationUtils.checkArgument(inflightRestoreTimeline.countInstants() == 0,
+        "Found pending restore in active timeline. Please complete the restore fully before proceeding. As of now, "
+            + "table could be in an inconsistent state. Pending restores: " + Arrays.toString(inflightRestoreTimeline.getInstantsAsStream()
+            .map(instant -> instant.getTimestamp()).collect(Collectors.toList()).toArray()));
+
     // if there are pending compactions, their instantTime must not be greater than that of this instant time
     metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().ifPresent(latestPending ->
         ValidationUtils.checkArgument(
@@ -1020,7 +1030,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /***
    * Schedules compaction inline.
-   * @param extraMetadata extrametada to be used.
+   * @param extraMetadata extra metadata to be used.
    * @return compaction instant if scheduled.
    */
   protected Option<String> inlineScheduleCompaction(Option<Map<String, String>> extraMetadata) {
@@ -1076,7 +1086,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *
    * @param extraMetadata Metadata to pass onto the scheduled service instant
    * @param tableServiceType Type of table service to schedule
-   * @return
+   *
+   * @return The given instant time option or empty if no table service plan is scheduled
    */
   public Option<String> scheduleTableService(Option<Map<String, String>> extraMetadata, TableServiceType tableServiceType) {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
@@ -1088,20 +1099,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *
    * @param extraMetadata Metadata to pass onto the scheduled service instant
    * @param tableServiceType Type of table service to schedule
-   * @return
+   *
+   * @return The given instant time option or empty if no table service plan is scheduled
    */
-  public Option<String> scheduleTableService(String instantTime, Option<Map<String, String>> extraMetadata,
-                                             TableServiceType tableServiceType) {
-    // A lock is required to guard against race conditions between an on-going writer and scheduling a table service.
-    final Option<HoodieInstant> inflightInstant = Option.of(new HoodieInstant(HoodieInstant.State.REQUESTED,
-        tableServiceType.getAction(), instantTime));
-    try {
-      this.txnManager.beginTransaction(inflightInstant, Option.empty());
-      LOG.info("Scheduling table service " + tableServiceType);
-      return tableServiceClient.scheduleTableServiceInternal(instantTime, extraMetadata, tableServiceType);
-    } finally {
-      this.txnManager.endTransaction(inflightInstant);
-    }
+  public Option<String> scheduleTableService(String instantTime, Option<Map<String, String>> extraMetadata, TableServiceType tableServiceType) {
+    return tableServiceClient.scheduleTableService(instantTime, extraMetadata, tableServiceType);
   }
 
   public HoodieMetrics getMetrics() {
@@ -1228,7 +1230,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * Called after each write, to release any resources used.
    */
-  protected void releaseResources() {
+  protected void releaseResources(String instantTime) {
     // do nothing here
   }
 
@@ -1303,10 +1305,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * add columns to table.
    *
-   * @param colName col name to be added. if we want to add col to a nested filed, the fullName should be specify
-   * @param schema col type to be added.
-   * @param doc col doc to be added.
-   * @param position col position to be added
+   * @param colName      col name to be added. if we want to add col to a nested filed, the fullName should be specified
+   * @param schema       col type to be added.
+   * @param doc          col doc to be added.
+   * @param position     col position to be added
    * @param positionType col position change type. now support three change types: first/after/before
    */
   public void addColumn(String colName, Schema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
@@ -1323,7 +1325,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * delete columns to table.
    *
-   * @param colNames col name to be deleted. if we want to delete col from a nested filed, the fullName should be specify
+   * @param colNames col name to be deleted. if we want to delete col from a nested filed, the fullName should be specified
    */
   public void deleteColumns(String... colNames) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
@@ -1334,7 +1336,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * rename col name for hudi table.
    *
-   * @param colName col name to be renamed. if we want to rename col from a nested filed, the fullName should be specify
+   * @param colName col name to be renamed. if we want to rename col from a nested filed, the fullName should be specified
    * @param newName new name for current col. no need to specify fullName.
    */
   public void renameColumn(String colName, String newName) {
@@ -1346,7 +1348,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * update col nullable attribute for hudi table.
    *
-   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
+   * @param colName  col name to be changed. if we want to change col from a nested filed, the fullName should be specified
    * @param nullable .
    */
   public void updateColumnNullability(String colName, boolean nullable) {
@@ -1360,7 +1362,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * only support update primitive type to primitive type.
    * cannot update nest type to nest type or primitive type eg: RecordType -> MapType, MapType -> LongType.
    *
-   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
+   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specified
    * @param newType .
    */
   public void updateColumnType(String colName, Type newType) {
@@ -1372,8 +1374,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * update col comment for hudi table.
    *
-   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
-   * @param doc .
+   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specified
+   * @param doc     .
    */
   public void updateColumnComment(String colName, String doc) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
@@ -1384,7 +1386,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * reorder the position of col.
    *
-   * @param colName column which need to be reordered. if we want to change col from a nested filed, the fullName should be specify.
+   * @param colName column which need to be reordered. if we want to change col from a nested filed, the fullName should be specified.
    * @param referColName reference position.
    * @param orderType col position change type. now support three change types: first/after/before
    */

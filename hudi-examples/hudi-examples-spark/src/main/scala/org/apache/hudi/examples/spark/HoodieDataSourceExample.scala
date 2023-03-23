@@ -30,16 +30,16 @@ import org.apache.spark.sql.SparkSession
 import scala.collection.JavaConversions._
 
 /**
-  * Simple examples of [[org.apache.hudi.DefaultSource]]
-  *
-  * To run this example, you should
-  *   1. For running in IDE, set VM options `-Dspark.master=local[2]`
-  *   2. For running in shell, using `spark-submit`
-  *
-  * Usage: HoodieWriteClientExample <tablePath> <tableName>.
-  * <tablePath> and <tableName> describe root path of hudi and table name
-  * for example, `HoodieDataSourceExample file:///tmp/hoodie/hudi_cow_table hudi_cow_table`
-  */
+ * Simple examples of [[org.apache.hudi.DefaultSource]]
+ *
+ * To run this example, you should
+ *   1. For running in IDE, set VM options `-Dspark.master=local[2]`
+ *      2. For running in shell, using `spark-submit`
+ *
+ * Usage: HoodieWriteClientExample <tablePath> <tableName>.
+ * <tablePath> and <tableName> describe root path of hudi and table name
+ * for example, `HoodieDataSourceExample file:///tmp/hoodie/hudi_cow_table hudi_cow_table`
+ */
 object HoodieDataSourceExample {
 
   def main(args: Array[String]): Unit = {
@@ -75,7 +75,7 @@ object HoodieDataSourceExample {
     val commitTime: String = System.currentTimeMillis().toString
     val inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20))
     val df = spark.read.json(spark.sparkContext.parallelize(inserts, 1))
-    df.write.format("org.apache.hudi").
+    df.write.format("hudi").
       options(getQuickstartWriteConfigs).
       option(PRECOMBINE_FIELD.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
@@ -90,9 +90,9 @@ object HoodieDataSourceExample {
     */
   def queryData(spark: SparkSession, tablePath: String, tableName: String, dataGen: HoodieExampleDataGenerator[HoodieAvroPayload]): Unit = {
     val roViewDF = spark.
-        read.
-        format("org.apache.hudi").
-        load(tablePath + "/*/*/*/*")
+      read.
+      format("hudi").
+      load(tablePath + "/*/*/*/*")
 
     roViewDF.createOrReplaceTempView("hudi_ro_table")
 
@@ -120,7 +120,7 @@ object HoodieDataSourceExample {
     val commitTime: String = System.currentTimeMillis().toString
     val updates = dataGen.convertToStringList(dataGen.generateUpdates(commitTime, 10))
     val df = spark.read.json(spark.sparkContext.parallelize(updates, 1))
-    df.write.format("org.apache.hudi").
+    df.write.format("hudi").
       options(getQuickstartWriteConfigs).
       option(PRECOMBINE_FIELD.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
@@ -135,11 +135,11 @@ object HoodieDataSourceExample {
    */
   def delete(spark: SparkSession, tablePath: String, tableName: String): Unit = {
 
-    val roViewDF = spark.read.format("org.apache.hudi").load(tablePath + "/*/*/*/*")
+    val roViewDF = spark.read.format("hudi").load(tablePath + "/*/*/*/*")
     roViewDF.createOrReplaceTempView("hudi_ro_table")
     val df = spark.sql("select uuid, partitionpath, ts from  hudi_ro_table limit 2")
 
-    df.write.format("org.apache.hudi").
+    df.write.format("hudi").
       options(getQuickstartWriteConfigs).
       option(PRECOMBINE_FIELD.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
@@ -155,7 +155,7 @@ object HoodieDataSourceExample {
    */
   def deleteByPartition(spark: SparkSession, tablePath: String, tableName: String): Unit = {
     val df = spark.emptyDataFrame
-    df.write.format("org.apache.hudi").
+    df.write.format("hudi").
       options(getQuickstartWriteConfigs).
       option(PRECOMBINE_FIELD.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
@@ -179,10 +179,10 @@ object HoodieDataSourceExample {
 
     // incrementally query data
     val incViewDF = spark.
-        read.
-        format("org.apache.hudi").
-        option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL).
-        option(BEGIN_INSTANTTIME.key, beginTime).
+      read.
+      format("hudi").
+      option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL).
+      option(BEGIN_INSTANTTIME.key, beginTime).
         load(tablePath)
     incViewDF.createOrReplaceTempView("hudi_incr_table")
     spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hudi_incr_table where fare > 20.0").show()
@@ -200,11 +200,11 @@ object HoodieDataSourceExample {
     val endTime = commits(commits.length - 2) // commit time we are interested in
 
     //incrementally query data
-    val incViewDF = spark.read.format("org.apache.hudi").
-        option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL).
-        option(BEGIN_INSTANTTIME.key, beginTime).
-        option(END_INSTANTTIME.key, endTime).
-        load(tablePath)
+    val incViewDF = spark.read.format("hudi").
+      option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL).
+      option(BEGIN_INSTANTTIME.key, beginTime).
+      option(END_INSTANTTIME.key, endTime).
+      load(tablePath)
     incViewDF.createOrReplaceTempView("hudi_incr_table")
     spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare > 20.0").show()
   }

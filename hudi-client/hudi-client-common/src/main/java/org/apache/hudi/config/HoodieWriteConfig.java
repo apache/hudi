@@ -68,6 +68,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
@@ -126,6 +127,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
+
+  public static final ConfigProperty<String> TAGGED_RECORD_STORAGE_LEVEL_VALUE = ConfigProperty
+       .key("hoodie.write.tagged.record.storage.level")
+       .defaultValue("MEMORY_AND_DISK_SER")
+       .withDocumentation("Determine what level of persistence is used to cache write RDDs. "
+          + "Refer to org.apache.spark.storage.StorageLevel for different values");
 
   public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
@@ -241,13 +248,29 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> INSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.insert.shuffle.parallelism")
       .defaultValue("0")
-      .withDocumentation("Parallelism for inserting records into the table. Inserts can shuffle data before writing to tune file sizes and optimize the storage layout.");
+      .withDocumentation("Parallelism for inserting records into the table. Inserts can shuffle "
+          + "data before writing to tune file sizes and optimize the storage layout. Before "
+          + "0.13.0 release, if users do not configure it, Hudi would use 200 as the default "
+          + "shuffle parallelism. From 0.13.0 onwards Hudi by default automatically uses the "
+          + "parallelism deduced by Spark based on the source data. If the shuffle parallelism "
+          + "is explicitly configured by the user, the user-configured parallelism is "
+          + "used in defining the actual parallelism. If you observe small files from the insert "
+          + "operation, we suggest configuring this shuffle parallelism explicitly, so that the "
+          + "parallelism is around total_input_data_size/120MB.");
 
   public static final ConfigProperty<String> BULKINSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.bulkinsert.shuffle.parallelism")
       .defaultValue("0")
-      .withDocumentation("For large initial imports using bulk_insert operation, controls the parallelism to use for sort modes or custom partitioning done"
-          + "before writing records to the table.");
+      .withDocumentation("For large initial imports using bulk_insert operation, controls the "
+          + "parallelism to use for sort modes or custom partitioning done before writing records "
+          + "to the table. Before 0.13.0 release, if users do not configure it, Hudi would use "
+          + "200 as the default shuffle parallelism. From 0.13.0 onwards Hudi by default "
+          + "automatically uses the parallelism deduced by Spark based on the source data or "
+          + "the parallelism based on the logical plan for row writer. If the shuffle parallelism "
+          + "is explicitly configured by the user, the user-configured parallelism is "
+          + "used in defining the actual parallelism. If you observe small files from the bulk insert "
+          + "operation, we suggest configuring this shuffle parallelism explicitly, so that the "
+          + "parallelism is around total_input_data_size/120MB.");
 
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS = ConfigProperty
       .key("hoodie.bulkinsert.user.defined.partitioner.sort.columns")
@@ -265,18 +288,36 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> UPSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.upsert.shuffle.parallelism")
       .defaultValue("0")
-      .withDocumentation("Parallelism to use for upsert operation on the table. Upserts can shuffle data to perform index lookups, file sizing, bin packing records optimally"
-          + "into file groups.");
+      .withDocumentation("Parallelism to use for upsert operation on the table. Upserts can "
+          + "shuffle data to perform index lookups, file sizing, bin packing records optimally "
+          + "into file groups. Before 0.13.0 release, "
+          + "if users do not configure it, Hudi would use 200 as the default "
+          + "shuffle parallelism. From 0.13.0 onwards Hudi by default automatically uses the "
+          + "parallelism deduced by Spark based on the source data. If the shuffle parallelism "
+          + "is explicitly configured by the user, the user-configured parallelism is "
+          + "used in defining the actual parallelism. If you observe small files from the upsert "
+          + "operation, we suggest configuring this shuffle parallelism explicitly, so that the "
+          + "parallelism is around total_input_data_size/120MB.");
 
   public static final ConfigProperty<String> DELETE_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.delete.shuffle.parallelism")
       .defaultValue("0")
-      .withDocumentation("Parallelism used for “delete” operation. Delete operations also performs shuffles, similar to upsert operation.");
+      .withDocumentation("Parallelism used for delete operation. Delete operations also performs "
+          + "shuffles, similar to upsert operation. Before 0.13.0 release, "
+          + "if users do not configure it, Hudi would use 200 as the default "
+          + "shuffle parallelism. From 0.13.0 onwards Hudi by default automatically uses the "
+          + "parallelism deduced by Spark based on the source data. If the shuffle parallelism "
+          + "is explicitly configured by the user, the user-configured parallelism is "
+          + "used in defining the actual parallelism.");
 
   public static final ConfigProperty<String> ROLLBACK_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.rollback.parallelism")
       .defaultValue("100")
-      .withDocumentation("Parallelism for rollback of commits. Rollbacks perform delete of files or logging delete blocks to file groups on storage in parallel.");
+      .withDocumentation("This config controls the parallelism for rollback of commits. "
+          + "Rollbacks perform deletion of files or logging delete blocks to file groups on "
+          + "storage in parallel. The configure value limits the parallelism so that the number "
+          + "of Spark tasks do not exceed the value. If rollback is slow due to the limited "
+          + "parallelism, you can increase this to tune the performance.");
 
   public static final ConfigProperty<String> WRITE_BUFFER_LIMIT_BYTES_VALUE = ConfigProperty
       .key("hoodie.write.buffer.limit.bytes")
@@ -614,6 +655,19 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to enable commit conflict checking or not during early "
           + "conflict detection.");
 
+  public static final ConfigProperty<String> MUTLI_WRITER_SOURCE_CHECKPOINT_ID = ConfigProperty
+      .key("hoodie.deltastreamer.multiwriter.source.checkpoint.id")
+      .noDefaultValue()
+      .withDocumentation("Unique Id to be used for multiwriter deltastreamer scenario. This is the "
+          + "scenario when multiple deltastreamers are used to write to the same target table. If you are just using "
+          + "a single deltastreamer for a table then you do not need to set this config.");
+
+  public static final ConfigProperty<String> SENSITIVE_CONFIG_KEYS_FILTER = ConfigProperty
+      .key("hoodie.sensitive.config.keys")
+      .defaultValue("ssl,tls,sasl,auth,credentials")
+      .withDocumentation("Comma separated list of filters for sensitive config keys. Delta Streamer "
+          + "will not print any configuration which contains the configured filter. For example with "
+          + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -1067,6 +1121,10 @@ public class HoodieWriteConfig extends HoodieConfig {
       return getString(WRITE_SCHEMA_OVERRIDE);
     }
     return getSchema();
+  }
+
+  public String getTaggedRecordStorageLevel() {
+    return getString(TAGGED_RECORD_STORAGE_LEVEL_VALUE);
   }
 
   public String getInternalSchema() {
@@ -1591,8 +1649,20 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST);
   }
 
+  public boolean isSingleGroupClusteringEnabled() {
+    return getBoolean(HoodieClusteringConfig.PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED);
+  }
+
+  public boolean shouldClusteringSingleGroup() {
+    return isClusteringSortEnabled() || isSingleGroupClusteringEnabled();
+  }
+
   public String getClusteringSortColumns() {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS);
+  }
+
+  public boolean isClusteringSortEnabled() {
+    return !StringUtils.isNullOrEmpty(getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS));
   }
 
   public HoodieClusteringConfig.LayoutOptimizationStrategy getLayoutOptimizationStrategy() {
@@ -2076,12 +2146,20 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_JOBNAME);
   }
 
+  public String getPushGatewayLabels() {
+    return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_LABELS);
+  }
+
   public boolean getPushGatewayRandomJobNameSuffix() {
     return getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX);
   }
 
   public String getMetricReporterMetricsNamePrefix() {
     return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
+  }
+
+  public String getMetricReporterFileBasedConfigs() {
+    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_FILE_BASED_CONFIGS_PATH);
   }
 
   /**
@@ -2360,6 +2438,13 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean areReleaseResourceEnabled() {
     return getBooleanOrDefault(RELEASE_RESOURCE_ENABLE);
+  }
+
+  /**
+   * Returns whether the explicit guard of lock is required.
+   */
+  public boolean needsLockGuard() {
+    return isMetadataTableEnabled() || getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
   }
 
   /**
@@ -2903,8 +2988,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
       // isLockProviderPropertySet must be fetched before setting defaults of HoodieLockConfig
       final TypedProperties writeConfigProperties = writeConfig.getProps();
-      final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME)
-          || writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_PROP);
+      final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key());
       writeConfig.setDefaultOnCondition(!isLockConfigSet,
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
@@ -2928,13 +3012,10 @@ public class HoodieWriteConfig extends HoodieConfig {
             // This is targeted at Single writer with async table services
             // If user does not set the lock provider, likely that the concurrency mode is not set either
             // Override the configs for metadata table
-            writeConfig.setValue(WRITE_CONCURRENCY_MODE.key(),
-                WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
             writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
                 InProcessLockProvider.class.getName());
-            LOG.info(String.format("Automatically set %s=%s and %s=%s since user has not set the "
+            LOG.info(String.format("Automatically set %s=%s since user has not set the "
                     + "lock provider for single writer with async table services",
-                WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value(),
                 HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
           }
         }
@@ -3016,7 +3097,9 @@ public class HoodieWriteConfig extends HoodieConfig {
           if (writeConfig.isEmbeddedTimelineServerEnabled()) {
             return MarkerType.TIMELINE_SERVER_BASED.toString();
           } else {
-            LOG.warn("Embedded timeline server is disabled, fallback to use direct marker type for spark");
+            if (!HoodieTableMetadata.isMetadataTable(writeConfig.getBasePath())) {
+              LOG.warn("Embedded timeline server is disabled, fallback to use direct marker type for spark");
+            }
             return MarkerType.DIRECT.toString();
           }
         case FLINK:

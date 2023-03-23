@@ -21,6 +21,7 @@ package org.apache.hudi.table.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -46,7 +47,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
@@ -556,7 +556,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       upsertRecords(client, "010", records, dataGen);
 
-      // trigger clean. creating a new client with aggresive cleaner configs so that clean will kick in immediately.
+      // trigger clean. creating a new client with aggressive cleaner configs so that clean will kick in immediately.
       cfgBuilder = getConfigBuilder(false)
           .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
           // Timeline-server-based markers are not used for multi-rollback tests

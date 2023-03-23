@@ -204,7 +204,7 @@ public class TestClientRollback extends HoodieClientTestBase {
           //restore again
           newClient.restoreToSavepoint(savepoint.getTimestamp());
 
-          //verify that we resuse the existing restore commit
+          //verify that we reuse the existing restore commit
           metaClient = HoodieTableMetaClient.reload(metaClient);
           table = HoodieSparkTable.create(getConfig(), context, metaClient);
           List<HoodieInstant> restoreInstants = table.getActiveTimeline().getRestoreTimeline().getInstants();
@@ -469,7 +469,7 @@ public class TestClientRollback extends HoodieClientTestBase {
   }
 
   /**
-   * Test Cases for effects of rollbacking completed/inflight commits.
+   * Test Cases for effects of rolling back completed/inflight commits.
    */
   @ParameterizedTest
   @MethodSource("testFailedRollbackCommitParams")
