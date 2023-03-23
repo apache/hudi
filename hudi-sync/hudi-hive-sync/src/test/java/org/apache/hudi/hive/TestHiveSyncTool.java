@@ -148,7 +148,7 @@ public class TestHiveSyncTool {
 
   @ParameterizedTest
   @MethodSource({"syncModeAndSchemaFromCommitMetadata"})
-  public void testBasicSync(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
+  public void testBasicSync(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
 
     String instantTime = "100";

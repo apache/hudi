@@ -261,7 +261,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
 
     // Second batch updates of data
-    val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
+    val records2 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, partitionOfRecords)).toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
 
     val hudiOptions = getClusteringOpts(
