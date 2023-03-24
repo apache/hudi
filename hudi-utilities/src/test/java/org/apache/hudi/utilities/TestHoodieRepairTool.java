@@ -313,8 +313,13 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
   @Test
   public void testUndoWithExistingBackupPath() throws IOException {
+    FileSystem fs = metaClient.getFs();
+    java.nio.file.Files.createDirectories(backupTempDir);
     String backupPath = backupTempDir.toAbsolutePath().toString();
+    LOG.warn("XXX 111 Base path " + basePath);
+    LOG.warn("XXX 111 backup path " + backupPath + ", is exists " + fs.exists(new Path(backupPath)));
     List<String> backupDanglingFileList = createDanglingDataFilesInFS(backupPath);
+    LOG.warn("XXX 222 Created danglign data files ");
     List<String> restoreDanglingFileList = DANGLING_DATA_FILE_LIST.stream()
         .map(filePath -> new Path(basePath, filePath).toString())
         .collect(Collectors.toList());
@@ -322,17 +327,22 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     existingFileList.addAll(backupDanglingFileList);
     existingFileList.addAll(restoreDanglingFileList);
 
+    LOG.warn("XXX 333 Verifying files in FS ");
     verifyFilesInFS(allFileAbsolutePathList, restoreDanglingFileList);
+    LOG.warn("XXX 444 Verifying files in FS ");
     verifyFilesInFS(backupDanglingFileList, Collections.emptyList());
+    LOG.warn("XXX 555 repair 1");
     testRepairToolWithMode(
         Option.empty(), Option.empty(), HoodieRepairTool.Mode.UNDO.toString(),
         backupPath, true,
         existingFileList, Collections.emptyList());
+    LOG.warn("XXX 555 repair 2");
     // Second run should fail
     testRepairToolWithMode(
         Option.empty(), Option.empty(), HoodieRepairTool.Mode.UNDO.toString(),
         backupPath, false,
         existingFileList, Collections.emptyList());
+    LOG.warn("XXX 666 repair");
   }
 
   private void testRepairToolWithMode(
