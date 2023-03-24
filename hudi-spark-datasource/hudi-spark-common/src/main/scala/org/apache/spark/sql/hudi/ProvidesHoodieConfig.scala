@@ -99,7 +99,7 @@ trait ProvidesHoodieConfig extends Logging {
                               isOverwritePartition: Boolean,
                               isOverwriteTable: Boolean,
                               insertPartitions: Map[String, Option[String]] = Map.empty,
-                              extraOptions: Map[String, String]): Map[String, String] = {
+                              extraOptions: Map[String, String] = Map.empty): Map[String, String] = {
 
     if (insertPartitions.nonEmpty &&
       (insertPartitions.keys.toSet != hoodieCatalogTable.partitionFields.toSet)) {
