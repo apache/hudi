@@ -49,6 +49,7 @@ public class SparkBootstrapDeltaCommitActionExecutor<T>
         table,
         HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
         inputRecordsRDD,
+        Option.empty(),
         extraMetadata);
   }
 }

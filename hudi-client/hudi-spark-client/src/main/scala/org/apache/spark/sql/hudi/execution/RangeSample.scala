@@ -340,7 +340,7 @@ object RangeSampleSort {
           val longBound = bound.asInstanceOf[Array[Long]]
           for (i <- 0 to bound.length - 1) {
             for (j <- 0 to fillFactor - 1) {
-              // sample factor shoud not be too large, so it's ok to use 1 / fillfactor as slice
+              // sample factor should not be too large, so it's ok to use 1 / fillfactor as slice
               newBound(j + i*(fillFactor)) = longBound(i) + (j + 1) * (1 / fillFactor.toDouble)
             }
           }

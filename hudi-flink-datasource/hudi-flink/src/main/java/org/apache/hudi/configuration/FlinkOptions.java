@@ -22,6 +22,7 @@ import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringP
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -101,6 +102,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("table.type")
       .stringType()
       .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
+      .withFallbackKeys(HoodieTableConfig.TYPE.key())
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
   public static final String NO_PRE_COMBINE = "no_precombine";
@@ -108,7 +110,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("precombine.field")
       .stringType()
       .defaultValue("ts")
-      .withFallbackKeys("write.precombine.field")
+      .withFallbackKeys("write.precombine.field", HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key())
       .withDescription("Field used in preCombining before actual write. When two records have the same\n"
           + "key value, we will pick the one with the largest value for the precombine field,\n"
           + "determined by Object.compareTo(..)");
@@ -117,7 +119,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("payload.class")
       .stringType()
       .defaultValue(EventTimeAvroPayload.class.getName())
-      .withFallbackKeys("write.payload.class")
+      .withFallbackKeys("write.payload.class", HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key())
       .withDescription("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.\n"
           + "This will render any value set for the option in-effective");
 
@@ -125,6 +127,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("record.merger.impls")
       .stringType()
       .defaultValue(HoodieAvroRecordMerger.class.getName())
+      .withFallbackKeys(HoodieWriteConfig.RECORD_MERGER_IMPLS.key())
       .withDescription("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
           + "These merger impls will filter by record.merger.strategy. "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
@@ -133,6 +136,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("record.merger.strategy")
       .stringType()
       .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .withFallbackKeys(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key())
       .withDescription("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in record.merger.impls which has the same merger strategy id");
 
   public static final ConfigOption<String> PARTITION_DEFAULT_NAME = ConfigOptions
@@ -181,6 +185,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("metadata.enabled")
       .booleanType()
       .defaultValue(true)
+      .withFallbackKeys(HoodieMetadataConfig.ENABLE.key())
       .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default disabled");
 
   public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions

@@ -208,7 +208,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client2, nextCommitTime2, 100);
 
     // start to write commit 003
-    // this commit 003 will failed quickly because early conflict detection before create marker.
+    // this commit 003 will fail quickly because early conflict detection before create marker.
     final String nextCommitTime3 = "003";
     assertThrows(SparkException.class, () -> {
       final JavaRDD<WriteStatus> writeStatusList3 = startCommitForUpdate(writeConfig, client3, nextCommitTime3, 100);

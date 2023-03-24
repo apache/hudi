@@ -19,11 +19,13 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -34,6 +36,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -59,6 +62,47 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
         Arguments.of(HoodieTableType.COPY_ON_WRITE, false),
         Arguments.of(HoodieTableType.MERGE_ON_READ, false)
     );
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,true", "true,false", "false,true", "false,false"})
+  public void testWriteClientAndTableServiceClientWithTimelineServer(
+      boolean enableEmbeddedTimelineServer, boolean passInTimelineServer) throws IOException {
+    HoodieTableMetaClient metaClient =
+        getHoodieMetaClient(hadoopConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieWriteConfig writeConfig = getConfigBuilder(true)
+        .withPath(metaClient.getBasePathV2().toString())
+        .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineServer)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(incrementTimelineServicePortToUse()).build())
+        .build();
+
+    SparkRDDWriteClient writeClient;
+    if (passInTimelineServer) {
+      EmbeddedTimelineService timelineService =
+          new EmbeddedTimelineService(context(), null, writeConfig);
+      timelineService.startServer();
+      writeConfig.setViewStorageConfig(timelineService.getRemoteFileSystemViewConfig());
+      writeClient = new SparkRDDWriteClient(context(), writeConfig, Option.of(timelineService));
+      // Both the write client and the table service client should use the same passed-in
+      // timeline server instance.
+      assertEquals(timelineService, writeClient.getTimelineServer().get());
+      assertEquals(timelineService, writeClient.getTableServiceClient().getTimelineServer().get());
+      // Write config should not be changed
+      assertEquals(writeConfig, writeClient.getConfig());
+      timelineService.stop();
+    } else {
+      writeClient = new SparkRDDWriteClient(context(), writeConfig);
+      // Only one timeline server should be instantiated, and the same timeline server
+      // should be used by both the write client and the table service client.
+      assertEquals(
+          writeClient.getTimelineServer(),
+          writeClient.getTableServiceClient().getTimelineServer());
+      if (!enableEmbeddedTimelineServer) {
+        assertFalse(writeClient.getTimelineServer().isPresent());
+      }
+    }
+    writeClient.close();
   }
 
   @ParameterizedTest

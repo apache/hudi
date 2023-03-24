@@ -55,6 +55,8 @@ public class ConfigProperty<T> implements Serializable {
 
   private final Set<String> validValues;
 
+  private final boolean advanced;
+
   private final String[] alternatives;
 
   // provide the ability to infer config value based on other configs
@@ -63,7 +65,7 @@ public class ConfigProperty<T> implements Serializable {
   ConfigProperty(String key, T defaultValue, String docOnDefaultValue, String doc,
                  Option<String> sinceVersion, Option<String> deprecatedVersion,
                  Option<Function<HoodieConfig, Option<T>>> inferFunc, Set<String> validValues,
-                 String... alternatives) {
+                 boolean advanced, String... alternatives) {
     this.key = Objects.requireNonNull(key);
     this.defaultValue = defaultValue;
     this.docOnDefaultValue = docOnDefaultValue;
@@ -72,6 +74,7 @@ public class ConfigProperty<T> implements Serializable {
     this.deprecatedVersion = deprecatedVersion;
     this.inferFunction = inferFunc;
     this.validValues = validValues;
+    this.advanced = advanced;
     this.alternatives = alternatives;
   }
 
@@ -127,34 +130,45 @@ public class ConfigProperty<T> implements Serializable {
     return Arrays.asList(alternatives);
   }
 
+  public boolean isAdvanced() {
+    return advanced;
+  }
+
   public ConfigProperty<T> withDocumentation(String doc) {
     Objects.requireNonNull(doc);
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, alternatives);
   }
 
   public ConfigProperty<T> withValidValues(String... validValues) {
     Objects.requireNonNull(validValues);
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, new HashSet<>(Arrays.asList(validValues)), alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, new HashSet<>(Arrays.asList(validValues)), advanced, alternatives);
   }
 
   public ConfigProperty<T> withAlternatives(String... alternatives) {
     Objects.requireNonNull(alternatives);
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, alternatives);
   }
 
   public ConfigProperty<T> sinceVersion(String sinceVersion) {
     Objects.requireNonNull(sinceVersion);
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, Option.of(sinceVersion), deprecatedVersion, inferFunction, validValues, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, Option.of(sinceVersion), deprecatedVersion, inferFunction, validValues, advanced, alternatives);
   }
 
   public ConfigProperty<T> deprecatedAfter(String deprecatedVersion) {
     Objects.requireNonNull(deprecatedVersion);
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, Option.of(deprecatedVersion), inferFunction, validValues, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, Option.of(deprecatedVersion), inferFunction, validValues, advanced, alternatives);
   }
 
   public ConfigProperty<T> withInferFunction(Function<HoodieConfig, Option<T>> inferFunction) {
     Objects.requireNonNull(inferFunction);
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, Option.of(inferFunction), validValues, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, Option.of(inferFunction), validValues, advanced, alternatives);
+  }
+
+  /**
+   * Marks the config as an advanced config.
+   */
+  public ConfigProperty<T> markAdvanced() {
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, true, alternatives);
   }
 
   /**
@@ -171,8 +185,8 @@ public class ConfigProperty<T> implements Serializable {
   @Override
   public String toString() {
     return String.format(
-        "Key: '%s' , default: %s description: %s since version: %s deprecated after: %s)",
-        key, defaultValue, doc, sinceVersion.isPresent() ? sinceVersion.get() : "version is not defined",
+        "Key: '%s' , default: %s , isAdvanced: %s , description: %s since version: %s deprecated after: %s)",
+        key, defaultValue, advanced, doc, sinceVersion.isPresent() ? sinceVersion.get() : "version is not defined",
         deprecatedVersion.isPresent() ? deprecatedVersion.get() : "version is not defined");
   }
 
@@ -194,7 +208,7 @@ public class ConfigProperty<T> implements Serializable {
     public <T> ConfigProperty<T> defaultValue(T value, String docOnDefaultValue) {
       Objects.requireNonNull(value);
       Objects.requireNonNull(docOnDefaultValue);
-      ConfigProperty<T> configProperty = new ConfigProperty<>(key, value, docOnDefaultValue, "", Option.empty(), Option.empty(), Option.empty(), Collections.emptySet());
+      ConfigProperty<T> configProperty = new ConfigProperty<>(key, value, docOnDefaultValue, "", Option.empty(), Option.empty(), Option.empty(), Collections.emptySet(), false);
       return configProperty;
     }
 
@@ -204,7 +218,7 @@ public class ConfigProperty<T> implements Serializable {
 
     public ConfigProperty<String> noDefaultValue(String docOnDefaultValue) {
       ConfigProperty<String> configProperty = new ConfigProperty<>(key, null, docOnDefaultValue, "", Option.empty(),
-          Option.empty(), Option.empty(), Collections.emptySet());
+          Option.empty(), Option.empty(), Collections.emptySet(), false);
       return configProperty;
     }
   }

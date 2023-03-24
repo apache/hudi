@@ -226,7 +226,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   /**
    * Selects the older versions of files for cleaning, such that it bounds the number of versions of each file. This
    * policy is useful, if you are simply interested in querying the table, and you don't want too many versions for a
-   * single file (i.e run it with versionsRetained = 1)
+   * single file (i.e., run it with versionsRetained = 1)
    */
   private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestVersions(String partitionPath) {
     LOG.info("Cleaning " + partitionPath + ", retaining latest " + config.getCleanerFileVersionsRetained()
@@ -330,7 +330,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
             getLatestVersionBeforeCommit(fileSliceList, earliestCommitToRetain);
 
         // Ensure there are more than 1 version of the file (we only clean old files from updates)
-        // i.e always spare the last commit.
+        // i.e., always spare the last commit.
         for (FileSlice aSlice : fileSliceList) {
           Option<HoodieBaseFile> aFile = aSlice.getBaseFile();
           String fileCommitTime = aSlice.getBaseInstantTime();
@@ -340,7 +340,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           }
 
           if (policy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS) {
-            // Dont delete the latest commit and also the last commit before the earliest commit we
+            // Do not delete the latest commit and also the last commit before the earliest commit we
             // are retaining
             // The window of commit retain == max query run time. So a query could be running which
             // still

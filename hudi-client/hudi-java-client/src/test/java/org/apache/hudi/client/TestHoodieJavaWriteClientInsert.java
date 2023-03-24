@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
@@ -31,6 +32,8 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
@@ -44,8 +47,10 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,7 +58,9 @@ import java.util.List;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness {
@@ -94,6 +101,45 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     String maxCommitPulls =
         String.format(HoodieHiveUtils.HOODIE_MAX_COMMIT_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
     jobConf.setInt(maxCommitPulls, numberOfCommitsToPull);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,true", "true,false", "false,true", "false,false"})
+  public void testWriteClientAndTableServiceClientWithTimelineServer(
+      boolean enableEmbeddedTimelineServer, boolean passInTimelineServer) throws IOException {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
+        .withPath(metaClient.getBasePathV2().toString())
+        .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineServer)
+        .build();
+
+    HoodieJavaWriteClient writeClient;
+    if (passInTimelineServer) {
+      EmbeddedTimelineService timelineService =
+          new EmbeddedTimelineService(context, null, writeConfig);
+      timelineService.startServer();
+      writeConfig.setViewStorageConfig(timelineService.getRemoteFileSystemViewConfig());
+      writeClient = new HoodieJavaWriteClient(context, writeConfig, true, Option.of(timelineService));
+      // Both the write client and the table service client should use the same passed-in
+      // timeline server instance.
+      assertEquals(timelineService, writeClient.getTimelineServer().get());
+      assertEquals(timelineService, writeClient.getTableServiceClient().getTimelineServer().get());
+      // Write config should not be changed
+      assertEquals(writeConfig, writeClient.getConfig());
+      timelineService.stop();
+    } else {
+      writeClient = new HoodieJavaWriteClient(context, writeConfig);
+      // Only one timeline server should be instantiated, and the same timeline server
+      // should be used by both the write client and the table service client.
+      assertEquals(
+          writeClient.getTimelineServer(),
+          writeClient.getTableServiceClient().getTimelineServer());
+      if (!enableEmbeddedTimelineServer) {
+        assertFalse(writeClient.getTimelineServer().isPresent());
+      }
+    }
+    writeClient.close();
   }
 
   @Test

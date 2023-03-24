@@ -15,6 +15,9 @@ on:
       - '**.pdf'
       - '**.png'
       - '**.svg'
+      - '**.yaml'
+      - '**.yml'
+      - '.gitignore'
     branches:
       - master
       - 'release-*'

@@ -103,7 +103,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
     List<HoodieInstant> instantsToRollback = new ArrayList<>();
     HoodieRestorePlan restorePlan = RestoreUtils.getRestorePlan(table.getMetaClient(), restoreInstant);
     for (HoodieInstantInfo instantInfo : restorePlan.getInstantsToRollback()) {
-      // If restore crashed mid-way, there are chances that some commits are already rolled back,
+      // If restore crashed midway, there are chances that some commits are already rolled back,
       // but some are not. so, we can ignore those commits which are fully rolledback in previous attempt if any.
       Option<HoodieInstant> rollbackInstantOpt = table.getActiveTimeline().getWriteTimeline()
           .filter(instant -> instant.getTimestamp().equals(instantInfo.getCommitTime()) && instant.getAction().equals(instantInfo.getAction())).firstInstant();

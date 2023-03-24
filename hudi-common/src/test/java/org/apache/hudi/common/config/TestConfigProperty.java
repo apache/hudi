@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -160,5 +161,14 @@ public class TestConfigProperty extends HoodieConfig {
   public void testSetDefaults() {
     setDefaults(this.getClass().getName());
     assertEquals(4, getProps().size());
+  }
+
+  @Test
+  public void testAdvancedValue() {
+    assertFalse(FAKE_BOOLEAN_CONFIG.isAdvanced());
+    assertFalse(FAKE_BOOLEAN_CONFIG_NO_DEFAULT.isAdvanced());
+
+    assertTrue(FAKE_BOOLEAN_CONFIG.markAdvanced().isAdvanced());
+    assertTrue(FAKE_BOOLEAN_CONFIG_NO_DEFAULT.markAdvanced().isAdvanced());
   }
 }

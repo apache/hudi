@@ -59,6 +59,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -93,6 +94,7 @@ import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
@@ -249,8 +251,7 @@ public class DeltaSync implements Serializable, Closeable {
   private Option<BaseErrorTableWriter> errorTableWriter = Option.empty();
   private HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy;
 
-  private transient HoodieDeltaStreamerMetrics metrics;
-
+  private transient HoodieIngestionMetrics metrics;
   private transient HoodieMetrics hoodieMetrics;
 
 
@@ -284,7 +285,7 @@ public class DeltaSync implements Serializable, Closeable {
 
     this.transformer = UtilHelpers.createTransformer(cfg.transformerClassNames);
 
-    this.metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(this.schemaProvider));
+    this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, getHoodieClientConfig(this.schemaProvider));
     this.hoodieMetrics = new HoodieMetrics(getHoodieClientConfig(this.schemaProvider));
     this.conf = conf;
     String id = conf.get(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key());
@@ -739,7 +740,7 @@ public class DeltaSync implements Serializable, Closeable {
    * @return Option Compaction instant if one is scheduled
    */
   private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
-                                                                 HoodieDeltaStreamerMetrics metrics,
+                                                                 HoodieIngestionMetrics metrics,
                                                                  Timer.Context overallTimerContext) {
     Option<String> scheduledCompactionInstant = Option.empty();
     // filter dupes if needed
@@ -1142,7 +1143,7 @@ public class DeltaSync implements Serializable, Closeable {
     return commitTimelineOpt;
   }
 
-  public HoodieDeltaStreamerMetrics getMetrics() {
+  public HoodieIngestionMetrics getMetrics() {
     return metrics;
   }
 

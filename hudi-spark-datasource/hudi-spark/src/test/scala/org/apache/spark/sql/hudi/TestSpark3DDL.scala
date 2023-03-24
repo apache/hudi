@@ -23,10 +23,9 @@ import org.apache.hudi.QuickstartUtils.{DataGenerator, convertToStringList, getQ
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.RawTripTestPayload
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, HoodieSparkUtils}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
 import org.apache.spark.sql.types.StringType
@@ -245,7 +244,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           val meta = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
           assert(meta.comment.get.equals("it is a hudi table"))
           assert(Seq("key1", "key2").filter(meta.properties.contains(_)).size == 2)
-          // test unset propertes
+          // test unset properties
           spark.sql(s"alter table $tableName unset tblproperties(comment, 'key1', 'key2')")
           val unsetMeta = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
           assert(Seq("key1", "key2").filter(unsetMeta.properties.contains(_)).size == 0)
@@ -524,7 +523,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"alter table ${tableName} add columns(name string comment 'add name back' after userx," +
             s" userx.name string comment 'add userx.name back' first, userx.score int comment 'add userx.score back' after age)")
 
-          // query new columns: name, userx.name, userx.score, those field should not be readed.
+          // query new columns: name, userx.name, userx.score, those field should not be read.
           checkAnswer(spark.sql(s"select name, userx.name, userx.score from ${tableName}").collect())(Seq(null, null, null))
 
           // insert again

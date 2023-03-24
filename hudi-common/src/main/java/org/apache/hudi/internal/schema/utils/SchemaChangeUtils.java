@@ -38,9 +38,9 @@ public class SchemaChangeUtils {
   /**
    * Whether to allow the column type to be updated.
    * now only support:
-   * int => long/float/double/string
-   * long => float/double/string
-   * float => double/String
+   * int => long/float/double/String/Decimal
+   * long => float/double/String/Decimal
+   * float => double/String/Decimal
    * double => String/Decimal
    * Decimal => Decimal/String
    * String => date/decimal
