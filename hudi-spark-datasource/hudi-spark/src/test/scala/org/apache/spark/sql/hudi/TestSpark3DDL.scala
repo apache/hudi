@@ -734,43 +734,43 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         }
       }
     }
+  }
 
-    test("Test DATE to STRING conversions when vectorized reading is not enabled") {
-      val tableName = generateTableName
-      // adding a struct column to force reads to use non-vectorized readers
-      spark.sql(
-        s"""
-           | create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  struct_col struct<f0: int, f1: string>,
-           |  ts long
-           |) using hudi
-           | partitioned by (ts)
-           |tblproperties (
-           |  primaryKey = 'id'
-           )
-         """.stripMargin)
-      spark.sql(
-        s"""
-           | insert into $tableName
-           | values (1, 'a1', 10, struct(1, 'f_1'), 1000)
-          """.stripMargin)
-      spark.sql(s"select * from $tableName")
+  test("Test DATE to STRING conversions when vectorized reading is not enabled") {
+    val tableName = generateTableName
+    // adding a struct column to force reads to use non-vectorized readers
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  struct_col struct<f0: int, f1: string>,
+         |  ts long
+         |) using hudi
+         | partitioned by (ts)
+         |tblproperties (
+         |  primaryKey = 'id'
+         )
+       """.stripMargin)
+    spark.sql(
+      s"""
+         | insert into $tableName
+         | values (1, 'a1', 10, struct(1, 'f_1'), 1000)
+        """.stripMargin)
+    spark.sql(s"select * from $tableName")
 
-      spark.sql("set hoodie.schema.on.read.enable=true")
-      spark.sql(s"alter table $tableName add column (`date_to_string_col` date)")
-      spark.sql(
-        s"""
-           | insert into $tableName
-           | values (2, 'a2', 20, struct(2, 'f_2'), date '2023-03-22', 1001)
-          """.stripMargin)
-      spark.sql(s"alter table $tableName alter column `date_to_string_col` type string")
+    spark.sql("set hoodie.schema.on.read.enable=true")
+    spark.sql(s"alter table $tableName add column (`date_to_string_col` date)")
+    spark.sql(
+      s"""
+         | insert into $tableName
+         | values (2, 'a2', 20, struct(2, 'f_2'), date '2023-03-22', 1001)
+        """.stripMargin)
+    spark.sql(s"alter table $tableName alter column `date_to_string_col` type string")
 
-      // struct and string (converted from date) column must be read to ensure that non-vectorized reader is used
-      // not checking results as we just need to ensure that the table can be read without any errors thrown
-      spark.sql(s"select * from $tableName")
-    }
+    // struct and string (converted from date) column must be read to ensure that non-vectorized reader is used
+    // not checking results as we just need to ensure that the table can be read without any errors thrown
+    spark.sql(s"select * from $tableName")
   }
 }
