@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -101,7 +100,7 @@ public class TestBucketIndexConcurrentFileWritesConflictResolutionStrategy exten
         Collectors.toList());
     // writer 1 conflicts with writer 2
     Assertions.assertEquals(1, candidateInstants.size());
-    ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), TimelineUtils.getCommitMetadata(candidateInstants.get(0), metaClient.getActiveTimeline().reload()));
+    ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
     try {
@@ -134,7 +133,7 @@ public class TestBucketIndexConcurrentFileWritesConflictResolutionStrategy exten
 
     // there should be 1 candidate instant
     Assertions.assertEquals(1, candidateInstants.size());
-    ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), TimelineUtils.getCommitMetadata(candidateInstants.get(0), metaClient.getActiveTimeline().reload()));
+    ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     // there should be no conflict between writer 1 and writer 2
     Assertions.assertFalse(strategy.hasConflict(thisCommitOperation, thatCommitOperation));

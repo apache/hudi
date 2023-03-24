@@ -78,7 +78,7 @@ public class TransactionUtils {
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElse(new HoodieCommitMetadata()));
       instantStream.forEach(instant -> {
         try {
-          ConcurrentOperation otherOperation = new ConcurrentOperation(instant, TimelineUtils.getCommitMetadata(instant, table.getActiveTimeline()));
+          ConcurrentOperation otherOperation = new ConcurrentOperation(instant, table.getMetaClient());
           if (resolutionStrategy.hasConflict(thisOperation, otherOperation)) {
             LOG.info("Conflict encountered between current instant = " + thisOperation + " and instant = "
                 + otherOperation + ", attempting to resolve it...");

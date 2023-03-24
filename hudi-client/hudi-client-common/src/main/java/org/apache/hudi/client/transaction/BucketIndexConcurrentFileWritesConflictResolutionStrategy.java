@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 
 import org.slf4j.Logger;
@@ -26,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * This class is a basic implementation of a conflict resolution strategy for concurrent writes {@link ConflictResolutionStrategy} using bucket index.
@@ -37,8 +37,18 @@ public class BucketIndexConcurrentFileWritesConflictResolutionStrategy
   @Override
   public boolean hasConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
     // TODO : UUID's can clash even for insert/insert, handle that case.
-    Set<String> partitionBucketIdSetForFirstInstant = extractpartitionBucketIds(thisOperation.getCommitMetadataOption().get());
-    Set<String> partitionBucketIdSetForSecondInstant = extractpartitionBucketIds(otherOperation.getCommitMetadataOption().get());
+    Set<String> partitionBucketIdSetForFirstInstant = thisOperation
+        .getMutatedPartitionAndFileIds()
+        .stream()
+        .map(partitionAndFileId ->
+            BucketIdentifier.partitionBucketIdStr(partitionAndFileId.getLeft(), BucketIdentifier.bucketIdFromFileId(partitionAndFileId.getRight()))
+        ).collect(Collectors.toSet());
+    Set<String> partitionBucketIdSetForSecondInstant = otherOperation
+        .getMutatedPartitionAndFileIds()
+        .stream()
+        .map(partitionAndFileId ->
+            BucketIdentifier.partitionBucketIdStr(partitionAndFileId.getLeft(), BucketIdentifier.bucketIdFromFileId(partitionAndFileId.getRight()))
+        ).collect(Collectors.toSet());
     Set<String> intersection = new HashSet<>(partitionBucketIdSetForFirstInstant);
     intersection.retainAll(partitionBucketIdSetForSecondInstant);
     if (!intersection.isEmpty()) {
@@ -47,16 +57,5 @@ public class BucketIndexConcurrentFileWritesConflictResolutionStrategy
       return true;
     }
     return false;
-  }
-
-  private static Set<String> extractpartitionBucketIds(HoodieCommitMetadata commitMetadata) {
-    Set<String> partitionBucketIdSet = new HashSet<>();
-    commitMetadata.getPartitionToWriteStats().forEach((partition, status) -> {
-      status.forEach(stat -> {
-        int bucketId = BucketIdentifier.bucketIdFromFileId(stat.getFileId());
-        partitionBucketIdSet.add(BucketIdentifier.partitionBucketIdStr(partition, bucketId));
-      });
-    });
-    return partitionBucketIdSet;
   }
 }
