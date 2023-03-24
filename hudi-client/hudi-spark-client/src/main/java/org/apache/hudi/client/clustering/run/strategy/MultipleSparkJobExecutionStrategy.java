@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
@@ -52,10 +54,12 @@ import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.io.IOUtils;
-import org.apache.hudi.io.storage.HoodieBootstrapFileReader;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieSparkBootstrapFileReader;
+import org.apache.hudi.io.storage.HoodieSparkFileReader;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -72,6 +76,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil;
+import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.BaseRelation;
 
 import java.io.IOException;
@@ -89,6 +95,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
 import static org.apache.hudi.common.table.log.HoodieFileSliceReader.getFileSliceReader;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
+import static org.apache.spark.sql.catalyst.util.DateTimeUtils.TIMEZONE_OPTION;
 
 /**
  * Clustering strategy to submit multiple spark jobs and union the results.
@@ -325,6 +332,12 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                                    List<ClusteringOperation> clusteringOps) {
     SerializableConfiguration hadoopConf = new SerializableConfiguration(getHoodieTable().getHadoopConf());
     HoodieWriteConfig writeConfig = getWriteConfig();
+    Option<String[]> partitionFields = getHoodieTable().getMetaClient().getTableConfig().getPartitionFields();
+    String bootstrapBasePath = getHoodieTable().getMetaClient().getTableConfig().getBootstrapBasePath().get();
+    CachingPath bbp = new CachingPath(bootstrapBasePath);
+    String timeZoneId = jsc.getConf().get("timeZone", SQLConf.get().sessionLocalTimeZone());
+    SparkParsePartitionUtil sparkParsePartitionUtil = SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkParsePartitionUtil();
+    Boolean shouldValidateColumns = jsc.getConf().getBoolean("spark.sql.sources.validatePartitionColumns", true);
 
     // NOTE: It's crucial to make sure that we don't capture whole "this" object into the
     //       closure, as this might lead to issues attempting to serialize its nested fields
@@ -333,12 +346,16 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           List<Iterator<HoodieRecord<T>>> iteratorsForPartition = new ArrayList<>();
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {
             try {
-              boolean isBootstrapSkeleton = !clusteringOp.getBootstrapFilePath().isEmpty();
               Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
               HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
-              if (isBootstrapSkeleton) {
+              if (!clusteringOp.getBootstrapFilePath().isEmpty()) {
+                String bootstrapFilePath = clusteringOp.getBootstrapFilePath();
+                int startOfPartitionPath = bootstrapFilePath.indexOf(bootstrapBasePath) + bootstrapBasePath.length() + 1;
+                String partitionFilePath = bootstrapFilePath.substring(startOfPartitionPath, clusteringOp.getBootstrapFilePath().lastIndexOf("/"));
                 HoodieFileReader dataFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(clusteringOp.getBootstrapFilePath()));
-                baseFileReader = new HoodieBootstrapFileReader(baseFileReader, dataFileReader, writeConfig.isConsistentLogicalTimestampEnabled());
+                Object[] partitionValues = HoodieSparkUtils.ParsePartitionColumnValues(partitionFields.get(), partitionFilePath, bbp,
+                    AvroConversionUtils.convertAvroSchemaToStructType(baseFileReader.getSchema()), timeZoneId, sparkParsePartitionUtil, shouldValidateColumns);
+                baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(baseFileReader, dataFileReader, partitionFields, partitionValues);
               }
               Option<BaseKeyGenerator> keyGeneratorOp =
                   writeConfig.populateMetaFields() ? Option.empty() : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));

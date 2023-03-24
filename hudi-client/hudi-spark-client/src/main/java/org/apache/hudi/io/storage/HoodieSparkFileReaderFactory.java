@@ -18,8 +18,11 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
@@ -43,4 +46,11 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory  {
   protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
     throw new HoodieIOException("Not support read orc file");
   }
+
+  @Override
+  public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader, HoodieFileReader dataFileReader,
+                                                                Option<String[]> partitionFields, Object[] partitionValues) {
+    return new HoodieSparkBootstrapFileReader(skeletonFileReader, dataFileReader, partitionFields, partitionValues);
+  }
+
 }
