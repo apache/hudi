@@ -160,11 +160,11 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   private static TypedProperties getProps(
       String basePath, String dateFormat, int datePartitionDepth, int numDaysToList, String currentDate) {
     TypedProperties properties = new TypedProperties();
-    properties.put(ROOT_INPUT_PATH, basePath);
-    properties.put(DATE_FORMAT, dateFormat);
-    properties.put(DATE_PARTITION_DEPTH, "" + datePartitionDepth);
-    properties.put(LOOKBACK_DAYS, "" + numDaysToList);
-    properties.put(CURRENT_DATE, currentDate);
+    properties.put(ROOT_INPUT_PATH.key(), basePath);
+    properties.put(DATE_FORMAT.key(), dateFormat);
+    properties.put(DATE_PARTITION_DEPTH.key(), "" + datePartitionDepth);
+    properties.put(LOOKBACK_DAYS.key(), "" + numDaysToList);
+    properties.put(CURRENT_DATE.key(), currentDate);
     return properties;
   }
 

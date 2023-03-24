@@ -67,8 +67,8 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
     MockitoAnnotations.initMocks(this);
 
     props = new TypedProperties();
-    props.put(GOOGLE_PROJECT_ID, "dummy-project");
-    props.put(PUBSUB_SUBSCRIPTION_ID, "dummy-subscription");
+    props.put(GOOGLE_PROJECT_ID.key(), "dummy-project");
+    props.put(PUBSUB_SUBSCRIPTION_ID.key(), "dummy-subscription");
   }
 
   @Test

@@ -145,7 +145,7 @@ public class IncrSourceHelper {
       return MissingCheckpointStrategy.READ_LATEST;
     }
 
-    if (props.containsKey(MISSING_CHECKPOINT_STRATEGY)) {
+    if (props.containsKey(MISSING_CHECKPOINT_STRATEGY.key())) {
       return MissingCheckpointStrategy.valueOf(props.getString(MISSING_CHECKPOINT_STRATEGY.key()));
     }
 
