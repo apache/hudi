@@ -239,8 +239,8 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
           }).toAttributes ++ partitionSchema.toAttributes
           val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
             if (implicitTypeChangeInfos.containsKey(i)) {
-              val srcType = typeChangeInfos.get(i).getRight
-              val dstType = typeChangeInfos.get(i).getLeft
+              val srcType = implicitTypeChangeInfos.get(i).getRight
+              val dstType = implicitTypeChangeInfos.get(i).getLeft
               val needTimeZone = Cast.needsTimeZone(srcType, dstType)
               Cast(attr, dstType, if (needTimeZone) timeZoneId else None)
             } else attr
