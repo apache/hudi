@@ -575,7 +575,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "It's useful in cases where extra metadata needs to be published regardless e.g tracking source offsets when ingesting data");
 
   public static final ConfigProperty<Boolean> ALLOW_OPERATION_METADATA_FIELD = ConfigProperty
-      .key("hoodie.allow.operation.metadata.field")
+      .key(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD.key())
       .defaultValue(false)
       .sinceVersion("0.9.0")
       .withDocumentation("Whether to include '_hoodie_operation' in the metadata fields. "

@@ -518,6 +518,22 @@ public class HoodieTableMetaClient implements Serializable {
     return metaClient;
   }
 
+  /**
+   * Helper method to initialize a given path as a hoodie table with configs passed in as Properties.
+   *
+   * @return Instance of HoodieTableMetaClient
+   */
+  public static HoodieTableMetaClient updateTableAndGetMetaClient(Configuration hadoopConf, String basePath,
+                                                                Properties props) {
+    LOG.info("Update hoodie table with basePath " + basePath);
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
+        .setConf(hadoopConf).build();
+    HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), props);
+    LOG.info("Finished update Table of type " + metaClient.getTableConfig().getTableType() + " from " + basePath);
+    return metaClient;
+  }
+
   public static void initializeBootstrapDirsIfNotExists(Configuration hadoopConf, String basePath, FileSystem fs) throws IOException {
 
     // Create bootstrap index by partition folder if it does not exist
@@ -810,6 +826,16 @@ public class HoodieTableMetaClient implements Serializable {
     private String inflightMetadataPartitions;
     private String secondaryIndexesMetadata;
 
+    private Boolean allowOperationMetadataField;
+
+    private String indexType;
+
+    private String indexBucketEngine;
+
+    private String indexHashField;
+
+    private Integer bucketIndexNumBuckets;
+
     /**
      * Persist the configs that is written at the first time, and should not be changed.
      * Like KeyGenerator's configs.
@@ -963,6 +989,31 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setAllowOperationMetadataField(boolean allowOperationMetadataField) {
+      this.allowOperationMetadataField = allowOperationMetadataField;
+      return this;
+    }
+
+    public PropertyBuilder setIndexType(String indexType) {
+      this.indexType = indexType;
+      return this;
+    }
+
+    public PropertyBuilder setIndexBucketEngine(String indexBucketEngine) {
+      this.indexBucketEngine = indexBucketEngine;
+      return this;
+    }
+
+    public PropertyBuilder setIndexHashField(String indexHashField) {
+      this.indexHashField = indexHashField;
+      return this;
+    }
+
+    public PropertyBuilder setIndexNumBuckets(Integer bucketIndexNumBuckets) {
+      this.bucketIndexNumBuckets = bucketIndexNumBuckets;
+      return this;
+    }
+
     private void set(String key, Object value) {
       if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
         this.others.put(key, value);
@@ -1083,6 +1134,23 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.SECONDARY_INDEXES_METADATA)) {
         setSecondaryIndexesMetadata(hoodieConfig.getString(HoodieTableConfig.SECONDARY_INDEXES_METADATA));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD)) {
+        setAllowOperationMetadataField(
+            hoodieConfig.getBoolean(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD));
+      }
+      // At present, the main consideration is bucket index
+      if (hoodieConfig.contains(HoodieTableConfig.INDEX_TYPE)) {
+        setIndexType(hoodieConfig.getString(HoodieTableConfig.INDEX_TYPE));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.BUCKET_INDEX_ENGINE_TYPE)) {
+        setIndexBucketEngine(hoodieConfig.getString(HoodieTableConfig.BUCKET_INDEX_ENGINE_TYPE));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.BUCKET_INDEX_HASH_FIELD)) {
+        setIndexHashField(hoodieConfig.getString(HoodieTableConfig.BUCKET_INDEX_HASH_FIELD));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.BUCKET_INDEX_NUM_BUCKETS)) {
+        setIndexNumBuckets(hoodieConfig.getInt(HoodieTableConfig.BUCKET_INDEX_NUM_BUCKETS));
+      }
       return this;
     }
 
@@ -1185,6 +1253,22 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != secondaryIndexesMetadata) {
         tableConfig.setValue(HoodieTableConfig.SECONDARY_INDEXES_METADATA, secondaryIndexesMetadata);
       }
+      if (null != allowOperationMetadataField) {
+        tableConfig.setValue(
+            HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD, Boolean.toString(allowOperationMetadataField));
+      }
+      if (null != indexType) {
+        tableConfig.setValue(HoodieTableConfig.INDEX_TYPE, indexType);
+      }
+      if (null != indexBucketEngine) {
+        tableConfig.setValue(HoodieTableConfig.BUCKET_INDEX_ENGINE_TYPE, indexBucketEngine);
+      }
+      if (null != indexHashField) {
+        tableConfig.setValue(HoodieTableConfig.BUCKET_INDEX_HASH_FIELD, indexHashField);
+      }
+      if (null != bucketIndexNumBuckets) {
+        tableConfig.setValue(HoodieTableConfig.BUCKET_INDEX_NUM_BUCKETS, Integer.toString(bucketIndexNumBuckets));
+      }
       return tableConfig.getProps();
     }
 
@@ -1199,5 +1283,8 @@ public class HoodieTableMetaClient implements Serializable {
       return HoodieTableMetaClient.initTableAndGetMetaClient(configuration, basePath, build());
     }
 
+    public HoodieTableMetaClient updateTable(Configuration configuration, String basePath) {
+      return HoodieTableMetaClient.updateTableAndGetMetaClient(configuration, basePath, build());
+    }
   }
 }

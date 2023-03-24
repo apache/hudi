@@ -221,6 +221,56 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(false)
       .withDocumentation("When set to true, will not write the partition columns into hudi. By default, false.");
 
+
+  public static final ConfigProperty<Boolean> ALLOW_OPERATION_METADATA_FIELD = ConfigProperty
+      .key("hoodie.allow.operation.metadata.field")
+      .defaultValue(false)
+      .sinceVersion("0.9.0")
+      .withDocumentation("Whether to include '_hoodie_operation' in the metadata fields. "
+          + "Once enabled, all the changes of a record are persisted to the delta log directly without merge");
+
+  public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
+      .key("hoodie.index.type")
+      // Builder#getDefaultIndexType has already set it according to engine type
+      .noDefaultValue()
+      .withDocumentation("Type of index to use. Default is SIMPLE on Spark engine, "
+          + "and INMEMORY on Flink and Java engines. "
+          + "Possible options are [BLOOM | GLOBAL_BLOOM | SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. "
+          + "Bloom filters removes the dependency on a external system "
+          + "and is stored in the footer of the Parquet Data Files");
+
+  /**
+   * Bucket Index Engine Type: implementation of bucket index
+   *
+   * SIMPLE:
+   *  0. Check `HoodieSimpleBucketLayout` for its supported operations.
+   *  1. Bucket num is fixed and requires rewriting the partition if we want to change it.
+   *
+   * CONSISTENT_HASHING:
+   *  0. Check `HoodieConsistentBucketLayout` for its supported operations.
+   *  1. Bucket num will auto-adjust by running clustering (still in progress)
+   */
+  public static final ConfigProperty<String> BUCKET_INDEX_ENGINE_TYPE = ConfigProperty
+      .key("hoodie.index.bucket.engine")
+      .defaultValue("SIMPLE")
+      .sinceVersion("0.11.0")
+      .withDocumentation("Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket."
+          + "Possible options are [SIMPLE | CONSISTENT_HASHING]."
+          + "Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size "
+          + "issues of the SIMPLE hashing engine. Consistent hashing only works with MOR tables, only use simple hashing on COW tables.");
+
+  public static final ConfigProperty<Integer> BUCKET_INDEX_NUM_BUCKETS = ConfigProperty
+      .key("hoodie.bucket.index.num.buckets")
+      .defaultValue(4)
+      .withDocumentation("Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, "
+          + "and each partition is divided to N buckets.");
+
+  public static final ConfigProperty<String> BUCKET_INDEX_HASH_FIELD = ConfigProperty
+      .key("hoodie.bucket.index.hash.field")
+      .noDefaultValue()
+      .withDocumentation("Index key. It is used to index the record and find its file group. "
+          + "If not set, use record key field as default");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
@@ -699,6 +749,26 @@ public class HoodieTableConfig extends HoodieConfig {
       return Option.of(getBaseFileFormat());
     }
     return Option.empty();
+  }
+
+  public Boolean getAllowOperationMetadataField() {
+    return getBoolean(ALLOW_OPERATION_METADATA_FIELD);
+  }
+
+  public String getIndexType() {
+    return getString(INDEX_TYPE);
+  }
+
+  public String getIndexEngineType() {
+    return getString(BUCKET_INDEX_ENGINE_TYPE);
+  }
+
+  public String getIndexHashField() {
+    return getString(BUCKET_INDEX_HASH_FIELD);
+  }
+
+  public Integer getIndexNumBuckets() {
+    return getInt(BUCKET_INDEX_NUM_BUCKETS);
   }
 
   public Map<String, String> propsMap() {
