@@ -171,7 +171,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
-    FileSystem fs = FSUtils.getFs(pathForReader.toString(), new Configuration(blockContentLoc.getHadoopConf()));
+    FileSystem fs = FSUtils.getFs(pathForReader.toString(), FSUtils.buildInlineConf(blockContentLoc.getHadoopConf()));
     // Read the content
     HoodieAvroHFileReader reader = new HoodieAvroHFileReader(fs, pathForReader, content, Option.of(writerSchema));
     return unsafeCast(reader.getRecordIterator(readerSchema));
@@ -184,9 +184,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
-    Configuration inlineConf = new Configuration(blockContentLoc.getHadoopConf());
-    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
-    inlineConf.setClassLoader(InLineFileSystem.class.getClassLoader());
+    Configuration inlineConf = FSUtils.buildInlineConf(blockContentLoc.getHadoopConf());
 
     Path inlinePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),
