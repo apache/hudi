@@ -68,6 +68,8 @@
               <artifactSet>
                 <includes combine.children="append">
                   <include>org.apache.hudi:hudi-common</include>
+                  <include>org.apache.hudi:hudi-client-common</include>
+                  <include>org.apache.hudi:hudi-java-client</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
 
                   <!-- Kryo -->
@@ -173,6 +175,22 @@
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hadoop-mr-bundle</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-client-common</artifactId>
+      <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-java-client</artifactId>
       <version>${project.version}</version>
     </dependency>
 
