@@ -761,7 +761,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     spark.sql(s"select * from $tableName")
 
     spark.sql("set hoodie.schema.on.read.enable=true")
-    spark.sql(s"alter table $tableName add column (`date_to_string_col` date)")
+    spark.sql(s"alter table $tableName add columns(`date_to_string_col` date)")
     spark.sql(
       s"""
          | insert into $tableName
