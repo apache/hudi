@@ -114,8 +114,51 @@ last_modified_at: 2022-12-21T15:59:57-04:00
 
 37. [How do I identify Schema Changes in Hudi Tables and Send Email Alert when New Column added/removed](https://www.youtube.com/watch?v=_i5G4ojpwlk) - By Soumil Shah, Jan 20th 2023
 
-38. [How to detect and Mask PII data in Apache Hudi Data Lake | Hands on Lab](https://www.youtube.com/watch?v=l4RG9CP5LTM) - By Soumil Shah, Jan 21st 2023
+38. [How to detect and Mask PII data in Apache Hudi Data Lake | Hands on Lab](https://www.youtube.com/watch?v=l4RG9CP5LTM)- By Soumil Shah, Jan 21st 2023
 
-39. [Learn How to restrict Intern from accessing Certain Column in Hudi Datalake with lake Formation](https://www.youtube.com/watch?v=yPmdCdPT8jo) - By Soumil Shah, Jan 28th 2023
+39. [Writing data quality and validation scripts for a Hudi data lake with AWS Glue and pydeequ| Hands on Lab](https://www.youtube.com/watch?v=1us5YD2lDZw)- By Soumil Shah, Jan 23, 2023 
 
-40. [How do I Ingest Extremely Small Files into Hudi Data lake with Glue Incremental data processing](https://www.youtube.com/watch?v=BvoLVeidd-0) - By Soumil Shah, Feb 7th 2023
+40. [Learn How to restrict Intern from accessing Certain Column in Hudi Datalake with lake Formation](https://www.youtube.com/watch?v=yPmdCdPT8jo)- By Soumil Shah, Jan 28th 2023
+
+41. [How do I Ingest Extremely Small Files into Hudi Data lake with Glue Incremental data processing](https://www.youtube.com/watch?v=BvoLVeidd-0)- By Soumil Shah, Feb 7th 2023
+
+42. [Create Your Hudi Transaction Datalake on S3 with EMR Serverless for Beginners in fun and easy way](https://www.youtube.com/watch?v=oBoCPaw_kjE)- By Soumil Shah, Feb 11th 2023
+
+43. [Streaming Ingestion from MongoDB into Hudi with Glue, kinesis&Event bridge&MongoStream Hands on labs](https://www.youtube.com/watch?v=yfZx1P9ovxA)- By Soumil Shah, Feb 18th 2023
+
+44. [Apache Hudi Bulk Insert Sort Modes a summary of two incredible blogs](https://www.youtube.com/watch?v=AuZoREO8_zs)- By Soumil Shah, Feb 21st 2023
+
+45. [Apache Hudi Bulk Insert Sort Modes a summary of two incredible blogs](https://www.youtube.com/watch?v=AuZoREO8_zs)- By Soumil Shah, Feb 21st 2023
+
+46. [Use Glue 4.0 to take regular save points for your Hudi tables for backup or disaster Recovery](https://www.youtube.com/watch?v=VgIMPSK7rFA)- By Soumil Shah, Feb 22nd 2023
+
+47. [RFC-51 Change Data Capture in Apache Hudi like Debezium and AWS DMS Hands on Labs](https://www.youtube.com/watch?v=n6D_es6RmHM)- By Soumil Shah, Feb 25th 2023
+
+48. [Python helper class which makes querying incremental data from Hudi Data lakes easy](https://www.youtube.com/watch?v=Ls--9CnweoY)- By Soumil Shah, Feb 26th 2023
+
+49. [Develop Incremental Pipeline with CDC from Hudi to Aurora Postgres | Demo Video](https://www.youtube.com/watch?v=Wy2I1PwIj2A)- By Soumil Shah, Mar 4th 2023
+
+50. [Power your Down Stream ElasticSearch Stack From Apache Hudi Transaction Datalake with CDC|Demo Video](https://www.youtube.com/watch?v=JQmPbHP8cMQ)- By Soumil Shah, Mar 6th 2023
+
+51. [Power your Down Stream Elastic Search Stack From Apache Hudi Transaction Datalake with CDC|DeepDive](https://www.youtube.com/watch?v=rr2V5xhgPeM)- By Soumil Shah, Mar 6th 2023
+
+52. [How to Rollback to Previous Checkpoint during Disaster in Apache Hudi using Glue 4.0 Demo](https://www.youtube.com/watch?v=Vi25q4vzogs)- By Soumil Shah, Mar 7th 2023
+
+53. [How do I read data from Cross Account S3 Buckets and Build Hudi Datalake in Datateam Account](https://www.youtube.com/watch?v=q5Q5MUkXnSE)- By Soumil Shah, Mar 11th 2023
+
+54. [Query cross-account Hudi Glue Data Catalogs using Amazon Athena](https://www.youtube.com/watch?v=6ubAw9RpNZ8)- By Soumil Shah, Mar 11th 2023
+
+54. [Learn About Bucket Index (SIMPLE) In Apache Hudi with lab](https://www.youtube.com/watch?v=lOQFUrfJFP4)- By Soumil Shah, Mar 15th 2023
+
+55. [Setting Uber’s Transactional Data Lake in Motion with Incremental ETL Using Apache Hudi](https://www.youtube.com/watch?v=PvlO_s1pOLQ)- By Soumil Shah, Mar 17th 2023
+
+56. [Push Hudi Commit Notification TO HTTP URI with Callback](https://www.youtube.com/watch?v=dX5ENGnL4cA)- By Soumil Shah, Mar 18th 2023
+
+56. [RFC - 18: Insert Overwrite in Apache Hudi with Example](https://www.youtube.com/watch?v=BKfKfn0h92M)- By Soumil Shah, Mar 19th 2023
+
+57. [RFC 42: Consistent Hashing in APache Hudi MOR Tables](https://www.youtube.com/watch?v=zN8JOBKXxP0)- By Soumil Shah, Mar 21st 2023
+
+58. [Data Analysis for Apache Hudi Blogs on Medium with Pandas](https://www.youtube.com/watch?v=a7FD4zIOwVg)- By Soumil Shah, Mar 24th 2023
+
+58. [How to scrape all Blogs about a topic from medium like pro with Python](https://www.youtube.com/watch?v=-KUSaC_1X6M)- By Soumil Shah, Mar 24th 2023
+
