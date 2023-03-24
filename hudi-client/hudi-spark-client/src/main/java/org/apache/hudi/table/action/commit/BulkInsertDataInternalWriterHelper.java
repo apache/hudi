@@ -54,30 +54,30 @@ public class BulkInsertDataInternalWriterHelper {
 
   private static final Logger LOG = LoggerFactory.getLogger(BulkInsertDataInternalWriterHelper.class);
 
-  private final String instantTime;
-  private final int taskPartitionId;
-  private final long taskId;
-  private final long taskEpochId;
-  private final HoodieTable hoodieTable;
-  private final HoodieWriteConfig writeConfig;
-  private final StructType structType;
-  private final Boolean arePartitionRecordsSorted;
-  private final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
-  private final String fileIdPrefix;
-  private final Map<String, HoodieRowCreateHandle> handles = new HashMap<>();
-  private final boolean populateMetaFields;
-  private final boolean shouldPreserveHoodieMetadata;
-  private final Option<BuiltinKeyGenerator> keyGeneratorOpt;
-  private final boolean simpleKeyGen;
-  private final int simplePartitionFieldIndex;
-  private final DataType simplePartitionFieldDataType;
+  protected final String instantTime;
+  protected final int taskPartitionId;
+  protected final long taskId;
+  protected final long taskEpochId;
+  protected final HoodieTable hoodieTable;
+  protected final HoodieWriteConfig writeConfig;
+  protected final StructType structType;
+  protected final Boolean arePartitionRecordsSorted;
+  protected final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
+  protected final String fileIdPrefix;
+  protected final Map<String, HoodieRowCreateHandle> handles = new HashMap<>();
+  protected final boolean populateMetaFields;
+  protected final boolean shouldPreserveHoodieMetadata;
+  protected final Option<BuiltinKeyGenerator> keyGeneratorOpt;
+  protected final boolean simpleKeyGen;
+  protected final int simplePartitionFieldIndex;
+  protected final DataType simplePartitionFieldDataType;
   /**
    * NOTE: This is stored as Catalyst's internal {@link UTF8String} to avoid
    *       conversion (deserialization) b/w {@link UTF8String} and {@link String}
    */
-  private UTF8String lastKnownPartitionPath = null;
-  private HoodieRowCreateHandle handle;
-  private int numFilesWritten = 0;
+  protected UTF8String lastKnownPartitionPath = null;
+  protected HoodieRowCreateHandle handle;
+  protected int numFilesWritten = 0;
 
   public BulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                             String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
@@ -144,17 +144,22 @@ public class BulkInsertDataInternalWriterHelper {
   public void write(InternalRow row) throws IOException {
     try {
       UTF8String partitionPath = extractPartitionPath(row);
-      if (lastKnownPartitionPath == null || !Objects.equals(lastKnownPartitionPath, partitionPath) || !handle.canWrite()) {
-        handle = getRowCreateHandle(partitionPath.toString());
-        // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
-        //       a mutable underlying buffer
-        lastKnownPartitionPath = partitionPath.clone();
-      }
+      UTF8String recordKey = extractRecordKey(row);
+      tryCreateNewHandle(partitionPath, recordKey);
 
       handle.write(row);
     } catch (Throwable t) {
       LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", t);
       throw t;
+    }
+  }
+
+  protected void tryCreateNewHandle(UTF8String partitionPath, UTF8String recordKey) throws IOException {
+    if (lastKnownPartitionPath == null || !Objects.equals(lastKnownPartitionPath, partitionPath) || !handle.canWrite()) {
+      handle = getRowCreateHandle(partitionPath.toString());
+      // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
+      //       a mutable underlying buffer
+      lastKnownPartitionPath = partitionPath.clone();
     }
   }
 
@@ -189,6 +194,21 @@ public class BulkInsertDataInternalWriterHelper {
     }
   }
 
+  private UTF8String extractRecordKey(InternalRow row) {
+    if (populateMetaFields) {
+      // In case meta-fields are materialized w/in the table itself, we can just simply extract
+      // partition path from there
+      //
+      // NOTE: Helper keeps track of [[lastKnownPartitionPath]] as [[UTF8String]] to avoid
+      //       conversion from Catalyst internal representation into a [[String]]
+      return row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
+    } else if (keyGeneratorOpt.isPresent()) {
+      return keyGeneratorOpt.get().getRecordKey(row, structType);
+    } else {
+      return UTF8String.EMPTY_UTF8;
+    }
+  }
+
   private HoodieRowCreateHandle getRowCreateHandle(String partitionPath) throws IOException {
     if (!handles.containsKey(partitionPath)) { // if there is no handle corresponding to the partition path
       // if records are sorted, we can close all existing handles
@@ -215,7 +235,7 @@ public class BulkInsertDataInternalWriterHelper {
         instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
   }
 
-  private String getNextFileId() {
+  protected String getNextFileId() {
     return String.format("%s-%d", fileIdPrefix, numFilesWritten++);
   }
 }
