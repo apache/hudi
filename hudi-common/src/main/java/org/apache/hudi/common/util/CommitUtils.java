@@ -119,7 +119,7 @@ public class CommitUtils {
     return commitMetadata;
   }
 
-  public static Set<Pair<String, String>> getPartitionAndFileIdWithoutSuffix(Map<String, List<org.apache.hudi.avro.model.HoodieWriteStat>>
+  public static Set<Pair<String, String>> getPartitionAndFileIdWithoutSuffixFromSpecificRecord(Map<String, List<org.apache.hudi.avro.model.HoodieWriteStat>>
                                                                                                      partitionToWriteStats) {
     Set<Pair<String, String>> partitionToFileId = new HashSet<>();
     // list all partitions paths
@@ -131,7 +131,7 @@ public class CommitUtils {
     return partitionToFileId;
   }
 
-  public static Set<Pair<String, String>> getPartitionAndFileIdWithoutSuffixAndRelativePaths(Map<String, List<HoodieWriteStat>> partitionToWriteStats) {
+  public static Set<Pair<String, String>> getPartitionAndFileIdWithoutSuffix(Map<String, List<HoodieWriteStat>> partitionToWriteStats) {
     Set<Pair<String, String>> partitionTofileId = new HashSet<>();
     // list all partitions paths
     for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {

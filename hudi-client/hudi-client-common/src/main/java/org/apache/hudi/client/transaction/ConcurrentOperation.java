@@ -39,7 +39,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_AC
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LOG_COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
-import static org.apache.hudi.common.util.CommitUtils.getPartitionAndFileIdWithoutSuffix;
+import static org.apache.hudi.common.util.CommitUtils.getPartitionAndFileIdWithoutSuffixFromSpecificRecord;
 
 /**
  * This class is used to hold all information used to identify how to resolve conflicts between instants.
@@ -110,13 +110,13 @@ public class ConcurrentOperation {
           break;
         case COMMIT_ACTION:
         case DELTA_COMMIT_ACTION:
-          this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffix(this.metadataWrapper.getMetadataFromTimeline().getHoodieCommitMetadata()
+          this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffixFromSpecificRecord(this.metadataWrapper.getMetadataFromTimeline().getHoodieCommitMetadata()
               .getPartitionToWriteStats());
           this.operationType = WriteOperationType.fromValue(this.metadataWrapper.getMetadataFromTimeline().getHoodieCommitMetadata().getOperationType());
           break;
         case REPLACE_COMMIT_ACTION:
           if (instant.isCompleted()) {
-            this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffix(
+            this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffixFromSpecificRecord(
                 this.metadataWrapper.getMetadataFromTimeline().getHoodieReplaceCommitMetadata().getPartitionToWriteStats());
             this.operationType = WriteOperationType.fromValue(this.metadataWrapper.getMetadataFromTimeline().getHoodieReplaceCommitMetadata().getOperationType());
           } else {
@@ -133,7 +133,7 @@ public class ConcurrentOperation {
               }
             } else {
               if (inflightCommitMetadata != null) {
-                this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffix(inflightCommitMetadata.getPartitionToWriteStats());
+                this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffixFromSpecificRecord(inflightCommitMetadata.getPartitionToWriteStats());
                 this.operationType = WriteOperationType.fromValue(this.metadataWrapper.getMetadataFromTimeline().getHoodieInflightReplaceMetadata().getOperationType());
               } else if (requestedReplaceMetadata != null) {
                 // inflight replacecommit metadata is empty due to clustering, read fileIds from requested replacecommit
@@ -156,7 +156,7 @@ public class ConcurrentOperation {
         case DELTA_COMMIT_ACTION:
         case REPLACE_COMMIT_ACTION:
         case LOG_COMPACTION_ACTION:
-          this.mutatedPartitionAndFileIds = CommitUtils.getPartitionAndFileIdWithoutSuffixAndRelativePaths(this.metadataWrapper.getCommitMetadata().getPartitionToWriteStats());
+          this.mutatedPartitionAndFileIds = CommitUtils.getPartitionAndFileIdWithoutSuffix(this.metadataWrapper.getCommitMetadata().getPartitionToWriteStats());
           this.operationType = this.metadataWrapper.getCommitMetadata().getOperationType();
           break;
         default:
