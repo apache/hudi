@@ -141,7 +141,8 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
-    val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
+   val dropColList = HoodieRecord.HOODIE_META_COLUMNS.asScala.:+ (HoodieRecord.HASH_PARTITION_FIELD)
+   val dfWithoutMetaCols = df.drop(dropColList:_*)
 
     if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
       HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, dfWithoutMetaCols)

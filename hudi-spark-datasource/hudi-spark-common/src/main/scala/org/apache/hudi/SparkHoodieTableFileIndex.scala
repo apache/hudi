@@ -25,7 +25,7 @@ import org.apache.hudi.SparkHoodieTableFileIndex._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.hadoop.CachingPath
@@ -39,6 +39,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundRefer
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
+import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
@@ -172,6 +173,37 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     getInputFileSlices(prunedPartitions: _*).asScala.map {
       case (partition, fileSlices) => (partition.path, fileSlices.asScala)
     }.toMap
+  }
+
+ private def getHashPartitionColVals(predicates: Seq[Expression]) : Option[Seq[Any]] = {
+    val hashPartitionCols = getHashPartitionColumns
+    if(hashPartitionCols.size == 0) {
+      Option.empty
+    }else{
+      val columnValuesMap = extractEqualityPredicatesLiteralValues(predicates)
+      val nonEmptyHashPartitionCol = hashPartitionCols.filter(colName => columnValuesMap.contains(colName))
+      if(nonEmptyHashPartitionCol.size != hashPartitionCols.size)  {
+        logInfo(s"Not enough hash partition predicates provided. Hash partition fields are (${hashPartitionCols.mkString(",")}) ")
+        Option.empty
+      }else{
+        Some(nonEmptyHashPartitionCol.map(colName => (columnValuesMap(colName).get)))
+      }
+    }
+  }
+
+  protected def createHashPartionFilter(predicates: Seq[Expression]) : Option[Expression] = {
+        val hashPartitionColValsOption = getHashPartitionColVals(predicates)
+        if(hashPartitionColValsOption.isEmpty){
+          Option.empty
+        }else{
+          val hashPartitionColVals = hashPartitionColValsOption.get
+          val getHashPartitionValue = (cols: Seq[Any], num : Int) => ((cols.filter(_ != null).mkString.trim.hashCode & Integer.MAX_VALUE) % num).toString
+          val hashPartitionNum = getHashPartitionNum
+          val hashPartitionValue = getHashPartitionValue(hashPartitionColVals, hashPartitionNum)
+          val attr = AttributeReference(HoodieRecord.HASH_PARTITION_FIELD, StringType, nullable = true)()
+          val dataFilter = EqualTo(attr, lit(hashPartitionValue).expr)
+          Some(dataFilter)
+        }
   }
 
   /**
