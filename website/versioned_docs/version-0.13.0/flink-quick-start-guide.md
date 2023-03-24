@@ -97,7 +97,7 @@ dependency to your project:
 <dependency>
     <groupId>org.apache.hudi</groupId>
     <artifactId>hudi-flink1.13-bundle</artifactId>
-    <version>0.13.0/version>
+    <version>0.13.0</version>
 </dependency>
 ```
 
