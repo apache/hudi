@@ -190,6 +190,10 @@ public class ExpressionUtils {
         .collect(Collectors.toList());
   }
 
+  /**
+   * Extracts partition predicate from filter condition.
+   * Returns partition predicates and non-partition predicates.
+   */
   public static Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> extractPartitionPredicateList(
       List<ResolvedExpression> exprs,
       List<String> partitionKeys,
