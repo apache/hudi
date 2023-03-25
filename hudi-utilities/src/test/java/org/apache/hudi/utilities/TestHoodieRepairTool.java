@@ -80,6 +80,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
   // instant time -> partitionPathToFileIdAndNameMap
   private final Map<String, Map<String, List<Pair<String, String>>>> instantInfoMap = new HashMap<>();
   private final List<String> allFileAbsolutePathList = new ArrayList<>();
+  private String tableBasePath;
   private java.nio.file.Path backupTempDir;
 
   @BeforeAll
@@ -101,18 +102,20 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
       context = new HoodieSparkEngineContext(jsc);
     }
     initPath();
-    metaClient = HoodieTestUtils.init(basePath, getTableType());
+    java.nio.file.Path basePath = tempDir.resolve("dataset");
+    this.tableBasePath = basePath.toUri().toString();
+    metaClient = HoodieTestUtils.init(tableBasePath, getTableType());
     backupTempDir = tempDir.resolve("backup");
     cleanUpDanglingDataFilesInFS();
     cleanUpBackupTempDir();
     HoodieTestCommitGenerator.setupTimelineInFS(
-        basePath, BASE_FILE_INFO, LOG_FILE_INFO, instantInfoMap);
+        tableBasePath, BASE_FILE_INFO, LOG_FILE_INFO, instantInfoMap);
     allFileAbsolutePathList.clear();
     allFileAbsolutePathList.addAll(instantInfoMap.entrySet().stream()
         .flatMap(e -> e.getValue().entrySet().stream()
             .flatMap(partition -> partition.getValue().stream()
                 .map(fileInfo -> new Path(
-                    new Path(basePath, partition.getKey()), fileInfo.getValue()).toString())
+                    new Path(tableBasePath, partition.getKey()), fileInfo.getValue()).toString())
                 .collect(Collectors.toList())
                 .stream())
             .collect(Collectors.toList())
@@ -139,7 +142,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     FileSystem fs = metaClient.getFs();
     DANGLING_DATA_FILE_LIST.forEach(
         relativeFilePath -> {
-          Path path = new Path(basePath, relativeFilePath);
+          Path path = new Path(tableBasePath, relativeFilePath);
           try {
             if (fs.exists(path)) {
               fs.delete(path, false);
@@ -167,8 +170,8 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
   private Stream<Arguments> configPathParams() {
     Object[][] data = new Object[][] {
-        {null, basePath, -1}, {basePath + "/backup", basePath, -1},
-        {"/tmp/backup", basePath, 0}
+        {null, tableBasePath, -1}, {tableBasePath + "/backup", tableBasePath, -1},
+        {"/tmp/backup", tableBasePath, 0}
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -178,12 +181,12 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     configPathParams().forEach(arguments -> {
       Object[] args = arguments.get();
       String backupPath = (String) args[0];
-      String basePath = (String) args[1];
+      String tableBasePath = (String) args[1];
       int expectedResult = (Integer) args[2];
 
       HoodieRepairTool.Config config = new HoodieRepairTool.Config();
       config.backupPath = backupPath;
-      config.basePath = basePath;
+      config.basePath = tableBasePath;
       HoodieRepairTool tool = new HoodieRepairTool(jsc, config);
       assertEquals(expectedResult, tool.checkBackupPathAgainstBasePath());
     });
@@ -198,9 +201,9 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     FSUtils.createPathIfNotExists(metaClient.getFs(), new Path(nonEmptyBackupPath));
     FSUtils.createPathIfNotExists(metaClient.getFs(), new Path(nonEmptyBackupPath, ".hoodie"));
     Object[][] data = new Object[][] {
-        {null, basePath, 0}, {"/tmp/backup", basePath, 0},
-        {emptyBackupPath, basePath, 0}, {basePath + "/backup", basePath, -1},
-        {nonEmptyBackupPath, basePath, -1},
+        {null, tableBasePath, 0}, {"/tmp/backup", tableBasePath, 0},
+        {emptyBackupPath, tableBasePath, 0}, {tableBasePath + "/backup", tableBasePath, -1},
+        {nonEmptyBackupPath, tableBasePath, -1},
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -210,12 +213,12 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     for (Arguments arguments: configPathParamsWithFS().collect(Collectors.toList())) {
       Object[] args = arguments.get();
       String backupPath = (String) args[0];
-      String basePath = (String) args[1];
+      String tableBasePath = (String) args[1];
       int expectedResult = (Integer) args[2];
 
       HoodieRepairTool.Config config = new HoodieRepairTool.Config();
       config.backupPath = backupPath;
-      config.basePath = basePath;
+      config.basePath = tableBasePath;
       HoodieRepairTool tool = new HoodieRepairTool(jsc, config);
       assertEquals(expectedResult, tool.checkBackupPathForRepair());
       if (backupPath == null) {
@@ -236,7 +239,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
   @Test
   public void testRepairWithBrokenInstants() throws IOException {
-    List<String> tableDanglingFileList = createDanglingDataFilesInFS(basePath);
+    List<String> tableDanglingFileList = createDanglingDataFilesInFS(tableBasePath);
     String backupPath = backupTempDir.toAbsolutePath().toString();
     List<String> backupDanglingFileList = DANGLING_DATA_FILE_LIST.stream()
         .map(filePath -> new Path(backupPath, filePath).toString())
@@ -252,7 +255,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
   @Test
   public void testRepairWithOneBrokenInstant() throws IOException {
-    List<String> tableDanglingFileList = createDanglingDataFilesInFS(basePath);
+    List<String> tableDanglingFileList = createDanglingDataFilesInFS(tableBasePath);
     String backupPath = backupTempDir.toAbsolutePath().toString();
     List<String> backupDanglingFileList = DANGLING_DATA_FILE_LIST
         .subList(1, 2).stream()
@@ -270,7 +273,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
   @Test
   public void testDryRunWithBrokenInstants() throws IOException {
-    List<String> tableDanglingFileList = createDanglingDataFilesInFS(basePath);
+    List<String> tableDanglingFileList = createDanglingDataFilesInFS(tableBasePath);
     String backupPath = backupTempDir.toAbsolutePath().toString();
     List<String> backupDanglingFileList = DANGLING_DATA_FILE_LIST.stream()
         .map(filePath -> new Path(backupPath, filePath).toString())
@@ -286,7 +289,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
   @Test
   public void testDryRunWithOneBrokenInstant() throws IOException {
-    List<String> tableDanglingFileList = createDanglingDataFilesInFS(basePath);
+    List<String> tableDanglingFileList = createDanglingDataFilesInFS(tableBasePath);
     String backupPath = backupTempDir.toAbsolutePath().toString();
     List<String> backupDanglingFileList = DANGLING_DATA_FILE_LIST.stream()
         .map(filePath -> new Path(backupPath, filePath).toString())
@@ -316,7 +319,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     String backupPath = backupTempDir.toAbsolutePath().toString();
     List<String> backupDanglingFileList = createDanglingDataFilesInFS(backupPath);
     List<String> restoreDanglingFileList = DANGLING_DATA_FILE_LIST.stream()
-        .map(filePath -> new Path(basePath, filePath).toString())
+        .map(filePath -> new Path(tableBasePath, filePath).toString())
         .collect(Collectors.toList());
     List<String> existingFileList = new ArrayList<>(allFileAbsolutePathList);
     existingFileList.addAll(backupDanglingFileList);
@@ -341,7 +344,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
       List<String> existFilePathList, List<String> nonExistFilePathList) throws IOException {
     HoodieRepairTool.Config config = new HoodieRepairTool.Config();
     config.backupPath = backupPath;
-    config.basePath = basePath;
+    config.basePath = tableBasePath;
     config.assumeDatePartitioning = true;
     if (startingInstantOption.isPresent()) {
       config.startingInstantTime = startingInstantOption.get();
