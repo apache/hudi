@@ -28,7 +28,6 @@ import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
@@ -55,6 +54,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.{SPARK_VERSION, SparkContext}
@@ -253,7 +253,8 @@ object HoodieSparkSqlWriter {
 
             // TODO(HUDI-4472) revisit and simplify schema handling
             val sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
-            val latestTableSchema = getLatestTableSchema(sqlContext.sparkSession, tableMetaClient).getOrElse(sourceSchema)
+            val tableIdentifier = TableIdentifier(tblName, if (databaseName.isEmpty) None else Some(databaseName))
+            val latestTableSchema = getLatestTableSchema(sqlContext.sparkSession, tableIdentifier, tableMetaClient).getOrElse(sourceSchema)
 
             val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
             var internalSchemaOpt = getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
@@ -406,9 +407,24 @@ object HoodieSparkSqlWriter {
   }
 
   private def getLatestTableSchema(spark: SparkSession,
+                                   tableId: TableIdentifier,
                                    tableMetaClient: HoodieTableMetaClient): Option[Schema] = {
     val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-    toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
+    val latestTableSchemaFromCommitMetadata = toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
+    latestTableSchemaFromCommitMetadata.orElse {
+      getCatalogTable(spark, tableId).map { catalogTable =>
+        val (structName, namespace) = getAvroRecordNameAndNamespace(tableId.table)
+        convertStructTypeToAvroSchema(catalogTable.schema, structName, namespace)
+      }
+    }
+  }
+
+  private def getCatalogTable(spark: SparkSession, tableId: TableIdentifier): Option[CatalogTable] = {
+    if (spark.sessionState.catalog.tableExists(tableId)) {
+      Some(spark.sessionState.catalog.getTableMetadata(tableId))
+    } else {
+      None
+    }
   }
 
   def registerKryoClassesAndGetGenericRecords(tblName: String, sparkContext: SparkContext, df: Dataset[Row],

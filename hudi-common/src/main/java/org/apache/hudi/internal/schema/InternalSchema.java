@@ -25,6 +25,7 @@ import org.apache.hudi.internal.schema.Types.RecordType;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -62,6 +63,10 @@ public class InternalSchema implements Serializable {
     this(DEFAULT_VERSION_ID, columns);
   }
 
+  public InternalSchema(RecordType recordType) {
+    this(DEFAULT_VERSION_ID, recordType);
+  }
+
   public InternalSchema(Field... columns) {
     this(DEFAULT_VERSION_ID, Arrays.asList(columns));
   }
@@ -72,6 +77,18 @@ public class InternalSchema implements Serializable {
     idToName = cols.isEmpty() ? new HashMap<>() : InternalSchemaBuilder.getBuilder().buildIdToName(record);
     nameToId = cols.isEmpty() ? new HashMap<>() : idToName.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
     maxColumnId = idToName.isEmpty() ? -1 : idToName.keySet().stream().max(Comparator.comparing(Integer::valueOf)).get();
+  }
+
+  public InternalSchema(long versionId, RecordType recordType) {
+    this.versionId = versionId;
+    this.record = recordType;
+    this.idToName = recordType.fields().isEmpty()
+      ? Collections.emptyMap()
+      : InternalSchemaBuilder.getBuilder().buildIdToName(record);
+    this.nameToId = recordType.fields().isEmpty()
+      ? Collections.emptyMap()
+      : idToName.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
+    this.maxColumnId = idToName.isEmpty() ? -1 : idToName.keySet().stream().max(Comparator.comparing(Integer::valueOf)).get();
   }
 
   public InternalSchema(long versionId, int maxColumnId, List<Field> cols) {
