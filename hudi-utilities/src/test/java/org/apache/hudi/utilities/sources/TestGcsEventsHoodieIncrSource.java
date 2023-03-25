@@ -37,9 +37,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
-import org.apache.hudi.utilities.sources.helpers.gcs.FileDataFetcher;
-import org.apache.hudi.utilities.sources.helpers.gcs.FilePathsFetcher;
+import org.apache.hudi.utilities.sources.helpers.gcs.GcsObjectDataFetcher;
+import org.apache.hudi.utilities.sources.helpers.gcs.GcsObjectMetadataFetcher;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -78,10 +79,10 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   protected java.nio.file.Path tempDir;
 
   @Mock
-  FilePathsFetcher filePathsFetcher;
+  GcsObjectMetadataFetcher gcsObjectMetadataFetcher;
 
   @Mock
-  FileDataFetcher fileDataFetcher;
+  GcsObjectDataFetcher gcsObjectDataFetcher;
 
   protected FilebasedSchemaProvider schemaProvider;
   private HoodieTableMetaClient metaClient;
@@ -108,9 +109,9 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 0, inserts.getKey());
 
-    verify(filePathsFetcher, times(0)).getGcsFilePaths(Mockito.any(), Mockito.any(),
+    verify(gcsObjectMetadataFetcher, times(0)).getGcsObjects(Mockito.any(), Mockito.any(),
             anyBoolean());
-    verify(fileDataFetcher, times(0)).fetchFileData(
+    verify(gcsObjectDataFetcher, times(0)).fetchCloudObjectData(
             Mockito.any(), Mockito.any(), Mockito.any());
   }
 
@@ -120,8 +121,10 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     String commitTimeForReads = "1";
 
     Pair<String, List<HoodieRecord>> inserts = writeGcsMetadataRecords(commitTimeForWrites);
-    List<String> dataFiles = Arrays.asList("data-file-1.json", "data-file-2.json");
-    when(filePathsFetcher.getGcsFilePaths(Mockito.any(), Mockito.any(), anyBoolean())).thenReturn(dataFiles);
+    List<CloudObjectMetadata> dataFiles = Arrays.asList(
+        new CloudObjectMetadata("data-file-1.json", 1),
+        new CloudObjectMetadata("data-file-2.json", 1));
+    when(gcsObjectMetadataFetcher.getGcsObjects(Mockito.any(), Mockito.any(), anyBoolean())).thenReturn(dataFiles);
 
     List<GcsDataRecord> recs = Arrays.asList(
             new GcsDataRecord("1", "Hello 1"),
@@ -132,13 +135,13 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     Dataset<Row> rows = spark().createDataFrame(recs, GcsDataRecord.class);
 
-    when(fileDataFetcher.fetchFileData(Mockito.any(), eq(dataFiles), Mockito.any())).thenReturn(Option.of(rows));
+    when(gcsObjectDataFetcher.fetchCloudObjectData(Mockito.any(), eq(dataFiles), Mockito.any())).thenReturn(Option.of(rows));
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 4, inserts.getKey());
 
-    verify(filePathsFetcher, times(1)).getGcsFilePaths(Mockito.any(), Mockito.any(),
+    verify(gcsObjectMetadataFetcher, times(1)).getGcsObjects(Mockito.any(), Mockito.any(),
             anyBoolean());
-    verify(fileDataFetcher, times(1)).fetchFileData(Mockito.any(),
+    verify(gcsObjectDataFetcher, times(1)).fetchCloudObjectData(Mockito.any(),
             eq(dataFiles), Mockito.any());
   }
 
@@ -147,7 +150,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     TypedProperties typedProperties = setProps(missingCheckpointStrategy);
 
     GcsEventsHoodieIncrSource incrSource = new GcsEventsHoodieIncrSource(typedProperties, jsc(),
-            spark(), schemaProvider, filePathsFetcher, fileDataFetcher);
+            spark(), schemaProvider, gcsObjectMetadataFetcher, gcsObjectDataFetcher);
 
     Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = incrSource.fetchNextBatch(checkpointToPull, 100);
 

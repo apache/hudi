@@ -21,10 +21,11 @@ package org.apache.hudi.utilities.sources.helpers.gcs;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,15 +38,16 @@ import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.getCloudObjectsPerPartition;
 
 /**
- * Extracts a list of fully qualified GCS filepaths from a given Spark Dataset as input.
+ * Extracts a list of GCS {@link CloudObjectMetadata} containing filepaths from a given Spark Dataset as input.
  * Optionally:
  * i) Match the filename and path against provided input filter strings
  * ii) Check if each file exists on GCS, in which case it assumes SparkContext is already
  * configured with GCS options through GcsEventsHoodieIncrSource.addGcsAccessConfs().
  */
-public class FilePathsFetcher implements Serializable {
+public class GcsObjectMetadataFetcher implements Serializable {
 
   /**
    * The default file format to assume if {@link GcsIngestionConfig#GCS_INCR_DATAFILE_EXTENSION} is not given.
@@ -56,13 +58,13 @@ public class FilePathsFetcher implements Serializable {
   private static final String GCS_PREFIX = "gs://";
   private static final long serialVersionUID = 1L;
 
-  private static final Logger LOG = LoggerFactory.getLogger(FilePathsFetcher.class);
+  private static final Logger LOG = LoggerFactory.getLogger(GcsObjectMetadataFetcher.class);
 
   /**
    * @param fileFormat The default file format to assume if {@link GcsIngestionConfig#GCS_INCR_DATAFILE_EXTENSION}
    *                   is not given.
    */
-  public FilePathsFetcher(TypedProperties props, String fileFormat) {
+  public GcsObjectMetadataFetcher(TypedProperties props, String fileFormat) {
     this.props = props;
     this.fileFormat = fileFormat;
   }
@@ -71,9 +73,9 @@ public class FilePathsFetcher implements Serializable {
    * @param sourceForFilenames a Dataset that contains metadata about files on GCS. Assumed to be a persisted form
    *                           of a Cloud Storage Pubsub Notification event.
    * @param checkIfExists      Check if each file exists, before returning its full path
-   * @return A list of fully qualified GCS file paths.
+   * @return A {@link List} of {@link CloudObjectMetadata} containing GCS info.
    */
-  public List<String> getGcsFilePaths(JavaSparkContext jsc, Dataset<Row> sourceForFilenames, boolean checkIfExists) {
+  public List<CloudObjectMetadata> getGcsObjects(JavaSparkContext jsc, Dataset<Row> sourceForFilenames, boolean checkIfExists) {
     String filter = createFilter();
     LOG.info("Adding filter string to Dataset: " + filter);
 
@@ -81,12 +83,11 @@ public class FilePathsFetcher implements Serializable {
             jsc.hadoopConfiguration());
 
     return sourceForFilenames
-            .filter(filter)
-            .select("bucket", "name")
-            .distinct()
-            .rdd().toJavaRDD().mapPartitions(
-                    CloudObjectsSelectorCommon.getCloudFilesPerPartition(GCS_PREFIX, serializableConfiguration, checkIfExists)
-            ).collect();
+        .filter(filter)
+        .select("bucket", "name", "size")
+        .distinct()
+        .mapPartitions(getCloudObjectsPerPartition(GCS_PREFIX, serializableConfiguration, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
+        .collectAsList();
   }
 
   /**
