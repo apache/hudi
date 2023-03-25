@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 
@@ -81,6 +82,11 @@ public class HoodieFileReaderFactory {
   }
 
   protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
+    throw new UnsupportedOperationException();
+  }
+
+  public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader, HoodieFileReader dataFileReader,
+                                                 Option<String[]> partitionFields, Object[] partitionValues) {
     throw new UnsupportedOperationException();
   }
 }

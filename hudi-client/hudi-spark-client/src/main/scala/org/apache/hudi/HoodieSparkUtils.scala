@@ -20,17 +20,24 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.hadoop.CachingPath
+import org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe
 import org.apache.spark.SPARK_VERSION
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame}
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.SQLConfInjectingRDD
+import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
@@ -54,7 +61,7 @@ private[hudi] trait SparkVersionsSupport {
   def gteqSpark3_3: Boolean = getSparkVersion >= "3.3"
 }
 
-object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
+object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport with Logging {
 
   override def getSparkVersion: String = SPARK_VERSION
 
@@ -190,5 +197,78 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
 
   def getCatalystRowSerDe(structType: StructType): SparkRowSerDe = {
     sparkAdapter.createSparkRowSerDe(structType)
+  }
+
+  def ParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String, basePath: Path,
+                                 schema: StructType, timeZoneId: String, sparkParsePartitionUtil: SparkParsePartitionUtil,
+                                 shouldValidatePartitionCols: Boolean): Array[Object] = {
+    if (partitionColumns.length == 0) {
+      // This is a non-partitioned table
+      Array.empty
+    } else {
+      val partitionFragments = partitionPath.split("/")
+      if (partitionFragments.length != partitionColumns.length) {
+        if (partitionColumns.length == 1) {
+          // If the partition column size is not equal to the partition fragment size
+          // and the partition column size is 1, we map the whole partition path
+          // to the partition column which can benefit from the partition prune.
+          val prefix = s"${partitionColumns.head}="
+          val partitionValue = if (partitionPath.startsWith(prefix)) {
+            // support hive style partition path
+            partitionPath.substring(prefix.length)
+          } else {
+            partitionPath
+          }
+          Array(UTF8String.fromString(partitionValue))
+        } else {
+          // If the partition column size is not equal to the partition fragments size
+          // and the partition column size > 1, we do not know how to map the partition
+          // fragments to the partition columns and therefore return an empty tuple. We don't
+          // fail outright so that in some cases we can fallback to reading the table as non-partitioned
+          // one
+          logWarning(s"Failed to parse partition values: found partition fragments" +
+            s" (${partitionFragments.mkString(",")}) are not aligned with expected partition columns" +
+            s" (${partitionColumns.mkString(",")})")
+          Array.empty
+        }
+      } else {
+        // If partitionSeqs.length == partitionSchema.fields.length
+        // Append partition name to the partition value if the
+        // HIVE_STYLE_PARTITIONING is disable.
+        // e.g. convert "/xx/xx/2021/02" to "/xx/xx/year=2021/month=02"
+        val partitionWithName =
+        partitionFragments.zip(partitionColumns).map {
+          case (partition, columnName) =>
+            if (partition.indexOf("=") == -1) {
+              s"${columnName}=$partition"
+            } else {
+              partition
+            }
+        }.mkString("/")
+
+        val pathWithPartitionName = new CachingPath(basePath, createRelativePathUnsafe(partitionWithName))
+        val partitionSchema = StructType(schema.fields.filter(f => partitionColumns.contains(f.name)))
+        val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema, timeZoneId,
+          sparkParsePartitionUtil, basePath, shouldValidatePartitionCols)
+
+        partitionValues.map(_.asInstanceOf[Object]).toArray
+      }
+    }
+  }
+
+  private def parsePartitionPath(partitionPath: Path, partitionSchema: StructType, timeZoneId: String,
+                                 sparkParsePartitionUtil: SparkParsePartitionUtil, basePath: Path,
+                                 shouldValidatePartitionCols: Boolean): Seq[Any] = {
+    val partitionDataTypes = partitionSchema.map(f => f.name -> f.dataType).toMap
+
+    sparkParsePartitionUtil.parsePartition(
+      partitionPath,
+      typeInference = false,
+      Set(basePath),
+      partitionDataTypes,
+      DateTimeUtils.getTimeZone(timeZoneId),
+      validatePartitionValues = shouldValidatePartitionCols
+    )
+      .toSeq(partitionSchema)
   }
 }

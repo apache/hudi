@@ -23,77 +23,80 @@ import org.apache.hudi.functional.TestBootstrap
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Dataset, Row}
 
+import java.io.File
 import java.time.Instant
 import java.util
 
 class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
 
-  test("Test Call run_bootstrap Procedure") {
-    withTempDir { tmp =>
-      val NUM_OF_RECORDS = 100
-      val PARTITION_FIELD = "datestr"
-      val RECORD_KEY_FIELD = "_row_key"
+  def bootstrapPartitioned(tempDir: File, tableName: String): Unit = {
+    val NUM_OF_RECORDS = 100
+    val PARTITION_FIELD = "datestr"
+    val RECORD_KEY_FIELD = "_row_key"
 
-      val tableName = generateTableName
-      val basePath = s"${tmp.getCanonicalPath}"
+    val basePath = s"${tempDir.getCanonicalPath}"
 
-      val srcName: String = "source"
-      val sourcePath = basePath + Path.SEPARATOR + srcName
-      val tablePath = basePath + Path.SEPARATOR + tableName
-      val jsc = new JavaSparkContext(spark.sparkContext)
+    val srcName: String = "source"
+    val sourcePath = basePath + Path.SEPARATOR + srcName
+    val tablePath = basePath + Path.SEPARATOR + tableName
+    val jsc = new JavaSparkContext(spark.sparkContext)
 
-      // generate test data
-      val partitions = util.Arrays.asList("2018", "2019", "2020")
-      val timestamp: Long = Instant.now.toEpochMilli
-      for (i <- 0 until partitions.size) {
-        val df: Dataset[Row] = TestBootstrap.generateTestRawTripDataset(timestamp, i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, spark.sqlContext)
-        df.write.parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
-      }
-
-      spark.sql("set hoodie.bootstrap.parallelism = 20")
-      checkAnswer(
-        s"""call run_bootstrap(
-           |table => '$tableName',
-           |base_path => '$tablePath',
-           |table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
-           |bootstrap_path => '$sourcePath',
-           |rowKey_field => '$RECORD_KEY_FIELD',
-           |partition_path_field => '$PARTITION_FIELD',
-           |bootstrap_overwrite => true)""".stripMargin) {
-        Seq(0)
-      }
-
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName using hudi
-           |location '$tablePath'
-           |tblproperties(primaryKey = '$RECORD_KEY_FIELD')
-           |""".stripMargin)
-
-      // show bootstrap's index partitions
-      var result = spark.sql(s"""call show_bootstrap_partitions(table => '$tableName')""".stripMargin).collect()
-      assertResult(3) {
-        result.length
-      }
-
-      // show bootstrap's index mapping
-      result = spark.sql(
-        s"""call show_bootstrap_mapping(table => '$tableName')""".stripMargin).collect()
-      assertResult(10) {
-        result.length
-      }
+    // generate test data
+    val partitions = util.Arrays.asList("2018", "2019", "2020")
+    val timestamp: Long = Instant.now.toEpochMilli
+    for (i <- 0 until partitions.size) {
+      val df: Dataset[Row] = TestBootstrap.generateTestRawTripDataset(timestamp, i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, spark.sqlContext)
+      df.write.parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
     }
+
+    spark.sql("set hoodie.bootstrap.parallelism = 20")
+    checkAnswer(
+      s"""call run_bootstrap(
+         |table => '$tableName',
+         |base_path => '$tablePath',
+         |table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
+         |bootstrap_path => '$sourcePath',
+         |rowKey_field => '$RECORD_KEY_FIELD',
+         |partition_path_field => '$PARTITION_FIELD',
+         |bootstrap_overwrite => true)""".stripMargin) {
+      Seq(0)
+    }
+
+    // create table
+    spark.sql(
+      s"""
+         |create table $tableName using hudi
+         |location '$tablePath'
+         |tblproperties(primaryKey = '$RECORD_KEY_FIELD')
+         |""".stripMargin)
+
+    // show bootstrap's index partitions
+    var result = spark.sql(s"""call show_bootstrap_partitions(table => '$tableName')""".stripMargin).collect()
+    assertResult(3) {
+      result.length
+    }
+
+    // show bootstrap's index mapping
+    result = spark.sql(
+      s"""call show_bootstrap_mapping(table => '$tableName')""".stripMargin).collect()
+    assertResult(10) {
+      result.length
+    }
+
   }
 
-  test("Test Call run_bootstrap Procedure with no-partitioned") {
-    withTempDir { tmp =>
+
+test ("Test Call run_bootstrap Procedure with no-partitioned") {
+  withTempDir {
+    tmp =>
       val NUM_OF_RECORDS = 100
       val PARTITION_FIELD = "datestr"
       val RECORD_KEY_FIELD = "_row_key"
 
       val tableName = generateTableName
-      val basePath = s"${tmp.getCanonicalPath}"
+      val basePath = s"${
+        tmp.getCanonicalPath
+      }"
 
       val srcName: String = "source"
       val sourcePath = basePath + Path.SEPARATOR + srcName
@@ -111,7 +114,9 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
         s"""call run_bootstrap(
            |table => '$tableName',
            |base_path => '$tablePath',
-           |table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
+           |table_type => '${
+          HoodieTableType.COPY_ON_WRITE.name
+        }',
            |bootstrap_path => '$sourcePath',
            |rowKey_field => '$RECORD_KEY_FIELD',
            |key_generator_class => 'NON_PARTITION',
@@ -132,6 +137,37 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"delete from $tableName where _row_key = 'trip_0'")
       val afterDeleteCount = spark.sql(s"select count(*) from $tableName").collect()(0).getLong(0)
       assert(originCount != afterDeleteCount)
+  }
+}
+
+  test("Test Call run_bootstrap Procedure") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      bootstrapPartitioned(tmp, tableName)
+    }
+  }
+
+  test("Test Call run_bootstrap Procedure cluster row writer disabled") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      bootstrapPartitioned(tmp, tableName)
+      val beforeClusterDf = spark.sql(s"select * from $tableName");
+      spark.sql("set hoodie.datasource.write.row.writer.enable = false")
+      spark.sql(
+        s"""call run_clustering(table => '$tableName')""".stripMargin)
+      assertResult(0)(spark.sql(s"select * from $tableName").except(beforeClusterDf).count())
+    }
+  }
+
+  test("Test Call run_bootstrap Procedure cluster row writer enabled") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      bootstrapPartitioned(tmp, tableName)
+      val beforeClusterDf = spark.sql(s"select * from $tableName");
+      spark.sql("set hoodie.datasource.write.row.writer.enable = true")
+      spark.sql(
+        s"""call run_clustering(table => '$tableName')""".stripMargin)
+      assertResult(0)(spark.sql(s"select * from $tableName").except(beforeClusterDf).count())
     }
   }
 
