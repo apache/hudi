@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CollectionUtils.reduce;
+
 /**
  * Utility methods to support evolve old avro schema based on a given schema.
  */
@@ -126,13 +128,11 @@ public class AvroSchemaEvolutionUtils {
     if (candidateUpdateCols.isEmpty()) {
       return writeSchema;
     }
-    // try to correct all changes
-    TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(writeInternalSchema);
-    candidateUpdateCols.stream().forEach(f -> updateChange.updateColumnNullability(f, true));
-    Schema result = AvroInternalSchemaConverter.convert(
-        SchemaChangeUtils.applyTableChanges2Schema(writeInternalSchema, updateChange),
-        writeSchema.getName(), writeSchema.getNamespace());
-    return result;
+    // Reconcile nullability constraints (by executing phony schema change)
+    TableChanges.ColumnUpdateChange schemaChange = reduce(candidateUpdateCols, TableChanges.ColumnUpdateChange.get(writeInternalSchema),
+        (change, field) -> change.updateColumnNullability(field, true));
+
+    return AvroInternalSchemaConverter.convert(SchemaChangeUtils.applyTableChanges2Schema(writeInternalSchema, schemaChange), writeSchema.getFullName());
   }
 }
 

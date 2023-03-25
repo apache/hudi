@@ -459,23 +459,30 @@ public class Types {
   public static class RecordType extends NestedType {
 
     public static RecordType get(List<Field> fields) {
-      return new RecordType(fields);
+      return new RecordType(fields, null);
+    }
+
+    public static RecordType get(List<Field> fields, String recordName) {
+      return new RecordType(fields, recordName);
     }
 
     public static RecordType get(Field... fields) {
-      return new RecordType(Arrays.asList(fields));
+      return new RecordType(Arrays.asList(fields), null);
     }
 
+    // NOTE: This field is necessary to provide for lossless conversion b/w Avro and
+    //       InternalSchema and back (Avro unfortunately relies not only on structural equivalence of
+    //       schemas but also corresponding Record type's "name" when evaluating their compatibility);
+    //       This field is nullable
+    private final String name;
     private final Field[] fields;
 
     private transient Map<String, Field> nameToFields = null;
     private transient Map<Integer, Field> idToFields = null;
 
-    private RecordType(List<Field> fields) {
-      this.fields = new Field[fields.size()];
-      for (int i = 0; i < this.fields.length; i += 1) {
-        this.fields[i] = fields.get(i);
-      }
+    private RecordType(List<Field> fields, String name) {
+      this.name = name;
+      this.fields = fields.toArray(new Field[0]);
     }
 
     @Override
@@ -511,6 +518,10 @@ public class Types {
         return field.type();
       }
       return null;
+    }
+
+    public String name() {
+      return name;
     }
 
     @Override

@@ -239,7 +239,7 @@ public class SchemaChangeUtils {
     // deal with root level changes
     List<Types.Field> newFields = TableChangesHelper.applyAddChange2Fields(newType.fields(),
         new ArrayList<>(), updates.getPositionChangeMap().get(-1));
-    return new InternalSchema(newFields);
+    return new InternalSchema(Types.RecordType.get(newFields, newType.name()));
   }
 
   /**
