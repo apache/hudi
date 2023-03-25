@@ -222,8 +222,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  hoodie.metadata.enable = 'false'
+           |  preCombineField = 'ts'
            | )
      """.stripMargin)
 
