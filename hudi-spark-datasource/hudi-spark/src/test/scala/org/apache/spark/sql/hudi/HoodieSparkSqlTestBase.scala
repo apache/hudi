@@ -176,6 +176,22 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     val fs = FSUtils.getFs(filePath, spark.sparkContext.hadoopConfiguration)
     fs.exists(path)
   }
+
+  protected def withSQLConf[T](pairs: (String, String)*)(f: => T): T = {
+    val conf = spark.sessionState.conf
+    val currentValues = pairs.unzip._1.map { k =>
+      if (conf.contains(k)) {
+        Some(conf.getConfString(k))
+      } else None
+    }
+    pairs.foreach { case(k, v) => conf.setConfString(k, v) }
+    try f finally {
+      pairs.unzip._1.zip(currentValues).foreach {
+        case (key, Some(value)) => conf.setConfString(key, value)
+        case (key, None) => conf.unsetConf(key)
+      }
+    }
+  }
 }
 
 object HoodieSparkSqlTestBase {
