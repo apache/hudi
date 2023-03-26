@@ -156,7 +156,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
   private void cleanUpBackupTempDir() throws IOException {
     FileSystem fs = metaClient.getFs();
-    fs.delete(new Path(backupTempDir.toAbsolutePath().toString()), true);
+    fs.delete(new Path(backupTempDir.toUri().toString()), true);
   }
 
   private static void initDanglingDataFileList() {
@@ -233,14 +233,14 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
     testRepairToolWithMode(
         Option.empty(), Option.empty(), HoodieRepairTool.Mode.REPAIR.toString(),
-        backupTempDir.toAbsolutePath().toString(), true,
+        backupTempDir.toUri().toString(), true,
         allFileAbsolutePathList, Collections.emptyList());
   }
 
   @Test
   public void testRepairWithBrokenInstants() throws IOException {
     List<String> tableDanglingFileList = createDanglingDataFilesInFS(tableBasePath);
-    String backupPath = backupTempDir.toAbsolutePath().toString();
+    String backupPath = backupTempDir.toUri().toString();
     List<String> backupDanglingFileList = DANGLING_DATA_FILE_LIST.stream()
         .map(filePath -> new Path(backupPath, filePath).toString())
         .collect(Collectors.toList());
@@ -256,7 +256,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
   @Test
   public void testRepairWithOneBrokenInstant() throws IOException {
     List<String> tableDanglingFileList = createDanglingDataFilesInFS(tableBasePath);
-    String backupPath = backupTempDir.toAbsolutePath().toString();
+    String backupPath = backupTempDir.toUri().toString();
     List<String> backupDanglingFileList = DANGLING_DATA_FILE_LIST
         .subList(1, 2).stream()
         .map(filePath -> new Path(backupPath, filePath).toString())
@@ -274,7 +274,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
   @Test
   public void testDryRunWithBrokenInstants() throws IOException {
     List<String> tableDanglingFileList = createDanglingDataFilesInFS(tableBasePath);
-    String backupPath = backupTempDir.toAbsolutePath().toString();
+    String backupPath = backupTempDir.toUri().toString();
     List<String> backupDanglingFileList = DANGLING_DATA_FILE_LIST.stream()
         .map(filePath -> new Path(backupPath, filePath).toString())
         .collect(Collectors.toList());
@@ -290,7 +290,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
   @Test
   public void testDryRunWithOneBrokenInstant() throws IOException {
     List<String> tableDanglingFileList = createDanglingDataFilesInFS(tableBasePath);
-    String backupPath = backupTempDir.toAbsolutePath().toString();
+    String backupPath = backupTempDir.toUri().toString();
     List<String> backupDanglingFileList = DANGLING_DATA_FILE_LIST.stream()
         .map(filePath -> new Path(backupPath, filePath).toString())
         .collect(Collectors.toList());
@@ -305,7 +305,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
   @Test
   public void testUndoWithNonExistentBackupPath() throws IOException {
-    String backupPath = backupTempDir.toAbsolutePath().toString();
+    String backupPath = backupTempDir.toUri().toString();
     metaClient.getFs().delete(new Path(backupPath), true);
 
     testRepairToolWithMode(
@@ -316,7 +316,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
   @Test
   public void testUndoWithExistingBackupPath() throws IOException {
-    String backupPath = backupTempDir.toAbsolutePath().toString();
+    String backupPath = backupTempDir.toUri().toString();
     List<String> backupDanglingFileList = createDanglingDataFilesInFS(backupPath);
     List<String> restoreDanglingFileList = DANGLING_DATA_FILE_LIST.stream()
         .map(filePath -> new Path(tableBasePath, filePath).toString())
