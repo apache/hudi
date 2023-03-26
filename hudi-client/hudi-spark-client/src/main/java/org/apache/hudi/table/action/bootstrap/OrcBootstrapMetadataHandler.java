@@ -71,7 +71,7 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     }
     BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void> wrapper = null;
     Reader orcReader = OrcFile.createReader(sourceFilePath, OrcFile.readerOptions(table.getHadoopConf()));
-    TypeDescription orcSchema = orcReader.getSchema();
+    TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(avroSchema);
     try (RecordReader reader = orcReader.rows(new Reader.Options(table.getHadoopConf()).schema(orcSchema))) {
       wrapper = new BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
           new OrcReaderIterator(reader, avroSchema, orcSchema), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
