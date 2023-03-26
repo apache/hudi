@@ -143,7 +143,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     // Group by partition for efficient updates for both InMemory and DiskBased structures.
     fileGroups.stream().collect(Collectors.groupingBy(HoodieFileGroup::getPartitionPath)).forEach((partition, value) -> {
       if (!isPartitionAvailableInStore(partition)) {
-        if (!partition.isEmpty() && bootstrapIndex.useIndex()) {
+        if (bootstrapIndex.useIndex()) {
           try (BootstrapIndex.IndexReader reader = bootstrapIndex.createReader()) {
             LOG.info("Bootstrap Index available for partition " + partition);
             List<BootstrapFileMapping> sourceFileMappings =
