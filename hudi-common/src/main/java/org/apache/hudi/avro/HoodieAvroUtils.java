@@ -37,7 +37,6 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
-import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.generic.GenericDatumReader;
@@ -77,6 +76,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Deque;
 import java.util.LinkedList;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
@@ -601,7 +601,6 @@ public class HoodieAvroUtils {
     throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
   }
 
-
   /**
    * Get schema for the given field and write schema. Field can be nested, denoted by dot notation. e.g: a.b.c
    * Use this method when record is not available. Otherwise, prefer to use {@link #getNestedFieldSchemaFromRecord(GenericRecord, String)}
@@ -871,12 +870,8 @@ public class HoodieAvroUtils {
   }
 
   private static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
-    Schema realOldSchema = oldSchema;
-    if (realOldSchema.getType() == UNION) {
-      realOldSchema = getActualSchemaFromUnion(oldSchema, oldValue);
-    }
-    if (realOldSchema.getType() == newSchema.getType()) {
-      switch (realOldSchema.getType()) {
+    if (oldSchema.getType() == newSchema.getType()) {
+      switch (oldSchema.getType()) {
         case NULL:
         case BOOLEAN:
         case INT:
@@ -887,25 +882,34 @@ public class HoodieAvroUtils {
         case STRING:
           return oldValue;
         case FIXED:
-          // fixed size and name must match:
-          if (!SchemaCompatibility.schemaNameEquals(realOldSchema, newSchema) || realOldSchema.getFixedSize() != newSchema.getFixedSize()) {
-            // deal with the precision change for decimalType
-            if (realOldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          if (oldSchema.getFixedSize() != newSchema.getFixedSize()) {
+            // Check whether this is a [[Decimal]]'s precision change
+            if (oldSchema.getLogicalType() instanceof Decimal) {
               final byte[] bytes;
               bytes = ((GenericFixed) oldValue).bytes();
-              LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) realOldSchema.getLogicalType();
-              BigDecimal bd = new BigDecimal(new BigInteger(bytes), decimal.getScale()).setScale(((LogicalTypes.Decimal) newSchema.getLogicalType()).getScale());
+              Decimal decimal = (Decimal) oldSchema.getLogicalType();
+              BigDecimal bd = new BigDecimal(new BigInteger(bytes), decimal.getScale()).setScale(((Decimal) newSchema.getLogicalType()).getScale());
               return DECIMAL_CONVERSION.toFixed(bd, newSchema, newSchema.getLogicalType());
+            } else {
+              throw new UnsupportedOperationException("Fixed type size change is not currently supported");
             }
-          } else {
-            return oldValue;
           }
-          return oldValue;
+
+          // For [[Fixed]] data type both size and name have to match
+          //
+          // NOTE: That for values wrapped into [[Union]], to make sure that reverse lookup (by
+          //       full-name) is working we have to make sure that both schema's name and namespace
+          //       do match
+          if (Objects.equals(oldSchema.getFullName(), newSchema.getFullName())) {
+            return oldValue;
+          } else {
+            return new GenericData.Fixed(newSchema, ((GenericFixed) oldValue).bytes());
+          }
         default:
           throw new AvroRuntimeException("Unknown schema type: " + newSchema.getType());
       }
     } else {
-      return rewritePrimaryTypeWithDiffSchemaType(oldValue, realOldSchema, newSchema);
+      return rewritePrimaryTypeWithDiffSchemaType(oldValue, oldSchema, newSchema);
     }
   }
 
