@@ -39,6 +39,7 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndex
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api._
+import org.junit.jupiter.api.condition.DisabledIf
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
 
@@ -48,6 +49,8 @@ import scala.collection.JavaConverters._
 import scala.util.Random
 
 @Tag("functional")
+@DisabledIf(value = "org.apache.hudi.HoodieSparkUtils.gteqSpark3_3()",
+  disabledReason = "Jackson version conflicts (HUDI-5352)")
 class TestColumnStatsIndex extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
 
