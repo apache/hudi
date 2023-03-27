@@ -5,14 +5,33 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
-            "id": "/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue",
+            "id": "/2023/03/20/Introducing-native-support-for-Apache Hudi-Delta-Lake-and-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark-Part-2-AWS-Glue-Studio-Visual-Editor",
+            "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/part-2-glue-studio-visual-editor-introducing-native-support-for-apache-hudi-delta-lake-and-apache-iceberg-on-aws-glue-for-apache-spark/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/03/20/Introducing-native-support-for-Apache Hudi-Delta-Lake-and-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark-Part-2-AWS-Glue-Studio-Visual-Editor",
+            "title": "Introducing native support for Apache Hudi, Delta Lake, and Apache Iceberg on AWS Glue for Apache Spark, Part 2: AWS Glue Studio Visual Editor",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-03-20T00:00:00.000Z",
+            "author": {
+                "name": "Noritaka Sekiyama"
+            }
+        },
+        {
+            "id": "/2023/03/16/Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi",
+            "content_html": "<hr/><p>title: &quot;Setting Uber’s Transactional Data Lake in Motion with Incremental ETL Using Apache Hudi&quot;\nauthors: </p><ul><li>name: Vinoth Govindarajan</li><li>name: Saketh Chintapalli</li><li>name: Yogesh Saswade</li><li>name: Aayush Bareja\ncategory: blog\nimage: /assets/images/blog/hudi-lakehouse-architecture-uber.png\ntags:</li><li>incremental pipeline</li><li>datalake</li><li>hudi</li><li>medallion architecture</li></ul><hr/><div url=\"https://www.uber.com/blog/ubers-lakehouse-architecture/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/03/16/Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi",
+            "title": "Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi",
+            "summary": "---",
+            "date_modified": "2023-03-16T00:00:00.000Z"
+        },
+        {
+            "id": "/2023/02/07/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue",
             "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue/\">Redirecting... please wait!! </div>",
-            "url": "https://hudi.apache.org/blog/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue",
+            "url": "https://hudi.apache.org/blog/2023/02/07/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue",
             "title": "Automate schema evolution at scale with Apache Hudi in AWS Glue | Amazon Web Services",
             "summary": "Redirecting... please wait!!",
-            "date_modified": "2023-03-24T02:41:14.436Z",
+            "date_modified": "2023-02-07T00:00:00.000Z",
             "author": {
-                "name": "Subhro Bose, Eva Fang and Ketan Karalkar"
+                "name": "Subhro Bose"
             }
         },
         {
@@ -46,6 +65,17 @@
             "date_modified": "2022-12-19T00:00:00.000Z",
             "author": {
                 "name": "Nadine Farah"
+            }
+        },
+        {
+            "id": "/2022/12/01/Run-apache-hudi-at-scale-on-aws",
+            "content_html": "<div url=\"https://pages.awscloud.com/GLOBAL-devadopt-DL-Apache-Hudi-Technical-Guide-2023-learn.html?sc_channel=sm&amp;sc_campaign=DB_Blog&amp;sc_publisher=LINKEDIN&amp;sc_geo=GLOBAL&amp;sc_outcome=awareness&amp;trk=DB_Blog&amp;linkId=205888417/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2022/12/01/Run-apache-hudi-at-scale-on-aws",
+            "title": "Run Apache Hudi at scale on AWS",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2022-12-01T00:00:00.000Z",
+            "author": {
+                "name": "Imtiaz Sayed,"
             }
         },
         {

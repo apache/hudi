@@ -2,20 +2,55 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2023-03-24T02:41:14.436Z</updated>
+    <updated>2023-03-20T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
     <entry>
+        <title type="html"><![CDATA[Introducing native support for Apache Hudi, Delta Lake, and Apache Iceberg on AWS Glue for Apache Spark, Part 2: AWS Glue Studio Visual Editor]]></title>
+        <id>/2023/03/20/Introducing-native-support-for-Apache Hudi-Delta-Lake-and-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark-Part-2-AWS-Glue-Studio-Visual-Editor</id>
+        <link href="https://hudi.apache.org/blog/2023/03/20/Introducing-native-support-for-Apache Hudi-Delta-Lake-and-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark-Part-2-AWS-Glue-Studio-Visual-Editor"/>
+        <updated>2023-03-20T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/part-2-glue-studio-visual-editor-introducing-native-support-for-apache-hudi-delta-lake-and-apache-iceberg-on-aws-glue-for-apache-spark/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Noritaka Sekiyama</name>
+        </author>
+        <author>
+            <name>Scott Long</name>
+        </author>
+        <author>
+            <name>Sean Ma</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi]]></title>
+        <id>/2023/03/16/Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2023/03/16/Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi"/>
+        <updated>2023-03-16T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[---]]></summary>
+        <content type="html"><![CDATA[<hr/><p>title: &quot;Setting Uber’s Transactional Data Lake in Motion with Incremental ETL Using Apache Hudi&quot;
+authors: </p><ul><li>name: Vinoth Govindarajan</li><li>name: Saketh Chintapalli</li><li>name: Yogesh Saswade</li><li>name: Aayush Bareja
+category: blog
+image: /assets/images/blog/hudi-lakehouse-architecture-uber.png
+tags:</li><li>incremental pipeline</li><li>datalake</li><li>hudi</li><li>medallion architecture</li></ul><hr/><div url="https://www.uber.com/blog/ubers-lakehouse-architecture/">Redirecting... please wait!! </div>]]></content>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Automate schema evolution at scale with Apache Hudi in AWS Glue | Amazon Web Services]]></title>
-        <id>/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue</id>
-        <link href="https://hudi.apache.org/blog/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue"/>
-        <updated>2023-03-24T02:41:14.436Z</updated>
+        <id>/2023/02/07/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue</id>
+        <link href="https://hudi.apache.org/blog/2023/02/07/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue"/>
+        <updated>2023-02-07T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
         <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue/">Redirecting... please wait!! </div>]]></content>
         <author>
-            <name>Subhro Bose, Eva Fang and Ketan Karalkar</name>
+            <name>Subhro Bose</name>
+        </author>
+        <author>
+            <name>Eva Fang</name>
+        </author>
+        <author>
+            <name>Ketan Karalkar</name>
         </author>
     </entry>
     <entry>
@@ -57,6 +92,32 @@ where people are sharing and helping each other!</p><img src="/assets/images/blo
 <a href="https://www.youtube.com/watch?v=5zF4jc_3rFs&amp;list=PLL2hlSFBmWwwbMpcyMjYuRn8cN99gFSY6&amp;">Build Datalakes on S3 and Glue with Apache HUDI</a>.</p><p>Follow the the <a href="https://drive.google.com/file/d/1W-E_SupsoI8VZWGtq5d7doxdWdNDPEoj/view">step-by-step instructions</a>. </p><p>Apply the <a href="https://github.com/soumilshah1995/dynamodb-hudi-stream-project">code source</a>.</p><h2>Questions</h2><p>If you run into blockers doing this tutorial, please reach out on the Apache Hudi community and tag <strong>soumilshah1995</strong> to help debug.</p>]]></content>
         <author>
             <name>Nadine Farah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Run Apache Hudi at scale on AWS]]></title>
+        <id>/2022/12/01/Run-apache-hudi-at-scale-on-aws</id>
+        <link href="https://hudi.apache.org/blog/2022/12/01/Run-apache-hudi-at-scale-on-aws"/>
+        <updated>2022-12-01T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://pages.awscloud.com/GLOBAL-devadopt-DL-Apache-Hudi-Technical-Guide-2023-learn.html?sc_channel=sm&amp;sc_campaign=DB_Blog&amp;sc_publisher=LINKEDIN&amp;sc_geo=GLOBAL&amp;sc_outcome=awareness&amp;trk=DB_Blog&amp;linkId=205888417/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Imtiaz Sayed,</name>
+        </author>
+        <author>
+            <name>Shana Schipers</name>
+        </author>
+        <author>
+            <name>Dylan Qu</name>
+        </author>
+        <author>
+            <name>Carlos Rodrigues</name>
+        </author>
+        <author>
+            <name>Arun A K</name>
+        </author>
+        <author>
+            <name>Francisco Morillo</name>
         </author>
     </entry>
     <entry>
