@@ -25,7 +25,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort}
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils
@@ -37,7 +37,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import java.time.Instant
 import java.util.Collections
@@ -326,6 +326,68 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecordsUpdate, hoodieROViewDF4.filter(s"timestamp == $updateTimestamp").count())
 
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime3, isPartitioned = true, isHiveStylePartitioned = true)
+  }
+
+  @Test
+  def testMetadataBootstrapMORPartitionedInlineClustering(): Unit = {
+    val timestamp = Instant.now.toEpochMilli
+    val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
+    // Prepare source data
+    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc, spark.sqlContext)
+    sourceDF.write.format("parquet")
+      .partitionBy("datestr")
+      .mode(SaveMode.Overwrite)
+      .save(srcPath)
+
+    val writeOpts = commonOpts ++ getRecordTypeOpts(HoodieRecordType.AVRO) ++ Map(
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
+    )
+
+    // Perform bootstrap
+    val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
+      DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      writeOpts,
+      classOf[SimpleKeyGenerator].getName)
+
+    // Read bootstrapped table and verify count
+    val hoodieROViewDF1 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key,
+        DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
+      .load(basePath + "/*")
+    assertEquals(numRecords, hoodieROViewDF1.count())
+
+    // Perform upsert with clustering
+    val updateTimestamp = Instant.now.toEpochMilli
+    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava, jsc, spark.sqlContext)
+
+    updateDF.write
+      .format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(HoodieClusteringConfig.INLINE_CLUSTERING.key, "true")
+      .option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key, "1")
+      .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "datestr")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Expect 2 new commits since meta bootstrap - delta commit and replacecommit (due to inline clustering)
+    assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, commitInstantTime1).size())
+
+    // Read table after upsert and verify count.
+    val hoodieROViewDF2 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key,
+        DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
+      .load(basePath + "/*")
+    assertEquals(numRecords, hoodieROViewDF2.count())
+
+    // Test query without "*" for MOR READ_OPTIMIZED
+    val hoodieROViewDFWithBasePath = spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key,
+        DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
+      .load(basePath)
+    assertEquals(numRecords, hoodieROViewDFWithBasePath.count())
   }
 
   @ParameterizedTest
