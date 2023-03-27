@@ -113,7 +113,7 @@ public class HoodieTableSource implements
     SupportsFilterPushDown {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableSource.class);
 
-  private static final int NO_LIMIT_CONSTANT = -1;
+  private static final long NO_LIMIT_CONSTANT = -1;
 
   private final transient org.apache.hadoop.conf.Configuration hadoopConf;
   private final transient HoodieTableMetaClient metaClient;
@@ -160,20 +160,14 @@ public class HoodieTableSource implements
     this.partitionKeys = partitionKeys;
     this.defaultPartName = defaultPartName;
     this.conf = conf;
-    this.fileIndex = fileIndex == null
-        ? FileIndex.instance(this.path, this.conf, this.tableRowType)
-        : fileIndex;
+    this.fileIndex = Optional.ofNullable(fileIndex).orElse(FileIndex.instance(this.path, this.conf, this.tableRowType));
     this.requiredPartitions = requiredPartitions;
-    this.requiredPos = requiredPos == null
-        ? IntStream.range(0, this.tableRowType.getFieldCount()).toArray()
-        : requiredPos;
-    this.limit = limit == null ? NO_LIMIT_CONSTANT : limit;
+    this.requiredPos = Optional.ofNullable(requiredPos).orElse(IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
+    this.limit = Optional.ofNullable(limit).orElse(NO_LIMIT_CONSTANT);
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-    this.metaClient = metaClient == null ? StreamerUtil.metaClientForReader(conf, hadoopConf) : metaClient;
+    this.metaClient = Optional.ofNullable(metaClient).orElse(StreamerUtil.metaClientForReader(conf, hadoopConf));
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
-    this.internalSchemaManager = internalSchemaManager == null
-        ? InternalSchemaManager.get(this.conf, this.metaClient)
-        : internalSchemaManager;
+    this.internalSchemaManager = Optional.ofNullable(internalSchemaManager).orElse(InternalSchemaManager.get(this.conf, this.metaClient));
   }
 
   @Override
