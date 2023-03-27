@@ -20,14 +20,17 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
+import scala.Tuple2;
 
+import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Comparator;
 
 /**
  * A partitioner that does sorting based on specified column values for each RDD partition.
@@ -59,17 +62,17 @@ public class RDDCustomColumnsSortPartitioner<T>
     final String[] sortColumns = this.sortColumnNames;
     final SerializableSchema schema = this.serializableSchema;
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
-    return records.sortBy(
-        record -> {
-          Object recordValue = record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
-          // null values are replaced with empty string for null_first order
-          if (recordValue == null) {
-            return StringUtils.EMPTY_STRING;
-          } else {
-            return StringUtils.objToString(recordValue);
-          }
-        },
-        true, outputSparkPartitions);
+
+    Comparator<HoodieRecord<T>> comparator = (Comparator<HoodieRecord<T>> & Serializable) (t1, t2) -> {
+      FlatLists.ComparableList obj1 = FlatLists.ofComparableArray(t1.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled));
+      FlatLists.ComparableList obj2 = FlatLists.ofComparableArray(t2.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled));
+      return obj1.compareTo(obj2);
+    };
+
+    return records
+        .mapToPair(record -> new Tuple2<>(record, record))
+        .sortByKey(comparator, true, outputSparkPartitions)
+        .map(Tuple2::_2);
   }
 
   @Override
