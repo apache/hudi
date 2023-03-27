@@ -21,6 +21,7 @@ import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark3RowSerDe}
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieBaseRelation, Spark3RowSerDe}
 import org.apache.spark.internal.Logging
@@ -32,6 +33,7 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
@@ -42,12 +44,19 @@ import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
+import java.time.ZoneId
+import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 import scala.collection.JavaConverters.mapAsScalaMapConverter
+import scala.collection.convert.Wrappers.JConcurrentMapWrapper
 
 /**
  * Base implementation of [[SparkAdapter]] for Spark 3.x branch
  */
 abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
+
+  private val cache = JConcurrentMapWrapper(
+    new ConcurrentHashMap[ZoneId, DateFormatter](1))
 
   def getCatalogUtils: HoodieSpark3CatalogUtils
 
@@ -73,6 +82,10 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
   override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark3ParsePartitionUtil
+
+  override def getDateFormatter(tz: TimeZone): DateFormatter = {
+    cache.getOrElseUpdate(tz.toZoneId, ReflectUtil.getDateFormatter(tz.toZoneId))
+  }
 
   /**
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.

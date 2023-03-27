@@ -34,6 +34,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan, SubqueryAlias}
+import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
@@ -42,7 +43,7 @@ import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
 import org.apache.spark.storage.StorageLevel
 
-import java.util.Locale
+import java.util.{Locale, TimeZone}
 
 /**
  * Interface adapting discrepancies and incompatibilities between different Spark versions
@@ -114,6 +115,11 @@ trait SparkAdapter extends Serializable {
    * Create the SparkParsePartitionUtil.
    */
   def getSparkParsePartitionUtil: SparkParsePartitionUtil
+
+  /**
+   * Get the [[DateFormatter]].
+   */
+  def getDateFormatter(tz: TimeZone): DateFormatter
 
   /**
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
