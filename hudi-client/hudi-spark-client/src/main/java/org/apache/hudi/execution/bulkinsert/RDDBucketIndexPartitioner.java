@@ -21,17 +21,10 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.avro.Schema;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.FlatLists;
-import org.apache.hudi.io.AppendHandleFactory;
-import org.apache.hudi.io.SingleFileHandleCreateFactory;
-import org.apache.hudi.io.WriteHandleFactory;
-import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.table.BucketIndexPartitioner;
 
 import org.apache.hudi.table.HoodieTable;
 import org.apache.logging.log4j.LogManager;
@@ -41,60 +34,20 @@ import org.apache.spark.api.java.JavaRDD;
 import scala.Tuple2;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
-import java.util.List;
 
 
 /**
  * Abstract of bucket index bulk_insert partitioner
  */
-public abstract class RDDBucketIndexPartitioner<T>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+
+  public abstract class RDDBucketIndexPartitioner<T>
+      extends BucketIndexPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   public static final Logger LOG = LogManager.getLogger(RDDBucketIndexPartitioner.class);
 
-  private final String[] sortColumnNames;
-  private final boolean consistentLogicalTimestampEnabled;
-  private final boolean preserveHoodieMetadata;
-
-  protected final HoodieTable table;
-  protected final List<String> indexKeyFields;
-  protected final List<Boolean> doAppend = new ArrayList<>();
-  protected final List<String> fileIdPfxList = new ArrayList<>();
-
   public RDDBucketIndexPartitioner(HoodieTable table, String sortString, boolean preserveHoodieMetadata) {
-
-    ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
-        "CoW table with bucket index doesn't support bulk_insert");
-
-    this.table = table;
-    this.indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
-    this.consistentLogicalTimestampEnabled = table.getConfig().isConsistentLogicalTimestampEnabled();
-    if (sortString != null) {
-      this.sortColumnNames = sortString.split(",");
-    } else {
-      this.sortColumnNames = null;
-    }
-    this.preserveHoodieMetadata = preserveHoodieMetadata;
-  }
-
-  @Override
-  public Option<WriteHandleFactory> getWriteHandleFactory(int idx) {
-    return doAppend.get(idx) ? Option.of(new AppendHandleFactory()) :
-        Option.of(new SingleFileHandleCreateFactory(FSUtils.createNewFileId(getFileIdPfx(idx), 0), this.preserveHoodieMetadata));
-  }
-
-  @Override
-  public String getFileIdPfx(int partitionId) {
-    return fileIdPfxList.get(partitionId);
-  }
-
-  @Override
-  public boolean arePartitionRecordsSorted() {
-    return (sortColumnNames != null && sortColumnNames.length > 0)
-        || table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE;
+    super(table, sortString, preserveHoodieMetadata);
   }
 
   /**

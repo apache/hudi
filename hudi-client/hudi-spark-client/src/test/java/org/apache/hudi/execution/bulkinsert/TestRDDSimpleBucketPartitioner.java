@@ -50,7 +50,7 @@ public class TestRDDSimpleBucketPartitioner extends HoodieClientTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     initPath();
-    initSparkContexts("TestUpdateSchemaEvolution");
+    initSparkContexts("TestRDDSimpleBucketPartitioner");
     initFileSystem();
     initTimelineService();
   }
@@ -62,8 +62,8 @@ public class TestRDDSimpleBucketPartitioner extends HoodieClientTestHarness {
 
   @ParameterizedTest
   @MethodSource("configParams")
-  public void testSimpleBucketPartitioner(boolean partitionSort) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, HoodieTableType.MERGE_ON_READ);
+  public void testSimpleBucketPartitioner(HoodieTableType type, boolean partitionSort) throws IOException {
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, type);
     int bucketNum = 2;
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
@@ -105,8 +105,10 @@ public class TestRDDSimpleBucketPartitioner extends HoodieClientTestHarness {
 
   private static Stream<Arguments> configParams() {
     Object[][] data = new Object[][]{
-        {true},
-        {false}
+        {HoodieTableType.COPY_ON_WRITE, true},
+        {HoodieTableType.COPY_ON_WRITE, false},
+        {HoodieTableType.MERGE_ON_READ, true},
+        {HoodieTableType.MERGE_ON_READ, false},
     };
     return Stream.of(data).map(Arguments::of);
   }
