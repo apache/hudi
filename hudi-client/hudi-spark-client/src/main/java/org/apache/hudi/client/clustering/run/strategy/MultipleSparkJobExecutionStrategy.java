@@ -368,9 +368,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         .stream()
         .map(op -> {
           ArrayList<String> readPaths = new ArrayList<>();
-          if (op.getBootstrapFilePath() != null) {
-            readPaths.add(op.getBootstrapFilePath());
-          }
           if (op.getDataFilePath() != null) {
             readPaths.add(op.getDataFilePath());
           }
