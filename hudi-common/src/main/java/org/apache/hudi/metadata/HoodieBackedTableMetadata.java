@@ -143,6 +143,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return Option.ofNullable(recordsByKeys.get(key));
   }
 
+
   @Override
   public List<String> getPartitionPathWithPathPrefixes(List<String> relativePathPrefixes) throws IOException {
     // TODO: consider skipping this method for non-partitioned table and simplify the checks

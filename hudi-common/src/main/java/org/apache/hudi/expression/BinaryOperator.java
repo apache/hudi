@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.expression;
+package org.apache.hudi.expression;
 
 import java.util.Arrays;
 

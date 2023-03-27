@@ -16,38 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.expression;
+package org.apache.hudi.expression;
 
-import java.util.List;
+public class AttributeReferenceExpression extends LeafExpression {
 
-public abstract class Expression {
+  private final String name;
 
-  public enum Operator {
-    AND("AND", "&&"),
-    OR("OR", "||"),
-    GT(">", ">"),
-    LT("<", "<"),
-    EQ("=", "="),
-    GT_EQ(">=", ">="),
-    LT_EQ("<=", "<=");
-
-    public final String sqlOperator;
-    public final String symbol;
-
-    Operator(String sqlOperator, String symbol) {
-      this.sqlOperator = sqlOperator;
-      this.symbol = symbol;
-    }
+  public AttributeReferenceExpression(String name) {
+    this.name = name;
   }
 
-  private final List<Expression> children;
-
-  public Expression(List<Expression> children) {
-    this.children = children;
+  public String getName() {
+    return name;
   }
 
-  /**
-   * Traverses the expression with the provided {@link ExpressionVisitor}
-   */
-  public abstract <T> T accept(ExpressionVisitor<T> exprVisitor);
+  @Override
+  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
+    return exprVisitor.visitAttribute(this);
+  }
 }

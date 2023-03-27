@@ -18,11 +18,11 @@
 
 package org.apache.hudi.hive.util;
 
-import org.apache.hudi.hive.expression.AttributeReferenceExpression;
-import org.apache.hudi.hive.expression.BinaryOperator;
-import org.apache.hudi.hive.expression.Expression;
-import org.apache.hudi.hive.expression.ExpressionVisitor;
-import org.apache.hudi.hive.expression.Literal;
+import org.apache.hudi.expression.AttributeReferenceExpression;
+import org.apache.hudi.expression.BinaryOperator;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.expression.ExpressionVisitor;
+import org.apache.hudi.expression.Literal;
 
 import java.util.Locale;
 

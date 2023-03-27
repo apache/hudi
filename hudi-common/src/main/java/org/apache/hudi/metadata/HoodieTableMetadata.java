@@ -33,6 +33,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.expression.Expression;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -145,6 +146,8 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Fetch all the files at the given partition path, per the latest snapshot of the metadata.
    */
   FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException;
+
+  List<String> getPartitionPathByExpression(Expression expression);
 
   /**
    * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.

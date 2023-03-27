@@ -16,16 +16,38 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.expression;
+package org.apache.hudi.expression;
 
-/**
- * Visitor used to travers the expression.
- */
-public interface ExpressionVisitor<T> {
+import java.util.List;
 
-  T visitBinaryOperator(BinaryOperator binaryOperator);
+public abstract class Expression {
 
-  T visitLiteral(Literal literal);
+  public enum Operator {
+    AND("AND", "&&"),
+    OR("OR", "||"),
+    GT(">", ">"),
+    LT("<", "<"),
+    EQ("=", "="),
+    GT_EQ(">=", ">="),
+    LT_EQ("<=", "<=");
 
-  T visitAttribute(AttributeReferenceExpression attribute);
+    public final String sqlOperator;
+    public final String symbol;
+
+    Operator(String sqlOperator, String symbol) {
+      this.sqlOperator = sqlOperator;
+      this.symbol = symbol;
+    }
+  }
+
+  private final List<Expression> children;
+
+  public Expression(List<Expression> children) {
+    this.children = children;
+  }
+
+  /**
+   * Traverses the expression with the provided {@link ExpressionVisitor}
+   */
+  public abstract <T> T accept(ExpressionVisitor<T> exprVisitor);
 }

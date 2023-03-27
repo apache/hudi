@@ -16,22 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.expression;
+package org.apache.hudi.expression;
 
-public class AttributeReferenceExpression extends LeafExpression {
+/**
+ * Visitor used to travers the expression.
+ */
+public interface ExpressionVisitor<T> {
 
-  private final String name;
+  T visitBinaryOperator(BinaryOperator binaryOperator);
 
-  public AttributeReferenceExpression(String name) {
-    this.name = name;
-  }
+  T visitLiteral(Literal literal);
 
-  public String getName() {
-    return name;
-  }
-
-  @Override
-  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
-    return exprVisitor.visitAttribute(this);
-  }
+  T visitAttribute(AttributeReferenceExpression attribute);
 }
