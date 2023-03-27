@@ -72,6 +72,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIXMODE;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SPARK_VERSION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
@@ -258,7 +259,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       propertiesChanged = true;
     }
 
-    Option<String> lastCommitTimeSynced = tableExists ? syncClient.getLastCommitTimeSynced(tableName) : Option.empty();
+    Option<String> lastCommitTimeSynced = (tableExists && !config.getBoolean(META_SYNC_PARTITION_FIXMODE))
+        ? syncClient.getLastCommitTimeSynced(tableName) : Option.empty();
     LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
 
     boolean partitionsChanged;
