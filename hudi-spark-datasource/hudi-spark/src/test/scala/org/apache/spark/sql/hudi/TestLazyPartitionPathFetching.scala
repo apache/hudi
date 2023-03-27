@@ -29,7 +29,7 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
            |  name string,
            |  price double,
            |  ts long,
-           |  grass_date string
+           |  date_par date
            |) using hudi
            | location '${tmp.getCanonicalPath}'
            | tblproperties (
@@ -37,43 +37,13 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
            |  type = 'cow',
            |  preCombineField = 'ts'
            | )
-           | PARTITIONED BY (grass_date)
+           | PARTITIONED BY (date_par)
        """.stripMargin)
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, date('2023-02-27'))")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, date('2023-02-28'))")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, date('2023-03-01'))")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, date '2023-02-27')")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, date '2023-02-28')")
+      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, date '2023-03-01')")
 
-      checkAnswer(s"select id, name, price, ts from $tableName where grass_date = '2023-03-01' order by id")(
-        Seq(3, "a3", 10.0, 1000)
-      )
-    }
-  }
-
-  test("Test querying with date column + partition pruning") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long,
-           |  grass_date date
-           |) using hudi
-           | location '${tmp.getCanonicalPath}'
-           | tblproperties (
-           |  primaryKey ='id',
-           |  type = 'cow',
-           |  preCombineField = 'ts'
-           | )
-           | PARTITIONED BY (grass_date)
-       """.stripMargin)
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, date('2023-02-27'))")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, date('2023-02-28'))")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, date('2023-03-01'))")
-
-      checkAnswer(s"select id, name, price, ts from $tableName where grass_date = date'2023-03-01' order by id")(
+      checkAnswer(s"select id, name, price, ts from $tableName where date_par='2023-03-01' order by id")(
         Seq(3, "a3", 10.0, 1000)
       )
     }
@@ -89,8 +59,8 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
            |  name string,
            |  price double,
            |  ts long,
-           |  grass_region string,
-           |  grass_date date
+           |  country string,
+           |  date_par date
            |) using hudi
            | location '${tmp.getCanonicalPath}'
            | tblproperties (
@@ -98,33 +68,17 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
            |  type = 'cow',
            |  preCombineField = 'ts'
            | )
-           | PARTITIONED BY (grass_region, grass_date)
+           | PARTITIONED BY (country, date_par)
          """.stripMargin)
-      spark.sql(s"set schema.on.read.enable=true")
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 'ID', date('2023-02-27'))")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, 'ID', date('2023-02-28'))")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, 'ID', date('2023-03-01'))")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 'ID', date '2023-02-27')")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, 'ID', date '2023-02-28')")
+      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, 'ID', date '2023-03-01')")
 
-      // test (A) that is expected to fail
-      // must execute this first to prevent caching
-      // steps into prunePartition, causing partitionPath to be incorrectly constructed
+      // for lazy fetching partition path & file slice to be enabled, filter must be applied on all partitions
       checkAnswer(s"select id, name, price, ts from $tableName " +
-        s"where grass_date = date'2023-03-01' and grass_region='ID' order by id")(
+        s"where date_par='2023-03-01' and country='ID' order by id")(
         Seq(3, "a3", 10.0, 1000)
       )
-
-      // test (B) that is expected to pass
-      // if we execute the test (B) first, cached listings will be used, test (A) will pass
-      // no error
-      checkAnswer(s"select id, name, price, ts from $tableName where grass_date = date'2023-03-01' order by id")(
-        Seq(3, "a3", 10.0, 1000)
-      )
-
-      // TLDR:
-      // execution order of [B] = pass
-      // execution order of [B, A] = pass
-      // execution order of [A] = fail
-      // execution order of [A, B] = fail
     }
   }
 }
