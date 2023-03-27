@@ -49,7 +49,7 @@ import scala.collection.JavaConverters._
 import scala.util.Random
 
 @Tag("functional")
-@DisabledIf(value = "org.apache.hudi.HoodieSparkUtils.gteqSpark3_3()",
+@DisabledIf(value = "org.apache.hudi.HoodieSparkUtils#gteqSpark3_3",
   disabledReason = "Jackson version conflicts (HUDI-5352)")
 class TestColumnStatsIndex extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
