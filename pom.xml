@@ -2360,7 +2360,7 @@
             <configuration combine.self="append">
               <excludes>
                 <!-- Exclude due to jackson version conflicts (HUDI-5352) -->
-                <exclude>hudi-spark-datasource/hudi-spark/src/test/scala/org/apache/hudi/functional/TestColumnStatsIndex.scala</exclude>
+                <exclude>**/functional/TestColumnStatsIndex.scala</exclude>
               </excludes>
             </configuration>
           </plugin>
