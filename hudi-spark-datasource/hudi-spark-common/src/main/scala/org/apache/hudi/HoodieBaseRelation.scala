@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
@@ -486,7 +487,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     try {
       val tableConfig = metaClient.getTableConfig
       if (shouldExtractPartitionValuesFromPartitionPath) {
-        val relativePath = new URI(metaClient.getBasePath).relativize(new URI(file.getPath.getParent.toString)).toString
+        val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(metaClient.getBasePathV2)
+        val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath.getParent)
+        val relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
         val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
         if (hiveStylePartitioningEnabled) {
           val partitionSpec = PartitioningUtils.parsePathFragment(relativePath)
