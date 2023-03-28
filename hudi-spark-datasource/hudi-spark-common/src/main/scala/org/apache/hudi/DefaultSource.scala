@@ -270,7 +270,7 @@ object DefaultSource {
       }
     }
   }
-  
+
   private def resolveHoodieBootstrapRelation(sqlContext: SQLContext,
                                              globPaths: Seq[Path],
                                              userSchema: Option[StructType],

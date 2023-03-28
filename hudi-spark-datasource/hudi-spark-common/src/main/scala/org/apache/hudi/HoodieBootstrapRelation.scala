@@ -189,8 +189,6 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
     this.copy(prunedDataSchema = Some(prunedSchema))
 
   def toHadoopFsRelation: HadoopFsRelation = {
-    println("partition schema is " + fileIndex.partitionSchema.toString())
-    println("data schema is " + fileIndex.dataSchema.toString())
       HadoopFsRelation(
         location = fileIndex,
         partitionSchema = fileIndex.partitionSchema,
