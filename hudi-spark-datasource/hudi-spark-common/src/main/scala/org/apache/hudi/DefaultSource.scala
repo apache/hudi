@@ -261,7 +261,7 @@ object DefaultSource {
           new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
 
         case (_, _, true) =>
-          new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+          new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters).toHadoopFsRelation
 
         case (_, _, _) =>
           throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +

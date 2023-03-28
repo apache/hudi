@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, getConfigProperties}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
+import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
@@ -93,6 +94,8 @@ case class HoodieFileIndex(spark: SparkSession,
    */
   @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
+  @transient private lazy val bootstrapIndex = new HFileBootstrapIndex(metaClient).createReader()
+
   override def rootPaths: Seq[Path] = getQueryPaths.asScala
 
   /**
@@ -150,7 +153,13 @@ case class HoodieFileIndex(spark: SparkSession,
           fileSlices.asScala
             .map(fs => fs.getBaseFile.orElse(null))
             .filter(_ != null)
-            .map(_.getFileStatus)
+            .map( f =>
+              if (f.getBootstrapBaseFile.isPresent) {
+                f.getBootstrapBaseFile.get().getFileStatus
+              } else {
+                f.getFileStatus
+              }
+            )
 
         // Filter in candidate files based on the col-stats index lookup
         val candidateFiles = baseFileStatuses.filter(fs =>

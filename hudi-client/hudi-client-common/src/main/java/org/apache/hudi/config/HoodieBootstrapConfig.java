@@ -68,6 +68,11 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .sinceVersion("0.6.0")
       .withDocumentation("Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped");
 
+  public static final ConfigProperty<String> DATA_QUERIES_ONLY = ConfigProperty
+      .key("hoodie.bootstrap.data.queries.only")
+      .defaultValue("true")
+      .withDocumentation("Improves query performance, but queries cannot use hudi metadata fields");
+
   public static final ConfigProperty<String> FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.full.input.provider")
       .defaultValue("org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider")
