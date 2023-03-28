@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.config.HoodieBootstrapConfig
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
@@ -261,12 +262,27 @@ object DefaultSource {
           new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
 
         case (_, _, true) =>
-          new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters).toHadoopFsRelation
+          resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
 
         case (_, _, _) =>
           throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
             s"isBootstrappedTable: $isBootstrappedTable ")
       }
+    }
+  }
+  
+  private def resolveHoodieBootstrapRelation(sqlContext: SQLContext,
+                                             globPaths: Seq[Path],
+                                             userSchema: Option[StructType],
+                                             metaClient: HoodieTableMetaClient,
+                                             parameters: Map[String, String]): BaseRelation = {
+    val enableFileIndex = HoodieSparkConfUtils.getConfigValue(parameters, sqlContext.sparkSession.sessionState.conf,
+      ENABLE_HOODIE_FILE_INDEX.key, ENABLE_HOODIE_FILE_INDEX.defaultValue.toString).toBoolean
+    if (!enableFileIndex || globPaths.nonEmpty || parameters.getOrElse(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key(), "true") != "true") {
+      HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+    } else {
+      HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters +
+        (HoodieBootstrapRelation.USE_FAST_BOOTSTRAP_READ -> "true")).toHadoopFsRelation
     }
   }
 

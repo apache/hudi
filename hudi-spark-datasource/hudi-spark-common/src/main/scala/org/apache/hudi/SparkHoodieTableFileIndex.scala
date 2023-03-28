@@ -25,7 +25,7 @@ import org.apache.hudi.SparkHoodieTableFileIndex._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.hadoop.CachingPath
@@ -83,10 +83,18 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   /**
    * Get the schema of the table.
    */
-  lazy val schema: StructType = schemaSpec.getOrElse({
-    val schemaUtil = new TableSchemaResolver(metaClient)
-    AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
-  })
+  lazy val schema: StructType = if (shouldFastBootstrap) {
+      StructType(rawSchema.fields.filterNot(f => HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
+    } else {
+      rawSchema
+    }
+
+  private lazy val rawSchema: StructType = schemaSpec.getOrElse({
+      val schemaUtil = new TableSchemaResolver(metaClient)
+      AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
+    })
+
+  protected lazy val shouldFastBootstrap = configProperties.getBoolean(HoodieBootstrapRelation.USE_FAST_BOOTSTRAP_READ, false)
 
   private lazy val sparkParsePartitionUtil = sparkAdapter.getSparkParsePartitionUtil
 

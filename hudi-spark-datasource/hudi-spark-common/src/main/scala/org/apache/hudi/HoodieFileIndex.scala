@@ -21,12 +21,13 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, getConfigProperties}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.model.HoodieBaseFile
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
+import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
@@ -146,17 +147,10 @@ case class HoodieFileIndex(spark: SparkSession,
     val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
     val listedPartitions = getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map {
       case (partition, fileSlices) =>
-        val baseFileStatuses: Seq[FileStatus] =
-          fileSlices.asScala
-            .map(fs => fs.getBaseFile.orElse(null))
-            .filter(_ != null)
-            .map( f =>
-              if (f.getBootstrapBaseFile.isPresent) {
-                f.getBootstrapBaseFile.get().getFileStatus
-              } else {
-                f.getFileStatus
-              }
-            )
+        val baseFileStatuses: Seq[FileStatus] = getBaseFileStatus(fileSlices
+          .asScala
+          .map(fs => fs.getBaseFile.orElse(null))
+          .filter(_ != null))
 
         // Filter in candidate files based on the col-stats index lookup
         val candidateFiles = baseFileStatuses.filter(fs =>
@@ -184,6 +178,22 @@ case class HoodieFileIndex(spark: SparkSession,
     } else {
       Seq(PartitionDirectory(InternalRow.empty, listedPartitions.flatMap(_.files)))
     }
+  }
+
+  /**
+   * In the fast bootstrap read code path, it gets the file status for the bootstrap base files instead of
+   * skeleton files.
+   */
+  private def getBaseFileStatus(baseFiles: mutable.Buffer[HoodieBaseFile]): mutable.Buffer[FileStatus] = {
+    if (shouldFastBootstrap) {
+     return baseFiles.map(f =>
+        if (f.getBootstrapBaseFile.isPresent) {
+         f.getBootstrapBaseFile.get().getFileStatus
+        } else {
+          f.getFileStatus
+        })
+    }
+    baseFiles.map(_.getFileStatus)
   }
 
   private def lookupFileNamesMissingFromIndex(allIndexedFileNames: Set[String]) = {

@@ -19,23 +19,20 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, projectReader}
 import org.apache.hudi.HoodieBootstrapRelation.validate
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.HoodieBootstrapConfig
-import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.execution.datasources.{DataSource, FilePartition, HadoopFsRelation, PartitionedFile, PartitioningAwareFileIndex}
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, PartitionedFile}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-case class HoodieBootstrapSplit(filePartition: FilePartition, dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile] = None) extends HoodieFileSplit
+case class HoodieBootstrapSplit(dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile] = None) extends HoodieFileSplit
 
 /**
   * This is Spark relation that can be used for querying metadata/fully bootstrapped query hoodie tables, as well as
@@ -60,7 +57,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
                                    override val metaClient: HoodieTableMetaClient,
                                    override val optParams: Map[String, String],
                                    private val prunedDataSchema: Option[StructType] = None)
-  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) with SparkAdapterSupport {
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) {
 
   override type FileSplit = HoodieBootstrapSplit
   override type Relation = HoodieBootstrapRelation
@@ -68,10 +65,8 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
   private lazy val skeletonSchema = HoodieSparkUtils.getMetaSchema
 
   override val mandatoryFields: Seq[String] = Seq.empty
-  private val dataOnly = !optParams.contains(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key()) ||
-    (optParams.get(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key).get == "true")
 
-  private def collectBootstrapFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit] = {
+  protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit] = {
     val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
     fileSlices.map { fileSlice =>
       val baseFile = fileSlice.getBaseFile.get()
@@ -82,41 +77,12 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
         val dataFile = PartitionedFile(partitionValues, baseFile.getBootstrapBaseFile.get().getPath, 0, baseFile.getBootstrapBaseFile.get().getFileLen)
         val skeletonFile = Option(PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen))
 
-        HoodieBootstrapSplit(null, dataFile, skeletonFile)
+        HoodieBootstrapSplit(dataFile, skeletonFile)
       } else {
         val dataFile = PartitionedFile(getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getPath, 0, baseFile.getFileLen)
-        HoodieBootstrapSplit(null, dataFile)
+        HoodieBootstrapSplit(dataFile)
       }
     }
-  }
-
-  protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[HoodieBootstrapSplit] = {
-    if (!dataOnly) {
-      return collectBootstrapFileSplits(partitionFilters, dataFilters)
-    }
-    val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
-    val fileSplits = fileSlices.flatMap { fileSlice =>
-      val baseFile = fileSlice.getBaseFile.get()
-      val (fs, partitionValues) = if (baseFile.getBootstrapBaseFile.isPresent) {
-        (baseFile.getBootstrapBaseFile.get.getFileStatus, getPartitionColumnsAsInternalRowInternal(baseFile.getFileStatus, extractPartitionValuesFromPartitionPath = true))
-      } else {
-        (baseFile.getFileStatus, getPartitionColumnsAsInternalRow(baseFile.getFileStatus))
-      }
-      // TODO fix, currently assuming parquet as underlying format
-      HoodieDataSourceHelper.splitFiles(
-        sparkSession = sparkSession,
-        file = fs,
-        partitionValues = partitionValues
-      )
-    }
-      // NOTE: It's important to order the splits in the reverse order of their
-      //       size so that we can subsequently bucket them in an efficient manner
-      .sortBy(_.length)(implicitly[Ordering[Long]].reverse)
-
-    val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
-
-    sparkAdapter.getFilePartitions(sparkSession, fileSplits, maxSplitBytes)
-      .map(s => HoodieBootstrapSplit.apply(s, null))
   }
 
   protected override def composeRDD(fileSplits: Seq[FileSplit],
@@ -124,19 +90,13 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
                                     filters: Array[Filter]): RDD[InternalRow] = {
-
-    val regularFileReader = createRegularFileReader(tableSchema, requiredSchema, filters)
-
-    if (dataOnly) {
-      return sparkAdapter.createHoodieFileScanRDD(sparkSession, regularFileReader.apply,
-        fileSplits.map(_.filePartition), requiredSchema.structTypeSchema).asInstanceOf[HoodieUnsafeRDD]
-    }
     val requiredSkeletonFileSchema =
       StructType(skeletonSchema.filter(f => requestedColumns.exists(col => resolver(f.name, col))))
 
     val (bootstrapDataFileReader, bootstrapSkeletonFileReader) =
       createBootstrapFileReaders(tableSchema, requiredSchema, requiredSkeletonFileSchema, filters)
 
+    val regularFileReader = createRegularFileReader(tableSchema, requiredSchema, filters)
 
     new HoodieBootstrapRDD(sqlContext.sparkSession, bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader,
       requiredSchema, fileSplits)
@@ -229,78 +189,22 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
     this.copy(prunedDataSchema = Some(prunedSchema))
 
   def toHadoopFsRelation: HadoopFsRelation = {
-    val enableFileIndex = HoodieSparkConfUtils.getConfigValue(optParams, sparkSession.sessionState.conf,
-      ENABLE_HOODIE_FILE_INDEX.key, ENABLE_HOODIE_FILE_INDEX.defaultValue.toString).toBoolean
-    if (enableFileIndex && globPaths.isEmpty) {
-      // NOTE: There are currently 2 ways partition values could be fetched:
-      //          - Source columns (producing the values used for physical partitioning) will be read
-      //          from the data file
-      //          - Values parsed from the actual partition path would be appended to the final dataset
-      //
-      //        In the former case, we don't need to provide the partition-schema to the relation,
-      //        therefore we simply stub it w/ empty schema and use full table-schema as the one being
-      //        read from the data file.
-      //
-      //        In the latter, we have to specify proper partition schema as well as "data"-schema, essentially
-      //        being a table-schema with all partition columns stripped out
-      val (partitionSchema, dataSchema) = if (shouldExtractPartitionValuesFromPartitionPath) {
-        (fileIndex.partitionSchema, fileIndex.dataSchema)
-      } else {
-        (StructType(Nil), tableStructSchema)
-      }
+    println("partition schema is " + fileIndex.partitionSchema.toString())
+    println("data schema is " + fileIndex.dataSchema.toString())
       HadoopFsRelation(
         location = fileIndex,
-        partitionSchema = partitionSchema,
-        dataSchema = dataSchema,
+        partitionSchema = fileIndex.partitionSchema,
+        dataSchema = fileIndex.dataSchema,
         bucketSpec = None,
         fileFormat = fileFormat,
         optParams)(sparkSession)
-    } else {
-      val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
-      val extraReadPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
-      // NOTE: Spark is able to infer partitioning values from partition path only when Hive-style partitioning
-      //       scheme is used. Therefore, we fallback to reading the table as non-partitioned (specifying
-      //       partitionColumns = Seq.empty) whenever Hive-style partitioning is not involved
-      val partitionColumns: Seq[String] = if (tableConfig.getHiveStylePartitioningEnable.toBoolean) {
-        this.partitionColumns
-      } else {
-        Seq.empty
-      }
-
-      DataSource.apply(
-        sparkSession = sparkSession,
-        paths = extraReadPaths,
-        // Here we should specify the schema to the latest commit schema since
-        // the table schema evolution.
-        userSpecifiedSchema = userSchema.orElse(Some(tableStructSchema)),
-        className = fileFormatClassName,
-        options = optParams ++ Map(
-          // Since we're reading the table as just collection of files we have to make sure
-          // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
-          // while keeping previous versions of the files around as well.
-          //
-          // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
-          "mapreduce.input.pathFilter.class" -> classOf[HoodieROTablePathFilter].getName,
-
-          // We have to override [[EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH]] setting, since
-          // the relation might have this setting overridden
-          DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key -> shouldExtractPartitionValuesFromPartitionPath.toString,
-
-          // NOTE: We have to specify table's base-path explicitly, since we're requesting Spark to read it as a
-          //       list of globbed paths which complicates partitioning discovery for Spark.
-          //       Please check [[PartitioningAwareFileIndex#basePaths]] comment for more details.
-          PartitioningAwareFileIndex.BASE_PATH_PARAM -> metaClient.getTableConfig.getBootstrapBasePath.get()
-        ),
-        partitionColumns = partitionColumns
-      )
-        .resolveRelation()
-        .asInstanceOf[HadoopFsRelation]
-    }
   }
 }
 
 
 object HoodieBootstrapRelation {
+
+  val USE_FAST_BOOTSTRAP_READ = "hoodie.bootstrap.relation.use.fast.bootstrap.read"
 
   private def validate(requiredDataSchema: HoodieTableSchema, requiredDataFileSchema: StructType, requiredSkeletonFileSchema: StructType): Unit = {
     val requiredDataColumns: Seq[String] = requiredDataSchema.structTypeSchema.fieldNames.toSeq
