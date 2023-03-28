@@ -25,20 +25,23 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 /**
  * Identifies different types of bootstrap.
  */
-@EnumDescription("Bootstrap types")
+@EnumDescription("Bootstrap is used to import an existing table into Hudi")
 public enum BootstrapMode {
   /**
    * In this mode, record level metadata is generated for each source record and both original record and metadata
    * for each record copied.
    */
-  @EnumFieldDescription("In this mode, record level metadata is generated for each source record and both original record and metadata "
-      + "for each record copied.")
+  @EnumFieldDescription("In this mode, the full record data is copied into hudi and metadata columns are added. A full"
+    + " record bootstrap is functionally equivalent to a bulk-insert. After a full record bootstrap, Hudi will function"
+    + " properly even if the original table is modified or deleted.")
   FULL_RECORD,
 
   /**
    * In this mode, record level metadata alone is generated for each source record and stored in new bootstrap location.
    */
   @EnumDefault
-  @EnumFieldDescription("In this mode, record level metadata alone is generated for each source record and stored in new bootstrap location.")
+  @EnumFieldDescription("In this mode, the full record data is not copied into Hudi. Instead, 'skeleton' files containing"
+      + " just the corresponding metadata columns are added to the Hudi table. Hudi relies on the data in the original table"
+      + " and will face data-loss or corruption if files bootstrapped from the original table are deleted or modified.")
   METADATA_ONLY
 }
