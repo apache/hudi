@@ -80,6 +80,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIf;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -106,6 +107,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests Bootstrap Client functionality.
  */
 @Tag("functional")
+@DisabledIf(value = "org.apache.hudi.HoodieSparkUtils#gteqSpark3_0",
+    disabledReason = "Orc for spark3 is fixed only in 13.0 release. 0.12.X does not have this support")
 public class TestOrcBootstrap extends HoodieClientTestBase {
 
 
