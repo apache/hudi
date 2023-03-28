@@ -28,8 +28,9 @@ import java.util.function.Supplier
 
 class DeleteSavepointProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None),
+    ProcedureParameter.optional(2, "path", DataTypes.StringType, None)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -44,9 +45,10 @@ class DeleteSavepointProcedure extends BaseProcedure with ProcedureBuilder with 
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(2))
     val instantTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
 
-    val basePath: String = getBasePath(tableName)
+    val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
 
     val completedInstants = metaClient.getActiveTimeline.getSavePointTimeline.filterCompletedInstants
