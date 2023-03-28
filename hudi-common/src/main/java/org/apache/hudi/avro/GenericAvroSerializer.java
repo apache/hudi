@@ -44,10 +44,13 @@ import java.util.HashMap;
  * <p>
  * Heavily adapted from:
  * <p>
- * https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/serializer/GenericAvroSerializer.scala
+ * <a href="https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/serializer/GenericAvroSerializer.scala">GenericAvroSerializer.scala</a>
  * <p>
  * As {@link org.apache.hudi.common.util.SerializationUtils} is not shared between threads and does not concern any
- * shuffling operations, compression and decompression cache is omitted.
+ * shuffling operations, compression and decompression cache is omitted as network IO is not a concern.
+ * <p>
+ * Unlike Spark's implementation, the class and constructor is not initialized with a predefined map of avro schemas.
+ * This is the case as schemas to read and write are not known beforehand.
  *
  * @param <D> the subtype of [[GenericContainer]] handled by this serializer
  */
