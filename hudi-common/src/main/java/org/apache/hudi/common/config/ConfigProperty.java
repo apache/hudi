@@ -176,7 +176,7 @@ public class ConfigProperty<T> implements Serializable {
 
     }
 
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, sb.toString(), sinceVersion, deprecatedVersion, inferFunction, validValues, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, sb.toString(), sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, alternatives);
   }
 
   public ConfigProperty<T> withValidValues(String... validValues) {
@@ -254,7 +254,7 @@ public class ConfigProperty<T> implements Serializable {
 
     public <T extends Enum<T>> ConfigProperty<T> enumDefaultValue(Class<T> e, String docOnDefaultValue) {
       return new ConfigProperty<>(key, getEnumDefault(e), docOnDefaultValue, "", Option.empty(), Option.empty(), Option.empty(), new HashSet<>(
-          Arrays.stream(e.getEnumConstants()).map(Enum::toString).collect(Collectors.toList())));
+          Arrays.stream(e.getEnumConstants()).map(Enum::toString).collect(Collectors.toList())), false);
     }
 
     public <T extends Enum<T>> ConfigProperty<T> enumDefaultValue(Class<T> e) {
@@ -271,7 +271,7 @@ public class ConfigProperty<T> implements Serializable {
 
     public <T extends Enum<T>> ConfigProperty<String> enumDefaultStringValue(Class<T> e, String docOnDefaultValue) {
       return new ConfigProperty<>(key, getEnumDefaultString(e), docOnDefaultValue, "", Option.empty(), Option.empty(), Option.empty(), new HashSet<>(
-          Arrays.stream(e.getEnumConstants()).map(Enum::name).collect(Collectors.toList())));
+          Arrays.stream(e.getEnumConstants()).map(Enum::name).collect(Collectors.toList())), false);
     }
 
     public <T extends Enum<T>> ConfigProperty<String> enumDefaultStringValue(Class<T> e) {

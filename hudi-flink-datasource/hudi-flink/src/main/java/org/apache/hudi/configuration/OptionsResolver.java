@@ -246,8 +246,10 @@ public class OptionsResolver {
    */
   public static boolean needsGuardByLock(Configuration conf) {
     return conf.getBoolean(FlinkOptions.METADATA_ENABLED)
-        || conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
-            .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+        || WriteConcurrencyMode.valueOf(conf.getString(
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()))
+        == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
   }
 
   /**
