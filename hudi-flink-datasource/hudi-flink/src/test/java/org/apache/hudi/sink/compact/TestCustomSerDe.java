@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink.compact;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -28,28 +30,52 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.BitCaskDiskMap;
+import org.apache.hudi.common.util.collection.RocksDbDiskMap;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
-public class TestBitCaskDiskMapFromFlink extends HoodieCommonTestHarness {
+/**
+ * Tests for custom SerDe of non-primitive avro types when using Avro versions > 1.10.0.
+ * The avro version used by hudi-flink module is 1.10.0, these tests are placed here so that avro 1.10.0 is used,
+ * allowing the error caused by anonymous classes to be thrown.
+ */
+public class TestCustomSerDe extends HoodieCommonTestHarness {
+
+  @BeforeEach
+  public void setup() {
+    initPath();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testBitCaskDiskMapPutDecimal(boolean isCompressionEnabled) throws IOException {
+    BitCaskDiskMap<String, HoodieRecord> bitCaskDiskMap = new BitCaskDiskMap<>(basePath, isCompressionEnabled);
+    HoodieRecord avroRecord = createAvroRecordWithDecimalOrderingField();
+    bitCaskDiskMap.put(avroRecord.getRecordKey(), avroRecord);
+    assertDoesNotThrow(() -> bitCaskDiskMap.get(avroRecord.getRecordKey()));
+  }
 
   @Test
-  public void testPutDecimal() throws IOException {
-    // the avro version used by hudi-flink module is 1.10.0
-    // placing the test here will use avro 1.10.0, allowing the error caused by anonymous classes to be thrown
-    BitCaskDiskMap<String, HoodieRecord> records = new BitCaskDiskMap<>(basePath, true);
+  public void testRocksDbDiskMapPutDecimal() throws IOException {
+    RocksDbDiskMap<String, HoodieRecord> rocksDbBasedMap = new RocksDbDiskMap<>(basePath);
+    HoodieRecord avroRecord = createAvroRecordWithDecimalOrderingField();
+    rocksDbBasedMap.put(avroRecord.getRecordKey(), avroRecord);
+    assertDoesNotThrow(() -> rocksDbBasedMap.get(avroRecord.getRecordKey()));
+  }
+
+  private static HoodieRecord createAvroRecordWithDecimalOrderingField() {
     Schema precombineFieldSchema = LogicalTypes.decimal(20, 0)
         .addToSchema(Schema.createFixed("fixed", null, "record.precombineField", 9));
-
     byte[] decimalFieldBytes = new byte[] {0, 0, 0, 1, -122, -16, -116, -90, -32};
     GenericFixed genericFixed = new GenericData.Fixed(precombineFieldSchema, decimalFieldBytes);
 
-    HoodieRecord avroRecord = new HoodieAvroRecord<>(new HoodieKey("recordKey", "partitionPath"),
+    // nullifying the record attribute in EventTimeAvroPayload here as it is not required in the test
+    return new HoodieAvroRecord<>(new HoodieKey("recordKey", "partitionPath"),
         new EventTimeAvroPayload(null, (Comparable) genericFixed));
-
-    records.put("a", avroRecord);
-    records.get("a");
   }
 
 }
