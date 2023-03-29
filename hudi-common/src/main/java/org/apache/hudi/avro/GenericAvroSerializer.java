@@ -22,6 +22,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import java.nio.ByteBuffer;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
@@ -61,7 +62,7 @@ public class GenericAvroSerializer<D extends GenericContainer> extends Serialize
 
   // cache results of Schema to bytes result as the same schema will be used many times
   private final HashMap<Schema, byte[]> encodeCache = new HashMap<>();
-  private final HashMap<byte[], Schema> schemaCache = new HashMap<>();
+  private final HashMap<ByteBuffer, Schema> schemaCache = new HashMap<>();
 
   private byte[] getSchemaBytes(Schema schema) {
     if (encodeCache.containsKey(schema)) {
@@ -74,12 +75,13 @@ public class GenericAvroSerializer<D extends GenericContainer> extends Serialize
   }
 
   private Schema getSchema(byte[] schemaBytes) {
-    if (schemaCache.containsKey(schemaBytes)) {
-      return schemaCache.get(schemaBytes);
+    ByteBuffer schemaByteBuffer = ByteBuffer.wrap(schemaBytes);
+    if (schemaCache.containsKey(schemaByteBuffer)) {
+      return schemaCache.get(schemaByteBuffer);
     } else {
       String schema = new String(schemaBytes, StandardCharsets.UTF_8);
       Schema parsedSchema = new Schema.Parser().parse(schema);
-      schemaCache.put(schemaBytes, parsedSchema);
+      schemaCache.put(schemaByteBuffer, parsedSchema);
       return parsedSchema;
     }
   }
