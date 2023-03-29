@@ -1139,7 +1139,7 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_BASE_PATH, bootstrapBasePath);
       }
 
-      if (null != preCombineField) {
+      if (StringUtils.nonEmpty(preCombineField)) {
         tableConfig.setValue(HoodieTableConfig.PRECOMBINE_FIELD, preCombineField);
       }
 
