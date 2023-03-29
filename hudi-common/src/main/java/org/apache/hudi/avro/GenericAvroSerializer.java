@@ -23,7 +23,6 @@ import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaNormalization;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -60,27 +59,27 @@ public class GenericAvroSerializer<D extends GenericContainer> extends Serialize
   private final HashMap<Schema, DatumWriter<D>> writerCache = new HashMap<>();
   private final HashMap<Schema, DatumReader<D>> readerCache = new HashMap<>();
 
-  // fingerprinting is very expensive so this alleviates most of the work
-  private final HashMap<Schema, Long> fingerprintCache = new HashMap<>();
-  private final HashMap<Long, Schema> schemaCache = new HashMap<>();
+  // cache results of Schema to bytes result as the same schema will be used many times
+  private final HashMap<Schema, byte[]> encodeCache = new HashMap<>();
+  private final HashMap<byte[], Schema> schemaCache = new HashMap<>();
 
-  private Long getFingerprint(Schema schema) {
-    if (fingerprintCache.containsKey(schema)) {
-      return fingerprintCache.get(schema);
+  private byte[] getSchemaBytes(Schema schema) {
+    if (encodeCache.containsKey(schema)) {
+      return encodeCache.get(schema);
     } else {
-      Long fingerprint = SchemaNormalization.parsingFingerprint64(schema);
-      fingerprintCache.put(schema, fingerprint);
-      return fingerprint;
+      byte[] schemaBytes = schema.toString().getBytes(StandardCharsets.UTF_8);
+      encodeCache.put(schema, schemaBytes);
+      return schemaBytes;
     }
   }
 
-  private Schema getSchema(Long fingerprint, byte[] schemaBytes) {
-    if (schemaCache.containsKey(fingerprint)) {
-      return schemaCache.get(fingerprint);
+  private Schema getSchema(byte[] schemaBytes) {
+    if (schemaCache.containsKey(schemaBytes)) {
+      return schemaCache.get(schemaBytes);
     } else {
       String schema = new String(schemaBytes, StandardCharsets.UTF_8);
       Schema parsedSchema = new Schema.Parser().parse(schema);
-      schemaCache.put(fingerprint, parsedSchema);
+      schemaCache.put(schemaBytes, parsedSchema);
       return parsedSchema;
     }
   }
@@ -110,9 +109,7 @@ public class GenericAvroSerializer<D extends GenericContainer> extends Serialize
   private void serializeDatum(D datum, Output output) throws IOException {
     Encoder encoder = EncoderFactory.get().directBinaryEncoder(output, null);
     Schema schema = datum.getSchema();
-    Long fingerprint = this.getFingerprint(schema);
-    byte[] schemaBytes = schema.toString().getBytes(StandardCharsets.UTF_8);
-    output.writeLong(fingerprint);
+    byte[] schemaBytes = getSchemaBytes(schema);
     output.writeInt(schemaBytes.length);
     output.writeBytes(schemaBytes);
     getDatumWriter(schema).write(datum, encoder);
@@ -120,10 +117,9 @@ public class GenericAvroSerializer<D extends GenericContainer> extends Serialize
   }
 
   private D deserializeDatum(Input input) throws IOException {
-    Long fingerprint = input.readLong();
     int schemaBytesLen = input.readInt();
     byte[] schemaBytes = input.readBytes(schemaBytesLen);
-    Schema schema = getSchema(fingerprint, schemaBytes);
+    Schema schema = getSchema(schemaBytes);
     Decoder decoder = DecoderFactory.get().directBinaryDecoder(input, null);
     return getDatumReader(schema).read(null, decoder);
   }
