@@ -40,6 +40,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -90,6 +91,7 @@ public class KafkaOffsetGen {
      * Format: topic1,0:offset0,1:offset1,2:offset2, .....
      */
     public static String offsetsToStr(OffsetRange[] ranges) {
+      ranges = mergeRangesByTp(ranges);
       StringBuilder sb = new StringBuilder();
       // at least 1 partition will be present.
       sb.append(ranges[0].topic() + ",");
@@ -150,6 +152,40 @@ public class KafkaOffsetGen {
       return ranges;
     }
 
+    public static OffsetRange[] splitRangesByCount(OffsetRange[] oldRanges, long maxEvents) {
+      List<OffsetRange> newRanges = new ArrayList<>();
+      for (OffsetRange range : oldRanges) {
+        newRanges.addAll(splitPerRange(range, maxEvents));
+      }
+      return newRanges.toArray(new OffsetRange[0]);
+    }
+
+    public static OffsetRange[] mergeRangesByTp(OffsetRange[] oldRanges) {
+      List<OffsetRange> newRanges = new ArrayList<>();
+      Map<TopicPartition, List<OffsetRange>> tpOffsets = Arrays.stream(oldRanges).collect(Collectors.groupingBy(OffsetRange::topicPartition));
+      for (Map.Entry<TopicPartition, List<OffsetRange>> entry : tpOffsets.entrySet()) {
+        long from = entry.getValue().stream().map(OffsetRange::fromOffset).min(Long::compare).get();
+        long until = entry.getValue().stream().map(OffsetRange::untilOffset).max(Long::compare).get();
+        newRanges.add(OffsetRange.create(entry.getKey(), from, until));
+      }
+      return newRanges.toArray(new OffsetRange[0]);
+    }
+
+    public static List<OffsetRange> splitPerRange(OffsetRange range, long maxEvents) {
+      List<OffsetRange> newRanges = new ArrayList<>();
+      if (range.count() <= maxEvents) {
+        newRanges.add(range);
+        return newRanges;
+      }
+      long partsNum = (range.count() + maxEvents - 1) / maxEvents;
+      long step = range.count() / partsNum;
+      for (long start = range.fromOffset(); start < range.untilOffset(); start += step) {
+        long end = Math.min(start + step, range.untilOffset());
+        newRanges.add(OffsetRange.create(range.topicPartition(), start, end));
+      }
+      return newRanges;
+    }
+
     public static long totalNewMessages(OffsetRange[] ranges) {
       return Arrays.stream(ranges).mapToLong(OffsetRange::count).sum();
     }
@@ -196,6 +232,14 @@ public class KafkaOffsetGen {
             .key("hoodie.deltastreamer.kafka.source.maxEvents")
             .defaultValue(5000000L)
             .withDocumentation("Maximum number of records obtained in each batch.");
+
+    public static final ConfigProperty<Long> MAX_EVENTS_PER_KAFKA_BATCH = ConfigProperty
+            .key("hoodie.deltastreamer.kafka.per.batch.maxEvents")
+            .defaultValue(Long.MAX_VALUE)
+            .withDocumentation("Maximum number of records in per kafka batch. For example: set this param to 500000, "
+                    + "in kafka partition 0 offset from 0 to 1000000, "
+                    + "will split to two kafka batches offset from 0 to 500000 and "
+                    + "offset from 500000 to 1000000");
 
     // "auto.offset.reset" is kafka native config param. Do not change the config param name.
     private static final ConfigProperty<KafkaResetOffsetStrategies> KAFKA_AUTO_OFFSET_RESET = ConfigProperty
@@ -298,7 +342,11 @@ public class KafkaOffsetGen {
       throw new HoodieException("sourceLimit should not be less than the number of kafka partitions");
     }
 
-    return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
+    OffsetRange[] ranges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
+
+    long maxEventsPerBatch = props.getLong(Config.MAX_EVENTS_PER_KAFKA_BATCH.key(),
+            Config.MAX_EVENTS_PER_KAFKA_BATCH.defaultValue());
+    return CheckpointUtils.splitRangesByCount(ranges, maxEventsPerBatch);
   }
 
   /**
