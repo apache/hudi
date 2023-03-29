@@ -26,8 +26,10 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.log4j.LogManager
+import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -57,6 +59,8 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
+  override def conf: SparkConf = conf(getSparkSqlConf)
+
   @ParameterizedTest
   @CsvSource(Array(
     "true,",
@@ -64,11 +68,11 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     "false,",
     "false,fare.currency"
   ))
-  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preComineField: String) {
+  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preCombineField: String) {
     var options: Map[String, String] = commonOpts +
       (HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled))
-    if (!StringUtils.isNullOrEmpty(preComineField)) {
-      options += (DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> preComineField)
+    if (!StringUtils.isNullOrEmpty(preCombineField)) {
+      options += (DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> preCombineField)
     }
     val dataGen = new HoodieTestDataGenerator(0xDEEF)
     val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)

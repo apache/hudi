@@ -262,7 +262,7 @@ public class TestHoodieCompactionStrategy {
         "LogFileLengthBasedCompactionStrategy should have resulted in fewer compactions");
     assertEquals(2, returned.size(), "LogFileLengthBasedCompactionStrategy should have resulted in 2 compaction");
 
-    // Delte log File length
+    // Delta log File length
     Integer allFileLength = returned.stream().map(s -> s.getDeltaFilePaths().size())
         .reduce(Integer::sum).orElse(0);
 

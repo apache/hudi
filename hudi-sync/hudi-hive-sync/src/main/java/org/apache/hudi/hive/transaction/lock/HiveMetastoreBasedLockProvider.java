@@ -37,6 +37,7 @@ import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
@@ -87,7 +88,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
       HiveConf hiveConf = new HiveConf();
       setHiveLockConfs(hiveConf);
       hiveConf.addResource(conf);
-      this.hiveClient = Hive.get(hiveConf).getMSC();
+      this.hiveClient = IMetaStoreClientUtil.getMSC(hiveConf);
     } catch (MetaException | HiveException e) {
       throw new HoodieLockException("Failed to create HiveMetaStoreClient", e);
     }

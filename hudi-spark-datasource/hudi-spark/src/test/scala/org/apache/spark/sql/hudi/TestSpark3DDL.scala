@@ -23,10 +23,9 @@ import org.apache.hudi.QuickstartUtils.{DataGenerator, convertToStringList, getQ
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.RawTripTestPayload
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, HoodieSparkUtils}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
 import org.apache.spark.sql.types.StringType
@@ -245,7 +244,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           val meta = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
           assert(meta.comment.get.equals("it is a hudi table"))
           assert(Seq("key1", "key2").filter(meta.properties.contains(_)).size == 2)
-          // test unset propertes
+          // test unset properties
           spark.sql(s"alter table $tableName unset tblproperties(comment, 'key1', 'key2')")
           val unsetMeta = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
           assert(Seq("key1", "key2").filter(unsetMeta.properties.contains(_)).size == 0)
@@ -524,7 +523,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"alter table ${tableName} add columns(name string comment 'add name back' after userx," +
             s" userx.name string comment 'add userx.name back' first, userx.score int comment 'add userx.score back' after age)")
 
-          // query new columns: name, userx.name, userx.score, those field should not be readed.
+          // query new columns: name, userx.name, userx.score, those field should not be read.
           checkAnswer(spark.sql(s"select name, userx.name, userx.score from ${tableName}").collect())(Seq(null, null, null))
 
           // insert again
@@ -732,6 +731,54 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           checkAnswer(spark.sql(s"select fare, addColumn from  hudi_trips_snapshot1 where fare = ${checkKey}").collect())(
             Seq(checkKey, null)
           )
+        }
+      }
+    }
+  }
+
+  test("Test DATE to STRING conversions when vectorized reading is not enabled") {
+    withTempDir { tmp =>
+      Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          // adding a struct column to force reads to use non-vectorized readers
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  struct_col struct<f0: int, f1: string>,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+               | partitioned by (ts)
+             """.stripMargin)
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1', 10, struct(1, 'f_1'), 1000)
+              """.stripMargin)
+          spark.sql(s"select * from $tableName")
+
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql(s"alter table $tableName add columns(date_to_string_col date)")
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (2, 'a2', 20, struct(2, 'f_2'), date '2023-03-22', 1001)
+              """.stripMargin)
+          spark.sql(s"alter table $tableName alter column date_to_string_col type string")
+
+          // struct and string (converted from date) column must be read to ensure that non-vectorized reader is used
+          // not checking results as we just need to ensure that the table can be read without any errors thrown
+          spark.sql(s"select * from $tableName")
         }
       }
     }

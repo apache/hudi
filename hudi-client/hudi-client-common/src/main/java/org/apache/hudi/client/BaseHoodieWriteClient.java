@@ -110,7 +110,7 @@ import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 
 /**
  * Abstract Write Client providing functionality for performing commit, index updates and rollback
- * Reused for regular write operations like upsert/insert/bulk-insert.. as well as bootstrap
+ * Reused for regular write operations like upsert/insert/bulk-insert as well as bootstrap
  *
  * @param <T> Type of data
  * @param <I> Type of inputs
@@ -476,9 +476,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
-   * de-duped and non existent keys will be removed before deleting.
+   * de-duped and non-existent keys will be removed before deleting.
    *
-   * @param keys {@link List} of {@link HoodieKey}s to be deleted
+   * @param keys        {@link List} of {@link HoodieKey}s to be deleted
    * @param instantTime Commit time handle
    * @return Collection of WriteStatus to inspect errors and counts
    */
@@ -680,7 +680,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * NOTE : This action requires all writers (ingest and compact) to a table to be stopped before proceeding. Revert
    * the (inflight/committed) record changes for all commits after the provided instant time.
    *
-   * @param savepointToRestoreTimestamp savepoint intstant time to which restoration is requested
+   * @param savepointToRestoreTimestamp savepoint instant time to which restoration is requested
    */
   public HoodieRestoreMetadata restoreToInstant(final String savepointToRestoreTimestamp, boolean initialMetadataTableIfNecessary) throws HoodieRestoreException {
     LOG.info("Begin restore to instant " + savepointToRestoreTimestamp);
@@ -1030,7 +1030,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /***
    * Schedules compaction inline.
-   * @param extraMetadata extrametada to be used.
+   * @param extraMetadata extra metadata to be used.
    * @return compaction instant if scheduled.
    */
   protected Option<String> inlineScheduleCompaction(Option<Map<String, String>> extraMetadata) {
@@ -1305,10 +1305,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * add columns to table.
    *
-   * @param colName col name to be added. if we want to add col to a nested filed, the fullName should be specify
-   * @param schema col type to be added.
-   * @param doc col doc to be added.
-   * @param position col position to be added
+   * @param colName      col name to be added. if we want to add col to a nested filed, the fullName should be specified
+   * @param schema       col type to be added.
+   * @param doc          col doc to be added.
+   * @param position     col position to be added
    * @param positionType col position change type. now support three change types: first/after/before
    */
   public void addColumn(String colName, Schema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
@@ -1325,7 +1325,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * delete columns to table.
    *
-   * @param colNames col name to be deleted. if we want to delete col from a nested filed, the fullName should be specify
+   * @param colNames col name to be deleted. if we want to delete col from a nested filed, the fullName should be specified
    */
   public void deleteColumns(String... colNames) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
@@ -1336,7 +1336,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * rename col name for hudi table.
    *
-   * @param colName col name to be renamed. if we want to rename col from a nested filed, the fullName should be specify
+   * @param colName col name to be renamed. if we want to rename col from a nested filed, the fullName should be specified
    * @param newName new name for current col. no need to specify fullName.
    */
   public void renameColumn(String colName, String newName) {
@@ -1348,7 +1348,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * update col nullable attribute for hudi table.
    *
-   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
+   * @param colName  col name to be changed. if we want to change col from a nested filed, the fullName should be specified
    * @param nullable .
    */
   public void updateColumnNullability(String colName, boolean nullable) {
@@ -1362,7 +1362,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * only support update primitive type to primitive type.
    * cannot update nest type to nest type or primitive type eg: RecordType -> MapType, MapType -> LongType.
    *
-   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
+   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specified
    * @param newType .
    */
   public void updateColumnType(String colName, Type newType) {
@@ -1374,8 +1374,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * update col comment for hudi table.
    *
-   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
-   * @param doc .
+   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specified
+   * @param doc     .
    */
   public void updateColumnComment(String colName, String doc) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
@@ -1386,7 +1386,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * reorder the position of col.
    *
-   * @param colName column which need to be reordered. if we want to change col from a nested filed, the fullName should be specify.
+   * @param colName column which need to be reordered. if we want to change col from a nested filed, the fullName should be specified.
    * @param referColName reference position.
    * @param orderType col position change type. now support three change types: first/after/before
    */

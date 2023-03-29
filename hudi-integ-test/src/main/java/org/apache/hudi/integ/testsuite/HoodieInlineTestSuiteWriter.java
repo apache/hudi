@@ -65,7 +65,14 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
   }
 
   public void shutdownResources() {
-    // no-op for non continuous mode test suite writer.
+    if (this.deltaStreamerWrapper != null) {
+      log.info("Shutting down DS wrapper gracefully ");
+      this.deltaStreamerWrapper.shutdownGracefully();
+    }
+    if (this.writeClient != null) {
+      log.info("Closing local write client");
+      this.writeClient.close();
+    }
   }
 
   public RDD<GenericRecord> getNextBatch() throws Exception {

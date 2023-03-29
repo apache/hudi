@@ -248,13 +248,29 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> INSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.insert.shuffle.parallelism")
       .defaultValue("0")
-      .withDocumentation("Parallelism for inserting records into the table. Inserts can shuffle data before writing to tune file sizes and optimize the storage layout.");
+      .withDocumentation("Parallelism for inserting records into the table. Inserts can shuffle "
+          + "data before writing to tune file sizes and optimize the storage layout. Before "
+          + "0.13.0 release, if users do not configure it, Hudi would use 200 as the default "
+          + "shuffle parallelism. From 0.13.0 onwards Hudi by default automatically uses the "
+          + "parallelism deduced by Spark based on the source data. If the shuffle parallelism "
+          + "is explicitly configured by the user, the user-configured parallelism is "
+          + "used in defining the actual parallelism. If you observe small files from the insert "
+          + "operation, we suggest configuring this shuffle parallelism explicitly, so that the "
+          + "parallelism is around total_input_data_size/120MB.");
 
   public static final ConfigProperty<String> BULKINSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.bulkinsert.shuffle.parallelism")
       .defaultValue("0")
-      .withDocumentation("For large initial imports using bulk_insert operation, controls the parallelism to use for sort modes or custom partitioning done"
-          + "before writing records to the table.");
+      .withDocumentation("For large initial imports using bulk_insert operation, controls the "
+          + "parallelism to use for sort modes or custom partitioning done before writing records "
+          + "to the table. Before 0.13.0 release, if users do not configure it, Hudi would use "
+          + "200 as the default shuffle parallelism. From 0.13.0 onwards Hudi by default "
+          + "automatically uses the parallelism deduced by Spark based on the source data or "
+          + "the parallelism based on the logical plan for row writer. If the shuffle parallelism "
+          + "is explicitly configured by the user, the user-configured parallelism is "
+          + "used in defining the actual parallelism. If you observe small files from the bulk insert "
+          + "operation, we suggest configuring this shuffle parallelism explicitly, so that the "
+          + "parallelism is around total_input_data_size/120MB.");
 
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS = ConfigProperty
       .key("hoodie.bulkinsert.user.defined.partitioner.sort.columns")
@@ -272,18 +288,36 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> UPSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.upsert.shuffle.parallelism")
       .defaultValue("0")
-      .withDocumentation("Parallelism to use for upsert operation on the table. Upserts can shuffle data to perform index lookups, file sizing, bin packing records optimally"
-          + "into file groups.");
+      .withDocumentation("Parallelism to use for upsert operation on the table. Upserts can "
+          + "shuffle data to perform index lookups, file sizing, bin packing records optimally "
+          + "into file groups. Before 0.13.0 release, "
+          + "if users do not configure it, Hudi would use 200 as the default "
+          + "shuffle parallelism. From 0.13.0 onwards Hudi by default automatically uses the "
+          + "parallelism deduced by Spark based on the source data. If the shuffle parallelism "
+          + "is explicitly configured by the user, the user-configured parallelism is "
+          + "used in defining the actual parallelism. If you observe small files from the upsert "
+          + "operation, we suggest configuring this shuffle parallelism explicitly, so that the "
+          + "parallelism is around total_input_data_size/120MB.");
 
   public static final ConfigProperty<String> DELETE_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.delete.shuffle.parallelism")
       .defaultValue("0")
-      .withDocumentation("Parallelism used for “delete” operation. Delete operations also performs shuffles, similar to upsert operation.");
+      .withDocumentation("Parallelism used for delete operation. Delete operations also performs "
+          + "shuffles, similar to upsert operation. Before 0.13.0 release, "
+          + "if users do not configure it, Hudi would use 200 as the default "
+          + "shuffle parallelism. From 0.13.0 onwards Hudi by default automatically uses the "
+          + "parallelism deduced by Spark based on the source data. If the shuffle parallelism "
+          + "is explicitly configured by the user, the user-configured parallelism is "
+          + "used in defining the actual parallelism.");
 
   public static final ConfigProperty<String> ROLLBACK_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.rollback.parallelism")
       .defaultValue("100")
-      .withDocumentation("Parallelism for rollback of commits. Rollbacks perform delete of files or logging delete blocks to file groups on storage in parallel.");
+      .withDocumentation("This config controls the parallelism for rollback of commits. "
+          + "Rollbacks perform deletion of files or logging delete blocks to file groups on "
+          + "storage in parallel. The configure value limits the parallelism so that the number "
+          + "of Spark tasks do not exceed the value. If rollback is slow due to the limited "
+          + "parallelism, you can increase this to tune the performance.");
 
   public static final ConfigProperty<String> WRITE_BUFFER_LIMIT_BYTES_VALUE = ConfigProperty
       .key("hoodie.write.buffer.limit.bytes")

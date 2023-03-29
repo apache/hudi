@@ -71,6 +71,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
+
 public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     extends BaseActionExecutor<T, I, K, O, R> {
 
@@ -255,6 +257,8 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
         .performClustering(clusteringPlan, schema, instantTime);
     HoodieData<WriteStatus> writeStatusList = writeMetadata.getWriteStatuses();
     HoodieData<WriteStatus> statuses = updateIndex(writeStatusList, writeMetadata);
+    statuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
+    // triggers clustering.
     writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collectAsList());
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
     commitOnAutoCommit(writeMetadata);

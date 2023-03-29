@@ -183,7 +183,12 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public void shutdownGracefully() {
-    ingestionService.ifPresent(ds -> ds.shutdown(false));
+    ingestionService.ifPresent(ds -> {
+      LOG.info("Shutting down DeltaStreamer");
+      ds.shutdown(false);
+      LOG.info("Async service shutdown complete. Closing DeltaSync ");
+      ds.close();
+    });
   }
 
   /**
@@ -268,8 +273,9 @@ public class HoodieDeltaStreamer implements Serializable {
         + "Default: No limit, e.g: DFS-Source => max bytes to read, Kafka-Source => max events to read")
     public long sourceLimit = Long.MAX_VALUE;
 
-    @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
-        + "is purely new data/inserts to gain speed)", converter = OperationConverter.class)
+    @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT, "
+        + "BULK_INSERT, INSERT_OVERWRITE, INSERT_OVERWRITE_TABLE, DELETE_PARTITION",
+        converter = OperationConverter.class)
     public WriteOperationType operation = WriteOperationType.UPSERT;
 
     @Parameter(names = {"--filter-dupes"},

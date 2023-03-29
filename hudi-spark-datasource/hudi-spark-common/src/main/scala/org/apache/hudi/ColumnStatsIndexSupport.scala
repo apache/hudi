@@ -357,7 +357,7 @@ object ColumnStatsIndexSupport {
     "BytesWrapper", "StringWrapper", "DateWrapper", "DecimalWrapper", "TimeMicrosWrapper", "TimestampMicrosWrapper")
 
   /**
-   * Target Column Stats Index columns which internally are mapped onto fields of the correspoding
+   * Target Column Stats Index columns which internally are mapped onto fields of the corresponding
    * Column Stats record payload ([[HoodieMetadataColumnStats]]) persisted w/in Metadata Table
    */
   private val targetColumnStatsIndexColumns = Seq(

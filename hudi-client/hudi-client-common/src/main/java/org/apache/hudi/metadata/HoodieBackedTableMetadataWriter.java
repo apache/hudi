@@ -162,7 +162,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
       enabled = true;
 
-      // Inline compaction and auto clean is required as we dont expose this table outside
+      // Inline compaction and auto clean is required as we do not expose this table outside
       ValidationUtils.checkArgument(!this.metadataWriteConfig.isAutoClean(),
           "Cleaning is controlled internally for Metadata table.");
       ValidationUtils.checkArgument(!this.metadataWriteConfig.inlineCompactionEnabled(),
@@ -1045,8 +1045,15 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .filterCompletedInstants()
         .lastInstant().orElseThrow(() -> new HoodieMetadataException("No completed deltacommit in metadata table"))
         .getTimestamp();
+    // we need to find if there are any inflights in data table timeline before or equal to the latest delta commit in metadata table.
+    // Whenever you want to change this logic, please ensure all below scenarios are considered.
+    // a. There could be a chance that latest delta commit in MDT is committed in MDT, but failed in DT. And so findInstantsBeforeOrEquals() should be employed
+    // b. There could be DT inflights after latest delta commit in MDT and we are ok with it. bcoz, the contract is, latest compaction instant time in MDT represents
+    // any instants before that is already synced with metadata table.
+    // c. Do consider out of order commits. For eg, c4 from DT could complete before c3. and we can't trigger compaction in MDT with c4 as base instant time, until every
+    // instant before c4 is synced with metadata table. 
     List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
-        .findInstantsBefore(latestDeltaCommitTimeInMetadataTable).getInstants();
+        .findInstantsBeforeOrEquals(latestDeltaCommitTimeInMetadataTable).getInstants();
 
     if (!pendingInstants.isEmpty()) {
       LOG.info(String.format(
@@ -1060,7 +1067,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // metadata table.
     final String compactionInstantTime = latestDeltaCommitTimeInMetadataTable + METADATA_COMPACTION_TIME_SUFFIX;
     // we need to avoid checking compaction w/ same instant again.
-    // lets say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
+    // let's say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
     // and again w/ C6, we will re-attempt compaction at which point latest delta commit is C4 in MDT.
     // and so we try compaction w/ instant C4001. So, we can avoid compaction if we already have compaction w/ same instant time.
     if (!metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime)
@@ -1105,7 +1112,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
 
-    // skip file system listing to populate metadata records if its a fresh table.
+    // skip file system listing to populate metadata records if it's a fresh table.
     // this is applicable only if the table already has N commits and metadata is enabled at a later point in time.
     if (createInstantTime.equals(SOLO_COMMIT_TIMESTAMP)) { // SOLO_COMMIT_TIMESTAMP will be the initial commit time in MDT for a fresh table.
       // If not, last completed commit in data table will be chosen as the initial commit time.

@@ -44,6 +44,7 @@ import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, QuickstartUtils, ScalaAssertionSupport}
+import org.apache.spark.scheduler.{SparkListener, SparkListenerStageCompleted}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -1410,6 +1411,47 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(false, Metrics.isInitialized(basePath), "Metrics should be shutdown")
   }
 
+  /**
+   * Validates that clustering dag is triggered only once.
+   * We leverage spark event listener to validate it.
+   */
+  @Test
+  def testValidateClusteringForRepeatedDag(): Unit = {
+    // register stage event listeners
+    val sm = new StageEventManager("org.apache.hudi.table.action.commit.BaseCommitActionExecutor.executeClustering")
+    spark.sparkContext.addSparkListener(sm)
+
+    var structType : StructType = null
+    for (i <- 1 to 2) {
+      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).toList
+      val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+      structType = inputDF.schema
+      inputDF.write.format("hudi")
+        .options(commonOpts)
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+        .option("hoodie.metadata.enable","false")
+        .mode(if (i == 0) SaveMode.Overwrite else SaveMode.Append)
+        .save(basePath)
+    }
+
+    // trigger clustering.
+    val records = recordsToStrings(dataGen.generateInserts("%05d".format(4), 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    structType = inputDF.schema
+    inputDF.write.format("hudi")
+      .options(commonOpts)
+      .option("hoodie.cleaner.commits.retained", "0")
+      .option("hoodie.parquet.small.file.limit", "0")
+      .option("hoodie.clustering.inline", "true")
+      .option("hoodie.clustering.inline.max.commits", "2")
+      .option("hoodie.metadata.enable","false")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // verify that clustering is not trigered more than once.
+    assertEquals(sm.triggerCount, 1)
+  }
+
   def getWriterReaderOpts(recordType: HoodieRecordType,
                           opt: Map[String, String] = commonOpts,
                           enableFileIndex: Boolean = DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.defaultValue()):
@@ -1438,6 +1480,17 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       basePath + "/*" * (partitionPathLevel + 1)
     } else {
       basePath
+    }
+  }
+
+  /************** Stage Event Listener **************/
+  class StageEventManager(eventToTrack: String) extends SparkListener() {
+    var triggerCount = 0
+
+    override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
+      if (stageCompleted.stageInfo.details.contains(eventToTrack)) {
+        triggerCount += 1
+      }
     }
   }
 }

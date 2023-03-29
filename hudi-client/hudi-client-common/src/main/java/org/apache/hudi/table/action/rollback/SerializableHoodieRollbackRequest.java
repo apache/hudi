@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * HoodieRollbackRequest in HoodieRollbackPlan (avro pojo) is not operable direclty within spark parallel engine.
+ * HoodieRollbackRequest in HoodieRollbackPlan (avro pojo) is not operable directly within spark parallel engine.
  * Hence converting the same to this {@link SerializableHoodieRollbackRequest} and then using it within spark.parallelize.
  */
 public class SerializableHoodieRollbackRequest implements Serializable {

@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -87,8 +88,10 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
   protected Set<String> pendingInflightAndRequestedInstants;
 
-  protected BaseHoodieTableServiceClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig, Option.empty());
+  protected BaseHoodieTableServiceClient(HoodieEngineContext context,
+                                         HoodieWriteConfig clientConfig,
+                                         Option<EmbeddedTimelineService> timelineService) {
+    super(context, clientConfig, timelineService);
   }
 
   protected void startAsyncCleanerService(BaseHoodieWriteClient writeClient) {
@@ -204,7 +207,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
   /***
    * Schedules compaction inline.
-   * @param extraMetadata extrametada to be used.
+   * @param extraMetadata extra metadata to be used.
    * @return compaction instant if scheduled.
    */
   protected Option<String> inlineScheduleCompaction(Option<Map<String, String>> extraMetadata) {
@@ -381,7 +384,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    */
   public Option<String> scheduleTableService(String instantTime, Option<Map<String, String>> extraMetadata,
                                              TableServiceType tableServiceType) {
-    // A lock is required to guard against race conditions between an on-going writer and scheduling a table service.
+    // A lock is required to guard against race conditions between an ongoing writer and scheduling a table service.
     final Option<HoodieInstant> inflightInstant = Option.of(new HoodieInstant(HoodieInstant.State.REQUESTED,
         tableServiceType.getAction(), instantTime));
     try {
@@ -469,7 +472,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   /**
    * Schedules clustering inline.
    *
-   * @param extraMetadata extrametadata to use.
+   * @param extraMetadata extra metadata to use.
    * @return clustering instant if scheduled.
    */
   protected Option<String> inlineScheduleClustering(Option<Map<String, String>> extraMetadata) {
@@ -581,7 +584,8 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   }
 
   /**
-   * Get inflight time line exclude compaction and clustering.
+   * Get inflight timeline excluding compaction and clustering.
+   *
    * @param metaClient
    * @return
    */

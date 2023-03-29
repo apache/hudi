@@ -106,7 +106,7 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
 
     // validate
     validateMetadata(testTable);
-    // after bootstrap do two writes and validate its still functional.
+    // after bootstrap do two writes and validate it's still functional.
     doWriteInsertAndUpsert(testTable);
     validateMetadata(testTable);
   }
@@ -178,7 +178,7 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
     // once the commit is complete, metadata should get fully synced.
     // in prod code path, SparkHoodieBackedTableMetadataWriter.create() will be called for every commit,
     // which may not be the case here if we directly call HoodieBackedTableMetadataWriter.update()
-    // hence lets first move the commit to complete and invoke sync directly
+    // hence let's first move the commit to complete and invoke sync directly
     ((HoodieMetadataTestTable) testTable).moveInflightCommitToComplete("00000007", inflightCommitMeta, true);
     syncTableMetadata(writeConfig);
     validateMetadata(testTable);
@@ -252,7 +252,7 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
     initWriteConfigAndMetatableWriter(writeConfig, true);
     syncTableMetadata(writeConfig);
     validateMetadata(testTable);
-    // after bootstrap do two writes and validate its still functional.
+    // after bootstrap do two writes and validate it's still functional.
     doWriteInsertAndUpsert(testTable);
     validateMetadata(testTable);
   }

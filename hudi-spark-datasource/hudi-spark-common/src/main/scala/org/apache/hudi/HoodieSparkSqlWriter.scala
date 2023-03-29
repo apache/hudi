@@ -37,7 +37,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME, KEYGEN_CLASS_NAME}
@@ -171,7 +171,6 @@ object HoodieSparkSqlWriter {
         jsc.setLocalProperty("spark.scheduler.pool", SparkConfigs.SPARK_DATASOURCE_WRITER_POOL_NAME)
       }
     }
-    val instantTime = HoodieActiveTimeline.createNewInstantTime()
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
 
     if (mode == SaveMode.Ignore && tableExists) {
@@ -181,7 +180,9 @@ object HoodieSparkSqlWriter {
       // Handle various save modes
       handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tblName, operation, fs)
       val partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, toProperties(parameters))
+      val timelineTimeZone = HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE))
       val tableMetaClient = if (tableExists) {
+        HoodieInstantTimeGenerator.setCommitTimeZone(timelineTimeZone)
         HoodieTableMetaClient.builder
           .setConf(sparkContext.hadoopConfiguration)
           .setBasePath(path)
@@ -212,9 +213,10 @@ object HoodieSparkSqlWriter {
           .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
           .setPartitionMetafileUseBaseFormat(useBaseFormatMetaFile)
           .setShouldDropPartitionColumns(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.DROP_PARTITION_COLUMNS))
-          .setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)))
+          .setCommitTimezone(timelineTimeZone)
           .initTable(sparkContext.hadoopConfiguration, path)
       }
+      val instantTime = HoodieActiveTimeline.createNewInstantTime()
       tableConfig = tableMetaClient.getTableConfig
 
       val commitActionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
@@ -473,7 +475,7 @@ object HoodieSparkSqlWriter {
           //       only incoming dataset's projection has to match the table's schema, and not the whole one
 
           if (mergeIntoWrites) {
-            // if its merge into writes, do not check for projection nor schema compatability. Writers down the line will
+            // if its merge into writes, do not check for projection nor schema compatibility. Writers down the line will
             // take care of it.
             canonicalizedSourceSchema
           } else {

@@ -31,6 +31,7 @@ import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
+import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -80,14 +81,15 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     // Support JDBC, HiveQL and metastore based implementations for backwards compatibility. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
     try {
+      this.client = IMetaStoreClientUtil.getMSC(config.getHiveConf());
       if (!StringUtils.isNullOrEmpty(config.getString(HIVE_SYNC_MODE))) {
         HiveSyncMode syncMode = HiveSyncMode.of(config.getString(HIVE_SYNC_MODE));
         switch (syncMode) {
           case HMS:
-            ddlExecutor = new HMSDDLExecutor(config);
+            ddlExecutor = new HMSDDLExecutor(config, this.client);
             break;
           case HIVEQL:
-            ddlExecutor = new HiveQueryDDLExecutor(config);
+            ddlExecutor = new HiveQueryDDLExecutor(config, this.client);
             break;
           case JDBC:
             ddlExecutor = new JDBCExecutor(config);
@@ -96,9 +98,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
             throw new HoodieHiveSyncException("Invalid sync mode given " + config.getString(HIVE_SYNC_MODE));
         }
       } else {
-        ddlExecutor = config.getBoolean(HIVE_USE_JDBC) ? new JDBCExecutor(config) : new HiveQueryDDLExecutor(config);
+        ddlExecutor = config.getBoolean(HIVE_USE_JDBC) ? new JDBCExecutor(config) : new HiveQueryDDLExecutor(config, this.client);
       }
-      this.client = Hive.get(config.getHiveConf()).getMSC();
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
