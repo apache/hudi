@@ -1374,13 +1374,13 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     // Test configs where metadata table has more aggressive archival configs than the compaction config
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 4).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 6).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
             .withMaxNumDeltaCommitsBeforeCompaction(8)
-            .archiveCommitsWith(4, 5).build())
+            .build())
         .forTable("test-trip-table").build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
 
@@ -1429,13 +1429,13 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j))));
       } else if (i <= 11) {
-        // In the metadata table timeline, the first delta commit is "00000007"
+        // In the metadata table timeline, the first delta commit is "00000005"
         // because it equals with the earliest commit on the dataset timeline, after archival,
-        // delta commits "00000008" till "00000011" are added later on without archival or compaction
-        assertEquals(i - 5, metadataTableInstants.size());
+        // delta commits "00000006" till "00000011" are added later on without archival or compaction
+        assertEquals(i - 3, metadataTableInstants.size());
         assertTrue(metadataTableInstants.contains(
             new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000007001")));
-        IntStream.range(7, i + 1).forEach(j ->
+        IntStream.range(5, i + 1).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
                     "000000" + String.format("%02d", j)))));
@@ -1472,11 +1472,11 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
                     "000000" + String.format("%02d", j)))));
       } else {
         // i == 17
-        // Only commits [00000015, 00000017] and "00000015001" are on the metadata timeline
-        assertEquals(4, metadataTableInstants.size());
+        // Only commits [00000013, 00000017] and "00000015001" are on the metadata timeline
+        assertEquals(6, metadataTableInstants.size());
         assertTrue(metadataTableInstants.contains(
             new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000015001")));
-        IntStream.range(15, 18).forEach(j ->
+        IntStream.range(13, 18).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
                     "000000" + String.format("%02d", j)))));

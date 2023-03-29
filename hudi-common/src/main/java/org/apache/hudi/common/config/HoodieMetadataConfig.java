@@ -94,25 +94,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Controls how often the metadata table is compacted.");
 
-  // Archival settings
-  public static final ConfigProperty<Integer> MIN_COMMITS_TO_KEEP = ConfigProperty
-      .key(METADATA_PREFIX + ".keep.min.commits")
-      .defaultValue(20)
-      .markAdvanced()
-      .sinceVersion("0.7.0")
-      .withDocumentation("Archiving service moves older entries from metadata table’s timeline "
-          + "into an archived log after each write, to keep the overhead constant, even as the "
-          + "metadata table size grows.  This config controls the minimum number of instants "
-          + "to retain in the active timeline.");
-
-  public static final ConfigProperty<Integer> MAX_COMMITS_TO_KEEP = ConfigProperty
-      .key(METADATA_PREFIX + ".keep.max.commits")
-      .defaultValue(30)
-      .markAdvanced()
-      .sinceVersion("0.7.0")
-      .withDocumentation("Similar to " + MIN_COMMITS_TO_KEEP.key() + ", this config controls "
-          + "the maximum number of instants to retain in the active timeline.");
-
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
       .key(METADATA_PREFIX + ".dir.filter.regex")
@@ -415,12 +396,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder archiveCommitsWith(int minToKeep, int maxToKeep) {
-      metadataConfig.setValue(MIN_COMMITS_TO_KEEP, String.valueOf(minToKeep));
-      metadataConfig.setValue(MAX_COMMITS_TO_KEEP, String.valueOf(maxToKeep));
-      return this;
-    }
-
     public Builder withFileListingParallelism(int parallelism) {
       metadataConfig.setValue(FILE_LISTING_PARALLELISM_VALUE, String.valueOf(parallelism));
       return this;
@@ -519,26 +494,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   @Deprecated
   public static final int DEFAULT_METADATA_COMPACT_NUM_DELTA_COMMITS = COMPACT_NUM_DELTA_COMMITS.defaultValue();
 
-  /**
-   * @deprecated Use {@link #MIN_COMMITS_TO_KEEP} and its methods.
-   */
-  @Deprecated
-  public static final String MIN_COMMITS_TO_KEEP_PROP = MIN_COMMITS_TO_KEEP.key();
-  /**
-   * @deprecated Use {@link #MIN_COMMITS_TO_KEEP} and its methods.
-   */
-  @Deprecated
-  public static final int DEFAULT_MIN_COMMITS_TO_KEEP = MIN_COMMITS_TO_KEEP.defaultValue();
-  /**
-   * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods.
-   */
-  @Deprecated
-  public static final String MAX_COMMITS_TO_KEEP_PROP = MAX_COMMITS_TO_KEEP.key();
-  /**
-   * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods.
-   */
-  @Deprecated
-  public static final int DEFAULT_MAX_COMMITS_TO_KEEP = MAX_COMMITS_TO_KEEP.defaultValue();
   /**
    * @deprecated No longer takes any effect.
    */
