@@ -21,6 +21,7 @@ package org.apache.hudi.common.fs;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -97,6 +98,13 @@ public class FSUtils {
       }
     }
     return conf;
+  }
+
+  public static Configuration buildInlineConf(Configuration conf) {
+    Configuration inlineConf = new Configuration(conf);
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+    inlineConf.setClassLoader(InLineFileSystem.class.getClassLoader());
+    return inlineConf;
   }
 
   public static FileSystem getFs(String pathStr, Configuration conf) {
