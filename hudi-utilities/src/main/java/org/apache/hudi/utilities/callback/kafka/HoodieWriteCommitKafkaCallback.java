@@ -85,10 +85,10 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
     kafkaProducerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     // default "all" to ensure no message loss
     kafkaProducerProps.setProperty(ProducerConfig.ACKS_CONFIG, hoodieConfig
-        .getString(ACKS));
+        .getStringOrDefault(ACKS));
     // retries 3 times by default
     kafkaProducerProps.setProperty(ProducerConfig.RETRIES_CONFIG, hoodieConfig
-        .getString(RETRIES));
+        .getStringOrDefault(RETRIES));
     kafkaProducerProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
         "org.apache.kafka.common.serialization.StringSerializer");
     kafkaProducerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
