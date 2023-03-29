@@ -756,12 +756,13 @@ public class HoodieDeltaStreamer implements Serializable {
                 }
               }
               // check if deltastreamer need to be shutdown
-              if (postWriteTerminationStrategy.isPresent()) {
-                if (postWriteTerminationStrategy.get().shouldShutdown(scheduledCompactionInstantAndRDD.isPresent() ? Option.of(scheduledCompactionInstantAndRDD.get().getRight()) :
+              if (postWriteTerminationStrategy.isPresent()
+                  && postWriteTerminationStrategy.get().shouldShutdown(scheduledCompactionInstantAndRDD.isPresent() ? Option.of(scheduledCompactionInstantAndRDD.get().getRight()) :
                     Option.empty())) {
-                  error = true;
-                  shutdown(false);
-                }
+                LOG.warn("Closing and shutting down ingestion service");
+                error = true;
+                close();
+                shutdown(true);
               }
               long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
               if (toSleepMs > 0) {
