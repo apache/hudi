@@ -34,13 +34,11 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class TestLockManager extends HoodieCommonTestHarness {
 
@@ -97,23 +95,17 @@ public class TestLockManager extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testLockAndUnlock() throws NoSuchFieldException, IllegalAccessException{
-
-    Field lockProvider = lockManager.getClass().getDeclaredField("lockProvider");
-    lockProvider.setAccessible(true);
+  public void testLockAndUnlock() {
+    LockManager mockLockManager = Mockito.spy(lockManager);
 
     assertDoesNotThrow(() -> {
-      lockManager.lock();
+      mockLockManager.lock();
     });
-
-    assertNotNull(lockProvider.get(lockManager));
 
     assertDoesNotThrow(() -> {
-      lockManager.unlock();
+      mockLockManager.unlock();
     });
 
-    // we set lockProvider = null, when we call close(),
-    // if lockProvider == null, we believe close() has been called.
-    assertNull(lockProvider.get(lockManager));
+    Mockito.verify(mockLockManager).close();
   }
 }
