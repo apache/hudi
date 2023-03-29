@@ -731,10 +731,13 @@ public class HoodieDeltaStreamer implements Serializable {
               Option<HoodieData<WriteStatus>> lastWriteStatuses = Option.ofNullable(
                   scheduledCompactionInstantAndRDD.isPresent() ? HoodieJavaRDD.of(scheduledCompactionInstantAndRDD.get().getRight()) : null);
               if (requestShutdownIfNeeded(lastWriteStatuses)) {
+                LOG.warn("Closing and shutting down ingestion service");
                 error = true;
-                shutdown(false);
+                onIngestionCompletes(false);
+                shutdown(true);
+              } else {
+                sleepBeforeNextIngestion(start);
               }
-              sleepBeforeNextIngestion(start);
             } catch (HoodieUpsertException ue) {
               handleUpsertException(ue);
             } catch (Exception e) {
