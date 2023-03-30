@@ -210,7 +210,7 @@ public class CommitsCommand {
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
           defaultValue = "false") final boolean headerOnly,
-      @ShellOption(value = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
               defaultValue = "false") final boolean includeArchivedTimeline)
       throws Exception {
 
@@ -278,7 +278,7 @@ public class CommitsCommand {
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
           defaultValue = "false") final boolean headerOnly,
-      @ShellOption(value = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
               defaultValue = "false") final boolean includeArchivedTimeline)
       throws Exception {
 
@@ -324,7 +324,7 @@ public class CommitsCommand {
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
           defaultValue = "false") final boolean headerOnly,
-      @ShellOption(value = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
               defaultValue = "false") final boolean includeArchivedTimeline)
       throws Exception {
 
