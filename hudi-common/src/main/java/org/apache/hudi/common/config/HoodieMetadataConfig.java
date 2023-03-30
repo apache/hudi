@@ -44,11 +44,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Asynchronous cleaning for metadata table is disabled by default
   public static final boolean DEFAULT_METADATA_ASYNC_CLEAN = false;
   // Full scanning of log files while reading log records is enabled by default for metadata table
-  public static final boolean DEFAULT_ENABLE_FULL_SCAN_LOG_FILES = true;
+  public static final boolean DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES = true;
   // Meta fields are not populated by default for metadata table
-  public static final boolean DEFAULT_POPULATE_META_FIELDS = false;
+  public static final boolean DEFAULT_METADATA_POPULATE_META_FIELDS = false;
   // Default number of commits to retain, without cleaning, on metadata table
-  public static final int DEFAULT_CLEANER_COMMITS_RETAINED = 3;
+  public static final int DEFAULT_METADATA_CLEANER_COMMITS_RETAINED = 3;
 
   public static final String METADATA_PREFIX = "hoodie.metadata";
   public static final String OPTIMIZED_LOG_BLOCKS_SCAN = ".optimized.log.blocks.scan.enable";

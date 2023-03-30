@@ -70,7 +70,7 @@ import java.util.Properties;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_CLEANER_COMMITS_RETAINED;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
@@ -401,7 +401,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-            .retainCommits(DEFAULT_CLEANER_COMMITS_RETAINED)
+            .retainCommits(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED)
             .build())
         // we will trigger archival manually, to control the instant times
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
