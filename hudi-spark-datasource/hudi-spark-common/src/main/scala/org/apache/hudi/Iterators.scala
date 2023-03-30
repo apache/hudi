@@ -18,12 +18,8 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.LogFileIterator._
@@ -33,7 +29,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
+import org.apache.hudi.common.table.log.{HoodieMergedLogRecordScanner, InstantRange}
 import org.apache.hudi.common.util.HoodieRecordUtils
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
@@ -42,6 +38,12 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.util.CachingIterator
+
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
@@ -49,6 +51,7 @@ import org.apache.spark.sql.catalyst.expressions.Projection
 import org.apache.spark.sql.types.StructType
 
 import java.io.Closeable
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -89,7 +92,7 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
     val internalSchema = tableSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
 
     scanLog(split.logFiles, getPartitionPath(split), logFileReaderAvroSchema, tableState,
-      maxCompactionMemoryInBytes, config, internalSchema)
+      maxCompactionMemoryInBytes, config, internalSchema, split.instantRangeOpt)
   }
 
   def logRecordsPairIterator(): Iterator[(String, HoodieRecord[_])] = {
@@ -255,7 +258,8 @@ object LogFileIterator {
               tableState: HoodieTableState,
               maxCompactionMemoryInBytes: Long,
               hadoopConf: Configuration,
-              internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): mutable.Map[String, HoodieRecord[_]] = {
+              internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema,
+              instantRangeOpt: Option[InstantRange] = None): mutable.Map[String, HoodieRecord[_]] = {
     val tablePath = tableState.tablePath
     val fs = FSUtils.getFs(tablePath, hadoopConf)
 
@@ -301,6 +305,7 @@ object LogFileIterator {
             .getOrElse(false))
         .withReverseReader(false)
         .withInternalSchema(internalSchema)
+        .withInstantRange(if (instantRangeOpt.isDefined) HOption.ofNullable(instantRangeOpt.get) else HOption.empty())
         .withBufferSize(
           hadoopConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
             HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))

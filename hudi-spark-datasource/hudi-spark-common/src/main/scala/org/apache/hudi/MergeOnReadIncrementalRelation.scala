@@ -24,6 +24,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.getCommitMetadata
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.common.table.log.InstantRange
+import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getWritePartitionPaths, listAffectedFilesForCommits}
@@ -108,7 +110,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
         }.toSeq
       }
 
-      buildSplits(filterFileSlices(fileSlices, globPattern))
+      buildSplits(filterFileSlices(fileSlices, globPattern), Option(getInstantRange()))
     }
   }
 
@@ -164,6 +166,15 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
 
   protected lazy val affectedFilesInCommits: Array[FileStatus] = {
     listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
+  }
+
+  protected def getInstantRange(): InstantRange = {
+    InstantRange
+      .builder()
+      .rangeType(RangeType.OPEN_CLOSE)
+      .startInstant(startTimestamp)
+      .endInstant(endTimestamp)
+      .build()
   }
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the

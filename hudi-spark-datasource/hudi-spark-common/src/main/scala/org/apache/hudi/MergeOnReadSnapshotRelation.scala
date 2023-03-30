@@ -26,6 +26,7 @@ import org.apache.hudi.MergeOnReadSnapshotRelation.{getFilePath, isProjectionCom
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.log.InstantRange
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -37,7 +38,7 @@ import org.apache.spark.sql.types.StructType
 import scala.collection.JavaConverters._
 
 case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
-                                      logFiles: List[HoodieLogFile]) extends HoodieFileSplit
+                                      logFiles: List[HoodieLogFile], instantRangeOpt: Option[InstantRange] = None) extends HoodieFileSplit
 
 case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
                                        override val optParams: Map[String, String],
@@ -228,7 +229,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
     }
   }
 
-  protected def buildSplits(fileSlices: Seq[FileSlice]): List[HoodieMergeOnReadFileSplit] = {
+  protected def buildSplits(fileSlices: Seq[FileSlice], instantRangeOpt: Option[InstantRange] = None): List[HoodieMergeOnReadFileSplit] = {
     fileSlices.map { fileSlice =>
       val baseFile = toScalaOption(fileSlice.getBaseFile)
       val logFiles = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
@@ -238,7 +239,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
         PartitionedFile(getPartitionColumnsAsInternalRow(file.getFileStatus), filePath, 0, file.getFileLen)
       }
 
-      HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
+      HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles, instantRangeOpt)
     }.toList
   }
 }
