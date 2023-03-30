@@ -847,7 +847,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   public void testArchiveRollbacksTestTable(boolean enableMetadata) throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 3, 2);
 
-    for (int i = 1; i < 9; i += 2) {
+    for (int i = 1; i < 13; i += 2) {
       testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       testTable.doRollback("0000000" + i, "0000000" + (i + 1));
 
@@ -856,7 +856,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
       List<HoodieInstant> originalCommits = commitsList.getKey();
       List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
 
-      if (i != 7) {
+      if (i != 11) {
         assertEquals(originalCommits, commitsAfterArchival);
       } else {
         // only time when archival will kick in

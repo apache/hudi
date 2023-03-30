@@ -257,7 +257,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     assertEquals(4, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
         "There should 4 instants not be archived!");
 
-    // archived 101 and 102 instants, remove 103 and 104 instant
+    // archived 101 and 102 instants, remove instant 103 to 106
     data.remove("103");
     data.remove("104");
     data.remove("105");
