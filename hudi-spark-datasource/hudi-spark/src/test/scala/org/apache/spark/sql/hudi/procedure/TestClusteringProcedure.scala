@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.Pair
-import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
 import org.apache.spark.sql.types.{DataTypes, Metadata, StringType, StructField, StructType}
@@ -392,6 +391,14 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
             Seq(9, "a9", 10.0, 1008),
             Seq(10, "a10", 10.0, 1009)
           )
+        }
+
+        // Test partition pruning with invalid predicates
+        {
+          val resultD = spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts > 1111L', order => 'ts', show_involved_partition => true)")
+            .collect()
+            .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+          assertResult(0)(resultD.length)
         }
       }
     }
