@@ -106,6 +106,7 @@ public class LockManager implements Serializable, AutoCloseable {
     if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       getLockProvider().unlock();
       metrics.updateLockHeldTimerMetrics();
+      close();
     }
   }
 
