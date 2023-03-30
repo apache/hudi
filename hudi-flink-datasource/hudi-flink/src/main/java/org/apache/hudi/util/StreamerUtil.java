@@ -49,6 +49,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.ChainedTransformer;
@@ -262,6 +263,7 @@ public class StreamerUtil {
           .setCDCEnabled(conf.getBoolean(FlinkOptions.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
           .setTimelineLayoutVersion(1)
+          .setHoodieIndexConf(OptionsResolver.getHoodieIndexConf(conf))
           .initTable(hadoopConf, basePath);
       LOG.info("Table initialized under base path {}", basePath);
     } else {
@@ -269,10 +271,42 @@ public class StreamerUtil {
           basePath, conf.getString(FlinkOptions.TABLE_NAME));
     }
 
-    return StreamerUtil.createMetaClient(conf, hadoopConf);
-
+    HoodieTableMetaClient client = StreamerUtil.createMetaClient(basePath, hadoopConf);
+    validateTableConfig(conf, client.getTableConfig());
+    return client;
     // Do not close the filesystem in order to use the CACHE,
     // some filesystems release the handles in #close method.
+  }
+
+  /**
+   * Detects conflicts between new parameters and existing table configurations.
+   */
+  public static void validateTableConfig(Configuration conf, HoodieTableConfig storedTableConf) {
+    // Should verify the consistency of bucket num at job startup.
+    if (storedTableConf.contains(FlinkOptions.INDEX_TYPE.key())) {
+      HoodieIndex.IndexType storedConfIndexType =
+              HoodieIndex.IndexType.valueOf(storedTableConf.getString(FlinkOptions.INDEX_TYPE.key()));
+      if (conf.contains(FlinkOptions.INDEX_TYPE)) {
+        HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
+        ValidationUtils.checkArgument(indexType.equals(storedConfIndexType),
+                  String.format("Config [%s] = [%s] is conflict with stored config [%s].",
+                          FlinkOptions.INDEX_TYPE.key(),
+                          indexType,
+                          storedConfIndexType));
+      }
+      if (storedConfIndexType.equals(HoodieIndex.IndexType.BUCKET)
+              && conf.contains(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)
+              && storedTableConf.contains(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key())) {
+        String bucketNums = conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS).toString();
+        String storedConfBucketNums = storedTableConf.getString(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key());
+        ValidationUtils.checkArgument(bucketNums.equals(storedConfBucketNums),
+                String.format("Config [%s] = [%s] is not equals stored config [%s].",
+                        HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key(),
+                        bucketNums,
+                        storedConfBucketNums));
+      }
+    }
+    // Other config verification.
   }
 
   /**
