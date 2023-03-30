@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -103,6 +104,17 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private void setupTableOptions(String basePath, Configuration conf) {
     StreamerUtil.getTableConfig(basePath, HadoopConfigurations.getHadoopConf(conf))
         .ifPresent(tableConfig -> {
+          if (!conf.contains(FlinkOptions.INDEX_TYPE)) {
+            if (tableConfig.contains(FlinkOptions.INDEX_TYPE.key())) {
+              conf.set(FlinkOptions.INDEX_TYPE, tableConfig.getString(FlinkOptions.INDEX_TYPE.key()));
+            } else if (tableConfig.contains(HoodieIndexConfig.INDEX_TYPE)) {
+              conf.set(FlinkOptions.INDEX_TYPE, tableConfig.getString(HoodieIndexConfig.INDEX_TYPE));
+            }
+          }
+          if (tableConfig.contains(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS)
+                  && !conf.contains(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)) {
+            conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, tableConfig.getInt(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS));
+          }
           if (tableConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)
               && !conf.contains(FlinkOptions.RECORD_KEY_FIELD)) {
             conf.setString(FlinkOptions.RECORD_KEY_FIELD, tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));

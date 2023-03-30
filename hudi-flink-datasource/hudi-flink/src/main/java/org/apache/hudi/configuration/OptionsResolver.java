@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * Tool helping to resolve the flink options {@link FlinkOptions}.
@@ -110,6 +111,16 @@ public class OptionsResolver {
   public static String getPreCombineField(Configuration conf) {
     final String preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
     return preCombineField.equals(FlinkOptions.NO_PRE_COMBINE) ? null : preCombineField;
+  }
+
+  public static Properties getHoodieIndexConf(Configuration conf) {
+    Properties pro = new Properties();
+    String indexType = conf.getString(FlinkOptions.INDEX_TYPE);
+    pro.put(FlinkOptions.INDEX_TYPE.key(), indexType);
+    if (indexType.equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name())) {
+      pro.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS).toString());
+    }
+    return pro;
   }
 
   /**
