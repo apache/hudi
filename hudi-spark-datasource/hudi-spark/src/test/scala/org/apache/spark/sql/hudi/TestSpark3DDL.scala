@@ -63,7 +63,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
          |""".stripMargin)
   }
 
-  test("Test multi change data type") {
+  test("Test alter column types") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -134,7 +134,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test multi change data type2") {
+  test("Test alter column types 2") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -223,7 +223,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Partition Table alter ") {
+  test("Test alter table properties and add rename drop column") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -376,7 +376,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
 
-  test("Test Alter Table") {
+  test("Test alter column by add rename and drop") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -437,7 +437,36 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Alter Table multiple times") {
+  test("Test alter column nullability") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string not null,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+             """.stripMargin)
+          spark.sql(s"alter table $tableName alter column name drop not null")
+          spark.sql(s"insert into $tableName values(1, null, 1000)")
+          checkAnswer(s"select id, name, ts from $tableName")(Seq(1, null, 1000))
+        }
+      }
+    }
+  }
+
+  test("Test alter column multiple times") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -475,7 +504,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Alter Table complex") {
+  test("Test alter column with complex schema") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
