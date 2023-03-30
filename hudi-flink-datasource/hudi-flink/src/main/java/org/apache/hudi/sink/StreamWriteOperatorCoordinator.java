@@ -39,6 +39,7 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
+import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -156,6 +157,11 @@ public class StreamWriteOperatorCoordinator
   private CkpMetadata ckpMetadata;
 
   /**
+   * The client id heartbeats.
+   */
+  private ClientIds clientIds;
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -193,6 +199,10 @@ public class StreamWriteOperatorCoordinator
     if (tableState.syncHive) {
       initHiveSync();
     }
+    // start client id heartbeats for optimistic concurrency control
+    if (OptionsResolver.isOptimisticConcurrencyControl(conf)) {
+      initClientIds(conf);
+    }
   }
 
   @Override
@@ -212,6 +222,9 @@ public class StreamWriteOperatorCoordinator
     this.eventBuffer = null;
     if (this.ckpMetadata != null) {
       this.ckpMetadata.close();
+    }
+    if (this.clientIds != null) {
+      this.clientIds.close();
     }
   }
 
@@ -348,6 +361,11 @@ public class StreamWriteOperatorCoordinator
     CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient, conf.getString(FlinkOptions.WRITE_CLIENT_ID));
     ckpMetadata.bootstrap();
     return ckpMetadata;
+  }
+
+  private void initClientIds(Configuration conf) {
+    this.clientIds = ClientIds.builder().conf(conf).build();
+    this.clientIds.start();
   }
 
   private void reset() {
