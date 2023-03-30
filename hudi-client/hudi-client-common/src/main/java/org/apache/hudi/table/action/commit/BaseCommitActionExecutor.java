@@ -257,7 +257,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
         .performClustering(clusteringPlan, schema, instantTime);
     HoodieData<WriteStatus> writeStatusList = writeMetadata.getWriteStatuses();
     HoodieData<WriteStatus> statuses = updateIndex(writeStatusList, writeMetadata);
-    statuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
+    statuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE));
     // triggers clustering.
     writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collectAsList());
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
