@@ -105,13 +105,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       Transient.lazy(ConcurrentHashMap::new);
 
   public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
-                                   String datasetBasePath, String spillableMapDirectory) {
-    this(engineContext, metadataConfig, datasetBasePath, spillableMapDirectory, false);
+                                   String datasetBasePath, String splittableMapDirectory) {
+    this(engineContext, metadataConfig, datasetBasePath, splittableMapDirectory, false);
   }
 
   public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
-                                   String datasetBasePath, String spillableMapDirectory, boolean reuse) {
-    super(engineContext, metadataConfig, datasetBasePath, spillableMapDirectory);
+                                   String datasetBasePath, String splittableMapDirectory, boolean reuse) {
+    super(engineContext, metadataConfig, datasetBasePath, splittableMapDirectory);
     this.reuse = reuse;
     this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(dataBasePath.toString());
 
@@ -528,7 +528,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withLatestInstantTime(latestMetadataInstantTime)
         .withMaxMemorySizeInBytes(MAX_MEMORY_SIZE_IN_BYTES)
         .withBufferSize(BUFFER_SIZE)
-        .withSpillableMapBasePath(spillableMapDirectory)
+        .withSpillableMapBasePath(splittableMapDirectory)
         .withDiskMapType(commonConfig.getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(commonConfig.isBitCaskDiskMapCompressionEnabled())
         .withLogBlockTimestamps(validInstantTimestamps)

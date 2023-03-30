@@ -83,22 +83,22 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected final HoodieTableMetaClient dataMetaClient;
   protected final Option<HoodieMetadataMetrics> metrics;
   protected final HoodieMetadataConfig metadataConfig;
-  // Directory used for Spillable Map when merging records
-  protected final String spillableMapDirectory;
+  // Directory used for Splittable Map when merging records
+  protected final String splittableMapDirectory;
 
   protected boolean isMetadataTableEnabled;
   protected boolean isBloomFilterIndexEnabled = false;
   protected boolean isColumnStatsIndexEnabled = false;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
-                              String dataBasePath, String spillableMapDirectory) {
+                              String dataBasePath, String splittableMapDirectory) {
     this.engineContext = engineContext;
     this.dataBasePath = new SerializablePath(new CachingPath(dataBasePath));
     this.dataMetaClient = HoodieTableMetaClient.builder()
         .setConf(engineContext.getHadoopConf().get())
         .setBasePath(dataBasePath)
         .build();
-    this.spillableMapDirectory = spillableMapDirectory;
+    this.splittableMapDirectory = splittableMapDirectory;
     this.metadataConfig = metadataConfig;
 
     this.isMetadataTableEnabled = metadataConfig.enabled();
