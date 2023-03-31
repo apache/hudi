@@ -37,10 +37,10 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieArchivalConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
@@ -70,8 +70,9 @@ import java.util.Properties;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -405,7 +406,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
             .build())
         // we will trigger archival manually, to control the instant times
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
-           .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep).build())
+            .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep).build())
         // we will trigger compaction manually, to control the instant times
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
@@ -415,7 +416,8 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
         .withRollbackParallelism(parallelism)
         .withFinalizeWriteParallelism(parallelism)
         .withAllowMultiWriteOnSameInstant(true)
-        .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName());
+        .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
+        .withPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS);
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();
