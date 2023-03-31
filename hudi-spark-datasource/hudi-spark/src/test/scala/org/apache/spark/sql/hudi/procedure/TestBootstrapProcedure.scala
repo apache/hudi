@@ -83,13 +83,19 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       assertResult(10) {
         result.length
       }
+
+      // cluster with row writer disabled and assert that records match with that before clustering
+      // NOTE: the row writer path is already tested in TestDataSourceForBootstrap
+      val beforeClusterDf = spark.sql(s"select * from $tableName")
+      spark.sql("set hoodie.datasource.write.row.writer.enable = false")
+      spark.sql(s"""call run_clustering(table => '$tableName')""".stripMargin)
+      assertResult(0)(spark.sql(s"select * from $tableName").except(beforeClusterDf).count())
     }
   }
 
   test("Test Call run_bootstrap Procedure with no-partitioned") {
     withTempDir { tmp =>
       val NUM_OF_RECORDS = 100
-      val PARTITION_FIELD = "datestr"
       val RECORD_KEY_FIELD = "_row_key"
 
       val tableName = generateTableName
