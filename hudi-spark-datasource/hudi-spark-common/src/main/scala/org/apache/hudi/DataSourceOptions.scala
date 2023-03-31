@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
+import org.apache.hudi.keygen.KeyGenUtils.inferKeyGeneratorType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGeneratorClassNameFromType, inferKeyGeneratorTypeFromWriteConfig}
 import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -378,10 +379,10 @@ object DataSourceWriteOptions {
   val HIVE_STYLE_PARTITIONING = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE
 
   /**
-    * Key generator class, that implements will extract the key out of incoming record.
-    */
+   * Key generator class, that implements will extract the key out of incoming record.
+   */
   val keyGeneratorInferFunc = JFunction.toJavaFunction((config: HoodieConfig) => {
-    Option.of(getKeyGeneratorClassNameFromType(inferKeyGeneratorTypeFromWriteConfig(config.getProps)))
+    Option.of(DataSourceOptionsHelper.inferKeyGenClazz(config.getProps))
   })
 
   val KEYGENERATOR_CLASS_NAME: ConfigProperty[String] = ConfigProperty
@@ -872,6 +873,14 @@ object DataSourceOptionsHelper {
     Map(
       QUERY_TYPE.key -> queryType
     ) ++ translateConfigurations(paramsWithGlobalProps)
+  }
+
+  def inferKeyGenClazz(props: TypedProperties): String = {
+    getKeyGeneratorClassNameFromType(inferKeyGeneratorTypeFromWriteConfig(props))
+  }
+
+  def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
+    getKeyGeneratorClassNameFromType(inferKeyGeneratorType(recordsKeyFields, partitionFields))
   }
 
   implicit def convert[T, U](prop: ConfigProperty[T])(implicit converter: T => U): ConfigProperty[U] = {
