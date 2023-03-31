@@ -116,6 +116,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
       String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
       TaskContextSupplier taskContextSupplier) {
+    // preserveMetadata is disabled by default for MDT but enabled otherwise
     this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, !HoodieTableMetadata.isMetadataTable(config.getBasePath()));
     this.recordMap = recordMap;
     this.useWriterSchema = true;

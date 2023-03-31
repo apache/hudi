@@ -141,6 +141,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchemaForCompaction = true;
+    // preserveMetadata is disabled by default for MDT but enabled otherwise
     this.preserveMetadata = !HoodieTableMetadata.isMetadataTable(config.getBasePath());
     init(fileId, this.partitionPath, dataFileToBeMerged);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
