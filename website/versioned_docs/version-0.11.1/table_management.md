@@ -87,8 +87,7 @@ hh string
 ) using hudi
 options (
   type = 'cow',
-  primaryKey = 'id',
-  preCombineField = 'ts'
+  primaryKey = 'id'
  ) 
 partitioned by (dt, hh);
 ```
