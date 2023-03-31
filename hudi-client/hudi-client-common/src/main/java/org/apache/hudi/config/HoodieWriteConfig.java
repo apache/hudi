@@ -1916,6 +1916,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE);
   }
 
+  public int getGlobalIndexDedupParallelism() {
+    return getInt(HoodieIndexConfig.GLOBAL_INDEX_DEDUP_PARALLELISM);
+  }
+
   public int getBucketIndexNumBuckets() {
     return getIntOrDefault(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
   }
