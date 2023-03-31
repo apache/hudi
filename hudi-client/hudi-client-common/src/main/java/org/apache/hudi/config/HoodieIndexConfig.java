@@ -244,6 +244,12 @@ public class HoodieIndexConfig extends HoodieConfig {
       .defaultValue("true")
       .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE + ", but for simple index.");
 
+  public static final ConfigProperty<String> GLOBAL_INDEX_DEDUP_PARALLELISM = ConfigProperty
+      .key("hoodie.global.index.dedup.parallelism")
+      .defaultValue("60")
+      .withDocumentation("Only applies if index type is GLOBAL_BLOOM or GLOBAL_SIMPLE. "
+          + "This controls the parallelism for deduplication during indexing where more than 1 record could be tagged due to partition update.");
+
   /**
    * ***** Bucket Index Configs *****
    * Bucket Index is targeted to locate the record fast by hash in big data scenarios.
@@ -636,6 +642,11 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withGlobalSimpleIndexUpdatePartitionPath(boolean updatePartitionPath) {
       hoodieIndexConfig.setValue(SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE, String.valueOf(updatePartitionPath));
+      return this;
+    }
+
+    public Builder withGlobalIndexDedupParallelism(int parallelism) {
+      hoodieIndexConfig.setValue(GLOBAL_INDEX_DEDUP_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 

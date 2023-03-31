@@ -121,7 +121,7 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
             entry -> new ImmutablePair<>(entry.getLeft().getRecordKey(),
                 Pair.of(entry.getLeft().getPartitionPath(), entry.getRight())));
 
-    return incomingRecords.leftOuterJoin(existingRecordByRecordKey).values()
+    HoodieData<HoodieRecord<R>> taggedHoodieRecords = incomingRecords.leftOuterJoin(existingRecordByRecordKey).values()
         .flatMap(entry -> {
           HoodieRecord<R> inputRecord = entry.getLeft();
           Option<Pair<String, HoodieRecordLocation>> partitionPathLocationPair = Option.ofNullable(entry.getRight().orElse(null));
@@ -135,8 +135,8 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
               HoodieRecord<R> deleteRecord = new HoodieAvroRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), new EmptyHoodieRecordPayload());
               deleteRecord.setCurrentLocation(location);
               deleteRecord.seal();
-              // Tag the incoming record for inserting to the new partition
-              HoodieRecord<R> insertRecord = (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(inputRecord, Option.empty());
+              // Tag the incoming record for inserting to the new partition; left unsealed for marking as dedup later
+              HoodieRecord<R> insertRecord = (HoodieRecord<R>) HoodieIndexUtils.getUnsealedTaggedRecord(inputRecord, Option.empty());
               taggedRecords = Arrays.asList(deleteRecord, insertRecord);
             } else {
               // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
@@ -149,6 +149,12 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
           }
           return taggedRecords.iterator();
         });
+    return taggedHoodieRecords.filter(r -> !r.isSealed())
+        .distinctWithKey(HoodieRecord::getKey, config.getGlobalIndexDedupParallelism())
+        .map(r -> {
+          r.seal();
+          return r;
+        }).union(taggedHoodieRecords.filter(HoodieRecord::isSealed));
   }
 
   @Override

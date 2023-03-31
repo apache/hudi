@@ -124,6 +124,19 @@ public class HoodieIndexUtils {
    * @return the tagged {@link HoodieRecord}
    */
   public static HoodieRecord getTaggedRecord(HoodieRecord inputRecord, Option<HoodieRecordLocation> location) {
+    HoodieRecord record = getUnsealedTaggedRecord(inputRecord, location);
+    record.seal();
+    return record;
+  }
+
+  /**
+   * Get tagged record for the passed in {@link HoodieRecord}. The returned record is left unsealed.
+   *
+   * @param inputRecord instance of {@link HoodieRecord} for which tagging is requested
+   * @param location    {@link HoodieRecordLocation} for the passed in {@link HoodieRecord}
+   * @return the tagged {@link HoodieRecord}
+   */
+  public static HoodieRecord getUnsealedTaggedRecord(HoodieRecord inputRecord, Option<HoodieRecordLocation> location) {
     HoodieRecord<?> record = inputRecord;
     if (location.isPresent()) {
       // When you have a record in multiple files in the same partition, then <row key, record> collection
@@ -134,7 +147,6 @@ public class HoodieIndexUtils {
       record = inputRecord.newInstance();
       record.unseal();
       record.setCurrentLocation(location.get());
-      record.seal();
     }
     return record;
   }

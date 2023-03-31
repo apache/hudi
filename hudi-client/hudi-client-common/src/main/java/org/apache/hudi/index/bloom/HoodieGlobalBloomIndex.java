@@ -111,7 +111,7 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
             p.getKey().getRecordKey(), new ImmutablePair<>(p.getValue(), p.getKey())));
 
     // Here as the records might have more data than rowKeys (some rowKeys' fileId is null), so we do left outer join.
-    return incomingRowKeyRecordPairs.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().flatMap(record -> {
+    HoodieData<HoodieRecord<R>> taggedHoodieRecords = incomingRowKeyRecordPairs.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().flatMap(record -> {
       final HoodieRecord<R> hoodieRecord = record.getLeft();
       final Option<Pair<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record.getRight();
       if (recordLocationHoodieKeyPair.isPresent()) {
@@ -123,8 +123,8 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
               new EmptyHoodieRecordPayload());
           deleteRecord.setCurrentLocation(recordLocationHoodieKeyPair.get().getLeft());
           deleteRecord.seal();
-          // Tag the incoming record for inserting to the new partition
-          HoodieRecord<R> insertRecord = HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty());
+          // Tag the incoming record for inserting to the new partition; left unsealed for marking as dedup later
+          HoodieRecord<R> insertRecord = HoodieIndexUtils.getUnsealedTaggedRecord(hoodieRecord, Option.empty());
           return Arrays.asList(deleteRecord, insertRecord).iterator();
         } else {
           // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
@@ -137,6 +137,12 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
         return Collections.singletonList((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty())).iterator();
       }
     });
+    return taggedHoodieRecords.filter(r -> !r.isSealed())
+        .distinctWithKey(HoodieRecord::getKey, config.getGlobalIndexDedupParallelism())
+        .map(r -> {
+          r.seal();
+          return r;
+        }).union(taggedHoodieRecords.filter(HoodieRecord::isSealed));
   }
 
   @Override
