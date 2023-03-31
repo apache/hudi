@@ -69,6 +69,8 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
       // set up default parallelism
       OptionsInference.setupSinkTasks(conf, dataStream.getExecutionConfig().getParallelism());
+      // set up client id
+      OptionsInference.setupClientId(conf);
 
       RowType rowType = (RowType) schema.toSinkRowDataType().notNull().getLogicalType();
 

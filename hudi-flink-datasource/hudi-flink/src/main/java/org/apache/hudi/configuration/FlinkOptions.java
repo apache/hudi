@@ -41,6 +41,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
+import org.apache.hudi.util.ClientIds;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
@@ -572,7 +573,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> WRITE_CLIENT_ID = ConfigOptions
       .key("write.client.id")
       .stringType()
-      .defaultValue("")
+      .defaultValue(ClientIds.INIT_CLIENT_ID)
       .withDescription("Unique identifier used to distinguish different writer pipelines for concurrent mode");
 
   // ------------------------------------------------------------------------

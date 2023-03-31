@@ -251,6 +251,14 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether OCC is enabled.
+   */
+  public static boolean isOptimisticConcurrencyControl(Configuration conf) {
+    return conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
+        .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+  }
+
+  /**
    * Returns the index type.
    */
   public static HoodieIndex.IndexType getIndexType(Configuration conf) {
