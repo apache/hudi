@@ -112,6 +112,16 @@ public class HoodieDeltaStreamer implements Serializable {
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
+  /**
+   * Config prop to force to skip saving checkpoint in the commit metadata.
+   *
+   * Typically used in one-time backfill scenarios, where checkpoints are not to be persisted.
+   *
+   * TODO: consolidate all checkpointing configs into HoodieCheckpointStrategy (HUDI-5906)
+   */
+  public static final String CHECKPOINT_FORCE_SKIP_PROP = "hoodie.deltastreamer.checkpoint.force.skip";
+  public static final Boolean DEFAULT_CHECKPOINT_FORCE_SKIP_PROP = false;
+
   protected final transient Config cfg;
 
   /**
