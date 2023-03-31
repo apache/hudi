@@ -495,11 +495,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .enableFullScan(true)
             .enableMetrics(false)
             .withMaxNumDeltaCommitsBeforeCompaction(3)
             .archiveCommitsWith(4, 5)
-            .retainCommits(3)
             .build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .retainCommits(1)
@@ -552,36 +550,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   @Test
-  public void testUpdationOfPopulateMetaFieldsForMetadataTable() throws Exception {
-    tableType = COPY_ON_WRITE;
-    init(tableType, false);
-
-    writeConfig = getWriteConfigBuilder(true, true, false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .withPopulateMetaFields(true)
-            .build())
-        .build();
-    initWriteConfigAndMetatableWriter(writeConfig, true);
-    doWriteOperation(testTable, "0000001", INSERT);
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(writeConfig.getBasePath() + "/.hoodie/metadata").setConf(hadoopConf).build();
-    assertTrue(metaClient.getTableConfig().populateMetaFields());
-
-    // update populateMeta fields to false.
-    writeConfig = getWriteConfigBuilder(true, true, false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .withPopulateMetaFields(false)
-            .build())
-        .build();
-    initWriteConfigAndMetatableWriter(writeConfig, true);
-    doWriteOperation(testTable, "0000002", INSERT);
-    metaClient = HoodieTableMetaClient.builder().setBasePath(writeConfig.getBasePath() + "/.hoodie/metadata").setConf(hadoopConf).build();
-    assertFalse(metaClient.getTableConfig().populateMetaFields());
-  }
-
-  @Test
   public void testMetadataInsertUpsertCleanNonPartitioned() throws Exception {
     init(COPY_ON_WRITE);
     doWriteOperationNonPartitioned(testTable, "0000001", INSERT);
@@ -615,7 +583,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .enableFullScan(true)
             .enableMetrics(false)
             .withMaxNumDeltaCommitsBeforeCompaction(3) // after 3 delta commits for regular writer operations, compaction should kick in.
             .build()).build();
@@ -740,9 +707,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .enableFullScan(true)
             .enableMetrics(false)
-            .withPopulateMetaFields(populateMetaFields)
             .withMaxNumDeltaCommitsBeforeCompaction(2)
             .build()).build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
@@ -782,7 +747,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .enableFullScan(true)
             .enableMetrics(false)
             .withMaxNumDeltaCommitsBeforeCompaction(4)
             .build()).build();
@@ -834,7 +798,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .enableFullScan(true)
             .enableMetrics(false)
             .withMaxNumDeltaCommitsBeforeCompaction(3)
             .build()).build();
@@ -914,7 +877,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(false, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withPopulateMetaFields(true)
             .build())
         .build();
 
@@ -990,7 +952,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withPopulateMetaFields(enableMetaFields)
             .withMaxNumDeltaCommitsBeforeCompaction(3)
             .build())
         .build();
@@ -1294,9 +1255,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     final int minArchiveCommitsDataset = 4;
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
-            .archiveCommitsWith(minArchiveCommitsMetadata, minArchiveCommitsMetadata + 1).retainCommits(1)
+            .archiveCommitsWith(minArchiveCommitsMetadata, minArchiveCommitsMetadata + 1)
             .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsBeforeCompaction)
-            .withPopulateMetaFields(populateMateFields)
             .build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .retainCommits(1)
@@ -1528,7 +1488,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withMetadataIndexColumnStats(true)
-            .enableFullScan(false)
             .build())
         .build();
 
@@ -2108,7 +2067,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     final int maxDeltaCommitsBeforeCompaction = 3;
     HoodieWriteConfig config = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
-            .archiveCommitsWith(40, 60).retainCommits(1)
+            .archiveCommitsWith(40, 60)
             .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsBeforeCompaction).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.NEVER)
@@ -2330,7 +2289,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false).build(),
+        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, false, false).build(),
         true)) {
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
@@ -2361,7 +2320,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false).build(),
+        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, false, false).build(),
         true)) {
       String newCommitTime = client.startCommit();
       // Next insert
@@ -2441,7 +2400,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // TESTCASE: If commit on the metadata table succeeds but fails on the dataset, then on next init the metadata table
     // should be rolled back to last valid commit.
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false).build(),
+        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, false, false).build(),
         true)) {
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
@@ -2465,7 +2424,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false).build(),
+        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, false, false).build(),
         true)) {
       String newCommitTime = client.startCommit();
       // Next insert

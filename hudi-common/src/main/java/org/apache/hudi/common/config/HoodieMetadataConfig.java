@@ -41,6 +41,15 @@ import java.util.Properties;
         + " to avoid overhead of accessing cloud storage, during queries.")
 public final class HoodieMetadataConfig extends HoodieConfig {
 
+  // Asynchronous cleaning for metadata table is disabled by default
+  public static final boolean DEFAULT_METADATA_ASYNC_CLEAN = false;
+  // Full scanning of log files while reading log records is enabled by default for metadata table
+  public static final boolean DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES = true;
+  // Meta fields are not populated by default for metadata table
+  public static final boolean DEFAULT_METADATA_POPULATE_META_FIELDS = false;
+  // Default number of commits to retain, without cleaning, on metadata table
+  public static final int DEFAULT_METADATA_CLEANER_COMMITS_RETAINED = 3;
+
   public static final String METADATA_PREFIX = "hoodie.metadata";
   public static final String OPTIMIZED_LOG_BLOCKS_SCAN = ".optimized.log.blocks.scan.enable";
 
@@ -66,13 +75,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(1)
       .sinceVersion("0.7.0")
       .withDocumentation("Parallelism to use when inserting to the metadata table");
-
-  // Async clean
-  public static final ConfigProperty<Boolean> ASYNC_CLEAN_ENABLE = ConfigProperty
-      .key(METADATA_PREFIX + ".clean.async")
-      .defaultValue(false)
-      .sinceVersion("0.7.0")
-      .withDocumentation("Enable asynchronous cleaning for metadata table. This is an internal config and setting this will not overwrite the value actually used.");
 
   // Async index
   public static final ConfigProperty<Boolean> ASYNC_INDEX_ENABLE = ConfigProperty
@@ -105,14 +107,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Similar to " + MIN_COMMITS_TO_KEEP.key() + ", this config controls "
           + "the maximum number of instants to retain in the active timeline.");
 
-  // Cleaner commits retained
-  public static final ConfigProperty<Integer> CLEANER_COMMITS_RETAINED = ConfigProperty
-      .key(METADATA_PREFIX + ".cleaner.commits.retained")
-      .defaultValue(3)
-      .sinceVersion("0.7.0")
-      .withDocumentation("Number of commits to retain, without cleaning, on metadata table. "
-          + "This is an internal config and setting this will not overwrite the actual value used.");
-
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
       .key(METADATA_PREFIX + ".dir.filter.regex")
@@ -132,13 +126,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(200)
       .sinceVersion("0.7.0")
       .withDocumentation("Parallelism to use, when listing the table on lake storage.");
-
-  public static final ConfigProperty<Boolean> ENABLE_FULL_SCAN_LOG_FILES = ConfigProperty
-      .key(METADATA_PREFIX + ".enable.full.scan.log.files")
-      .defaultValue(true)
-      .sinceVersion("0.10.0")
-      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries. "
-          + "This is an internal config and setting this will not overwrite the actual value used.");
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_BLOOM_FILTER = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.enable")
@@ -222,13 +209,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("After the async indexer has finished indexing upto the base instant, it will ensure that all inflight writers "
           + "reliably write index updates as well. If this timeout expires, then the indexer will abort itself safely.");
-
-  public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
-      .key(METADATA_PREFIX + ".populate.meta.fields")
-      .defaultValue(false)
-      .sinceVersion("0.10.0")
-      .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated. "
-          + "This is an internal config and setting this will not overwrite the actual value used.");
 
   public static final ConfigProperty<Boolean> IGNORE_SPURIOUS_DELETES = ConfigProperty
       .key("_" + METADATA_PREFIX + ".ignore.spurious.deletes")
@@ -315,14 +295,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public String getDirectoryFilterRegex() {
     return getString(DIR_FILTER_REGEX);
-  }
-
-  public boolean allowFullScan() {
-    return getBooleanOrDefault(ENABLE_FULL_SCAN_LOG_FILES);
-  }
-
-  public boolean populateMetaFields() {
-    return getBooleanOrDefault(HoodieMetadataConfig.POPULATE_META_FIELDS);
   }
 
   public boolean ignoreSpuriousDeletes() {
@@ -413,11 +385,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withAsyncClean(boolean asyncClean) {
-      metadataConfig.setValue(ASYNC_CLEAN_ENABLE, String.valueOf(asyncClean));
-      return this;
-    }
-
     public Builder withAsyncIndex(boolean asyncIndex) {
       metadataConfig.setValue(ASYNC_INDEX_ENABLE, String.valueOf(asyncIndex));
       return this;
@@ -428,19 +395,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withPopulateMetaFields(boolean populateMetaFields) {
-      metadataConfig.setValue(POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
-      return this;
-    }
-
     public Builder archiveCommitsWith(int minToKeep, int maxToKeep) {
       metadataConfig.setValue(MIN_COMMITS_TO_KEEP, String.valueOf(minToKeep));
       metadataConfig.setValue(MAX_COMMITS_TO_KEEP, String.valueOf(maxToKeep));
-      return this;
-    }
-
-    public Builder retainCommits(int commitsRetained) {
-      metadataConfig.setValue(CLEANER_COMMITS_RETAINED, String.valueOf(commitsRetained));
       return this;
     }
 
@@ -456,11 +413,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withDirectoryFilterRegex(String regex) {
       metadataConfig.setValue(DIR_FILTER_REGEX, regex);
-      return this;
-    }
-
-    public Builder enableFullScan(boolean enableFullScan) {
-      metadataConfig.setValue(ENABLE_FULL_SCAN_LOG_FILES, String.valueOf(enableFullScan));
       return this;
     }
 
@@ -537,17 +489,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final int DEFAULT_METADATA_INSERT_PARALLELISM = INSERT_PARALLELISM_VALUE.defaultValue();
 
   /**
-   * @deprecated Use {@link #ASYNC_CLEAN_ENABLE} and its methods.
-   */
-  @Deprecated
-  public static final String METADATA_ASYNC_CLEAN_PROP = ASYNC_CLEAN_ENABLE.key();
-  /**
-   * @deprecated Use {@link #ASYNC_CLEAN_ENABLE} and its methods.
-   */
-  @Deprecated
-  public static final boolean DEFAULT_METADATA_ASYNC_CLEAN = ASYNC_CLEAN_ENABLE.defaultValue();
-
-  /**
    * @deprecated Use {@link #COMPACT_NUM_DELTA_COMMITS} and its methods.
    */
   @Deprecated
@@ -578,16 +519,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
    */
   @Deprecated
   public static final int DEFAULT_MAX_COMMITS_TO_KEEP = MAX_COMMITS_TO_KEEP.defaultValue();
-  /**
-   * @deprecated Use {@link #CLEANER_COMMITS_RETAINED} and its methods.
-   */
-  @Deprecated
-  public static final String CLEANER_COMMITS_RETAINED_PROP = CLEANER_COMMITS_RETAINED.key();
-  /**
-   * @deprecated Use {@link #CLEANER_COMMITS_RETAINED} and its methods.
-   */
-  @Deprecated
-  public static final int DEFAULT_CLEANER_COMMITS_RETAINED = CLEANER_COMMITS_RETAINED.defaultValue();
   /**
    * @deprecated No longer takes any effect.
    */

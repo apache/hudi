@@ -232,7 +232,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withPopulateMetaFields(false)
             .withMaxNumDeltaCommitsBeforeCompaction(3)
             .build())
         .build();
