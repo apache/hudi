@@ -155,6 +155,7 @@ public class HoodieIndexConfig extends HoodieConfig {
   public static final ConfigProperty<String> BLOOM_INDEX_BUCKETIZED_CHECKING = ConfigProperty
       .key("hoodie.bloom.index.bucketized.checking")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("Only applies if index type is BLOOM. "
           + "When true, bucketized bloom filtering is enabled. "
           + "This reduces skew seen in sort based bloom index lookup");

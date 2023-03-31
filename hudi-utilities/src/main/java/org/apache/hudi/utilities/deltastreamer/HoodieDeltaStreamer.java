@@ -112,6 +112,16 @@ public class HoodieDeltaStreamer implements Serializable {
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
+  /**
+   * Config prop to force to skip saving checkpoint in the commit metadata.
+   *
+   * Typically used in one-time backfill scenarios, where checkpoints are not to be persisted.
+   *
+   * TODO: consolidate all checkpointing configs into HoodieCheckpointStrategy (HUDI-5906)
+   */
+  public static final String CHECKPOINT_FORCE_SKIP_PROP = "hoodie.deltastreamer.checkpoint.force.skip";
+  public static final Boolean DEFAULT_CHECKPOINT_FORCE_SKIP_PROP = false;
+
   protected final transient Config cfg;
 
   /**
@@ -183,7 +193,12 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public void shutdownGracefully() {
-    ingestionService.ifPresent(ds -> ds.shutdown(false));
+    ingestionService.ifPresent(ds -> {
+      LOG.info("Shutting down DeltaStreamer");
+      ds.shutdown(false);
+      LOG.info("Async service shutdown complete. Closing DeltaSync ");
+      ds.close();
+    });
   }
 
   /**
@@ -726,10 +741,13 @@ public class HoodieDeltaStreamer implements Serializable {
               Option<HoodieData<WriteStatus>> lastWriteStatuses = Option.ofNullable(
                   scheduledCompactionInstantAndRDD.isPresent() ? HoodieJavaRDD.of(scheduledCompactionInstantAndRDD.get().getRight()) : null);
               if (requestShutdownIfNeeded(lastWriteStatuses)) {
+                LOG.warn("Closing and shutting down ingestion service");
                 error = true;
-                shutdown(false);
+                onIngestionCompletes(false);
+                shutdown(true);
+              } else {
+                sleepBeforeNextIngestion(start);
               }
-              sleepBeforeNextIngestion(start);
             } catch (HoodieUpsertException ue) {
               handleUpsertException(ue);
             } catch (Exception e) {

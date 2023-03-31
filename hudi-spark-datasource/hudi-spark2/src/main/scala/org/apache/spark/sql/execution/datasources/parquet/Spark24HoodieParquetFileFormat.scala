@@ -107,6 +107,7 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     val pushDownStringStartWith = sqlConf.parquetFilterPushDownStringStartWith
     val pushDownInFilterThreshold = sqlConf.parquetFilterPushDownInFilterThreshold
     val isCaseSensitive = sqlConf.caseSensitiveAnalysis
+    val timeZoneId = Option(sqlConf.sessionLocalTimeZone)
 
     (file: PartitionedFile) => {
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
@@ -238,7 +239,10 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
           }).toAttributes ++ partitionSchema.toAttributes
           val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
             if (implicitTypeChangeInfos.containsKey(i)) {
-              Cast(attr, implicitTypeChangeInfos.get(i).getLeft)
+              val srcType = implicitTypeChangeInfos.get(i).getRight
+              val dstType = implicitTypeChangeInfos.get(i).getLeft
+              val needTimeZone = Cast.needsTimeZone(srcType, dstType)
+              Cast(attr, dstType, if (needTimeZone) timeZoneId else None)
             } else attr
           }
           GenerateUnsafeProjection.generate(castSchema, newFullSchema)

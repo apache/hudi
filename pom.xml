@@ -2205,7 +2205,7 @@
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.2</parquet.version>
-        <orc.spark.version>1.7.4</orc.spark.version>
+        <orc.spark.version>1.7.8</orc.spark.version>
         <avro.version>1.11.1</avro.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
@@ -2329,7 +2329,7 @@
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.2</parquet.version>
-        <orc.spark.version>1.7.4</orc.spark.version>
+        <orc.spark.version>1.7.8</orc.spark.version>
         <avro.version>1.11.1</avro.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
