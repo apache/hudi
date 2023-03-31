@@ -27,56 +27,127 @@
 # This is to run by GitHub Actions CI tasks from the project root directory
 # and it contains the CI environment-specific variables.
 
-HUDI_VERSION=$1
+HUDI_VERSION=0.13.0-rc3
+REPO_BASE_URL=https://repository.apache.org/content/repositories/orgapachehudi-1117/org/apache/hudi
+
+echo "Validating $HUDI_VERSION bundles"
 
 # choose versions based on build profiles
-if [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
+if [[ ${SPARK_PROFILE} == 'spark' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=2.3.9
   DERBY_VERSION=10.10.2.0
+  FLINK_VERSION=1.13.6
   SPARK_VERSION=2.4.8
   SPARK_HADOOP_VERSION=2.7
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=spark248hive239
+  IMAGE_TAG=flink1136hive239spark248
+  hudi_flink_bundle_name=hudi-flink1.13-bundle
+  hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
+  hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
+  hudi_spark_bundle_name=hudi-spark-bundle_2.11
+  hudi_utilities_bundle_name=hudi-utilities-bundle_2.11
+  hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.11
+  hudi_metaserver_server_bundle_name=hudi-metaserver-server-bundle
+elif [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=2.3.9
+  DERBY_VERSION=10.10.2.0
+  FLINK_VERSION=1.13.6
+  SPARK_VERSION=2.4.8
+  SPARK_HADOOP_VERSION=2.7
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1136hive239spark248
+  hudi_flink_bundle_name=hudi-flink1.13-bundle
+  hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
+  hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
+  hudi_spark_bundle_name=hudi-spark2.4-bundle_2.11
+  hudi_utilities_bundle_name=hudi-utilities-bundle_2.11
+  hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.11
+  hudi_metaserver_server_bundle_name=hudi-metaserver-server-bundle
 elif [[ ${SPARK_PROFILE} == 'spark3.1' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.13.6
   SPARK_VERSION=3.1.3
   SPARK_HADOOP_VERSION=2.7
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=spark313hive313
+  IMAGE_TAG=flink1136hive313spark313
+  hudi_flink_bundle_name=hudi-flink1.13-bundle
+  hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
+  hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
+  hudi_spark_bundle_name=hudi-spark3.1-bundle_2.12
+  hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
+  hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
+  hudi_metaserver_server_bundle_name=hudi-metaserver-server-bundle
 elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.14.6
   SPARK_VERSION=3.2.3
   SPARK_HADOOP_VERSION=2.7
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=spark323hive313
+  IMAGE_TAG=flink1146hive313spark323
+  hudi_flink_bundle_name=hudi-flink1.14-bundle
+  hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
+  hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
+  hudi_spark_bundle_name=hudi-spark3.2-bundle_2.12
+  hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
+  hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
+  hudi_metaserver_server_bundle_name=hudi-metaserver-server-bundle
 elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.15.3
   SPARK_VERSION=3.3.1
   SPARK_HADOOP_VERSION=2
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=spark331hive313
+  IMAGE_TAG=flink1153hive313spark331
+  hudi_flink_bundle_name=hudi-flink1.15-bundle
+  hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
+  hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
+  hudi_spark_bundle_name=hudi-spark3.3-bundle_2.12
+  hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
+  hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
+  hudi_metaserver_server_bundle_name=hudi-metaserver-server-bundle
+elif [[ ${SPARK_PROFILE} == 'spark3' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.15.3
+  SPARK_VERSION=3.3.1
+  SPARK_HADOOP_VERSION=2
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1153hive313spark331
+  hudi_flink_bundle_name=hudi-flink1.15-bundle
+  hudi_hadoop_mr_bundle_name=hudi-hadoop-mr-bundle
+  hudi_kafka_connect_bundle_name=hudi-kafka-connect-bundle
+  hudi_spark_bundle_name=hudi-spark3-bundle_2.12
+  hudi_utilities_bundle_name=hudi-utilities-bundle_2.12
+  hudi_utilities_slim_bundle_name=hudi-utilities-slim-bundle_2.12
+  hudi_metaserver_server_bundle_name=hudi-metaserver-server-bundle
 fi
 
 # Copy bundle jars to temp dir for mounting
 TMP_JARS_DIR=/tmp/jars/$(date +%s)
 mkdir -p $TMP_JARS_DIR
-cp ${GITHUB_WORKSPACE}/packaging/hudi-hadoop-mr-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-cp ${GITHUB_WORKSPACE}/packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-slim-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-cp ${GITHUB_WORKSPACE}/packaging/hudi-kafka-connect-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-echo 'Validating jars below:'
+wget -q $REPO_BASE_URL/$hudi_flink_bundle_name/$HUDI_VERSION/$hudi_flink_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_hadoop_mr_bundle_name/$HUDI_VERSION/$hudi_hadoop_mr_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_kafka_connect_bundle_name/$HUDI_VERSION/$hudi_kafka_connect_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_spark_bundle_name/$HUDI_VERSION/$hudi_spark_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_utilities_bundle_name/$HUDI_VERSION/$hudi_utilities_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_utilities_slim_bundle_name/$HUDI_VERSION/$hudi_utilities_slim_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+wget -q $REPO_BASE_URL/$hudi_metaserver_server_bundle_name/$HUDI_VERSION/$hudi_metaserver_server_bundle_name-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+echo "Downloaded these jars from $REPO_BASE_URL for validation:"
 ls -l $TMP_JARS_DIR
 
 # Copy test dataset
@@ -91,6 +162,7 @@ docker build \
 --build-arg HADOOP_VERSION=$HADOOP_VERSION \
 --build-arg HIVE_VERSION=$HIVE_VERSION \
 --build-arg DERBY_VERSION=$DERBY_VERSION \
+--build-arg FLINK_VERSION=$FLINK_VERSION \
 --build-arg SPARK_VERSION=$SPARK_VERSION \
 --build-arg SPARK_HADOOP_VERSION=$SPARK_HADOOP_VERSION \
 --build-arg CONFLUENT_VERSION=$CONFLUENT_VERSION \
