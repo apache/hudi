@@ -46,6 +46,12 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, name, price, ts from $tableName where date_par='2023-03-01' order by id")(
         Seq(3, "a3", 10.0, 1000)
       )
+
+      withSQLConf("spark.sql.session.timeZone" -> "UTC+2") {
+        checkAnswer(s"select id, name, price, ts from $tableName where date_par='2023-03-01' order by id")(
+          Seq(3, "a3", 10.0, 1000)
+        )
+      }
     }
   }
 
@@ -79,6 +85,13 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
         s"where date_par='2023-03-01' and country='ID' order by id")(
         Seq(3, "a3", 10.0, 1000)
       )
+
+      withSQLConf("spark.sql.session.timeZone" -> "UTC+2") {
+        checkAnswer(s"select id, name, price, ts from $tableName " +
+          s"where date_par='2023-03-01' and country='ID' order by id")(
+          Seq(3, "a3", 10.0, 1000)
+        )
+      }
     }
   }
 }
