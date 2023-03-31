@@ -31,14 +31,15 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
-import io.javalin.core.JavalinConfig;
-import io.javalin.jetty.JettyServer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
+import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -342,8 +343,26 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? new JettyServer(new JavalinConfig()).server() :
-            new Server(new QueuedThreadPool(timelineServerConf.numThreads));
+    int maxThreads;
+    if (timelineServerConf.numThreads > 0) {
+      maxThreads = timelineServerConf.numThreads;
+    } else {
+      // io.javalin.jetty.JettyUtil.defaultThreadPool
+      maxThreads = 250;
+    }
+    QueuedThreadPool pool = new QueuedThreadPool(maxThreads, 8, 60_000);
+    pool.setDaemon(true);
+    final Server server = new Server(pool);
+    ServerConnector connector = new ServerConnector(
+        server,
+        null,
+        new ScheduledExecutorScheduler("TimelineService-JettyScheduler", true),
+        null,
+        -1,
+        -1,
+        new HttpConnectionFactory());
+    server.addConnector(connector);
+
     app = Javalin.create(c -> {
       if (!timelineServerConf.compress) {
         c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
