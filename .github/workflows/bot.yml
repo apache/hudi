@@ -6,21 +6,11 @@ on:
       - master
       - 'release-*'
   pull_request:
-    paths-ignore:
-      - '**.bmp'
-      - '**.gif'
-      - '**.jpg'
-      - '**.jpeg'
-      - '**.md'
-      - '**.pdf'
-      - '**.png'
-      - '**.svg'
     branches:
       - master
       - 'release-*'
 env:
   MVN_ARGS: -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
-  SPARK_COMMON_MODULES: hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common
 
 jobs:
   validate-bundles:
@@ -28,20 +18,18 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: 'flink1.16'
-            sparkProfile: 'spark3.3'
-          - flinkProfile: 'flink1.15'
-            sparkProfile: 'spark3.3'
-          - flinkProfile: 'flink1.15'
-            sparkProfile: 'spark3'
-          - flinkProfile: 'flink1.14'
-            sparkProfile: 'spark3.2'
-          - flinkProfile: 'flink1.13'
-            sparkProfile: 'spark3.1'
           - flinkProfile: 'flink1.13'
             sparkProfile: 'spark'
           - flinkProfile: 'flink1.13'
             sparkProfile: 'spark2.4'
+          - flinkProfile: 'flink1.13'
+            sparkProfile: 'spark3.1'
+          - flinkProfile: 'flink1.14'
+            sparkProfile: 'spark3.2'
+          - flinkProfile: 'flink1.15'
+            sparkProfile: 'spark3.3'
+          - flinkProfile: 'flink1.15'
+            sparkProfile: 'spark3'
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -56,4 +44,3 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
           ./packaging/bundle-validation/ci_run.sh
-
