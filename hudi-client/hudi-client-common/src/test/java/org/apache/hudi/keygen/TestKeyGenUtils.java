@@ -18,13 +18,39 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 public class TestKeyGenUtils {
+
+  @Test
+  public void testInferKeyGeneratorType() {
+    assertEquals(
+        KeyGeneratorType.SIMPLE,
+        KeyGenUtils.inferKeyGeneratorType("col1", "partition1"));
+    assertEquals(
+        KeyGeneratorType.COMPLEX,
+        KeyGenUtils.inferKeyGeneratorType("col1", "partition1,partition2"));
+    assertEquals(
+        KeyGeneratorType.COMPLEX,
+        KeyGenUtils.inferKeyGeneratorType("col1,col2", "partition1"));
+    assertEquals(
+        KeyGeneratorType.COMPLEX,
+        KeyGenUtils.inferKeyGeneratorType("col1,col2", "partition1,partition2"));
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        KeyGenUtils.inferKeyGeneratorType("col1,col2", ""));
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        KeyGenUtils.inferKeyGeneratorType("col1,col2", null));
+  }
 
   @Test
   public void testExtractRecordKeys() {

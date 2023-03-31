@@ -38,12 +38,10 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
@@ -259,7 +257,6 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "version",
       PARTITIONPATH_FIELD.key -> "dt,hh",
-      KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName,
       HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString
     )
 
@@ -396,8 +393,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "version",
-      PARTITIONPATH_FIELD.key -> "dt,hh",
-      KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName
+      PARTITIONPATH_FIELD.key -> "dt,hh"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -456,8 +452,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       HoodieMetadataConfig.ENABLE.key -> enableMetadataTable.toString,
       RECORDKEY_FIELD.key -> "id",
-      PARTITIONPATH_FIELD.key -> "region_code,dt",
-      KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName
+      PARTITIONPATH_FIELD.key -> "region_code,dt"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(

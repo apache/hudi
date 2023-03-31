@@ -27,8 +27,6 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -188,10 +186,6 @@ public class HoodieJavaGenerateApp {
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
         // Used by hive sync and queries
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
-        // Add Key Extractor
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
-                : SimpleKeyGenerator.class.getCanonicalName())
         .mode(commitType);
 
     updateHiveSyncConfig(writer);

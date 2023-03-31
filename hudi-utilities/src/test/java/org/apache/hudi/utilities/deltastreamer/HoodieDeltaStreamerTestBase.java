@@ -64,6 +64,8 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   static final String PROPS_INVALID_FILE = "test-invalid-props.properties";
   static final String PROPS_INVALID_TABLE_CONFIG_FILE = "test-invalid-table-config.properties";
   static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
+  static final String PROPS_FILENAME_INFER_COMPLEX_KEYGEN = "test-infer-complex-keygen.properties";
+  static final String PROPS_FILENAME_INFER_NONPARTITIONED_KEYGEN = "test-infer-nonpartitioned-keygen.properties";
   static final String PROPS_FILENAME_TEST_CSV = "test-csv-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_ORC = "test-orc-dfs-source.properties";
@@ -159,6 +161,19 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_INVALID);
+
+    // Properties used for testing inferring key generator for complex key generator
+    TypedProperties inferKeygenProps = new TypedProperties();
+    inferKeygenProps.setProperty("include", "base.properties");
+    inferKeygenProps.setProperty("hoodie.datasource.write.recordkey.field", "timestamp,_row_key");
+    inferKeygenProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
+    inferKeygenProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
+    inferKeygenProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
+    UtilitiesTestBase.Helpers.savePropsToDFS(inferKeygenProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_INFER_COMPLEX_KEYGEN);
+
+    // Properties used for testing inferring key generator for non-partitioned key generator
+    inferKeygenProps.setProperty("hoodie.datasource.write.partitionpath.field", "");
+    UtilitiesTestBase.Helpers.savePropsToDFS(inferKeygenProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_INFER_NONPARTITIONED_KEYGEN);
 
     TypedProperties props1 = new TypedProperties();
     populateAllCommonProps(props1, dfsBasePath, brokerAddress);

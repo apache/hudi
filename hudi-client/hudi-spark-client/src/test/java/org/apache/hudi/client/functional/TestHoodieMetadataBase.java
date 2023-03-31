@@ -47,7 +47,6 @@ import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
@@ -338,7 +337,6 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
                                                             boolean enableMetrics, boolean useRollbackUsingMarkers,
                                                             boolean validateMetadataPayloadConsistency) {
     Properties properties = new Properties();
-    properties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withDeleteParallelism(2).withRollbackParallelism(2).withFinalizeWriteParallelism(2)
         .withAutoCommit(autoCommit)

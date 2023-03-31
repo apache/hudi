@@ -71,7 +71,6 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.KeyGenerator;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
@@ -376,7 +375,7 @@ public class DeltaSync implements Serializable, Closeable {
         .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
             HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
         .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-            SimpleKeyGenerator.class.getName()))
+            keyGenerator.getClass().getName()))
         .setPreCombineField(cfg.sourceOrderingField)
         .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
             HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
@@ -473,7 +472,7 @@ public class DeltaSync implements Serializable, Closeable {
           .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
               HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
           .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-              SimpleKeyGenerator.class.getName()))
+              keyGenerator.getClass().getName()))
           .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
               HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
           .setShouldDropPartitionColumns(isDropPartitionColumns())

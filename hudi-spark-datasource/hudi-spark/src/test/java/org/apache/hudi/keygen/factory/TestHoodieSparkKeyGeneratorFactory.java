@@ -21,17 +21,21 @@ package org.apache.hudi.keygen.factory;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
+import org.apache.hudi.keygen.ComplexKeyGenerator;
+import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TestComplexKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
+import static org.apache.hudi.config.HoodieWriteConfig.KEYGENERATOR_TYPE;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -41,25 +45,47 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 public class TestHoodieSparkKeyGeneratorFactory {
   @Test
+  public void testInferKeyGeneratorTypeFromWriteConfig() {
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        HoodieSparkKeyGeneratorFactory.inferKeyGeneratorTypeFromWriteConfig(new TypedProperties()));
+
+    TypedProperties props = getCommonProps();
+    assertEquals(
+        KeyGeneratorType.SIMPLE,
+        HoodieSparkKeyGeneratorFactory.inferKeyGeneratorTypeFromWriteConfig(props));
+
+    props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,ts");
+    assertEquals(
+        KeyGeneratorType.COMPLEX,
+        HoodieSparkKeyGeneratorFactory.inferKeyGeneratorTypeFromWriteConfig(props));
+
+    props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        HoodieSparkKeyGeneratorFactory.inferKeyGeneratorTypeFromWriteConfig(props));
+  }
+
+  @Test
   public void testKeyGeneratorFactory() throws IOException {
     TypedProperties props = getCommonProps();
 
     // set KeyGenerator type only
-    props.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), KeyGeneratorType.SIMPLE.name());
+    props.put(KEYGENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM.name());
     KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-    Assertions.assertEquals(SimpleKeyGenerator.class.getName(), keyGenerator.getClass().getName());
+    assertEquals(CustomKeyGenerator.class.getName(), keyGenerator.getClass().getName());
 
     // set KeyGenerator class only
     props = getCommonProps();
     props.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
     KeyGenerator keyGenerator2 = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-    Assertions.assertEquals(SimpleKeyGenerator.class.getName(), keyGenerator2.getClass().getName());
+    assertEquals(SimpleKeyGenerator.class.getName(), keyGenerator2.getClass().getName());
 
     // set both class name and keyGenerator type
-    props.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM.name());
+    props.put(KEYGENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM.name());
     KeyGenerator keyGenerator3 = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     // KEYGENERATOR_TYPE_PROP was overwritten by KEYGENERATOR_CLASS_PROP
-    Assertions.assertEquals(SimpleKeyGenerator.class.getName(), keyGenerator3.getClass().getName());
+    assertEquals(SimpleKeyGenerator.class.getName(), keyGenerator3.getClass().getName());
 
     // set wrong class name
     final TypedProperties props2 = getCommonProps();
@@ -68,8 +94,24 @@ public class TestHoodieSparkKeyGeneratorFactory {
 
     // set wrong keyGenerator type
     final TypedProperties props3 = getCommonProps();
-    props3.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), "wrong_type");
+    props3.put(KEYGENERATOR_TYPE.key(), "wrong_type");
     assertThrows(HoodieKeyGeneratorException.class, () -> HoodieSparkKeyGeneratorFactory.createKeyGenerator(props3));
+
+    // Infer key generator
+    TypedProperties props4 = getCommonProps();
+    assertEquals(
+        SimpleKeyGenerator.class.getName(),
+        HoodieSparkKeyGeneratorFactory.createKeyGenerator(props4).getClass().getName());
+
+    props4.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,ts");
+    assertEquals(
+        ComplexKeyGenerator.class.getName(),
+        HoodieSparkKeyGeneratorFactory.createKeyGenerator(props4).getClass().getName());
+
+    props4.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
+    assertEquals(
+        NonpartitionedKeyGenerator.class.getName(),
+        HoodieSparkKeyGeneratorFactory.createKeyGenerator(props4).getClass().getName());
   }
 
   private TypedProperties getCommonProps() {

@@ -52,7 +52,7 @@ import org.apache.spark.sql.types._
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
@@ -224,7 +224,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
 
     // incase of non partitioned dataset, inference should not happen.
-    toInsertDf.write.partitionBy("fare","rider").format("hudi")
+    toInsertDf.write.partitionBy("fare", "rider").format("hudi")
       .options(commonOptsNoPreCombine)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(KEYGENERATOR_CLASS_NAME.key(), classOf[NonpartitionedKeyGenerator].getName)
@@ -281,8 +281,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       "hoodie.upsert.shuffle.parallelism" -> "4",
       "hoodie.bulkinsert.shuffle.parallelism" -> "2",
       "hoodie.delete.shuffle.parallelism" -> "1",
-      HoodieMetadataConfig.ENABLE.key -> "false", // this is testing table configs and write configs. disabling metadata to save on test run time.
-      "hoodie.datasource.write.keygenerator.class" -> classOf[SimpleKeyGenerator].getCanonicalName
+      HoodieMetadataConfig.ENABLE.key -> "false" // this is testing table configs and write configs. disabling metadata to save on test run time.
     ))
 
     // Insert Operation
@@ -340,7 +339,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val optsWithNoRepeatedTableConfig = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
-      "hoodie.datasource.write.keygenerator.class" -> classOf[SimpleKeyGenerator].getCanonicalName,
       HoodieMetadataConfig.ENABLE.key -> "false"
     )
     // this write should succeed even w/o though we set key gen explicitly, its the default

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -29,7 +28,10 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
+
+import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -47,8 +49,33 @@ public class KeyGenUtils {
   public static final String DEFAULT_COMPOSITE_KEY_FILED_VALUE = ":";
 
   /**
+   * Infers the key generator type based on the record key and partition fields.
+   * <p>
+   * (1) partition field is empty: {@link KeyGeneratorType#NON_PARTITION};
+   * (2) Only one partition field and one record key field: {@link KeyGeneratorType#SIMPLE};
+   * (3) More than one partition and/or record key fields: {@link KeyGeneratorType#COMPLEX}.
+   *
+   * @param recordsKeyFields Record key field list.
+   * @param partitionFields  Partition field list.
+   * @return Inferred key generator type.
+   */
+  public static KeyGeneratorType inferKeyGeneratorType(
+      String recordsKeyFields, String partitionFields) {
+    if (!StringUtils.isNullOrEmpty(partitionFields)) {
+      int numPartFields = partitionFields.split(",").length;
+      int numRecordKeyFields = recordsKeyFields.split(",").length;
+      if (numPartFields == 1 && numRecordKeyFields == 1) {
+        return KeyGeneratorType.SIMPLE;
+      }
+      return KeyGeneratorType.COMPLEX;
+    }
+    return KeyGeneratorType.NON_PARTITION;
+  }
+
+  /**
    * Fetches record key from the GenericRecord.
-   * @param genericRecord generic record of interest.
+   *
+   * @param genericRecord   generic record of interest.
    * @param keyGeneratorOpt Optional BaseKeyGenerator. If not, meta field will be used.
    * @return the record key for the passed in generic record.
    */

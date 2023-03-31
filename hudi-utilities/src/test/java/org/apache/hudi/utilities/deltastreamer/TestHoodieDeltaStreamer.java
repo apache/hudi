@@ -61,6 +61,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
+import org.apache.hudi.keygen.ComplexKeyGenerator;
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.utilities.DummySchemaProvider;
@@ -608,6 +610,36 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // expected
     LOG.debug("Expected error during getting the key generator", e);
     assertTrue(e.getMessage().contains("Could not load key generator class"));
+  }
+
+  private static Stream<Arguments> provideInferKeyGenArgs() {
+    return Stream.of(
+        Arguments.of(
+            PROPS_FILENAME_INFER_COMPLEX_KEYGEN,
+            ComplexKeyGenerator.class.getName()),
+        Arguments.of(
+            PROPS_FILENAME_INFER_NONPARTITIONED_KEYGEN,
+            NonpartitionedKeyGenerator.class.getName())
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("provideInferKeyGenArgs")
+  public void testInferKeyGenerator(String propsFilename,
+                                    String expectedKeyGeneratorClassName) throws Exception {
+    String[] splitNames = propsFilename.split("\\.");
+    String tableBasePath = basePath + "/" + splitNames[0];
+    HoodieDeltaStreamer deltaStreamer =
+        new HoodieDeltaStreamer(TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT,
+            Collections.singletonList(TripsWithDistanceTransformer.class.getName()),
+            propsFilename, false), jsc);
+    deltaStreamer.sync();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(new Configuration()).setBasePath(tableBasePath).build();
+    assertEquals(
+        expectedKeyGeneratorClassName, metaClient.getTableConfig().getKeyGeneratorClassName());
+    Dataset<Row> res = sqlContext.read().format("hudi").load(tableBasePath);
+    assertEquals(1000, res.count());
   }
 
   @Test
@@ -2335,7 +2367,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       props.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
       props.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "id");
 
-      props.setProperty("hoodie.datasource.write.keygenerator.class", SimpleKeyGenerator.class.getName());
       props.setProperty("hoodie.datasource.write.recordkey.field", "ID");
       props.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
 
