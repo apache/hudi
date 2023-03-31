@@ -96,6 +96,12 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation("When " + HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name() + " cleaning policy is used, "
           + " the minimum number of file slices to retain in each file group, during cleaning.");
 
+  public static final ConfigProperty<Integer> CLEANER_REPLACED_FILES_HOURS_RETAINED = ConfigProperty
+      .key("hoodie.cleaner.replaced.files.retained.hours")
+      .defaultValue(-1)
+      .withDocumentation("When " + HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name() + " cleaning policy is used, "
+          + "Number of hours for replaced files need to be retained. default -1 means clean all these replaced files as soon as possible");
+
   public static final ConfigProperty<String> CLEANER_INCREMENTAL_MODE_ENABLE = ConfigProperty
       .key("hoodie.cleaner.incremental.mode")
       .defaultValue("true")
@@ -276,6 +282,11 @@ public class HoodieCleanConfig extends HoodieConfig {
 
     public HoodieCleanConfig.Builder retainFileVersions(int fileVersionsRetained) {
       cleanConfig.setValue(CLEANER_FILE_VERSIONS_RETAINED, String.valueOf(fileVersionsRetained));
+      return this;
+    }
+
+    public HoodieCleanConfig.Builder withReplacedFilesRetainHours(int hours) {
+      cleanConfig.setValue(CLEANER_REPLACED_FILES_HOURS_RETAINED, String.valueOf(hours));
       return this;
     }
 
