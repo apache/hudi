@@ -84,7 +84,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     context = new HoodieJavaEngineContext(hadoopConf);
 
     try {
-      KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createAvroKeyGeneratorByType(
+      KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(
           new TypedProperties(connectConfigs.getProps()));
       String recordKeyFields = KafkaConnectUtils.getRecordKeyColumns(keyGenerator);
       String partitionColumns = KafkaConnectUtils.getPartitionColumns(keyGenerator,

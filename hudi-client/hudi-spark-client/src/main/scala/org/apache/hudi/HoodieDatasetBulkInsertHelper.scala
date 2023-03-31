@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.SparkHoodieIndexFactory
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BuiltinKeyGenerator, SparkKeyGeneratorInterface}
 import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
@@ -74,13 +75,10 @@ object HoodieDatasetBulkInsertHelper
     val updatedSchema = StructType(metaFields ++ schema.fields)
 
     val updatedDF = if (populateMetaFields) {
-      val keyGeneratorClassName = config.getStringOrThrow(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME,
-        "Key-generator class name is required")
-
       val prependedRdd: RDD[InternalRow] =
         df.queryExecution.toRdd.mapPartitions { iter =>
           val keyGenerator =
-            ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps))
+            HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))
               .asInstanceOf[SparkKeyGeneratorInterface]
 
           iter.map { row =>

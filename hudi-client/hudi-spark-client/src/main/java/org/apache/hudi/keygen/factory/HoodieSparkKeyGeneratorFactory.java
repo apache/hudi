@@ -19,8 +19,6 @@
 package org.apache.hudi.keygen.factory;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
@@ -37,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -46,7 +43,7 @@ import java.util.Map;
  * This factory will try {@link HoodieWriteConfig#KEYGENERATOR_CLASS_NAME} firstly, this ensures the class prop
  * will not be overwritten by {@link KeyGeneratorType}
  */
-public class HoodieSparkKeyGeneratorFactory {
+public class HoodieSparkKeyGeneratorFactory extends KeyGeneratorFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkKeyGeneratorFactory.class);
 
@@ -66,57 +63,34 @@ public class HoodieSparkKeyGeneratorFactory {
         "org.apache.hudi.keygen.TimestampBasedKeyGenerator");
   }
 
-  public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
-    String keyGeneratorClass = getKeyGeneratorClassName(props);
-    try {
-      return (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
-    } catch (Throwable e) {
-      throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
-    }
-  }
-
-  public static String getKeyGeneratorClassName(TypedProperties props) {
-    String keyGeneratorClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), null);
-
-    if (StringUtils.isNullOrEmpty(keyGeneratorClass)) {
-      String keyGeneratorType = props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), KeyGeneratorType.SIMPLE.name());
-      LOG.info("The value of {} is empty, use SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE.key());
-      KeyGeneratorType keyGeneratorTypeEnum;
-      try {
-        keyGeneratorTypeEnum = KeyGeneratorType.valueOf(keyGeneratorType.toUpperCase(Locale.ROOT));
-      } catch (IllegalArgumentException e) {
-        throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + keyGeneratorType);
-      }
-      switch (keyGeneratorTypeEnum) {
-        case SIMPLE:
-          keyGeneratorClass = SimpleKeyGenerator.class.getName();
-          break;
-        case COMPLEX:
-          keyGeneratorClass = ComplexKeyGenerator.class.getName();
-          break;
-        case TIMESTAMP:
-          keyGeneratorClass = TimestampBasedKeyGenerator.class.getName();
-          break;
-        case CUSTOM:
-          keyGeneratorClass = CustomKeyGenerator.class.getName();
-          break;
-        case NON_PARTITION:
-          keyGeneratorClass = NonpartitionedKeyGenerator.class.getName();
-          break;
-        case GLOBAL_DELETE:
-          keyGeneratorClass = GlobalDeleteKeyGenerator.class.getName();
-          break;
-        default:
-          throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + keyGeneratorType);
-      }
-    }
-    return keyGeneratorClass;
-  }
-
   /**
    * Convert hoodie-common KeyGenerator to SparkKeyGeneratorInterface implement.
    */
   public static String convertToSparkKeyGenerator(String keyGeneratorClassName) {
     return COMMON_TO_SPARK_KEYGENERATOR.getOrDefault(keyGeneratorClassName, keyGeneratorClassName);
+  }
+
+  public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
+    return KeyGeneratorFactory.createKeyGenerator(props, LOG, HoodieSparkKeyGeneratorFactory::getKeyGenerator);
+  }
+
+  private static KeyGenerator getKeyGenerator(KeyGeneratorType keyGeneratorTypeEnum, TypedProperties props)
+      throws IOException {
+    switch (keyGeneratorTypeEnum) {
+      case SIMPLE:
+        return new SimpleKeyGenerator(props);
+      case COMPLEX:
+        return new ComplexKeyGenerator(props);
+      case TIMESTAMP:
+        return new TimestampBasedKeyGenerator(props);
+      case CUSTOM:
+        return new CustomKeyGenerator(props);
+      case NON_PARTITION:
+        return new NonpartitionedKeyGenerator(props);
+      case GLOBAL_DELETE:
+        return new GlobalDeleteKeyGenerator(props);
+      default:
+        throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + keyGeneratorTypeEnum);
+    }
   }
 }
