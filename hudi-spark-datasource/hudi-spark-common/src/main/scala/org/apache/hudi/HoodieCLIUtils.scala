@@ -48,6 +48,22 @@ object HoodieCLIUtils extends ProvidesHoodieConfig{
       metaClient.getTableConfig.getTableName, finalParameters.asJava)
   }
 
+  def createHoodieClientFromPath(sparkSession: SparkSession,
+                                 basePath: String,
+                                 conf: Map[String, String],
+                                 tableName: Option[String]): SparkRDDWriteClient[_] = {
+    val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
+      .setConf(sparkSession.sessionState.newHadoopConf()).build()
+    val schemaUtil = new TableSchemaResolver(metaClient)
+    val schemaStr = schemaUtil.getTableAvroSchema(false).toString
+    val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
+      buildHoodieConfig(getHoodieCatalogTable(sparkSession, tableName.getOrElse(metaClient.getTableConfig.getTableName))) ++ conf)
+
+    val jsc = new JavaSparkContext(sparkSession.sparkContext)
+    DataSourceUtils.createHoodieClient(jsc, schemaStr, basePath,
+      metaClient.getTableConfig.getTableName, finalParameters.asJava)
+  }
+
   def extractPartitions(clusteringGroups: Seq[HoodieClusteringGroup]): String = {
     var partitionPaths: Seq[String] = Seq.empty
     clusteringGroups.foreach(g =>

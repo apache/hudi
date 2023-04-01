@@ -170,8 +170,12 @@ class RunClusteringProcedure extends BaseProcedure
     logInfo(s"Pending clustering instants: ${pendingClustering.mkString(",")}")
 
     var client: SparkRDDWriteClient[_] = null
+    val actualTableName = tableName.map(
+      t => Some(t.asInstanceOf[String]))
+      .getOrElse(Option.empty)
+
     try {
-      client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, conf)
+      client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, conf, actualTableName)
       if (operator.isSchedule) {
         val instantTime = HoodieActiveTimeline.createNewInstantTime
         if (client.scheduleClusteringAtInstant(instantTime, HOption.empty())) {

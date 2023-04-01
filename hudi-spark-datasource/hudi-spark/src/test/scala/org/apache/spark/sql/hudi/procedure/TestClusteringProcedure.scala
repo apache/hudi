@@ -136,6 +136,109 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call run_clustering Procedure By Table not in default database") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateNotDefaultTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        spark.sql(
+          s"""
+             |create database if not exists ${hoodieDatabase}
+             |""".stripMargin)
+
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | options (
+             |  primaryKey ='id',
+             |  type = '$tableType',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by(ts)
+             | location '$basePath'
+       """.stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+        val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty, Some(tableName))
+        // Generate the first clustering plan
+        val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
+        client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
+
+        // Generate the second clustering plan
+        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
+        val secondScheduleInstant = HoodieActiveTimeline.createNewInstantTime
+        client.scheduleClusteringAtInstant(secondScheduleInstant, HOption.empty())
+        checkAnswer(s"call show_clustering('$tableName')")(
+          Seq(secondScheduleInstant, 1, HoodieInstant.State.REQUESTED.name(), "*"),
+          Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
+        )
+
+        // Do clustering for all clustering plan generated above, and no new clustering
+        // instant will be generated because of there is no commit after the second
+        // clustering plan generated
+        checkAnswer(s"call run_clustering(table => '$tableName', order => 'ts', show_involved_partition => true)")(
+          Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "ts=1003"),
+          Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "ts=1000,ts=1001,ts=1002")
+        )
+
+        // No new commits
+        val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
+        assertResult(false)(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, secondScheduleInstant))
+
+        // Check the number of finished clustering instants
+        val finishedClustering = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
+          .getInstants
+          .iterator().asScala
+          .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
+          .toSeq
+        assertResult(2)(finishedClustering.size)
+
+        checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 10.0, 1001),
+          Seq(3, "a3", 10.0, 1002),
+          Seq(4, "a4", 10.0, 1003)
+        )
+
+        // After clustering there should be no pending clustering and all clustering instants should be completed
+        checkAnswer(s"call show_clustering(table => '$tableName')")(
+          Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "*"),
+          Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "*")
+        )
+
+        // Do clustering without manual schedule(which will do the schedule if no pending clustering exists)
+        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
+        spark.sql(s"insert into $tableName values(6, 'a6', 10, 1005)")
+        spark.sql(s"call run_clustering(table => '$tableName', order => 'ts', show_involved_partition => true)").show()
+
+        val thirdClusteringInstant = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
+          .findInstantsAfter(secondScheduleInstant)
+          .getInstants
+          .iterator().asScala
+          .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
+          .toSeq
+        // Should have a new replace commit after the second clustering command.
+        assertResult(1)(thirdClusteringInstant.size)
+
+        checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 10.0, 1001),
+          Seq(3, "a3", 10.0, 1002),
+          Seq(4, "a4", 10.0, 1003),
+          Seq(5, "a5", 10.0, 1004),
+          Seq(6, "a6", 10.0, 1005)
+        )
+      }
+    }
+  }
+
   test("Test Call run_clustering Procedure By Path") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>

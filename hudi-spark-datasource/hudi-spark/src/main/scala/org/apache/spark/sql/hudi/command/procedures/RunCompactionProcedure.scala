@@ -67,8 +67,12 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
 
     var client: SparkRDDWriteClient[_] = null
+    val actualTableName = tableName.map(
+      t => Some(t.asInstanceOf[String]))
+      .getOrElse(Option.empty)
+
     try {
-      client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, Map.empty)
+      client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, Map.empty, actualTableName)
       var willCompactionInstants: Seq[String] = Seq.empty
       operation match {
         case "schedule" =>

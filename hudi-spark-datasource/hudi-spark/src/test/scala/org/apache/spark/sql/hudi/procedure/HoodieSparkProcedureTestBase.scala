@@ -20,7 +20,15 @@ package org.apache.spark.sql.hudi.procedure
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 class HoodieSparkProcedureTestBase extends HoodieSparkSqlTestBase {
+
+  protected var hoodieDatabase = "hoodie_database"
+
   override def generateTableName: String = {
     s"default.${super.generateTableName}"
   }
+
+  def generateNotDefaultTableName: String = {
+    s"${hoodieDatabase}.${super.generateTableName}"
+  }
+
 }
