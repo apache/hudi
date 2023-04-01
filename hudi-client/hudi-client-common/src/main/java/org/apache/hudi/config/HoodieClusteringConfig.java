@@ -183,7 +183,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups");
 
   public static final ConfigProperty<Boolean> PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED = ConfigProperty
-      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + ".single.group.clustering.enabled")
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "single.group.clustering.enabled")
       .defaultValue(true)
       .sinceVersion("0.14.0")
       .withDocumentation("Whether to generate clustering plan when there is only one file group involved, by default true");
