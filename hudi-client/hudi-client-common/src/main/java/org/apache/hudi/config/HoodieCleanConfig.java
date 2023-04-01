@@ -42,9 +42,13 @@ import java.util.stream.Collectors;
  */
 @Immutable
 @ConfigClassProperty(name = "Clean Configs",
-        groupName = ConfigGroups.Names.WRITE_CLIENT,
-        description = "Cleaning (reclamation of older/unused file groups/slices).")
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Cleaning (reclamation of older/unused file groups/slices).")
 public class HoodieCleanConfig extends HoodieConfig {
+
+  private static final String CLEANER_COMMITS_RETAINED_KEY = "hoodie.cleaner.commits.retained";
+  private static final String CLEANER_HOURS_RETAINED_KEY = "hoodie.cleaner.hours.retained";
+  private static final String CLEANER_FILE_VERSIONS_RETAINED_KEY = "hoodie.cleaner.fileversions.retained";
 
   public static final ConfigProperty<String> AUTO_CLEAN = ConfigProperty
       .key("hoodie.clean.automatic")
@@ -59,25 +63,68 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation("Only applies when " + AUTO_CLEAN.key() + " is turned on. "
           + "When turned on runs cleaner async with writing, which can speed up overall write performance.");
 
+  // The cleaner policy config definition has to be before the following configs for inference:
+  // CLEANER_COMMITS_RETAINED, CLEANER_HOURS_RETAINED, CLEANER_FILE_VERSIONS_RETAINED
+  @Deprecated
+  public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
+      .key("hoodie.cleaner.policy")
+      .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+      .withInferFunction(cfg -> {
+        boolean isCommitsRetainedConfigured = cfg.contains(CLEANER_COMMITS_RETAINED_KEY);
+        boolean isHoursRetainedConfigured = cfg.contains(CLEANER_HOURS_RETAINED_KEY);
+        boolean isFileVersionsRetainedConfigured = cfg.contains(CLEANER_FILE_VERSIONS_RETAINED_KEY);
+
+        // If the cleaner policy is not configured, the cleaner policy is inferred only when one
+        // of the following configs are explicitly configured by the user:
+        // "hoodie.cleaner.commits.retained" (inferred as KEEP_LATEST_COMMITS)
+        // "hoodie.cleaner.hours.retained" (inferred as KEEP_LATEST_BY_HOURS)
+        // "hoodie.cleaner.fileversions.retained" (inferred as KEEP_LATEST_FILE_VERSIONS)
+        if (isCommitsRetainedConfigured && !isHoursRetainedConfigured && !isFileVersionsRetainedConfigured) {
+          return Option.of(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name());
+        }
+        if (!isCommitsRetainedConfigured && isHoursRetainedConfigured && !isFileVersionsRetainedConfigured) {
+          return Option.of(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS.name());
+        }
+        if (!isCommitsRetainedConfigured && !isHoursRetainedConfigured && isFileVersionsRetainedConfigured) {
+          return Option.of(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name());
+        }
+        return Option.empty();
+      })
+      .withDocumentation("Cleaning policy to be used. The cleaner service deletes older file "
+          + "slices files to re-claim space. Long running query plans may often refer to older "
+          + "file slices and will break if those are cleaned, before the query has had a chance "
+          + "to run. So, it is good to make sure that the data is retained for more than the "
+          + "maximum query execution time. "
+          + "By default, the cleaning policy is determined based on one of the following configs "
+          + "explicitly set by the user (at most one of them can be set; otherwise, "
+          + "KEEP_LATEST_COMMITS cleaning policy is used): "
+          + "(1) \"hoodie.cleaner.commits.retained\": the KEEP_LATEST_COMMITS cleaning policy is "
+          + "used, which keeps the file slices written by the last N commits, determined by "
+          + "\"hoodie.cleaner.commits.retained\"; "
+          + "(2) \"hoodie.cleaner.hours.retained\": the KEEP_LATEST_BY_HOURS cleaning policy is "
+          + "used, which keeps the file slices written in the last N hours based on the commit "
+          + "time, determined by \"hoodie.cleaner.hours.retained\"; "
+          + "(3) \"hoodie.cleaner.fileversions.retained\": the KEEP_LATEST_FILE_VERSIONS cleaning "
+          + "policy is used, which keeps the last N versions of the file slices written, "
+          + "determined by \"hoodie.cleaner.fileversions.retained\".");
+
   public static final ConfigProperty<String> CLEANER_COMMITS_RETAINED = ConfigProperty
-      .key("hoodie.cleaner.commits.retained")
+      .key(CLEANER_COMMITS_RETAINED_KEY)
       .defaultValue("10")
       .withDocumentation("Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits "
           + "(scheduled). This also directly translates into how much data retention the table supports for incremental queries.");
 
-  public static final ConfigProperty<String> CLEANER_HOURS_RETAINED = ConfigProperty.key("hoodie.cleaner.hours.retained")
+  public static final ConfigProperty<String> CLEANER_HOURS_RETAINED = ConfigProperty.key(CLEANER_HOURS_RETAINED_KEY)
       .defaultValue("24")
       .withDocumentation("Number of hours for which commits need to be retained. This config provides a more flexible option as"
           + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
           + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
 
-  public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
-      .key("hoodie.cleaner.policy")
-      .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
-      .withDocumentation("Cleaning policy to be used. The cleaner service deletes older file slices files to re-claim space."
-          + " By default, cleaner spares the file slices written by the last N commits, determined by  " + CLEANER_COMMITS_RETAINED.key()
-          + " Long running query plans may often refer to older file slices and will break if those are cleaned, before the query has had"
-          + "   a chance to run. So, it is good to make sure that the data is retained for more than the maximum query execution time");
+  public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED = ConfigProperty
+      .key(CLEANER_FILE_VERSIONS_RETAINED_KEY)
+      .defaultValue("3")
+      .withDocumentation("When " + HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name() + " cleaning policy is used, "
+          + " the minimum number of file slices to retain in each file group, during cleaning.");
 
   public static final ConfigProperty<String> CLEAN_TRIGGER_STRATEGY = ConfigProperty
       .key("hoodie.clean.trigger.strategy")
@@ -89,12 +136,6 @@ public class HoodieCleanConfig extends HoodieConfig {
       .key("hoodie.clean.max.commits")
       .defaultValue("1")
       .withDocumentation("Number of commits after the last clean operation, before scheduling of a new clean is attempted.");
-
-  public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED = ConfigProperty
-      .key("hoodie.cleaner.fileversions.retained")
-      .defaultValue("3")
-      .withDocumentation("When " + HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name() + " cleaning policy is used, "
-          + " the minimum number of file slices to retain in each file group, during cleaning.");
 
   public static final ConfigProperty<String> CLEANER_INCREMENTAL_MODE_ENABLE = ConfigProperty
       .key("hoodie.cleaner.incremental.mode")
