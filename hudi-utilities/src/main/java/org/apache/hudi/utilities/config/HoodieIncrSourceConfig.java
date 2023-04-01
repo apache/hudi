@@ -44,7 +44,7 @@ public class HoodieIncrSourceConfig extends HoodieConfig {
   public static final ConfigProperty<String> HOODIE_SRC_BASE_PATH = ConfigProperty
       .key("hoodie.deltastreamer.source.hoodieincr.path")
       .noDefaultValue()
-      .withDocumentation("Base-path for the source Hoodie table");
+      .withDocumentation("Base-path for the source Hudi table");
 
   public static final ConfigProperty<Integer> NUM_INSTANTS_PER_FETCH = ConfigProperty
       .key("hoodie.deltastreamer.source.hoodieincr.num_instants")

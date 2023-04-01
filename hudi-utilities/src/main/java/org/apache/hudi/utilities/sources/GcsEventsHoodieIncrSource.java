@@ -40,11 +40,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.calculateBeginAndEndInstants;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMissingCheckpointStrategy;
 
@@ -111,7 +111,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
     this(props, jsc, spark, schemaProvider,
             new FilePathsFetcher(props, getSourceFileFormat(props)),
-            new FileDataFetcher(props, props.getString(DATAFILE_FORMAT.key(), SOURCE_FILE_FORMAT.defaultValue()))
+        new FileDataFetcher(props, props.getString(DATAFILE_FORMAT.key(), DATAFILE_FORMAT.defaultValue()))
     );
   }
 

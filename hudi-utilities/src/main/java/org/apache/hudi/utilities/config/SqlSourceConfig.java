@@ -39,5 +39,5 @@ public class SqlSourceConfig extends HoodieConfig {
   public static final ConfigProperty<String> SOURCE_SQL = ConfigProperty
       .key("hoodie.deltastreamer.source.sql.sql.query")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("SQL query for fetching source data.");
 }

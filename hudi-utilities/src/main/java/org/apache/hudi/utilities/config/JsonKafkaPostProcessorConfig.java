@@ -38,29 +38,29 @@ import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFiel
     description = "Configurations controlling the post processor of Json Kafka Source in Deltastreamer.")
 public class JsonKafkaPostProcessorConfig extends HoodieConfig {
 
-  public static final ConfigProperty<String> JSON_KAFKA_PROCESSOR_CLASS_OPT = ConfigProperty
+  public static final ConfigProperty<String> JSON_KAFKA_PROCESSOR_CLASS = ConfigProperty
       .key("hoodie.deltastreamer.source.json.kafka.processor.class")
       .noDefaultValue()
       .withDocumentation("Json kafka source post processor class name, post process data after consuming from"
           + "source and before giving it to deltastreamer.");
 
-  public static final ConfigProperty<String> DATABASE_NAME_REGEX_PROP = ConfigProperty
+  public static final ConfigProperty<String> DATABASE_NAME_REGEX = ConfigProperty
       .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.database.regex")
       .noDefaultValue()
       .withDocumentation("Database name regex");
 
-  public static final ConfigProperty<String> TABLE_NAME_REGEX_PROP = ConfigProperty
+  public static final ConfigProperty<String> TABLE_NAME_REGEX = ConfigProperty
       .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.table.regex")
       .noDefaultValue()
       .withDocumentation("Table name regex");
 
-  public static final ConfigProperty<String> PRECOMBINE_FIELD_TYPE_PROP = ConfigProperty
+  public static final ConfigProperty<String> PRECOMBINE_FIELD_TYPE = ConfigProperty
       .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.precombine.field.type")
       .defaultValue(DATE_STRING.toString())
       .withDocumentation("Data type of the preCombine field. could be NON_TIMESTAMP, DATE_STRING,"
           + "UNIX_TIMESTAMP or EPOCHMILLISECONDS. DATE_STRING by default");
 
-  public static final ConfigProperty<String> PRECOMBINE_FIELD_FORMAT_PROP = ConfigProperty
+  public static final ConfigProperty<String> PRECOMBINE_FIELD_FORMAT = ConfigProperty
       .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.precombine.field.format")
       .defaultValue("yyyy-MM-dd HH:mm:ss")
       .withDocumentation("When the preCombine filed is in DATE_STRING format, use should tell hoodie"

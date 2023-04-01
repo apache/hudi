@@ -49,29 +49,29 @@ public class KafkaSourceConfig extends HoodieConfig {
       .withDocumentation("Time out for fetching partitions. 5min by default");
 
   public static final ConfigProperty<Boolean> ENABLE_KAFKA_COMMIT_OFFSET = ConfigProperty
-          .key(PREFIX + "enable.commit.offset")
-          .defaultValue(false)
-          .withDocumentation("Automatically submits offset to kafka.");
+      .key(PREFIX + "enable.commit.offset")
+      .defaultValue(false)
+      .withDocumentation("Automatically submits offset to kafka.");
 
   public static final ConfigProperty<Boolean> ENABLE_FAIL_ON_DATA_LOSS = ConfigProperty
-          .key(PREFIX + "enable.failOnDataLoss")
-          .defaultValue(false)
-          .withDocumentation("Fail when checkpoint goes out of bounds instead of seeking to earliest offsets.");
+      .key(PREFIX + "enable.failOnDataLoss")
+      .defaultValue(false)
+      .withDocumentation("Fail when checkpoint goes out of bounds instead of seeking to earliest offsets.");
 
-  public static final ConfigProperty<Long> MAX_EVENTS_FROM_KAFKA_SOURCE_PROP = ConfigProperty
-          .key("hoodie.deltastreamer.kafka.source.maxEvents")
-          .defaultValue(5000000L)
-          .withDocumentation("Maximum number of records obtained in each batch.");
+  public static final ConfigProperty<Long> MAX_EVENTS_FROM_KAFKA_SOURCE = ConfigProperty
+      .key("hoodie.deltastreamer.kafka.source.maxEvents")
+      .defaultValue(5000000L)
+      .withDocumentation("Maximum number of records obtained in each batch.");
 
   public static final ConfigProperty<String> KAFKA_TOPIC_NAME = ConfigProperty
-          .key(PREFIX + "topic")
-          .noDefaultValue()
-          .withDocumentation("Kafka topic name.");
+      .key(PREFIX + "topic")
+      .noDefaultValue()
+      .withDocumentation("Kafka topic name.");
 
   // "auto.offset.reset" is kafka native config param. Do not change the config param name.
   public static final ConfigProperty<KafkaResetOffsetStrategies> KAFKA_AUTO_OFFSET_RESET = ConfigProperty
-          .key("auto.offset.reset")
-          .defaultValue(KafkaResetOffsetStrategies.LATEST)
+      .key("auto.offset.reset")
+      .defaultValue(KafkaResetOffsetStrategies.LATEST)
           .withDocumentation("Kafka consumer strategy for reading data.");
 
   /**

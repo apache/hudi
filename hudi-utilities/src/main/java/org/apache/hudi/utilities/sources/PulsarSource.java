@@ -230,8 +230,8 @@ public class PulsarSource extends RowSource implements Closeable {
     if (sourceLimit < Long.MAX_VALUE) {
       return sourceLimit;
     } else {
-      return props.getLong(PulsarSourceConfig.PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD_PROP.key(),
-          PulsarSourceConfig.PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD_PROP.defaultValue());
+      return props.getLong(PulsarSourceConfig.PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD.key(),
+          PulsarSourceConfig.PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD.defaultValue());
     }
   }
 

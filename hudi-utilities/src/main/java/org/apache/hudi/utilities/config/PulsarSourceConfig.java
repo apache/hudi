@@ -36,7 +36,7 @@ import javax.annotation.concurrent.Immutable;
     description = "Configurations controlling the behavior of Pulsar source in Deltastreamer.")
 public class PulsarSourceConfig extends HoodieConfig {
 
-  public static final ConfigProperty<Long> PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD_PROP = ConfigProperty
+  public static final ConfigProperty<Long> PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD = ConfigProperty
       .key("hoodie.deltastreamer.source.pulsar.maxRecords")
       .defaultValue(5_000_000L)
       .withDocumentation("Max number of records obtained in a single each batch");

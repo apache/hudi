@@ -264,89 +264,22 @@ public class JdbcSource extends RowSource {
    * Inner class with config keys.
    */
   protected static class Config {
-    @Deprecated
-    private static final String URL = JdbcSourceConfig.URL.key();
-
     private static final String URL_PROP = "url";
-
-    /**
-     * {@link  #USER} is the username used for JDBC connection.
-     */
-    @Deprecated
-    private static final String USER = JdbcSourceConfig.USER.key();
-
     /**
      * {@value #USER_PROP} used internally to build jdbc params.
      */
     private static final String USER_PROP = "user";
-
-    /**
-     * {@link  #PASSWORD} is the password used for JDBC connection.
-     */
-    @Deprecated
-    private static final String PASSWORD = JdbcSourceConfig.PASSWORD.key();
-
-    /**
-     * {@link  #PASSWORD_FILE} is the base-path for the JDBC password file.
-     */
-    @Deprecated
-    private static final String PASSWORD_FILE = JdbcSourceConfig.PASSWORD_FILE.key();
-
     /**
      * {@value #PASSWORD_PROP} used internally to build jdbc params.
      */
     private static final String PASSWORD_PROP = "password";
-
-    /**
-     * {@link  #DRIVER_CLASS} used for JDBC connection.
-     */
-    @Deprecated
-    private static final String DRIVER_CLASS = JdbcSourceConfig.DRIVER_CLASS.key();
-
     /**
      * {@value #DRIVER_PROP} used internally to build jdbc params.
      */
     private static final String DRIVER_PROP = "driver";
-
-    /**
-     * {@link  #RDBMS_TABLE_NAME} RDBMS table to pull.
-     */
-    @Deprecated
-    private static final String RDBMS_TABLE_NAME = JdbcSourceConfig.RDBMS_TABLE_NAME.key();
-
     /**
      * {@value #RDBMS_TABLE_PROP} used internally for jdbc.
      */
     private static final String RDBMS_TABLE_PROP = "dbtable";
-
-    /**
-     * {@link #INCREMENTAL_COLUMN} if ran in incremental mode, this field will be used to pull new data incrementally.
-     */
-    @Deprecated
-    private static final String INCREMENTAL_COLUMN = JdbcSourceConfig.INCREMENTAL_COLUMN.key();
-
-    /**
-     * {@link #IS_INCREMENTAL} will the JDBC source do an incremental pull?
-     */
-    @Deprecated
-    private static final String IS_INCREMENTAL = JdbcSourceConfig.IS_INCREMENTAL.key();
-
-    /**
-     * {@link #EXTRA_OPTIONS} used to set any extra options the user specifies for jdbc.
-     */
-    @Deprecated
-    private static final String EXTRA_OPTIONS = JdbcSourceConfig.EXTRA_OPTIONS.key();
-
-    /**
-     * {@link #STORAGE_LEVEL} is used to control the persistence level. Default value: MEMORY_AND_DISK_SER.
-     */
-    @Deprecated
-    private static final String STORAGE_LEVEL = JdbcSourceConfig.STORAGE_LEVEL.key();
-
-    /**
-     * {@link #FALLBACK_TO_FULL_FETCH} is a boolean, which if set true, makes incremental fetch to fallback to full fetch in case of any error.
-     */
-    @Deprecated
-    private static final String FALLBACK_TO_FULL_FETCH = JdbcSourceConfig.FALLBACK_TO_FULL_FETCH.key();
   }
 }

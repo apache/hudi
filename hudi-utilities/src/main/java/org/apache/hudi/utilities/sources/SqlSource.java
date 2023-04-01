@@ -87,13 +87,4 @@ public class SqlSource extends RowSource {
     }
     return Pair.of(Option.of(source), null);
   }
-
-  /**
-   * Configs supported.
-   */
-  private static class Config {
-
-    @Deprecated
-    private static final String SOURCE_SQL = SqlSourceConfig.SOURCE_SQL.key();
-  }
 }

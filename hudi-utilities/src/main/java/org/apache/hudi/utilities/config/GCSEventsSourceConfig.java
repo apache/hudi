@@ -27,13 +27,13 @@ import org.apache.hudi.common.config.HoodieConfig;
 import javax.annotation.concurrent.Immutable;
 
 /**
- * Cloud Source Configs
+ * GCS Events Source Configs
  */
 @Immutable
-@ConfigClassProperty(name = "Kafka Source Configs",
+@ConfigClassProperty(name = "GCS Events Source Configs",
     groupName = ConfigGroups.Names.DELTA_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
-    description = "Configurations controlling the behavior of Kafka source in Deltastreamer.")
+    description = "Configurations controlling the behavior of GCS Events Source in Deltastreamer.")
 public class GCSEventsSourceConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> GOOGLE_PROJECT_ID = ConfigProperty

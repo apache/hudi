@@ -226,8 +226,8 @@ public class KafkaOffsetGen {
     }
 
     // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
-    long maxEventsToReadFromKafka = props.getLong(KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE_PROP.key(),
-            KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE_PROP.defaultValue());
+    long maxEventsToReadFromKafka = props.getLong(KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE.key(),
+        KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE.defaultValue());
 
     long numEvents;
     if (sourceLimit == Long.MAX_VALUE) {
