@@ -53,12 +53,7 @@ public class HoodieSimpleDataGenerator {
   public List<HoodieRecord<DefaultHoodieRecordPayload>> getInserts(int n, int numPartitions, long ts) {
     return IntStream.range(0, n).mapToObj(id -> {
       String pt = numPartitions == 0 ? "" : "p" + id % numPartitions;
-      GenericRecord r = new GenericData.Record(SCHEMA);
-      r.put("id", id);
-      r.put("pt", pt);
-      r.put("ts", ts);
-      DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(r, ts);
-      return new HoodieAvroRecord<>(new HoodieKey(String.valueOf(id), pt), payload);
+      return getNewRecord(id, pt, ts);
     }).collect(Collectors.toList());
   }
 
