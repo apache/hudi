@@ -62,7 +62,7 @@ public class HoodieSimpleDataGenerator {
     }).collect(Collectors.toList());
   }
 
-  public HoodieRecord<DefaultHoodieRecordPayload> getUpdate(int id, String pt, long ts) {
+  public HoodieRecord<DefaultHoodieRecordPayload> getNewRecord(int id, String pt, long ts) {
     GenericRecord r = new GenericData.Record(SCHEMA);
     r.put("id", id);
     r.put("pt", pt);

@@ -463,12 +463,12 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     HoodieSimpleDataGenerator dataGen = new HoodieSimpleDataGenerator();
     HoodieRecordLocation dummyLoc = new HoodieRecordLocation("dummy-instant-time", "dummy-file-id");
     HoodiePairData<HoodieKey, HoodieRecordLocation> existingRecords = HoodieListPairData.eager(Stream.of(
-            dataGen.getUpdate(0, "p0", 0),
-            dataGen.getUpdate(0, "p1", 1))
+            dataGen.getNewRecord(0, "p0", 0),
+            dataGen.getNewRecord(0, "p1", 1))
         .map(r -> Pair.of(r.getKey(), dummyLoc))
         .collect(Collectors.toList()));
     HoodieData<HoodieRecord<DefaultHoodieRecordPayload>> incomingRecords = HoodieListData.eager(
-        Collections.singletonList(dataGen.getUpdate(0, "p2", 2)));
+        Collections.singletonList(dataGen.getNewRecord(0, "p2", 2)));
 
     HoodieWriteConfig mockWriteConfig = mock(HoodieWriteConfig.class);
     when(mockWriteConfig.getBloomIndexUpdatePartitionPath()).thenReturn(true);

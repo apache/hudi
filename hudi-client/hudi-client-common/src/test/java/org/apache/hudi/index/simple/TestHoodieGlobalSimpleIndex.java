@@ -55,12 +55,12 @@ public class TestHoodieGlobalSimpleIndex {
     HoodieSimpleDataGenerator dataGen = new HoodieSimpleDataGenerator();
     HoodieRecordLocation dummyLoc = new HoodieRecordLocation("dummy-instant-time", "dummy-file-id");
     HoodiePairData<HoodieKey, HoodieRecordLocation> existingRecords = HoodieListPairData.eager(Stream.of(
-            dataGen.getUpdate(0, "p0", 0),
-            dataGen.getUpdate(0, "p1", 1))
+            dataGen.getNewRecord(0, "p0", 0),
+            dataGen.getNewRecord(0, "p1", 1))
         .map(r -> Pair.of(r.getKey(), dummyLoc))
         .collect(Collectors.toList()));
     HoodiePairData<String, HoodieRecord<DefaultHoodieRecordPayload>> incomingRecords = HoodieListPairData.eager(Stream.of(
-        Pair.of("0", dataGen.getUpdate(0, "p2", 2))).collect(Collectors.toList()));
+        Pair.of("0", dataGen.getNewRecord(0, "p2", 2))).collect(Collectors.toList()));
 
     when(mockWriteConfig.getGlobalSimpleIndexUpdatePartitionPath()).thenReturn(true);
     HoodieGlobalSimpleIndex index = new HoodieGlobalSimpleIndex(mockWriteConfig, Option.empty());
