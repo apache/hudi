@@ -121,11 +121,12 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
             entry -> new ImmutablePair<>(entry.getLeft().getRecordKey(),
                 Pair.of(entry.getLeft().getPartitionPath(), entry.getRight())));
 
-    HoodieData<HoodieRecord<R>> taggedHoodieRecords = incomingRecords.leftOuterJoin(existingRecordByRecordKey).values()
+    // Pair of a tagged record and if the record needs dedup
+    HoodieData<Pair<HoodieRecord<R>, Boolean>> taggedHoodieRecords = incomingRecords.leftOuterJoin(existingRecordByRecordKey).values()
         .flatMap(entry -> {
           HoodieRecord<R> inputRecord = entry.getLeft();
           Option<Pair<String, HoodieRecordLocation>> partitionPathLocationPair = Option.ofNullable(entry.getRight().orElse(null));
-          List<HoodieRecord<R>> taggedRecords;
+          List<Pair<HoodieRecord<R>, Boolean>> taggedRecords;
 
           if (partitionPathLocationPair.isPresent()) {
             String partitionPath = partitionPathLocationPair.get().getKey();
@@ -135,26 +136,24 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
               HoodieRecord<R> deleteRecord = new HoodieAvroRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), new EmptyHoodieRecordPayload());
               deleteRecord.setCurrentLocation(location);
               deleteRecord.seal();
-              // Tag the incoming record for inserting to the new partition; left unsealed for marking as dedup later
-              HoodieRecord<R> insertRecord = (HoodieRecord<R>) HoodieIndexUtils.getUnsealedTaggedRecord(inputRecord, Option.empty());
-              taggedRecords = Arrays.asList(deleteRecord, insertRecord);
+              // Tag the incoming record for inserting to the new partition
+              HoodieRecord<R> insertRecord = (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(inputRecord, Option.empty());
+              taggedRecords = Arrays.asList(Pair.of(deleteRecord, false), Pair.of(insertRecord, true));
             } else {
               // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
               // When it differs, the record will still be updated at its old partition.
               HoodieRecord<R> newRecord = new HoodieAvroRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), (HoodieRecordPayload) inputRecord.getData());
-              taggedRecords = Collections.singletonList((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(newRecord, Option.ofNullable(location)));
+              taggedRecords = Collections.singletonList(Pair.of((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(newRecord, Option.ofNullable(location)), false));
             }
           } else {
-            taggedRecords = Collections.singletonList((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(inputRecord, Option.empty()));
+            taggedRecords = Collections.singletonList(Pair.of((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(inputRecord, Option.empty()), false));
           }
           return taggedRecords.iterator();
         });
-    return taggedHoodieRecords.filter(r -> !r.isSealed())
+    return taggedHoodieRecords.filter(Pair::getRight)
+        .map(Pair::getLeft)
         .distinctWithKey(HoodieRecord::getKey, config.getGlobalIndexDedupParallelism())
-        .map(r -> {
-          r.seal();
-          return r;
-        }).union(taggedHoodieRecords.filter(HoodieRecord::isSealed));
+        .union(taggedHoodieRecords.filter(p -> !p.getRight()).map(Pair::getLeft));
   }
 
   @Override

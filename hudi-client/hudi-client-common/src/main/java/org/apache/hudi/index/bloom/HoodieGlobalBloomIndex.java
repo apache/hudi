@@ -110,8 +110,9 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
         keyLocationPairs.mapToPair(p -> new ImmutablePair<>(
             p.getKey().getRecordKey(), new ImmutablePair<>(p.getValue(), p.getKey())));
 
+    // Pair of a tagged record and if the record needs dedup
     // Here as the records might have more data than rowKeys (some rowKeys' fileId is null), so we do left outer join.
-    HoodieData<HoodieRecord<R>> taggedHoodieRecords = incomingRowKeyRecordPairs.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().flatMap(record -> {
+    HoodieData<Pair<HoodieRecord<R>, Boolean>> taggedHoodieRecords = incomingRowKeyRecordPairs.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().flatMap(record -> {
       final HoodieRecord<R> hoodieRecord = record.getLeft();
       final Option<Pair<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record.getRight();
       if (recordLocationHoodieKeyPair.isPresent()) {
@@ -123,26 +124,24 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
               new EmptyHoodieRecordPayload());
           deleteRecord.setCurrentLocation(recordLocationHoodieKeyPair.get().getLeft());
           deleteRecord.seal();
-          // Tag the incoming record for inserting to the new partition; left unsealed for marking as dedup later
-          HoodieRecord<R> insertRecord = HoodieIndexUtils.getUnsealedTaggedRecord(hoodieRecord, Option.empty());
-          return Arrays.asList(deleteRecord, insertRecord).iterator();
+          // Tag the incoming record for inserting to the new partition
+          HoodieRecord<R> insertRecord = HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty());
+          return Arrays.asList(Pair.of(deleteRecord, false), Pair.of(insertRecord, true)).iterator();
         } else {
           // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
           // When it differs, the record will still be updated at its old partition.
-          return Collections.singletonList(
+          return Collections.singletonList(Pair.of(
               (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(new HoodieAvroRecord(recordLocationHoodieKeyPair.get().getRight(), (HoodieRecordPayload) hoodieRecord.getData()),
-                  Option.ofNullable(recordLocationHoodieKeyPair.get().getLeft()))).iterator();
+                  Option.ofNullable(recordLocationHoodieKeyPair.get().getLeft())), false)).iterator();
         }
       } else {
-        return Collections.singletonList((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty())).iterator();
+        return Collections.singletonList(Pair.of((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty()), false)).iterator();
       }
     });
-    return taggedHoodieRecords.filter(r -> !r.isSealed())
+    return taggedHoodieRecords.filter(Pair::getRight)
+        .map(Pair::getLeft)
         .distinctWithKey(HoodieRecord::getKey, config.getGlobalIndexDedupParallelism())
-        .map(r -> {
-          r.seal();
-          return r;
-        }).union(taggedHoodieRecords.filter(HoodieRecord::isSealed));
+        .union(taggedHoodieRecords.filter(p -> !p.getRight()).map(Pair::getLeft));
   }
 
   @Override

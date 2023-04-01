@@ -297,10 +297,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.sealed = false;
   }
 
-  public boolean isSealed() {
-    return this.sealed;
-  }
-
   public void checkState() {
     if (sealed) {
       throw new UnsupportedOperationException("Not allowed to modify after sealed");
