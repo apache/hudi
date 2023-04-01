@@ -70,4 +70,16 @@ object HoodieCLIUtils extends ProvidesHoodieConfig{
         throw new SparkException(s"Unsupported identifier $table")
     }
   }
+
+  def getHoodieDatabaseAndTable(table: String): (String, Option[String]) = {
+    val seq: Seq[String] = table.split('.')
+    seq match {
+      case Seq(tableName) =>
+        (tableName, None)
+      case Seq(database, tableName) =>
+        (tableName, Some(database))
+      case _ =>
+        throw new SparkException(s"Unsupported identifier $table")
+    }
+  }
 }
