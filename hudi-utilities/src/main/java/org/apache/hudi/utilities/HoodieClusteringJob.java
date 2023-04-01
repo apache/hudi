@@ -34,10 +34,10 @@ import org.apache.hudi.table.HoodieSparkTable;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.jetbrains.annotations.TestOnly;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -50,7 +50,7 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 
 public class HoodieClusteringJob {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieClusteringJob.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieClusteringJob.class);
   private final Config cfg;
   private final TypedProperties props;
   private final JavaSparkContext jsc;

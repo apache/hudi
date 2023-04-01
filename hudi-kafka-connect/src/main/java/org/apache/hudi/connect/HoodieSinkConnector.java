@@ -21,8 +21,8 @@ package org.apache.hudi.connect;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,7 +36,7 @@ import java.util.Map;
 public class HoodieSinkConnector extends SinkConnector {
 
   public static final String VERSION = "0.1.0";
-  private static final Logger LOG = LogManager.getLogger(HoodieSinkConnector.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSinkConnector.class);
   private Map<String, String> configProps;
 
   /**

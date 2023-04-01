@@ -25,11 +25,11 @@ import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -39,7 +39,7 @@ import java.util.stream.IntStream;
  */
 public class DistributedTestDataSource extends AbstractBaseTestSource {
 
-  private static final Logger LOG = LogManager.getLogger(DistributedTestDataSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DistributedTestDataSource.class);
 
   private final int numTestSourcePartitions;
 

@@ -53,9 +53,9 @@ import com.amazonaws.services.glue.model.StorageDescriptor;
 import com.amazonaws.services.glue.model.Table;
 import com.amazonaws.services.glue.model.TableInput;
 import com.amazonaws.services.glue.model.UpdateTableRequest;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -67,9 +67,9 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
+import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
-import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.parquetSchemaToMapSchema;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
@@ -84,7 +84,7 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
  */
 public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
-  private static final Logger LOG = LogManager.getLogger(AWSGlueCatalogSyncClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AWSGlueCatalogSyncClient.class);
   private static final int MAX_PARTITIONS_PER_REQUEST = 100;
   private static final long BATCH_REQUEST_SLEEP_MILLIS = 1000L;
   private final AWSGlue awsGlue;

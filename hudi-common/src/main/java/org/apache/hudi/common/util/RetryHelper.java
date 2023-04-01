@@ -20,8 +20,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
  * @param <T> Type of return value for checked function.
  */
 public class RetryHelper<T, R extends Exception> implements Serializable {
-  private static final Logger LOG = LogManager.getLogger(RetryHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RetryHelper.class);
   private static final List<? extends Class<? extends Exception>> DEFAULT_RETRY_EXCEPTIONS = Arrays.asList(IOException.class, RuntimeException.class);
   private transient CheckedFunction<T, R> func;
   private final int num;

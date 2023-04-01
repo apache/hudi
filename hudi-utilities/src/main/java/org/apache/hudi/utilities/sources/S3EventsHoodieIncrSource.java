@@ -36,8 +36,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.DataFrameReader;
@@ -45,6 +43,8 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URLDecoder;
@@ -67,7 +67,7 @@ import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.SOURCE_F
  */
 public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
-  private static final Logger LOG = LogManager.getLogger(S3EventsHoodieIncrSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(S3EventsHoodieIncrSource.class);
 
   static class Config {
     // control whether we do existence check for files before consuming them

@@ -32,8 +32,9 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.LogCompactionExecutionHelper;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Set;
@@ -41,7 +42,7 @@ import java.util.stream.Collectors;
 
 public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, O> extends BaseHoodieCompactionPlanGenerator<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieLogCompactionPlanGenerator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogCompactionPlanGenerator.class);
 
   public HoodieLogCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);

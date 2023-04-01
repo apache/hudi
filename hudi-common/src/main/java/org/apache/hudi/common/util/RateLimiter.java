@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -42,7 +42,7 @@ public class RateLimiter {
   private static final long WAIT_BEFORE_NEXT_ACQUIRE_PERMIT_IN_MS = 5;
   private static final int SCHEDULER_CORE_THREAD_POOL_SIZE = 1;
 
-  private static final Logger LOG = LogManager.getLogger(RateLimiter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RateLimiter.class);
 
   public static RateLimiter create(int permits, TimeUnit timePeriod) {
     final RateLimiter limiter = new RateLimiter(permits, timePeriod);

@@ -31,9 +31,9 @@ import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
 import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -56,7 +56,7 @@ public class CloudObjectsSelector {
   public static final List<String> ALLOWED_S3_EVENT_PREFIX =
       Collections.singletonList("ObjectCreated");
   public static final String S3_PREFIX = "s3://";
-  public static volatile Logger log = LogManager.getLogger(CloudObjectsSelector.class);
+  public static volatile Logger log = LoggerFactory.getLogger(CloudObjectsSelector.class);
   public static final String SQS_ATTR_APPROX_MESSAGES = "ApproximateNumberOfMessages";
   static final String SQS_MODEL_MESSAGE = "Message";
   static final String SQS_MODEL_EVENT_RECORDS = "Records";

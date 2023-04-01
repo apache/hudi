@@ -40,8 +40,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -57,7 +57,7 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
  */
 public class DirectWriteMarkers extends WriteMarkers {
 
-  private static final Logger LOG = LogManager.getLogger(DirectWriteMarkers.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DirectWriteMarkers.class);
   private final transient FileSystem fs;
 
   public DirectWriteMarkers(FileSystem fs, String basePath, String markerFolderPath, String instantTime) {

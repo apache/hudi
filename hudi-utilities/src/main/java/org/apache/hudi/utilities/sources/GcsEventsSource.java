@@ -29,13 +29,13 @@ import org.apache.hudi.utilities.sources.helpers.gcs.MetadataMessage;
 import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
 
 import com.google.pubsub.v1.ReceivedMessage;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -103,7 +103,7 @@ public class GcsEventsSource extends RowSource {
 
   private static final String CHECKPOINT_VALUE_ZERO = "0";
 
-  private static final Logger LOG = LogManager.getLogger(GcsEventsSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(GcsEventsSource.class);
 
   public GcsEventsSource(TypedProperties props, JavaSparkContext jsc, SparkSession spark,
                          SchemaProvider schemaProvider) {

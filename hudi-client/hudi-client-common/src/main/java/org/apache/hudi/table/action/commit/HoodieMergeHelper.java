@@ -46,8 +46,8 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -61,7 +61,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.isStrictProjectionOf;
 
 public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMergeHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHelper.class);
 
   private HoodieMergeHelper() {
   }

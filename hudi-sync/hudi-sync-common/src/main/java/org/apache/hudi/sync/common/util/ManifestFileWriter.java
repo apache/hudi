@@ -30,8 +30,8 @@ import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.OutputStreamWriter;
@@ -44,7 +44,7 @@ public class ManifestFileWriter {
 
   public static final String MANIFEST_FOLDER_NAME = "manifest";
   public static final String MANIFEST_FILE_NAME = "latest-snapshot.csv";
-  private static final Logger LOG = LogManager.getLogger(ManifestFileWriter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ManifestFileWriter.class);
 
   private final HoodieTableMetaClient metaClient;
   private final boolean useFileListingFromMetadata;

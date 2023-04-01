@@ -26,15 +26,15 @@ import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.kafka010.OffsetRange;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
-  private static final Logger LOG = LogManager.getLogger(KafkaSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
   // these are native kafka's config. do not change the config names.
   protected static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
   protected static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";

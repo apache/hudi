@@ -23,9 +23,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -46,7 +46,7 @@ public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
     }
   }
 
-  private static final Logger LOG = LogManager.getLogger(KafkaOffsetPostProcessor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaOffsetPostProcessor.class);
 
   public static final String KAFKA_SOURCE_OFFSET_COLUMN = "_hoodie_kafka_source_offset";
   public static final String KAFKA_SOURCE_PARTITION_COLUMN = "_hoodie_kafka_source_partition";

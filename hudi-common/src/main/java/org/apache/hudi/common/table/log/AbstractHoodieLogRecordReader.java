@@ -47,8 +47,8 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -88,7 +88,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public abstract class AbstractHoodieLogRecordReader {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractHoodieLogRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractHoodieLogRecordReader.class);
 
   // Reader schema for the records
   protected final Schema readerSchema;

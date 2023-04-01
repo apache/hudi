@@ -21,8 +21,8 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.util.JsonUtils;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -36,7 +36,7 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
-  private static final Logger LOG = LogManager.getLogger(HoodieReplaceCommitMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieReplaceCommitMetadata.class);
   protected Map<String, List<String>> partitionToReplaceFileIds;
 
   // for ser/deser

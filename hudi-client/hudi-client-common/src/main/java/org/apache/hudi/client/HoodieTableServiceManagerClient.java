@@ -30,8 +30,8 @@ import org.apache.hudi.exception.HoodieRemoteException;
 
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
@@ -79,7 +79,7 @@ public class HoodieTableServiceManagerClient {
   private final String dbName;
   private final String tableName;
 
-  private static final Logger LOG = LogManager.getLogger(HoodieTableServiceManagerClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableServiceManagerClient.class);
 
   public HoodieTableServiceManagerClient(HoodieTableMetaClient metaClient, HoodieTableServiceManagerConfig config) {
     this.basePath = metaClient.getBasePathV2().toString();

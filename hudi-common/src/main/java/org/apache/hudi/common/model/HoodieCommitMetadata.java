@@ -30,8 +30,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
 public class HoodieCommitMetadata implements Serializable {
 
   public static final String SCHEMA_KEY = "schema";
-  private static final Logger LOG = LogManager.getLogger(HoodieCommitMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCommitMetadata.class);
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
   protected Boolean compacted;
 

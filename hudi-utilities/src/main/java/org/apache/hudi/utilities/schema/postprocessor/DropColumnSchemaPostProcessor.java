@@ -25,9 +25,9 @@ import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
  */
 public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
 
-  private static final Logger LOG = LogManager.getLogger(DropColumnSchemaPostProcessor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DropColumnSchemaPostProcessor.class);
 
   public DropColumnSchemaPostProcessor(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);

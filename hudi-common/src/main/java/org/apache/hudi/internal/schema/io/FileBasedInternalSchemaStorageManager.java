@@ -34,8 +34,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -51,7 +51,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.SCHEMA_COMMIT
  * {@link AbstractInternalSchemaStorageManager} implementation based on the schema files.
  */
 public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchemaStorageManager {
-  private static final Logger LOG = LogManager.getLogger(FileBasedInternalSchemaStorageManager.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileBasedInternalSchemaStorageManager.class);
 
   public static final String SCHEMA_NAME = ".schema";
   private final Path baseSchemaPath;

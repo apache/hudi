@@ -21,11 +21,13 @@ package org.apache.hudi.utilities.sources.helpers.gcs;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceCloudStorageHelper;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
 import java.util.List;
 
@@ -38,7 +40,7 @@ public class FileDataFetcher implements Serializable {
   private final String fileFormat;
   private TypedProperties props;
 
-  private static final Logger LOG = LogManager.getLogger(FileDataFetcher.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileDataFetcher.class);
 
   private static final long serialVersionUID = 1L;
 

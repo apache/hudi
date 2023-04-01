@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
@@ -31,19 +30,19 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -52,7 +51,7 @@ import java.util.Objects;
 
 public class HoodieCompactor {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
   public static final String EXECUTE = "execute";
   public static final String SCHEDULE = "schedule";
   public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
@@ -187,7 +186,7 @@ public class HoodieCompactor {
     this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     // need to do validate in case that users call compact() directly without setting cfg.runningMode
     validateRunningMode(cfg);
-    LOG.info(cfg);
+    LOG.info(cfg.toString());
 
     int ret = UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {

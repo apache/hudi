@@ -39,8 +39,8 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -54,7 +54,7 @@ import java.util.stream.Collectors;
  * Flink hoodie writable table.
  */
 public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
-  private static final Logger LOG = LogManager.getLogger(HoodieFlinkWriteableTestTable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkWriteableTestTable.class);
 
   private HoodieFlinkWriteableTestTable(String basePath, org.apache.hadoop.fs.FileSystem fs, HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
     super(basePath, fs, metaClient, schema, filter);

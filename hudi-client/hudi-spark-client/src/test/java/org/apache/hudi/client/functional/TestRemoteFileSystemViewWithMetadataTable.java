@@ -48,13 +48,13 @@ import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -76,7 +76,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@link HoodieMetadataFileSystemView} on the timeline server.
  */
 public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestHarness {
-  private static final Logger LOG = LogManager.getLogger(TestRemoteFileSystemViewWithMetadataTable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestRemoteFileSystemViewWithMetadataTable.class);
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -192,7 +192,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
       try {
         return future.get();
       } catch (Exception e) {
-        LOG.error(e);
+        LOG.error("Get result error", e);
         return false;
       }
     }).reduce((a, b) -> a && b).get());

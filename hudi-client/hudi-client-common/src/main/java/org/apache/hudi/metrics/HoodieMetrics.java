@@ -26,15 +26,15 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Wrapper for metrics-related operations.
  */
 public class HoodieMetrics {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMetrics.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetrics.class);
 
   private Metrics metrics;
   // Some timers

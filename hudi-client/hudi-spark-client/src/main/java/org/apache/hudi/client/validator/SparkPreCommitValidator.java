@@ -29,10 +29,10 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
  * Validator can be configured pre-commit. 
  */
 public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<WriteStatus>> {
-  private static final Logger LOG = LogManager.getLogger(SparkPreCommitValidator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkPreCommitValidator.class);
 
   private HoodieSparkTable<T> table;
   private HoodieEngineContext engineContext;

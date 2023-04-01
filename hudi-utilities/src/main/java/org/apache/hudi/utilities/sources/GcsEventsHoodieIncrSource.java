@@ -28,12 +28,12 @@ import org.apache.hudi.utilities.sources.helpers.gcs.FileDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.gcs.FilePathsFetcher;
 import org.apache.hudi.utilities.sources.helpers.gcs.QueryInfo;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -107,7 +107,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   private final FilePathsFetcher filePathsFetcher;
   private final FileDataFetcher fileDataFetcher;
 
-  private static final Logger LOG = LogManager.getLogger(GcsEventsHoodieIncrSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(GcsEventsHoodieIncrSource.class);
 
   public GcsEventsHoodieIncrSource(TypedProperties props, JavaSparkContext jsc, SparkSession spark,
                                    SchemaProvider schemaProvider) {

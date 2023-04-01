@@ -24,14 +24,14 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A factory to generate {@code WriteMarkers} instance based on the {@code MarkerType}.
  */
 public class WriteMarkersFactory {
-  private static final Logger LOG = LogManager.getLogger(WriteMarkersFactory.class);
+  private static final Logger LOG = LoggerFactory.getLogger(WriteMarkersFactory.class);
 
   /**
    * @param markerType the type of markers to use

@@ -40,8 +40,8 @@ import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -69,7 +69,7 @@ import java.util.stream.Collectors;
 public abstract class BaseFlinkCommitActionExecutor<T> extends
     BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, HoodieWriteMetadata> {
 
-  private static final Logger LOG = LogManager.getLogger(BaseFlinkCommitActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseFlinkCommitActionExecutor.class);
 
   protected HoodieWriteHandle<?, ?, ?, ?> writeHandle;
 

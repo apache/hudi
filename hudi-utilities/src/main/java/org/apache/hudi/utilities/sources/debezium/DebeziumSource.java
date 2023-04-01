@@ -38,8 +38,6 @@ import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -51,6 +49,8 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
  */
 public abstract class DebeziumSource extends RowSource {
 
-  private static final Logger LOG = LogManager.getLogger(DebeziumSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DebeziumSource.class);
   // these are native kafka's config. do not change the config names.
   private static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
   private static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";

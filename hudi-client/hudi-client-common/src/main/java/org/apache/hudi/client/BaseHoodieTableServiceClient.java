@@ -57,8 +57,8 @@ import org.apache.hudi.table.action.rollback.RollbackUtils;
 
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -77,7 +77,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
 
 public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient implements RunsTableService {
 
-  private static final Logger LOG = LogManager.getLogger(BaseHoodieWriteClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieWriteClient.class);
 
   protected transient Timer.Context compactionTimer;
   protected transient Timer.Context clusteringTimer;

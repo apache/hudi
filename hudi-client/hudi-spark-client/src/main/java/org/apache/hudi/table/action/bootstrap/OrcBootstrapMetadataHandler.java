@@ -38,19 +38,19 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.orc.OrcFile;
 import org.apache.orc.Reader;
 import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
 import static org.apache.hudi.io.HoodieBootstrapHandle.METADATA_BOOTSTRAP_RECORD_SCHEMA;
 
 class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
-  private static final Logger LOG = LogManager.getLogger(OrcBootstrapMetadataHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(OrcBootstrapMetadataHandler.class);
 
   public OrcBootstrapMetadataHandler(HoodieWriteConfig config, HoodieTable table, HoodieFileStatus srcFileStatus) {
     super(config, table, srcFileStatus);

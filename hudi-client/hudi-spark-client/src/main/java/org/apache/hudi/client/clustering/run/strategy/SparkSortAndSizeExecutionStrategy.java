@@ -20,21 +20,21 @@ package org.apache.hudi.client.clustering.run.strategy;
 
 import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -46,7 +46,7 @@ import java.util.Map;
  */
 public class SparkSortAndSizeExecutionStrategy<T>
     extends MultipleSparkJobExecutionStrategy<T> {
-  private static final Logger LOG = LogManager.getLogger(SparkSortAndSizeExecutionStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkSortAndSizeExecutionStrategy.class);
 
   public SparkSortAndSizeExecutionStrategy(HoodieTable table,
                                            HoodieEngineContext engineContext,

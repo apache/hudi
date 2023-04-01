@@ -27,10 +27,10 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.spark.api.java.JavaSparkContext;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -38,7 +38,7 @@ import java.io.IOException;
  * Archive Utils.
  */
 public final class ArchiveExecutorUtils {
-  private static final Logger LOG = LogManager.getLogger(ArchiveExecutorUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ArchiveExecutorUtils.class);
 
   private ArchiveExecutorUtils() {
   }

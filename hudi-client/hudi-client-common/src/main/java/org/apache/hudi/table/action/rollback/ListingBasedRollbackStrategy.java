@@ -40,9 +40,9 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -62,7 +62,7 @@ import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STR
  */
 public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecutor.RollbackStrategy {
 
-  private static final Logger LOG = LogManager.getLogger(ListingBasedRollbackStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ListingBasedRollbackStrategy.class);
 
   protected final HoodieTable<?, ?, ?, ?> table;
 

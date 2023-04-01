@@ -32,10 +32,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
@@ -46,7 +46,7 @@ import java.util.function.Supplier;
  */
 public abstract class HoodieJavaClientTestHarness extends HoodieCommonTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieJavaClientTestHarness.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaClientTestHarness.class);
 
   protected Configuration hadoopConf;
   protected HoodieJavaEngineContext context;

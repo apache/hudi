@@ -36,8 +36,8 @@ import org.apache.hudi.common.util.collection.RocksDBDAO;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -61,7 +61,7 @@ import java.util.stream.Stream;
  */
 public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSystemView {
 
-  private static final Logger LOG = LogManager.getLogger(RocksDbBasedFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RocksDbBasedFileSystemView.class);
 
   private final FileSystemViewStorageConfig config;
 

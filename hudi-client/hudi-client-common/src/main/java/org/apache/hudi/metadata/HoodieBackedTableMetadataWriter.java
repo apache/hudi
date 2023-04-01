@@ -77,8 +77,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -116,7 +116,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetada
  */
 public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWriter {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadataWriter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadataWriter.class);
 
   public static final String METADATA_COMPACTION_TIME_SUFFIX = "001";
 

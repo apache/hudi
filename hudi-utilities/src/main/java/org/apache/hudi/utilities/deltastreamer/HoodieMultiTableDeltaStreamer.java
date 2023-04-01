@@ -41,9 +41,9 @@ import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -61,7 +61,7 @@ import java.util.Set;
  */
 public class HoodieMultiTableDeltaStreamer {
 
-  private static Logger logger = LogManager.getLogger(HoodieMultiTableDeltaStreamer.class);
+  private static Logger logger = LoggerFactory.getLogger(HoodieMultiTableDeltaStreamer.class);
 
   private List<TableExecutionContext> tableExecutionContexts;
   private transient JavaSparkContext jssc;

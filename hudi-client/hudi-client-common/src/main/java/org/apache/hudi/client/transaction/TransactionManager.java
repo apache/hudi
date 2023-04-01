@@ -24,8 +24,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 
@@ -35,7 +35,7 @@ import java.io.Serializable;
  */
 public class TransactionManager implements Serializable {
 
-  protected static final Logger LOG = LogManager.getLogger(TransactionManager.class);
+  protected static final Logger LOG = LoggerFactory.getLogger(TransactionManager.class);
   protected final LockManager lockManager;
   protected final boolean needsLockGuard;
   protected Option<HoodieInstant> currentTxnOwnerInstant = Option.empty();

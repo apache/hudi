@@ -33,10 +33,10 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -48,7 +48,7 @@ import java.util.Properties;
 public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRecordPayload<T>>
     extends MultipleSparkJobExecutionStrategy<T> {
 
-  private static final Logger LOG = LogManager.getLogger(SparkConsistentBucketClusteringExecutionStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkConsistentBucketClusteringExecutionStrategy.class);
 
   public SparkConsistentBucketClusteringExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext,
                                                           HoodieWriteConfig writeConfig) {

@@ -19,7 +19,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodiePairData;
@@ -40,14 +39,15 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
-import scala.Tuple2;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -58,6 +58,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import scala.Tuple2;
+
 import static org.apache.hudi.metadata.HoodieMetadataPayload.getBloomFilterIndexKey;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
@@ -67,7 +69,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
  */
 public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
-  private static final Logger LOG = LogManager.getLogger(SparkHoodieBloomIndexHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkHoodieBloomIndexHelper.class);
 
   private static final SparkHoodieBloomIndexHelper SINGLETON_INSTANCE =
       new SparkHoodieBloomIndexHelper();

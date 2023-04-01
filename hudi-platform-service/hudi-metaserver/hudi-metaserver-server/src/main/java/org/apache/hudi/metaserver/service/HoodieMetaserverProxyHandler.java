@@ -19,9 +19,10 @@
 package org.apache.hudi.metaserver.service;
 
 import org.apache.hudi.metaserver.thrift.MetaserverException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.thrift.TException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -32,7 +33,7 @@ import java.util.Arrays;
  * AOP for meta server.
  */
 public class HoodieMetaserverProxyHandler implements InvocationHandler {
-  private static final Logger LOG = LogManager.getLogger(HoodieMetaserverProxyHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetaserverProxyHandler.class);
 
   private final HoodieMetaserverGateway metaserverGateway;
 

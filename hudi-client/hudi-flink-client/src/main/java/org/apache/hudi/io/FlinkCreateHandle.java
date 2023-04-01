@@ -31,8 +31,8 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -50,7 +50,7 @@ import java.util.List;
 public class FlinkCreateHandle<T, I, K, O>
     extends HoodieCreateHandle<T, I, K, O> implements MiniBatchHandle {
 
-  private static final Logger LOG = LogManager.getLogger(FlinkCreateHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkCreateHandle.class);
 
   private boolean isClosed = false;
 

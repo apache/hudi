@@ -39,8 +39,8 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -52,7 +52,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class HoodieRowDataCreateHandle implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(HoodieRowDataCreateHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRowDataCreateHandle.class);
   private static final AtomicLong SEQGEN = new AtomicLong(1);
 
   private final String instantTime;
