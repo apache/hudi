@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -33,9 +34,10 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Helper class to generate commit metadata.
@@ -117,28 +119,27 @@ public class CommitUtils {
     return commitMetadata;
   }
 
-  public static HashMap<String, String> getFileIdWithoutSuffixAndRelativePathsFromSpecificRecord(Map<String, List<org.apache.hudi.avro.model.HoodieWriteStat>>
-                                                                                       partitionToWriteStats) {
-    HashMap<String, String> fileIdToPath = new HashMap<>();
+  public static Set<Pair<String, String>> getPartitionAndFileIdWithoutSuffixFromSpecificRecord(Map<String, List<org.apache.hudi.avro.model.HoodieWriteStat>>
+                                                                                                     partitionToWriteStats) {
+    Set<Pair<String, String>> partitionToFileId = new HashSet<>();
     // list all partitions paths
     for (Map.Entry<String, List<org.apache.hudi.avro.model.HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
       for (org.apache.hudi.avro.model.HoodieWriteStat stat : entry.getValue()) {
-        fileIdToPath.put(stat.getFileId(), stat.getPath());
+        partitionToFileId.add(Pair.of(entry.getKey(), stat.getFileId()));
       }
     }
-    return fileIdToPath;
+    return partitionToFileId;
   }
 
-  public static HashMap<String, String> getFileIdWithoutSuffixAndRelativePaths(Map<String, List<HoodieWriteStat>>
-      partitionToWriteStats) {
-    HashMap<String, String> fileIdToPath = new HashMap<>();
+  public static Set<Pair<String, String>> getPartitionAndFileIdWithoutSuffix(Map<String, List<HoodieWriteStat>> partitionToWriteStats) {
+    Set<Pair<String, String>> partitionTofileId = new HashSet<>();
     // list all partitions paths
     for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
       for (HoodieWriteStat stat : entry.getValue()) {
-        fileIdToPath.put(stat.getFileId(), stat.getPath());
+        partitionTofileId.add(Pair.of(entry.getKey(), stat.getFileId()));
       }
     }
-    return fileIdToPath;
+    return partitionTofileId;
   }
 
   /**
