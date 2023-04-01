@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.config.FilebasedSchemaProviderConfig;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import org.apache.avro.Schema;
@@ -39,14 +40,6 @@ import java.util.Collections;
  */
 public class FilebasedSchemaProvider extends SchemaProvider {
 
-  /**
-   * Configs supported.
-   */
-  public static class Config {
-    private static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider.source.schema.file";
-    private static final String TARGET_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider.target.schema.file";
-  }
-
   private final FileSystem fs;
 
   protected Schema sourceSchema;
@@ -55,14 +48,14 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   public FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_FILE_PROP));
-    String sourceFile = props.getString(Config.SOURCE_SCHEMA_FILE_PROP);
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE.key()));
+    String sourceFile = props.getString(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE.key());
     boolean shouldSanitize = SanitizationUtils.getShouldSanitize(props);
     String invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
     this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
     this.sourceSchema = readAvroSchemaFromFile(sourceFile, this.fs, shouldSanitize, invalidCharMask);
-    if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {
-      this.targetSchema = readAvroSchemaFromFile(props.getString(Config.TARGET_SCHEMA_FILE_PROP), this.fs, shouldSanitize, invalidCharMask);
+    if (props.containsKey(FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE.key())) {
+      this.targetSchema = readAvroSchemaFromFile(props.getString(FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE.key()), this.fs, shouldSanitize, invalidCharMask);
     }
   }
 

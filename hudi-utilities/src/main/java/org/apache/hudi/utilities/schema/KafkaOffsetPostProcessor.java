@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 
 import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
@@ -36,15 +37,12 @@ import java.util.stream.Collectors;
 public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
 
   public static class Config {
-    public static final ConfigProperty<String> KAFKA_APPEND_OFFSETS = ConfigProperty
-        .key("hoodie.deltastreamer.source.kafka.append.offsets")
-        .defaultValue("false")
-        .withDocumentation("When enabled, appends kafka offset info like source offset(_hoodie_kafka_source_offset), "
-            + "partition (_hoodie_kafka_source_partition) and timestamp (_hoodie_kafka_source_timestamp) to the records. "
-            + "By default its disabled and no kafka offsets are added");
+    @Deprecated
+    public static final ConfigProperty<String> KAFKA_APPEND_OFFSETS =
+        HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS;
 
     public static boolean shouldAddOffsets(TypedProperties props) {
-      return  props.getBoolean(KafkaOffsetPostProcessor.Config.KAFKA_APPEND_OFFSETS.key(), Boolean.parseBoolean(KafkaOffsetPostProcessor.Config.KAFKA_APPEND_OFFSETS.defaultValue()));
+      return props.getBoolean(HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS.key(), Boolean.parseBoolean(HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS.defaultValue()));
     }
   }
 

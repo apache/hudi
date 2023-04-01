@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -30,9 +31,11 @@ import org.apache.spark.sql.types.StructType;
  */
 public class SparkAvroPostProcessor extends SchemaPostProcessor {
 
+  @Deprecated
   public static class Config {
+    @Deprecated
     public static final String SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE =
-            "hoodie.deltastreamer.schemaprovider.spark_avro_post_processor.enable";
+        HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE.key();
   }
 
   public SparkAvroPostProcessor(TypedProperties props, JavaSparkContext jssc) {
