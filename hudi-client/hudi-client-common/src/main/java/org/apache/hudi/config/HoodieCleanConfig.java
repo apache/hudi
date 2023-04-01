@@ -65,6 +65,7 @@ public class HoodieCleanConfig extends HoodieConfig {
 
   // The cleaner policy config definition has to be before the following configs for inference:
   // CLEANER_COMMITS_RETAINED, CLEANER_HOURS_RETAINED, CLEANER_FILE_VERSIONS_RETAINED
+  @Deprecated
   public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy")
       .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
