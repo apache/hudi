@@ -64,12 +64,11 @@ import java.util.stream.Collectors;
 @ShellComponent
 public class ArchivedCommitsCommand {
   private static final Logger LOG = LogManager.getLogger(ArchivedCommitsCommand.class);
-
   @ShellMethod(key = "trigger archival", value = "trigger archival")
   public String triggerArchival(
       @ShellOption(value = {"--minCommits"},
-          help = "Minimum number of instants to retain in the active timeline. See hoodie.keep.min.commits",
-          defaultValue = "20") int minCommits,
+        help = "Minimum number of instants to retain in the active timeline. See hoodie.keep.min.commits",
+        defaultValue = "20") int minCommits,
       @ShellOption(value = {"--maxCommits"},
           help = "Maximum number of instants to retain in the active timeline. See hoodie.keep.max.commits",
           defaultValue = "30") int maxCommits,
@@ -102,7 +101,8 @@ public class ArchivedCommitsCommand {
       @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "10") final Integer limit,
       @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
-      @ShellOption(value = {"--headeronly"}, help = "Print Header Only", defaultValue = "false") final boolean headerOnly)
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+              defaultValue = "false") final boolean headerOnly)
       throws IOException {
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     String basePath = HoodieCLI.getTableMetaClient().getBasePath();
@@ -175,7 +175,8 @@ public class ArchivedCommitsCommand {
       @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "10") final Integer limit,
       @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
-      @ShellOption(value = {"--headeronly"}, help = "Print Header Only", defaultValue = "false") final boolean headerOnly)
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+              defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
