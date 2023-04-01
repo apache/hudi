@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -113,7 +114,8 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
    * @param existingRecords existing records with {@link HoodieRecordLocation}s
    * @return {@link HoodieData} of {@link HoodieRecord}s with tagged {@link HoodieRecordLocation}s
    */
-  private <R> HoodieData<HoodieRecord<R>> getTaggedRecords(
+  @VisibleForTesting
+  <R> HoodieData<HoodieRecord<R>> getTaggedRecords(
       HoodiePairData<String, HoodieRecord<R>> incomingRecords,
       HoodiePairData<HoodieKey, HoodieRecordLocation> existingRecords) {
     HoodiePairData<String, Pair<String, HoodieRecordLocation>> existingRecordByRecordKey =

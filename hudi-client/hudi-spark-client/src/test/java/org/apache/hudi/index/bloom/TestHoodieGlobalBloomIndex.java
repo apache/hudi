@@ -19,12 +19,19 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.functional.TestHoodieMetadataBase;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodieListPairData;
+import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.testutils.HoodieSimpleDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -47,12 +54,14 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import scala.Tuple2;
 
@@ -63,6 +72,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
 
@@ -447,4 +458,36 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     return filesMap;
   }
 
+  @Test
+  public void testTagRecordsWithPartitionUpdates() {
+    HoodieSimpleDataGenerator dataGen = new HoodieSimpleDataGenerator();
+    HoodieRecordLocation dummyLoc = new HoodieRecordLocation("dummy-instant-time", "dummy-file-id");
+    HoodiePairData<HoodieKey, HoodieRecordLocation> existingRecords = HoodieListPairData.eager(Stream.of(
+            dataGen.getUpdate(0, "p0", 0),
+            dataGen.getUpdate(0, "p1", 1))
+        .map(r -> Pair.of(r.getKey(), dummyLoc))
+        .collect(Collectors.toList()));
+    HoodieData<HoodieRecord<DefaultHoodieRecordPayload>> incomingRecords = HoodieListData.eager(
+        Collections.singletonList(dataGen.getUpdate(0, "p2", 2)));
+
+    HoodieWriteConfig mockWriteConfig = mock(HoodieWriteConfig.class);
+    when(mockWriteConfig.getBloomIndexUpdatePartitionPath()).thenReturn(true);
+    HoodieGlobalBloomIndex index =
+        new HoodieGlobalBloomIndex(mockWriteConfig, SparkHoodieBloomIndexHelper.getInstance());
+    List<HoodieRecord<DefaultHoodieRecordPayload>> taggedRecords = index.tagLocationBacktoRecords(existingRecords, incomingRecords)
+        .collectAsList().stream().sorted(Comparator.comparing(HoodieRecord::getPartitionPath)).collect(Collectors.toList());
+    assertEquals(3, taggedRecords.size(), "expect 2 delete records in p0 and p1, and 1 tagged record in p2");
+    HoodieRecord<DefaultHoodieRecordPayload> deleteRecordPt0 = taggedRecords.get(0);
+    assertEquals("0", deleteRecordPt0.getRecordKey());
+    assertEquals("p0", deleteRecordPt0.getPartitionPath());
+    assertEquals(dummyLoc, deleteRecordPt0.getCurrentLocation());
+    HoodieRecord<DefaultHoodieRecordPayload> deleteRecordPt1 = taggedRecords.get(1);
+    assertEquals("0", deleteRecordPt1.getRecordKey());
+    assertEquals("p1", deleteRecordPt1.getPartitionPath());
+    assertEquals(dummyLoc, deleteRecordPt1.getCurrentLocation());
+    HoodieRecord<DefaultHoodieRecordPayload> insertRecord = taggedRecords.get(2);
+    assertEquals("0", insertRecord.getRecordKey());
+    assertEquals("p2", insertRecord.getPartitionPath());
+    assertNull(insertRecord.getCurrentLocation());
+  }
 }
