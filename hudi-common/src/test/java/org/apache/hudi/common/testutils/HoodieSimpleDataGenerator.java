@@ -46,8 +46,8 @@ public class HoodieSimpleDataGenerator {
     ]
    }
    */
-  public static final String SCHEMA_STR =
-      "{\"type\":\"record\",\"name\":\"ExampleRecord\",\"namespace\":\"com.example.avro\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"},{\"name\":\"pt\",\"type\":\"string\"},{\"name\":\"ts\",\"type\":\"long\"}]}";
+  public static final String SCHEMA_STR = "{\"type\":\"record\",\"name\":\"ExampleRecord\",\"namespace\":\"com.example.avro\",\"fields\":"
+      + "[{\"name\":\"id\",\"type\":\"int\"},{\"name\":\"pt\",\"type\":\"string\"},{\"name\":\"ts\",\"type\":\"long\"}]}";
   public static final Schema SCHEMA = new Schema.Parser().parse(SCHEMA_STR);
 
   public List<HoodieRecord<DefaultHoodieRecordPayload>> getInserts(int n, int numPartitions, long ts) {
