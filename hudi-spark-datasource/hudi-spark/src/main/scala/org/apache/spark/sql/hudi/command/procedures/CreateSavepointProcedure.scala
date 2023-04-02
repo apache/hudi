@@ -87,6 +87,3 @@ object CreateSavepointProcedure {
     override def get(): CreateSavepointProcedure = new CreateSavepointProcedure()
   }
 }
-
-
-

@@ -181,4 +181,3 @@ object ShowArchivedCommitsMetadataProcedure {
     override def get() = new ShowArchivedCommitsProcedure(true)
   }
 }
-
