@@ -22,6 +22,7 @@ package org.apache.hudi
 import org.apache.hudi.avro.model.HoodieClusteringGroup
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.StringUtils
 import org.apache.spark.SparkException
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
@@ -40,8 +41,9 @@ object HoodieCLIUtils extends ProvidesHoodieConfig{
       .setConf(sparkSession.sessionState.newHadoopConf()).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
     val schemaStr = schemaUtil.getTableAvroSchema(false).toString
+    val table = StringUtils.join(metaClient.getTableConfig.getDatabaseName, ".", metaClient.getTableConfig.getTableName)
     val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
-      buildHoodieConfig(getHoodieCatalogTable(sparkSession, metaClient.getTableConfig.getTableName)) ++ conf)
+      buildHoodieConfig(getHoodieCatalogTable(sparkSession, table)) ++ conf)
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     DataSourceUtils.createHoodieClient(jsc, schemaStr, basePath,
