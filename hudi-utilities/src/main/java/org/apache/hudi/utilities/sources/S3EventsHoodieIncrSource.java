@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
+import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 
@@ -55,13 +57,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.DEFAULT_NUM_INSTANTS_PER_FETCH;
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT;
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.DEFAULT_SOURCE_FILE_FORMAT;
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.HOODIE_SRC_BASE_PATH;
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.NUM_INSTANTS_PER_FETCH;
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.READ_LATEST_INSTANT_ON_MISSING_CKPT;
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.SOURCE_FILE_FORMAT;
+import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
+import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
+import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
+import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
 /**
  * This source will use the S3 events meta information from hoodie table generate by {@link S3EventsSource}.
  */
@@ -71,23 +70,30 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
   static class Config {
     // control whether we do existence check for files before consuming them
-    static final String ENABLE_EXISTS_CHECK = "hoodie.deltastreamer.source.s3incr.check.file.exists";
-    static final Boolean DEFAULT_ENABLE_EXISTS_CHECK = false;
+    @Deprecated
+    static final String ENABLE_EXISTS_CHECK = S3EventsHoodieIncrSourceConfig.S3_INCR_ENABLE_EXISTS_CHECK.key();
+    @Deprecated
+    static final Boolean DEFAULT_ENABLE_EXISTS_CHECK = S3EventsHoodieIncrSourceConfig.S3_INCR_ENABLE_EXISTS_CHECK.defaultValue();
 
     // control whether to filter the s3 objects starting with this prefix
-    static final String S3_KEY_PREFIX = "hoodie.deltastreamer.source.s3incr.key.prefix";
-    static final String S3_FS_PREFIX = "hoodie.deltastreamer.source.s3incr.fs.prefix";
+    @Deprecated
+    static final String S3_KEY_PREFIX = S3EventsHoodieIncrSourceConfig.S3_KEY_PREFIX.key();
+    @Deprecated
+    static final String S3_FS_PREFIX = S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX.key();
 
     // control whether to ignore the s3 objects starting with this prefix
-    static final String S3_IGNORE_KEY_PREFIX = "hoodie.deltastreamer.source.s3incr.ignore.key.prefix";
+    @Deprecated
+    static final String S3_IGNORE_KEY_PREFIX = S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_PREFIX.key();
     // control whether to ignore the s3 objects with this substring
-    static final String S3_IGNORE_KEY_SUBSTRING = "hoodie.deltastreamer.source.s3incr.ignore.key.substring";
+    @Deprecated
+    static final String S3_IGNORE_KEY_SUBSTRING = S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_SUBSTRING.key();
     /**
-     *{@value #SPARK_DATASOURCE_OPTIONS} is json string, passed to the reader while loading dataset.
+     *{@link #SPARK_DATASOURCE_OPTIONS} is json string, passed to the reader while loading dataset.
      * Example delta streamer conf
      * - --hoodie-conf hoodie.deltastreamer.source.s3incr.spark.datasource.options={"header":"true","encoding":"UTF-8"}
      */
-    static final String SPARK_DATASOURCE_OPTIONS = "hoodie.deltastreamer.source.s3incr.spark.datasource.options";
+    @Deprecated
+    static final String SPARK_DATASOURCE_OPTIONS = S3EventsHoodieIncrSourceConfig.SPARK_DATASOURCE_OPTIONS.key();
   }
 
   public S3EventsHoodieIncrSource(
@@ -100,13 +106,13 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
   private DataFrameReader getDataFrameReader(String fileFormat) {
     DataFrameReader dataFrameReader = sparkSession.read().format(fileFormat);
-    if (!StringUtils.isNullOrEmpty(props.getString(Config.SPARK_DATASOURCE_OPTIONS, null))) {
+    if (!StringUtils.isNullOrEmpty(props.getString(S3EventsHoodieIncrSourceConfig.SPARK_DATASOURCE_OPTIONS.key(), null))) {
       final ObjectMapper mapper = new ObjectMapper();
       Map<String, String> sparkOptionsMap = null;
       try {
-        sparkOptionsMap = mapper.readValue(props.getString(Config.SPARK_DATASOURCE_OPTIONS), Map.class);
+        sparkOptionsMap = mapper.readValue(props.getString(S3EventsHoodieIncrSourceConfig.SPARK_DATASOURCE_OPTIONS.key()), Map.class);
       } catch (IOException e) {
-        throw new HoodieException(String.format("Failed to parse sparkOptions: %s", props.getString(Config.SPARK_DATASOURCE_OPTIONS)), e);
+        throw new HoodieException(String.format("Failed to parse sparkOptions: %s", props.getString(S3EventsHoodieIncrSourceConfig.SPARK_DATASOURCE_OPTIONS.key())), e);
       }
       LOG.info(String.format("sparkOptions loaded: %s", sparkOptionsMap));
       dataFrameReader = dataFrameReader.options(sparkOptionsMap);
@@ -116,17 +122,17 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
   @Override
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HOODIE_SRC_BASE_PATH));
-    String srcPath = props.getString(HOODIE_SRC_BASE_PATH);
-    int numInstantsPerFetch = props.getInteger(NUM_INSTANTS_PER_FETCH, DEFAULT_NUM_INSTANTS_PER_FETCH);
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HOODIE_SRC_BASE_PATH.key()));
+    String srcPath = props.getString(HOODIE_SRC_BASE_PATH.key());
+    int numInstantsPerFetch = props.getInteger(NUM_INSTANTS_PER_FETCH.key(), NUM_INSTANTS_PER_FETCH.defaultValue());
     boolean readLatestOnMissingCkpt = props.getBoolean(
-        READ_LATEST_INSTANT_ON_MISSING_CKPT, DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT);
-    IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy = (props.containsKey(HoodieIncrSource.Config.MISSING_CHECKPOINT_STRATEGY))
-        ? IncrSourceHelper.MissingCheckpointStrategy.valueOf(props.getString(HoodieIncrSource.Config.MISSING_CHECKPOINT_STRATEGY)) : null;
+        READ_LATEST_INSTANT_ON_MISSING_CKPT.key(), READ_LATEST_INSTANT_ON_MISSING_CKPT.defaultValue());
+    IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy = (props.containsKey(HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY.key()))
+        ? IncrSourceHelper.MissingCheckpointStrategy.valueOf(props.getString(HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY.key())) : null;
     if (readLatestOnMissingCkpt) {
       missingCheckpointStrategy = IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST;
     }
-    String fileFormat = props.getString(SOURCE_FILE_FORMAT, DEFAULT_SOURCE_FILE_FORMAT);
+    String fileFormat = props.getString(SOURCE_FILE_FORMAT.key(), SOURCE_FILE_FORMAT.defaultValue());
 
     // Use begin Instant if set and non-empty
     Option<String> beginInstant =
@@ -166,23 +172,23 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     }
 
     String filter = "s3.object.size > 0";
-    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_KEY_PREFIX, null))) {
-      filter = filter + " and s3.object.key like '" + props.getString(Config.S3_KEY_PREFIX) + "%'";
+    if (!StringUtils.isNullOrEmpty(props.getString(S3EventsHoodieIncrSourceConfig.S3_KEY_PREFIX.key(), null))) {
+      filter = filter + " and s3.object.key like '" + props.getString(S3EventsHoodieIncrSourceConfig.S3_KEY_PREFIX.key()) + "%'";
     }
-    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_PREFIX, null))) {
-      filter = filter + " and s3.object.key not like '" + props.getString(Config.S3_IGNORE_KEY_PREFIX) + "%'";
+    if (!StringUtils.isNullOrEmpty(props.getString(S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_PREFIX.key(), null))) {
+      filter = filter + " and s3.object.key not like '" + props.getString(S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_PREFIX.key()) + "%'";
     }
-    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_SUBSTRING, null))) {
-      filter = filter + " and s3.object.key not like '%" + props.getString(Config.S3_IGNORE_KEY_SUBSTRING) + "%'";
+    if (!StringUtils.isNullOrEmpty(props.getString(S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_SUBSTRING.key(), null))) {
+      filter = filter + " and s3.object.key not like '%" + props.getString(S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_SUBSTRING.key()) + "%'";
     }
     // add file format filtering by default
     filter = filter + " and s3.object.key like '%" + fileFormat + "%'";
 
-    String s3FS = props.getString(Config.S3_FS_PREFIX, "s3").toLowerCase();
+    String s3FS = props.getString(S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX.key(), S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX.defaultValue()).toLowerCase();
     String s3Prefix = s3FS + "://";
 
     // Create S3 paths
-    final boolean checkExists = props.getBoolean(Config.ENABLE_EXISTS_CHECK, Config.DEFAULT_ENABLE_EXISTS_CHECK);
+    final boolean checkExists = props.getBoolean(S3EventsHoodieIncrSourceConfig.S3_INCR_ENABLE_EXISTS_CHECK.key(), S3EventsHoodieIncrSourceConfig.S3_INCR_ENABLE_EXISTS_CHECK.defaultValue());
     SerializableConfiguration serializableConfiguration = new SerializableConfiguration(sparkContext.hadoopConfiguration());
     List<String> cloudFiles = source
         .filter(filter)

@@ -33,10 +33,10 @@ import java.io.Serializable;
 import java.util.List;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.CLOUD_DATAFILE_EXTENSION;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.IGNORE_RELATIVE_PATH_PREFIX;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.IGNORE_RELATIVE_PATH_SUBSTR;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.SELECT_RELATIVE_PATH_PREFIX;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX;
 
 /**
  * Extracts a list of fully qualified GCS filepaths from a given Spark Dataset as input.
@@ -95,12 +95,12 @@ public class FilePathsFetcher implements Serializable {
   private String createFilter() {
     StringBuilder filter = new StringBuilder("size > 0");
 
-    getPropVal(SELECT_RELATIVE_PATH_PREFIX).ifPresent(val -> filter.append(" and name like '" + val + "%'"));
-    getPropVal(IGNORE_RELATIVE_PATH_PREFIX).ifPresent(val -> filter.append(" and name not like '" + val + "%'"));
-    getPropVal(IGNORE_RELATIVE_PATH_SUBSTR).ifPresent(val -> filter.append(" and name not like '%" + val + "%'"));
+    getPropVal(SELECT_RELATIVE_PATH_PREFIX.key()).ifPresent(val -> filter.append(" and name like '" + val + "%'"));
+    getPropVal(IGNORE_RELATIVE_PATH_PREFIX.key()).ifPresent(val -> filter.append(" and name not like '" + val + "%'"));
+    getPropVal(IGNORE_RELATIVE_PATH_SUBSTR.key()).ifPresent(val -> filter.append(" and name not like '%" + val + "%'"));
 
     // Match files with a given extension, or use the fileFormat as the default.
-    getPropVal(CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
+    getPropVal(CLOUD_DATAFILE_EXTENSION.key()).or(() -> Option.of(fileFormat))
             .map(val -> filter.append(" and name like '%" + val + "'"));
 
     return filter.toString();

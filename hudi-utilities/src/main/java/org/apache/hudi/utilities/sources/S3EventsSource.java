@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.config.S3SourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.S3EventsMetaSelector;
 
@@ -64,7 +65,7 @@ public class S3EventsSource extends RowSource implements Closeable {
    *
    * @param lastCkptStr The last checkpoint instant string, empty if first run.
    * @param sourceLimit Limit on the size of data to fetch. For {@link S3EventsSource},
-   *                    {@link org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config#S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH} is used.
+   *                    {@link S3SourceConfig#S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH} is used.
    * @return A pair of dataset of event records and the next checkpoint instant string
    */
   @Override
