@@ -333,7 +333,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     // NOTE: It's crucial to make sure that we don't capture whole "this" object into the
     //       closure, as this might lead to issues attempting to serialize its nested fields
     HoodieTableConfig  tableConfig = getHoodieTable().getMetaClient().getTableConfig();
-    String bootstrapBasePath = tableConfig.getBootstrapBasePath().get();
+    String bootstrapBasePath = tableConfig.getBootstrapBasePath().orElse(null);
+    Option<String[]> partitionFields = tableConfig.getPartitionFields();
     String timeZoneId = jsc.getConf().get("timeZone", SQLConf.get().sessionLocalTimeZone());
     SparkParsePartitionUtil sparkParsePartitionUtil = SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkParsePartitionUtil();
     boolean shouldValidateColumns = jsc.getConf().getBoolean("spark.sql.sources.validatePartitionColumns", true);
@@ -345,19 +346,26 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             try {
               Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
               HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
-
-              if (StringUtils.nonEmpty(clusteringOp.getBootstrapFilePath())) {
+              // handle bootstrap path
+              if (StringUtils.nonEmpty(clusteringOp.getBootstrapFilePath()) && StringUtils.nonEmpty(bootstrapBasePath)) {
                 String bootstrapFilePath = clusteringOp.getBootstrapFilePath();
-                int startOfPartitionPath = bootstrapFilePath.indexOf(bootstrapBasePath) + bootstrapBasePath.length() + 1;
-                String partitionFilePath = bootstrapFilePath.substring(startOfPartitionPath, bootstrapFilePath.lastIndexOf("/"));
-                CachingPath bootstrapCachingPath = new CachingPath(bootstrapBasePath);
-                Object[] partitionValues = HoodieSparkUtils.parsePartitionColumnValues(tableConfig.getPartitionFields().get(), partitionFilePath, bootstrapCachingPath,
-                    AvroConversionUtils.convertAvroSchemaToStructType(baseFileReader.getSchema()), timeZoneId, sparkParsePartitionUtil, shouldValidateColumns);
-
+                Object[] partitionValues = new Object[0];
+                if (partitionFields.isPresent()) {
+                  int startOfPartitionPath = bootstrapFilePath.indexOf(bootstrapBasePath) + bootstrapBasePath.length() + 1;
+                  String partitionFilePath = bootstrapFilePath.substring(startOfPartitionPath, bootstrapFilePath.lastIndexOf("/"));
+                  CachingPath bootstrapCachingPath = new CachingPath(bootstrapBasePath);
+                  partitionValues = HoodieSparkUtils.parsePartitionColumnValues(
+                      partitionFields.get(),
+                      partitionFilePath,
+                      bootstrapCachingPath,
+                      AvroConversionUtils.convertAvroSchemaToStructType(baseFileReader.getSchema()),
+                      timeZoneId,
+                      sparkParsePartitionUtil,
+                      shouldValidateColumns);
+                }
                 HoodieFileReader bootstrapDataFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(bootstrapFilePath));
                 HoodieFileReader bootstrapSkeletonFileReader = baseFileReader;
-                baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
-                    bootstrapSkeletonFileReader, bootstrapDataFileReader, tableConfig.getPartitionFields(), partitionValues);
+                baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(bootstrapSkeletonFileReader, bootstrapDataFileReader, partitionFields, partitionValues);
               }
 
               Option<BaseKeyGenerator> keyGeneratorOp =
@@ -394,6 +402,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         .stream()
         .map(op -> {
           ArrayList<String> readPaths = new ArrayList<>();
+          // NOTE: for bootstrap tables, only need to handle data file path (ehich is the skeleton file) because
+          // HoodieBootstrapRelation takes care of stitching if there is bootstrap path for the skeleton file.
           if (op.getDataFilePath() != null) {
             readPaths.add(op.getDataFilePath());
           }
