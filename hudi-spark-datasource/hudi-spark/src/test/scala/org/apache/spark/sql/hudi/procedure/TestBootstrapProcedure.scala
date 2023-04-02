@@ -134,4 +134,44 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       assert(originCount != afterDeleteCount)
     }
   }
+
+  test("Test Call run_bootstrap Procedure about MOR with full record") {
+    withTempDir { tmp =>
+      val NUM_OF_RECORDS = 100
+      val PARTITION_FIELD = "datestr"
+      val RECORD_KEY_FIELD = "_row_key"
+
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}"
+
+      val srcName: String = "source"
+      val sourcePath = basePath + Path.SEPARATOR + srcName
+      val tablePath = basePath + Path.SEPARATOR + tableName
+      val jsc = new JavaSparkContext(spark.sparkContext)
+
+      // generate test data
+      val partitions = util.Arrays.asList("2018", "2019", "2020")
+      val timestamp: Long = Instant.now.toEpochMilli
+      for (i <- 0 until partitions.size) {
+        val df: Dataset[Row] = TestBootstrap.generateTestRawTripDataset(timestamp, i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, spark.sqlContext)
+        df.write.parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
+      }
+
+      spark.sql("set hoodie.bootstrap.parallelism = 20")
+      spark.sql("set hoodie.datasource.write.precombine.field=timestamp")
+
+      checkAnswer(
+        s"""call run_bootstrap(
+           |table => '$tableName',
+           |base_path => '$tablePath',
+           |table_type => '${HoodieTableType.MERGE_ON_READ.name}',
+           |bootstrap_path => '$sourcePath',
+           |rowKey_field => '$RECORD_KEY_FIELD',
+           |selector_class => 'org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector',
+           |partition_path_field => '$PARTITION_FIELD',
+           |bootstrap_overwrite => true)""".stripMargin) {
+        Seq(0)
+      }
+    }
+  }
 }

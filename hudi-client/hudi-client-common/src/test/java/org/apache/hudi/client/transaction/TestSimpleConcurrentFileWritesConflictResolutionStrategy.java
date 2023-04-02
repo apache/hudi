@@ -18,14 +18,6 @@
 
 package org.apache.hudi.client.transaction;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
@@ -48,9 +40,19 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends HoodieCommonTestHarness {
 
@@ -92,7 +94,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   @Test
-  public void testConcurrentWritesWithInterleavingSuccesssfulCommit() throws Exception {
+  public void testConcurrentWritesWithInterleavingSuccessfulCommit() throws Exception {
     createCommit(HoodieActiveTimeline.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful

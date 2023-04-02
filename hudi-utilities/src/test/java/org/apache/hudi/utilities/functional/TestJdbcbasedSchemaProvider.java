@@ -26,11 +26,11 @@ import org.apache.hudi.utilities.schema.JdbcbasedSchemaProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Tag("functional")
 public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(TestJdbcbasedSchemaProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestJdbcbasedSchemaProvider.class);
   private static final TypedProperties PROPS = new TypedProperties();
 
   @BeforeAll

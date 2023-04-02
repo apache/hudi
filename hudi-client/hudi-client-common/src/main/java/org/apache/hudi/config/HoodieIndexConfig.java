@@ -30,8 +30,8 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -67,7 +67,7 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
     description = "")
 public class HoodieIndexConfig extends HoodieConfig {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieIndexConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexConfig.class);
 
   public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
       .key("hoodie.index.type")
@@ -155,6 +155,7 @@ public class HoodieIndexConfig extends HoodieConfig {
   public static final ConfigProperty<String> BLOOM_INDEX_BUCKETIZED_CHECKING = ConfigProperty
       .key("hoodie.bloom.index.bucketized.checking")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("Only applies if index type is BLOOM. "
           + "When true, bucketized bloom filtering is enabled. "
           + "This reduces skew seen in sort based bloom index lookup");

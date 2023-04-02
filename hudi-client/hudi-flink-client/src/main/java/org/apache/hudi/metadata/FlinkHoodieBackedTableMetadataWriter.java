@@ -36,8 +36,8 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -51,7 +51,7 @@ import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGE
  */
 public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
 
-  private static final Logger LOG = LogManager.getLogger(FlinkHoodieBackedTableMetadataWriter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkHoodieBackedTableMetadataWriter.class);
 
   public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {

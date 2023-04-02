@@ -34,8 +34,8 @@ import org.apache.hudi.sync.common.util.ConfigUtils;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -62,7 +62,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIO
     description = "")
 public class HoodieSyncConfig extends HoodieConfig {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieSyncConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSyncConfig.class);
 
   public static final ConfigProperty<String> META_SYNC_BASE_PATH = ConfigProperty
       .key("hoodie.datasource.meta.sync.base.path")

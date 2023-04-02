@@ -39,6 +39,7 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndex
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api._
+import org.junit.jupiter.api.condition.DisabledIf
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
 
@@ -48,6 +49,8 @@ import scala.collection.JavaConverters._
 import scala.util.Random
 
 @Tag("functional")
+@DisabledIf(value = "org.apache.hudi.HoodieSparkUtils#gteqSpark3_3",
+  disabledReason = "Jackson version conflicts (HUDI-5352)")
 class TestColumnStatsIndex extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
 
@@ -95,10 +98,6 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      // NOTE: Currently only this setting is used like following by different MT partitions:
-      //          - Files: using it
-      //          - Column Stats: NOT using it (defaults to doing "point-lookups")
-      HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.key -> testCase.forceFullLogScan.toString,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ metadataOpts
 
@@ -647,14 +646,12 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
 
 object TestColumnStatsIndex {
 
-  case class ColumnStatsTestCase(tableType: HoodieTableType, forceFullLogScan: Boolean, shouldReadInMemory: Boolean)
+  case class ColumnStatsTestCase(tableType: HoodieTableType, shouldReadInMemory: Boolean)
 
   def testMetadataColumnStatsIndexParams: java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(HoodieTableType.values().toStream.flatMap(tableType =>
-      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = false, shouldReadInMemory = true)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = false, shouldReadInMemory = false)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = true, shouldReadInMemory = false)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = true, shouldReadInMemory = true)))
+      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true)),
+        Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false)))
     ): _*)
   }
 }

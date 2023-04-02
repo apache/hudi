@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
-import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType
@@ -656,7 +656,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt")
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -740,7 +739,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "day,hh")
           .option(URL_ENCODE_PARTITIONING.key, "true")
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -812,7 +810,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         .option(RECORDKEY_FIELD.key, "id")
         .option(PRECOMBINE_FIELD.key, "ts")
         .option(PARTITIONPATH_FIELD.key, "")
-        .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
         .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
         .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
         .mode(SaveMode.Overwrite)

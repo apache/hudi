@@ -18,14 +18,6 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import com.codahale.metrics.Timer;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaCompatibility;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
@@ -39,7 +31,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
@@ -50,6 +41,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -59,19 +51,19 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.CommitUtils;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
-import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -79,7 +71,6 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.KeyGenerator;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
@@ -91,6 +82,7 @@ import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback;
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig;
+import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
@@ -100,10 +92,16 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
 import org.apache.hudi.utilities.schema.SimpleSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
-import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.transform.Transformer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import com.codahale.metrics.Timer;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaCompatibility;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
@@ -114,8 +112,8 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.avro.HoodieAvroDeserializer;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
-
-import scala.collection.JavaConversions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -134,6 +132,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
+import scala.collection.JavaConversions;
+
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
@@ -144,12 +144,14 @@ import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
-import static org.apache.hudi.config.HoodieWriteConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
+import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.DEFAULT_CHECKPOINT_FORCE_SKIP_PROP;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_FORCE_SKIP_PROP;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
@@ -159,7 +161,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 public class DeltaSync implements Serializable, Closeable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DeltaSync.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**
@@ -373,7 +375,7 @@ public class DeltaSync implements Serializable, Closeable {
         .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
             HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
         .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-            SimpleKeyGenerator.class.getName()))
+            keyGenerator.getClass().getName()))
         .setPreCombineField(cfg.sourceOrderingField)
         .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
             HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
@@ -470,7 +472,7 @@ public class DeltaSync implements Serializable, Closeable {
           .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
               HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
           .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-              SimpleKeyGenerator.class.getName()))
+              keyGenerator.getClass().getName()))
           .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
               HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
           .setShouldDropPartitionColumns(isDropPartitionColumns())
@@ -678,7 +680,7 @@ public class DeltaSync implements Serializable, Closeable {
         }
         // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
-          props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE.key());
+          props.remove(KafkaSourceConfig.KAFKA_CHECKPOINT_TYPE.key());
         }
       } else if (cfg.checkpoint != null) { // getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get()) will never return a commit metadata w/o any checkpoint key set.
         resumeCheckpointStr = Option.of(cfg.checkpoint);
@@ -785,15 +787,17 @@ public class DeltaSync implements Serializable, Closeable {
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc = Option.empty();
-      if (checkpointStr != null) {
-        if (multiwriterIdentifier.isPresent()) {
-          extraPreCommitFunc = Option.of(new DeltastreamerMultiWriterCkptUpdateFunc(this, checkpointStr, latestCheckpointWritten));
-        } else {
-          checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
+      if (!props.getBoolean(CHECKPOINT_FORCE_SKIP_PROP, DEFAULT_CHECKPOINT_FORCE_SKIP_PROP)) {
+        if (checkpointStr != null) {
+          if (multiwriterIdentifier.isPresent()) {
+            extraPreCommitFunc = Option.of(new DeltastreamerMultiWriterCkptUpdateFunc(this, checkpointStr, latestCheckpointWritten));
+          } else {
+            checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
+          }
         }
-      }
-      if (cfg.checkpoint != null) {
-        checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
+        if (cfg.checkpoint != null) {
+          checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
+        }
       }
 
       if (hasErrors) {

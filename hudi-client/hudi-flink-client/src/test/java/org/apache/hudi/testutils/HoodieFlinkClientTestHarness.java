@@ -38,8 +38,8 @@ import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -53,7 +53,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
 
-  protected static final Logger LOG = LogManager.getLogger(HoodieFlinkClientTestHarness.class);
+  protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkClientTestHarness.class);
   protected Configuration hadoopConf;
   protected FileSystem fs;
   protected HoodieFlinkEngineContext context;

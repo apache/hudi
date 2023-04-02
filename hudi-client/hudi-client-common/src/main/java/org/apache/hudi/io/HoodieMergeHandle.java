@@ -51,8 +51,8 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -98,7 +98,7 @@ import java.util.Set;
 @NotThreadSafe
 public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMergeHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandle.class);
 
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;

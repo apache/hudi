@@ -59,11 +59,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -187,7 +187,7 @@ public class IncrementalInputSplits implements Serializable {
     if (fullTableScan) {
       // scans the partitions and files directly.
       FileIndex fileIndex = getFileIndex();
-      readPartitions = new HashSet<>(fileIndex.getOrBuildPartitionPaths());
+      readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
       if (readPartitions.size() == 0) {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
@@ -219,7 +219,7 @@ public class IncrementalInputSplits implements Serializable {
         // fallback to full table scan
         // reading from the earliest, scans the partitions and files directly.
         FileIndex fileIndex = getFileIndex();
-        readPartitions = new HashSet<>(fileIndex.getOrBuildPartitionPaths());
+        readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
         if (readPartitions.size() == 0) {
           LOG.warn("No partitions found for reading in user provided path.");
           return Result.EMPTY;
@@ -281,7 +281,7 @@ public class IncrementalInputSplits implements Serializable {
     if (instantRange == null) {
       // reading from the earliest, scans the partitions and files directly.
       FileIndex fileIndex = getFileIndex();
-      readPartitions = new HashSet<>(fileIndex.getOrBuildPartitionPaths());
+      readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
       if (readPartitions.size() == 0) {
         LOG.warn("No partitions found for reading under path: " + path);
         return Result.EMPTY;

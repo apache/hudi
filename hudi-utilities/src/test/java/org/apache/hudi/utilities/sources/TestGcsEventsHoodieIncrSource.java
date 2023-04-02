@@ -18,9 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -43,8 +40,10 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.gcs.FileDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.gcs.FilePathsFetcher;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -55,6 +54,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -85,7 +86,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   protected FilebasedSchemaProvider schemaProvider;
   private HoodieTableMetaClient metaClient;
 
-  private static final Logger LOG = LogManager.getLogger(TestGcsEventsHoodieIncrSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestGcsEventsHoodieIncrSource.class);
 
   @BeforeEach
   public void setUp() throws IOException {

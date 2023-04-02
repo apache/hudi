@@ -31,8 +31,8 @@ import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -49,7 +49,7 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
  */
 public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
-  private static final Logger LOG = LogManager.getLogger(HiveQueryDDLExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveQueryDDLExecutor.class);
 
   private final IMetaStoreClient metaStoreClient;
   private SessionState sessionState;

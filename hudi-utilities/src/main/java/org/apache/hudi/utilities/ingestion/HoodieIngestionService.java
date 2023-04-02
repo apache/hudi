@@ -26,8 +26,8 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -41,7 +41,7 @@ import static org.apache.hudi.utilities.ingestion.HoodieIngestionService.HoodieI
  */
 public abstract class HoodieIngestionService extends HoodieAsyncService {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieIngestionService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieIngestionService.class);
 
   protected HoodieIngestionConfig ingestionConfig;
 

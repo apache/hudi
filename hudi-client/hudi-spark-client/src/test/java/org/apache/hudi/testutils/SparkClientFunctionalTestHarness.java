@@ -47,7 +47,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
@@ -334,7 +333,6 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
     properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
-    properties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
     return properties;
   }
 

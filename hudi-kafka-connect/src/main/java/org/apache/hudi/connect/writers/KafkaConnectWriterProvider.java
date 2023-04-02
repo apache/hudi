@@ -27,12 +27,12 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.KafkaConnectFileIdPrefixProvider;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -43,8 +43,8 @@ import org.apache.hudi.schema.SchemaProvider;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
@@ -54,7 +54,7 @@ import java.util.Collections;
  */
 public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteStatus> {
 
-  private static final Logger LOG = LogManager.getLogger(KafkaConnectWriterProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectWriterProvider.class);
 
   private final KafkaConnectConfigs connectConfigs;
   private final HoodieEngineContext context;

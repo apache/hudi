@@ -35,12 +35,12 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FutureUtils;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -64,14 +64,14 @@ import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.sources.BaseRelation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -94,7 +94,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  */
 public abstract class MultipleSparkJobExecutionStrategy<T>
     extends ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
-  private static final Logger LOG = LogManager.getLogger(MultipleSparkJobExecutionStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MultipleSparkJobExecutionStrategy.class);
 
   public MultipleSparkJobExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
@@ -368,9 +368,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         .stream()
         .map(op -> {
           ArrayList<String> readPaths = new ArrayList<>();
-          if (op.getBootstrapFilePath() != null) {
-            readPaths.add(op.getBootstrapFilePath());
-          }
           if (op.getDataFilePath() != null) {
             readPaths.add(op.getDataFilePath());
           }

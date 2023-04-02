@@ -36,9 +36,9 @@ import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -73,7 +73,7 @@ import java.util.Set;
 @ShellComponent
 public class MetadataCommand {
 
-  private static final Logger LOG = LogManager.getLogger(MetadataCommand.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MetadataCommand.class);
   private static String metadataBaseDirectory;
   private JavaSparkContext jsc;
 

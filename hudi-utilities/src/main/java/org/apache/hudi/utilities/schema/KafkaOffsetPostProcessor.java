@@ -20,11 +20,12 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -36,19 +37,16 @@ import java.util.stream.Collectors;
 public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
 
   public static class Config {
-    public static final ConfigProperty<String> KAFKA_APPEND_OFFSETS = ConfigProperty
-        .key("hoodie.deltastreamer.source.kafka.append.offsets")
-        .defaultValue("false")
-        .withDocumentation("When enabled, appends kafka offset info like source offset(_hoodie_kafka_source_offset), "
-            + "partition (_hoodie_kafka_source_partition) and timestamp (_hoodie_kafka_source_timestamp) to the records. "
-            + "By default its disabled and no kafka offsets are added");
+    @Deprecated
+    public static final ConfigProperty<String> KAFKA_APPEND_OFFSETS =
+        HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS;
 
     public static boolean shouldAddOffsets(TypedProperties props) {
-      return  props.getBoolean(KafkaOffsetPostProcessor.Config.KAFKA_APPEND_OFFSETS.key(), Boolean.parseBoolean(KafkaOffsetPostProcessor.Config.KAFKA_APPEND_OFFSETS.defaultValue()));
+      return props.getBoolean(HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS.key(), Boolean.parseBoolean(HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS.defaultValue()));
     }
   }
 
-  private static final Logger LOG = LogManager.getLogger(KafkaOffsetPostProcessor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaOffsetPostProcessor.class);
 
   public static final String KAFKA_SOURCE_OFFSET_COLUMN = "_hoodie_kafka_source_offset";
   public static final String KAFKA_SOURCE_PARTITION_COLUMN = "_hoodie_kafka_source_partition";

@@ -157,17 +157,18 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
     // Load existing fileID belongs to this task
     Map<Integer, String> bucketToFileIDMap = new HashMap<>();
-    this.writeClient.getHoodieTable().getHoodieView().getAllFileGroups(partition).forEach(fileGroup -> {
-      String fileID = fileGroup.getFileGroupId().getFileId();
-      int bucketNumber = BucketIdentifier.bucketIdFromFileId(fileID);
+    this.writeClient.getHoodieTable().getHoodieView().getLatestFileSlices(partition).forEach(fileSlice -> {
+      String fileId = fileSlice.getFileId();
+      int bucketNumber = BucketIdentifier.bucketIdFromFileId(fileId);
       if (isBucketToLoad(bucketNumber, partition)) {
-        LOG.info(String.format("Should load this partition bucket %s with fileID %s", bucketNumber, fileID));
+        LOG.info(String.format("Should load this partition bucket %s with fileId %s", bucketNumber, fileId));
+        // Validate that one bucketId has only ONE fileId
         if (bucketToFileIDMap.containsKey(bucketNumber)) {
-          throw new RuntimeException(String.format("Duplicate fileID %s from bucket %s of partition %s found "
-              + "during the BucketStreamWriteFunction index bootstrap.", fileID, bucketNumber, partition));
+          throw new RuntimeException(String.format("Duplicate fileId %s from bucket %s of partition %s found "
+              + "during the BucketStreamWriteFunction index bootstrap.", fileId, bucketNumber, partition));
         } else {
-          LOG.info(String.format("Adding fileID %s to the bucket %s of partition %s.", fileID, bucketNumber, partition));
-          bucketToFileIDMap.put(bucketNumber, fileID);
+          LOG.info(String.format("Adding fileId %s to the bucket %s of partition %s.", fileId, bucketNumber, partition));
+          bucketToFileIDMap.put(bucketNumber, fileId);
         }
       }
     });

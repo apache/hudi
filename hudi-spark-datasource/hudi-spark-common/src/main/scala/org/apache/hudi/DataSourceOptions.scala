@@ -23,21 +23,22 @@ import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.{Option, StringUtils}
-import org.apache.hudi.config.{HoodieClusteringConfig, HoodiePayloadConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
+import org.apache.hudi.keygen.KeyGenUtils.inferKeyGeneratorType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
-import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGeneratorClassNameFromType, inferKeyGeneratorTypeFromWriteConfig}
+import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.hudi.util.JFunction
-import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
-import scala.util.control.Breaks.break
 
 /**
  * List of options that can be passed to the Hoodie datasource,
@@ -270,7 +271,6 @@ object DataSourceWriteOptions {
       WriteOperationType.DELETE_PARTITION.value,
       WriteOperationType.INSERT_OVERWRITE_TABLE.value,
       WriteOperationType.COMPACT.value,
-      WriteOperationType.INSERT.value,
       WriteOperationType.ALTER_SCHEMA.value
     )
     .withDocumentation("Whether to do upsert, insert or bulkinsert for the write operation. " +
@@ -379,8 +379,8 @@ object DataSourceWriteOptions {
   val HIVE_STYLE_PARTITIONING = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE
 
   /**
-    * Key generator class, that implements will extract the key out of incoming record.
-    */
+   * Key generator class, that implements will extract the key out of incoming record.
+   */
   val keyGeneratorInferFunc = JFunction.toJavaFunction((config: HoodieConfig) => {
     Option.of(DataSourceOptionsHelper.inferKeyGenClazz(config.getProps))
   })
@@ -789,7 +789,7 @@ object DataSourceWriteOptions {
 
 object DataSourceOptionsHelper {
 
-  private val log = LogManager.getLogger(DataSourceOptionsHelper.getClass)
+  private val log = LoggerFactory.getLogger(DataSourceOptionsHelper.getClass)
 
   // put all the configs with alternatives here
   val allConfigsWithAlternatives = List(
@@ -876,23 +876,11 @@ object DataSourceOptionsHelper {
   }
 
   def inferKeyGenClazz(props: TypedProperties): String = {
-    val partitionFields = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), null)
-    val recordsKeyFields = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key(), null)
-    inferKeyGenClazz(recordsKeyFields, partitionFields)
+    getKeyGeneratorClassNameFromType(inferKeyGeneratorTypeFromWriteConfig(props))
   }
 
   def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
-    if (!StringUtils.isNullOrEmpty(partitionFields)) {
-      val numPartFields = partitionFields.split(",").length
-      val numRecordKeyFields = recordsKeyFields.split(",").length
-      if (numPartFields == 1 && numRecordKeyFields == 1) {
-        classOf[SimpleKeyGenerator].getName
-      } else {
-        classOf[ComplexKeyGenerator].getName
-      }
-    } else {
-      classOf[NonpartitionedKeyGenerator].getName
-    }
+    getKeyGeneratorClassNameFromType(inferKeyGeneratorType(recordsKeyFields, partitionFields))
   }
 
   implicit def convert[T, U](prop: ConfigProperty[T])(implicit converter: T => U): ConfigProperty[U] = {

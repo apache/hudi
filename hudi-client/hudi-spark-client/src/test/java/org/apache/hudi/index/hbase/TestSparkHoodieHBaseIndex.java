@@ -21,6 +21,7 @@ package org.apache.hudi.index.hbase;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -32,12 +33,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -78,6 +78,9 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_CLIENT_PORT;
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_QUORUM;
+import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_ZNODE_PARENT;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -87,9 +90,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_CLIENT_PORT;
-import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_ZNODE_PARENT;
-import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_QUORUM;
 
 /**
  * Note :: HBaseTestingUtility is really flaky with issues where the HbaseMiniCluster fails to shutdown across tests,
@@ -286,15 +286,15 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   public void testTagLocationAndPartitionPathUpdateWithExplicitRollback() throws Exception {
     final int numRecords = 10;
     final String oldPartitionPath = "1970/01/01";
-    final String emptyHoodieRecordPayloadClasssName = EmptyHoodieRecordPayload.class.getName();
-    HoodieWriteConfig config = getConfigBuilder(100,  true, true).withRollbackUsingMarkers(false).build();
+    final String emptyHoodieRecordPayloadClassName = EmptyHoodieRecordPayload.class.getName();
+    HoodieWriteConfig config = getConfigBuilder(100, true, true).withRollbackUsingMarkers(false).build();
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
       final String firstCommitTime = writeClient.startCommit();
       List<HoodieRecord> newRecords = dataGen.generateInserts(firstCommitTime, numRecords);
       List<HoodieRecord> oldRecords = new LinkedList();
-      for (HoodieRecord newRecord: newRecords) {
+      for (HoodieRecord newRecord : newRecords) {
         HoodieKey key = new HoodieKey(newRecord.getRecordKey(), oldPartitionPath);
         HoodieRecord hoodieRecord = new HoodieAvroRecord(key, (HoodieRecordPayload) newRecord.getData());
         oldRecords.add(hoodieRecord);
@@ -326,8 +326,8 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       assertEquals(numRecords, afterFirstTaggedRecords.stream().filter(HoodieRecord::isCurrentLocationKnown).count());
       // Verify the second commit
       assertEquals(numRecords, beforeSecondTaggedRecords.stream()
-              .filter(record -> record.getKey().getPartitionPath().equals(oldPartitionPath)
-                      && record.getData().getClass().getName().equals(emptyHoodieRecordPayloadClasssName)).count());
+          .filter(record -> record.getKey().getPartitionPath().equals(oldPartitionPath)
+              && record.getData().getClass().getName().equals(emptyHoodieRecordPayloadClassName)).count());
       assertEquals(numRecords * 2, beforeSecondTaggedRecords.stream().count());
       assertEquals(numRecords, afterSecondTaggedRecords.stream().count());
       assertEquals(numRecords, afterSecondTaggedRecords.stream().filter(record -> !record.getKey().getPartitionPath().equals(oldPartitionPath)).count());
@@ -335,7 +335,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       // If an exception occurs after hbase writes the index and the index does not roll back,
       // the currentLocation information will not be returned.
       assertEquals(numRecords, afterRollback.stream().filter(record -> record.getKey().getPartitionPath().equals(oldPartitionPath)
-              && record.getData().getClass().getName().equals(emptyHoodieRecordPayloadClasssName)).count());
+          && record.getData().getClass().getName().equals(emptyHoodieRecordPayloadClassName)).count());
       assertEquals(numRecords * 2, beforeSecondTaggedRecords.stream().count());
       assertEquals(numRecords, afterRollback.stream().filter(HoodieRecord::isCurrentLocationKnown)
               .filter(record -> record.getCurrentLocation().getInstantTime().equals(firstCommitTime)).count());

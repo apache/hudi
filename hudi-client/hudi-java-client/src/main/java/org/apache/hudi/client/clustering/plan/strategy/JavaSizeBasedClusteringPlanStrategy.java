@@ -31,8 +31,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -49,7 +50,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  */
 public class JavaSizeBasedClusteringPlanStrategy<T>
     extends PartitionAwareClusteringPlanStrategy<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
-  private static final Logger LOG = LogManager.getLogger(JavaSizeBasedClusteringPlanStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(JavaSizeBasedClusteringPlanStrategy.class);
 
   public JavaSizeBasedClusteringPlanStrategy(HoodieTable table,
                                              HoodieEngineContext engineContext,

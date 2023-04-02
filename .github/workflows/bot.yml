@@ -23,6 +23,7 @@ on:
       - 'release-*'
 env:
   MVN_ARGS: -e -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
+  SPARK_COMMON_MODULES: hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common
 
 jobs:
   validate-source:
@@ -52,18 +53,23 @@ jobs:
         include:
           - scalaProfile: "scala-2.11"
             sparkProfile: "spark2.4"
+            sparkModules: "hudi-spark-datasource/hudi-spark2"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark2.4"
+            sparkModules: "hudi-spark-datasource/hudi-spark2"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.1"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.1.x"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.2"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.2.x"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
 
     steps:
       - uses: actions/checkout@v2
@@ -89,9 +95,18 @@ jobs:
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
         if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+      - name: FT - Spark
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
+        run:
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-flink:
     runs-on: ubuntu-latest

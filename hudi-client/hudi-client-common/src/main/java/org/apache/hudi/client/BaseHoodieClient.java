@@ -40,8 +40,8 @@ import org.apache.hudi.table.HoodieTable;
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -54,7 +54,7 @@ import java.util.Set;
  */
 public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
-  private static final Logger LOG = LogManager.getLogger(BaseHoodieClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieClient.class);
 
   protected final transient FileSystem fs;
   protected final transient HoodieEngineContext context;

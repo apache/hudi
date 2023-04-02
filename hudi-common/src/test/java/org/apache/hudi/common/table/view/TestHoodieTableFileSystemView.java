@@ -62,14 +62,14 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -99,7 +99,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @SuppressWarnings("ResultOfMethodCallIgnored")
 public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(TestHoodieTableFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieTableFileSystemView.class);
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with bootstrap enable={0}";
 
   private static final String TEST_WRITE_TOKEN = "1-0-1";

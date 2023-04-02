@@ -29,8 +29,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
@@ -43,7 +43,7 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIEN
  */
 public class LockManager implements Serializable, AutoCloseable {
 
-  private static final Logger LOG = LogManager.getLogger(LockManager.class);
+  private static final Logger LOG = LoggerFactory.getLogger(LockManager.class);
   private final HoodieWriteConfig writeConfig;
   private final LockConfiguration lockConfiguration;
   private final SerializableConfiguration hadoopConf;
@@ -111,6 +111,7 @@ public class LockManager implements Serializable, AutoCloseable {
     if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       getLockProvider().unlock();
       metrics.updateLockHeldTimerMetrics();
+      close();
     }
   }
 

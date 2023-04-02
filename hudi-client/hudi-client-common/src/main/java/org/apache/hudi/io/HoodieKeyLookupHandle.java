@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -28,8 +27,10 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -42,7 +43,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
  */
 public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieKeyLookupHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieKeyLookupHandle.class);
 
   private final BloomFilter bloomFilter;
   private final List<String> candidateRecordKeys;

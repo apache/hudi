@@ -52,13 +52,13 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -88,7 +88,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
-  private static final Logger LOG = LogManager.getLogger(TestHoodieBackedTableMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieBackedTableMetadata.class);
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -232,7 +232,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withPopulateMetaFields(false)
             .withMaxNumDeltaCommitsBeforeCompaction(3)
             .build())
         .build();

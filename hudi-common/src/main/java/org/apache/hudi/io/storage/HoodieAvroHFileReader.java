@@ -48,8 +48,8 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileInfo;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.hadoop.hbase.nio.ByteBuff;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -81,7 +81,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   public static final String KEY_MIN_RECORD = "minRecordKey";
   public static final String KEY_MAX_RECORD = "maxRecordKey";
 
-  private static final Logger LOG = LogManager.getLogger(HoodieAvroHFileReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileReader.class);
 
   private final Path path;
 

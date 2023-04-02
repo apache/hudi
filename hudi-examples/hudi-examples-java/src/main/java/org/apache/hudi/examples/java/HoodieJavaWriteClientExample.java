@@ -36,8 +36,8 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieJavaWriteClientExample {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieJavaWriteClientExample.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaWriteClientExample.class);
 
   private static String tableType = HoodieTableType.COPY_ON_WRITE.name();
 

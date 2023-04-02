@@ -21,6 +21,7 @@ package org.apache.hudi.common.fs;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -45,8 +46,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -76,7 +77,7 @@ import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthorit
  */
 public class FSUtils {
 
-  private static final Logger LOG = LogManager.getLogger(FSUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FSUtils.class);
   // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1_1-0-1
   // Archive log files are of this pattern - .commits_.archive.1_1-0-1
   public static final Pattern LOG_FILE_PATTERN =
@@ -97,6 +98,13 @@ public class FSUtils {
       }
     }
     return conf;
+  }
+
+  public static Configuration buildInlineConf(Configuration conf) {
+    Configuration inlineConf = new Configuration(conf);
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+    inlineConf.setClassLoader(InLineFileSystem.class.getClassLoader());
+    return inlineConf;
   }
 
   public static FileSystem getFs(String pathStr, Configuration conf) {

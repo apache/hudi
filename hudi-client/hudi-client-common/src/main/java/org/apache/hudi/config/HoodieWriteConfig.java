@@ -79,10 +79,10 @@ import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -114,7 +114,7 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
         + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g DeltaStreamer).")
 public class HoodieWriteConfig extends HoodieConfig {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieWriteConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteConfig.class);
   private static final long serialVersionUID = 0L;
 
   // This is a constant as is should never be changed via config (will invalidate previous commits)
@@ -216,6 +216,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> AVRO_SCHEMA_STRING = ConfigProperty
       .key("hoodie.avro.schema")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Schema string representing the current write schema of the table. Hudi passes this to "
           + "implementations of HoodieRecordPayload to convert incoming records to avro. This is also used as the write schema "
           + "evolving records during an update.");
@@ -654,13 +655,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("Whether to enable commit conflict checking or not during early "
           + "conflict detection.");
-
-  public static final ConfigProperty<String> MUTLI_WRITER_SOURCE_CHECKPOINT_ID = ConfigProperty
-      .key("hoodie.deltastreamer.multiwriter.source.checkpoint.id")
-      .noDefaultValue()
-      .withDocumentation("Unique Id to be used for multiwriter deltastreamer scenario. This is the "
-          + "scenario when multiple deltastreamers are used to write to the same target table. If you are just using "
-          + "a single deltastreamer for a table then you do not need to set this config.");
 
   public static final ConfigProperty<String> SENSITIVE_CONFIG_KEYS_FILTER = ConfigProperty
       .key("hoodie.sensitive.config.keys")
@@ -2300,10 +2294,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS);
   }
 
-  public boolean isMetadataAsyncClean() {
-    return getBoolean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE);
-  }
-
   public boolean isMetadataAsyncIndex() {
     return getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE);
   }
@@ -2314,10 +2304,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getMetadataMinCommitsToKeep() {
     return getInt(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP);
-  }
-
-  public int getMetadataCleanerCommitsRetained() {
-    return getInt(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED);
   }
 
   /**

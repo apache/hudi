@@ -23,8 +23,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncTool;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,7 +34,7 @@ import static org.apache.hudi.hive.replication.GlobalHiveSyncConfig.META_SYNC_GL
 
 public class GlobalHiveSyncTool extends HiveSyncTool {
 
-  private static final Logger LOG = LogManager.getLogger(GlobalHiveSyncTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(GlobalHiveSyncTool.class);
   protected final GlobalHiveSyncConfig config;
 
   public GlobalHiveSyncTool(Properties props, Configuration hadoopConf) {

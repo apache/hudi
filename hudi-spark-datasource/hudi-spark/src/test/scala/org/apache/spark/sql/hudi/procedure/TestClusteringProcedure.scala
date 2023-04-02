@@ -670,6 +670,37 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call run_clustering with unsupported bucket index") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'BUCKET',
+           |  hoodie.bucket.index.hash.field = 'id'
+           | )
+           | partitioned by (ts)
+           | location '$basePath'
+     """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1010)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1010)")
+
+      checkExceptionContain(s"call run_clustering(table => '$tableName')")(
+        "Executor SparkExecuteClusteringCommitActionExecutor is not compatible with table layout HoodieSimpleBucketLayout")
+    }
+  }
+
   def avgRecord(commitTimeline: HoodieTimeline): Long = {
     var totalByteSize = 0L
     var totalRecordsCount = 0L

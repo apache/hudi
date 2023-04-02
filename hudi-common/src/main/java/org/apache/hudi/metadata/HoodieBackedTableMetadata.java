@@ -59,8 +59,8 @@ import org.apache.hudi.util.Transient;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -76,6 +76,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
@@ -89,7 +90,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
  */
 public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadata.class);
 
   private final String metadataBasePath;
 
@@ -549,7 +550,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private boolean isFullScanAllowedForPartition(String partitionName) {
     switch (partitionName) {
       case PARTITION_NAME_FILES:
-        return HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.defaultValue();
+        return DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
 
       case PARTITION_NAME_COLUMN_STATS:
       case PARTITION_NAME_BLOOM_FILTERS:

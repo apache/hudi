@@ -21,24 +21,23 @@ package org.apache.hudi.metrics.prometheus;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metrics.MetricUtils;
 
+import com.codahale.metrics.Counter;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
-import com.codahale.metrics.Timer;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.ScheduledReporter;
+import com.codahale.metrics.Timer;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.dropwizard.DropwizardExports;
 import io.prometheus.client.exporter.PushGateway;
-
-import java.net.MalformedURLException;
-import java.net.URL;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -49,7 +48,7 @@ import java.util.concurrent.TimeUnit;
 
 public class PushGatewayReporter extends ScheduledReporter {
 
-  private static final Logger LOG = LogManager.getLogger(PushGatewayReporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PushGatewayReporter.class);
   // Ensures that we maintain a single PushGw client (single connection pool) per Push Gw Server instance.
   private static final Map<String, PushGateway> PUSH_GATEWAY_PER_HOSTNAME = new ConcurrentHashMap<>();
 
