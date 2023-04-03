@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -28,9 +29,12 @@ import org.apache.avro.Schema;
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.CallExpression;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ResolvedExpression;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -43,16 +47,13 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -86,10 +87,13 @@ public class TestHoodieTableSource {
     assertNotNull(fileStatuses);
     assertThat(fileStatuses.length, is(4));
     // apply partition pruning
-    Map<String, String> partitions = new HashMap<>();
-    partitions.put("partition", "par1");
-
-    tableSource.applyPartitions(Collections.singletonList(partitions));
+    FieldReferenceExpression partRef = new FieldReferenceExpression("partition", DataTypes.STRING(), 4, 4);
+    ValueLiteralExpression partLiteral = new ValueLiteralExpression("par1", DataTypes.STRING().notNull());
+    CallExpression partFilter = new CallExpression(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(partRef, partLiteral),
+        DataTypes.BOOLEAN());
+    tableSource.applyFilters(Arrays.asList(partFilter));
 
     FileStatus[] fileStatuses2 = tableSource.getReadFiles();
     assertNotNull(fileStatuses2);
@@ -138,15 +142,17 @@ public class TestHoodieTableSource {
   @Test
   void testDataSkippingFilterShouldBeNotNullWhenTableSourceIsCopied() {
     HoodieTableSource tableSource = getEmptyStreamingSource();
-    ResolvedExpression mockExpression = new CallExpression(
+    FieldReferenceExpression ref = new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0);
+    ValueLiteralExpression literal = new ValueLiteralExpression("1", DataTypes.STRING().notNull());
+    ResolvedExpression filterExpr = new CallExpression(
         BuiltInFunctionDefinitions.IN,
-        Collections.emptyList(),
-        TestConfigurations.ROW_DATA_TYPE);
-    List<ResolvedExpression> expectedFilters = Collections.singletonList(mockExpression);
+        Arrays.asList(ref, literal),
+        DataTypes.BOOLEAN());
+    List<ResolvedExpression> expectedFilters = Collections.singletonList(filterExpr);
     tableSource.applyFilters(expectedFilters);
     HoodieTableSource copiedSource = (HoodieTableSource) tableSource.copy();
-    List<ResolvedExpression> actualFilters = copiedSource.getFileIndex().getDataFilters();
-    assertEquals(expectedFilters, actualFilters);
+    DataPruner dataPruner = copiedSource.getDataPruner();
+    assertNotNull(dataPruner);
   }
 
   @Test
@@ -161,6 +167,7 @@ public class TestHoodieTableSource {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
     conf.setBoolean(FlinkOptions.READ_AS_STREAMING, true);
+    conf.setBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
 
     return new HoodieTableSource(
         TestConfigurations.TABLE_SCHEMA,

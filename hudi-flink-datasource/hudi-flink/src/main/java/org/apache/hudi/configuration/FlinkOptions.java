@@ -319,13 +319,6 @@ public class FlinkOptions extends HoodieConfig {
               + "1) you are definitely sure that the consumer reads [faster than/completes before] any clustering instants "
               + "when " + HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.key() + " is set to false.\n");
 
-  // this option is experimental
-  public static final ConfigOption<Boolean> READ_STREAMING_CONTINUOUS_PARTITION_PRUNE = ConfigOptions
-      .key("read.streaming.continuous.partition-prune")
-      .booleanType()
-      .defaultValue(false)// default disable continuous partition pruning
-      .withDescription("Whether to enable continuous partition pruning for streaming read, default false");
-
   public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
       .key("read.start-commit")
