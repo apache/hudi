@@ -353,6 +353,8 @@ public class TimelineService {
     QueuedThreadPool pool = new QueuedThreadPool(maxThreads, 8, 60_000);
     pool.setDaemon(true);
     final Server server = new Server(pool);
+    HttpConnectionFactory httpConnectionFactory = new HttpConnectionFactory();
+    httpConnectionFactory.getHttpConfiguration().setSendServerVersion(false);
     ServerConnector connector = new ServerConnector(
         server,
         null,
@@ -360,7 +362,8 @@ public class TimelineService {
         null,
         -1,
         -1,
-        new HttpConnectionFactory());
+        httpConnectionFactory);
+    connector.setPort(serverPort);
     server.addConnector(connector);
 
     app = Javalin.create(c -> {
