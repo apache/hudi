@@ -121,28 +121,28 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     String commitTimeForReads = "1";
 
     Pair<String, List<HoodieRecord>> inserts = writeGcsMetadataRecords(commitTimeForWrites);
-    List<CloudObjectMetadata> dataFiles = Arrays.asList(
+    List<CloudObjectMetadata> cloudObjectMetadataList = Arrays.asList(
         new CloudObjectMetadata("data-file-1.json", 1),
         new CloudObjectMetadata("data-file-2.json", 1));
-    when(gcsObjectMetadataFetcher.getGcsObjectMetadata(Mockito.any(), Mockito.any(), anyBoolean())).thenReturn(dataFiles);
+    when(gcsObjectMetadataFetcher.getGcsObjectMetadata(Mockito.any(), Mockito.any(), anyBoolean())).thenReturn(cloudObjectMetadataList);
 
-    List<GcsDataRecord> recs = Arrays.asList(
-            new GcsDataRecord("1", "Hello 1"),
-            new GcsDataRecord("2", "Hello 2"),
-            new GcsDataRecord("3", "Hello 3"),
-            new GcsDataRecord("4", "Hello 4")
+    List<GcsExampleDataRecord> recs = Arrays.asList(
+        new GcsExampleDataRecord("1", "Hello 1"),
+        new GcsExampleDataRecord("2", "Hello 2"),
+        new GcsExampleDataRecord("3", "Hello 3"),
+        new GcsExampleDataRecord("4", "Hello 4")
     );
 
-    Dataset<Row> rows = spark().createDataFrame(recs, GcsDataRecord.class);
+    Dataset<Row> rows = spark().createDataFrame(recs, GcsExampleDataRecord.class);
 
-    when(gcsObjectDataFetcher.getCloudObjectDataDF(Mockito.any(), eq(dataFiles), Mockito.any())).thenReturn(Option.of(rows));
+    when(gcsObjectDataFetcher.getCloudObjectDataDF(Mockito.any(), eq(cloudObjectMetadataList), Mockito.any())).thenReturn(Option.of(rows));
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 4, inserts.getKey());
 
     verify(gcsObjectMetadataFetcher, times(1)).getGcsObjectMetadata(Mockito.any(), Mockito.any(),
             anyBoolean());
     verify(gcsObjectDataFetcher, times(1)).getCloudObjectDataDF(Mockito.any(),
-            eq(dataFiles), Mockito.any());
+            eq(cloudObjectMetadataList), Mockito.any());
   }
 
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,
@@ -272,11 +272,11 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     }
   }
 
-  public static class GcsDataRecord {
+  private static class GcsExampleDataRecord {
     public String id;
     public String text;
 
-    public GcsDataRecord(String id, String text) {
+    public GcsExampleDataRecord(String id, String text) {
       this.id = id;
       this.text = text;
     }
