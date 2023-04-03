@@ -36,7 +36,6 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
-import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.gcs.GcsObjectDataFetcher;
@@ -48,6 +47,10 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.expressions.GenericRow;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -74,6 +77,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarness {
+
+  private static final Schema GCS_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
+      TestGcsEventsHoodieIncrSource.class, "/delta-streamer-config/gcs-metadata.avsc", true);
 
   @TempDir
   protected java.nio.file.Path tempDir;
@@ -126,14 +132,17 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
         new CloudObjectMetadata("data-file-2.json", 1));
     when(gcsObjectMetadataFetcher.getGcsObjectMetadata(Mockito.any(), Mockito.any(), anyBoolean())).thenReturn(cloudObjectMetadataList);
 
-    List<GcsExampleDataRecord> recs = Arrays.asList(
-        new GcsExampleDataRecord("1", "Hello 1"),
-        new GcsExampleDataRecord("2", "Hello 2"),
-        new GcsExampleDataRecord("3", "Hello 3"),
-        new GcsExampleDataRecord("4", "Hello 4")
+    List<Row> recs = Arrays.asList(
+        new GenericRow(new String[] {"1", "Hello 1"}),
+        new GenericRow(new String[] {"2", "Hello 2"}),
+        new GenericRow(new String[] {"3", "Hello 3"}),
+        new GenericRow(new String[] {"4", "Hello 4"})
     );
-
-    Dataset<Row> rows = spark().createDataFrame(recs, GcsExampleDataRecord.class);
+    StructType schema = new StructType(new StructField[] {
+        DataTypes.createStructField("id", DataTypes.StringType, true),
+        DataTypes.createStructField("text", DataTypes.StringType, true)
+    });
+    Dataset<Row> rows = spark().createDataFrame(recs, schema);
 
     when(gcsObjectDataFetcher.getCloudObjectDataDF(Mockito.any(), eq(cloudObjectMetadataList), Mockito.any())).thenReturn(Option.of(rows));
 
@@ -169,17 +178,14 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   }
 
   private HoodieRecord getGcsMetadataRecord(String commitTime, String filename, String bucketName, String generation) {
-    Schema sourceSchema = new MetadataSchemaProvider().getSourceSchema();
-    LOG.info("schema: " + sourceSchema);
-
     String partitionPath = bucketName;
 
     String id = "id:" + bucketName + "/" + filename + "/" + generation;
     String mediaLink = String.format("https://storage.googleapis.com/download/storage/v1/b/%s/o/%s"
-            + "?generation=%s&alt=media", bucketName, filename, generation);
+        + "?generation=%s&alt=media", bucketName, filename, generation);
     String selfLink = String.format("https://www.googleapis.com/storage/v1/b/%s/o/%s", bucketName, filename);
 
-    GenericRecord rec = new GenericData.Record(sourceSchema);
+    GenericRecord rec = new GenericData.Record(GCS_METADATA_SCHEMA);
     rec.put("_row_key", id);
     rec.put("partition_path", bucketName);
     rec.put("timestamp", Long.parseLong(commitTime));
@@ -247,47 +253,11 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   private HoodieWriteConfig.Builder getConfigBuilder(String basePath, HoodieTableMetaClient metaClient) {
     return HoodieWriteConfig.newBuilder()
             .withPath(basePath)
-            .withSchema(new MetadataSchemaProvider().getSourceSchema().toString())
+            .withSchema(GCS_METADATA_SCHEMA.toString())
             .withParallelism(2, 2)
             .withBulkInsertParallelism(2)
             .withFinalizeWriteParallelism(2).withDeleteParallelism(2)
             .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
             .forTable(metaClient.getTableConfig().getTableName());
   }
-
-  private static class MetadataSchemaProvider extends SchemaProvider {
-
-    private final Schema schema;
-
-    public MetadataSchemaProvider() {
-      super(new TypedProperties());
-      this.schema = SchemaTestUtil.getSchemaFromResource(
-              TestGcsEventsHoodieIncrSource.class,
-              "/delta-streamer-config/gcs-metadata.avsc", true);
-    }
-
-    @Override
-    public Schema getSourceSchema() {
-      return schema;
-    }
-  }
-
-  private static class GcsExampleDataRecord {
-    public String id;
-    public String text;
-
-    public GcsExampleDataRecord(String id, String text) {
-      this.id = id;
-      this.text = text;
-    }
-
-    public String getId() {
-      return id;
-    }
-
-    public String getText() {
-      return text;
-    }
-  }
-
 }
