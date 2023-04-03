@@ -67,7 +67,8 @@ public class HoodieCleanConfig extends HoodieConfig {
   public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy")
       .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
-      .withEnumDocumentation(HoodieCleaningPolicy.class)
+      .withEnumDocumentation(HoodieCleaningPolicy.class, "It is recommended that data is retained for more than the maximum "
+        + "query execution time. Long running query plans may refer to older file slices and will fail if those file slices are cleaned.")
       .withInferFunction(cfg -> {
         boolean isCommitsRetainedConfigured = cfg.contains(CLEANER_COMMITS_RETAINED_KEY);
         boolean isHoursRetainedConfigured = cfg.contains(CLEANER_HOURS_RETAINED_KEY);
