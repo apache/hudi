@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.cluster;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
@@ -28,7 +27,6 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 @EnumDescription("Partition filter mode used in the creation of clustering plan.")
 public enum ClusteringPlanPartitionFilterMode {
 
-  @EnumDefault
   @EnumFieldDescription("Do not filter partitions. The clustering plan will include all partitions that have clustering candidates.")
   NONE,
 

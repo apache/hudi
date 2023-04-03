@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
@@ -33,7 +32,6 @@ import java.util.stream.Collectors;
 @EnumDescription("Hoodie file formats")
 public enum HoodieFileFormat {
 
-  @EnumDefault
   @EnumFieldDescription("Apache Parquet is an  open source, column-oriented data file format designed for efficient data storage and retrieval. "
       + "It provides efficient data compression and encoding schemes with enhanced performance to handle complex data in bulk.")
   PARQUET(".parquet"),

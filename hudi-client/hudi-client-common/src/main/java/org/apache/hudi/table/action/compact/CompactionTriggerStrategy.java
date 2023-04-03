@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.compact;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
@@ -26,7 +25,6 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 public enum CompactionTriggerStrategy {
 
     // trigger compaction when reach N delta commits
-    @EnumDefault
     @EnumFieldDescription("trigger compaction when reach N delta commits")
     NUM_COMMITS,
 

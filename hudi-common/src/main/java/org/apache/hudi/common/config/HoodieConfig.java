@@ -266,11 +266,4 @@ public class HoodieConfig implements Serializable {
     }
   }
 
-  protected static <T extends  Enum<T>> T getEnumDefault(Class<T> e) {
-    return ConfigProperty.PropertyBuilder.getEnumDefault(e);
-  }
-
-  protected static <T extends  Enum<T>> String getEnumDefaultString(Class<T> e) {
-    return ConfigProperty.PropertyBuilder.getEnumDefaultString(e);
-  }
 }

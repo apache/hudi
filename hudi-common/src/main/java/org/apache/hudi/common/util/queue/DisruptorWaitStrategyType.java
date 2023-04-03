@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -37,7 +36,6 @@ public enum DisruptorWaitStrategyType {
    * The BlockingWaitStrategy is the slowest of the available wait strategies, but is the most conservative with the respect to CPU usage
    * and will give the most consistent behaviour across the widest variety of deployment options.
    */
-  @EnumDefault
   @EnumFieldDescription("The slowest of the available wait strategies. However, it is the most conservative with the respect to CPU usage and "
       + "will give the most consistent behaviour across the widest variety of deployment options.")
   BLOCKING_WAIT,

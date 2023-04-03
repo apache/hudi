@@ -31,7 +31,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * ConfigProperty describes a configuration property. It contains the configuration
@@ -145,6 +144,20 @@ public class ConfigProperty<T> implements Serializable {
     return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, alternatives);
   }
 
+  public <U extends Enum<U>> ConfigProperty<T> withEnumDocumentation(Class<U> e) {
+    return withEnumDocumentation(e,"");
+  }
+
+  private <U extends Enum<U>> boolean isDefaultField(Class<U> e, Field f) {
+    if (!hasDefaultValue()) {
+      return false;
+    }
+    if (defaultValue() instanceof String) {
+      return f.getName().equals(defaultValue());
+    }
+    return Enum.valueOf(e, f.getName()).equals(defaultValue());
+  }
+
   public <U extends Enum<U>> ConfigProperty<T> withEnumDocumentation(Class<U> e, String doc, String... internalOption) {
     Objects.requireNonNull(e);
     Objects.requireNonNull(doc);
@@ -164,8 +177,7 @@ public class ConfigProperty<T> implements Serializable {
         Objects.requireNonNull(fieldDescription);
         sb.append("\n    ");
         sb.append(f.getName());
-        EnumDefault isDefault = f.getAnnotation(EnumDefault.class);
-        if (isDefault != null) {
+        if (isDefaultField(e, f)) {
           sb.append("(default)");
         } else if (Arrays.asList(internalOption).contains(f.getName())) {
           sb.append("(internal only)");
@@ -173,7 +185,6 @@ public class ConfigProperty<T> implements Serializable {
         sb.append(": ");
         sb.append(fieldDescription.value());
       }
-
     }
 
     return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, sb.toString(), sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, alternatives);
@@ -250,62 +261,6 @@ public class ConfigProperty<T> implements Serializable {
       Objects.requireNonNull(docOnDefaultValue);
       ConfigProperty<T> configProperty = new ConfigProperty<>(key, value, docOnDefaultValue, "", Option.empty(), Option.empty(), Option.empty(), Collections.emptySet(), false);
       return configProperty;
-    }
-
-    public <T extends Enum<T>> ConfigProperty<T> enumDefaultValue(Class<T> e, String docOnDefaultValue) {
-      return new ConfigProperty<>(key, getEnumDefault(e), docOnDefaultValue, "", Option.empty(), Option.empty(), Option.empty(), new HashSet<>(
-          Arrays.stream(e.getEnumConstants()).map(Enum::toString).collect(Collectors.toList())), false);
-    }
-
-    public <T extends Enum<T>> ConfigProperty<T> enumDefaultValue(Class<T> e) {
-      return enumDefaultValue(e,"");
-    }
-
-    public <T extends Enum<T>> ConfigProperty<T> enumDefaultValueAndDocumentation(Class<T> e, String doc) {
-      return enumDefaultValue(e).withEnumDocumentation(e, doc);
-    }
-
-    public <T extends Enum<T>> ConfigProperty<T> enumDefaultValueAndDocumentation(Class<T> e) {
-      return enumDefaultValueAndDocumentation(e, "");
-    }
-
-    public <T extends Enum<T>> ConfigProperty<String> enumDefaultStringValue(Class<T> e, String docOnDefaultValue) {
-      return new ConfigProperty<>(key, getEnumDefaultString(e), docOnDefaultValue, "", Option.empty(), Option.empty(), Option.empty(), new HashSet<>(
-          Arrays.stream(e.getEnumConstants()).map(Enum::name).collect(Collectors.toList())), false);
-    }
-
-    public <T extends Enum<T>> ConfigProperty<String> enumDefaultStringValue(Class<T> e) {
-      return enumDefaultStringValue(e,"");
-    }
-
-    public <T extends Enum<T>> ConfigProperty<String> enumDefaultStringValueAndDocumentation(Class<T> e, String doc) {
-      return enumDefaultStringValue(e).withEnumDocumentation(e, doc);
-    }
-
-    public <T extends Enum<T>> ConfigProperty<String> enumDefaultStringValueAndDocumentation(Class<T> e) {
-      return enumDefaultStringValueAndDocumentation(e, "");
-    }
-
-    public static <T extends  Enum<T>> String getEnumDefaultString(Class<T> e) {
-      Objects.requireNonNull(e);
-      String enumDefault = null;
-      for (Field f: e.getFields()) {
-        EnumDefault d = f.getAnnotation(EnumDefault.class);
-        if (d != null) {
-          if (enumDefault != null) {
-            throw new RuntimeException(e.getName() + " has multiple fields labeled @EnumDefault");
-          }
-          enumDefault = f.getName();
-        }
-      }
-      if (enumDefault == null) {
-        throw new RuntimeException(e.getName() + " has no fields labeled @EnumDefault");
-      }
-      return enumDefault;
-    }
-
-    public static <T extends  Enum<T>> T getEnumDefault(Class<T> e) {
-      return Enum.valueOf(e, getEnumDefaultString(e));
     }
 
     public ConfigProperty<String> noDefaultValue() {

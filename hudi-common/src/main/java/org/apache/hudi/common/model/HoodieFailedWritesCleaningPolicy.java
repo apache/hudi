@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
@@ -30,7 +29,6 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 public enum HoodieFailedWritesCleaningPolicy {
 
   // performs cleaning of failed writes inline every write operation
-  @EnumDefault
   @EnumFieldDescription("Clean failed writes inline after every write operation.")
   EAGER,
 

@@ -120,9 +120,9 @@ class RunClusteringProcedure extends BaseProcedure
 
     orderStrategy match {
       case Some(o) =>
-        val strategy = LayoutOptimizationStrategy.fromValue(o.asInstanceOf[String])
+        val strategy = LayoutOptimizationStrategy.valueOf(o.asInstanceOf[String])
         conf = conf ++ Map(
-          HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key() -> strategy.getValue
+          HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key() -> strategy.name()
         )
       case _ =>
         logInfo("No order strategy")
@@ -160,7 +160,7 @@ class RunClusteringProcedure extends BaseProcedure
         logInfo("No specific instants")
         op match {
           case Some(o) =>
-            operator = ClusteringOperator.fromValue(o.asInstanceOf[String].toLowerCase(Locale.ROOT))
+            operator = ClusteringOperator.valueOf(o.asInstanceOf[String])
           case _ =>
             logInfo("No op, use default scheduleAndExecute")
         }

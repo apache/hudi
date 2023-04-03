@@ -18,7 +18,6 @@
 
 package org.apache.hudi.keygen.constant;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
@@ -32,7 +31,6 @@ import java.util.List;
 @EnumDescription("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`")
 public enum KeyGeneratorType {
 
-  @EnumDefault
   @EnumFieldDescription("Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
   SIMPLE,
 

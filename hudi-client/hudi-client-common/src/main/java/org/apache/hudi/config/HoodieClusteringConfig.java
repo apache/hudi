@@ -21,25 +21,19 @@ package org.apache.hudi.config;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
-import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 
-import javax.annotation.Nonnull;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -154,7 +148,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public static final ConfigProperty<ClusteringPlanPartitionFilterMode> PLAN_PARTITION_FILTER_MODE_NAME = ConfigProperty
       .key(PLAN_PARTITION_FILTER_MODE)
-      .enumDefaultValueAndDocumentation(ClusteringPlanPartitionFilterMode.class)
+      .defaultValue(ClusteringPlanPartitionFilterMode.NONE)
+      .withEnumDocumentation(ClusteringPlanPartitionFilterMode.class)
       .sinceVersion("0.11.0");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
@@ -245,10 +240,9 @@ public class HoodieClusteringConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
-      .defaultValue("linear")
-      .sinceVersion("0.10.0")
-      .withDocumentation("Determines ordering strategy used in records layout optimization. "
-          + "Currently supported strategies are \"linear\", \"z-order\" and \"hilbert\" values are supported.");
+      .defaultValue(LayoutOptimizationStrategy.LINEAR.name())
+      .withEnumDocumentation(LayoutOptimizationStrategy.class)
+      .sinceVersion("0.10.0");
 
   /**
    * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_STRATEGY} value is set to
@@ -272,11 +266,9 @@ public class HoodieClusteringConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "curve.build.method")
-      .defaultValue("direct")
-      .sinceVersion("0.10.0")
-      .withDocumentation("Controls how data is sampled to build the space-filling curves. "
-          + "Two methods: \"direct\", \"sample\". The direct method is faster than the sampling, "
-          + "however sample method would produce a better data layout.");
+      .defaultValue(SpatialCurveCompositionStrategyType.DIRECT.name())
+      .withEnumDocumentation(SpatialCurveCompositionStrategyType.class)
+      .sinceVersion("0.10.0");
 
   /**
    * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD} value
@@ -672,27 +664,14 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /**
    * Type of a strategy for building Z-order/Hilbert space-filling curves.
    */
+  @EnumDescription("Type of a strategy for building Z-order/Hilbert space-filling curves.")
   public enum SpatialCurveCompositionStrategyType {
-    DIRECT("direct"),
-    SAMPLE("sample");
 
-    private static final Map<String, SpatialCurveCompositionStrategyType> VALUE_TO_ENUM_MAP =
-        TypeUtils.getValueToEnumMap(SpatialCurveCompositionStrategyType.class, e -> e.value);
+    @EnumFieldDescription("Faster than sampling, but produces a worse(?) layout. NEEDS BETTER DESCRIPTION")
+    DIRECT,
 
-    private final String value;
-
-    SpatialCurveCompositionStrategyType(String value) {
-      this.value = value;
-    }
-
-    public static SpatialCurveCompositionStrategyType fromValue(String value) {
-      SpatialCurveCompositionStrategyType enumValue = VALUE_TO_ENUM_MAP.get(value);
-      if (enumValue == null) {
-        throw new HoodieException(String.format("Invalid value (%s)", value));
-      }
-
-      return enumValue;
-    }
+    @EnumFieldDescription("Slower than sampling, but produces a better(?) layout. NEEDS BETTER DESCRIPTION")
+    SAMPLE
   }
 
   /**
@@ -701,74 +680,27 @@ public class HoodieClusteringConfig extends HoodieConfig {
   @EnumDescription("Determines ordering strategy for records layout optimization")
   public enum LayoutOptimizationStrategy {
 
-    @EnumDefault
     @EnumFieldDescription("Order records lexicographically.")
-    LINEAR("linear"),
+    LINEAR,
 
     @EnumFieldDescription("Order records along Z-order spatial-curve")
-    ZORDER("z-order"),
+    ZORDER,
 
     @EnumFieldDescription("Order records along Hilbert's spatial-curve")
-    HILBERT("hilbert");
-
-    private static final Map<String, LayoutOptimizationStrategy> VALUE_TO_ENUM_MAP =
-        TypeUtils.getValueToEnumMap(LayoutOptimizationStrategy.class, e -> e.value);
-
-    private final String value;
-
-    LayoutOptimizationStrategy(String value) {
-      this.value = value;
-    }
-
-    @Nonnull
-    public static LayoutOptimizationStrategy fromValue(String value) {
-      LayoutOptimizationStrategy enumValue = VALUE_TO_ENUM_MAP.get(value);
-      if (enumValue == null) {
-        throw new HoodieException(String.format("Invalid value (%s)", value));
-      }
-
-      return enumValue;
-    }
-
-    public String getValue() {
-      return value;
-    }
+    HILBERT
   }
 
+  @EnumDescription("Clustering Operator ADD DESCRIPTION")
   public enum ClusteringOperator {
 
-    /**
-     * only schedule the clustering plan
-     */
-    SCHEDULE("schedule"),
+    @EnumFieldDescription("Only schedule the clustering plan")
+    SCHEDULE,
 
-    /**
-     * only execute then pending clustering plans
-     */
-    EXECUTE("execute"),
+    @EnumFieldDescription("Only execute pending clustering plans")
+    EXECUTE,
 
-    /**
-     * schedule cluster first, and execute all pending clustering plans
-     */
-    SCHEDULE_AND_EXECUTE("scheduleandexecute");
-
-    private static final Map<String, ClusteringOperator> VALUE_TO_ENUM_MAP =
-            TypeUtils.getValueToEnumMap(ClusteringOperator.class, e -> e.value);
-
-    private final String value;
-
-    ClusteringOperator(String value) {
-      this.value = value;
-    }
-
-    @Nonnull
-    public static ClusteringOperator fromValue(String value) {
-      ClusteringOperator enumValue = VALUE_TO_ENUM_MAP.get(value);
-      if (enumValue == null) {
-        throw new HoodieException(String.format("Invalid value (%s)", value));
-      }
-      return enumValue;
-    }
+    @EnumFieldDescription("Schedule cluster first, and execute all pending clustering plans")
+    SCHEDULE_AND_EXECUTE;
 
     public boolean isSchedule() {
       return this != ClusteringOperator.EXECUTE;
@@ -776,10 +708,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public boolean isExecute() {
       return this != ClusteringOperator.SCHEDULE;
-    }
-
-    public String getValue() {
-      return value;
     }
   }
 }

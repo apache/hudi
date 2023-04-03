@@ -161,7 +161,8 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BLOOM_FILTER_TYPE = ConfigProperty
       .key("hoodie.bloom.index.filter.type")
-      .enumDefaultStringValueAndDocumentation(BloomFilterTypeCode.class);
+      .defaultValue(BloomFilterTypeCode.DYNAMIC_V0.name())
+      .withEnumDocumentation(BloomFilterTypeCode.class);
 
   public static final ConfigProperty<String> BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = ConfigProperty
       .key("hoodie.bloom.index.filter.dynamic.max.entries")
@@ -259,7 +260,8 @@ public class HoodieIndexConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> BUCKET_INDEX_ENGINE_TYPE = ConfigProperty
       .key("hoodie.index.bucket.engine")
-      .enumDefaultStringValueAndDocumentation(HoodieIndex.BucketIndexEngineType.class)
+      .defaultValue(HoodieIndex.BucketIndexEngineType.SIMPLE.name())
+      .withEnumDocumentation(HoodieIndex.BucketIndexEngineType.class)
       .sinceVersion("0.11.0");
 
   /**

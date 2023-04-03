@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
@@ -31,7 +30,6 @@ public enum HoodieCleaningPolicy {
   @EnumFieldDescription("Retain the most recent N file slices in each file group, determined by `hoodie.cleaner.fileversions.retained`.")
   KEEP_LATEST_FILE_VERSIONS,
 
-  @EnumDefault
   @EnumFieldDescription("Retain the file slices written by the last N commits, determined by `hoodie.cleaner.commits.retained`.")
   KEEP_LATEST_COMMITS,
 

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
@@ -35,7 +34,6 @@ public enum ExecutorType {
     + "to gain better writing performance. Although DisruptorExecutor is still an experimental feature.")
   DISRUPTOR,
 
-  @EnumDefault
   @EnumFieldDescription("Executor with no inner message queue and no inner lock. Consuming and writing records from iterator directly. "
     + "The advantage is that there is no need for additional memory and cpu resources due to lock or multithreading. "
     + "The disadvantage is that the executor is a single-write-single-read model, cannot support functions such as speed limit "

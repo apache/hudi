@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
@@ -28,7 +27,6 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 @EnumDescription("Concurrency modes for write operations.")
 public enum WriteConcurrencyMode {
   // Only a single writer can perform write ops
-  @EnumDefault
   @EnumFieldDescription("Only one active writer to the table. Maximizes throughput.")
   SINGLE_WRITER,
 

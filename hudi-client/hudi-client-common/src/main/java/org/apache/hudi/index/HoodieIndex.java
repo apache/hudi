@@ -22,7 +22,6 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.data.HoodieData;
@@ -194,7 +193,6 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   @EnumDescription("Determines bucket index to use when `hoodie.index.type` is set to `BUCKET`")
   public enum BucketIndexEngineType {
 
-    @EnumDefault
     @EnumFieldDescription("Mandatory for COW tables when using BUCKET index. Uses a fixed number of buckets.")
     SIMPLE,
 

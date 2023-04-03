@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.bloom;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
@@ -32,7 +31,6 @@ public enum BloomFilterTypeCode {
   @EnumFieldDescription("Bloom filter with fixed size?")
   SIMPLE,
 
-  @EnumDefault
   @EnumFieldDescription("Bloom filter that is auto sized based on number of keys")
   DYNAMIC_V0
 }

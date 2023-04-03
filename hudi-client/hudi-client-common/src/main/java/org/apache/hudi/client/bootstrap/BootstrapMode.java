@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.bootstrap;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
@@ -39,7 +38,6 @@ public enum BootstrapMode {
   /**
    * In this mode, record level metadata alone is generated for each source record and stored in new bootstrap location.
    */
-  @EnumDefault
   @EnumFieldDescription("In this mode, the full record data is not copied into Hudi. Instead, 'skeleton' files containing"
       + " just the corresponding metadata columns are added to the Hudi table. Hudi relies on the data in the original table"
       + " and will face data-loss or corruption if files bootstrapped from the original table are deleted or modified.")

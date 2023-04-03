@@ -18,7 +18,6 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
@@ -28,7 +27,6 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 @EnumDescription("Modes for sorting records during bulk insert.")
 public enum BulkInsertSortMode {
 
-  @EnumDefault
   @EnumFieldDescription("No sorting. Fastest and matches `spark.write.parquet()` in number of files and overhead.")
   NONE,
 

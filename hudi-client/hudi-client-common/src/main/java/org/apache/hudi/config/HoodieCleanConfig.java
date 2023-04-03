@@ -66,7 +66,8 @@ public class HoodieCleanConfig extends HoodieConfig {
   @Deprecated
   public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy")
-      .enumDefaultStringValueAndDocumentation(HoodieCleaningPolicy.class)
+      .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+      .withEnumDocumentation(HoodieCleaningPolicy.class)
       .withInferFunction(cfg -> {
         boolean isCommitsRetainedConfigured = cfg.contains(CLEANER_COMMITS_RETAINED_KEY);
         boolean isHoursRetainedConfigured = cfg.contains(CLEANER_HOURS_RETAINED_KEY);
@@ -109,7 +110,8 @@ public class HoodieCleanConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> CLEAN_TRIGGER_STRATEGY = ConfigProperty
       .key("hoodie.clean.trigger.strategy")
-      .enumDefaultStringValueAndDocumentation(CleaningTriggerStrategy.class);
+      .defaultValue(CleaningTriggerStrategy.NUM_COMMITS.name())
+      .withEnumDocumentation(CleaningTriggerStrategy.class);
 
   public static final ConfigProperty<String> CLEAN_MAX_COMMITS = ConfigProperty
       .key("hoodie.clean.max.commits")
@@ -125,7 +127,8 @@ public class HoodieCleanConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> FAILED_WRITES_CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy.failed.writes")
-      .enumDefaultStringValueAndDocumentation(HoodieFailedWritesCleaningPolicy.class,
+      .defaultValue(HoodieFailedWritesCleaningPolicy.EAGER.name())
+      .withEnumDocumentation(HoodieFailedWritesCleaningPolicy.class,
           "note that LAZY policy is required when multi-writers are enabled.")
       .withInferFunction(cfg -> {
         Option<String> writeConcurrencyModeOpt = Option.ofNullable(cfg.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE));

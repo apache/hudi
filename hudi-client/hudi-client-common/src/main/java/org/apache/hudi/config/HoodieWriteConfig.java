@@ -167,14 +167,17 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> WRITE_EXECUTOR_TYPE = ConfigProperty
       .key("hoodie.write.executor.type")
-      .enumDefaultStringValue(ExecutorType.class, "Set executor which orchestrates concurrent producers and consumers communicating through a message queue.")
+      .defaultValue(ExecutorType.SIMPLE.name())
+      .withEnumDocumentation(ExecutorType.class, "Set executor which orchestrates concurrent producers and consumers communicating through a message queue.")
       .sinceVersion("0.13.0");
 
   public static final ConfigProperty<String> KEYGENERATOR_TYPE = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.type")
-      .enumDefaultStringValueAndDocumentation(KeyGeneratorType.class,
+      .defaultValue(KeyGeneratorType.SIMPLE.name())
+      .withEnumDocumentation(KeyGeneratorType.class,
           "**Note** This is being actively worked on. Please use "
-        + "`hoodie.datasource.write.keygenerator.class` instead.");
+              + "`hoodie.datasource.write.keygenerator.class` instead.");
+
 
 
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty
@@ -193,8 +196,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
       .key("hoodie.table.base.file.format")
-      .defaultValue(getEnumDefault(HoodieFileFormat.class))
-      .withValidValues("PARQUET", "ORC", "HFILE")
+      .defaultValue(HoodieFileFormat.PARQUET)
+      .withValidValues(HoodieFileFormat.PARQUET.name(), HoodieFileFormat.ORC.name(), HoodieFileFormat.HFILE.name())
       .withEnumDocumentation(HoodieFileFormat.class, "File format to store all the base file data.", "HFILE")
       .withAlternatives("hoodie.table.ro.file.format");
 
@@ -326,7 +329,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY = ConfigProperty
       .key("hoodie.write.executor.disruptor.wait.strategy")
-      .enumDefaultStringValueAndDocumentation(DisruptorWaitStrategyType.class, "Strategy employed for making Disruptor Executor wait on a cursor")
+      .defaultValue(DisruptorWaitStrategyType.BLOCKING_WAIT.name())
+      .withEnumDocumentation(DisruptorWaitStrategyType.class, "Strategy employed for making Disruptor Executor wait on a cursor")
       .sinceVersion("0.13.0");
 
   public static final ConfigProperty<String> COMBINE_BEFORE_INSERT = ConfigProperty
@@ -375,7 +379,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MARKERS_TYPE = ConfigProperty
       .key("hoodie.write.markers.type")
-      .enumDefaultStringValueAndDocumentation(MarkerType.class, "Marker type for the timeline.")
+      .defaultValue(MarkerType.TIMELINE_SERVER_BASED.name())
+      .withEnumDocumentation(MarkerType.class, "Marker type for the timeline.")
       .sinceVersion("0.9.0");
 
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
@@ -399,7 +404,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BULK_INSERT_SORT_MODE = ConfigProperty
       .key("hoodie.bulkinsert.sort.mode")
-      .enumDefaultStringValueAndDocumentation(BulkInsertSortMode.class);
+      .defaultValue(BulkInsertSortMode.NONE.name())
+      .withEnumDocumentation(BulkInsertSortMode.class);
 
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_ENABLE = ConfigProperty
       .key("hoodie.embed.timeline.server")
@@ -494,7 +500,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> WRITE_CONCURRENCY_MODE = ConfigProperty
       .key("hoodie.write.concurrency.mode")
-      .enumDefaultStringValueAndDocumentation(WriteConcurrencyMode.class);
+      .defaultValue(WriteConcurrencyMode.SINGLE_WRITER.name())
+      .withEnumDocumentation(WriteConcurrencyMode.class);
 
   public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
       .key("hoodie.write.schema")
@@ -1619,13 +1626,12 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieClusteringConfig.LayoutOptimizationStrategy getLayoutOptimizationStrategy() {
-    return HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(
-        getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY)
-    );
+    return HoodieClusteringConfig.LayoutOptimizationStrategy
+        .valueOf(getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY));
   }
 
   public HoodieClusteringConfig.SpatialCurveCompositionStrategyType getLayoutOptimizationCurveBuildMethod() {
-    return HoodieClusteringConfig.SpatialCurveCompositionStrategyType.fromValue(
+    return HoodieClusteringConfig.SpatialCurveCompositionStrategyType.valueOf(
         getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD));
   }
 
@@ -1933,10 +1939,6 @@ public class HoodieWriteConfig extends HoodieConfig {
   public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
     return Option.ofNullable(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT))
         .map(HoodieLogBlock.HoodieLogBlockType::fromId);
-  }
-
-  public void testEnums() {
-    System.out.println(KEYGENERATOR_TYPE);
   }
 
   public long getLogFileMaxSize() {

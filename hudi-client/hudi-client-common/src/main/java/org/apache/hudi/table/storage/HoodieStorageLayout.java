@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.storage;
 
-import org.apache.hudi.common.config.EnumDefault;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -56,7 +55,6 @@ public abstract class HoodieStorageLayout implements Serializable {
   @EnumDescription("Determines how the files are organized within a table")
   public enum LayoutType {
 
-    @EnumDefault
     @EnumFieldDescription("Default storage layout?")
     DEFAULT,
 
