@@ -51,7 +51,7 @@ public class GcsObjectDataFetcher implements Serializable {
     this.props = props;
   }
 
-  public Option<Dataset<Row>> fetchCloudObjectData(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata, TypedProperties props) {
+  public Option<Dataset<Row>> getCloudObjectDataDF(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata, TypedProperties props) {
     return loadAsDataset(spark, cloudObjectMetadata, props, fileFormat);
   }
 

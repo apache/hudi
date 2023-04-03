@@ -109,9 +109,9 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 0, inserts.getKey());
 
-    verify(gcsObjectMetadataFetcher, times(0)).getGcsObjects(Mockito.any(), Mockito.any(),
+    verify(gcsObjectMetadataFetcher, times(0)).getGcsObjectMetadata(Mockito.any(), Mockito.any(),
             anyBoolean());
-    verify(gcsObjectDataFetcher, times(0)).fetchCloudObjectData(
+    verify(gcsObjectDataFetcher, times(0)).getCloudObjectDataDF(
             Mockito.any(), Mockito.any(), Mockito.any());
   }
 
@@ -124,7 +124,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     List<CloudObjectMetadata> dataFiles = Arrays.asList(
         new CloudObjectMetadata("data-file-1.json", 1),
         new CloudObjectMetadata("data-file-2.json", 1));
-    when(gcsObjectMetadataFetcher.getGcsObjects(Mockito.any(), Mockito.any(), anyBoolean())).thenReturn(dataFiles);
+    when(gcsObjectMetadataFetcher.getGcsObjectMetadata(Mockito.any(), Mockito.any(), anyBoolean())).thenReturn(dataFiles);
 
     List<GcsDataRecord> recs = Arrays.asList(
             new GcsDataRecord("1", "Hello 1"),
@@ -135,13 +135,13 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     Dataset<Row> rows = spark().createDataFrame(recs, GcsDataRecord.class);
 
-    when(gcsObjectDataFetcher.fetchCloudObjectData(Mockito.any(), eq(dataFiles), Mockito.any())).thenReturn(Option.of(rows));
+    when(gcsObjectDataFetcher.getCloudObjectDataDF(Mockito.any(), eq(dataFiles), Mockito.any())).thenReturn(Option.of(rows));
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 4, inserts.getKey());
 
-    verify(gcsObjectMetadataFetcher, times(1)).getGcsObjects(Mockito.any(), Mockito.any(),
+    verify(gcsObjectMetadataFetcher, times(1)).getGcsObjectMetadata(Mockito.any(), Mockito.any(),
             anyBoolean());
-    verify(gcsObjectDataFetcher, times(1)).fetchCloudObjectData(Mockito.any(),
+    verify(gcsObjectDataFetcher, times(1)).getCloudObjectDataDF(Mockito.any(),
             eq(dataFiles), Mockito.any());
   }
 

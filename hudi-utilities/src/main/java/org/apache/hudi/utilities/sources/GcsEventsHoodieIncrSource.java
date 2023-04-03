@@ -143,20 +143,20 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
       return Pair.of(Option.empty(), queryInfo.getStartInstant());
     }
 
-    Dataset<Row> sourceCloudObjects = queryInfo.initializeSourceForFilenames(srcPath, sparkSession);
+    Dataset<Row> cloudObjectMetadataDF = queryInfo.initCloudObjectMetadata(srcPath, sparkSession);
 
-    if (sourceCloudObjects.isEmpty()) {
+    if (cloudObjectMetadataDF.isEmpty()) {
       LOG.info("Source of file names is empty. Returning empty result and endInstant: "
               + queryInfo.getEndInstant());
       return Pair.of(Option.empty(), queryInfo.getEndInstant());
     }
 
-    return extractData(queryInfo, sourceCloudObjects);
+    return extractData(queryInfo, cloudObjectMetadataDF);
   }
 
-  private Pair<Option<Dataset<Row>>, String> extractData(QueryInfo queryInfo, Dataset<Row> sourceCloudObjects) {
-    List<CloudObjectMetadata> cloudObjectMetadata = gcsObjectMetadataFetcher.getGcsObjects(sparkContext, sourceCloudObjects, checkIfFileExists);
-    Option<Dataset<Row>> fileDataRows = gcsObjectDataFetcher.fetchCloudObjectData(sparkSession, cloudObjectMetadata, props);
+  private Pair<Option<Dataset<Row>>, String> extractData(QueryInfo queryInfo, Dataset<Row> cloudObjectMetadataDF) {
+    List<CloudObjectMetadata> cloudObjectMetadata = gcsObjectMetadataFetcher.getGcsObjectMetadata(sparkContext, cloudObjectMetadataDF, checkIfFileExists);
+    Option<Dataset<Row>> fileDataRows = gcsObjectDataFetcher.getCloudObjectDataDF(sparkSession, cloudObjectMetadata, props);
     return Pair.of(fileDataRows, queryInfo.getEndInstant());
   }
 

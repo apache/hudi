@@ -47,7 +47,7 @@ import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.getCloudObjectsPerPartition;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.getCloudObjectMetadataPerPartition;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.loadAsDataset;
 
 /**
@@ -162,12 +162,12 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
     // Create S3 paths
     final boolean checkExists = props.getBoolean(S3EventsHoodieIncrSourceConfig.S3_INCR_ENABLE_EXISTS_CHECK.key(), S3EventsHoodieIncrSourceConfig.S3_INCR_ENABLE_EXISTS_CHECK.defaultValue());
-    SerializableConfiguration serializableConfiguration = new SerializableConfiguration(sparkContext.hadoopConfiguration());
+    SerializableConfiguration serializableHadoopConf = new SerializableConfiguration(sparkContext.hadoopConfiguration());
     List<CloudObjectMetadata> cloudObjectMetadata = source
         .filter(filter)
         .select("s3.bucket.name", "s3.object.key", "s3.object.size")
         .distinct()
-        .mapPartitions(getCloudObjectsPerPartition(s3Prefix, serializableConfiguration, checkExists), Encoders.kryo(CloudObjectMetadata.class))
+        .mapPartitions(getCloudObjectMetadataPerPartition(s3Prefix, serializableHadoopConf, checkExists), Encoders.kryo(CloudObjectMetadata.class))
         .collectAsList();
 
     Option<Dataset<Row>> datasetOption = loadAsDataset(sparkSession, cloudObjectMetadata, props, fileFormat);

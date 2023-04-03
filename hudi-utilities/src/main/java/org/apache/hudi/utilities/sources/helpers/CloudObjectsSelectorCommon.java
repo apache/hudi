@@ -64,16 +64,16 @@ public class CloudObjectsSelectorCommon {
    * Return a function that extracts filepaths from a list of Rows.
    * Here Row is assumed to have the schema [bucket_name, filepath_relative_to_bucket, object_size]
    * @param storageUrlSchemePrefix    Eg: s3:// or gs://. The storage-provider-specific prefix to use within the URL.
-   * @param serializableConfiguration
+   * @param serializableHadoopConf
    * @param checkIfExists             check if each file exists, before adding it to the returned list
    * @return
    */
-  public static MapPartitionsFunction<Row, CloudObjectMetadata> getCloudObjectsPerPartition(
-      String storageUrlSchemePrefix, SerializableConfiguration serializableConfiguration, boolean checkIfExists) {
+  public static MapPartitionsFunction<Row, CloudObjectMetadata> getCloudObjectMetadataPerPartition(
+      String storageUrlSchemePrefix, SerializableConfiguration serializableHadoopConf, boolean checkIfExists) {
     return rows -> {
-      List<CloudObjectMetadata> cloudObjectMetadata = new ArrayList<>();
+      List<CloudObjectMetadata> cloudObjectMetadataPerPartition = new ArrayList<>();
       rows.forEachRemaining(row -> {
-        Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, serializableConfiguration, checkIfExists);
+        Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, serializableHadoopConf, checkIfExists);
         filePathUrl.ifPresent(url -> {
           LOG.info("Adding file: " + url);
           long size;
@@ -87,11 +87,11 @@ public class CloudObjectsSelectorCommon {
           } else {
             throw new HoodieIOException("unexpected object size's type in Cloud storage events: " + obj.getClass());
           }
-          cloudObjectMetadata.add(new CloudObjectMetadata(url, size));
+          cloudObjectMetadataPerPartition.add(new CloudObjectMetadata(url, size));
         });
       });
 
-      return cloudObjectMetadata.iterator();
+      return cloudObjectMetadataPerPartition.iterator();
     };
   }
 

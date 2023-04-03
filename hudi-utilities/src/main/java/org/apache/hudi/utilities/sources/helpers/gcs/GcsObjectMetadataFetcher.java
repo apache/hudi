@@ -38,10 +38,10 @@ import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.getCloudObjectsPerPartition;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.getCloudObjectMetadataPerPartition;
 
 /**
- * Extracts a list of GCS {@link CloudObjectMetadata} containing filepaths from a given Spark Dataset as input.
+ * Extracts a list of GCS {@link CloudObjectMetadata} containing metadata of GCS objects from a given Spark Dataset as input.
  * Optionally:
  * i) Match the filename and path against provided input filter strings
  * ii) Check if each file exists on GCS, in which case it assumes SparkContext is already
@@ -70,28 +70,27 @@ public class GcsObjectMetadataFetcher implements Serializable {
   }
 
   /**
-   * @param sourceForFilenames a Dataset that contains metadata about files on GCS. Assumed to be a persisted form
-   *                           of a Cloud Storage Pubsub Notification event.
-   * @param checkIfExists      Check if each file exists, before returning its full path
+   * @param cloudObjectMetadataDF a Dataset that contains metadata of GCS objects. Assumed to be a persisted form
+   *                              of a Cloud Storage Pubsub Notification event.
+   * @param checkIfExists         Check if each file exists, before returning its full path
    * @return A {@link List} of {@link CloudObjectMetadata} containing GCS info.
    */
-  public List<CloudObjectMetadata> getGcsObjects(JavaSparkContext jsc, Dataset<Row> sourceForFilenames, boolean checkIfExists) {
+  public List<CloudObjectMetadata> getGcsObjectMetadata(JavaSparkContext jsc, Dataset<Row> cloudObjectMetadataDF, boolean checkIfExists) {
     String filter = createFilter();
     LOG.info("Adding filter string to Dataset: " + filter);
 
-    SerializableConfiguration serializableConfiguration = new SerializableConfiguration(
-            jsc.hadoopConfiguration());
+    SerializableConfiguration serializableHadoopConf = new SerializableConfiguration(jsc.hadoopConfiguration());
 
-    return sourceForFilenames
+    return cloudObjectMetadataDF
         .filter(filter)
         .select("bucket", "name", "size")
         .distinct()
-        .mapPartitions(getCloudObjectsPerPartition(GCS_PREFIX, serializableConfiguration, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
+        .mapPartitions(getCloudObjectMetadataPerPartition(GCS_PREFIX, serializableHadoopConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
         .collectAsList();
   }
 
   /**
-   * Add optional filters that narrow down the list of filenames to fetch.
+   * Add optional filters that narrow down the list of GCS objects to fetch.
    */
   private String createFilter() {
     StringBuilder filter = new StringBuilder("size > 0");
@@ -102,7 +101,7 @@ public class GcsObjectMetadataFetcher implements Serializable {
 
     // Match files with a given extension, or use the fileFormat as the default.
     getPropVal(CLOUD_DATAFILE_EXTENSION.key()).or(() -> Option.of(fileFormat))
-            .map(val -> filter.append(" and name like '%" + val + "'"));
+        .map(val -> filter.append(" and name like '%" + val + "'"));
 
     return filter.toString();
   }
