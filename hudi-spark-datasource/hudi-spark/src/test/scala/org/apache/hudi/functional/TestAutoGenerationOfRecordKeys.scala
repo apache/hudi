@@ -202,4 +202,50 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
 
     assertTrue(getRootCause(e).getMessage.contains(configKey + " is not supported with auto generation of record keys"))
   }
+
+
+  @Test
+  def testRecordKeysAutoGenEnableToDisable(): Unit = {
+    val (vanillaWriteOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+
+    var options: Map[String, String] = vanillaWriteOpts ++ Map(
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[SimpleKeyGenerator].getCanonicalName)
+
+    // NOTE: In this test we deliberately removing record-key configuration
+    //       to validate Hudi is handling this case appropriately
+    val writeOpts = options -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 5)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF.cache
+
+    //
+    // Step #1: Persist first batch with auto-gen'd record-keys
+    //
+    inputDF.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, "insert")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+
+    //
+    // Step #2: Insert w/ explicit record key config. Should fail since we can't modify this property.
+    //
+    val e = assertThrows(classOf[HoodieException]) {
+      val inputDF2 = inputDF
+      inputDF2.write.format("hudi")
+        .options(writeOpts ++ Map(
+          DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key"
+        ))
+        .option(DataSourceWriteOptions.OPERATION.key, "insert")
+        .mode(SaveMode.Append)
+        .save(basePath)
+    }
+
+    val expectedMsg = s"RecordKey:\t_row_key\tnull"
+    assertTrue(getRootCause(e).getMessage.contains(expectedMsg))
+  }
 }
