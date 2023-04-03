@@ -78,14 +78,16 @@ object AutoRecordKeyGenerationUtils {
                                   sparkPartitionId: Integer): Iterator[(GenericRecord, Option[String])] = {
     var rowId = 0
     // we will override record keys if auto generation if keys is enabled.
-    genRecsItr.map(avroRecord =>
-      if (autoGenerateKeys) {
+    if (autoGenerateKeys) {
+      genRecsItr.map(avroRecord => {
         val recordKey : String = HoodieRecord.generateSequenceId(instantTime, sparkPartitionId, rowId)
         rowId += 1
         (avroRecord, Some(recordKey))
-      } else {
+      })
+    } else {
+      genRecsItr.map(avroRecord => {
         (avroRecord, Option.empty)
-      }
-    )
+      })
+    }
   }
 }

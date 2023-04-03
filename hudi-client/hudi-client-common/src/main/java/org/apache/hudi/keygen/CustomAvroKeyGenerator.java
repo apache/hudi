@@ -56,7 +56,6 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
 
   public CustomAvroKeyGenerator(TypedProperties props) {
     super(props);
-    this.setAutoGenerateRecordKeys(!props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     if (autoGenerateRecordKeys()) {
       this.recordKeyFields = Collections.emptyList();
     } else {

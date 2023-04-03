@@ -77,7 +77,6 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
 
   TimestampBasedAvroKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
     super(config, Option.ofNullable(recordKeyField), partitionPathField);
-    this.setAutoGenerateRecordKeys(recordKeyField == null);
     String dateTimeParserClass = config.getString(KeyGeneratorOptions.Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParser.class.getName());
     this.parser = KeyGenUtils.createDateTimeParser(config, dateTimeParserClass);
     this.inputDateTimeZone = parser.getInputDateTimeZone();

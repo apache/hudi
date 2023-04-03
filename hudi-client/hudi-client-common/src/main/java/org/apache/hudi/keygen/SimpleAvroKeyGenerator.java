@@ -41,7 +41,6 @@ public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
 
   SimpleAvroKeyGenerator(TypedProperties props, Option<String> recordKeyField, String partitionPathField) {
     super(props);
-    this.setAutoGenerateRecordKeys(!props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     this.recordKeyFields = recordKeyField.map(keyField -> Collections.singletonList(keyField)).orElse(Collections.emptyList());
     this.partitionPathFields = Collections.singletonList(partitionPathField);
   }

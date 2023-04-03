@@ -39,7 +39,6 @@ public class NonpartitionedAvroKeyGenerator extends BaseKeyGenerator {
 
   public NonpartitionedAvroKeyGenerator(TypedProperties props) {
     super(props);
-    this.setAutoGenerateRecordKeys(!props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     this.recordKeyFields = autoGenerateRecordKeys() ? Collections.emptyList() :
         Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
             .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());

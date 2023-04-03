@@ -43,7 +43,6 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
-    this.setAutoGenerateRecordKeys(!props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     if (autoGenerateRecordKeys()) {
       this.recordKeyFields = Collections.emptyList();
     } else {

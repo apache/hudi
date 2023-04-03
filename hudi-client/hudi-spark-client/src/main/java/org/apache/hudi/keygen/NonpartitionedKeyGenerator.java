@@ -42,7 +42,6 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
 
   public NonpartitionedKeyGenerator(TypedProperties props) {
     super(props);
-    this.setAutoGenerateRecordKeys(!props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     if (autoGenerateRecordKeys()) {
       this.recordKeyFields = Collections.emptyList();
     } else {

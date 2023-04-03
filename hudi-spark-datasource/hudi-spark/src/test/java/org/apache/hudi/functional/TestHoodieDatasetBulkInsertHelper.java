@@ -328,18 +328,6 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
       // ignore
     }
 
-    config = getConfigBuilder(schemaStr).withProps(getProps(false, true, false, true)).build();
-    rows = DataSourceTestUtils.generateRandomRows(10);
-    dataset = sqlContext.createDataFrame(rows, structType);
-    try {
-      Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-          new NonSortPartitionerWithRows(), false, "000001111");
-      preparedDF.count();
-      fail("Should have thrown exception");
-    } catch (Exception e) {
-      // ignore
-    }
-
     config = getConfigBuilder(schemaStr).withProps(getProps(false, true, true, false)).build();
     rows = DataSourceTestUtils.generateRandomRows(10);
     dataset = sqlContext.createDataFrame(rows, structType);

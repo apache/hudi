@@ -36,7 +36,6 @@ public class GlobalAvroDeleteKeyGenerator extends BaseKeyGenerator {
 
   public GlobalAvroDeleteKeyGenerator(TypedProperties config) {
     super(config);
-    this.setAutoGenerateRecordKeys(!config.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     if (autoGenerateRecordKeys()) {
       this.recordKeyFields = Collections.emptyList();
     } else {

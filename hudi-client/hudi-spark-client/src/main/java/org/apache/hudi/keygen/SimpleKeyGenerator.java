@@ -50,7 +50,6 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   SimpleKeyGenerator(TypedProperties props, Option<String> recordKeyField, String partitionPathField) {
     super(props);
-    this.setAutoGenerateRecordKeys(!props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     // Make sure key-generator is configured properly
     validateRecordKey(recordKeyField);
     validatePartitionPath(partitionPathField);

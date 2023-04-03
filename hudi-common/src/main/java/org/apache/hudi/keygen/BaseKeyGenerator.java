@@ -47,6 +47,7 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
         Boolean.parseBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.defaultValue()));
     this.consistentLogicalTimestampEnabled = config.getBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+    this.setAutoGenerateRecordKeys(!config.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
   }
 
   /**

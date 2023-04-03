@@ -50,12 +50,6 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
     return getCommonProps();
   }
 
-  private TypedProperties getPropertiesWithoutRecordKeyProp() {
-    TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
-    return properties;
-  }
-
   private TypedProperties getWrongRecordKeyFieldProps() {
     TypedProperties properties = new TypedProperties();
     properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
