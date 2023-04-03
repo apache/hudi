@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.IncrementalInputSplits;
-import org.apache.hudi.source.prune.PartitionPruner;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
@@ -64,7 +64,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -346,7 +345,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .partitionPruner(new PartitionPruner(Collections.emptySet()))
+        .partitionPruner(PartitionPruners.getInstance(Collections.emptySet()))
         .skipCompaction(false)
         .build();
 
@@ -388,7 +387,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .partitionPruner(new PartitionPruner(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4"))))
+        .partitionPruner(PartitionPruners.getInstance(Arrays.asList("par1", "par2", "par3", "par4")))
         .skipCompaction(false)
         .build();
 
@@ -427,7 +426,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .partitionPruner(new PartitionPruner(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4"))))
+        .partitionPruner(PartitionPruners.getInstance((Arrays.asList("par1", "par2", "par3", "par4"))))
         .skipCompaction(true)
         .build();
 
@@ -494,7 +493,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .partitionPruner(new PartitionPruner(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4"))))
+        .partitionPruner(PartitionPruners.getInstance(Arrays.asList("par1", "par2", "par3", "par4")))
         .skipClustering(true)
         .build();
 
@@ -558,7 +557,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .partitionPruner(new PartitionPruner(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4"))))
+        .partitionPruner(PartitionPruners.getInstance(Arrays.asList("par1", "par2", "par3", "par4")))
         .build();
 
     // default read the latest commit

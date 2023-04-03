@@ -38,7 +38,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
-import org.apache.hudi.source.prune.PartitionPruner;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.ClusteringUtil;
@@ -95,7 +95,7 @@ public class IncrementalInputSplits implements Serializable {
   private final RowType rowType;
   private final long maxCompactionMemoryInBytes;
   // for partition pruning
-  private final PartitionPruner partitionPruner;
+  private final PartitionPruners.PartitionPruner partitionPruner;
   // skip compaction
   private final boolean skipCompaction;
   // skip clustering
@@ -106,7 +106,7 @@ public class IncrementalInputSplits implements Serializable {
       Path path,
       RowType rowType,
       long maxCompactionMemoryInBytes,
-      @Nullable PartitionPruner partitionPruner,
+      @Nullable PartitionPruners.PartitionPruner partitionPruner,
       boolean skipCompaction,
       boolean skipClustering) {
     this.conf = conf;
@@ -599,7 +599,7 @@ public class IncrementalInputSplits implements Serializable {
     private RowType rowType;
     private long maxCompactionMemoryInBytes;
     // for partition pruning
-    private PartitionPruner partitionPruner;
+    private PartitionPruners.PartitionPruner partitionPruner;
     // skip compaction
     private boolean skipCompaction = false;
     // skip clustering
@@ -628,7 +628,7 @@ public class IncrementalInputSplits implements Serializable {
       return this;
     }
 
-    public Builder partitionPruner(@Nullable PartitionPruner partitionPruner) {
+    public Builder partitionPruner(@Nullable PartitionPruners.PartitionPruner partitionPruner) {
       this.partitionPruner = partitionPruner;
       return this;
     }

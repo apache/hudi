@@ -45,7 +45,7 @@ import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
 import org.apache.hudi.source.prune.DataPruner;
-import org.apache.hudi.source.prune.PartitionPruner;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
@@ -132,7 +132,7 @@ public class HoodieTableSource implements
   private int[] requiredPos;
   private long limit;
   private DataPruner dataPruner;
-  private PartitionPruner partitionPruner;
+  private PartitionPruners.PartitionPruner partitionPruner;
   private FileIndex fileIndex;
 
   public HoodieTableSource(
@@ -151,7 +151,7 @@ public class HoodieTableSource implements
       String defaultPartName,
       Configuration conf,
       @Nullable DataPruner dataPruner,
-      @Nullable PartitionPruner partitionPruner,
+      @Nullable PartitionPruners.PartitionPruner partitionPruner,
       @Nullable int[] requiredPos,
       @Nullable Long limit,
       @Nullable HoodieTableMetaClient metaClient,
@@ -289,7 +289,7 @@ public class HoodieTableSource implements
     return sb.toString();
   }
 
-  private PartitionPruner cratePartitionPruner(List<ResolvedExpression> partitionFilters) {
+  private PartitionPruners.PartitionPruner cratePartitionPruner(List<ResolvedExpression> partitionFilters) {
     StringJoiner joiner = new StringJoiner(" and ");
     partitionFilters.stream().forEach(f -> joiner.add(f.asSummaryString()));
     LOG.info("Partition pruner for hoodie source, condition is:\n" + joiner.toString());
@@ -300,7 +300,7 @@ public class HoodieTableSource implements
         .collect(Collectors.toList());
     String defaultParName = conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME);
     boolean hivePartition = conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING);
-    return new PartitionPruner(evaluators, this.partitionKeys, partitionTypes, defaultParName, hivePartition);
+    return PartitionPruners.getInstance(evaluators, this.partitionKeys, partitionTypes, defaultParName, hivePartition);
   }
 
   private List<MergeOnReadInputSplit> buildInputSplits() {

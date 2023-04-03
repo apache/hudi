@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.prune.DataPruner;
-import org.apache.hudi.source.prune.PartitionPruner;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.stats.ColumnStatsIndices;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
@@ -63,33 +63,26 @@ public class FileIndex {
   private final RowType rowType;
   private final boolean tableExists;
   private final HoodieMetadataConfig metadataConfig;
-  private final PartitionPruner partitionPruner;
+  private final PartitionPruners.PartitionPruner partitionPruner;
   private final boolean dataSkippingEnabled;
   private final DataPruner dataPruner;
   private List<String> partitionPaths;      // cache of partition paths
 
-  private FileIndex(Path path, Configuration conf, RowType rowType, DataPruner dataPruner, PartitionPruner partitionPruner) {
+  private FileIndex(Path path, Configuration conf, RowType rowType, DataPruner dataPruner, PartitionPruners.PartitionPruner partitionPruner) {
     this.path = path;
     this.rowType = rowType;
     this.tableExists = StreamerUtil.tableExists(path.toString(), HadoopConfigurations.getHadoopConf(conf));
     this.metadataConfig = metadataConfig(conf);
     this.dataSkippingEnabled = conf.getBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED);
-    // NOTE: Data Skipping is only effective when it references columns that are indexed w/in
-    //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
-    //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
-    //          CSI only contains stats for top-level columns, in this case for "struct")
-    //          - Any expression not directly referencing top-level column (for ex, sub-queries, since there's
-    //          nothing CSI in particular could be applied for)
-    if (!metadataConfig.enabled() || !dataSkippingEnabled) {
-      validateConfig();
-      this.dataPruner = null;
-    } else {
-      this.dataPruner = dataPruner;
-    }
+    this.dataPruner = initializeDataPruner(dataPruner);
     this.partitionPruner = partitionPruner;
   }
 
-  public static FileIndex instance(Path path, Configuration conf, RowType rowType, DataPruner dataPruner, PartitionPruner partitionPruner) {
+  public static FileIndex instance(Path path, Configuration conf, RowType rowType) {
+    return new FileIndex(path, conf, rowType, null, null);
+  }
+
+  public static FileIndex instance(Path path, Configuration conf, RowType rowType, DataPruner dataPruner, PartitionPruners.PartitionPruner partitionPruner) {
     return new FileIndex(path, conf, rowType, dataPruner, partitionPruner);
   }
 
@@ -253,13 +246,6 @@ public class FileIndex {
     }
   }
 
-  private void validateConfig() {
-    if (dataSkippingEnabled && !metadataConfig.enabled()) {
-      LOG.warn("Data skipping requires Metadata Table to be enabled! "
-          + "isMetadataTableEnabled = {}", metadataConfig.enabled());
-    }
-  }
-
   /**
    * Returns all the relative partition paths.
    *
@@ -288,5 +274,26 @@ public class FileIndex {
     properties.put(HoodieMetadataConfig.ENABLE.key(), conf.getBoolean(FlinkOptions.METADATA_ENABLED));
 
     return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
+  }
+
+  private DataPruner initializeDataPruner(DataPruner dataPruner) {
+    // NOTE: Data Skipping is only effective when it references columns that are indexed w/in
+    //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
+    //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
+    //          CSI only contains stats for top-level columns, in this case for "struct")
+    //          - Any expression not directly referencing top-level column (for ex, sub-queries, since there's
+    //          nothing CSI in particular could be applied for)
+    if (!metadataConfig.enabled() || !dataSkippingEnabled) {
+      validateConfig();
+      return null;
+    }
+    return dataPruner;
+  }
+
+  private void validateConfig() {
+    if (dataSkippingEnabled && !metadataConfig.enabled()) {
+      LOG.warn("Data skipping requires Metadata Table to be enabled! "
+          + "isMetadataTableEnabled = {}", metadataConfig.enabled());
+    }
   }
 }
