@@ -355,16 +355,18 @@ public class TimelineService {
     final Server server = new Server(pool);
     HttpConnectionFactory httpConnectionFactory = new HttpConnectionFactory();
     httpConnectionFactory.getHttpConfiguration().setSendServerVersion(false);
+    ScheduledExecutorScheduler scheduler = new ScheduledExecutorScheduler("TimelineService-JettyScheduler", true);
     ServerConnector connector = new ServerConnector(
         server,
         null,
-        new ScheduledExecutorScheduler("TimelineService-JettyScheduler", true),
+        scheduler,
         null,
         -1,
         -1,
         httpConnectionFactory);
     connector.setPort(serverPort);
     server.addConnector(connector);
+    server.addBean(scheduler);
 
     app = Javalin.create(c -> {
       if (!timelineServerConf.compress) {
