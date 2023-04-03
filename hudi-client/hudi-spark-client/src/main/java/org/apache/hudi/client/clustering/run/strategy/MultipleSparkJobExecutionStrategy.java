@@ -336,7 +336,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     String bootstrapBasePath = tableConfig.getBootstrapBasePath().orElse(null);
     Option<String[]> partitionFields = tableConfig.getPartitionFields();
     String timeZoneId = jsc.getConf().get("timeZone", SQLConf.get().sessionLocalTimeZone());
-    SparkParsePartitionUtil sparkParsePartitionUtil = SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkParsePartitionUtil();
     boolean shouldValidateColumns = jsc.getConf().getBoolean("spark.sql.sources.validatePartitionColumns", true);
 
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, clusteringOps.size())
@@ -354,6 +353,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                   int startOfPartitionPath = bootstrapFilePath.indexOf(bootstrapBasePath) + bootstrapBasePath.length() + 1;
                   String partitionFilePath = bootstrapFilePath.substring(startOfPartitionPath, bootstrapFilePath.lastIndexOf("/"));
                   CachingPath bootstrapCachingPath = new CachingPath(bootstrapBasePath);
+                  SparkParsePartitionUtil sparkParsePartitionUtil = SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkParsePartitionUtil();
                   partitionValues = HoodieSparkUtils.parsePartitionColumnValues(
                       partitionFields.get(),
                       partitionFilePath,
@@ -363,9 +363,11 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                       sparkParsePartitionUtil,
                       shouldValidateColumns);
                 }
-                HoodieFileReader bootstrapDataFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(bootstrapFilePath));
-                HoodieFileReader bootstrapSkeletonFileReader = baseFileReader;
-                baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(bootstrapSkeletonFileReader, bootstrapDataFileReader, partitionFields, partitionValues);
+                baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
+                    HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(bootstrapFilePath)),
+                    baseFileReader, 
+                    partitionFields,
+                    partitionValues);
               }
 
               Option<BaseKeyGenerator> keyGeneratorOp =
