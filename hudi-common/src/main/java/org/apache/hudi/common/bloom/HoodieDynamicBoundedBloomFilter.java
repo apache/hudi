@@ -61,7 +61,6 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
    * Generate {@link HoodieDynamicBoundedBloomFilter} from the given {@code serString} serialized string.
    *
    * @param serString the serialized string which represents the {@link HoodieDynamicBoundedBloomFilter}
-   * @param typeCode  type code of the bloom filter
    */
   public HoodieDynamicBoundedBloomFilter(String serString) {
     // ignoring the type code for now, since we have just one version
