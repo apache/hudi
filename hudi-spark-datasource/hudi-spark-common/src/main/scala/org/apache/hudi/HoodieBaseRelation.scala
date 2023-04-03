@@ -467,7 +467,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                                          extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
     try {
       val tableConfig = metaClient.getTableConfig
-      if (shouldExtractPartitionValuesFromPartitionPath) {
+      if (extractPartitionValuesFromPartitionPath) {
         val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(metaClient.getBasePathV2)
         val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath.getParent)
         val relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
