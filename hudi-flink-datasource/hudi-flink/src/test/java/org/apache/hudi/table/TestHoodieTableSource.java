@@ -77,12 +77,7 @@ public class TestHoodieTableSource {
   @Test
   void testGetReadPaths() throws Exception {
     beforeEach();
-    HoodieTableSource tableSource = new HoodieTableSource(
-        TestConfigurations.TABLE_SCHEMA,
-        new Path(tempFile.getPath()),
-        Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
-        "default-par",
-        conf);
+    HoodieTableSource tableSource = getEmptyStreamingSource();
     FileStatus[] fileStatuses = tableSource.getReadFiles();
     assertNotNull(fileStatuses);
     assertThat(fileStatuses.length, is(4));
@@ -93,9 +88,10 @@ public class TestHoodieTableSource {
         BuiltInFunctionDefinitions.EQUALS,
         Arrays.asList(partRef, partLiteral),
         DataTypes.BOOLEAN());
-    tableSource.applyFilters(Arrays.asList(partFilter));
+    HoodieTableSource tableSource2 = getEmptyStreamingSource();
+    tableSource2.applyFilters(Arrays.asList(partFilter));
 
-    FileStatus[] fileStatuses2 = tableSource.getReadFiles();
+    FileStatus[] fileStatuses2 = tableSource2.getReadFiles();
     assertNotNull(fileStatuses2);
     assertThat(fileStatuses2.length, is(1));
   }
