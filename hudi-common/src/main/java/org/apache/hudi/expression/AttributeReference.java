@@ -20,47 +20,38 @@ package org.apache.hudi.expression;
 
 import org.apache.hudi.internal.schema.Type;
 
-import java.util.List;
+public class AttributeReference extends LeafExpression {
 
-public interface Expression {
+  private final String name;
+  private final Type type;
+  private final boolean nullable;
 
-  enum Operator {
-    TRUE("TRUE", "TRUE"),
-    FALSE("FALSE", "FALSE"),
-    AND("AND", "&&"),
-    OR("OR", "||"),
-    GT(">", ">"),
-    LT("<", "<"),
-    EQ("=", "="),
-    GT_EQ(">=", ">="),
-    LT_EQ("<=", "<="),
-    STARTS_WITH(null, null),
-    NOT_STARTS_WITH(null, null),
-    IN("IN", "IN"),
-    NOT_IN("NOT IN", "NOT IN");
-
-    public final String sqlOperator;
-    public final String symbol;
-
-    Operator(String sqlOperator, String symbol) {
-      this.sqlOperator = sqlOperator;
-      this.symbol = symbol;
-    }
+  public AttributeReference(String name, Type type) {
+    this.name = name;
+    this.type = type;
+    this.nullable = true;
   }
 
-  List<Expression> getChildren();
-
-  Type getDataType();
-
-  default Object eval(StructLike data) {
-    throw new UnsupportedOperationException("Cannot evaluate expression " + this);
+  public String getName() {
+    return name;
   }
-
-  /**
-   * Traverses the expression with the provided {@link ExpressionVisitor}
-   */
-  <T> T accept(ExpressionVisitor<T> exprVisitor);
 
   @Override
-  String toString();
+  public Type getDataType() {
+    return type;
+  }
+
+  public boolean isNullable() {
+    return nullable;
+  }
+
+  @Override
+  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
+    return exprVisitor.visitAttribute(this);
+  }
+
+  @Override
+  public String toString() {
+    return name + "[type: " + type.typeId().getName() + ", nullable: " + nullable + "]";
+  }
 }

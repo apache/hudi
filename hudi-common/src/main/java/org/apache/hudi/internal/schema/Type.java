@@ -19,9 +19,13 @@
 package org.apache.hudi.internal.schema;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * The type of a schema, reference avro schema.
@@ -33,16 +37,37 @@ public interface Type extends Serializable {
    * Enums for type names.
    */
   enum TypeID {
-    RECORD, ARRAY, MAP, FIXED, STRING, BINARY,
-    INT, LONG, FLOAT, DOUBLE, DATE, BOOLEAN, TIME, TIMESTAMP, DECIMAL, UUID;
-    private String name;
+    RECORD(Types.RecordType.class),
+    ARRAY(List.class),
+    MAP(Map.class),
+    FIXED(ByteBuffer.class),
+    STRING(String.class),
+    BINARY(ByteBuffer.class),
+    INT(Integer.class),
+    LONG(Long.class),
+    FLOAT(Float.class),
+    DOUBLE(Double.class),
+    // TODO How to change this
+    DATE(Integer.class),
+    BOOLEAN(Boolean.class),
+    TIME(Long.class),
+    TIMESTAMP(Long.class),
+    DECIMAL(BigDecimal.class),
+    UUID(java.util.UUID.class);
+    private final String name;
+    private final Class<?> classTag;
 
-    TypeID() {
+    TypeID(Class<?> classTag) {
       this.name = this.name().toLowerCase(Locale.ROOT);
+      this.classTag = classTag;
     }
 
     public String getName() {
       return name;
+    }
+
+    public Class<?> getClassTag() {
+      return classTag;
     }
   }
 

@@ -23,9 +23,19 @@ package org.apache.hudi.expression;
  */
 public interface ExpressionVisitor<T> {
 
-  T visitBinaryOperator(BinaryOperator binaryOperator);
+  T alwaysTrue();
+
+  T alwaysFalse();
 
   T visitLiteral(Literal literal);
 
-  T visitAttribute(AttributeReferenceExpression attribute);
+  T visitAttribute(AttributeReference attribute);
+
+  T visitBoundReference(BoundReference boundReference);
+
+  T visitAnd(Predicates.And and);
+
+  T visitOr(Predicates.Or or);
+
+  T visitPredicate(Predicate predicate);
 }

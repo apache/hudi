@@ -113,7 +113,6 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
         List<Pair<Option<String>, Option<Path>>> result = engineContext.map(dirToFileListing, fileStatus -> {
           FileSystem fileSystem = fileStatus.getPath().getFileSystem(hadoopConf.get());
           String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath());
-          expression.accept()
           if (fileStatus.isDirectory()) {
             if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, fileStatus.getPath())) {
               return Pair.of(Option.of(FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath())), Option.empty());

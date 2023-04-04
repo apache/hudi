@@ -46,6 +46,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.expression.Expression;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
 import org.apache.hudi.util.Transient;
@@ -143,6 +144,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return Option.ofNullable(recordsByKeys.get(key));
   }
 
+  @Override
+  public List<String> getPartitionPathByExpression(Expression expression) {
+    return null;
+  }
 
   @Override
   public List<String> getPartitionPathWithPathPrefixes(List<String> relativePathPrefixes) throws IOException {

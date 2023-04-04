@@ -18,15 +18,9 @@
 
 package org.apache.hudi.expression;
 
-import java.util.List;
+public interface StructLike {
 
-/**
- * Expression that without any child expressions.
- */
-public abstract class LeafExpression implements Expression {
+  int numFields();
 
-  @Override
-  public List<Expression> getChildren() {
-    return null;
-  }
+  <T> T get(int pos, Class<T> classTag);
 }

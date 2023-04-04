@@ -18,50 +18,23 @@
 
 package org.apache.hudi.expression;
 
-import org.apache.hudi.internal.schema.Type;
+import java.util.List;
 
-import javax.xml.bind.DatatypeConverter;
-import java.nio.ByteBuffer;
+public class ArrayData implements StructLike {
 
-public class Literal<T> extends LeafExpression {
+  private final List<Object> data;
 
-  private final T value;
-  private final Type type;
-
-  public Literal(T value, Type type) {
-    this.value = value;
-    this.type = type;
-  }
-
-  public T getValue() {
-    return value;
+  public ArrayData(List<Object> data) {
+    this.data = data;
   }
 
   @Override
-  public Type getDataType() {
-    return type;
+  public int numFields() {
+    return data.size();
   }
 
   @Override
-  public Object eval(StructLike data) {
-    return value;
-  }
-
-  @Override
-  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
-    return exprVisitor.visitLiteral(this);
-  }
-
-  @Override
-  public String toString() {
-    if (value == null) {
-      return "null";
-    }
-
-    if (value instanceof ByteBuffer) {
-      return DatatypeConverter.printHexBinary(((ByteBuffer)value).array());
-    }
-
-    return value.toString();
+  public <T> T get(int pos, Class<T> classTag) {
+    return classTag.cast(data.get(pos));
   }
 }

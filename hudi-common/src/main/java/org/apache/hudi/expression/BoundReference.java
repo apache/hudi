@@ -20,47 +20,36 @@ package org.apache.hudi.expression;
 
 import org.apache.hudi.internal.schema.Type;
 
-import java.util.List;
+public class BoundReference extends LeafExpression {
 
-public interface Expression {
+  private final int ordinal;
+  private final Type type;
+  private final boolean nullable;
 
-  enum Operator {
-    TRUE("TRUE", "TRUE"),
-    FALSE("FALSE", "FALSE"),
-    AND("AND", "&&"),
-    OR("OR", "||"),
-    GT(">", ">"),
-    LT("<", "<"),
-    EQ("=", "="),
-    GT_EQ(">=", ">="),
-    LT_EQ("<=", "<="),
-    STARTS_WITH(null, null),
-    NOT_STARTS_WITH(null, null),
-    IN("IN", "IN"),
-    NOT_IN("NOT IN", "NOT IN");
-
-    public final String sqlOperator;
-    public final String symbol;
-
-    Operator(String sqlOperator, String symbol) {
-      this.sqlOperator = sqlOperator;
-      this.symbol = symbol;
-    }
+  public BoundReference(int ordinal, Type type, boolean nullable) {
+    this.ordinal = ordinal;
+    this.type = type;
+    this.nullable = nullable;
   }
-
-  List<Expression> getChildren();
-
-  Type getDataType();
-
-  default Object eval(StructLike data) {
-    throw new UnsupportedOperationException("Cannot evaluate expression " + this);
-  }
-
-  /**
-   * Traverses the expression with the provided {@link ExpressionVisitor}
-   */
-  <T> T accept(ExpressionVisitor<T> exprVisitor);
 
   @Override
-  String toString();
+  public Type getDataType() {
+    return type;
+  }
+
+  @Override
+  public Object eval(StructLike data) {
+    return data.get(ordinal, this.type.typeId().getClassTag());
+  }
+
+  @Override
+  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
+    return exprVisitor.visitBoundReference(this);
+  }
+
+  @Override
+  public String toString() {
+    return "boundReference[ordinal: " + ordinal + ", type: "
+        + type.typeId().getName() + ", nullable: " + nullable + "]";
+  }
 }
