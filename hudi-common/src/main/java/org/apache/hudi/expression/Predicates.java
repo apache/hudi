@@ -21,6 +21,7 @@ package org.apache.hudi.expression;
 import org.apache.hudi.internal.schema.Type;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -60,16 +61,12 @@ public class Predicates {
     return new BinaryComparison(left, Expression.Operator.STARTS_WITH, right);
   }
 
-  public static BinaryComparison notStartsWith(Expression left, Expression right) {
-    return new BinaryComparison(left, Expression.Operator.NOT_STARTS_WITH, right);
-  }
-
   public static In in(Expression left, List<Expression> validExpressions) {
     return new In(left, validExpressions);
   }
 
-  public static In notIn(Expression left, List<Expression> validExpressions) {
-    return new NotIn(left, validExpressions);
+  public static Not not(Expression expr) {
+    return new Not(expr);
   }
 
   public static class True extends LeafExpression implements Predicate {
@@ -244,23 +241,32 @@ public class Predicates {
     }
   }
 
-  public static class NotIn extends In {
+  public static class Not implements Predicate {
 
-    public NotIn(Expression value, List<Expression> validValues) {
-      super(value, validValues);
+    Expression child;
+
+    public Not(Expression child) {
+      this.child = child;
+    }
+
+    @Override
+    public List<Expression> getChildren() {
+      return Collections.singletonList(child);
     }
 
     @Override
     public Boolean eval(StructLike data) {
-      Set<Object> values = validValues.stream()
-          .map(validValue -> validValue.eval(data))
-          .collect(Collectors.toSet());
-      return !values.contains(value.eval(data));
+      return ! (Boolean) child.eval(data);
     }
 
     @Override
     public Operator getOperator() {
-      return Operator.NOT_IN;
+      return Operator.NOT;
+    }
+
+    @Override
+    public String toString() {
+      return "NOT " + child;
     }
   }
 
@@ -289,8 +295,6 @@ public class Predicates {
           return comparator.compare(getLeft().eval(data), getRight().eval(data)) <= 0;
         case STARTS_WITH:
           return String.valueOf(getLeft().eval(data)).startsWith(String.valueOf(getRight().eval(data)));
-        case NOT_STARTS_WITH:
-          return !String.valueOf(getLeft().eval(data)).startsWith(String.valueOf(getRight().eval(data)));
         default:
           throw new IllegalArgumentException("The operation " + getOperator() + " doesn't support binary comparison");
       }

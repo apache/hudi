@@ -128,6 +128,18 @@ public class PartialBindVisitor implements ExpressionVisitor<Expression> {
 
   @Override
   public Expression visitPredicate(Predicate predicate) {
+    if (predicate instanceof Predicates.Not) {
+      Expression expr = ((Predicates.Not) predicate).child.accept(this);
+      if (expr instanceof Predicates.True) {
+        return alwaysFalse();
+      }
+      if (expr instanceof Predicates.False) {
+        return alwaysTrue();
+      }
+
+      return Predicates.not(expr);
+    }
+
     if (predicate instanceof Predicates.BinaryComparison) {
       Predicates.BinaryComparison binaryExp = (Predicates.BinaryComparison) predicate;
       Expression left = binaryExp.getLeft().accept(this);

@@ -35,9 +35,8 @@ public interface Expression {
     GT_EQ(">=", ">="),
     LT_EQ("<=", "<="),
     STARTS_WITH(null, null),
-    NOT_STARTS_WITH(null, null),
     IN("IN", "IN"),
-    NOT_IN("NOT IN", "NOT IN");
+    NOT("NOT", "NOT");
 
     public final String sqlOperator;
     public final String symbol;
