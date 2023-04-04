@@ -33,9 +33,7 @@ import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.slf4j.Logger;
@@ -353,19 +351,7 @@ public class TimelineService {
     QueuedThreadPool pool = new QueuedThreadPool(maxThreads, 8, 60_000);
     pool.setDaemon(true);
     final Server server = new Server(pool);
-    HttpConnectionFactory httpConnectionFactory = new HttpConnectionFactory();
-    httpConnectionFactory.getHttpConfiguration().setSendServerVersion(false);
-    ScheduledExecutorScheduler scheduler = new ScheduledExecutorScheduler("TimelineService-JettyScheduler", true);
-    ServerConnector connector = new ServerConnector(
-        server,
-        null,
-        scheduler,
-        null,
-        -1,
-        -1,
-        httpConnectionFactory);
-    connector.setPort(serverPort);
-    server.addConnector(connector);
+    ScheduledExecutorScheduler scheduler = new ScheduledExecutorScheduler("TimelineService-JettyScheduler", true, 8);
     server.addBean(scheduler);
 
     app = Javalin.create(c -> {
