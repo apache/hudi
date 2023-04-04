@@ -151,7 +151,8 @@ object HoodieWriterUtils {
         val datasourceRecordKey = params.getOrElse(RECORDKEY_FIELD.key(), null)
         val tableConfigRecordKey = tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS)
         if ((null != datasourceRecordKey && null != tableConfigRecordKey
-          && datasourceRecordKey != tableConfigRecordKey) || (null != datasourceRecordKey && tableConfigRecordKey == null)) {
+          && datasourceRecordKey != tableConfigRecordKey) || (null != datasourceRecordKey && !datasourceRecordKey.isEmpty
+          && tableConfigRecordKey == null)) {
           diffConfigs.append(s"RecordKey:\t$datasourceRecordKey\t$tableConfigRecordKey\n")
         }
 
