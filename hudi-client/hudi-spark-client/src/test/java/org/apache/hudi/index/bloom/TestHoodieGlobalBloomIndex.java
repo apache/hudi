@@ -23,7 +23,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.data.HoodiePairData;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -31,7 +30,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.testutils.HoodieSimpleDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -459,35 +458,40 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
   }
 
   @Test
-  public void testTagRecordsWithPartitionUpdates() {
-    HoodieSimpleDataGenerator dataGen = new HoodieSimpleDataGenerator();
+  public void testTagRecordsWithPartitionUpdates() throws IOException {
+    final String[] partitions = new String[] {"pt1", "pt2", "pt3"};
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED, partitions, new HashMap<>());
+    List<HoodieRecord> recordsIn1stPartition = dataGen.generateInsertsForPartition("001", 1, "pt1");
+    final String recordKey = recordsIn1stPartition.get(0).getRecordKey();
+    List<HoodieRecord> recordsIn2ndPartition = dataGen.generateUpdatesForDifferentPartition("002", recordsIn1stPartition, "pt2");
+    List<HoodieRecord> recordsIn3rdPartition = dataGen.generateUpdatesForDifferentPartition("003", recordsIn2ndPartition, "pt3");
     HoodieRecordLocation dummyLoc = new HoodieRecordLocation("dummy-instant-time", "dummy-file-id");
     HoodiePairData<HoodieKey, HoodieRecordLocation> existingRecords = HoodieListPairData.eager(Stream.of(
-            dataGen.getNewRecord(0, "p0", 0),
-            dataGen.getNewRecord(0, "p1", 1))
+            recordsIn1stPartition.get(0),
+            recordsIn2ndPartition.get(0))
         .map(r -> Pair.of(r.getKey(), dummyLoc))
         .collect(Collectors.toList()));
-    HoodieData<HoodieRecord<DefaultHoodieRecordPayload>> incomingRecords = HoodieListData.eager(
-        Collections.singletonList(dataGen.getNewRecord(0, "p2", 2)));
+    HoodieData<HoodieRecord<RawTripTestPayload>> incomingRecords = HoodieListData.eager(
+        Collections.singletonList((HoodieRecord<RawTripTestPayload>) recordsIn3rdPartition.get(0)));
 
     HoodieWriteConfig mockWriteConfig = mock(HoodieWriteConfig.class);
     when(mockWriteConfig.getBloomIndexUpdatePartitionPath()).thenReturn(true);
     HoodieGlobalBloomIndex index =
         new HoodieGlobalBloomIndex(mockWriteConfig, SparkHoodieBloomIndexHelper.getInstance());
-    List<HoodieRecord<DefaultHoodieRecordPayload>> taggedRecords = index.tagLocationBacktoRecords(existingRecords, incomingRecords)
+    List<HoodieRecord<RawTripTestPayload>> taggedRecords = index.tagLocationBacktoRecords(existingRecords, incomingRecords)
         .collectAsList().stream().sorted(Comparator.comparing(HoodieRecord::getPartitionPath)).collect(Collectors.toList());
-    assertEquals(3, taggedRecords.size(), "expect 2 delete records in p0 and p1, and 1 tagged record in p2");
-    HoodieRecord<DefaultHoodieRecordPayload> deleteRecordPt0 = taggedRecords.get(0);
-    assertEquals("0", deleteRecordPt0.getRecordKey());
-    assertEquals("p0", deleteRecordPt0.getPartitionPath());
-    assertEquals(dummyLoc, deleteRecordPt0.getCurrentLocation());
-    HoodieRecord<DefaultHoodieRecordPayload> deleteRecordPt1 = taggedRecords.get(1);
-    assertEquals("0", deleteRecordPt1.getRecordKey());
-    assertEquals("p1", deleteRecordPt1.getPartitionPath());
+    assertEquals(3, taggedRecords.size(), "expect 2 delete records in pt1 and pt2, and 1 tagged record in pt3");
+    HoodieRecord<RawTripTestPayload> deleteRecordPt1 = taggedRecords.get(0);
+    assertEquals(recordKey, deleteRecordPt1.getRecordKey());
+    assertEquals("pt1", deleteRecordPt1.getPartitionPath());
     assertEquals(dummyLoc, deleteRecordPt1.getCurrentLocation());
-    HoodieRecord<DefaultHoodieRecordPayload> insertRecord = taggedRecords.get(2);
-    assertEquals("0", insertRecord.getRecordKey());
-    assertEquals("p2", insertRecord.getPartitionPath());
+    HoodieRecord<RawTripTestPayload> deleteRecordPt2 = taggedRecords.get(1);
+    assertEquals(recordKey, deleteRecordPt2.getRecordKey());
+    assertEquals("pt2", deleteRecordPt2.getPartitionPath());
+    assertEquals(dummyLoc, deleteRecordPt2.getCurrentLocation());
+    HoodieRecord<RawTripTestPayload> insertRecord = taggedRecords.get(2);
+    assertEquals(recordKey, insertRecord.getRecordKey());
+    assertEquals("pt3", insertRecord.getPartitionPath());
     assertNull(insertRecord.getCurrentLocation());
   }
 }
