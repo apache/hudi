@@ -37,7 +37,10 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.expression.ArrayData;
 import org.apache.hudi.expression.Expression;
+import org.apache.hudi.expression.PartialBindVisitor;
+import org.apache.hudi.internal.schema.Types;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -61,6 +64,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   private final SerializableConfiguration hadoopConf;
   private final String datasetBasePath;
   private final boolean assumeDatePartitioning;
+  private final boolean hiveStylePartitioningEnabled;
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext, SerializableConfiguration conf, String datasetBasePath,
                                        boolean assumeDatePartitioning) {
@@ -68,6 +72,10 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
     this.hadoopConf = conf;
     this.datasetBasePath = datasetBasePath;
     this.assumeDatePartitioning = assumeDatePartitioning;
+    this.hiveStylePartitioningEnabled = Boolean.parseBoolean(HoodieTableMetaClient.builder()
+        .setConf(hadoopConf.get())
+        .setBasePath(datasetBasePath)
+        .build().getTableConfig().getHiveStylePartitioningEnable());
   }
 
   @Override
@@ -88,11 +96,11 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public List<String> getPartitionPathByExpression(Expression expression) {
+  public List<String> getPartitionPathByExpression(Expression expression, Types.RecordType schema) throws IOException {
     List<Path> pathsToList = new CopyOnWriteArrayList<>();
     pathsToList.add(new Path(datasetBasePath));
     List<String> partitionPaths = new CopyOnWriteArrayList<>();
-
+    int partitionLevel = 0;
     while (!pathsToList.isEmpty()) {
       // TODO: Get the parallelism from HoodieWriteConfig
       int listingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, pathsToList.size());
@@ -103,6 +111,9 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
         return Arrays.stream(fileSystem.listStatus(path));
       }, listingParallelism);
       pathsToList.clear();
+      Types.RecordType currentSchema = Types.RecordType.get(schema.fields().subList(0, ++partitionLevel));
+      PartialBindVisitor partialBindVisitor = new PartialBindVisitor(currentSchema, false);
+      Expression boundedExpr = expression.accept(partialBindVisitor);
 
       // if current dictionary contains PartitionMetadata, add it to result
       // if current dictionary does not contain PartitionMetadata, add it to queue to be processed.
@@ -112,16 +123,25 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
         // and second entry holds optionally a directory path to be processed further.
         List<Pair<Option<String>, Option<Path>>> result = engineContext.map(dirToFileListing, fileStatus -> {
           FileSystem fileSystem = fileStatus.getPath().getFileSystem(hadoopConf.get());
-          String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath());
           if (fileStatus.isDirectory()) {
+            String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath());
             if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, fileStatus.getPath())) {
-              return Pair.of(Option.of(FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath())), Option.empty());
+              if ((Boolean) boundedExpr.eval(HoodieTableMetadata.
+                  extractPartitionValues(relativePartitionPath, hiveStylePartitioningEnabled))) {
+                return Pair.of(Option.of(relativePartitionPath), Option.empty());
+              }
             } else if (!fileStatus.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
-              return Pair.of(Option.empty(), Option.of(fileStatus.getPath()));
+              if ((Boolean) boundedExpr.eval(HoodieTableMetadata.
+                  extractPartitionValues(relativePartitionPath, hiveStylePartitioningEnabled))) {
+                return Pair.of(Option.empty(), Option.of(fileStatus.getPath()));
+              }
             }
           } else if (fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
-            String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath().getParent());
-            return Pair.of(Option.of(partitionName), Option.empty());
+            String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath().getParent());
+            if ((Boolean) boundedExpr.eval(HoodieTableMetadata.
+                extractPartitionValues(relativePartitionPath, hiveStylePartitioningEnabled))) {
+              return Pair.of(Option.of(relativePartitionPath), Option.empty());
+            }
           }
           return Pair.of(Option.empty(), Option.empty());
         }, fileListingParallelism);

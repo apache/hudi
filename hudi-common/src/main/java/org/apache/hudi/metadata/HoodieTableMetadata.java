@@ -33,13 +33,17 @@ import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.expression.ArrayData;
 import org.apache.hudi.expression.Expression;
+import org.apache.hudi.internal.schema.Types;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -142,12 +146,27 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
     return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, reuse);
   }
 
+  static ArrayData extractPartitionValues(String relativePartitionPath, boolean hiveStylePartitioningEnabled) {
+    List<Object> partitionValues;
+    if (hiveStylePartitioningEnabled) {
+      partitionValues = Arrays.stream(relativePartitionPath.split("/"))
+          .map(kv -> (Object) kv.split("=")[1])
+          .collect(Collectors.toList());
+    } else {
+      partitionValues = Arrays.stream(relativePartitionPath.split("/"))
+          .map(v -> (Object) v)
+          .collect(Collectors.toList());
+    }
+
+    return new ArrayData(partitionValues);
+  }
+
   /**
    * Fetch all the files at the given partition path, per the latest snapshot of the metadata.
    */
   FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException;
 
-  List<String> getPartitionPathByExpression(Expression expression);
+  List<String> getPartitionPathByExpression(Expression expression, Types.RecordType schema) throws IOException;
 
   /**
    * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.

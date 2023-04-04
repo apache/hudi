@@ -46,7 +46,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
+import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
 import org.apache.hudi.util.Transient;
@@ -145,8 +147,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public List<String> getPartitionPathByExpression(Expression expression) {
-    return null;
+  public List<String> getPartitionPathByExpression(Expression expression, Types.RecordType schema) throws IOException {
+    Expression boundedExpr = expression.accept(new BindVisitor(schema, false));
+    boolean hiveStylePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getHiveStylePartitioningEnable());
+    return getAllPartitionPaths().stream()
+        .filter(p -> (boolean) boundedExpr.eval(HoodieTableMetadata.
+            extractPartitionValues(p, hiveStylePartitioningEnabled)))
+        .collect(Collectors.toList());
   }
 
   @Override

@@ -24,91 +24,16 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-public class PartialBindVisitor implements ExpressionVisitor<Expression> {
-
-  private final Types.RecordType recordType;
-  private final boolean caseSensitive;
+public class PartialBindVisitor extends BindVisitor {
 
   public PartialBindVisitor(Types.RecordType recordType, boolean caseSensitive) {
-    this.recordType = recordType;
-    this.caseSensitive = caseSensitive;
+    super(recordType, caseSensitive);
   }
 
-  @Override
-  public Expression alwaysTrue() {
-    return Predicates.True.get();
-  }
-
-  @Override
-  public Expression alwaysFalse() {
-    return Predicates.False.get();
-  }
-
-  @Override
-  public Expression visitAnd(Predicates.And and) {
-    if (and.getLeft() instanceof Predicates.False
-        || and.getRight() instanceof Predicates.False) {
-      return alwaysFalse();
-    }
-
-    Expression left = and.getLeft().accept(this);
-    Expression right = and.getRight().accept(this);
-    if (left instanceof Predicates.False
-        || right instanceof Predicates.False) {
-      return alwaysFalse();
-    }
-
-    if (left instanceof Predicates.True
-        && right instanceof Predicates.True) {
-      return alwaysTrue();
-    }
-
-    if (left instanceof Predicates.True) {
-      return right;
-    }
-
-    if (right instanceof Predicates.True) {
-      return left;
-    }
-
-    return Predicates.and(left, right);
-  }
-
-  @Override
-  public Expression visitOr(Predicates.Or or) {
-    if (or.getLeft() instanceof Predicates.True
-        || or.getRight() instanceof Predicates.True) {
-      return alwaysTrue();
-    }
-
-    Expression left = or.getLeft().accept(this);
-    Expression right = or.getRight().accept(this);
-    if (left instanceof Predicates.True
-        || right instanceof Predicates.True) {
-      return alwaysTrue();
-    }
-
-    if (left instanceof Predicates.False
-        && right instanceof Predicates.False) {
-      return alwaysFalse();
-    }
-
-    if (left instanceof Predicates.False) {
-      return right;
-    }
-
-    if (right instanceof Predicates.False) {
-      return left;
-    }
-
-    return Predicates.or(left, right);
-  }
-
-  @Override
-  public Expression visitLiteral(Literal literal) {
-    return literal;
-  }
-
+  /**
+   * If the attribute cannot find from the schema, directly return null, visitPredicate
+   * will handle it.
+   */
   @Override
   public Expression visitAttribute(AttributeReference attribute) {
     // TODO Should consider caseSensitive?
@@ -121,11 +46,10 @@ public class PartialBindVisitor implements ExpressionVisitor<Expression> {
     return new BoundReference(field.fieldId(), field.type(), attribute.isNullable());
   }
 
-  @Override
-  public Expression visitBoundReference(BoundReference boundReference) {
-    return boundReference;
-  }
-
+  /**
+   * If an expression is null after accept method, which means it cannot be bounded from
+   * schema, we'll directly return {@link Predicates.True}.
+   */
   @Override
   public Expression visitPredicate(Predicate predicate) {
     if (predicate instanceof Predicates.Not) {
