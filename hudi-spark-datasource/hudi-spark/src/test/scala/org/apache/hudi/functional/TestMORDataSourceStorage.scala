@@ -21,7 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH, getCommitTimeAtUTC}
@@ -160,72 +160,41 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     )
     val dataGen = new HoodieTestDataGenerator(0xDEEF)
 
-    // insert all records to partition 1
-    val commitTime1 = getCommitTimeAtUTC(1)
-    val inserts1 = dataGen.generateInsertsForPartition(commitTime1, totalRecords, DEFAULT_FIRST_PARTITION_PATH)
-    val df1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(inserts1), parallelism))
-    df1.write.format("hudi").
-      options(commonOpts).
-      mode(SaveMode.Overwrite).
-      save(basePath)
+    def upsertAndValidate(records: java.util.List[HoodieRecord[_]], partition: String): Unit = {
+      // upsert records
+      spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records), parallelism))
+        .write.format("hudi")
+        .options(commonOpts)
+        .mode(SaveMode.Append)
+        .save(basePath)
 
-    // validate all records are in partition 1
-    val df1Snapshot = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .load(basePath)
-    assertEquals(totalRecords, df1Snapshot.count)
-    assertEquals(totalRecords, df1Snapshot.filter(s"partition_path = '$DEFAULT_FIRST_PARTITION_PATH'").count)
+      // validate all records are in the partition
+      val snapshotDF = spark.read.format("org.apache.hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+        .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
+        .load(basePath)
+      assertEquals(totalRecords, snapshotDF.count)
+      assertEquals(totalRecords, snapshotDF.filter(s"partition_path = '$partition'").count)
+    }
+
+    // insert all records to partition 1
+    val inserts1 = dataGen.generateInsertsForPartition(
+      getCommitTimeAtUTC(1), totalRecords, DEFAULT_FIRST_PARTITION_PATH)
+    upsertAndValidate(inserts1, DEFAULT_FIRST_PARTITION_PATH)
 
     // update all records to partition 2
-    val commitTime2 = getCommitTimeAtUTC(2)
-    val updates2 = dataGen.generateUpdatesForDifferentPartition(commitTime2, inserts1, DEFAULT_SECOND_PARTITION_PATH)
-    val df2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(updates2), parallelism))
-    df2.write.format("hudi").
-      options(commonOpts).
-      mode(SaveMode.Append).
-      save(basePath)
-
-    // validate all records are in partition 2
-    val df2Snapshot = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .load(basePath)
-    assertEquals(totalRecords, df2Snapshot.count)
-    assertEquals(totalRecords, df2Snapshot.filter(s"partition_path = '$DEFAULT_SECOND_PARTITION_PATH'").count)
+    val updates2 = dataGen.generateUpdatesForDifferentPartition(
+      getCommitTimeAtUTC(2), inserts1, DEFAULT_SECOND_PARTITION_PATH)
+    upsertAndValidate(updates2, DEFAULT_SECOND_PARTITION_PATH)
 
     // update all records to partition 3
-    val commitTime3 = getCommitTimeAtUTC(3)
-    val updates3 = dataGen.generateUpdatesForDifferentPartition(commitTime3, updates2, DEFAULT_THIRD_PARTITION_PATH)
-    val df3 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(updates3), parallelism))
-    df3.write.format("hudi").
-      options(commonOpts).
-      mode(SaveMode.Append).
-      save(basePath)
-
-    // validate all records are in partition 3
-    val df3Snapshot = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .load(basePath)
-    assertEquals(totalRecords, df3Snapshot.count)
-    assertEquals(totalRecords, df3Snapshot.filter(s"partition_path = '$DEFAULT_THIRD_PARTITION_PATH'").count)
+    val updates3 = dataGen.generateUpdatesForDifferentPartition(
+      getCommitTimeAtUTC(3), updates2, DEFAULT_THIRD_PARTITION_PATH)
+    upsertAndValidate(updates3, DEFAULT_THIRD_PARTITION_PATH)
 
     // update all records back to partition 1
-    val commitTime4 = getCommitTimeAtUTC(4)
-    val updates4 = dataGen.generateUpdatesForDifferentPartition(commitTime4, updates3, DEFAULT_FIRST_PARTITION_PATH)
-    val df4 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(updates4), parallelism))
-    df4.write.format("hudi").
-      options(commonOpts).
-      mode(SaveMode.Append).
-      save(basePath)
-
-    // validate all records are in partition 1
-    val df4Snapshot = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .load(basePath)
-    assertEquals(totalRecords, df4Snapshot.count)
-    assertEquals(totalRecords, df4Snapshot.filter(s"partition_path = '$DEFAULT_FIRST_PARTITION_PATH'").count)
+    val updates4 = dataGen.generateUpdatesForDifferentPartition(
+      getCommitTimeAtUTC(4), updates3, DEFAULT_FIRST_PARTITION_PATH)
+    upsertAndValidate(updates4, DEFAULT_FIRST_PARTITION_PATH)
   }
 }
