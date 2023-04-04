@@ -63,6 +63,14 @@ public class KafkaSourceConfig extends HoodieConfig {
       .defaultValue(5000000L)
       .withDocumentation("Maximum number of records obtained in each batch.");
 
+  public static final ConfigProperty<Long> MAX_EVENTS_PER_KAFKA_PARTITION = ConfigProperty
+          .key(PREFIX + "per.partition.maxEvents")
+          .defaultValue(Long.MAX_VALUE)
+          .withDocumentation("Maximum number of records in per kafka partition. For example: set this param to 500000, "
+                  + "in kafka partition 0 offset from 0 to 1000000, "
+                  + "will split to two kafka inputs offset from 0 to 500000 and "
+                  + "offset from 500000 to 1000000");
+
   public static final ConfigProperty<String> KAFKA_TOPIC_NAME = ConfigProperty
       .key(PREFIX + "topic")
       .noDefaultValue()

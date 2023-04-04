@@ -40,6 +40,7 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -91,10 +92,24 @@ public class KafkaOffsetGen {
      * Format: topic1,0:offset0,1:offset1,2:offset2, .....
      */
     public static String offsetsToStr(OffsetRange[] ranges) {
+      ranges = mergeRangesByTp(ranges);
       StringBuilder sb = new StringBuilder();
       // at least 1 partition will be present.
       sb.append(ranges[0].topic() + ",");
       sb.append(Arrays.stream(ranges).map(r -> String.format("%s:%d", r.partition(), r.untilOffset()))
+              .collect(Collectors.joining(",")));
+      return sb.toString();
+    }
+
+    /**
+     * Stringfy the offset ranges, used for logging
+     * Format: topic,0:fromOffset0->toOffset0,1:fromOffset1->toOffset1,...
+     */
+    public static String offsetsStringfy(OffsetRange[] ranges) {
+      StringBuilder sb = new StringBuilder();
+      // at least 1 partition will be present.
+      sb.append(ranges[0].topic() + ",");
+      sb.append(Arrays.stream(ranges).map(r -> String.format("%s:%d->%d", r.partition(), r.fromOffset(), r.untilOffset()))
               .collect(Collectors.joining(",")));
       return sb.toString();
     }
@@ -149,6 +164,40 @@ public class KafkaOffsetGen {
       }
 
       return ranges;
+    }
+
+    public static OffsetRange[] splitRangesByCount(OffsetRange[] oldRanges, long maxEvents) {
+      List<OffsetRange> newRanges = new ArrayList<>();
+      for (OffsetRange range : oldRanges) {
+        newRanges.addAll(splitSingleRange(range, maxEvents));
+      }
+      return newRanges.toArray(new OffsetRange[0]);
+    }
+
+    public static OffsetRange[] mergeRangesByTp(OffsetRange[] oldRanges) {
+      List<OffsetRange> newRanges = new ArrayList<>();
+      Map<TopicPartition, List<OffsetRange>> tpOffsets = Arrays.stream(oldRanges).collect(Collectors.groupingBy(OffsetRange::topicPartition));
+      for (Map.Entry<TopicPartition, List<OffsetRange>> entry : tpOffsets.entrySet()) {
+        long from = entry.getValue().stream().map(OffsetRange::fromOffset).min(Long::compare).get();
+        long until = entry.getValue().stream().map(OffsetRange::untilOffset).max(Long::compare).get();
+        newRanges.add(OffsetRange.create(entry.getKey(), from, until));
+      }
+      return newRanges.toArray(new OffsetRange[0]);
+    }
+
+    public static List<OffsetRange> splitSingleRange(OffsetRange range, long maxEvents) {
+      List<OffsetRange> newRanges = new ArrayList<>();
+      if (range.count() <= maxEvents) {
+        newRanges.add(range);
+        return newRanges;
+      }
+      long partsNum = (range.count() + maxEvents - 1) / maxEvents;
+      long step = range.count() / partsNum;
+      for (long start = range.fromOffset(); start < range.untilOffset(); start += step) {
+        long end = Math.min(start + step, range.untilOffset());
+        newRanges.add(OffsetRange.create(range.topicPartition(), start, end));
+      }
+      return newRanges;
     }
 
     public static long totalNewMessages(OffsetRange[] ranges) {
@@ -242,7 +291,15 @@ public class KafkaOffsetGen {
       throw new HoodieException("sourceLimit should not be less than the number of kafka partitions");
     }
 
-    return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
+    OffsetRange[] ranges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
+    LOG.info("before split by count: " + CheckpointUtils.offsetsStringfy(ranges));
+    long maxEventsPerPartition = props.getLong(KafkaSourceConfig.MAX_EVENTS_PER_KAFKA_PARTITION.key(),
+            KafkaSourceConfig.MAX_EVENTS_PER_KAFKA_PARTITION.defaultValue());
+    LOG.info("getNextOffsetRanges set config " + KafkaSourceConfig.MAX_EVENTS_PER_KAFKA_PARTITION.key() + " to " + maxEventsPerPartition);
+
+    ranges = CheckpointUtils.splitRangesByCount(ranges, maxEventsPerPartition);
+    LOG.info("after split by count: " + CheckpointUtils.offsetsStringfy(ranges));
+    return ranges;
   }
 
   /**
