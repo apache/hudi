@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 
 import java.io.File;
