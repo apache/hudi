@@ -201,7 +201,6 @@ public class ITTestHoodieFlinkClustering {
 
     // use append mode
     options.put(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value());
-    options.put(FlinkOptions.INSERT_CLUSTER.key(), "false");
 
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
