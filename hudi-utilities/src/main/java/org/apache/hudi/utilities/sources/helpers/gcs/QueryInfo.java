@@ -51,7 +51,7 @@ public class QueryInfo {
     this.endInstant = endInstant;
   }
 
-  public Dataset<Row> initializeSourceForFilenames(String srcPath, SparkSession sparkSession) {
+  public Dataset<Row> initCloudObjectMetadata(String srcPath, SparkSession sparkSession) {
     if (isIncremental()) {
       return incrementalQuery(sparkSession).load(srcPath);
     }
