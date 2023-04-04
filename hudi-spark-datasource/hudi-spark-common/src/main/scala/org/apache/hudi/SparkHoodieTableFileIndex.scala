@@ -25,7 +25,8 @@ import org.apache.hudi.SparkHoodieTableFileIndex._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{FileSlice, HoodieRecord, HoodieTableQueryType}
+import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
+import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.hadoop.CachingPath
@@ -84,7 +85,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * Get the schema of the table.
    */
   lazy val schema: StructType = if (shouldFastBootstrap) {
-      StructType(rawSchema.fields.filterNot(f => HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
+      StructType(rawSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
     } else {
       rawSchema
     }
