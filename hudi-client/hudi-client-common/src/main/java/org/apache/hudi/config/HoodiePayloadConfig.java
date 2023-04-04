@@ -95,7 +95,7 @@ public class HoodiePayloadConfig extends HoodieConfig {
     }
 
     public Builder withPayloadOrderingField(String payloadOrderingField) {
-      payloadConfig.setValue(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, String.valueOf(payloadOrderingField));
+      payloadConfig.setValue(ORDERING_FIELD, String.valueOf(payloadOrderingField));
       return this;
     }
 
