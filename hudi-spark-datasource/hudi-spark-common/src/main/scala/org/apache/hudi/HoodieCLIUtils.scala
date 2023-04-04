@@ -71,9 +71,9 @@ object HoodieCLIUtils extends ProvidesHoodieConfig{
     }
   }
 
-  def getHoodieDatabaseAndTable(table: String): (String, Option[String]) = {
-    val seq: Seq[String] = table.split('.')
-    seq match {
+  def getTableIdentifier(table: String): (String, Option[String]) = {
+    val arrayStr: Array[String] = table.split('.')
+    arrayStr.toSeq match {
       case Seq(tableName) =>
         (tableName, None)
       case Seq(database, tableName) =>

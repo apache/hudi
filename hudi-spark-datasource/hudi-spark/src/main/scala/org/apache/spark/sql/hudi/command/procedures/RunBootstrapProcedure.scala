@@ -85,7 +85,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     val propsFilePath = getArgValueOrDefault(args, PARAMETERS(15)).get.asInstanceOf[String]
     val bootstrapOverwrite = getArgValueOrDefault(args, PARAMETERS(16)).get.asInstanceOf[Boolean]
 
-    val (tableName, database) = HoodieCLIUtils.getHoodieDatabaseAndTable(table.get.asInstanceOf[String])
+    val (tableName, database) = HoodieCLIUtils.getTableIdentifier(table.get.asInstanceOf[String])
     val configs: util.List[String] = new util.ArrayList[String]
 
     val properties: TypedProperties = if (propsFilePath == null || propsFilePath.isEmpty) buildProperties(configs)
