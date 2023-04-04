@@ -74,7 +74,7 @@ public class FileIndex {
     this.tableExists = StreamerUtil.tableExists(path.toString(), HadoopConfigurations.getHadoopConf(conf));
     this.metadataConfig = metadataConfig(conf);
     this.dataSkippingEnabled = conf.getBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED);
-    this.dataPruner = initializeDataPruner(dataPruner);
+    this.dataPruner = isDataSkippingFeasible() ? dataPruner : null;
     this.partitionPruner = partitionPruner;
   }
 
@@ -276,7 +276,7 @@ public class FileIndex {
     return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
   }
 
-  private DataPruner initializeDataPruner(DataPruner dataPruner) {
+  private boolean isDataSkippingFeasible() {
     // NOTE: Data Skipping is only effective when it references columns that are indexed w/in
     //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
     //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
@@ -284,16 +284,12 @@ public class FileIndex {
     //          - Any expression not directly referencing top-level column (for ex, sub-queries, since there's
     //          nothing CSI in particular could be applied for)
     if (!metadataConfig.enabled() || !dataSkippingEnabled) {
-      validateConfig();
-      return null;
-    }
-    return dataPruner;
-  }
-
-  private void validateConfig() {
-    if (dataSkippingEnabled && !metadataConfig.enabled()) {
-      LOG.warn("Data skipping requires Metadata Table to be enabled! "
-          + "isMetadataTableEnabled = {}", metadataConfig.enabled());
+      if (dataSkippingEnabled) {
+        LOG.warn("Data skipping requires Metadata Table to be enabled! isMetadataTableEnabled = false");
+      }
+      return false;
+    } else {
+      return true;
     }
   }
 }

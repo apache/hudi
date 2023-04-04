@@ -194,7 +194,7 @@ public class ExpressionUtils {
    * Extracts partition predicate from filter condition.
    * Returns partition predicates and non-partition predicates.
    */
-  public static Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> extractPartitionPredicateList(
+  public static Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitExpressionsByPartitions(
       List<ResolvedExpression> exprs,
       List<String> partitionKeys,
       RowType tableRowType) {

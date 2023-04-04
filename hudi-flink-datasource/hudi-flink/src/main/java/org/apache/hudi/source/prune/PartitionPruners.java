@@ -123,11 +123,11 @@ public class PartitionPruners {
   /**
    * Fake partition pruner which would not prune any partitions.
    */
-  public static class FakePartitionPruner implements PartitionPruner {
+  public static class DummyPartitionPruner implements PartitionPruner {
 
     private static final long serialVersionUID = 1L;
 
-    private FakePartitionPruner() {
+    private DummyPartitionPruner() {
 
     }
 
@@ -144,7 +144,7 @@ public class PartitionPruners {
       String defaultParName,
       boolean hivePartition) {
     if (partitionEvaluators.isEmpty()) {
-      return new FakePartitionPruner();
+      return new DummyPartitionPruner();
     } else {
       return new DynamicPartitionPruner(partitionEvaluators, partitionKeys, partitionTypes, defaultParName, hivePartition);
     }
@@ -153,7 +153,7 @@ public class PartitionPruners {
   public static PartitionPruner getInstance(Collection<String> candidatePartitions) {
     Set<String> distinctPartitions = new HashSet<>(candidatePartitions);
     if (distinctPartitions.isEmpty()) {
-      return new FakePartitionPruner();
+      return new DummyPartitionPruner();
     } else {
       return new StaticPartitionPruner(distinctPartitions);
     }

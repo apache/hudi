@@ -102,7 +102,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
-import static org.apache.hudi.util.ExpressionUtils.extractPartitionPredicateList;
+import static org.apache.hudi.util.ExpressionUtils.splitExpressionsByPartitions;
 import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
 
 /**
@@ -236,7 +236,7 @@ public class HoodieTableSource implements
   public Result applyFilters(List<ResolvedExpression> filters) {
     List<ResolvedExpression> simpleFilters = filterSimpleCallExpression(filters);
     Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitFilters =
-        extractPartitionPredicateList(
+        splitExpressionsByPartitions(
             simpleFilters,
             this.partitionKeys,
             this.tableRowType);
