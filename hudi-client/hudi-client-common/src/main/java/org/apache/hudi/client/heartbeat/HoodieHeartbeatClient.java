@@ -26,8 +26,8 @@ import org.apache.hudi.exception.HoodieHeartbeatException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -53,7 +53,7 @@ import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeart
 @NotThreadSafe
 public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieHeartbeatClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieHeartbeatClient.class);
 
   private final transient FileSystem fs;
   private final String basePath;

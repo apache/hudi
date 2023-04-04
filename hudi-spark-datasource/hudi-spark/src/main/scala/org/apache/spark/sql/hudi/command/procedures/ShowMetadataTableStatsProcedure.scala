@@ -71,5 +71,3 @@ object ShowMetadataTableStatsProcedure {
     override def get() = new ShowMetadataTableStatsProcedure()
   }
 }
-
-

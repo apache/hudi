@@ -61,6 +61,12 @@ public class ConfigGroups {
         "Commit Callback Configs",
         "Configurations controlling callback behavior into HTTP endpoints, to push "
             + "notifications on commits on hudi tables."),
+    SCHEMA_PROVIDER(
+        "DeltaStreamer Schema Provider Configs",
+        "Configurations that control the schema provider for DeltaStreamer."),
+    DELTA_STREAMER_SOURCE(
+        "DeltaStreamer Source Configs",
+        "Configurations controlling the behavior of reading source data."),
     NONE(
         "None",
         "No subgroup. This description should be hidden.");

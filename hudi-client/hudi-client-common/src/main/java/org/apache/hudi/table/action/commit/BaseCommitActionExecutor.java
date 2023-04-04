@@ -56,8 +56,8 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -76,7 +76,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVE
 public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     extends BaseActionExecutor<T, I, K, O, R> {
 
-  private static final Logger LOG = LogManager.getLogger(BaseCommitActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseCommitActionExecutor.class);
 
   protected final Option<Map<String, String>> extraMetadata;
   protected final WriteOperationType operationType;

@@ -19,8 +19,9 @@
 package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.function.Function;
@@ -38,7 +39,7 @@ import java.util.function.Function;
  */
 public class SimpleExecutor<I, O, E> implements HoodieExecutor<E> {
 
-  private static final Logger LOG = LogManager.getLogger(SimpleExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SimpleExecutor.class);
 
   // Record iterator (producer)
   private final Iterator<I> itr;

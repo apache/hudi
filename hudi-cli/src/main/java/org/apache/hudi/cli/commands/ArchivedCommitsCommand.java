@@ -43,10 +43,10 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -62,7 +62,7 @@ import java.util.stream.Collectors;
  */
 @ShellComponent
 public class ArchivedCommitsCommand {
-  private static final Logger LOG = LogManager.getLogger(ArchivedCommitsCommand.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ArchivedCommitsCommand.class);
   @ShellMethod(key = "trigger archival", value = "trigger archival")
   public String triggerArchival(
       @ShellOption(value = {"--minCommits"},

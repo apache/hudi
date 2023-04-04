@@ -28,8 +28,8 @@ import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Hashtable;
 import java.util.Map;
@@ -39,7 +39,7 @@ import java.util.Map;
  */
 public class UpgradeDowngrade {
 
-  private static final Logger LOG = LogManager.getLogger(UpgradeDowngrade.class);
+  private static final Logger LOG = LoggerFactory.getLogger(UpgradeDowngrade.class);
   public static final String HOODIE_UPDATED_PROPERTY_FILE = "hoodie.properties.updated";
 
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper;

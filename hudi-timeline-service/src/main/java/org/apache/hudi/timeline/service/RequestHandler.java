@@ -49,9 +49,9 @@ import io.javalin.http.Context;
 import io.javalin.http.Handler;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -68,7 +68,7 @@ import java.util.concurrent.ScheduledExecutorService;
 public class RequestHandler {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  private static final Logger LOG = LogManager.getLogger(RequestHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RequestHandler.class);
 
   private final TimelineService.Config timelineServiceConfig;
   private final FileSystemViewManager viewManager;

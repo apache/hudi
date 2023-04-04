@@ -121,8 +121,3 @@ object CopyToTableProcedure {
     override def get() = new CopyToTableProcedure()
   }
 }
-
-
-
-
-

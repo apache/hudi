@@ -18,11 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import java.lang.reflect.InvocationTargetException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -30,8 +25,15 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.lang.reflect.InvocationTargetException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * A utility class for HoodieRecord.
@@ -39,7 +41,7 @@ import org.apache.log4j.Logger;
 public class HoodieRecordUtils {
 
   private static final Map<String, Object> INSTANCE_CACHE = new HashMap<>();
-  private static final Logger LOG = LogManager.getLogger(HoodieRecordUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRecordUtils.class);
 
   /**
    * Instantiate a given class with a record merge.

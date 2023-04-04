@@ -27,8 +27,8 @@ import org.apache.hudi.sync.common.HoodieSyncTool;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Properties;
@@ -37,7 +37,7 @@ import java.util.Properties;
  * Helper class for syncing Hudi commit data with external metastores.
  */
 public class SyncUtilHelpers {
-  private static final Logger LOG = LogManager.getLogger(SyncUtilHelpers.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SyncUtilHelpers.class);
   /**
    * Create an instance of an implementation of {@link HoodieSyncTool} that will sync all the relevant meta information
    * with an external metastore such as Hive etc. to ensure Hoodie tables can be queried or read via external systems.

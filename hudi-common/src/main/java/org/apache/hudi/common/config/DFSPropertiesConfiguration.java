@@ -28,8 +28,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -56,7 +56,7 @@ import java.util.Set;
  */
 public class DFSPropertiesConfiguration {
 
-  private static final Logger LOG = LogManager.getLogger(DFSPropertiesConfiguration.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DFSPropertiesConfiguration.class);
 
   public static final String DEFAULT_PROPERTIES_FILE = "hudi-defaults.conf";
   public static final String CONF_FILE_DIR_ENV_NAME = "HUDI_CONF_DIR";

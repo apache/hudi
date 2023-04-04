@@ -26,8 +26,8 @@ import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -41,7 +41,7 @@ import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEPRECATED_DE
  */
 public class FourToFiveUpgradeHandler implements UpgradeHandler {
 
-  private static final Logger LOG = LogManager.getLogger(FourToFiveUpgradeHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FourToFiveUpgradeHandler.class);
 
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {

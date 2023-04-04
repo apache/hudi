@@ -37,8 +37,8 @@ import com.google.cloud.bigquery.Table;
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.ViewDefinition;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -50,7 +50,7 @@ import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PROJ
 
 public class HoodieBigQuerySyncClient extends HoodieSyncClient {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieBigQuerySyncClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBigQuerySyncClient.class);
 
   protected final BigQuerySyncConfig config;
   private final String projectId;

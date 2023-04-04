@@ -49,15 +49,15 @@ import java.util.stream.Collectors;
  *
  * <p>Why we use the DFS based message queue instead of sending
  * the {@link org.apache.flink.runtime.operators.coordination.OperatorEvent} ?
- * The write task handles the operator event using the main mailbox executor which has the lowest priority for mails,
- * it is also used to process the inputs. When the write task blocks and waits for the operator event to ack the valid instant to write,
+ * The writer task thread handles the operator event using the main mailbox executor which has the lowest priority for mails,
+ * it is also used to process the inputs. When the writer task blocks and waits for the operator event to ack the valid instant to write,
  * it actually blocks all the subsequent events in the mailbox, the operator event would never be consumed then it causes deadlock.
  *
  * <p>The checkpoint metadata is also more lightweight than the active timeline.
  *
  * <p>NOTE: should be removed in the future if we have good manner to handle the async notifications from driver.
  */
-public class CkpMetadata implements Serializable {
+public class CkpMetadata implements Serializable, AutoCloseable {
   private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LoggerFactory.getLogger(CkpMetadata.class);
@@ -219,6 +219,7 @@ public class CkpMetadata implements Serializable {
   }
 
   protected static String ckpMetaPath(String basePath, String uniqueId) {
+    // .hoodie/.aux/ckp_meta
     String metaPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + Path.SEPARATOR + CKP_META;
     return StringUtils.isNullOrEmpty(uniqueId) ? metaPath : metaPath + "_" + uniqueId;
   }

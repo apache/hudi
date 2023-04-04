@@ -26,8 +26,8 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
@@ -38,7 +38,7 @@ import java.util.Properties;
  */
 public class KafkaControlProducer {
 
-  private static final Logger LOG = LogManager.getLogger(KafkaControlProducer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaControlProducer.class);
 
   private final String bootstrapServers;
   private final String controlTopicName;

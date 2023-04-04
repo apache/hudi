@@ -32,11 +32,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
-import scala.Tuple2;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,6 +44,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
+import scala.Tuple2;
 
 /**
  * Implementation of the function that probing Bloom Filters of individual files verifying
@@ -53,7 +55,7 @@ import java.util.Map;
 public class HoodieMetadataBloomFilterProbingFunction implements
     PairFlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, String>>, HoodieFileGroupId, HoodieBloomFilterProbingResult> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMetadataBloomFilterProbingFunction.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataBloomFilterProbingFunction.class);
 
   // Assuming each file bloom filter takes up 512K, sizing the max file count
   // per batch so that the total fetched bloom filters would not cross 128 MB.

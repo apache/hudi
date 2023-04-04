@@ -35,8 +35,8 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -49,7 +49,7 @@ import java.util.List;
  */
 public class BufferedConnectWriter extends AbstractConnectWriter {
 
-  private static final Logger LOG = LogManager.getLogger(BufferedConnectWriter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BufferedConnectWriter.class);
 
   private final HoodieEngineContext context;
   private final HoodieJavaWriteClient writeClient;

@@ -19,16 +19,15 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.WriteOperationType
-import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
-import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
+import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
 
 import java.io.File
 
@@ -806,7 +805,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "day,hh")
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
@@ -1231,6 +1229,40 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         """.stripMargin)
         checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
           Seq(13, "a3", 12.0, 1000, "2021-01-05")
+        )
+      })
+    }
+  }
+
+  test("Test Hudi should not record empty preCombineKey in hoodie.properties") {
+    withSQLConf("hoodie.datasource.write.operation" -> "insert") {
+      withRecordType()(withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double
+             |) using hudi
+             |tblproperties(primaryKey = 'id')
+             |location '${tmp.getCanonicalPath}/$tableName'
+        """.stripMargin)
+
+        spark.sql(s"insert into $tableName select 1, 'name1', 11")
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(1, "name1", 11.0)
+        )
+
+        spark.sql(s"insert overwrite table $tableName select 2, 'name2', 12")
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(2, "name2", 12.0)
+        )
+
+        spark.sql(s"insert into $tableName select 3, 'name3', 13")
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(2, "name2", 12.0),
+          Seq(3, "name3", 13.0)
         )
       })
     }

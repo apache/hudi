@@ -42,6 +42,7 @@ public class HoodieArchivalConfig extends HoodieConfig {
   public static final ConfigProperty<String> AUTO_ARCHIVE = ConfigProperty
       .key("hoodie.archive.automatic")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("When enabled, the archival table service is invoked immediately after each commit,"
           + " to archive commits if we cross a maximum value of commits."
           + " It's recommended to enable this, to ensure number of active commits is bounded.");
@@ -49,6 +50,7 @@ public class HoodieArchivalConfig extends HoodieConfig {
   public static final ConfigProperty<String> ASYNC_ARCHIVE = ConfigProperty
       .key("hoodie.archive.async")
       .defaultValue("false")
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Only applies when " + AUTO_ARCHIVE.key() + " is turned on. "
           + "When turned on runs archiver async with writing, which can speed up overall write performance.");
