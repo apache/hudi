@@ -21,10 +21,13 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH, getCommitTimeAtUTC}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
@@ -35,29 +38,12 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
-import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
 
 
 @Tag("functional")
 class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
-
-  private val log = LoggerFactory.getLogger(classOf[TestMORDataSourceStorage])
-
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    "hoodie.bulkinsert.shuffle.parallelism" -> "2",
-    "hoodie.delete.shuffle.parallelism" -> "1",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
-  )
-
-  val verificationCol: String = "driver"
-  val updatedVerificationVal: String = "driver_update"
 
   override def conf: SparkConf = conf(getSparkSqlConf)
 
@@ -68,7 +54,20 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     "false,",
     "false,fare.currency"
   ))
-  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preCombineField: String) {
+  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preCombineField: String): Unit = {
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      "hoodie.delete.shuffle.parallelism" -> "1",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    )
+    val verificationCol: String = "driver"
+    val updatedVerificationVal: String = "driver_update"
+
     var options: Map[String, String] = commonOpts +
       (HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled))
     if (!StringUtils.isNullOrEmpty(preCombineField)) {
@@ -132,5 +131,84 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       .load(basePath)
     assertEquals(100, hudiSnapshotDF3.count())
     assertEquals(updatedVerificationVal, hudiSnapshotDF3.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true,GLOBAL_SIMPLE",
+    "true,GLOBAL_BLOOM",
+    "false,GLOBAL_SIMPLE",
+    "false,GLOBAL_BLOOM",
+  ))
+  def testMergeOnReadStorageWithGlobalIndexUpdatePartition(isMetadataEnabled: Boolean, indexType: String): Unit = {
+    val totalRecords = 10
+    val parallelism = 2
+    val commonOpts = Map(
+      HoodieTableConfig.NAME.key -> "hudi_trips_mor_global_update_partition",
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieMetadataConfig.ENABLE.key -> isMetadataEnabled.toString,
+      HoodieIndexConfig.INDEX_TYPE.key -> indexType,
+      HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true",
+      HoodieIndexConfig.GLOBAL_INDEX_DEDUP_PARALLELISM.key -> parallelism.toString,
+      HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> parallelism.toString,
+      HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> parallelism.toString,
+      HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key -> parallelism.toString,
+      HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> parallelism.toString,
+    )
+    val dataGen = new HoodieTestDataGenerator(0xDEEF)
+
+    // insert all records to partition 1
+    val commitTime1 = getCommitTimeAtUTC(1)
+    val inserts1 = dataGen.generateInsertsForPartition(commitTime1, totalRecords, DEFAULT_FIRST_PARTITION_PATH)
+    val df1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(inserts1), parallelism))
+    df1.write.format("hudi").
+      options(commonOpts).
+      mode(SaveMode.Overwrite).
+      save(basePath)
+
+    // validate all records are in partition 1
+    val df1Snapshot = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
+      .load(basePath)
+    assertEquals(totalRecords, df1Snapshot.count)
+    assertEquals(totalRecords, df1Snapshot.filter(s"partition_path = '$DEFAULT_FIRST_PARTITION_PATH'").count)
+
+    // update all records to partition 2
+    val commitTime2 = getCommitTimeAtUTC(2)
+    val updates2 = dataGen.generateUpdatesForDifferentPartition(commitTime2, inserts1, DEFAULT_SECOND_PARTITION_PATH)
+    val df2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(updates2), parallelism))
+    df2.write.format("hudi").
+      options(commonOpts).
+      mode(SaveMode.Append).
+      save(basePath)
+
+    // validate all records are in partition 2
+    val df2Snapshot = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
+      .load(basePath)
+    assertEquals(totalRecords, df2Snapshot.count)
+    assertEquals(totalRecords, df2Snapshot.filter(s"partition_path = '$DEFAULT_SECOND_PARTITION_PATH'").count())
+
+    // update all records to partition 3
+    val commitTime3 = getCommitTimeAtUTC(3)
+    val updates3 = dataGen.generateUpdatesForDifferentPartition(commitTime3, updates2, DEFAULT_THIRD_PARTITION_PATH)
+    val df3 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(updates3), parallelism))
+    df3.write.format("hudi").
+      options(commonOpts).
+      mode(SaveMode.Append).
+      save(basePath)
+
+    // validate all records are in partition 3
+    val df3Snapshot = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
+      .load(basePath)
+    assertEquals(totalRecords, df3Snapshot.count)
+    assertEquals(totalRecords, df3Snapshot.filter(s"partition_path = '$DEFAULT_THIRD_PARTITION_PATH'").count())
   }
 }

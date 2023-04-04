@@ -81,6 +81,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
  * <p>
@@ -769,17 +771,12 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return updates;
   }
 
-  public List<HoodieRecord> generateUpdatesWithDiffPartition(String instantTime, List<HoodieRecord> baseRecords)
+  public List<HoodieRecord> generateUpdatesForDifferentPartition(String instantTime, List<HoodieRecord> baseRecords, String newPartition)
       throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
       String partition = baseRecord.getPartitionPath();
-      String newPartition = "";
-      if (partitionPaths[0].equalsIgnoreCase(partition)) {
-        newPartition = partitionPaths[1];
-      } else {
-        newPartition = partitionPaths[0];
-      }
+      checkState(!partition.equals(newPartition), "newPartition should be different from any given record's current partition.");
       HoodieKey key = new HoodieKey(baseRecord.getRecordKey(), newPartition);
       HoodieRecord record = generateUpdateRecord(key, instantTime);
       updates.add(record);
