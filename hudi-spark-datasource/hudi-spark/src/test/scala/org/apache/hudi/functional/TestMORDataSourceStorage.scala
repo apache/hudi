@@ -138,7 +138,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     "true,GLOBAL_SIMPLE",
     "true,GLOBAL_BLOOM",
     "false,GLOBAL_SIMPLE",
-    "false,GLOBAL_BLOOM",
+    "false,GLOBAL_BLOOM"
   ))
   def testMergeOnReadStorageWithGlobalIndexUpdatePartition(isMetadataEnabled: Boolean, indexType: String): Unit = {
     val totalRecords = 10
@@ -156,7 +156,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> parallelism.toString,
       HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> parallelism.toString,
       HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key -> parallelism.toString,
-      HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> parallelism.toString,
+      HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> parallelism.toString
     )
     val dataGen = new HoodieTestDataGenerator(0xDEEF)
 
@@ -192,7 +192,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .load(basePath)
     assertEquals(totalRecords, df2Snapshot.count)
-    assertEquals(totalRecords, df2Snapshot.filter(s"partition_path = '$DEFAULT_SECOND_PARTITION_PATH'").count())
+    assertEquals(totalRecords, df2Snapshot.filter(s"partition_path = '$DEFAULT_SECOND_PARTITION_PATH'").count)
 
     // update all records to partition 3
     val commitTime3 = getCommitTimeAtUTC(3)
@@ -209,6 +209,23 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .load(basePath)
     assertEquals(totalRecords, df3Snapshot.count)
-    assertEquals(totalRecords, df3Snapshot.filter(s"partition_path = '$DEFAULT_THIRD_PARTITION_PATH'").count())
+    assertEquals(totalRecords, df3Snapshot.filter(s"partition_path = '$DEFAULT_THIRD_PARTITION_PATH'").count)
+
+    // update all records back to partition 1
+    val commitTime4 = getCommitTimeAtUTC(4)
+    val updates4 = dataGen.generateUpdatesForDifferentPartition(commitTime4, updates3, DEFAULT_FIRST_PARTITION_PATH)
+    val df4 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(updates4), parallelism))
+    df4.write.format("hudi").
+      options(commonOpts).
+      mode(SaveMode.Append).
+      save(basePath)
+
+    // validate all records are in partition 1
+    val df4Snapshot = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
+      .load(basePath)
+    assertEquals(totalRecords, df4Snapshot.count)
+    assertEquals(totalRecords, df4Snapshot.filter(s"partition_path = '$DEFAULT_FIRST_PARTITION_PATH'").count)
   }
 }

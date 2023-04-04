@@ -18,8 +18,11 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -167,5 +170,37 @@ public class HoodieIndexUtils {
       throw new HoodieIndexException("Error checking candidate keys against file.", e);
     }
     return foundRecordKeys;
+  }
+
+  public static <R> HoodieData<HoodieRecord<R>> dedupForPartitionUpdates(HoodieData<Pair<HoodieRecord<R>, Boolean>> taggedHoodieRecords, int dedupParallelism) {
+    /*
+     * In case a record is updated from p1 to p2 and then to p3, 2 existing records
+     * will be tagged for the incoming record to insert to p3. So we dedup them here. (Set A)
+     */
+    HoodiePairData<String, HoodieRecord<R>> deduped = taggedHoodieRecords.filter(Pair::getRight)
+        .map(Pair::getLeft)
+        .distinctWithKey(HoodieRecord::getKey, dedupParallelism)
+        .mapToPair(r -> Pair.of(r.getRecordKey(), r));
+
+    /*
+     * This includes
+     *  - tagged existing records whose partition paths are not to be updated (Set B)
+     *  - completely new records (Set C)
+     */
+    HoodieData<HoodieRecord<R>> undeduped = taggedHoodieRecords.filter(p -> !p.getRight()).map(Pair::getLeft);
+
+    /*
+     * There can be intersection between Set A and Set B mentioned above.
+     *
+     * Example: record X is updated from p1 to p2 and then back to p1.
+     * Set A will contain an insert to p1 and Set B will contain an update to p1.
+     *
+     * So we let A left-anti join B to drop the insert from Set A and keep the update in Set B.
+     */
+    return deduped.leftOuterJoin(undeduped
+            .filter(r -> !(r.getData() instanceof EmptyHoodieRecordPayload))
+            .mapToPair(r -> Pair.of(r.getRecordKey(), r)))
+        .values().filter(p -> !p.getRight().isPresent()).map(Pair::getLeft)
+        .union(undeduped);
   }
 }

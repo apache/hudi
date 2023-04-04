@@ -44,6 +44,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.index.HoodieIndexUtils.dedupForPartitionUpdates;
 import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
 
 /**
@@ -152,10 +153,8 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
           }
           return taggedRecords.iterator();
         });
-    return taggedHoodieRecords.filter(Pair::getRight)
-        .map(Pair::getLeft)
-        .distinctWithKey(HoodieRecord::getKey, config.getGlobalIndexDedupParallelism())
-        .union(taggedHoodieRecords.filter(p -> !p.getRight()).map(Pair::getLeft));
+
+    return dedupForPartitionUpdates(taggedHoodieRecords, config.getGlobalIndexDedupParallelism());
   }
 
   @Override

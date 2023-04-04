@@ -44,6 +44,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.index.HoodieIndexUtils.dedupForPartitionUpdates;
+
 /**
  * This filter will only work with hoodie table since it will only load partitions
  * with .hoodie_partition_metadata file in it.
@@ -138,10 +140,8 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
         return Collections.singletonList(Pair.of((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty()), false)).iterator();
       }
     });
-    return taggedHoodieRecords.filter(Pair::getRight)
-        .map(Pair::getLeft)
-        .distinctWithKey(HoodieRecord::getKey, config.getGlobalIndexDedupParallelism())
-        .union(taggedHoodieRecords.filter(p -> !p.getRight()).map(Pair::getLeft));
+
+    return dedupForPartitionUpdates(taggedHoodieRecords, config.getGlobalIndexDedupParallelism());
   }
 
   @Override
