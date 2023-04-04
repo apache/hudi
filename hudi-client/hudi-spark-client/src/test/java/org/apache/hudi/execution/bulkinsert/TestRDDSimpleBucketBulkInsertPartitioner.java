@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -39,13 +40,15 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestRDDSimpleBucketPartitioner extends HoodieClientTestHarness {
+public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -62,9 +65,9 @@ public class TestRDDSimpleBucketPartitioner extends HoodieClientTestHarness {
 
   @ParameterizedTest
   @MethodSource("configParams")
-  public void testSimpleBucketPartitioner(HoodieTableType type, boolean partitionSort) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, type);
-    int bucketNum = 2;
+  public void testSimpleBucketPartitioner(boolean partitionSort) throws IOException {
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, HoodieTableType.MERGE_ON_READ);
+    int bucketNum = 10;
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
         .withPath(basePath)
@@ -79,9 +82,8 @@ public class TestRDDSimpleBucketPartitioner extends HoodieClientTestHarness {
     }
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    List<HoodieRecord> records = dataGenerator.generateInserts("0", 100);
+    List<HoodieRecord> records = dataGenerator.generateInserts("0", 1000);
     HoodieJavaRDD<HoodieRecord> javaRDD = HoodieJavaRDD.of(records, context, 1);
-    javaRDD.map(HoodieRecord::getPartitionPath).count();
 
     final HoodieSparkTable table = HoodieSparkTable.create(config, context);
     BulkInsertPartitioner partitioner = BulkInsertInternalPartitionerFactory.get(table, config);
@@ -101,14 +103,23 @@ public class TestRDDSimpleBucketPartitioner extends HoodieClientTestHarness {
         return partitionRecords.iterator();
       }, false).collect();
     }
+
+    // first writes, it will create new bucket files based on the records
+    getHoodieWriteClient(config).startCommitWithTime("0");
+    List<WriteStatus> writeStatues = getHoodieWriteClient(config).bulkInsert(HoodieJavaRDD.getJavaRDD(javaRDD), "0").collect();
+    Map<String, WriteStatus> writeStatuesMap = new HashMap<>();
+    writeStatues.forEach(ws -> writeStatuesMap.put(ws.getFileId(), ws));
+
+    // second writes the same records, all records should be mapped to the same bucket files
+    getHoodieWriteClient(config).startCommitWithTime("1");
+    List<WriteStatus> writeStatues2 = getHoodieWriteClient(config).bulkInsert(HoodieJavaRDD.getJavaRDD(javaRDD), "1").collect();
+    writeStatues2.forEach(ws -> assertEquals(ws.getTotalRecords(), writeStatuesMap.get(ws.getFileId()).getTotalRecords()));
   }
 
   private static Stream<Arguments> configParams() {
     Object[][] data = new Object[][]{
-        {HoodieTableType.COPY_ON_WRITE, true},
-        {HoodieTableType.COPY_ON_WRITE, false},
-        {HoodieTableType.MERGE_ON_READ, true},
-        {HoodieTableType.MERGE_ON_READ, false},
+        {true},
+        {false},
     };
     return Stream.of(data).map(Arguments::of);
   }

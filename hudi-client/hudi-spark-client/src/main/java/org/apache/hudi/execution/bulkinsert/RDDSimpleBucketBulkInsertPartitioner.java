@@ -34,9 +34,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class RDDSimpleBucketPartitioner<T extends HoodieRecordPayload> extends RDDBucketIndexPartitioner<T> {
+public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload> extends RDDBucketIndexPartitioner<T> {
 
-  public RDDSimpleBucketPartitioner(HoodieTable table) {
+  public RDDSimpleBucketBulkInsertPartitioner(HoodieTable table) {
     super(table, null, false);
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSimpleBucketIndex);
   }
@@ -44,10 +44,10 @@ public class RDDSimpleBucketPartitioner<T extends HoodieRecordPayload> extends R
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputPartitions) {
     HoodieSimpleBucketIndex index = (HoodieSimpleBucketIndex) table.getIndex();
-    HashMap<String, Integer> fileIdToIdx = new HashMap<>();
+    Map<String, Integer> fileIdPrefixToBucketIndex = new HashMap<>();
 
     // Map <partition, <bucketNo, fileID>>
-    Map<String, HashMap<Integer, String>> partitionMapper = getPartitionMapper(records, fileIdToIdx);
+    Map<String, Map<Integer, String>> partitionMapper = getPartitionMapper(records, fileIdPrefixToBucketIndex);
 
     return doPartition(records, new Partitioner() {
       @Override
@@ -61,13 +61,13 @@ public class RDDSimpleBucketPartitioner<T extends HoodieRecordPayload> extends R
         String partitionPath = hoodieKey.getPartitionPath();
         int bucketID = index.getBucketID(hoodieKey);
         String fileID = partitionMapper.get(partitionPath).get(bucketID);
-        return fileIdToIdx.get(fileID);
+        return fileIdPrefixToBucketIndex.get(fileID);
       }
     });
   }
 
-  Map<String, HashMap<Integer, String>> getPartitionMapper(JavaRDD<HoodieRecord<T>> records,
-                                                           HashMap<String, Integer> fileIdToIdx) {
+  Map<String, Map<Integer, String>> getPartitionMapper(JavaRDD<HoodieRecord<T>> records,
+                                                       Map<String, Integer> fileIdPrefixToBucketIndex) {
 
     HoodieSimpleBucketIndex index = (HoodieSimpleBucketIndex) table.getIndex();
     int numBuckets = index.getNumBuckets();
@@ -75,31 +75,32 @@ public class RDDSimpleBucketPartitioner<T extends HoodieRecordPayload> extends R
         .map(HoodieRecord::getPartitionPath)
         .distinct().collect().stream()
         .collect(Collectors.toMap(p -> p, p -> {
-          Map<Integer, HoodieRecordLocation> locationMap = index.loadPartitionBucketIdFileIdMapping(table, p);
-          HashMap<Integer, String> fileIdMap = new HashMap<>();
+          Map<Integer, HoodieRecordLocation> locationMap = index.loadBucketIdToFileIdMappingForPartition(table, p);
+          Map<Integer, String> bucketIdToFileIdPrefixMap = new HashMap<>();
           HashSet<Integer> existsBucketID = new HashSet<>();
 
           // Load an existing index
           locationMap.forEach((k, v) -> {
             String fileId = v.getFileId();
-            fileIdMap.put(k, fileId);
-            fileIdToIdx.put(fileId, fileIdPfxList.size());
-            fileIdPfxList.add(fileId);
-            existsBucketID.add(BucketIdentifier.bucketIdFromFileId(fileId));
+            String prefix = fileId.substring(0, 36);
+            bucketIdToFileIdPrefixMap.put(k, prefix);
+            fileIdPrefixToBucketIndex.put(prefix, fileIdPfxList.size());
+            fileIdPfxList.add(prefix);
+            existsBucketID.add(BucketIdentifier.bucketIdFromFileId(prefix));
             doAppend.add(true);
           });
 
           // Generate a file that does not exist
           for (int i = 0; i < numBuckets; i++) {
             if (!existsBucketID.contains(i)) {
-              String fileId = BucketIdentifier.newBucketFileIdPrefix(i);
-              fileIdToIdx.put(fileId, fileIdPfxList.size());
-              fileIdPfxList.add(fileId);
+              String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(i);
+              fileIdPrefixToBucketIndex.put(fileIdPrefix, fileIdPfxList.size());
+              fileIdPfxList.add(fileIdPrefix);
               doAppend.add(false);
-              fileIdMap.put(i, fileId);
+              bucketIdToFileIdPrefixMap.put(i, fileIdPrefix);
             }
           }
-          return fileIdMap;
+          return bucketIdToFileIdPrefixMap;
         }));
   }
 }

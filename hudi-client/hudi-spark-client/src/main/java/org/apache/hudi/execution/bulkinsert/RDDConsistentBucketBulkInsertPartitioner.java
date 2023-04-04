@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
@@ -40,7 +41,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 /**
  * A partitioner for (consistent hashing) bucket index used in bulk_insert
  */
-public class RDDConsistentBucketPartitioner<T> extends RDDBucketIndexPartitioner<T> {
+public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexPartitioner<T> {
 
   private static final Logger LOG = LogManager.getLogger(RDDConsistentBucketPartitioner.class);
 
@@ -48,16 +49,18 @@ public class RDDConsistentBucketPartitioner<T> extends RDDBucketIndexPartitioner
   private final List<String> indexKeyFields;
   private final Map<String, List<ConsistentHashingNode>> hashingChildrenNodes;
 
-  private List<Boolean> doAppend;
-  private List<String> fileIdPfxList;
-
-  public RDDConsistentBucketPartitioner(HoodieTable table, Map<String, String> strategyParams, boolean preserveHoodieMetadata) {
+  public RDDConsistentBucketBulkInsertPartitioner(HoodieTable table,
+                                                  Map<String, String> strategyParams,
+                                                  boolean preserveHoodieMetadata) {
+    super(table,
+        strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), null),
+        preserveHoodieMetadata);
     this.table = table;
     this.indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
     this.hashingChildrenNodes = new HashMap<>();
   }
 
-  public RDDConsistentBucketPartitioner(HoodieTable table) {
+  public RDDConsistentBucketBulkInsertPartitioner(HoodieTable table) {
     this(table, Collections.emptyMap(), false);
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSparkConsistentBucketIndex,
         "RDDConsistentBucketPartitioner can only be used together with consistent hashing bucket index");

@@ -34,9 +34,9 @@ import java.util.List;
 /**
  * Abstract of bucket index bulk_insert partitioner
  */
-public abstract class BucketIndexPartitioner<T> implements BulkInsertPartitioner<T> {
+public abstract class BucketIndexBulkInsertPartitioner<T> implements BulkInsertPartitioner<T> {
 
-  public static final Logger LOG = LogManager.getLogger(BucketIndexPartitioner.class);
+  public static final Logger LOG = LogManager.getLogger(BucketIndexBulkInsertPartitioner.class);
 
   private final boolean preserveHoodieMetadata;
 
@@ -47,7 +47,7 @@ public abstract class BucketIndexPartitioner<T> implements BulkInsertPartitioner
   protected final List<Boolean> doAppend = new ArrayList<>();
   protected final List<String> fileIdPfxList = new ArrayList<>();
 
-  public BucketIndexPartitioner(HoodieTable table, String sortString, boolean preserveHoodieMetadata) {
+  public BucketIndexBulkInsertPartitioner(HoodieTable table, String sortString, boolean preserveHoodieMetadata) {
 
     this.table = table;
     this.indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
