@@ -105,7 +105,6 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         ? BucketType.INSERT
         : BucketType.UPDATE;
     handleUpsertPartition(
-        instantTime,
         partitionPath,
         fileId,
         bucketType,
@@ -170,7 +169,6 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
 
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(
-      String instantTime,
       String partitionPath,
       String fileIdHint,
       BucketType bucketType,
