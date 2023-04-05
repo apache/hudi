@@ -248,4 +248,20 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     val expectedMsg = s"RecordKey:\t_row_key\tnull"
     assertTrue(getRootCause(e).getMessage.contains(expectedMsg))
   }
+
+  @Test
+  def testWriteToHudiWithoutAnyConfigs(): Unit = {
+    val records = recordsToStrings(dataGen.generateInserts("000", 5)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF.cache
+
+    inputDF.write.format("hudi")
+      .option("hoodie.table.name","hudi_tbl")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    val snapshot0 = spark.read.format("hudi").load(basePath)
+    assertEquals(5, snapshot0.count())
+  }
 }
