@@ -1005,7 +1005,6 @@
             <groupId>log4j</groupId>
             <artifactId>apache-log4j-extras</artifactId>
           </exclusion>
-
         </exclusions>
       </dependency>
 
