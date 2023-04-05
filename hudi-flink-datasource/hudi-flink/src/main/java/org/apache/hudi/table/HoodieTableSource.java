@@ -102,7 +102,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
-import static org.apache.hudi.util.ExpressionUtils.splitExpressionsByPartitions;
+import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
 import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
 
 /**
@@ -235,17 +235,11 @@ public class HoodieTableSource implements
   @Override
   public Result applyFilters(List<ResolvedExpression> filters) {
     List<ResolvedExpression> simpleFilters = filterSimpleCallExpression(filters);
-    Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitFilters =
-        splitExpressionsByPartitions(
-            simpleFilters,
-            this.partitionKeys,
-            this.tableRowType);
+    Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitFilters = splitExprByPartitionCall(simpleFilters, this.partitionKeys, this.tableRowType);
     this.dataPruner = DataPruner.newInstance(splitFilters.f0);
     this.partitionPruner = cratePartitionPruner(splitFilters.f1);
     // refuse all the filters now
-    return SupportsFilterPushDown.Result.of(
-        new ArrayList<>(splitFilters.f1),
-        new ArrayList<>(filters));
+    return SupportsFilterPushDown.Result.of(new ArrayList<>(splitFilters.f1), new ArrayList<>(filters));
   }
 
   @Override
@@ -289,10 +283,14 @@ public class HoodieTableSource implements
     return sb.toString();
   }
 
+  @Nullable
   private PartitionPruners.PartitionPruner cratePartitionPruner(List<ResolvedExpression> partitionFilters) {
+    if (partitionFilters.isEmpty()) {
+      return null;
+    }
     StringJoiner joiner = new StringJoiner(" and ");
-    partitionFilters.stream().forEach(f -> joiner.add(f.asSummaryString()));
-    LOG.info("Partition pruner for hoodie source, condition is:\n" + joiner.toString());
+    partitionFilters.forEach(f -> joiner.add(f.asSummaryString()));
+    LOG.info("Partition pruner for hoodie source, condition is:\n" + joiner);
     List<ExpressionEvaluators.Evaluator> evaluators = ExpressionEvaluators.fromExpression(partitionFilters);
     List<DataType> partitionTypes = this.partitionKeys.stream().map(name ->
         this.schema.getColumn(name).orElseThrow(() -> new HoodieValidationException("Field " + name + " does not exist")))

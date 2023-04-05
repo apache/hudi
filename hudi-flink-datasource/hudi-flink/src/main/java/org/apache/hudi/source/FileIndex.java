@@ -64,7 +64,6 @@ public class FileIndex {
   private final boolean tableExists;
   private final HoodieMetadataConfig metadataConfig;
   private final PartitionPruners.PartitionPruner partitionPruner;
-  private final boolean dataSkippingEnabled;
   private final DataPruner dataPruner;
   private List<String> partitionPaths;      // cache of partition paths
 
@@ -73,8 +72,7 @@ public class FileIndex {
     this.rowType = rowType;
     this.tableExists = StreamerUtil.tableExists(path.toString(), HadoopConfigurations.getHadoopConf(conf));
     this.metadataConfig = metadataConfig(conf);
-    this.dataSkippingEnabled = conf.getBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED);
-    this.dataPruner = isDataSkippingFeasible() ? dataPruner : null;
+    this.dataPruner = isDataSkippingFeasible(conf.getBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? dataPruner : null;
     this.partitionPruner = partitionPruner;
   }
 
@@ -276,20 +274,20 @@ public class FileIndex {
     return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
   }
 
-  private boolean isDataSkippingFeasible() {
+  private boolean isDataSkippingFeasible(boolean dataSkippingEnabled) {
     // NOTE: Data Skipping is only effective when it references columns that are indexed w/in
     //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
     //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
     //          CSI only contains stats for top-level columns, in this case for "struct")
     //          - Any expression not directly referencing top-level column (for ex, sub-queries, since there's
     //          nothing CSI in particular could be applied for)
-    if (!metadataConfig.enabled() || !dataSkippingEnabled) {
-      if (dataSkippingEnabled) {
-        LOG.warn("Data skipping requires Metadata Table to be enabled! isMetadataTableEnabled = false");
+    if (dataSkippingEnabled) {
+      if (metadataConfig.enabled()) {
+        return true;
+      } else {
+        LOG.warn("Data skipping requires Metadata Table to be enabled! Disable the data skipping");
       }
-      return false;
-    } else {
-      return true;
     }
+    return false;
   }
 }

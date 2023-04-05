@@ -345,7 +345,6 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .partitionPruner(PartitionPruners.getInstance(Collections.emptySet()))
         .skipCompaction(false)
         .build();
 
@@ -387,7 +386,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .partitionPruner(PartitionPruners.getInstance(Arrays.asList("par1", "par2", "par3", "par4")))
+        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipCompaction(false)
         .build();
 
@@ -426,7 +425,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .partitionPruner(PartitionPruners.getInstance((Arrays.asList("par1", "par2", "par3", "par4"))))
+        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipCompaction(true)
         .build();
 
@@ -493,7 +492,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .partitionPruner(PartitionPruners.getInstance(Arrays.asList("par1", "par2", "par3", "par4")))
+        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipClustering(true)
         .build();
 
@@ -557,7 +556,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .partitionPruner(PartitionPruners.getInstance(Arrays.asList("par1", "par2", "par3", "par4")))
+        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .build();
 
     // default read the latest commit

@@ -41,7 +41,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -192,23 +192,26 @@ public class ExpressionUtils {
 
   /**
    * Extracts partition predicate from filter condition.
-   * Returns partition predicates and non-partition predicates.
+   *
+   * <p>NOTE: the {@code expressions} should be simple call expressions.
+   *
+   * @return A tuple of partition predicates and non-partition predicates.
    */
-  public static Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitExpressionsByPartitions(
-      List<ResolvedExpression> exprs,
+  public static Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitExprByPartitionCall(
+      List<ResolvedExpression> expressions,
       List<String> partitionKeys,
       RowType tableRowType) {
     if (partitionKeys.isEmpty()) {
-      return Tuple2.of(exprs, Collections.emptyList());
+      return Tuple2.of(expressions, Collections.emptyList());
     } else {
       List<ResolvedExpression> partitionFilters = new ArrayList<>();
       List<ResolvedExpression> nonPartitionFilters = new ArrayList<>();
-      int[] partitionIdxMapping = tableRowType.getFieldNames().stream().mapToInt(partitionKeys::indexOf).toArray();
-      for (ResolvedExpression expr : exprs) {
+      final List<String> fieldNames = tableRowType.getFieldNames();
+      Set<Integer> parFieldPos = partitionKeys.stream().map(fieldNames::indexOf).collect(Collectors.toSet());
+      for (ResolvedExpression expr : expressions) {
         for (CallExpression e : splitByAnd(expr)) {
-          CallExpression convertedExpr = applyMapping(e, partitionIdxMapping);
-          if (convertedExpr != null) {
-            partitionFilters.add(convertedExpr);
+          if (isPartitionCallExpr(e, parFieldPos)) {
+            partitionFilters.add(expr);
           } else {
             nonPartitionFilters.add(e);
           }
@@ -242,64 +245,23 @@ public class ExpressionUtils {
     }
   }
 
-  private static CallExpression applyMapping(CallExpression expr, int[] fieldIdxMapping) {
-    FunctionDefinition funcDef = expr.getFunctionDefinition();
-    if (funcDef == BuiltInFunctionDefinitions.IN
-        || funcDef == BuiltInFunctionDefinitions.EQUALS
-        || funcDef == BuiltInFunctionDefinitions.NOT_EQUALS
-        || funcDef == BuiltInFunctionDefinitions.IS_NULL
-        || funcDef == BuiltInFunctionDefinitions.IS_NOT_NULL
-        || funcDef == BuiltInFunctionDefinitions.LESS_THAN
-        || funcDef == BuiltInFunctionDefinitions.GREATER_THAN
-        || funcDef == BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL
-        || funcDef == BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL) {
-      List<Expression> children = expr.getChildren();
-      List<ResolvedExpression> newChildren = children.stream()
-          .map(
-              child -> {
-                if (child instanceof FieldReferenceExpression) {
-                  FieldReferenceExpression refExpr = (FieldReferenceExpression) child;
-                  int target = fieldIdxMapping[refExpr.getFieldIndex()];
-                  if (target >= 0) {
-                    return new FieldReferenceExpression(
-                        refExpr.getName(),
-                        refExpr.getOutputDataType(),
-                        refExpr.getInputIndex(),
-                        target);
-                  } else {
-                    return null;
-                  }
-                } else {
-                  return (ResolvedExpression) child;
-                }
-              })
-          .filter(Objects::nonNull)
-          .collect(Collectors.toList());
-      if (newChildren.size() == children.size()) {
-        return new CallExpression(
-            expr.getFunctionDefinition(),
-            newChildren,
-            expr.getOutputDataType());
-      } else {
-        return null;
-      }
-    } else if (funcDef == BuiltInFunctionDefinitions.OR
-        || funcDef == BuiltInFunctionDefinitions.AND) {
-      List<Expression> children = expr.getChildren();
-      List<ResolvedExpression> newChildren = children.stream()
-          .map(child -> applyMapping((CallExpression) child, fieldIdxMapping))
-          .filter(Objects::nonNull)
-          .collect(Collectors.toList());
-      if (newChildren.size() == children.size()) {
-        return new CallExpression(
-            expr.getFunctionDefinition(),
-            newChildren,
-            expr.getOutputDataType());
-      } else {
-        return null;
-      }
-    } else {
-      throw new UnsupportedOperationException("Unsupported function: " + funcDef);
-    }
+  /**
+   * Returns whether the {@code expr} is a partition call expression.
+   *
+   * @param expr        The expression
+   * @param parFieldPos The partition field positions within the table schema
+   */
+  private static boolean isPartitionCallExpr(CallExpression expr, Set<Integer> parFieldPos) {
+    List<Expression> children = expr.getChildren();
+    return children.stream()
+        .allMatch(
+            child -> {
+              if (child instanceof FieldReferenceExpression) {
+                FieldReferenceExpression refExpr = (FieldReferenceExpression) child;
+                return parFieldPos.contains(refExpr.getFieldIndex());
+              } else {
+                return true;
+              }
+            });
   }
 }

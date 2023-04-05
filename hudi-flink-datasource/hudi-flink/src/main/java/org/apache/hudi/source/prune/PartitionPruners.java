@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.prune;
 
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.stats.ColumnStats;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -26,6 +27,7 @@ import org.apache.hudi.util.DataTypeUtils;
 import org.apache.flink.table.types.DataType;
 
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -108,32 +110,15 @@ public class PartitionPruners {
 
     private static final long serialVersionUID = 1L;
 
-    private final Set<String> candidatePartitions;
+    private final Set<String> partitions;
 
-    private StaticPartitionPruner(Set<String> candidatePartitions) {
-      this.candidatePartitions = candidatePartitions;
+    private StaticPartitionPruner(Collection<String> partitions) {
+      this.partitions = new HashSet<>(partitions);
     }
 
     public Set<String> filter(Collection<String> partitions) {
       return partitions.stream()
-          .filter(this.candidatePartitions::contains).collect(Collectors.toSet());
-    }
-  }
-
-  /**
-   * Fake partition pruner which would not prune any partitions.
-   */
-  public static class DummyPartitionPruner implements PartitionPruner {
-
-    private static final long serialVersionUID = 1L;
-
-    private DummyPartitionPruner() {
-
-    }
-
-    @Override
-    public Set<String> filter(Collection<String> partitions) {
-      return new HashSet<>(partitions);
+          .filter(this.partitions::contains).collect(Collectors.toSet());
     }
   }
 
@@ -143,19 +128,15 @@ public class PartitionPruners {
       List<DataType> partitionTypes,
       String defaultParName,
       boolean hivePartition) {
-    if (partitionEvaluators.isEmpty()) {
-      return new DummyPartitionPruner();
-    } else {
-      return new DynamicPartitionPruner(partitionEvaluators, partitionKeys, partitionTypes, defaultParName, hivePartition);
-    }
+    ValidationUtils.checkState(!partitionEvaluators.isEmpty());
+    return new DynamicPartitionPruner(partitionEvaluators, partitionKeys, partitionTypes, defaultParName, hivePartition);
   }
 
   public static PartitionPruner getInstance(Collection<String> candidatePartitions) {
-    Set<String> distinctPartitions = new HashSet<>(candidatePartitions);
-    if (distinctPartitions.isEmpty()) {
-      return new DummyPartitionPruner();
-    } else {
-      return new StaticPartitionPruner(distinctPartitions);
-    }
+    return new StaticPartitionPruner(candidatePartitions);
+  }
+
+  public static PartitionPruner getInstance(String... candidatePartitions) {
+    return new StaticPartitionPruner(Arrays.asList(candidatePartitions));
   }
 }

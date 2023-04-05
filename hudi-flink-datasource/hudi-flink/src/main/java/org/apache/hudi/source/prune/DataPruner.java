@@ -29,6 +29,8 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 
+import javax.annotation.Nullable;
+
 import java.io.Serializable;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -71,8 +73,9 @@ public class DataPruner implements Serializable {
     return referencedCols;
   }
 
+  @Nullable
   public static DataPruner newInstance(List<ResolvedExpression> filters) {
-    if (filters == null || filters.size() == 0) {
+    if (filters.isEmpty()) {
       return null;
     }
     String[] referencedCols = ExpressionUtils.referencedColumns(filters);
