@@ -690,6 +690,16 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to enable commit conflict checking or not during early "
           + "conflict detection.");
 
+  public static final ConfigProperty<Boolean> SAMPLE_WRITES_ENABLED = ConfigProperty
+      .key("hoodie.write.sample.writes.enabled")
+      .defaultValue(false)
+      .withDocumentation("");
+
+  public static final ConfigProperty<Integer> SAMPLE_WRITES_SIZE = ConfigProperty
+      .key("hoodie.write.sample.writes.size")
+      .defaultValue(2000)
+      .withDocumentation("");
+
   public static final ConfigProperty<String> SENSITIVE_CONFIG_KEYS_FILTER = ConfigProperty
       .key("hoodie.sensitive.config.keys")
       .defaultValue("ssl,tls,sasl,auth,credentials")
@@ -2952,6 +2962,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withEarlyConflictDetectionStrategy(String className) {
       writeConfig.setValue(EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withSampleWritesEnabled(boolean enabled) {
+      writeConfig.setValue(SAMPLE_WRITES_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withSampleWritesSize(int size) {
+      writeConfig.setValue(SAMPLE_WRITES_SIZE, String.valueOf(size));
       return this;
     }
 

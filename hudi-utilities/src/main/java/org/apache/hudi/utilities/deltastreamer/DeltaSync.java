@@ -31,6 +31,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.utils.SparkSampleWritesUtils;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
@@ -757,6 +758,7 @@ public class DeltaSync implements Serializable, Closeable {
     }
 
     boolean isEmpty = records.isEmpty();
+    SparkSampleWritesUtils.overwriteRecordSizeEstimateIfNeeded(jssc, records, writeClient.getConfig());
 
     // try to start a new commit
     String instantTime = startCommit();
