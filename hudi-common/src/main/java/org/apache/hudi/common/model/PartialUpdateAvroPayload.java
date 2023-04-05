@@ -18,16 +18,15 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.List;
@@ -107,10 +106,10 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
     final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0 ? true : false;
     try {
       GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
-      Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord);
+      Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord, true);
       if (mergedRecord.isPresent()) {
         return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(),
-            shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
+                shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
       }
     } catch (Exception ex) {
       return this;
@@ -120,12 +119,12 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
-    return this.mergeOldRecord(currentValue, schema, false);
+    return this.mergeOldRecord(currentValue, schema, false, false);
   }
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties prop) throws IOException {
-    return mergeOldRecord(currentValue, schema, isRecordNewer(orderingVal, currentValue, prop));
+    return mergeOldRecord(currentValue, schema, isRecordNewer(orderingVal, currentValue, prop), false);
   }
 
   /**
@@ -139,18 +138,30 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
   //  Utilities
   // -------------------------------------------------------------------------
 
+  /**
+   * Merge old record with new record.
+   * @param oldRecord
+   * @param schema
+   * @param isOldRecordNewer
+   * @param isPreCombining flag for deleted record combine logic
+  1 preCombine: if delete record is newer, return merged record with _hoodie_is_deleted = true
+  2 combineAndGetUpdateValue:  return empty since we don't need to store deleted data to storage
+   * @return
+   * @throws IOException
+   */
   private Option<IndexedRecord> mergeOldRecord(IndexedRecord oldRecord,
-      Schema schema,
-      boolean isOldRecordNewer) throws IOException {
+                                               Schema schema,
+                                               boolean isOldRecordNewer, boolean isPreCombining) throws IOException {
     Option<IndexedRecord> recordOption = getInsertValue(schema);
-    if (!recordOption.isPresent()) {
+
+    if (!recordOption.isPresent() && !isPreCombining) {
       // use natural order for delete record
       return Option.empty();
     }
 
     if (isOldRecordNewer && schema.getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD) != null) {
       // handling disorder, should use the metadata fields of the updating record
-      return mergeDisorderRecordsWithMetadata(schema, (GenericRecord) oldRecord, (GenericRecord) recordOption.get());
+      return mergeDisorderRecordsWithMetadata(schema, (GenericRecord) oldRecord, (GenericRecord) recordOption.get(), isPreCombining);
     } else if (isOldRecordNewer) {
       return mergeRecords(schema, (GenericRecord) oldRecord, (GenericRecord) recordOption.get());
     } else {
@@ -168,10 +179,10 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
    * @return the merged record option
    */
   protected Option<IndexedRecord> mergeDisorderRecordsWithMetadata(
-      Schema schema,
-      GenericRecord oldRecord,
-      GenericRecord updatingRecord) {
-    if (isDeleteRecord(oldRecord)) {
+          Schema schema,
+          GenericRecord oldRecord,
+          GenericRecord updatingRecord, boolean isPreCombining) {
+    if (isDeleteRecord(oldRecord) && !isPreCombining) {
       return Option.empty();
     } else {
       final GenericRecordBuilder builder = new GenericRecordBuilder(schema);
@@ -206,20 +217,20 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
     String orderingField = prop.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     if (!StringUtils.isNullOrEmpty(orderingField)) {
       boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(prop.getProperty(
-          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+              KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+              KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
 
       Comparable oldOrderingVal =
-          (Comparable) HoodieAvroUtils.getNestedFieldVal(
-              (GenericRecord) record,
-              orderingField,
-              true,
-              consistentLogicalTimestampEnabled);
+              (Comparable) HoodieAvroUtils.getNestedFieldVal(
+                      (GenericRecord) record,
+                      orderingField,
+                      true,
+                      consistentLogicalTimestampEnabled);
 
       // pick the payload with greater ordering value as insert record
       return oldOrderingVal != null
-          && ReflectionUtils.isSameClass(oldOrderingVal, orderingVal)
-          && oldOrderingVal.compareTo(orderingVal) > 0;
+              && ReflectionUtils.isSameClass(oldOrderingVal, orderingVal)
+              && oldOrderingVal.compareTo(orderingVal) > 0;
     }
     return false;
   }
