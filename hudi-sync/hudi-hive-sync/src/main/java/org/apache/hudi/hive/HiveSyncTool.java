@@ -258,13 +258,28 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
     }
     LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
-    List<String> writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced);
-    LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
 
-    // Sync the partitions if needed
-    // find dropped partitions, if any, in the latest commit
-    Set<String> droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced);
-    boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, droppedPartitions);
+    boolean partitionsChanged;
+    if (!lastCommitTimeSynced.isPresent()
+        || syncClient.getActiveTimeline().isBeforeTimelineStarts(lastCommitTimeSynced.get())) {
+      // If the last commit time synced is before the start of the active timeline,
+      // the Hive sync falls back to list all partitions on storage, instead of
+      // reading active and archived timelines for written partitions.
+      LOG.info("Sync all partitions given the last commit time synced is empty or "
+          + "before the start of the active timeline. Listing all partitions in "
+          + config.getString(META_SYNC_BASE_PATH)
+          + ", file system: " + config.getHadoopFileSystem());
+      partitionsChanged = syncAllPartitions(tableName);
+    } else {
+      List<String> writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced);
+      LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
+
+      // Sync the partitions if needed
+      // find dropped partitions, if any, in the latest commit
+      Set<String> droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced);
+      partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, droppedPartitions);
+    }
+
     boolean meetSyncConditions = schemaChanged || partitionsChanged;
     if (!config.getBoolean(META_SYNC_CONDITIONAL_SYNC) || meetSyncConditions) {
       syncClient.updateLastCommitTimeSynced(tableName);
@@ -367,45 +382,82 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   /**
+   * Syncs all partitions on storage to the metastore, by only making incremental changes.
+   *
+   * @param tableName The table name in the metastore.
+   * @return {@code true} if one or more partition(s) are changed in the metastore;
+   * {@code false} otherwise.
+   */
+  private boolean syncAllPartitions(String tableName) {
+    try {
+      if (config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
+        return false;
+      }
+
+      List<Partition> allPartitionsInMetastore = syncClient.getAllPartitions(tableName);
+      List<String> allPartitionsOnStorage = syncClient.getAllPartitionPathsOnStorage();
+      return syncPartitions(
+          tableName,
+          syncClient.getPartitionEvents(allPartitionsInMetastore, allPartitionsOnStorage));
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to sync partitions for table " + tableName, e);
+    }
+  }
+
+  /**
    * Syncs the list of storage partitions passed in (checks if the partition is in hive, if not adds it or if the
    * partition path does not match, it updates the partition path).
    *
-   * @param writtenPartitionsSince partitions has been added, updated, or dropped since last synced.
+   * @param tableName              The table name in the metastore.
+   * @param writtenPartitionsSince Partitions has been added, updated, or dropped since last synced.
+   * @param droppedPartitions      Partitions that are dropped since last sync.
+   * @return {@code true} if one or more partition(s) are changed in the metastore;
+   * {@code false} otherwise.
    */
   private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, Set<String> droppedPartitions) {
-    boolean partitionsChanged;
     try {
       if (writtenPartitionsSince.isEmpty() || config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
         return false;
       }
 
       List<Partition> hivePartitions = getTablePartitions(tableName, writtenPartitionsSince);
-      List<PartitionEvent> partitionEvents =
-          syncClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, droppedPartitions);
-
-      List<String> newPartitions = filterPartitions(partitionEvents, PartitionEventType.ADD);
-      if (!newPartitions.isEmpty()) {
-        LOG.info("New Partitions " + newPartitions);
-        syncClient.addPartitionsToTable(tableName, newPartitions);
-      }
-
-      List<String> updatePartitions = filterPartitions(partitionEvents, PartitionEventType.UPDATE);
-      if (!updatePartitions.isEmpty()) {
-        LOG.info("Changed Partitions " + updatePartitions);
-        syncClient.updatePartitionsToTable(tableName, updatePartitions);
-      }
-
-      List<String> dropPartitions = filterPartitions(partitionEvents, PartitionEventType.DROP);
-      if (!dropPartitions.isEmpty()) {
-        LOG.info("Drop Partitions " + dropPartitions);
-        syncClient.dropPartitions(tableName, dropPartitions);
-      }
-
-      partitionsChanged = !updatePartitions.isEmpty() || !newPartitions.isEmpty() || !dropPartitions.isEmpty();
+      return syncPartitions(
+          tableName,
+          syncClient.getPartitionEvents(
+              hivePartitions, writtenPartitionsSince, droppedPartitions));
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to sync partitions for table " + tableName, e);
     }
-    return partitionsChanged;
+  }
+
+  /**
+   * Syncs added, updated, and dropped partitions to the metastore.
+   *
+   * @param tableName          The table name in the metastore.
+   * @param partitionEventList The partition change event list.
+   * @return {@code true} if one or more partition(s) are changed in the metastore;
+   * {@code false} otherwise.
+   */
+  private boolean syncPartitions(String tableName, List<PartitionEvent> partitionEventList) {
+    List<String> newPartitions = filterPartitions(partitionEventList, PartitionEventType.ADD);
+    if (!newPartitions.isEmpty()) {
+      LOG.info("New Partitions " + newPartitions);
+      syncClient.addPartitionsToTable(tableName, newPartitions);
+    }
+
+    List<String> updatePartitions = filterPartitions(partitionEventList, PartitionEventType.UPDATE);
+    if (!updatePartitions.isEmpty()) {
+      LOG.info("Changed Partitions " + updatePartitions);
+      syncClient.updatePartitionsToTable(tableName, updatePartitions);
+    }
+
+    List<String> dropPartitions = filterPartitions(partitionEventList, PartitionEventType.DROP);
+    if (!dropPartitions.isEmpty()) {
+      LOG.info("Drop Partitions " + dropPartitions);
+      syncClient.dropPartitions(tableName, dropPartitions);
+    }
+
+    return !updatePartitions.isEmpty() || !newPartitions.isEmpty() || !dropPartitions.isEmpty();
   }
 
   private List<String> filterPartitions(List<PartitionEvent> events, PartitionEventType eventType) {
