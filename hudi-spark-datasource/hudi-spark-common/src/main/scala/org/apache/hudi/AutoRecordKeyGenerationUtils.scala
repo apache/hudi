@@ -19,14 +19,17 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.DataSourceWriteOptions.INSERT_DROP_DUPS
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_DROP_DUPS, PRECOMBINE_FIELD}
+import org.apache.hudi.HoodieSparkSqlWriter.getClass
 import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieKeyGeneratorException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.slf4j.LoggerFactory
 
 object AutoRecordKeyGenerationUtils {
+  private val log = LoggerFactory.getLogger(getClass)
 
   def mayBeValidateParamsForAutoGenerationOfRecordKeys(parameters: Map[String, String], hoodieConfig: HoodieConfig): Unit = {
     val autoGenerateRecordKeys = !parameters.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) // if record key is not configured,
@@ -45,6 +48,10 @@ object AutoRecordKeyGenerationUtils {
       if (!parameters.getOrElse(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString).toBoolean) {
         throw new HoodieKeyGeneratorException("Disabling " + HoodieTableConfig.POPULATE_META_FIELDS.key() + " is not supported with auto generation of record keys")
       }
+    }
+
+    if (hoodieConfig.contains(PRECOMBINE_FIELD.key())) {
+      log.warn("Precombine field " + hoodieConfig.getString(PRECOMBINE_FIELD.key()) + " will be ignoed with auto record key generation enabled")
     }
   }
 }

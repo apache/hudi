@@ -157,20 +157,7 @@ object HoodieSparkSqlWriter {
       case _ => throw new HoodieException("hoodie only support org.apache.spark.serializer.KryoSerializer as spark.serializer")
     }
     val tableType = HoodieTableType.valueOf(hoodieConfig.getString(TABLE_TYPE))
-    var operation = WriteOperationType.fromValue(hoodieConfig.getString(OPERATION))
-    // TODO clean up
-    // It does not make sense to allow upsert() operation if INSERT_DROP_DUPS is true
-    // Auto-correct the operation to "insert" if OPERATION is set to "upsert" wrongly
-    // or not set (in which case it will be set as "upsert" by parametersWithWriteDefaults()) .
-    if (hoodieConfig.getBoolean(INSERT_DROP_DUPS) &&
-      operation == WriteOperationType.UPSERT) {
-
-      log.warn(s"$UPSERT_OPERATION_OPT_VAL is not applicable " +
-        s"when $INSERT_DROP_DUPS is set to be true, " +
-        s"overriding the $OPERATION to be $INSERT_OPERATION_OPT_VAL")
-
-      operation = WriteOperationType.INSERT
-    }
+    val operation = deduceOperation(hoodieConfig, paramsWithoutDefaults)
 
     val jsc = new JavaSparkContext(sparkContext)
     if (asyncCompactionTriggerFn.isDefined) {
@@ -426,6 +413,41 @@ object HoodieSparkSqlWriter {
           writeClient.close()
         }
       }
+    }
+  }
+
+  def deduceOperation(hoodieConfig: HoodieConfig, paramsWithoutDefaults : Map[String, String]): WriteOperationType = {
+    var operation = WriteOperationType.fromValue(hoodieConfig.getString(OPERATION))
+    // TODO clean up
+    // It does not make sense to allow upsert() operation if INSERT_DROP_DUPS is true
+    // Auto-correct the operation to "insert" if OPERATION is set to "upsert" wrongly
+    // or not set (in which case it will be set as "upsert" by parametersWithWriteDefaults()) .
+    if (hoodieConfig.getBoolean(INSERT_DROP_DUPS) &&
+      operation == WriteOperationType.UPSERT) {
+
+      log.warn(s"$UPSERT_OPERATION_OPT_VAL is not applicable " +
+        s"when $INSERT_DROP_DUPS is set to be true, " +
+        s"overriding the $OPERATION to be $INSERT_OPERATION_OPT_VAL")
+
+      operation = WriteOperationType.INSERT
+      operation
+    } else {
+      // if no record key, no preCombine and no explicit partition path is set, we should treat it as append only workload
+      // and make bulk_insert as operation type.
+      if (!paramsWithoutDefaults.containsKey(DataSourceWriteOptions.RECORDKEY_FIELD.key())
+        && !paramsWithoutDefaults.containsKey(DataSourceWriteOptions.PARTITIONPATH_FIELD.key())
+        && !paramsWithoutDefaults.containsKey(DataSourceWriteOptions.PRECOMBINE_FIELD.key())
+        && !paramsWithoutDefaults.containsKey(OPERATION.key())) {
+        log.warn(s"Choosing BULK_INSERT as the operation type since auto record key generation is applicable")
+        operation = WriteOperationType.BULK_INSERT
+      }
+      // if no record key is set, will switch the default operation to INSERT (auto record key gen)
+      else if (!hoodieConfig.contains(DataSourceWriteOptions.RECORDKEY_FIELD.key())
+        && !paramsWithoutDefaults.containsKey(OPERATION.key())) {
+        log.warn(s"Choosing INSERT as the operation type since auto record key generation is applicable")
+        operation = WriteOperationType.INSERT
+      }
+      operation
     }
   }
 
