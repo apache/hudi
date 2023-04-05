@@ -358,16 +358,6 @@ public class TestData {
           TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
   );
 
-  public static List<RowData> DATA_SET_NEW_PARTITIONS = Arrays.asList(
-      insertRow(
-          StringData.fromString("id9"), StringData.fromString("LiLi"), 24,
-          TimestampData.fromEpochMillis(9), StringData.fromString("par5")),
-      insertRow(StringData.fromString("id11"), StringData.fromString("Baobao"), 34,
-          TimestampData.fromEpochMillis(10), StringData.fromString("par7")),
-      insertRow(StringData.fromString("id12"), StringData.fromString("LinLin"), 34,
-          TimestampData.fromEpochMillis(10), StringData.fromString("part8"))
-  );
-
   public static List<RowData> dataSetInsert(int... ids) {
     List<RowData> inserts = new ArrayList<>();
     Arrays.stream(ids).forEach(i -> inserts.add(

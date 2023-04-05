@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
 import org.apache.hudi.table.catalog.HoodieHiveCatalog;
@@ -47,8 +46,6 @@ import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.data.StringData;
-import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,7 +60,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -80,7 +76,6 @@ import static org.apache.hudi.utils.TestConfigurations.sql;
 import static org.apache.hudi.utils.TestData.array;
 import static org.apache.hudi.utils.TestData.assertRowsEqualsUnordered;
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
-import static org.apache.hudi.utils.TestData.insertRow;
 import static org.apache.hudi.utils.TestData.map;
 import static org.apache.hudi.utils.TestData.row;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -1769,20 +1764,15 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("tableTypeAndFilters")
-  void testDynamicPartitionPrune(
-      HoodieTableType tableType,
-      boolean hiveStylePartitioning,
-      String filterCondition,
-      List<RowData> expectedResult) throws Exception {
+  @MethodSource("tableTypeAndPartitioningParams")
+  void testDynamicPartitionPrune(HoodieTableType tableType, boolean hiveStylePartitioning) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.TABLE_NAME, "t1");
     conf.setString(FlinkOptions.TABLE_TYPE, tableType.name());
     conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
 
-    // write one commit
+    // write the first commit
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, tableType)
@@ -1792,25 +1782,15 @@ public class ITTestHoodieDataSource {
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
 
-    String sinkDDL = "create table sink(\n"
-        + "  uuid varchar(20),\n"
-        + "  name varchar(20),\n"
-        + "  age int,\n"
-        + "  ts timestamp,\n"
-        + "  part varchar(20)"
-        + ") with (\n"
-        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'"
-        + ")";
-    TableResult tableResult = submitSelectSql(
-        streamTableEnv,
-        "select uuid, name, age, ts, `partition` as part from t1 where " + filterCondition,
-        sinkDDL);
-
+    // launch a streaming query
+    TableResult tableResult = submitSelectSql(streamTableEnv,
+        "select uuid, name, age, ts, `partition` as part from t1 where `partition` > 'par4'",
+        TestConfigurations.getCollectSinkDDL("sink"));
     // write second commit
-    TestData.writeData(TestData.DATA_SET_NEW_PARTITIONS, conf);
-    // stop the streaming query and fetch the result
-    List<Row> result = stopAndFetchData(streamTableEnv, tableResult, 10);
-    assertRowsEquals(result, expectedResult);
+    TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
+    // stop the streaming query and get data
+    List<Row> actualResult = stopAndFetchData(streamTableEnv, tableResult, 10);
+    assertRowsEquals(actualResult, TestData.DATA_SET_INSERT_SEPARATE_PARTITION);
   }
 
   // -------------------------------------------------------------------------
@@ -1885,75 +1865,6 @@ public class ITTestHoodieDataSource {
     return Stream.of(data).map(Arguments::of);
   }
 
-  /**
-   * Return test params => (HoodieTableType, hive style partitioning, filter condition, expected result).
-   */
-  private static Stream<Arguments> tableTypeAndFilters() {
-    HoodieTableType[] tableTypes = {HoodieTableType.COPY_ON_WRITE, HoodieTableType.MERGE_ON_READ};
-    boolean [] isHiveStylePartitions = {true, false};
-    Pair<String,  List<RowData>>[] filterAndResults = new Pair[] {
-        Pair.of(
-            "`partition` = 'par5' or `partition` = 'par6'",
-            Arrays.asList(
-                insertRow(StringData.fromString("id9"), StringData.fromString("LiLi"), 24,
-                    TimestampData.fromEpochMillis(9), StringData.fromString("par5")))),
-        Pair.of(
-        "`partition` >= 'par5' and `partition` <= 'par6'",
-        Arrays.asList(
-            insertRow(StringData.fromString("id9"), StringData.fromString("LiLi"), 24,
-                TimestampData.fromEpochMillis(9), StringData.fromString("par5")))),
-        Pair.of(
-        "`partition` <> 'par7'",
-        Arrays.asList(
-            insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
-                TimestampData.fromEpochMillis(1), StringData.fromString("par1")),
-            insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
-                TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
-            insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
-                TimestampData.fromEpochMillis(3), StringData.fromString("par2")),
-            insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
-                TimestampData.fromEpochMillis(4), StringData.fromString("par2")),
-            insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
-                TimestampData.fromEpochMillis(5), StringData.fromString("par3")),
-            insertRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
-                TimestampData.fromEpochMillis(6), StringData.fromString("par3")),
-            insertRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
-                TimestampData.fromEpochMillis(7), StringData.fromString("par4")),
-            insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
-                TimestampData.fromEpochMillis(8), StringData.fromString("par4")),
-            insertRow(StringData.fromString("id9"), StringData.fromString("LiLi"), 24,
-                TimestampData.fromEpochMillis(9), StringData.fromString("par5")),
-            insertRow(StringData.fromString("id12"), StringData.fromString("LinLin"), 34,
-                TimestampData.fromEpochMillis(10), StringData.fromString("part8")))),
-        Pair.of(
-        "`partition` not in ('par1', 'par2', 'par3')",
-        Arrays.asList(
-            insertRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
-                TimestampData.fromEpochMillis(7), StringData.fromString("par4")),
-            insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
-                TimestampData.fromEpochMillis(8), StringData.fromString("par4")),
-            insertRow(StringData.fromString("id9"), StringData.fromString("LiLi"), 24,
-                TimestampData.fromEpochMillis(9), StringData.fromString("par5")),
-            insertRow(StringData.fromString("id11"), StringData.fromString("Baobao"), 34,
-                TimestampData.fromEpochMillis(10), StringData.fromString("par7")),
-            insertRow(StringData.fromString("id12"), StringData.fromString("LinLin"), 34,
-                TimestampData.fromEpochMillis(10), StringData.fromString("part8")))),
-        Pair.of(
-        "`partition` like 'part%' and `partition` <> 'part8'",
-        new ArrayList<>())
-    };
-    List<Object[]> data = new ArrayList<>();
-    for (HoodieTableType tableType : tableTypes) {
-      for (boolean isHiveStylePartition : isHiveStylePartitions) {
-        for (Pair<String,  List<RowData>> filterAndResult : filterAndResults) {
-          Object[] arr = {tableType, isHiveStylePartition, filterAndResult.getKey(), filterAndResult.getValue()};
-          data.add(arr);
-        }
-      }
-    }
-    return data.stream().map(Arguments::of);
-  }
-
   private void execInsertSql(TableEnvironment tEnv, String insert) {
     TableResult tableResult = tEnv.executeSql(insert);
     // wait to finish
@@ -2000,16 +1911,8 @@ public class ITTestHoodieDataSource {
 
   private List<Row> execSelectSql(TableEnvironment tEnv, String select, String sinkDDL, long timeout)
       throws InterruptedException {
-    tEnv.executeSql("DROP TABLE IF EXISTS sink");
-    tEnv.executeSql(sinkDDL);
-    TableResult tableResult = tEnv.executeSql("insert into sink " + select);
-    // wait for the timeout then cancels the job
-    TimeUnit.SECONDS.sleep(timeout);
-    tableResult.getJobClient().ifPresent(JobClient::cancel);
-    tEnv.executeSql("DROP TABLE IF EXISTS sink");
-    return CollectSinkTableFactory.RESULT.values().stream()
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
+    TableResult tableResult = submitSelectSql(tEnv, select, sinkDDL);
+    return stopAndFetchData(tEnv, tableResult, timeout);
   }
 
   private TableResult submitSelectSql(TableEnvironment tEnv, String select, String sinkDDL) {
