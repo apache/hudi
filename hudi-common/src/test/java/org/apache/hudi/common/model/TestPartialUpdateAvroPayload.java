@@ -201,8 +201,8 @@ public class TestPartialUpdateAvroPayload {
     record1.put("child", Arrays.asList("A"));
 
     GenericRecord record2 = new GenericData.Record(schema);
-    record1.put("_hoodie_commit_time", "20220915000000001");
-    record1.put("_hoodie_commit_seqno", "20220915000000001_2_000");
+    record2.put("_hoodie_commit_time", "20220915000000001");
+    record2.put("_hoodie_commit_seqno", "20220915000000001_2_000");
     record2.put("id", "1");
     record2.put("partition", "partition1");
     record2.put("ts", 1L);
