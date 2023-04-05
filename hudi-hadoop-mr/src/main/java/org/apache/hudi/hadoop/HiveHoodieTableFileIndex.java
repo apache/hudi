@@ -58,7 +58,7 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
         shouldIncludePendingCommits,
         true,
         new NoopCache(),
-        false);
+        true);
   }
 
   /**

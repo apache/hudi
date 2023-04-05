@@ -58,7 +58,6 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import java.io.IOException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -82,14 +81,14 @@ public class SchemaEvolutionContext {
 
   private final InputSplit split;
   private final JobConf job;
-  private HoodieTableMetaClient metaClient;
+  private final HoodieTableMetaClient metaClient;
   public Option<InternalSchema> internalSchemaOption;
 
-  public SchemaEvolutionContext(InputSplit split, JobConf job) throws IOException {
+  public SchemaEvolutionContext(InputSplit split, JobConf job) {
     this(split, job, Option.empty());
   }
 
-  public SchemaEvolutionContext(InputSplit split, JobConf job, Option<HoodieTableMetaClient> metaClientOption) throws IOException {
+  public SchemaEvolutionContext(InputSplit split, JobConf job, Option<HoodieTableMetaClient> metaClientOption) {
     this.split = split;
     this.job = job;
     this.metaClient = metaClientOption.isPresent() ? metaClientOption.get() : setUpHoodieTableMetaClient();
@@ -97,17 +96,10 @@ public class SchemaEvolutionContext {
       internalSchemaOption = Option.empty();
       return;
     }
-    try {
-      TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-      this.internalSchemaOption = schemaUtil.getTableInternalSchemaFromCommitMetadata();
-    } catch (Exception e) {
-      internalSchemaOption = Option.empty();
-      LOG.warn(String.format("failed to get internal Schema from hudi table：%s", metaClient.getBasePathV2()), e);
-    }
     LOG.info(String.format("finish init schema evolution for split: %s", split));
   }
 
-  private HoodieTableMetaClient setUpHoodieTableMetaClient() throws IOException {
+  private HoodieTableMetaClient setUpHoodieTableMetaClient() {
     try {
       Path inputPath = ((FileSplit)split).getPath();
       FileSystem fs =  inputPath.getFileSystem(job);
@@ -159,27 +151,26 @@ public class SchemaEvolutionContext {
    * Do schema evolution for ParquetFormat.
    */
   public void doEvolutionForParquetFormat() {
-    if (internalSchemaOption.isPresent()) {
+    List<String> requiredColumns = getRequireColumn(job);
+    // No need trigger schema evolution for count(*)/count(1) operation
+    boolean disableSchemaEvolution = requiredColumns.isEmpty() || (requiredColumns.size() == 1 && requiredColumns.get(0).isEmpty());
+    if (!disableSchemaEvolution) {
+      if (!internalSchemaOption.isPresent()) {
+        internalSchemaOption = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata();
+      }
       // reading hoodie schema evolution table
       job.setBoolean(HIVE_EVOLUTION_ENABLE, true);
-      Path finalPath = ((FileSplit)split).getPath();
+      Path finalPath = ((FileSplit) split).getPath();
       InternalSchema prunedSchema;
-      List<String> requiredColumns = getRequireColumn(job);
-      // No need trigger schema evolution for count(*)/count(1) operation
-      boolean disableSchemaEvolution =
-          requiredColumns.isEmpty() || (requiredColumns.size() == 1 && requiredColumns.get(0).isEmpty());
-      if (!disableSchemaEvolution) {
-        prunedSchema = InternalSchemaUtils.pruneInternalSchema(internalSchemaOption.get(), requiredColumns);
-        InternalSchema querySchema = prunedSchema;
-        Long commitTime = Long.valueOf(FSUtils.getCommitTime(finalPath.getName()));
-        InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitTime, metaClient, false);
-        InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchema, true,
-            true).mergeSchema();
-        List<Types.Field> fields = mergedInternalSchema.columns();
-        setColumnNameList(job, fields);
-        setColumnTypeList(job, fields);
-        pushDownFilter(job, querySchema, fileSchema);
-      }
+      prunedSchema = InternalSchemaUtils.pruneInternalSchema(internalSchemaOption.get(), requiredColumns);
+      InternalSchema querySchema = prunedSchema;
+      Long commitTime = Long.valueOf(FSUtils.getCommitTime(finalPath.getName()));
+      InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitTime, metaClient, false);
+      InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchema, true, true).mergeSchema();
+      List<Types.Field> fields = mergedInternalSchema.columns();
+      setColumnNameList(job, fields);
+      setColumnTypeList(job, fields);
+      pushDownFilter(job, querySchema, fileSchema);
     }
   }
 
