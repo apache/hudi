@@ -28,7 +28,7 @@ import java.util.Arrays;
 import java.util.Properties;
 import java.util.stream.Stream;
 
-public class TestPreCombineUtils {
+public class PreCombineTestUtils {
   private static String[] preCombineConfigs = new String[] {
       HoodieTableConfig.PRECOMBINE_FIELD.key(),
       "hoodie.datasource.write.precombine.field",
@@ -41,10 +41,14 @@ public class TestPreCombineUtils {
     );
   }
 
-  public static void setPreCombineConfigs(Properties props, String key, String value) {
+  /**
+   * Sets specified key to the value provided. The other preCombine related configs are
+   * removed from properties.
+   */
+  public static void setPreCombineConfig(Properties props, String key, String value) {
     for (String config : preCombineConfigs) {
       if (key.equals(config)) {
-        props.setProperty(key, "ts");
+        props.setProperty(key, value);
       } else {
         props.remove(key);
       }

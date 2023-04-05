@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.testutils.TestPreCombineUtils;
+import org.apache.hudi.common.testutils.PreCombineTestUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -64,9 +64,9 @@ public class TestDefaultHoodieRecordPayload {
   }
 
   @ParameterizedTest
-  @MethodSource("org.apache.hudi.common.testutils.TestPreCombineUtils#configurePreCombine")
+  @MethodSource("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine")
   public void testActiveRecords(String key) throws IOException {
-    TestPreCombineUtils.setPreCombineConfigs(props, key, "ts");
+    PreCombineTestUtils.setPreCombineConfig(props, key, "ts");
     GenericRecord record1 = new GenericData.Record(schema);
     record1.put("id", "1");
     record1.put("partition", "partition0");
@@ -92,9 +92,9 @@ public class TestDefaultHoodieRecordPayload {
   }
 
   @ParameterizedTest
-  @MethodSource("org.apache.hudi.common.testutils.TestPreCombineUtils#configurePreCombine")
+  @MethodSource("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine")
   public void testDeletedRecord(String key) throws IOException {
-    TestPreCombineUtils.setPreCombineConfigs(props, key, "ts");
+    PreCombineTestUtils.setPreCombineConfig(props, key, "ts");
     GenericRecord record1 = new GenericData.Record(schema);
     record1.put("id", "1");
     record1.put("partition", "partition0");
