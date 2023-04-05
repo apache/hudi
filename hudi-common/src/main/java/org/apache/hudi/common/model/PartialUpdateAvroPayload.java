@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -84,7 +85,7 @@ import java.util.Properties;
  *  Result data after preCombine or combineAndGetUpdateValue:
  *      id      ts      name    price
  *      1       2       name_1  price_1
- *</pre>
+ * </pre>
  */
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
 
@@ -109,7 +110,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord, true);
       if (mergedRecord.isPresent()) {
         return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(),
-                shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
+            shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
       }
     } catch (Exception ex) {
       return this;
@@ -140,12 +141,13 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
 
   /**
    * Merge old record with new record.
+   *
    * @param oldRecord
    * @param schema
    * @param isOldRecordNewer
-   * @param isPreCombining flag for deleted record combine logic
-  1 preCombine: if delete record is newer, return merged record with _hoodie_is_deleted = true
-  2 combineAndGetUpdateValue:  return empty since we don't need to store deleted data to storage
+   * @param isPreCombining   flag for deleted record combine logic
+   *                         1 preCombine: if delete record is newer, return merged record with _hoodie_is_deleted = true
+   *                         2 combineAndGetUpdateValue:  return empty since we don't need to store deleted data to storage
    * @return
    * @throws IOException
    */
@@ -175,13 +177,12 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
    * @param schema         The record schema
    * @param oldRecord      The current record from file
    * @param updatingRecord The incoming record
-   *
    * @return the merged record option
    */
   protected Option<IndexedRecord> mergeDisorderRecordsWithMetadata(
-          Schema schema,
-          GenericRecord oldRecord,
-          GenericRecord updatingRecord, boolean isPreCombining) {
+      Schema schema,
+      GenericRecord oldRecord,
+      GenericRecord updatingRecord, boolean isPreCombining) {
     if (isDeleteRecord(oldRecord) && !isPreCombining) {
       return Option.empty();
     } else {
@@ -208,29 +209,28 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
    * Returns whether the given record is newer than the record of this payload.
    *
    * @param orderingVal
-   * @param record The record
-   * @param prop   The payload properties
-   *
+   * @param record      The record
+   * @param prop        The payload properties
    * @return true if the given record is newer
    */
   private static boolean isRecordNewer(Comparable orderingVal, IndexedRecord record, Properties prop) {
     String orderingField = prop.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     if (!StringUtils.isNullOrEmpty(orderingField)) {
       boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(prop.getProperty(
-              KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-              KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
 
       Comparable oldOrderingVal =
-              (Comparable) HoodieAvroUtils.getNestedFieldVal(
-                      (GenericRecord) record,
-                      orderingField,
-                      true,
-                      consistentLogicalTimestampEnabled);
+          (Comparable) HoodieAvroUtils.getNestedFieldVal(
+              (GenericRecord) record,
+              orderingField,
+              true,
+              consistentLogicalTimestampEnabled);
 
       // pick the payload with greater ordering value as insert record
       return oldOrderingVal != null
-              && ReflectionUtils.isSameClass(oldOrderingVal, orderingVal)
-              && oldOrderingVal.compareTo(orderingVal) > 0;
+          && ReflectionUtils.isSameClass(oldOrderingVal, orderingVal)
+          && oldOrderingVal.compareTo(orderingVal) > 0;
     }
     return false;
   }

@@ -21,8 +21,10 @@ package org.apache.hudi.common.model;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -44,22 +46,22 @@ public class TestPartialUpdateAvroPayload {
   private Schema schema;
 
   String jsonSchema = "{\n"
-          + "  \"type\": \"record\",\n"
-          + "  \"name\": \"partialRecord\", \"namespace\":\"org.apache.hudi\",\n"
-          + "  \"fields\": [\n"
-          + "    {\"name\": \"_hoodie_commit_time\", \"type\": [\"null\", \"string\"]},\n"
-          + "    {\"name\": \"_hoodie_commit_seqno\", \"type\": [\"null\", \"string\"]},\n"
-          + "    {\"name\": \"_hoodie_record_key\", \"type\": [\"null\", \"string\"]},\n"
-          + "    {\"name\": \"_hoodie_partition_path\", \"type\": [\"null\", \"string\"]},\n"
-          + "    {\"name\": \"_hoodie_file_name\", \"type\": [\"null\", \"string\"]},\n"
-          + "    {\"name\": \"id\", \"type\": [\"null\", \"string\"]},\n"
-          + "    {\"name\": \"partition\", \"type\": [\"null\", \"string\"]},\n"
-          + "    {\"name\": \"ts\", \"type\": [\"null\", \"long\"]},\n"
-          + "    {\"name\": \"_hoodie_is_deleted\", \"type\": [\"null\", \"boolean\"], \"default\":false},\n"
-          + "    {\"name\": \"city\", \"type\": [\"null\", \"string\"]},\n"
-          + "    {\"name\": \"child\", \"type\": [\"null\", {\"type\": \"array\", \"items\": \"string\"}]}\n"
-          + "  ]\n"
-          + "}";
+      + "  \"type\": \"record\",\n"
+      + "  \"name\": \"partialRecord\", \"namespace\":\"org.apache.hudi\",\n"
+      + "  \"fields\": [\n"
+      + "    {\"name\": \"_hoodie_commit_time\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"_hoodie_commit_seqno\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"_hoodie_record_key\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"_hoodie_partition_path\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"_hoodie_file_name\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"id\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"partition\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"ts\", \"type\": [\"null\", \"long\"]},\n"
+      + "    {\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false},\n"
+      + "    {\"name\": \"city\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"child\", \"type\": [\"null\", {\"type\": \"array\", \"items\": \"string\"}]}\n"
+      + "  ]\n"
+      + "}";
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -218,7 +220,7 @@ public class TestPartialUpdateAvroPayload {
 
     // let payload2 as the latest one, then should use payload2's meta field's value as the result
     GenericRecord mergedRecord2 = (GenericRecord) payload2.preCombine(payload1, schema, properties).getInsertValue(schema, properties).get();
-    assertEquals(mergedRecord2.get("_hoodie_commit_time").toString(), "20220915000000001");
-    assertEquals(mergedRecord2.get("_hoodie_commit_seqno").toString(), "20220915000000001_2_000");
+    assertEquals(mergedRecord2.get("_hoodie_commit_time").toString(), record2.get("_hoodie_commit_time").toString());
+    assertEquals(mergedRecord2.get("_hoodie_commit_seqno").toString(), record2.get("_hoodie_commit_seqno").toString());
   }
 }
