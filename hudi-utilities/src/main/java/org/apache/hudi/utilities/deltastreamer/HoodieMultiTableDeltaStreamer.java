@@ -146,8 +146,9 @@ public class HoodieMultiTableDeltaStreamer {
   }
 
   private void populateTransformerProps(HoodieDeltaStreamer.Config cfg, TypedProperties typedProperties) {
-    List<String> transformerClassNameOverride = Arrays.asList(typedProperties.getString(Constants.TRANSFORMER_CLASS, null).split(","));
-    if (! transformerClassNameOverride.isEmpty()) {
+    String transformerClass = typedProperties.getString(Constants.TRANSFORMER_CLASS, null);
+    if (transformerClass != null && !transformerClass.trim().isEmpty()) {
+      List<String> transformerClassNameOverride = Arrays.asList(transformerClass.split(","));
       cfg.transformerClassNames = transformerClassNameOverride;
     }
   }
