@@ -100,7 +100,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
   @Override
   public PartialUpdateAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue, Schema schema, Properties properties) {
     if (oldValue.recordBytes.length == 0) {
-      // use natural order for delete record
+      // use natural order for deleted record
       return this;
     }
     // pick the payload with greater ordering value as insert record
@@ -147,14 +147,14 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
    * @param isOldRecordNewer
    * @param isPreCombining   flag for deleted record combine logic
    *                         1 preCombine: if delete record is newer, return merged record with _hoodie_is_deleted = true
-   *                         2 combineAndGetUpdateValue:  return empty since we don't need to store deleted data to storage
+   *                         2 combineAndGetUpdateValue:  if delete record is newer, return empty since we don't need to store deleted data to storage
    * @return
    * @throws IOException
    */
   private Option<IndexedRecord> mergeOldRecord(IndexedRecord oldRecord,
                                                Schema schema,
                                                boolean isOldRecordNewer, boolean isPreCombining) throws IOException {
-    Option<IndexedRecord> recordOption = getInsertValue(schema);
+    Option<IndexedRecord> recordOption = getInsertValue(schema, isPreCombining);
 
     if (!recordOption.isPresent() && !isPreCombining) {
       // use natural order for delete record
@@ -169,6 +169,21 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
     } else {
       return mergeRecords(schema, (GenericRecord) recordOption.get(), (GenericRecord) oldRecord);
     }
+  }
+
+  /**
+   * return itself as long as it called by preCombine
+   * @param schema
+   * @param isPreCombining
+   * @return
+   * @throws IOException
+   */
+  public Option<IndexedRecord> getInsertValue(Schema schema, boolean isPreCombining) throws IOException {
+    if (recordBytes.length == 0 || (!isPreCombining && isDeletedRecord)) {
+      return Option.empty();
+    }
+
+    return Option.of((IndexedRecord) HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 
   /**
