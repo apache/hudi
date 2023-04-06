@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -26,6 +27,7 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.RowType;
 
 import javax.annotation.Nullable;
 
@@ -35,8 +37,12 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoField;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Utilities for expression resolving.
@@ -176,5 +182,89 @@ public class ExpressionUtils {
       default:
         throw new UnsupportedOperationException("Unsupported type: " + logicalType);
     }
+  }
+
+  public static List<ResolvedExpression> filterSimpleCallExpression(List<ResolvedExpression> exprs) {
+    return exprs.stream()
+        .filter(ExpressionUtils::isSimpleCallExpression)
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Extracts partition predicate from filter condition.
+   *
+   * <p>NOTE: the {@code expressions} should be simple call expressions.
+   *
+   * @return A tuple of partition predicates and non-partition predicates.
+   */
+  public static Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitExprByPartitionCall(
+      List<ResolvedExpression> expressions,
+      List<String> partitionKeys,
+      RowType tableRowType) {
+    if (partitionKeys.isEmpty()) {
+      return Tuple2.of(expressions, Collections.emptyList());
+    } else {
+      List<ResolvedExpression> partitionFilters = new ArrayList<>();
+      List<ResolvedExpression> nonPartitionFilters = new ArrayList<>();
+      final List<String> fieldNames = tableRowType.getFieldNames();
+      Set<Integer> parFieldPos = partitionKeys.stream().map(fieldNames::indexOf).collect(Collectors.toSet());
+      for (ResolvedExpression expr : expressions) {
+        for (CallExpression e : splitByAnd(expr)) {
+          if (isPartitionCallExpr(e, parFieldPos)) {
+            partitionFilters.add(expr);
+          } else {
+            nonPartitionFilters.add(e);
+          }
+        }
+      }
+      return Tuple2.of(nonPartitionFilters, partitionFilters);
+    }
+  }
+
+  private static List<CallExpression> splitByAnd(ResolvedExpression expr) {
+    List<CallExpression> result = new ArrayList<>();
+    splitByAnd(expr, result);
+    return result;
+  }
+
+  private static void splitByAnd(
+      ResolvedExpression expr,
+      List<CallExpression> result) {
+    if (!(expr instanceof CallExpression)) {
+      return;
+    }
+    CallExpression callExpr = (CallExpression) expr;
+    FunctionDefinition funcDef = callExpr.getFunctionDefinition();
+
+    if (funcDef == BuiltInFunctionDefinitions.AND) {
+      callExpr.getChildren().stream()
+          .filter(child -> child instanceof CallExpression)
+          .forEach(child -> splitByAnd((CallExpression) child, result));
+    } else {
+      result.add(callExpr);
+    }
+  }
+
+  /**
+   * Returns whether the {@code expr} is a partition call expression.
+   *
+   * @param expr        The expression
+   * @param parFieldPos The partition field positions within the table schema
+   */
+  private static boolean isPartitionCallExpr(CallExpression expr, Set<Integer> parFieldPos) {
+    List<Expression> children = expr.getChildren();
+    // if any child expr reference a non-partition field, returns false.
+    return children.stream()
+        .allMatch(
+            child -> {
+              if (child instanceof FieldReferenceExpression) {
+                FieldReferenceExpression refExpr = (FieldReferenceExpression) child;
+                return parFieldPos.contains(refExpr.getFieldIndex());
+              } else if (child instanceof CallExpression) {
+                return isPartitionCallExpr((CallExpression) child, parFieldPos);
+              } else {
+                return true;
+              }
+            });
   }
 }

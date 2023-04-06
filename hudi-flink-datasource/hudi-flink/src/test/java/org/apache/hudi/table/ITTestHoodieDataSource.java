@@ -1763,6 +1763,36 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result, expected);
   }
 
+  @ParameterizedTest
+  @MethodSource("tableTypeAndPartitioningParams")
+  void testDynamicPartitionPrune(HoodieTableType tableType, boolean hiveStylePartitioning) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.TABLE_NAME, "t1");
+    conf.setString(FlinkOptions.TABLE_TYPE, tableType.name());
+    conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
+
+    // write the first commit
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 2)
+        .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+
+    // launch a streaming query
+    TableResult tableResult = submitSelectSql(streamTableEnv,
+        "select uuid, name, age, ts, `partition` as part from t1 where `partition` > 'par4'",
+        TestConfigurations.getCollectSinkDDL("sink"));
+    // write second commit
+    TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
+    // stop the streaming query and get data
+    List<Row> actualResult = fetchResult(streamTableEnv, tableResult, 10);
+    assertRowsEquals(actualResult, TestData.DATA_SET_INSERT_SEPARATE_PARTITION);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -1881,9 +1911,19 @@ public class ITTestHoodieDataSource {
 
   private List<Row> execSelectSql(TableEnvironment tEnv, String select, String sinkDDL, long timeout)
       throws InterruptedException {
+    TableResult tableResult = submitSelectSql(tEnv, select, sinkDDL);
+    return fetchResult(tEnv, tableResult, timeout);
+  }
+
+  private TableResult submitSelectSql(TableEnvironment tEnv, String select, String sinkDDL) {
     tEnv.executeSql("DROP TABLE IF EXISTS sink");
     tEnv.executeSql(sinkDDL);
     TableResult tableResult = tEnv.executeSql("insert into sink " + select);
+    return tableResult;
+  }
+
+  private List<Row> fetchResult(TableEnvironment tEnv, TableResult tableResult, long timeout)
+      throws InterruptedException {
     // wait for the timeout then cancels the job
     TimeUnit.SECONDS.sleep(timeout);
     tableResult.getJobClient().ifPresent(JobClient::cancel);

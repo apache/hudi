@@ -16,8 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.source;
+package org.apache.hudi.source.prune;
 
+import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.stats.ColumnStats;
 import org.apache.hudi.util.ExpressionUtils;
 
@@ -27,6 +28,8 @@ import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
+
+import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.LinkedHashMap;
@@ -70,8 +73,9 @@ public class DataPruner implements Serializable {
     return referencedCols;
   }
 
+  @Nullable
   public static DataPruner newInstance(List<ResolvedExpression> filters) {
-    if (filters == null || filters.size() == 0) {
+    if (filters.isEmpty()) {
       return null;
     }
     String[] referencedCols = ExpressionUtils.referencedColumns(filters);
