@@ -50,7 +50,9 @@ public class PartitionPruners {
   }
 
   /**
-   * Dynamic partition pruner for hoodie table source which partitions list is available in runtime phase. Note: the data of new partitions created after the job starts could be read if they match the
+   * Dynamic partition pruner for hoodie table source which partitions list is available in runtime phase.
+   *
+   * <p>Note: The data of new partitions created after the job starts could be read if they match the
    * filter conditions.
    */
   public static class DynamicPartitionPruner implements PartitionPruner {
@@ -104,7 +106,8 @@ public class PartitionPruners {
   /**
    * Static partition pruner for hoodie table source which partitions list is available in compile phase.
    * After applied this partition pruner, hoodie source could not read the data from other partitions during runtime.
-   * Note: the data of new partitions created after the job starts would never be read.
+   *
+   * <p>Note: the data of new partitions created after the job starts would never be read.
    */
   public static class StaticPartitionPruner implements PartitionPruner {
 

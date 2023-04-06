@@ -253,12 +253,15 @@ public class ExpressionUtils {
    */
   private static boolean isPartitionCallExpr(CallExpression expr, Set<Integer> parFieldPos) {
     List<Expression> children = expr.getChildren();
+    // if any child expr reference a non-partition field, returns false.
     return children.stream()
         .allMatch(
             child -> {
               if (child instanceof FieldReferenceExpression) {
                 FieldReferenceExpression refExpr = (FieldReferenceExpression) child;
                 return parFieldPos.contains(refExpr.getFieldIndex());
+              } else if (child instanceof CallExpression) {
+                return isPartitionCallExpr((CallExpression) child, parFieldPos);
               } else {
                 return true;
               }
