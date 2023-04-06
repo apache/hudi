@@ -154,13 +154,13 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public void close() {
   }
 
-  @EnumDescription("Determines how records are indexed. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java engines")
+  @EnumDescription("Determines how records are indexed. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java engines.")
   public enum IndexType {
 
     @EnumFieldDescription("Index mapping is managed in an external Apache HBase table.")
     HBASE,
 
-    @EnumFieldDescription("Index is in memory?")
+    @EnumFieldDescription("In memory index")
     INMEMORY,
 
     @EnumFieldDescription("Employs bloom filters built out of the record keys, "
@@ -180,7 +180,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
 
     @EnumFieldDescription("Performs a lean join of the incoming update/delete records "
         + "against keys extracted from the table on storage."
-        + "Key uniqueness is enforced across all partitions in the table. ")
+        + "Key uniqueness is enforced across all partitions in the table.")
     GLOBAL_SIMPLE,
 
     @EnumFieldDescription("Bucket Index is targeted to locate the record fast by hash in big data scenarios. "
@@ -190,7 +190,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
     FLINK_STATE
   }
 
-  @EnumDescription("Determines bucket index to use when `hoodie.index.type` is set to `BUCKET`")
+  @EnumDescription("Determines bucket index to use when `hoodie.index.type` is set to `BUCKET`.")
   public enum BucketIndexEngineType {
 
     @EnumFieldDescription("Mandatory for COW tables when using BUCKET index. Uses a fixed number of buckets.")

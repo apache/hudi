@@ -667,39 +667,39 @@ public class HoodieClusteringConfig extends HoodieConfig {
   @EnumDescription("Type of a strategy for building Z-order/Hilbert space-filling curves.")
   public enum SpatialCurveCompositionStrategyType {
 
-    @EnumFieldDescription("Faster than sampling, but produces a worse(?) layout. NEEDS BETTER DESCRIPTION")
+    @EnumFieldDescription("Faster than sampling")
     DIRECT,
 
-    @EnumFieldDescription("Slower than sampling, but produces a better(?) layout. NEEDS BETTER DESCRIPTION")
+    @EnumFieldDescription("Produces a better layout compared to DIRECT strategy")
     SAMPLE
   }
 
   /**
    * Layout optimization strategies such as Z-order/Hilbert space-curves, etc
    */
-  @EnumDescription("Determines ordering strategy for records layout optimization")
+  @EnumDescription("Determines ordering strategy for records layout optimization.")
   public enum LayoutOptimizationStrategy {
 
     @EnumFieldDescription("Order records lexicographically.")
     LINEAR,
 
-    @EnumFieldDescription("Order records along Z-order spatial-curve")
+    @EnumFieldDescription("Order records along Z-order spatial-curve.")
     ZORDER,
 
-    @EnumFieldDescription("Order records along Hilbert's spatial-curve")
+    @EnumFieldDescription("Order records along Hilbert's spatial-curve.")
     HILBERT
   }
 
   @EnumDescription("Clustering mode to use.")
   public enum ClusteringOperator {
 
-    @EnumFieldDescription("Only schedule the clustering plan")
+    @EnumFieldDescription("Only schedule the clustering plan.")
     SCHEDULE,
 
-    @EnumFieldDescription("Only execute pending clustering plans")
+    @EnumFieldDescription("Only execute pending clustering plans.")
     EXECUTE,
 
-    @EnumFieldDescription("Schedule cluster first, and execute all pending clustering plans")
+    @EnumFieldDescription("Schedule cluster first, and execute all pending clustering plans.")
     SCHEDULE_AND_EXECUTE;
 
     public boolean isSchedule() {

@@ -28,7 +28,7 @@ import java.util.List;
 /**
  * Types of {@link org.apache.hudi.keygen.KeyGenerator}.
  */
-@EnumDescription("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`")
+@EnumDescription("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`.")
 public enum KeyGeneratorType {
 
   @EnumFieldDescription("Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")

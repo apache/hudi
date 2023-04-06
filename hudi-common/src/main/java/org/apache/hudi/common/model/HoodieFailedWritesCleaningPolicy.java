@@ -37,7 +37,7 @@ public enum HoodieFailedWritesCleaningPolicy {
   LAZY,
 
   // Does not clean failed writes
-  @EnumFieldDescription("Never clean failed writes")
+  @EnumFieldDescription("Never clean failed writes.")
   NEVER;
 
   public boolean isEager() {

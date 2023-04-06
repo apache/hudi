@@ -21,9 +21,9 @@ package org.apache.hudi.table.action.clean;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
-@EnumDescription("Controls when cleaning is scheduled")
+@EnumDescription("Controls when cleaning is scheduled.")
 public enum CleaningTriggerStrategy {
     // trigger cleaning when reach n commits
-    @EnumFieldDescription("Trigger the cleaning service every N commits, determined by `hoodie.clean.max.commits`")
+    @EnumFieldDescription("Trigger the cleaning service every N commits, determined by `hoodie.clean.max.commits`.")
     NUM_COMMITS
 }

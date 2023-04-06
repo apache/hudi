@@ -49,6 +49,7 @@ import static org.apache.hudi.config.HoodieHBaseIndexConfig.ZKPORT;
 import static org.apache.hudi.config.HoodieHBaseIndexConfig.ZKQUORUM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.BLOOM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.BUCKET;
+import static org.apache.hudi.index.HoodieIndex.IndexType.FLINK_STATE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.HBASE;
@@ -73,7 +74,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       // Builder#getDefaultIndexType has already set it according to engine type
       .noDefaultValue()
       .withValidValues(HBASE.name(), INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(),
-          SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name())
+          SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name(), FLINK_STATE.name())
       .withDocumentation(HoodieIndex.IndexType.class);
 
 

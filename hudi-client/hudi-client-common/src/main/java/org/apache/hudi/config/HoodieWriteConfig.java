@@ -179,8 +179,6 @@ public class HoodieWriteConfig extends HoodieConfig {
           "**Note** This is being actively worked on. Please use "
               + "`hoodie.datasource.write.keygenerator.class` instead.");
 
-
-
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty
       .key("hoodie.rollback.using.markers")
       .defaultValue("true")

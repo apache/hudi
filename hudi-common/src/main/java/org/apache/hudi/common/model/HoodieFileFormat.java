@@ -29,14 +29,14 @@ import java.util.stream.Collectors;
 /**
  * Hoodie file format.
  */
-@EnumDescription("Hoodie file formats")
+@EnumDescription("Hoodie file formats.")
 public enum HoodieFileFormat {
 
   @EnumFieldDescription("Apache Parquet is an  open source, column-oriented data file format designed for efficient data storage and retrieval. "
       + "It provides efficient data compression and encoding schemes with enhanced performance to handle complex data in bulk.")
   PARQUET(".parquet"),
 
-  @EnumFieldDescription("File format used in the Hudi Timeline")
+  @EnumFieldDescription("File format used in the Hudi Timeline.")
   HOODIE_LOG(".log"),
 
   @EnumFieldDescription("(internal config) File format for hbase. A file of sorted key/value pairs. Both keys and values are byte arrays.")

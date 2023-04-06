@@ -52,13 +52,13 @@ public abstract class HoodieStorageLayout implements Serializable {
    */
   public abstract boolean writeOperationSupported(WriteOperationType operationType);
 
-  @EnumDescription("Determines how the files are organized within a table")
+  @EnumDescription("Determines how the files are organized within a table.")
   public enum LayoutType {
 
-    @EnumFieldDescription("Default storage layout?")
+    @EnumFieldDescription("")
     DEFAULT,
 
-    @EnumFieldDescription("Storage layout for when `hoodie.index.type` is set to `BUCKET`?")
+    @EnumFieldDescription("")
     BUCKET
   }
 }

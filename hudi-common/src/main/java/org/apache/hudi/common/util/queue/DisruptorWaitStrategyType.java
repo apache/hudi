@@ -29,7 +29,7 @@ import java.util.List;
 /**
  * Enum for the type of waiting strategy in Disruptor Queue.
  */
-@EnumDescription("Strategy employed for making Disruptor Executor wait on a cursor")
+@EnumDescription("Strategy employed for making Disruptor Executor wait on a cursor.")
 public enum DisruptorWaitStrategyType {
 
   /**
@@ -63,7 +63,7 @@ public enum DisruptorWaitStrategyType {
     + "The `YIELDING_WAIT` strategy will busy spin, waiting for the sequence to increment to the appropriate value. "
     + "Inside the body of the loop `Thread#yield()` will be called allowing other queued threads to run. "
     + "This is the recommended wait strategy when you need very high performance, and the number of `EventHandler` threads is lower than the total number of logical cores, "
-    + "such as when hyper-threading is enabled")
+    + "such as when hyper-threading is enabled.")
   YIELDING_WAIT,
 
   /**
