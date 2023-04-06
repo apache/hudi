@@ -114,8 +114,25 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              |location '$tablePath'
              |""".stripMargin)
 
+        df.write.format("hudi")
+          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
+          .option(RECORDKEY_FIELD.key, "id")
+          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(PARTITIONPATH_FIELD.key, "dt")
+          .option(URL_ENCODE_PARTITIONING.key(), urlencode)
+          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+          .mode(SaveMode.Append)
+          .save(tablePath)
+
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (dt='2021/10/01')")
+
+        // trigger clean so that partition deletion kicks in.
+        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+          .collect()
 
         val partitionPath = if (urlencode) {
           PartitionPathEncodeUtils.escapePathName("2021/10/01")
@@ -123,7 +140,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           "2021/10/01"
         }
         checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
-        assertResult(true)(existsPath(s"${tmp.getCanonicalPath}/$tableName/$partitionPath"))
+        assertResult(false)(existsPath(s"${tmp.getCanonicalPath}/$tableName/$partitionPath"))
 
         // show partitions
         if (urlencode) {
@@ -221,11 +238,20 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         "Found duplicate keys 'dt'")
     }
 
+    // insert data
+    spark.sql(s"""insert into $tableName values (3, "z5", "v1", "2021-10-01"), (4, "l5", "v1", "2021-10-02")""")
 
     // drop 2021-10-01 partition
     spark.sql(s"alter table $tableName drop partition (dt='2021-10-01')")
 
-    checkAnswer(s"select id, name, ts, dt from $tableName")(Seq(2, "l4", "v1", "2021-10-02"))
+    // trigger clean so that partition deletion kicks in.
+    spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+      .collect()
+
+    checkAnswer(s"select id, name, ts, dt from $tableName")(
+      Seq(2, "l4", "v1", "2021-10-02"),
+      Seq(4, "l5", "v1", "2021-10-02")
+    )
 
     // show partitions
     checkAnswer(s"show partitions $tableName")(Seq("dt=2021-10-02"))
@@ -264,8 +290,26 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         checkExceptionContain(s"alter table $tableName drop partition (year='2021', month='10')")(
           "All partition columns need to be specified for Hoodie's partition"
         )
+
+        df.write.format("hudi")
+          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
+          .option(RECORDKEY_FIELD.key, "id")
+          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(PARTITIONPATH_FIELD.key, "year,month,day")
+          .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+          .mode(SaveMode.Append)
+          .save(tablePath)
+
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
+
+        // trigger clean so that partition deletion kicks in.
+        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+          .collect()
 
         checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
           Seq(2, "l4", "v1", "2021", "10", "02")
@@ -314,8 +358,25 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              | )
              |""".stripMargin)
 
+        df.write.format("hudi")
+          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
+          .option(RECORDKEY_FIELD.key, "id")
+          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(PARTITIONPATH_FIELD.key, "year,month,day")
+          .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+          .mode(SaveMode.Append)
+          .save(tablePath)
+
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
+
+        // trigger clean so that partition deletion kicks in.
+        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+          .collect()
 
         // insert data
         spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
