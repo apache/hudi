@@ -371,8 +371,8 @@ public class UtilHelpers {
       return 0;
     }
 
-    LOG.error(String.format("Job failed with %d errors.", errorsCount));
-    return -1;
+    LOG.error(String.format("Job failed with %s instant time, with %d errors.", instantTime, errorsCount));
+    throw new HoodieException(String.format("Job failed with %s instant time, with %d errors.", instantTime, errorsCount));
   }
 
   /**

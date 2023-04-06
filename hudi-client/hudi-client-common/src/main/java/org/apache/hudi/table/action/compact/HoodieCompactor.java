@@ -29,6 +29,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -48,6 +49,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
@@ -65,6 +68,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -72,19 +77,18 @@ import java.util.stream.StreamSupport;
 
 import static java.util.stream.Collectors.toList;
 
-/**
- * A HoodieCompactor runs compaction on a hoodie table.
- */
-public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+/** A HoodieCompactor runs compaction on a hoodie table. */
+public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O>
+    implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
 
   /**
    * Handles the compaction timeline based on the compaction instant before actual compaction.
    *
-   * @param table                     {@link HoodieTable} instance to use.
+   * @param table {@link HoodieTable} instance to use.
    * @param pendingCompactionTimeline pending compaction timeline.
-   * @param compactionInstantTime     compaction instant
+   * @param compactionInstantTime compaction instant
    */
   public abstract void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline, String compactionInstantTime);
@@ -96,14 +100,16 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
    */
   public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config);
 
-  /**
-   * Execute compaction operations and report back status.
-   */
+  /** Execute compaction operations and report back status. */
   public HoodieData<WriteStatus> compact(
-      HoodieEngineContext context, HoodieCompactionPlan compactionPlan,
-      HoodieTable table, HoodieWriteConfig config, String compactionInstantTime,
+      HoodieEngineContext context,
+      HoodieCompactionPlan compactionPlan,
+      HoodieTable table,
+      HoodieWriteConfig config,
+      String compactionInstantTime,
       HoodieCompactionHandler compactionHandler) {
-    if (compactionPlan == null || (compactionPlan.getOperations() == null)
+    if (compactionPlan == null
+        || (compactionPlan.getOperations() == null)
         || (compactionPlan.getOperations().isEmpty())) {
       return context.emptyHoodieData();
     }
@@ -129,26 +135,119 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     }
 
     // Compacting is very similar to applying updates to existing file
-    List<CompactionOperation> operations = compactionPlan.getOperations().stream()
-        .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
+    List<CompactionOperation> operations =
+        compactionPlan.getOperations().stream()
+            .map(CompactionOperation::convertFromAvroRecordInstance)
+            .collect(toList());
     LOG.info("Compactor compacting " + operations + " files");
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices: " + config.getTableName());
+    // Get pendingInstants when schedule compaction plan, wait for the instants to complete,
+    // regenerate CompactionOperations
+    List<String> missingInstants = compactionPlan.getMissingInstants();
+    LOG.info("Compactor pendingInstants: " + missingInstants);
+    HashMap<HoodieFileGroupId, HashSet<String>> fileGroupTofilePaths = new HashMap<>();
+    missingInstants.forEach(
+        instantTime -> {
+          // check if the instant has been rollback
+          HoodieInstant hoodieInstantRequest =
+              new HoodieInstant(
+                  HoodieInstant.State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime);
+          HoodieInstant hoodieInstantInflight =
+              new HoodieInstant(
+                  HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime);
+          HoodieInstant hoodieInstant =
+              new HoodieInstant(
+                  HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime);
+
+          Integer i = 0;
+          while (!table.getMetaClient().getCommitsTimeline().containsInstant(hoodieInstant)) {
+            if (i == 12) {
+              LOG.info("Compactor has already waited 120s for instant " + instantTime + " to complete, now exit");
+              throw new HoodieException("Compactor has already waited 120s for instant " + instantTime + " to complete, now exit");
+            }
+
+            try {
+              LOG.info("CommitsTimeline instantssss: " + table.getMetaClient().getCommitsTimeline().getInstants().collect(toList()));
+              if (!table.getMetaClient().getCommitsTimeline().containsInstant(hoodieInstantRequest)
+                  && !table.getMetaClient().getCommitsTimeline().containsInstant(hoodieInstantInflight)) {
+                LOG.info("instant: " + instantTime + " has been rollback");
+                return;
+              }
+              LOG.info("instant: " + instantTime + " has not completed, wait 10s...");
+              Thread.sleep(10000);
+              table.getMetaClient().reloadActiveTimeline();
+              i++;
+            } catch (InterruptedException e) {
+              // ignore InterruptedException here.
+            }
+          }
+          LOG.info("instant: " + instantTime + " has completed");
+          try {
+            HoodieCommitMetadata commitMetadata =
+                HoodieCommitMetadata.fromBytes(
+                    table
+                        .getMetaClient()
+                        .getCommitsTimeline()
+                        .getInstantDetails(hoodieInstant)
+                        .get(),
+                    HoodieCommitMetadata.class);
+            commitMetadata
+                .getFileGroupIdAndRelativePaths()
+                .forEach(
+                    (k, v) -> {
+                      HashSet<String> filePaths =
+                          fileGroupTofilePaths.computeIfAbsent(k, key -> new HashSet<>());
+                      filePaths.add(v);
+                    });
+          } catch (IOException e) {
+            throw new HoodieIOException(
+                String.format(
+                    "Failed to fetch HoodieCommitMetadata for instant (%s)", hoodieInstant),
+                e);
+          }
+        });
+
+    operations.forEach(
+        operation -> {
+          HoodieFileGroupId fileGroup = operation.getFileGroupId();
+          HashSet<String> filePaths = fileGroupTofilePaths.get(fileGroup);
+          if (filePaths != null) {
+            List<String> deltaFileNameList = operation.getDeltaFileNames();
+            Set<String> deltaFileNameSet = new HashSet<>(deltaFileNameList);
+            LOG.info("fileId: " + fileGroup + "operation deltaFileNameSet: " + deltaFileNameSet + " pending instants write filePaths: " + filePaths);
+            deltaFileNameSet.addAll(filePaths.stream().filter(filePath -> FSUtils.getBaseCommitTimeFromLogPath(new Path(filePath)).equals(operation.getBaseInstantTime())).collect(toList()));
+            LOG.info("fileId: " + fileGroup + "updated operation deltaFileNameSet: " + deltaFileNameSet + "\n");
+            List<String> deltaFileNameListUpdated = new ArrayList<>(deltaFileNameSet);
+            operation.setDeltaFileNames(deltaFileNameListUpdated);
+          }
+        });
+
+    context.setJobStatus(
+        this.getClass().getSimpleName(), "Compacting file slices: " + config.getTableName());
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
-    return context.parallelize(operations).map(operation -> compact(
-        compactionHandler, metaClient, config, operation, compactionInstantTime, taskContextSupplier))
+    return context
+        .parallelize(operations)
+        .map(
+            operation ->
+                compact(
+                    compactionHandler,
+                    metaClient,
+                    config,
+                    operation,
+                    compactionInstantTime,
+                    taskContextSupplier))
         .flatMap(List::iterator);
   }
 
-  /**
-   * Execute a single compaction operation and report back status.
-   */
-  public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
-                                   HoodieTableMetaClient metaClient,
-                                   HoodieWriteConfig config,
-                                   CompactionOperation operation,
-                                   String instantTime,
-                                   TaskContextSupplier taskContextSupplier) throws IOException {
+  /** Execute a single compaction operation and report back status. */
+  public List<WriteStatus> compact(
+      HoodieCompactionHandler compactionHandler,
+      HoodieTableMetaClient metaClient,
+      HoodieWriteConfig config,
+      CompactionOperation operation,
+      String instantTime,
+      TaskContextSupplier taskContextSupplier)
+      throws IOException {
     FileSystem fs = metaClient.getFs();
     Schema readerSchema;
     Option<InternalSchema> internalSchemaOption = Option.empty();
@@ -158,56 +257,83 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
       // its safe to modify config here, since we running in task side.
       ((HoodieTable) compactionHandler).getConfig().setDefault(config);
     } else {
-      readerSchema = HoodieAvroUtils.addMetadataFields(
-          new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+      readerSchema =
+          HoodieAvroUtils.addMetadataFields(
+              new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     }
-    LOG.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
-        + " for commit " + instantTime);
+    LOG.info(
+        "Compacting base "
+            + operation.getDataFileName()
+            + " with delta files "
+            + operation.getDeltaFileNames()
+            + " for commit "
+            + instantTime);
     // TODO - FIX THIS
     // Reads the entire avro file. Always only specific blocks should be read from the avro file
     // (failure recover).
     // Load all the delta commits since the last compaction commit and get all the blocks to be
     // loaded and load it using CompositeAvroLogReader
     // Since a DeltaCommit is not defined yet, reading all the records. revisit this soon.
-    String maxInstantTime = metaClient
-        .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
-            HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
+    String maxInstantTime =
+        metaClient
+            .getActiveTimeline()
+            .getTimelineOfActions(
+                CollectionUtils.createSet(
+                    HoodieTimeline.COMMIT_ACTION,
+                    HoodieTimeline.ROLLBACK_ACTION,
+                    HoodieTimeline.DELTA_COMMIT_ACTION))
+            .filterCompletedInstants()
+            .lastInstant()
+            .get()
+            .getTimestamp();
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
 
-    List<String> logFiles = operation.getDeltaFileNames().stream().map(
-        p -> new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
-        .collect(toList());
-    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
-        .withBasePath(metaClient.getBasePath())
-        .withLogFilePaths(logFiles)
-        .withReaderSchema(readerSchema)
-        .withLatestInstantTime(maxInstantTime)
-        .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
-        .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-        .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
-        .withReverseReader(config.getCompactionReverseLogReadEnabled())
-        .withBufferSize(config.getMaxDFSStreamBufferSize())
-        .withSpillableMapBasePath(config.getSpillableMapBasePath())
-        .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
-        .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-        .withOperationField(config.allowOperationMetadataField())
-        .withPartition(operation.getPartitionPath())
-        .build();
+    List<String> logFiles =
+        operation.getDeltaFileNames().stream()
+            .map(
+                p ->
+                    new Path(
+                            FSUtils.getPartitionPath(
+                                metaClient.getBasePath(), operation.getPartitionPath()),
+                            p)
+                        .toString())
+            .collect(toList());
+    HoodieMergedLogRecordScanner scanner =
+        HoodieMergedLogRecordScanner.newBuilder()
+            .withFileSystem(fs)
+            .withBasePath(metaClient.getBasePath())
+            .withLogFilePaths(logFiles)
+            .withReaderSchema(readerSchema)
+            .withLatestInstantTime(maxInstantTime)
+            .withInternalSchema(
+                internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
+            .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+            .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
+            .withReverseReader(config.getCompactionReverseLogReadEnabled())
+            .withBufferSize(config.getMaxDFSStreamBufferSize())
+            .withSpillableMapBasePath(config.getSpillableMapBasePath())
+            .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
+            .withBitCaskDiskMapCompressionEnabled(
+                config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+            .withOperationField(config.allowOperationMetadataField())
+            .withPartition(operation.getPartitionPath())
+            .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =
         operation.getBaseFile(metaClient.getBasePath(), operation.getPartitionPath());
 
-    // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
-    // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
+    // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns
+    // an empty scanner.
+    // But in this case, we need to give it a base file. Otherwise, it will lose base file in
+    // following fileSlice.
     if (!scanner.iterator().hasNext()) {
       if (!oldDataFileOpt.isPresent()) {
         scanner.close();
         return new ArrayList<>();
       } else {
-        // TODO: we may directly rename original parquet file if there is not evolution/devolution of schema
+        // TODO: we may directly rename original parquet file if there is not evolution/devolution
+        // of schema
         /*
         TaskContextSupplier taskContextSupplier = hoodieCopyOnWriteTable.getTaskContextSupplier();
         String newFileName = FSUtils.makeDataFileName(instantTime,
@@ -224,59 +350,84 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     Iterator<List<WriteStatus>> result;
     // If the dataFile is present, perform updates else perform inserts into a new base file.
     if (oldDataFileOpt.isPresent()) {
-      result = compactionHandler.handleUpdate(instantTime, operation.getPartitionPath(),
-          operation.getFileId(), scanner.getRecords(),
-          oldDataFileOpt.get());
+      result =
+          compactionHandler.handleUpdate(
+              instantTime,
+              operation.getPartitionPath(),
+              operation.getFileId(),
+              scanner.getRecords(),
+              oldDataFileOpt.get());
     } else {
-      result = compactionHandler.handleInsert(instantTime, operation.getPartitionPath(), operation.getFileId(),
-          scanner.getRecords());
+      result =
+          compactionHandler.handleInsert(
+              instantTime,
+              operation.getPartitionPath(),
+              operation.getFileId(),
+              scanner.getRecords());
     }
     scanner.close();
     Iterable<List<WriteStatus>> resultIterable = () -> result;
-    return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
-      s.getStat().setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
-      s.getStat().setTotalLogFilesCompacted(scanner.getTotalLogFiles());
-      s.getStat().setTotalLogRecords(scanner.getTotalLogRecords());
-      s.getStat().setPartitionPath(operation.getPartitionPath());
-      s.getStat()
-          .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
-      s.getStat().setTotalLogBlocks(scanner.getTotalLogBlocks());
-      s.getStat().setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
-      s.getStat().setTotalRollbackBlocks(scanner.getTotalRollbacks());
-      RuntimeStats runtimeStats = new RuntimeStats();
-      runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
-      s.getStat().setRuntimeStats(runtimeStats);
-    }).collect(toList());
+    return StreamSupport.stream(resultIterable.spliterator(), false)
+        .flatMap(Collection::stream)
+        .peek(
+            s -> {
+              s.getStat().setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
+              s.getStat().setTotalLogFilesCompacted(scanner.getTotalLogFiles());
+              s.getStat().setTotalLogRecords(scanner.getTotalLogRecords());
+              s.getStat().setPartitionPath(operation.getPartitionPath());
+              s.getStat()
+                  .setTotalLogSizeCompacted(
+                      operation
+                          .getMetrics()
+                          .get(CompactionStrategy.TOTAL_LOG_FILE_SIZE)
+                          .longValue());
+              s.getStat().setTotalLogBlocks(scanner.getTotalLogBlocks());
+              s.getStat().setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
+              s.getStat().setTotalRollbackBlocks(scanner.getTotalRollbacks());
+              RuntimeStats runtimeStats = new RuntimeStats();
+              runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
+              s.getStat().setRuntimeStats(runtimeStats);
+            })
+        .collect(toList());
   }
 
   /**
    * Generate a new compaction plan for scheduling.
    *
-   * @param context                               HoodieEngineContext
-   * @param hoodieTable                           Hoodie Table
-   * @param config                                Hoodie Write Configuration
-   * @param compactionCommitTime                  scheduled compaction commit time
-   * @param fgIdsInPendingCompactionAndClustering partition-fileId pairs for which compaction is pending
+   * @param context HoodieEngineContext
+   * @param hoodieTable Hoodie Table
+   * @param config Hoodie Write Configuration
+   * @param compactionCommitTime scheduled compaction commit time
+   * @param fgIdsInPendingCompactionAndClustering partition-fileId pairs for which compaction is
+   *     pending
    * @return Compaction Plan
    * @throws IOException when encountering errors
    */
   HoodieCompactionPlan generateCompactionPlan(
-      HoodieEngineContext context, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config,
-      String compactionCommitTime, Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering) throws IOException {
+      HoodieEngineContext context,
+      HoodieTable<T, I, K, O> hoodieTable,
+      HoodieWriteConfig config,
+      String compactionCommitTime,
+      Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering)
+      throws IOException {
     // Accumulator to keep track of total log files for a table
     HoodieAccumulator totalLogFiles = context.newAccumulator();
     // Accumulator to keep track of total log file slices for a table
     HoodieAccumulator totalFileSlices = context.newAccumulator();
 
-    ValidationUtils.checkArgument(hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ,
-        "Can only compact table of type " + HoodieTableType.MERGE_ON_READ + " and not "
+    ValidationUtils.checkArgument(
+        hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ,
+        "Can only compact table of type "
+            + HoodieTableType.MERGE_ON_READ
+            + " and not "
             + hoodieTable.getMetaClient().getTableType().name());
 
     // TODO : check if maxMemory is not greater than JVM or executor memory
     // TODO - rollback any compactions in flight
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     LOG.info("Compacting " + metaClient.getBasePath() + " with commit " + compactionCommitTime);
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), metaClient.getBasePath());
+    List<String> partitionPaths =
+        FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), metaClient.getBasePath());
 
     // filter the partition paths if needed to reduce list status
     partitionPaths = config.getCompactionStrategy().filterPartitionPaths(config, partitionPaths);
@@ -288,40 +439,85 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
 
     SliceView fileSystemView = hoodieTable.getSliceView();
     LOG.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
-    context.setJobStatus(this.getClass().getSimpleName(), "Looking for files to compact: " + config.getTableName());
+    context.setJobStatus(
+        this.getClass().getSimpleName(), "Looking for files to compact: " + config.getTableName());
 
-    List<HoodieCompactionOperation> operations = context.flatMap(partitionPaths, partitionPath -> fileSystemView
-        .getLatestFileSlices(partitionPath)
-        .filter(slice -> !fgIdsInPendingCompactionAndClustering.contains(slice.getFileGroupId()))
-        .map(s -> {
-          List<HoodieLogFile> logFiles =
-              s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
-          totalLogFiles.add(logFiles.size());
-          totalFileSlices.add(1L);
-          // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
-          // for Map operations and collecting them finally in Avro generated classes for storing
-          // into meta files.
-          Option<HoodieBaseFile> dataFile = s.getBaseFile();
-          return new CompactionOperation(dataFile, partitionPath, logFiles,
-              config.getCompactionStrategy().captureMetrics(config, s));
-        })
-        .filter(c -> !c.getDeltaFileNames().isEmpty()), partitionPaths.size()).stream()
-        .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
+    List<HoodieCompactionOperation> operations =
+        context
+            .flatMap(
+                partitionPaths,
+                partitionPath ->
+                    fileSystemView
+                        .getLatestFileSlices(partitionPath)
+                        .filter(
+                            slice ->
+                                !fgIdsInPendingCompactionAndClustering.contains(
+                                    slice.getFileGroupId()))
+                        .map(
+                            s -> {
+                              List<HoodieLogFile> logFiles =
+                                  s.getLogFiles()
+                                      .sorted(HoodieLogFile.getLogFileComparator())
+                                      .collect(toList());
+                              totalLogFiles.add(logFiles.size());
+                              totalFileSlices.add(1L);
+                              // Avro generated classes are not inheriting Serializable. Using
+                              // CompactionOperation POJO
+                              // for Map operations and collecting them finally in Avro generated
+                              // classes for storing
+                              // into meta files.
+                              Option<HoodieBaseFile> dataFile = s.getBaseFile();
+                              return new CompactionOperation(
+                                  dataFile,
+                                  partitionPath,
+                                  logFiles,
+                                  config.getCompactionStrategy().captureMetrics(config, s));
+                            })
+                        .filter(c -> !c.getDeltaFileNames().isEmpty()),
+                partitionPaths.size())
+            .stream()
+            .map(CompactionUtils::buildHoodieCompactionOperation)
+            .collect(toList());
+    // Get pending deltaCommits to use when do compaction to fix data loss problem
+    List<String> missingInstants =
+        metaClient
+            .getActiveTimeline()
+            .filterPendingExcludingCompaction()
+            .getInstants()
+            .filter(
+                HoodieInstant ->
+                    HoodieInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
+            .map(HoodieInstant::getTimestamp)
+            .collect(toList());
 
+    LOG.info("Pending deltaCommits when schedule compaction plan: " + missingInstants);
     LOG.info("Total of " + operations.size() + " compactions are retrieved");
     LOG.info("Total number of latest files slices " + totalFileSlices.value());
     LOG.info("Total number of log files " + totalLogFiles.value());
     LOG.info("Total number of file slices " + totalFileSlices.value());
     // Filter the compactions with the passed in filter. This lets us choose most effective
     // compactions only
-    HoodieCompactionPlan compactionPlan = config.getCompactionStrategy().generateCompactionPlan(config, operations,
-        CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()));
+    HoodieCompactionPlan compactionPlan =
+        config
+            .getCompactionStrategy()
+            .generateCompactionPlan(
+                config,
+                operations,
+                CompactionUtils.getAllPendingCompactionPlans(metaClient).stream()
+                    .map(Pair::getValue)
+                    .collect(toList()),
+                missingInstants);
     ValidationUtils.checkArgument(
-        compactionPlan.getOperations().stream().noneMatch(
-            op -> fgIdsInPendingCompactionAndClustering.contains(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))),
+        compactionPlan.getOperations().stream()
+            .noneMatch(
+                op ->
+                    fgIdsInPendingCompactionAndClustering.contains(
+                        new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))),
         "Bad Compaction Plan. FileId MUST NOT have multiple pending compactions. "
-            + "Please fix your strategy implementation. FileIdsWithPendingCompactions :" + fgIdsInPendingCompactionAndClustering
-            + ", Selected workload :" + compactionPlan);
+            + "Please fix your strategy implementation. FileIdsWithPendingCompactions :"
+            + fgIdsInPendingCompactionAndClustering
+            + ", Selected workload :"
+            + compactionPlan);
     if (compactionPlan.getOperations().isEmpty()) {
       LOG.warn("After filtering, Nothing to compact for " + metaClient.getBasePath());
     }
