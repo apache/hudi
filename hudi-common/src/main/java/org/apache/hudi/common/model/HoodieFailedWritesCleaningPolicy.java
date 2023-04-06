@@ -33,7 +33,7 @@ public enum HoodieFailedWritesCleaningPolicy {
   EAGER,
 
   // performs cleaning of failed writes lazily during clean
-  @EnumFieldDescription("Clean failed writes when the cleaning service runs.")
+  @EnumFieldDescription("Clean failed writes when the cleaning service runs. This policy is required when multi-writers are enabled.")
   LAZY,
 
   // Does not clean failed writes

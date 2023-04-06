@@ -144,8 +144,8 @@ public class ConfigProperty<T> implements Serializable {
     return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, alternatives);
   }
 
-  public <U extends Enum<U>> ConfigProperty<T> withEnumDocumentation(Class<U> e) {
-    return withEnumDocumentation(e,"");
+  public <U extends Enum<U>> ConfigProperty<T> withDocumentation(Class<U> e) {
+    return withDocumentation(e,"");
   }
 
   private <U extends Enum<U>> boolean isDefaultField(Class<U> e, Field f) {
@@ -158,11 +158,10 @@ public class ConfigProperty<T> implements Serializable {
     return Enum.valueOf(e, f.getName()).equals(defaultValue());
   }
 
-  public <U extends Enum<U>> ConfigProperty<T> withEnumDocumentation(Class<U> e, String doc, String... internalOption) {
+  public <U extends Enum<U>> ConfigProperty<T> withDocumentation(Class<U> e, String doc) {
     Objects.requireNonNull(e);
-    Objects.requireNonNull(doc);
     StringBuilder sb = new StringBuilder();
-    if (!doc.isEmpty()) {
+    if (StringUtils.nonEmpty(doc)) {
       sb.append(doc);
       sb.append('\n');
     }
@@ -179,8 +178,6 @@ public class ConfigProperty<T> implements Serializable {
         sb.append(f.getName());
         if (isDefaultField(e, f)) {
           sb.append("(default)");
-        } else if (Arrays.asList(internalOption).contains(f.getName())) {
-          sb.append("(internal only)");
         }
         sb.append(": ");
         sb.append(fieldDescription.value());

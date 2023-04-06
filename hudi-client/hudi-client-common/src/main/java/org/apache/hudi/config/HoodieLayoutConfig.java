@@ -41,7 +41,7 @@ public class HoodieLayoutConfig extends HoodieConfig {
   public static final ConfigProperty<String> LAYOUT_TYPE = ConfigProperty
       .key("hoodie.storage.layout.type")
       .defaultValue(HoodieStorageLayout.LayoutType.DEFAULT.name())
-      .withEnumDocumentation(HoodieStorageLayout.LayoutType.class);
+      .withDocumentation(HoodieStorageLayout.LayoutType.class);
 
   public static final ConfigProperty<String> LAYOUT_PARTITIONER_CLASS_NAME = ConfigProperty
       .key("hoodie.storage.layout.partitioner.class")

@@ -265,5 +265,4 @@ public class HoodieConfig implements Serializable {
       throw new HoodieException(errorMessage);
     }
   }
-
 }

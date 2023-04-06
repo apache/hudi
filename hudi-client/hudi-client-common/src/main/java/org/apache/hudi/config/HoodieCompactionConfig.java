@@ -84,7 +84,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> INLINE_COMPACT_TRIGGER_STRATEGY = ConfigProperty
       .key("hoodie.compact.inline.trigger.strategy")
       .defaultValue(CompactionTriggerStrategy.NUM_COMMITS.name())
-      .withEnumDocumentation(CompactionTriggerStrategy.class);
+      .withDocumentation(CompactionTriggerStrategy.class);
 
   public static final ConfigProperty<String> PARQUET_SMALL_FILE_LIMIT = ConfigProperty
       .key("hoodie.parquet.small.file.limit")

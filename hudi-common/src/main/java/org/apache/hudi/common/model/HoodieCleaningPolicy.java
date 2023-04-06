@@ -24,7 +24,9 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 /**
  * Hoodie cleaning policies.
  */
-@EnumDescription("Policy to be used by the cleaner for deleting older file slices to re-claim space.")
+@EnumDescription("Policy to be used by the cleaner for deleting older file slices to re-claim space. It is recommended that data is retained"
+    + " for more than the maximum query execution time. Long running query plans may refer to older file slices and will fail if those "
+    + "file slices are cleaned.")
 public enum HoodieCleaningPolicy {
 
   @EnumFieldDescription("Retain the most recent N file slices in each file group, determined by `hoodie.cleaner.fileversions.retained`.")

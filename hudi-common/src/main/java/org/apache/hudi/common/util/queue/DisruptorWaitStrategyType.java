@@ -29,7 +29,7 @@ import java.util.List;
 /**
  * Enum for the type of waiting strategy in Disruptor Queue.
  */
-@EnumDescription("Type of waiting strategy in the Disruptor Queue")
+@EnumDescription("Strategy employed for making Disruptor Executor wait on a cursor")
 public enum DisruptorWaitStrategyType {
 
   /**

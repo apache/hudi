@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -246,7 +247,7 @@ public class OptionsResolver {
    */
   public static boolean needsGuardByLock(Configuration conf) {
     return conf.getBoolean(FlinkOptions.METADATA_ENABLED)
-        || WriteConcurrencyMode.valueOf(conf.getString(
+        || ConfigUtils.resolveEnum(WriteConcurrencyMode.class, conf.getString(
         HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
         HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()))
         == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;

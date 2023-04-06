@@ -53,8 +53,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARTITION_SELECTOR_REGEX_MODE = ConfigProperty
       .key("hoodie.bootstrap.mode.selector.regex.mode")
       .defaultValue(BootstrapMode.METADATA_ONLY.name())
-      .withEnumDocumentation(BootstrapMode.class, "Bootstrap mode to apply for partition paths that "
-          + "match the regex set in `hoodie.bootstrap.mode.selector.regex`.")
+      .withDocumentation(BootstrapMode.class)
       .sinceVersion("0.6.0");
 
 
@@ -79,7 +78,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
   public static final ConfigProperty<String> KEYGEN_TYPE = ConfigProperty
       .key("hoodie.bootstrap.keygen.type")
       .defaultValue(KeyGeneratorType.SIMPLE.name())
-      .withEnumDocumentation(KeyGeneratorType.class, "Key generator class for bootstrap")
+      .withDocumentation(KeyGeneratorType.class)
       .sinceVersion("0.9.0");
 
   public static final ConfigProperty<String> PARTITION_PATH_TRANSLATOR_CLASS_NAME = ConfigProperty

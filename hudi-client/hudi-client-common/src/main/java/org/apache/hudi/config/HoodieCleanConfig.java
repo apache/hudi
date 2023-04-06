@@ -67,8 +67,7 @@ public class HoodieCleanConfig extends HoodieConfig {
   public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy")
       .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
-      .withEnumDocumentation(HoodieCleaningPolicy.class, "It is recommended that data is retained for more than the maximum "
-        + "query execution time. Long running query plans may refer to older file slices and will fail if those file slices are cleaned.")
+      .withDocumentation(HoodieCleaningPolicy.class)
       .withInferFunction(cfg -> {
         boolean isCommitsRetainedConfigured = cfg.contains(CLEANER_COMMITS_RETAINED_KEY);
         boolean isHoursRetainedConfigured = cfg.contains(CLEANER_HOURS_RETAINED_KEY);
@@ -112,7 +111,7 @@ public class HoodieCleanConfig extends HoodieConfig {
   public static final ConfigProperty<String> CLEAN_TRIGGER_STRATEGY = ConfigProperty
       .key("hoodie.clean.trigger.strategy")
       .defaultValue(CleaningTriggerStrategy.NUM_COMMITS.name())
-      .withEnumDocumentation(CleaningTriggerStrategy.class);
+      .withDocumentation(CleaningTriggerStrategy.class);
 
   public static final ConfigProperty<String> CLEAN_MAX_COMMITS = ConfigProperty
       .key("hoodie.clean.max.commits")
@@ -129,12 +128,11 @@ public class HoodieCleanConfig extends HoodieConfig {
   public static final ConfigProperty<String> FAILED_WRITES_CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy.failed.writes")
       .defaultValue(HoodieFailedWritesCleaningPolicy.EAGER.name())
-      .withEnumDocumentation(HoodieFailedWritesCleaningPolicy.class,
-          "note that LAZY policy is required when multi-writers are enabled.")
+      .withDocumentation(HoodieFailedWritesCleaningPolicy.class)
       .withInferFunction(cfg -> {
         Option<String> writeConcurrencyModeOpt = Option.ofNullable(cfg.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE));
         if (!writeConcurrencyModeOpt.isPresent()
-            || !writeConcurrencyModeOpt.get().equals(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
+            || !writeConcurrencyModeOpt.get().equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
           return Option.empty();
         }
         return Option.of(HoodieFailedWritesCleaningPolicy.LAZY.name());

@@ -39,7 +39,7 @@ public enum HoodieFileFormat {
   @EnumFieldDescription("File format used in the Hudi Timeline")
   HOODIE_LOG(".log"),
 
-  @EnumFieldDescription("File format for hbase. A file of sorted key/value pairs. Both keys and values are byte arrays.")
+  @EnumFieldDescription("(internal config) File format for hbase. A file of sorted key/value pairs. Both keys and values are byte arrays.")
   HFILE(".hfile"),
 
   @EnumFieldDescription("The Optimized Row Columnar (ORC) file format provides a highly efficient way to store Hive data. "

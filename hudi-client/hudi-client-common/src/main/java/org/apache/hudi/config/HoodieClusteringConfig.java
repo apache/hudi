@@ -149,7 +149,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<ClusteringPlanPartitionFilterMode> PLAN_PARTITION_FILTER_MODE_NAME = ConfigProperty
       .key(PLAN_PARTITION_FILTER_MODE)
       .defaultValue(ClusteringPlanPartitionFilterMode.NONE)
-      .withEnumDocumentation(ClusteringPlanPartitionFilterMode.class)
+      .withDocumentation(ClusteringPlanPartitionFilterMode.class)
       .sinceVersion("0.11.0");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
@@ -241,7 +241,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
       .defaultValue(LayoutOptimizationStrategy.LINEAR.name())
-      .withEnumDocumentation(LayoutOptimizationStrategy.class)
+      .withDocumentation(LayoutOptimizationStrategy.class)
       .sinceVersion("0.10.0");
 
   /**
@@ -267,7 +267,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "curve.build.method")
       .defaultValue(SpatialCurveCompositionStrategyType.DIRECT.name())
-      .withEnumDocumentation(SpatialCurveCompositionStrategyType.class)
+      .withDocumentation(SpatialCurveCompositionStrategyType.class)
       .sinceVersion("0.10.0");
 
   /**
@@ -690,7 +690,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     HILBERT
   }
 
-  @EnumDescription("Clustering Operator ADD DESCRIPTION")
+  @EnumDescription("Clustering mode to use.")
   public enum ClusteringOperator {
 
     @EnumFieldDescription("Only schedule the clustering plan")

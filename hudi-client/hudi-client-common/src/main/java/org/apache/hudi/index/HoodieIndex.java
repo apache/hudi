@@ -154,7 +154,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public void close() {
   }
 
-  @EnumDescription("Determines how records are indexed. Default is engine specific.")
+  @EnumDescription("Determines how records are indexed. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java engines")
   public enum IndexType {
 
     @EnumFieldDescription("Index mapping is managed in an external Apache HBase table.")
@@ -186,7 +186,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
     @EnumFieldDescription("Bucket Index is targeted to locate the record fast by hash in big data scenarios. "
         + "Use `hoodie.index.bucket.engine` to choose bucket engine type.")
     BUCKET,
-    @EnumFieldDescription("Managed by Flink?")
+    @EnumFieldDescription("Internal Config")
     FLINK_STATE
   }
 

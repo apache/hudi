@@ -188,7 +188,7 @@ public class TestConfigProperty extends HoodieConfig {
   void testEnumConfigs() {
     ConfigProperty<String> testConfig = ConfigProperty.key("test.config")
         .defaultValue(TestEnum.TEST_VAL_B.name())
-        .withEnumDocumentation(TestEnum.class);
+        .withDocumentation(TestEnum.class);
     String[] lines = testConfig.doc().split("\n");
     assertEquals("org.apache.hudi.common.config.TestConfigProperty$TestEnum: Test enum description.", lines[0]);
     assertEquals("    TEST_VAL_A: Test val a", lines[1]);

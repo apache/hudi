@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 /**
  * Identifies different types of bootstrap.
  */
-@EnumDescription("Bootstrap is used to import an existing table into Hudi")
+@EnumDescription("Bootstrap mode to apply for partition paths that match the regex set in `hoodie.bootstrap.mode.selector.regex`.")
 public enum BootstrapMode {
   /**
    * In this mode, record level metadata is generated for each source record and both original record and metadata
@@ -38,8 +38,8 @@ public enum BootstrapMode {
   /**
    * In this mode, record level metadata alone is generated for each source record and stored in new bootstrap location.
    */
-  @EnumFieldDescription("In this mode, the full record data is not copied into Hudi. Instead, 'skeleton' files containing"
-      + " just the corresponding metadata columns are added to the Hudi table. Hudi relies on the data in the original table"
-      + " and will face data-loss or corruption if files bootstrapped from the original table are deleted or modified.")
+  @EnumFieldDescription("In this mode, the full record data is not copied into Hudi therefore it avoids full cost of rewriting the dataset. "
+      + "Instead, 'skeleton' files containing just the corresponding metadata columns are added to the Hudi table. Hudi relies on the data "
+      + "in the original table and will face data-loss or corruption if files bootstrapped from the original table are deleted or modified.")
   METADATA_ONLY
 }
