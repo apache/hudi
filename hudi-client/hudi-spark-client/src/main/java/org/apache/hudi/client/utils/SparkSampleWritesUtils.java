@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.SAMPLE_WRITES_FOLDER_PATH;
@@ -50,11 +51,17 @@ import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD
 import static org.apache.hudi.config.HoodieWriteConfig.SAMPLE_WRITES_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.SAMPLE_WRITES_SIZE;
 
+/**
+ * The utilities class is dedicated to estimating average record size by writing sample incoming records
+ * to `.hoodie/.aux/.sample_writes/<instant time>/<epoch millis>` and reading the commit metadata.
+ *
+ * TODO handle sample_writes sub-path clean-up w.r.t. rollback and insert overwrite. (HUDI-6044)
+ */
 public class SparkSampleWritesUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkSampleWritesUtils.class);
 
-  public static void overwriteRecordSizeEstimateIfNeeded(JavaSparkContext jsc, JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig) {
+  public static void overwriteRecordSizeEstimateIfNeeded(JavaSparkContext jsc, JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig, String instantTime) {
     if (!writeConfig.getBoolean(SAMPLE_WRITES_ENABLED)) {
       LOG.debug("Skip overwriting record size estimate as it's disabled.");
       return;
@@ -65,25 +72,24 @@ public class SparkSampleWritesUtils {
       return;
     }
     try {
-      Pair<Boolean, String> result = doSampleWrites(jsc, records, writeConfig);
+      Pair<Boolean, String> result = doSampleWrites(jsc, records, writeConfig, instantTime);
       if (result.getLeft()) {
         long avgSize = getAvgSizeFromSampleWrites(jsc, result.getRight());
         LOG.info("Overwriting record size estimate to " + avgSize);
         writeConfig.setValue(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE, String.valueOf(avgSize));
       }
     } catch (IOException e) {
-      LOG.error("Got error when doing sample writes for table " + writeConfig.getTableName(), e);
+      LOG.error(String.format("Not overwriting record size estimate for table %s due to error when doing sample writes.", writeConfig.getTableName()), e);
     }
   }
 
-  private static Pair<Boolean, String> doSampleWrites(JavaSparkContext jsc, JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig) throws IOException {
-    Path basePath = new CachingPath(writeConfig.getBasePath(), SAMPLE_WRITES_FOLDER_PATH);
-    FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
-    checkState(!fs.exists(basePath), String.format("%s already exists. Is there a concurrent writer?", basePath));
+  private static Pair<Boolean, String> doSampleWrites(JavaSparkContext jsc, JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig, String instantTime) throws IOException {
+    long now = Instant.now().toEpochMilli();
+    Path basePath = new CachingPath(writeConfig.getBasePath(), SAMPLE_WRITES_FOLDER_PATH + Path.SEPARATOR + instantTime + Path.SEPARATOR + now);
     final String sampleWritesBasePath = basePath.toString();
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
-        .setTableName(writeConfig.getTableName() + "_samples")
+        .setTableName(String.format("%s_samples_%s_%s", writeConfig.getTableName(), instantTime, now))
         .setCDCEnabled(false)
         .initTable(jsc.hadoopConfiguration(), sampleWritesBasePath);
     HoodieWriteConfig sampleWriteConfig = HoodieWriteConfig.newBuilder()
@@ -99,8 +105,8 @@ public class SparkSampleWritesUtils {
     try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty())) {
       int size = writeConfig.getIntOrDefault(SAMPLE_WRITES_SIZE);
       List<HoodieRecord> samples = records.coalesce(1).take(size);
-      String commitTime = sampleWriteClient.startCommit();
-      JavaRDD<WriteStatus> writeStatusRDD = sampleWriteClient.bulkInsert(jsc.parallelize(samples, 1), commitTime);
+      sampleWriteClient.startCommitWithTime(instantTime);
+      JavaRDD<WriteStatus> writeStatusRDD = sampleWriteClient.bulkInsert(jsc.parallelize(samples, 1), instantTime);
       if (writeStatusRDD.filter(WriteStatus::hasErrors).count() > 0) {
         LOG.error(String.format("sample writes for table %s failed with errors.", writeConfig.getTableName()));
         if (LOG.isTraceEnabled()) {
@@ -121,7 +127,7 @@ public class SparkSampleWritesUtils {
   private static long getAvgSizeFromSampleWrites(JavaSparkContext jsc, String sampleWritesBasePath) throws IOException {
     HoodieTableMetaClient metaClient = getMetaClient(jsc, sampleWritesBasePath);
     Option<HoodieInstant> lastInstantOpt = metaClient.getCommitTimeline().filterCompletedInstants().lastInstant();
-    checkState(lastInstantOpt.isPresent());
+    checkState(lastInstantOpt.isPresent(), "The only completed instant should be present in sample_writes table.");
     HoodieInstant instant = lastInstantOpt.get();
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
         .fromBytes(metaClient.getCommitTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);

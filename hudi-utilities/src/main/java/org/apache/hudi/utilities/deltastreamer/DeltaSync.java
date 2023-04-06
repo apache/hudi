@@ -758,11 +758,11 @@ public class DeltaSync implements Serializable, Closeable {
     }
 
     boolean isEmpty = records.isEmpty();
-    SparkSampleWritesUtils.overwriteRecordSizeEstimateIfNeeded(jssc, records, writeClient.getConfig());
 
     // try to start a new commit
     String instantTime = startCommit();
     LOG.info("Starting commit  : " + instantTime);
+    SparkSampleWritesUtils.overwriteRecordSizeEstimateIfNeeded(jssc, records, writeClient.getConfig(), instantTime);
 
     JavaRDD<WriteStatus> writeStatusRDD;
     switch (cfg.operation) {

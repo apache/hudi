@@ -102,6 +102,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
+import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
 /**
@@ -693,12 +694,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> SAMPLE_WRITES_ENABLED = ConfigProperty
       .key("hoodie.write.sample.writes.enabled")
       .defaultValue(false)
-      .withDocumentation("");
+      .withDocumentation("Set this to true to sample from the first batch of records and write to the auxiliary path, before writing to the table."
+          + "The sampled records are used to calculate the average record size. The relevant write client will have `" + COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key()
+          + "` being overwritten by the calculated result.");
 
   public static final ConfigProperty<Integer> SAMPLE_WRITES_SIZE = ConfigProperty
       .key("hoodie.write.sample.writes.size")
       .defaultValue(2000)
-      .withDocumentation("");
+      .withDocumentation("Number of records to sample from the first write. To improve the estimation's accuracy, "
+          + "for smaller or more compressable record size, set the sample size bigger. For bigger or less compressable record size, set smaller.");
 
   public static final ConfigProperty<String> SENSITIVE_CONFIG_KEYS_FILTER = ConfigProperty
       .key("hoodie.sensitive.config.keys")
@@ -1463,7 +1467,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public int getCopyOnWriteRecordSizeEstimate() {
-    return getInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
+    return getInt(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
   }
 
   public boolean allowMultipleCleans() {

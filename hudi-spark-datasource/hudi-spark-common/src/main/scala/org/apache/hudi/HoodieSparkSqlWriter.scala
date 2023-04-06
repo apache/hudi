@@ -372,8 +372,8 @@ object HoodieSparkSqlWriter {
               } else {
                 hoodieRecords
               }
-            SparkSampleWritesUtils.overwriteRecordSizeEstimateIfNeeded(jsc, hoodieRecords, client.getConfig)
             client.startCommitWithTime(instantTime, commitActionType)
+            SparkSampleWritesUtils.overwriteRecordSizeEstimateIfNeeded(jsc, hoodieRecords, client.getConfig, instantTime)
             val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation)
             (writeResult, client)
         }
