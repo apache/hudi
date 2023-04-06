@@ -103,6 +103,8 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
           conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
         }
         return Pipelines.compact(conf, pipeline);
+      } else if (OptionsResolver.isMorTable(conf)) {
+        return Pipelines.dummySink(pipeline);
       } else {
         return Pipelines.clean(conf, pipeline);
       }
