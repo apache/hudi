@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
@@ -43,10 +42,6 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  */
 public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexPartitioner<T> {
 
-  private static final Logger LOG = LogManager.getLogger(RDDConsistentBucketPartitioner.class);
-
-  private final HoodieTable table;
-  private final List<String> indexKeyFields;
   private final Map<String, List<ConsistentHashingNode>> hashingChildrenNodes;
 
   public RDDConsistentBucketBulkInsertPartitioner(HoodieTable table,
@@ -55,8 +50,6 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
     super(table,
         strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), null),
         preserveHoodieMetadata);
-    this.table = table;
-    this.indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
     this.hashingChildrenNodes = new HashMap<>();
   }
 

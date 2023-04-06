@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -81,8 +82,7 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
 
           // Load an existing index
           locationMap.forEach((k, v) -> {
-            String fileId = v.getFileId();
-            String prefix = fileId.substring(0, 36);
+            String prefix = FSUtils.getFileIdPfxFromFileId(v.getFileId());
             bucketIdToFileIdPrefixMap.put(k, prefix);
             fileIdPrefixToBucketIndex.put(prefix, fileIdPfxList.size());
             fileIdPfxList.add(prefix);

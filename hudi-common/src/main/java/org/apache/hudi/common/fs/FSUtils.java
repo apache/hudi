@@ -358,6 +358,13 @@ public class FSUtils {
     return UUID.randomUUID().toString();
   }
 
+  /**
+   * Returns prefix for a file group from fileId.
+   */
+  public static String getFileIdPfxFromFileId(String fileId) {
+    return fileId.substring(0, 36);
+  }
+
   public static String createNewFileId(String idPfx, int id) {
     return String.format("%s-%d", idPfx, id);
   }
