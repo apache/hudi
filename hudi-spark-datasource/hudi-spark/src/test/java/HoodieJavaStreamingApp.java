@@ -302,7 +302,7 @@ public class HoodieJavaStreamingApp {
       // wait for spark streaming to process one microbatch
       Thread.sleep(3000);
       waitTillNCommits(fs, numExpCommits, 180, 3);
-      commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
+      commitInstantTime2 = HoodieDataSourceHelpers.listCommitsSince(fs, tablePath, commitInstantTime1).stream().sorted().findFirst().get();
       LOG.info("Second commit at instant time :" + commitInstantTime2);
     }
 
@@ -312,8 +312,7 @@ public class HoodieJavaStreamingApp {
       }
       // Wait for compaction to also finish and track latest timestamp as commit timestamp
       waitTillNCommits(fs, numExpCommits, 180, 3);
-      commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-      LOG.info("Compaction commit at instant time :" + commitInstantTime2);
+      LOG.info("Compaction commit at instant time :" + HoodieDataSourceHelpers.latestCommit(fs, tablePath));
     }
 
     /**
@@ -377,7 +376,6 @@ public class HoodieJavaStreamingApp {
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "true")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
-        .option(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA.key(), "false")
         .option(DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH().key(),"true")
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName).option("checkpointLocation", checkpointLocation)
         .outputMode(OutputMode.Append());

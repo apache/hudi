@@ -37,7 +37,7 @@ public class MockStateInitializationContext implements StateInitializationContex
 
   @Override
   public boolean isRestored() {
-    return false;
+    return operatorStateStore.isRestored();
   }
 
   @Override

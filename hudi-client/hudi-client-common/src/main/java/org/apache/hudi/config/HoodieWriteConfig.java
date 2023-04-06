@@ -1537,14 +1537,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
   }
 
-  public boolean isPreserveHoodieCommitMetadataForClustering() {
-    return getBoolean(HoodieClusteringConfig.PRESERVE_COMMIT_METADATA);
-  }
-
-  public boolean isPreserveHoodieCommitMetadataForCompaction() {
-    return getBoolean(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA);
-  }
-
   public boolean isClusteringEnabled() {
     // TODO: future support async clustering
     return inlineClusteringEnabled() || isAsyncClusteringEnabled();
@@ -2308,6 +2300,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   /**
    * Hoodie Client Lock Configs.
+   *
    * @return
    */
   public boolean isAutoAdjustLockConfigs() {

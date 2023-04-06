@@ -218,12 +218,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Enable running of clustering service, asynchronously as inserts happen on the table.")
       .withAlternatives("hoodie.datasource.clustering.async.enable");
 
-  public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
-      .key("hoodie.clustering.preserve.commit.metadata")
-      .defaultValue(true)
-      .sinceVersion("0.9.0")
-      .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
-
   /**
    * @deprecated this setting has no effect. Please refer to clustering configuration, as well as
    * {@link #LAYOUT_OPTIMIZE_STRATEGY} config to enable advanced record layout optimization strategies
@@ -578,11 +572,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withAsyncClustering(Boolean asyncClustering) {
       clusteringConfig.setValue(ASYNC_CLUSTERING_ENABLE, String.valueOf(asyncClustering));
-      return this;
-    }
-
-    public Builder withPreserveHoodieCommitMetadata(Boolean preserveHoodieCommitMetadata) {
-      clusteringConfig.setValue(PRESERVE_COMMIT_METADATA, String.valueOf(preserveHoodieCommitMetadata));
       return this;
     }
 
