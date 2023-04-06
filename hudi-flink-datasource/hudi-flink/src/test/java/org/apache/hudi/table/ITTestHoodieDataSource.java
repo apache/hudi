@@ -1789,7 +1789,7 @@ public class ITTestHoodieDataSource {
     // write second commit
     TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
     // stop the streaming query and get data
-    List<Row> actualResult = stopAndFetchData(streamTableEnv, tableResult, 10);
+    List<Row> actualResult = fetchResult(streamTableEnv, tableResult, 10);
     assertRowsEquals(actualResult, TestData.DATA_SET_INSERT_SEPARATE_PARTITION);
   }
 
@@ -1912,7 +1912,7 @@ public class ITTestHoodieDataSource {
   private List<Row> execSelectSql(TableEnvironment tEnv, String select, String sinkDDL, long timeout)
       throws InterruptedException {
     TableResult tableResult = submitSelectSql(tEnv, select, sinkDDL);
-    return stopAndFetchData(tEnv, tableResult, timeout);
+    return fetchResult(tEnv, tableResult, timeout);
   }
 
   private TableResult submitSelectSql(TableEnvironment tEnv, String select, String sinkDDL) {
@@ -1922,7 +1922,7 @@ public class ITTestHoodieDataSource {
     return tableResult;
   }
 
-  private List<Row> stopAndFetchData(TableEnvironment tEnv, TableResult tableResult, long timeout)
+  private List<Row> fetchResult(TableEnvironment tEnv, TableResult tableResult, long timeout)
       throws InterruptedException {
     // wait for the timeout then cancels the job
     TimeUnit.SECONDS.sleep(timeout);
