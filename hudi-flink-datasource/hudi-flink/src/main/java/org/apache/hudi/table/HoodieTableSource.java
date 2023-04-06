@@ -37,11 +37,15 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.sink.utils.Pipelines;
+import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
+import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
@@ -51,7 +55,6 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ChangelogModes;
-import org.apache.hudi.util.ExpressionUtils;
 import org.apache.hudi.util.InputFormats;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -59,6 +62,7 @@ import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
@@ -74,7 +78,6 @@ import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.connector.source.abilities.SupportsFilterPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
-import org.apache.flink.table.connector.source.abilities.SupportsPartitionPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.ResolvedExpression;
@@ -93,21 +96,20 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
+import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
+import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
 
 /**
  * Hoodie batch table source that always read the latest snapshot of the underneath table.
  */
 public class HoodieTableSource implements
     ScanTableSource,
-    SupportsPartitionPushDown,
     SupportsProjectionPushDown,
     SupportsLimitPushDown,
     SupportsFilterPushDown {
@@ -125,13 +127,13 @@ public class HoodieTableSource implements
   private final List<String> partitionKeys;
   private final String defaultPartName;
   private final Configuration conf;
-  private final FileIndex fileIndex;
   private final InternalSchemaManager internalSchemaManager;
 
   private int[] requiredPos;
   private long limit;
-
-  private List<Map<String, String>> requiredPartitions;
+  private DataPruner dataPruner;
+  private PartitionPruners.PartitionPruner partitionPruner;
+  private FileIndex fileIndex;
 
   public HoodieTableSource(
       ResolvedSchema schema,
@@ -148,8 +150,8 @@ public class HoodieTableSource implements
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf,
-      @Nullable FileIndex fileIndex,
-      @Nullable List<Map<String, String>> requiredPartitions,
+      @Nullable DataPruner dataPruner,
+      @Nullable PartitionPruners.PartitionPruner partitionPruner,
       @Nullable int[] requiredPos,
       @Nullable Long limit,
       @Nullable HoodieTableMetaClient metaClient,
@@ -160,10 +162,8 @@ public class HoodieTableSource implements
     this.partitionKeys = partitionKeys;
     this.defaultPartName = defaultPartName;
     this.conf = conf;
-    this.fileIndex = fileIndex == null
-        ? FileIndex.instance(this.path, this.conf, this.tableRowType)
-        : fileIndex;
-    this.requiredPartitions = requiredPartitions;
+    this.dataPruner = dataPruner;
+    this.partitionPruner = partitionPruner;
     this.requiredPos = requiredPos == null
         ? IntStream.range(0, this.tableRowType.getFieldCount()).toArray()
         : requiredPos;
@@ -193,7 +193,7 @@ public class HoodieTableSource implements
         OptionsInference.setupSourceTasks(conf, execEnv.getParallelism());
         if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
           StreamReadMonitoringFunction monitoringFunction = new StreamReadMonitoringFunction(
-              conf, FilePathUtils.toFlinkPath(path), tableRowType, maxCompactionMemoryInBytes, getRequiredPartitionPaths());
+              conf, FilePathUtils.toFlinkPath(path), tableRowType, maxCompactionMemoryInBytes, partitionPruner);
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
@@ -224,7 +224,7 @@ public class HoodieTableSource implements
   @Override
   public DynamicTableSource copy() {
     return new HoodieTableSource(schema, path, partitionKeys, defaultPartName,
-        conf, fileIndex, requiredPartitions, requiredPos, limit, metaClient, internalSchemaManager);
+        conf, dataPruner, partitionPruner, requiredPos, limit, metaClient, internalSchemaManager);
   }
 
   @Override
@@ -234,24 +234,12 @@ public class HoodieTableSource implements
 
   @Override
   public Result applyFilters(List<ResolvedExpression> filters) {
-    List<ResolvedExpression> callExpressionFilters = filters.stream()
-        .filter(ExpressionUtils::isSimpleCallExpression)
-        .collect(Collectors.toList());
-    this.fileIndex.setFilters(callExpressionFilters);
+    List<ResolvedExpression> simpleFilters = filterSimpleCallExpression(filters);
+    Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitFilters = splitExprByPartitionCall(simpleFilters, this.partitionKeys, this.tableRowType);
+    this.dataPruner = DataPruner.newInstance(splitFilters.f0);
+    this.partitionPruner = cratePartitionPruner(splitFilters.f1);
     // refuse all the filters now
-    return SupportsFilterPushDown.Result.of(Collections.emptyList(), new ArrayList<>(filters));
-  }
-
-  @Override
-  public Optional<List<Map<String, String>>> listPartitions() {
-    List<Map<String, String>> partitions = this.fileIndex.getPartitions(
-        this.partitionKeys, defaultPartName, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING));
-    return Optional.of(partitions);
-  }
-
-  @Override
-  public void applyPartitions(List<Map<String, String>> partitions) {
-    this.requiredPartitions = partitions;
+    return SupportsFilterPushDown.Result.of(new ArrayList<>(splitFilters.f1), new ArrayList<>(filters));
   }
 
   @Override
@@ -296,18 +284,25 @@ public class HoodieTableSource implements
   }
 
   @Nullable
-  private Set<String> getRequiredPartitionPaths() {
-    if (this.requiredPartitions == null) {
-      // returns null for non partition pruning
+  private PartitionPruners.PartitionPruner cratePartitionPruner(List<ResolvedExpression> partitionFilters) {
+    if (partitionFilters.isEmpty()) {
       return null;
     }
-    return FilePathUtils.toRelativePartitionPaths(this.partitionKeys, this.requiredPartitions,
-        conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING));
+    StringJoiner joiner = new StringJoiner(" and ");
+    partitionFilters.forEach(f -> joiner.add(f.asSummaryString()));
+    LOG.info("Partition pruner for hoodie source, condition is:\n" + joiner);
+    List<ExpressionEvaluators.Evaluator> evaluators = ExpressionEvaluators.fromExpression(partitionFilters);
+    List<DataType> partitionTypes = this.partitionKeys.stream().map(name ->
+        this.schema.getColumn(name).orElseThrow(() -> new HoodieValidationException("Field " + name + " does not exist")))
+        .map(Column::getDataType)
+        .collect(Collectors.toList());
+    String defaultParName = conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME);
+    boolean hivePartition = conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING);
+    return PartitionPruners.getInstance(evaluators, this.partitionKeys, partitionTypes, defaultParName, hivePartition);
   }
 
-  private List<MergeOnReadInputSplit> buildFileIndex() {
-    Set<String> requiredPartitionPaths = getRequiredPartitionPaths();
-    fileIndex.setPartitionPaths(requiredPartitionPaths);
+  private List<MergeOnReadInputSplit> buildInputSplits() {
+    FileIndex fileIndex = getOrBuildFileIndex();
     List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
     if (relPartitionPaths.size() == 0) {
       return Collections.emptyList();
@@ -360,7 +355,7 @@ public class HoodieTableSource implements
         final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.getString(FlinkOptions.TABLE_TYPE));
         switch (tableType) {
           case MERGE_ON_READ:
-            final List<MergeOnReadInputSplit> inputSplits = buildFileIndex();
+            final List<MergeOnReadInputSplit> inputSplits = buildInputSplits();
             if (inputSplits.size() == 0) {
               // When there is no input splits, just return an empty source.
               LOG.warn("No input splits generate for MERGE_ON_READ input format, returns empty collection instead");
@@ -381,7 +376,8 @@ public class HoodieTableSource implements
             .path(FilePathUtils.toFlinkPath(path))
             .rowType(this.tableRowType)
             .maxCompactionMemoryInBytes(maxCompactionMemoryInBytes)
-            .requiredPartitions(getRequiredPartitionPaths()).build();
+            .partitionPruner(partitionPruner)
+            .build();
         final boolean cdcEnabled = this.conf.getBoolean(FlinkOptions.CDC_ENABLED);
         final IncrementalInputSplits.Result result = incrementalInputSplits.inputSplits(metaClient, hadoopConf, cdcEnabled);
         if (result.isEmpty()) {
@@ -518,6 +514,13 @@ public class HoodieTableSource implements
     return HoodieAvroUtils.addMetadataFields(schema, conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED));
   }
 
+  private FileIndex getOrBuildFileIndex() {
+    if (this.fileIndex == null) {
+      this.fileIndex = FileIndex.instance(this.path, this.conf, this.tableRowType, dataPruner, partitionPruner);
+    }
+    return this.fileIndex;
+  }
+
   @VisibleForTesting
   public Schema getTableAvroSchema() {
     try {
@@ -546,8 +549,9 @@ public class HoodieTableSource implements
   @VisibleForTesting
   public void reset() {
     this.metaClient.reloadActiveTimeline();
-    this.requiredPartitions = null;
-    this.fileIndex.reset();
+    if (this.fileIndex != null) {
+      this.fileIndex.reset();
+    }
   }
 
   /**
@@ -555,8 +559,7 @@ public class HoodieTableSource implements
    */
   @VisibleForTesting
   public FileStatus[] getReadFiles() {
-    Set<String> requiredPartitionPaths = getRequiredPartitionPaths();
-    fileIndex.setPartitionPaths(requiredPartitionPaths);
+    FileIndex fileIndex = getOrBuildFileIndex();
     List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
     if (relPartitionPaths.size() == 0) {
       return new FileStatus[0];
@@ -565,7 +568,7 @@ public class HoodieTableSource implements
   }
 
   @VisibleForTesting
-  FileIndex getFileIndex() {
-    return fileIndex;
+  public DataPruner getDataPruner() {
+    return dataPruner;
   }
 }
