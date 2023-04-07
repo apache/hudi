@@ -74,7 +74,7 @@ import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.
  * @since 0.3.0
  */
 public class HoodieTableConfig extends HoodieConfig {
-
+  // comment
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableConfig.class);
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
