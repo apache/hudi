@@ -955,6 +955,12 @@
         <artifactId>spark-hive_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>log4j</groupId>
+            <artifactId>apache-log4j-extras</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.spark</groupId>
@@ -1445,6 +1451,10 @@
             <artifactId>log4j</artifactId>
           </exclusion>
           <exclusion>
+            <groupId>log4j</groupId>
+            <artifactId>apache-log4j-extras</artifactId>
+          </exclusion>
+          <exclusion>
             <groupId>org.apache.hbase</groupId>
             <artifactId>*</artifactId>
           </exclusion>
@@ -1495,6 +1505,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>log4j</groupId>
+            <artifactId>apache-log4j-extras</artifactId>
           </exclusion>
           <exclusion>
             <groupId>org.apache.hbase</groupId>
