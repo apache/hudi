@@ -18,13 +18,6 @@
 
 package org.apache.hudi.source;
 
-import org.apache.hudi.adapter.AbstractStreamOperatorAdapter;
-import org.apache.hudi.adapter.AbstractStreamOperatorFactoryAdapter;
-import org.apache.hudi.adapter.MailboxExecutorAdapter;
-import org.apache.hudi.adapter.Utils;
-import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
-import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
-
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.runtime.state.JavaSerializer;
@@ -40,10 +33,15 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Preconditions;
+import org.apache.hudi.adapter.AbstractStreamOperatorAdapter;
+import org.apache.hudi.adapter.AbstractStreamOperatorFactoryAdapter;
+import org.apache.hudi.adapter.MailboxExecutorAdapter;
+import org.apache.hudi.adapter.Utils;
+import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
+import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Queue;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -63,8 +61,6 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamReadOperator.class);
 
-  private static final int MINI_BATCH_SIZE = 2048;
-
   // It's the same thread that runs this operator and checkpoint actions. Use this executor to schedule only
   // splits for subsequent reading, so that a new checkpoint could be triggered without blocking a long time
   // for exhausting all scheduled split reading tasks.
@@ -78,11 +74,7 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
 
   private transient Queue<MergeOnReadInputSplit> splits;
 
-  // Splits are read by the same thread that calls #processElement. Each read task is submitted to that thread by adding
-  // them to the executor. This state is used to ensure that only one read task is in that splits queue at a time, so that
-  // read tasks do not accumulate ahead of checkpoint tasks. When there is a read task in the queue, this is set to RUNNING.
-  // When there are no more files to read, this will be set to IDLE.
-  private transient volatile SplitState currentSplitState;
+  private transient volatile SplitProcessThread splitProcessThread;
 
   private StreamReadOperator(MergeOnReadInputFormat format, ProcessingTimeService timeService,
                              MailboxExecutorAdapter mailboxExecutor) {
@@ -98,9 +90,6 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     // TODO Replace Java serialization with Avro approach to keep state compatibility.
     inputSplitsState = context.getOperatorStateStore().getListState(
         new ListStateDescriptor<>("splits", new JavaSerializer<>()));
-
-    // Initialize the current split state to IDLE.
-    currentSplitState = SplitState.IDLE;
 
     // Recover splits state from flink state backend if possible.
     splits = new LinkedBlockingDeque<>();
@@ -120,8 +109,18 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
         output,
         getRuntimeContext().getExecutionConfig().getAutoWatermarkInterval());
 
-    // Enqueue to process the recovered input splits.
-    enqueueProcessSplits();
+    splitProcessThread = new SplitProcessThread(splits,
+        executor,
+        format,
+        sourceContext,
+        this::splitProcessException,
+        getRuntimeContext().getIndexOfThisSubtask(),
+        getRuntimeContext().getNumberOfParallelSubtasks());
+    splitProcessThread.start();
+  }
+
+  public void splitProcessException() throws Exception {
+    throw new Exception("Split process thread occur exception.");
   }
 
   @Override
@@ -135,65 +134,6 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
   @Override
   public void processElement(StreamRecord<MergeOnReadInputSplit> element) {
     splits.add(element.getValue());
-    enqueueProcessSplits();
-  }
-
-  private void enqueueProcessSplits() {
-    if (currentSplitState == SplitState.IDLE && !splits.isEmpty()) {
-      currentSplitState = SplitState.RUNNING;
-      executor.execute(this::processSplits, "process input split");
-    }
-  }
-
-  private void processSplits() throws IOException {
-    MergeOnReadInputSplit split = splits.peek();
-    if (split == null) {
-      currentSplitState = SplitState.IDLE;
-      return;
-    }
-
-    // 1. open a fresh new input split and start reading as mini-batch
-    // 2. if the input split has remaining records to read, switches to another runnable to handle
-    // 3. if the input split reads to the end, close the format and remove the split from the queue #splits
-    // 4. for each runnable, reads at most #MINI_BATCH_SIZE number of records
-    if (format.isClosed()) {
-      // This log is important to indicate the consuming process,
-      // there is only one log message for one data bucket.
-      LOG.info("Processing input split : {}", split);
-      format.open(split);
-    }
-    try {
-      consumeAsMiniBatch(split);
-    } finally {
-      currentSplitState = SplitState.IDLE;
-    }
-
-    // Re-schedule to process the next split.
-    enqueueProcessSplits();
-  }
-
-  /**
-   * Consumes at most {@link #MINI_BATCH_SIZE} number of records
-   * for the given input split {@code split}.
-   *
-   * <p>Note: close the input format and remove the input split for the queue {@link #splits}
-   * if the split reads to the end.
-   *
-   * @param split The input split
-   */
-  private void consumeAsMiniBatch(MergeOnReadInputSplit split) throws IOException {
-    for (int i = 0; i < MINI_BATCH_SIZE; i++) {
-      if (!format.reachedEnd()) {
-        sourceContext.collect(format.nextRecord(null));
-        split.consume();
-      } else {
-        // close the input format
-        format.close();
-        // remove the split
-        splits.poll();
-        break;
-      }
-    }
   }
 
   @Override
@@ -210,7 +150,9 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
       format.closeInputFormat();
       format = null;
     }
-
+    if (splitProcessThread != null) {
+      splitProcessThread.shutdown();
+    }
     sourceContext = null;
   }
 
@@ -223,14 +165,13 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
       sourceContext.close();
       sourceContext = null;
     }
+    if (splitProcessThread != null) {
+      splitProcessThread.shutdown();
+    }
   }
 
   public static OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory(MergeOnReadInputFormat format) {
     return new OperatorFactory(format);
-  }
-
-  private enum SplitState {
-    IDLE, RUNNING
   }
 
   private static class OperatorFactory extends AbstractStreamOperatorFactoryAdapter<RowData>

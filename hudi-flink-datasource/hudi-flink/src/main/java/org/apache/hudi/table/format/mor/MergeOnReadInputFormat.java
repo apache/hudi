@@ -537,6 +537,7 @@ public class MergeOnReadInputFormat
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
+
   /**
    * Base record iterator with instant time filtering.
    */
@@ -907,5 +908,9 @@ public class MergeOnReadInputFormat
   @VisibleForTesting
   public void isEmitDelete(boolean emitDelete) {
     this.emitDelete = emitDelete;
+  }
+
+  public Configuration getConf() {
+    return conf;
   }
 }

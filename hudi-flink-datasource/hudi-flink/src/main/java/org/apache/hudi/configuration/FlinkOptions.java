@@ -339,6 +339,12 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Enables data-skipping allowing queries to leverage indexes to reduce the search space by"
           + "skipping over files");
 
+  public static final ConfigOption<Long> READ_RATE_LIMIT = ConfigOptions
+      .key("write.rate.limit")
+      .longType()
+      .defaultValue(0L) // default no limit
+      .withDescription("Read record rate limit per second to prevent traffic jitter and improve stability, default 0 (no limit)");
+
   // ------------------------------------------------------------------------
   //  Write Options
   // ------------------------------------------------------------------------
