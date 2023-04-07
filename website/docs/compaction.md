@@ -220,7 +220,6 @@ Below are the configuration options you can set in the data ingestion pipeline:
 For offline compaction, you need to run the Flink app manually. Here's a sample command below:
 
 ### Options
-
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
 | `--path` | `true` | `--` | The path where the target table is stored on Hudi |
