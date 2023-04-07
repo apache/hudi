@@ -5,7 +5,7 @@ toc: true
 last_modified_at:
 ---
 
-Hudi has a table service called compaction, where files are compacted together to form a new file version. In Hudi, two different storage types are available, Copy-On-Write (COW) and Merge-On-Read (MOR). Each storage type uses distinct file types: COW uses base files comprised of Parquet files (columnar-base); MOR uses base and log files consisting of Parquet files (columnar-base) and Avro files (row-base), respectively. Compaction is a mandatory table service in Hudi that only applies to MOR tables, not COW tables. 
+Hudi has a table service called compaction, where files are compacted together to form a new file version. In Hudi, two different storage types are available, Copy-On-Write (COW) and Merge-On-Read (MOR). Each storage type uses distinct file types: COW uses base files comprised of Parquet files (columnar-base); MOR uses base and log files consisting of Parquet files (columnar-base) and Avro files (row-base), respectively. Compaction is a an optional table service in Hudi that only applies to MOR tables, not COW tables. 
 
 ## WHY MOR TABLES NEED COMPACTION
 In Hudi, data is organized in terms of [file groups](https://hudi.apache.org/docs/file_layouts/). Each file group in a MOR table consists of a base file and one or more log files. Typically during writes, updates are stored in log files, and inserts are stored in base files. During the compaction process, log files get compacted into a new base file version. Since Hudi writes updates directly to log files, MOR tables are write-optimized and have a lower write amplification than COW tables because no synchronous merge occurs during writes. In contrast, COW tables have a higher write amplification because Hudi applies each write to a new base file version, where a synchronous merge combines new writes with the older base files and forms a new base file version. 
@@ -94,12 +94,12 @@ After reaching 5 commits, Hudi evaluates the entire table to identify file group
 Once you have configured your compaction strategy, you need to execute it. Below are several options for how you can do this:
 
 ### Inline Compaction
-Inline compaction refers to the process of executing the compaction process as part of the data ingestion pipeline, rather than running them asynchronously as a separate job. With inline compaction, Hudi will schedule, plan and execute the compaction operations after each commit is completed. This is the simplest deployment model to run because it’s easier to manage than running different asynchronus Spark jobs (see below). This mode is only supported on Spark Datasource, Spark-SQL and DeltaStreamer in sync-once mode. In the next section, we’ll go over code snippets you can use to get started with inline clustering. To run inline compaction with DeltaStreamer in continuous mode, you must pass the flag `--disable-compaction` so the async compaction is disabled (see below). With inline compaction, your data latency could be higher because you'll block any writer from ingesting data when compaction is being executed.
+Inline compaction refers to the process of executing the compaction process as part of the data ingestion pipeline, rather than running them asynchronously as a separate job. With inline compaction, Hudi will schedule, plan and execute the compaction operations after each commit is completed. This is the simplest deployment model to run because it’s easier to manage than running different asynchronus Spark jobs (see below). This mode is only supported on Spark Datasource, Spark-SQL and DeltaStreamer in sync-once mode. In the next section, we’ll go over code snippets you can use to get started with inline compaction. To run inline compaction with DeltaStreamer in continuous mode, you must pass the flag `--disable-compaction` so the async compaction is disabled (see below). With inline compaction, your data latency could be higher because you'll block any writer from ingesting data when compaction is being executed.
 
 **DeltaStreamer**: When both ingestion and compaction are running in the same spark context, you can use resource allocation configuration in DeltaStreamer CLI such as (`--delta-sync-scheduling-weight`, `--compact-scheduling-weight`, `--delta-sync-scheduling-minshare`, and `--compact-scheduling-minshare`) to control executor allocation between ingestion and compaction.
 
 ### Asynchronous Compaction
-There are three ways you can execute an asynchronous clustering process:
+There are three ways you can execute an asynchronous compaction process:
 
 **Asynchronous execution within the same process**: In this deployment mode, Hudi will schedule, plan and execute the compaction operations after each commit is completed as part of the ingestion pipeline. Separately, Hudi spins up another thread within the same job and executes the compaction table service. This is supported by Spark Datasource, Spark streaming, Flink, DeltaStreamer in continuous mode and Spark-SQL.
 
@@ -114,7 +114,7 @@ For this deployment mode, you need to enable `hoodie.compact.inline.trigger.stra
 For this deployment mode, you need to enable `hoodie.compact.inline.trigger.strategy`.
 
 ## Code Examples
-### Inline clustering example
+### Inline compaction example
 This is the most straightforward deployment option, where compaction will be triggered when the schedule compaction strategy threshold is met. The example below shows you how to run compaction every 4 commits: 
 
 ```
@@ -125,7 +125,7 @@ hoodie.compact.inline.max.delta.commits=4
 # hoodie.compaction.strategy=org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy
 ```
 
-### Async clustering example
+### Async compaction example
 #### Spark Structured Streaming​ with the default async deployment model
 
 Asynchronous execution within the same process are enabled by default for streaming jobs. Here is an example snippet in java:
