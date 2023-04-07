@@ -193,6 +193,7 @@ public class MergeOnReadInputFormat
         return new BaseFileOnlyFilteringIterator(
             split.getInstantRange().get(),
             this.tableState.getRequiredRowType(),
+            this.requiredPos,
             getBaseFileIterator(split.getBasePath().get(), getRequiredPosWithCommitTime(this.requiredPos)));
       } else {
         // base file only
@@ -548,21 +549,31 @@ public class MergeOnReadInputFormat
 
     private RowData currentRecord;
 
+    private int commitTimePos;
+
     BaseFileOnlyFilteringIterator(
         InstantRange instantRange,
         RowType requiredRowType,
+        int[] requiredPos,
         ClosableIterator<RowData> nested) {
       this.nested = nested;
       this.instantRange = instantRange;
-      int[] positions = IntStream.range(1, 1 + requiredRowType.getFieldCount()).toArray();
-      projection = RowDataProjection.instance(requiredRowType, positions);
+      this.commitTimePos = getCommitTimePos(requiredPos);
+      int[] positions;
+      if (commitTimePos < 0) {
+        commitTimePos = 0;
+        positions = IntStream.range(1, 1 + requiredPos.length).toArray();
+      } else {
+        positions = IntStream.range(0, requiredPos.length).toArray();
+      }
+      this.projection = RowDataProjection.instance(requiredRowType, positions);
     }
 
     @Override
     public boolean hasNext() {
       while (this.nested.hasNext()) {
         currentRecord = this.nested.next();
-        boolean isInRange = instantRange.isInRange(currentRecord.getString(HOODIE_COMMIT_TIME_COL_POS).toString());
+        boolean isInRange = instantRange.isInRange(currentRecord.getString(commitTimePos).toString());
         if (isInRange) {
           return true;
         }
@@ -898,10 +909,22 @@ public class MergeOnReadInputFormat
   // -------------------------------------------------------------------------
 
   private static int[] getRequiredPosWithCommitTime(int[] requiredPos) {
+    if (getCommitTimePos(requiredPos) >= 0) {
+      return requiredPos;
+    }
     int[] requiredPos2 = new int[requiredPos.length + 1];
     requiredPos2[0] = HOODIE_COMMIT_TIME_COL_POS;
     System.arraycopy(requiredPos, 0, requiredPos2, 1, requiredPos.length);
     return requiredPos2;
+  }
+
+  private static int getCommitTimePos(int[] requiredPos) {
+    for (int i = 0; i < requiredPos.length; i++) {
+      if (requiredPos[i] == HOODIE_COMMIT_TIME_COL_POS) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   @VisibleForTesting
