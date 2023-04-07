@@ -28,6 +28,7 @@ import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.keygen.ComplexKeyGenerator
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.spark.internal.Logging
@@ -131,6 +132,7 @@ trait ProvidesHoodieConfig extends Logging {
       DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.defaultValue()).toBoolean
     val dropDuplicate = sparkSession.conf
       .getOption(INSERT_DROP_DUPS.key).getOrElse(INSERT_DROP_DUPS.defaultValue).toBoolean
+    val autoGenerateRecordKeys : Boolean = !combinedOpts.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
 
     val insertMode = InsertMode.of(combinedOpts.getOrElse(DataSourceWriteOptions.SQL_INSERT_MODE.key,
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
@@ -142,24 +144,27 @@ trait ProvidesHoodieConfig extends Logging {
     //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
     val operationOverride = combinedOpts.get(DataSourceWriteOptions.OPERATION.key)
     val operation = operationOverride.getOrElse {
-      (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
-        case (true, _, _, _, false, _) =>
+      (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable,
+      autoGenerateRecordKeys) match {
+        case (true, _, _, _, false, _, _) =>
           throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
-        case (true, true, _, _, _, true) =>
+        case (true, true, _, _, _, true, _) =>
           throw new IllegalArgumentException(s"Insert Overwrite Partition can not use bulk insert.")
-        case (true, _, _, true, _, _) =>
+        case (true, _, _, true, _, _, _) =>
           throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
             s" Please disable $INSERT_DROP_DUPS and try again.")
         // if enableBulkInsert is true, use bulk insert for the insert overwrite non-partitioned table.
-        case (true, false, true, _, _, false) => BULK_INSERT_OPERATION_OPT_VAL
+        case (true, false, true, _, _, false, _) => BULK_INSERT_OPERATION_OPT_VAL
         // insert overwrite table
-        case (false, false, true, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
+        case (false, false, true, _, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
         // insert overwrite partition
-        case (_, true, false, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
+        case (_, true, false, _, _, true, _) => INSERT_OVERWRITE_OPERATION_OPT_VAL
         // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
-        case (false, false, false, false, false, _) if hasPrecombineColumn => UPSERT_OPERATION_OPT_VAL
+        case (false, false, false, false, false, _, _) if hasPrecombineColumn => UPSERT_OPERATION_OPT_VAL
         // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
-        case (true, _, _, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
+        case (true, _, _, _, true, _, _) => BULK_INSERT_OPERATION_OPT_VAL
+        // if auto record key generation is enabled, use bulk_insert
+        case (_, _, _, _, _, true, true) => BULK_INSERT_OPERATION_OPT_VAL
         // for the rest case, use the insert operation
         case _ => INSERT_OPERATION_OPT_VAL
       }

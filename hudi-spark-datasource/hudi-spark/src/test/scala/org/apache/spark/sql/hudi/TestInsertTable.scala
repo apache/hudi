@@ -20,14 +20,15 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.HoodieDuplicateKeyException
+import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieKeyGeneratorException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
+import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.File
 
@@ -1268,7 +1269,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-
   test("Test Insert Into with auto generate record keys") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -1300,6 +1300,52 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(2, "a2", 20.0, 2000, "2021-01-06"),
         Seq(3, "a3", 30.0, 3000, "2021-01-07")
       )
+
+      assertResult(WriteOperationType.BULK_INSERT) {
+        getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}").getOperationType
+      }
+    }
+  }
+
+  test("Test Insert Into with auto generate record keys with precombine ") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a partitioned table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  dt string,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | partitioned by (dt)
+           | location '${tmp.getCanonicalPath}'
+           | tblproperties (
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      assertThrows[HoodieKeyGeneratorException] {
+        try {
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1, 'a1', 10, 1000, "2021-01-05"),
+               | (2, 'a2', 20, 2000, "2021-01-06"),
+               | (3, 'a3', 30, 3000, "2021-01-07")
+              """.stripMargin)
+        } catch {
+          case e: Exception =>
+            var root: Throwable = e
+            while (root.getCause != null) {
+              root = root.getCause
+            }
+            throw root
+        }
+      }
     }
   }
 }
