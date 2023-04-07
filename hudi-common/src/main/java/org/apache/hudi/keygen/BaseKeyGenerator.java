@@ -19,6 +19,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -68,7 +69,11 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
     if (!autoGenerateRecordKeys() && (getRecordKeyFieldNames() == null || getPartitionPathFields() == null)) {
       throw new HoodieKeyException("Unable to find field names for record key or partition path in cfg");
     }
-    return new HoodieKey(getRecordKey(record), getPartitionPath(record));
+    String recordKey = StringUtils.EMPTY_STRING;
+    if (!autoGenerateRecordKeys()) {
+      recordKey = getRecordKey(record);
+    }
+    return new HoodieKey(recordKey, getPartitionPath(record));
   }
 
   @Override

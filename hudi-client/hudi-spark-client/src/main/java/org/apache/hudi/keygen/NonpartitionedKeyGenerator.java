@@ -19,7 +19,6 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.generic.GenericRecord;
@@ -66,18 +65,12 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    if (autoGenerateRecordKeys()) {
-      return StringUtils.EMPTY_STRING;
-    }
     tryInitRowAccessor(row.schema());
     return combineRecordKey(getRecordKeyFieldNames(), Arrays.asList(rowAccessor.getRecordKeyParts(row)));
   }
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
-    if (autoGenerateRecordKeys()) {
-      return UTF8String.EMPTY_UTF8;
-    }
     tryInitRowAccessor(schema);
     return combineRecordKeyUnsafe(getRecordKeyFieldNames(), Arrays.asList(rowAccessor.getRecordKeyParts(internalRow)));
   }

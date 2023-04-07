@@ -19,7 +19,6 @@ package org.apache.hudi.keygen;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -70,18 +69,12 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    if (autoGenerateRecordKeys()) {
-      return StringUtils.EMPTY_STRING;
-    }
     tryInitRowAccessor(row.schema());
     return combineCompositeRecordKey(rowAccessor.getRecordKeyParts(row));
   }
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
-    if (autoGenerateRecordKeys()) {
-      return UTF8String.EMPTY_UTF8;
-    }
     tryInitRowAccessor(schema);
     return combineCompositeRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
   }
