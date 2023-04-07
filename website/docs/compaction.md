@@ -94,7 +94,6 @@ After reaching 5 commits, Hudi evaluates the entire table to identify file group
 Once you have configured your compaction strategy, you need to execute it. Below are several options for how you can do this:
 
 ### Inline Compaction
-
 Inline compaction refers to the process of executing the compaction process as part of the data ingestion pipeline, rather than running them asynchronously as a separate job. With inline compaction, Hudi will schedule, plan and execute the compaction operations after each commit is completed. This is the simplest deployment model to run because it’s easier to manage than running different asynchronus Spark jobs (see below). This mode is only supported on Spark Datasource, Spark-SQL and DeltaStreamer in sync-once mode. In the next section, we’ll go over code snippets you can use to get started with inline clustering. To run inline compaction with DeltaStreamer in continuous mode, you must pass the flag `--disable-compaction` so the async compaction is disabled (see below). With inline compaction, your data latency could be higher because you'll block any writer from ingesting data when compaction is being executed.
 
 **DeltaStreamer**: When both ingestion and compaction are running in the same spark context, you can use resource allocation configuration in DeltaStreamer CLI such as (`--delta-sync-scheduling-weight`, `--compact-scheduling-weight`, `--delta-sync-scheduling-minshare`, and `--compact-scheduling-minshare`) to control executor allocation between ingestion and compaction.
@@ -149,7 +148,6 @@ DataStreamWriter<Row> writer = streamingInput.writeStream().format("org.apache.h
        .option(HoodieWriteConfig.TABLE_NAME, tableName).option("checkpointLocation", checkpointLocation)
        .outputMode(OutputMode.Append());
 writer.trigger(new ProcessingTime(30000)).start(tablePath);
-
 ```
 
 #### DeltaStreamer in continuous mode​ with the default async deployment model
@@ -167,11 +165,9 @@ spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.6.0 \
 --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
 --props /path/to/source.properties \
 --continuous
-
 ```
 
 #### Hudi Compactor Utility​
-
 Hudi provides a standalone tool to execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](https://hudi.apache.org/docs/deployment#compactions):
 
 ```
