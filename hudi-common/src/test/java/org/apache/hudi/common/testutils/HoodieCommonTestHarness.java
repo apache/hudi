@@ -28,6 +28,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.net.URI;
 
 /**
  * The common hoodie test harness to provide the basic infrastructure.
@@ -36,6 +37,7 @@ public class HoodieCommonTestHarness {
 
   protected String tableName = null;
   protected String basePath = null;
+  protected URI baseUri;
   protected transient HoodieTestDataGenerator dataGen = null;
   protected transient HoodieTableMetaClient metaClient;
   @TempDir
@@ -52,7 +54,8 @@ public class HoodieCommonTestHarness {
     try {
       java.nio.file.Path basePath = tempDir.resolve("dataset");
       java.nio.file.Files.createDirectories(basePath);
-      this.basePath = basePath.toString();
+      this.basePath = basePath.toAbsolutePath().toString();
+      this.baseUri = basePath.toUri();
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }

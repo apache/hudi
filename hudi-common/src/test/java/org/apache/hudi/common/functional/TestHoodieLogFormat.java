@@ -46,7 +46,7 @@ import org.apache.hudi.common.testutils.HadoopMapRedUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil;
+import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -60,15 +60,17 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -99,43 +101,39 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
- * Tests hoodie log format {@link HoodieLogFormat}.
+ * Tests hoodie log format {@link HoodieLogFormat}
  */
 @SuppressWarnings("Duplicates")
 public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   private static final HoodieLogBlockType DEFAULT_DATA_BLOCK_TYPE = HoodieLogBlockType.AVRO_DATA_BLOCK;
 
+  private static HdfsTestService hdfsTestService;
   private static String BASE_OUTPUT_PATH = "/tmp/";
-  private FileSystem fs;
+  private static FileSystem fs;
   private Path partitionPath;
   private int bufferSize = 4096;
+  private String spillableBasePath;
 
   @BeforeAll
   public static void setUpClass() throws IOException, InterruptedException {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
-    MiniClusterUtil.setUp();
+    hdfsTestService = new HdfsTestService();
+    fs = hdfsTestService.start(true).getFileSystem();
   }
 
   @AfterAll
   public static void tearDownClass() {
-    MiniClusterUtil.shutdown();
+    hdfsTestService.stop();
   }
 
   @BeforeEach
-  public void setUp() throws IOException, InterruptedException {
-    this.fs = MiniClusterUtil.fileSystem;
-
-    assertTrue(fs.mkdirs(new Path(tempDir.toAbsolutePath().toString())));
-    this.partitionPath = new Path(tempDir.toAbsolutePath().toString());
-    this.basePath = tempDir.getParent().toString();
-    HoodieTestUtils.init(MiniClusterUtil.configuration, basePath, HoodieTableType.MERGE_ON_READ);
-  }
-
-  @AfterEach
-  public void tearDown() throws IOException {
-    fs.delete(partitionPath, true);
-    fs.delete(new Path(basePath), true);
+  public void setUp(TestInfo testInfo) throws IOException, InterruptedException {
+    Path workDir = fs.getWorkingDirectory();
+    basePath = new Path(workDir.toString(), testInfo.getDisplayName() + System.currentTimeMillis()).toString();
+    partitionPath = new Path(basePath, "partition_path");
+    spillableBasePath = new Path(workDir.toString(), ".spillable_path").toString();
+    HoodieTestUtils.init(fs.getConf(), basePath, HoodieTableType.MERGE_ON_READ);
   }
 
   @Test
@@ -344,15 +342,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
    */
 
   @Test
-  public void testAppendNotSupported() throws IOException, URISyntaxException, InterruptedException {
+  public void testAppendNotSupported(@TempDir java.nio.file.Path tempDir) throws IOException, URISyntaxException, InterruptedException {
     // Use some fs like LocalFileSystem, that does not support appends
-    Path localPartitionPath = new Path("file://" + partitionPath);
-    FileSystem localFs = FSUtils.getFs(localPartitionPath.toString(), HoodieTestUtils.getDefaultHadoopConf());
-    Path testPath = new Path(localPartitionPath, "append_test");
+    Path localTempDir = new Path(tempDir.toUri());
+    FileSystem localFs = FSUtils.getFs(localTempDir.toString(), HoodieTestUtils.getDefaultHadoopConf());
+    assertTrue(localFs instanceof LocalFileSystem);
+    Path testPath = new Path(localTempDir, "append_test");
     localFs.mkdirs(testPath);
 
     // Some data & append two times.
-    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
+    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 5);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
@@ -587,7 +586,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(bufferSize)
-        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
@@ -820,7 +819,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(bufferSize)
-        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
@@ -898,7 +897,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(bufferSize)
-        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
@@ -985,7 +984,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReadBlocksLazily(true)
         .withReverseReader(false)
         .withBufferSize(bufferSize)
-        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
@@ -1063,7 +1062,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(bufferSize)
-        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
@@ -1109,7 +1108,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(bufferSize)
-        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
@@ -1204,7 +1203,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(bufferSize)
-        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
@@ -1307,7 +1306,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(bufferSize)
-        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
@@ -1375,7 +1374,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(bufferSize)
-        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
@@ -1426,7 +1425,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(bufferSize)
-        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
@@ -1496,7 +1495,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(bufferSize)
-        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
@@ -1602,7 +1601,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(bufferSize)
-        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
@@ -1676,7 +1675,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           .withReadBlocksLazily(readBlocksLazily)
           .withReverseReader(false)
           .withBufferSize(bufferSize)
-          .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+          .withSpillableMapBasePath(spillableBasePath)
           .withDiskMapType(diskMapType)
           .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
           .build();
