@@ -86,6 +86,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -122,6 +124,7 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("Duplicates")
 public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieLogFormat.class);
   private static final HoodieLogBlockType DEFAULT_DATA_BLOCK_TYPE = HoodieLogBlockType.AVRO_DATA_BLOCK;
   private static final int BUFFER_SIZE = 4096;
 
@@ -145,8 +148,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp(TestInfo testInfo) throws IOException, InterruptedException {
     Path workDir = fs.getWorkingDirectory();
+    LOG.warn("XXX Work dir " + workDir.toString());
     basePath = new Path(workDir.toString(), testInfo.getDisplayName() + System.currentTimeMillis()).toString();
+    LOG.warn("XXX BasePath " + workDir.toString());
     partitionPath = new Path(basePath, "partition_path");
+    LOG.warn("XXX Partition " + partitionPath);
     spillableBasePath = new Path(workDir.toString(), ".spillable_path").toString();
     HoodieTestUtils.init(fs.getConf(), basePath, HoodieTableType.MERGE_ON_READ);
   }
