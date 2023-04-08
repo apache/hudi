@@ -31,15 +31,15 @@ import java.io.IOException;
 import java.net.URI;
 
 /**
- * The common hoodie test harness to provide the basic infrastructure.
+ * The common hoodie test harness to provide the basic infrastructure..
  */
 public class HoodieCommonTestHarness {
 
   protected String tableName = null;
   protected String basePath = null;
   protected URI baseUri;
-  protected transient HoodieTestDataGenerator dataGen = null;
-  protected transient HoodieTableMetaClient metaClient;
+  protected HoodieTestDataGenerator dataGen = null;
+  protected HoodieTableMetaClient metaClient;
   @TempDir
   public java.nio.file.Path tempDir;
 
@@ -90,8 +90,10 @@ public class HoodieCommonTestHarness {
    * @throws IOException
    */
   protected void initMetaClient() throws IOException {
-    metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
-    basePath = metaClient.getBasePath();
+    if (basePath == null) {
+      initPath();
+    }
+    metaClient = HoodieTestUtils.init(basePath, getTableType());
   }
 
   protected void refreshFsView() throws IOException {

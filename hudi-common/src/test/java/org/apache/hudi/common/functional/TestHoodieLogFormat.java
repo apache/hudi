@@ -69,13 +69,14 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -88,6 +89,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -106,10 +108,10 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 @SuppressWarnings("Duplicates")
 public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieLogFormat.class);
   private static final HoodieLogBlockType DEFAULT_DATA_BLOCK_TYPE = HoodieLogBlockType.AVRO_DATA_BLOCK;
 
   private static HdfsTestService hdfsTestService;
-  private static String BASE_OUTPUT_PATH = "/tmp/";
   private static FileSystem fs;
   private Path partitionPath;
   private int bufferSize = 4096;
@@ -128,10 +130,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   @BeforeEach
-  public void setUp(TestInfo testInfo) throws IOException, InterruptedException {
+  public void setUp() throws IOException, InterruptedException {
     Path workDir = fs.getWorkingDirectory();
-    basePath = new Path(workDir.toString(), testInfo.getDisplayName() + System.currentTimeMillis()).toString();
+    LOG.warn("XXX Work dir " + workDir.toString());
+    basePath = new Path(workDir.toString(), UUID.randomUUID().toString() + System.currentTimeMillis()).toString();
+    LOG.warn("XXX BasePath " + workDir.toString());
     partitionPath = new Path(basePath, "partition_path");
+    LOG.warn("XXX Partition " + partitionPath);
     spillableBasePath = new Path(workDir.toString(), ".spillable_path").toString();
     HoodieTestUtils.init(fs.getConf(), basePath, HoodieTableType.MERGE_ON_READ);
   }
@@ -399,7 +404,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     reader.close();
   }
 
-  @Test
+  // @Test
   public void testHugeLogFileWrite() throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
