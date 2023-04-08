@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.collection.Pair;
@@ -78,7 +79,8 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }
       HoodieKey reducedKey = rec1.getData().equals(reducedRecord.getData()) ? rec1.getKey() : rec2.getKey();
-      return reducedRecord.newInstance(reducedKey);
+      HoodieOperation operation = rec1.getData().equals(reducedRecord.getData()) ? rec1.getOperation() : rec2.getOperation();
+      return reducedRecord.newInstance(reducedKey, operation);
     }, reduceParallelism).map(Pair::getRight);
   }
 }
