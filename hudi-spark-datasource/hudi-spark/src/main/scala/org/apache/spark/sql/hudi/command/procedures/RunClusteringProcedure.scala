@@ -58,7 +58,8 @@ class RunClusteringProcedure extends BaseProcedure
     // params => key=value, key2=value2
     ProcedureParameter.optional(7, "options", DataTypes.StringType, None),
     ProcedureParameter.optional(8, "instants", DataTypes.StringType, None),
-    ProcedureParameter.optional(9, "selected_partitions", DataTypes.StringType, None)
+    ProcedureParameter.optional(9, "selected_partitions", DataTypes.StringType, None),
+    ProcedureParameter.optional(10, "show_file_slices", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -85,6 +86,7 @@ class RunClusteringProcedure extends BaseProcedure
     val options = getArgValueOrDefault(args, PARAMETERS(7))
     val instantsStr = getArgValueOrDefault(args, PARAMETERS(8))
     val parts = getArgValueOrDefault(args, PARAMETERS(9))
+    val showFileSlices = getArgValueOrDefault(args, PARAMETERS(10)).get.asInstanceOf[Boolean]
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
@@ -197,14 +199,25 @@ class RunClusteringProcedure extends BaseProcedure
         ClusteringUtils.getClusteringPlan(metaClient, instant)
       )
 
-      if (showInvolvedPartitions) {
-        clusteringPlans.map { p =>
-          Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(),
-            p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala))
-        }
+      if (showFileSlices) {
+        var fileSlices = 0
+        clusteringPlans.foreach( plan => {
+          val inputGroups = plan.get().getRight.getInputGroups
+          inputGroups.asScala.foreach(group => {
+            fileSlices += group.getSlices.size()
+          })
+        })
+        Seq(Row(fileSlices))
       } else {
-        clusteringPlans.map { p =>
-          Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(), p.get().getLeft.getState.name(), "*")
+        if (showInvolvedPartitions) {
+          clusteringPlans.map { p =>
+            Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(),
+              p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala))
+          }
+        } else {
+          clusteringPlans.map { p =>
+            Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(), p.get().getLeft.getState.name(), "*")
+          }
         }
       }
     } finally {
