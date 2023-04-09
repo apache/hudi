@@ -18,10 +18,11 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.junit.jupiter.api.Test;
-import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,8 +41,8 @@ public class TestCheckpointUtils {
   @Test
   public void testStringToOffsets() {
     OffsetRange[] ranges =
-            CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[]{0, 1}, new long[]{200000, 250000}),
-                    makeOffsetMap(new int[]{0, 1}, new long[]{300000, 350000}), 1000000L);
+        CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
+            makeOffsetMap(new int[] {0, 1}, new long[] {300000, 350000}), 1000000L, Long.MAX_VALUE);
     String checkpointStr = CheckpointUtils.offsetsToStr(ranges);
     Map<TopicPartition, Long> offsetMap = CheckpointUtils.strToOffsets(checkpointStr);
     assertEquals(2, offsetMap.size());
@@ -58,49 +59,49 @@ public class TestCheckpointUtils {
   @Test
   public void testOffsetToString() {
     OffsetRange[] ranges =
-            CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[]{0, 1}, new long[]{200000, 250000}),
-                    makeOffsetMap(new int[]{0, 1}, new long[]{300000, 350000}), 1000000L);
+        CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
+            makeOffsetMap(new int[] {0, 1}, new long[] {300000, 350000}), 1000000L, Long.MAX_VALUE);
     assertEquals(TEST_TOPIC_NAME + ",0:300000,1:350000", CheckpointUtils.offsetsToStr(ranges));
 
-    ranges = new OffsetRange[]{
-            OffsetRange.apply(TEST_TOPIC_NAME, 0, 0, 100),
-            OffsetRange.apply(TEST_TOPIC_NAME, 0, 100, 200),
-            OffsetRange.apply(TEST_TOPIC_NAME, 1, 100, 200),
-            OffsetRange.apply(TEST_TOPIC_NAME, 1, 200, 300)};
+    ranges = new OffsetRange[] {
+        OffsetRange.apply(TEST_TOPIC_NAME, 0, 0, 100),
+        OffsetRange.apply(TEST_TOPIC_NAME, 0, 100, 200),
+        OffsetRange.apply(TEST_TOPIC_NAME, 1, 100, 200),
+        OffsetRange.apply(TEST_TOPIC_NAME, 1, 200, 300)};
     assertEquals(TEST_TOPIC_NAME + ",0:200,1:300", CheckpointUtils.offsetsToStr(ranges));
   }
 
   @Test
   public void testOffsetStringfy() {
     OffsetRange[] ranges =
-            CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[]{0, 1}, new long[]{200000, 250000}),
-                    makeOffsetMap(new int[]{0, 1}, new long[]{300000, 350000}), 1000000L);
+        CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
+            makeOffsetMap(new int[] {0, 1}, new long[] {300000, 350000}), 1000000L, Long.MAX_VALUE);
     assertEquals(TEST_TOPIC_NAME + ",0:200000->300000,1:250000->350000", CheckpointUtils.offsetsStringfy(ranges));
 
-    ranges = new OffsetRange[]{
-            OffsetRange.apply(TEST_TOPIC_NAME, 0, 0, 100),
-            OffsetRange.apply(TEST_TOPIC_NAME, 0, 100, 200),
-            OffsetRange.apply(TEST_TOPIC_NAME, 1, 100, 200),
-            OffsetRange.apply(TEST_TOPIC_NAME, 1, 200, 300)};
+    ranges = new OffsetRange[] {
+        OffsetRange.apply(TEST_TOPIC_NAME, 0, 0, 100),
+        OffsetRange.apply(TEST_TOPIC_NAME, 0, 100, 200),
+        OffsetRange.apply(TEST_TOPIC_NAME, 1, 100, 200),
+        OffsetRange.apply(TEST_TOPIC_NAME, 1, 200, 300)};
     assertEquals(TEST_TOPIC_NAME + ",0:0->100,0:100->200,1:100->200,1:200->300", CheckpointUtils.offsetsStringfy(ranges));
   }
 
   @Test
   public void testComputeOffsetRanges() {
     // test totalNewMessages()
-    long totalMsgs = CheckpointUtils.totalNewMessages(new OffsetRange[]{OffsetRange.apply(TEST_TOPIC_NAME, 0, 0, 100),
-            OffsetRange.apply(TEST_TOPIC_NAME, 0, 100, 200)});
+    long totalMsgs = CheckpointUtils.totalNewMessages(new OffsetRange[] {OffsetRange.apply(TEST_TOPIC_NAME, 0, 0, 100),
+        OffsetRange.apply(TEST_TOPIC_NAME, 0, 100, 200)});
     assertEquals(200, totalMsgs);
 
     // should consume all the full data
     OffsetRange[] ranges =
-            CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[]{0, 1}, new long[]{200000, 250000}),
-                    makeOffsetMap(new int[]{0, 1}, new long[]{300000, 350000}), 1000000L);
+        CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
+            makeOffsetMap(new int[] {0, 1}, new long[] {300000, 350000}), 1000000L, Long.MAX_VALUE);
     assertEquals(200000, CheckpointUtils.totalNewMessages(ranges));
 
     // should only consume upto limit
-    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[]{0, 1}, new long[]{200000, 250000}),
-            makeOffsetMap(new int[]{0, 1}, new long[]{300000, 350000}), 10000);
+    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
+        makeOffsetMap(new int[] {0, 1}, new long[] {300000, 350000}), 10000, Long.MAX_VALUE);
     assertEquals(10000, CheckpointUtils.totalNewMessages(ranges));
     assertEquals(200000, ranges[0].fromOffset());
     assertEquals(205000, ranges[0].untilOffset());
@@ -108,35 +109,61 @@ public class TestCheckpointUtils {
     assertEquals(255000, ranges[1].untilOffset());
 
     // should also consume from new partitions.
-    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[]{0, 1}, new long[]{200000, 250000}),
-            makeOffsetMap(new int[]{0, 1, 2}, new long[]{300000, 350000, 100000}), 1000000L);
+    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
+        makeOffsetMap(new int[] {0, 1, 2}, new long[] {300000, 350000, 100000}), 1000000L, Long.MAX_VALUE);
     assertEquals(300000, CheckpointUtils.totalNewMessages(ranges));
     assertEquals(3, ranges.length);
 
     // for skewed offsets, does not starve any partition & can catch up
-    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[]{0, 1}, new long[]{200000, 250000}),
-            makeOffsetMap(new int[]{0, 1, 2}, new long[]{200010, 350000, 10000}), 100000);
+    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
+        makeOffsetMap(new int[] {0, 1, 2}, new long[] {200010, 350000, 10000}), 100000, Long.MAX_VALUE);
     assertEquals(100000, CheckpointUtils.totalNewMessages(ranges));
     assertEquals(10, ranges[0].count());
     assertEquals(89990, ranges[1].count());
     assertEquals(10000, ranges[2].count());
 
-    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[]{0, 1}, new long[]{200000, 250000}),
-            makeOffsetMap(new int[]{0, 1, 2}, new long[]{200010, 350000, 10000}), 1000000);
+    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
+        makeOffsetMap(new int[] {0, 1, 2}, new long[] {200010, 350000, 10000}), 1000000, Long.MAX_VALUE);
     assertEquals(110010, CheckpointUtils.totalNewMessages(ranges));
     assertEquals(10, ranges[0].count());
     assertEquals(100000, ranges[1].count());
     assertEquals(10000, ranges[2].count());
 
     // not all partitions consume same entries.
-    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[]{0, 1, 2, 3, 4}, new long[]{0, 0, 0, 0, 0}),
-            makeOffsetMap(new int[]{0, 1, 2, 3, 4}, new long[]{100, 1000, 1000, 1000, 1000}), 1001);
+    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1, 2, 3, 4}, new long[] {0, 0, 0, 0, 0}),
+        makeOffsetMap(new int[] {0, 1, 2, 3, 4}, new long[] {100, 1000, 1000, 1000, 1000}), 1001, Long.MAX_VALUE);
     assertEquals(1001, CheckpointUtils.totalNewMessages(ranges));
     assertEquals(100, ranges[0].count());
     assertEquals(226, ranges[1].count());
     assertEquals(226, ranges[2].count());
     assertEquals(226, ranges[3].count());
     assertEquals(223, ranges[4].count());
+
+    // single partition with maxEventsPerPartition
+    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
+        makeOffsetMap(new int[] {0}, new long[] {1000}), 300, 100);
+    assertEquals(0, ranges[0].fromOffset());
+    assertEquals(100, ranges[0].untilOffset());
+    assertEquals(100, ranges[1].fromOffset());
+    assertEquals(200, ranges[1].untilOffset());
+    assertEquals(200, ranges[2].fromOffset());
+    assertEquals(300, ranges[2].untilOffset());
+
+    // multi partitions with maxEventsPerPartition
+    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {0, 0}),
+        makeOffsetMap(new int[] {0, 1}, new long[] {1000, 1000}), 300, 100);
+    assertEquals(0, ranges[0].partition());
+    assertEquals(0, ranges[0].fromOffset());
+    assertEquals(75, ranges[0].untilOffset());
+    assertEquals(0, ranges[1].partition());
+    assertEquals(75, ranges[1].fromOffset());
+    assertEquals(150, ranges[1].untilOffset());
+    assertEquals(1, ranges[2].partition());
+    assertEquals(0, ranges[2].fromOffset());
+    assertEquals(75, ranges[2].untilOffset());
+    assertEquals(1, ranges[3].partition());
+    assertEquals(75, ranges[3].fromOffset());
+    assertEquals(150, ranges[3].untilOffset());
   }
 
   @Test

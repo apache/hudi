@@ -123,7 +123,9 @@ public class KafkaOffsetGen {
      * @param numEvents maximum number of events to read.
      */
     public static OffsetRange[] computeOffsetRanges(Map<TopicPartition, Long> fromOffsetMap,
-                                                    Map<TopicPartition, Long> toOffsetMap, long numEvents) {
+                                                    Map<TopicPartition, Long> toOffsetMap,
+                                                    long numEvents,
+                                                    long maxEventsPerPartition) {
 
       Comparator<OffsetRange> byPartition = Comparator.comparing(OffsetRange::partition);
 
@@ -163,6 +165,10 @@ public class KafkaOffsetGen {
           }
         }
       }
+
+      LOG.info("before split by count: " + CheckpointUtils.offsetsStringfy(ranges));
+      ranges = CheckpointUtils.splitRangesByCount(ranges, maxEventsPerPartition);
+      LOG.info("after split by count: " + CheckpointUtils.offsetsStringfy(ranges));
 
       return ranges;
     }
@@ -297,15 +303,11 @@ public class KafkaOffsetGen {
       throw new HoodieException("sourceLimit should not be less than the number of kafka partitions");
     }
 
-    OffsetRange[] ranges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
-    LOG.info("before split by count: " + CheckpointUtils.offsetsStringfy(ranges));
     long maxEventsPerPartition = props.getLong(KafkaSourceConfig.MAX_EVENTS_PER_KAFKA_PARTITION.key(),
             KafkaSourceConfig.MAX_EVENTS_PER_KAFKA_PARTITION.defaultValue());
     LOG.info("getNextOffsetRanges set config " + KafkaSourceConfig.MAX_EVENTS_PER_KAFKA_PARTITION.key() + " to " + maxEventsPerPartition);
 
-    ranges = CheckpointUtils.splitRangesByCount(ranges, maxEventsPerPartition);
-    LOG.info("after split by count: " + CheckpointUtils.offsetsStringfy(ranges));
-    return ranges;
+    return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents, maxEventsPerPartition);
   }
 
   /**
