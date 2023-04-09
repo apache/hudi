@@ -92,6 +92,7 @@ public class KafkaOffsetGen {
      * Format: topic1,0:offset0,1:offset1,2:offset2, .....
      */
     public static String offsetsToStr(OffsetRange[] ranges) {
+      // merge the ranges by partition to maintain one offset range map to one topic partition.
       ranges = mergeRangesByTp(ranges);
       StringBuilder sb = new StringBuilder();
       // at least 1 partition will be present.
@@ -174,6 +175,11 @@ public class KafkaOffsetGen {
       return newRanges.toArray(new OffsetRange[0]);
     }
 
+    /**
+     * Merge ranges by partition, because we need to maintain the checkpoint with one offset range per topic partition.
+     * @param oldRanges to merge
+     * @return ranges merged by partition
+     */
     public static OffsetRange[] mergeRangesByTp(OffsetRange[] oldRanges) {
       List<OffsetRange> newRanges = new ArrayList<>();
       Map<TopicPartition, List<OffsetRange>> tpOffsets = Arrays.stream(oldRanges).collect(Collectors.groupingBy(OffsetRange::topicPartition));
