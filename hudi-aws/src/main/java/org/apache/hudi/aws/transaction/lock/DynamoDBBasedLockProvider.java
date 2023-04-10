@@ -18,6 +18,15 @@
 
 package org.apache.hudi.aws.transaction.lock;
 
+import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
+import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.lock.LockState;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.DynamoDbBasedLockConfig;
+import org.apache.hudi.exception.HoodieLockException;
+
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.dynamodbv2.AcquireLockOptions;
@@ -36,23 +45,15 @@ import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
 import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
 import com.amazonaws.services.dynamodbv2.util.TableUtils;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
-import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.lock.LockProvider;
-import org.apache.hudi.common.lock.LockState;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.DynamoDbBasedLockConfig;
-import org.apache.hudi.exception.HoodieLockException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import javax.annotation.concurrent.NotThreadSafe;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import javax.annotation.concurrent.NotThreadSafe;
 
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
 
@@ -63,7 +64,7 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_
 @NotThreadSafe
 public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
 
-  private static final Logger LOG = LogManager.getLogger(DynamoDBBasedLockProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DynamoDBBasedLockProvider.class);
 
   private static final String DYNAMODB_ATTRIBUTE_NAME = "key";
 

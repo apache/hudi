@@ -19,7 +19,6 @@
 package org.apache.hudi.common.model;
 
 import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
@@ -68,7 +67,7 @@ import static org.apache.spark.sql.types.DataTypes.StringType;
  * </ul>
  *
  */
-public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements KryoSerializable {
+public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   /**
    * Record copy operation to avoid double copying. InternalRow do not need to copy twice.

@@ -28,7 +28,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
-import org.apache.log4j.Level
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.checkMessageContains
@@ -42,7 +41,7 @@ import java.io.File
 import java.util.TimeZone
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
-  org.apache.log4j.Logger.getRootLogger.setLevel(Level.WARN)
+  org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
 
   private lazy val sparkWareHouse = {
     val dir = Utils.createTempDir()
@@ -50,6 +49,9 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     dir
   }
 
+  // NOTE: We need to set "spark.testing" property to make sure Spark can appropriately
+  //       recognize environment as testing
+  System.setProperty("spark.testing", "true")
   // NOTE: We have to fix the timezone to make sure all date-/timestamp-bound utilities output
   //       is consistent with the fixtures
   DateTimeZone.setDefault(DateTimeZone.UTC)

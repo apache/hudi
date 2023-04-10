@@ -57,8 +57,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hive.service.server.HiveServer2;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
 import org.apache.orc.OrcFile;
 import org.apache.orc.TypeDescription;
 import org.apache.orc.Writer;
@@ -121,9 +119,9 @@ public class UtilitiesTestBase {
 
   @BeforeAll
   public static void setLogLevel() {
-    Logger rootLogger = Logger.getRootLogger();
-    rootLogger.setLevel(Level.ERROR);
-    Logger.getLogger("org.apache.spark").setLevel(Level.WARN);
+    org.apache.log4j.Logger rootLogger = org.apache.log4j.Logger.getRootLogger();
+    rootLogger.setLevel(org.apache.log4j.Level.ERROR);
+    org.apache.log4j.Logger.getLogger("org.apache.spark").setLevel(org.apache.log4j.Level.WARN);
   }
 
   public static void initTestServices() throws Exception {

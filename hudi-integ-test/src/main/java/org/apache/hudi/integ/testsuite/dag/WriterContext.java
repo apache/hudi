@@ -22,8 +22,8 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.integ.testsuite.HoodieContinousTestSuiteWriter;
-import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.integ.testsuite.HoodieInlineTestSuiteWriter;
+import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
@@ -33,10 +33,10 @@ import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -47,7 +47,7 @@ import java.util.concurrent.Executors;
  */
 public class WriterContext {
 
-  protected static Logger log = LogManager.getLogger(WriterContext.class);
+  protected static Logger log = LoggerFactory.getLogger(WriterContext.class);
 
   private final HoodieTestSuiteConfig cfg;
   private TypedProperties props;

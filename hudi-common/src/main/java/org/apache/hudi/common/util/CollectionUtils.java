@@ -70,6 +70,26 @@ public class CollectionUtils {
   }
 
   /**
+   * Reduces provided {@link Collection} using provided {@code reducer} applied to
+   * every element of the collection like following
+   *
+   * {@code reduce(reduce(reduce(identity, e1), e2), ...)}
+   *
+   * @param c target collection to be reduced
+   * @param identity element for reducing to start from
+   * @param reducer actual reducing operator
+   *
+   * @return result of the reduction of the collection using reducing operator
+   */
+  public static <T, U> U reduce(Collection<T> c, U identity, BiFunction<U, T, U> reducer) {
+    return c.stream()
+        .sequential()
+        .reduce(identity, reducer, (a, b) -> {
+          throw new UnsupportedOperationException();
+        });
+  }
+
+  /**
    * Makes a copy of provided {@link Properties} object
    */
   public static Properties copy(Properties props) {
@@ -164,9 +184,10 @@ public class CollectionUtils {
   }
 
   /**
-   * Returns difference b/w {@code one} {@link Set} of elements and {@code another}
+   * Returns difference b/w {@code one} {@link Collection} of elements and {@code another}
+   * The elements in collection {@code one} are also duplicated and returned as a {@link Set}.
    */
-  public static <E> Set<E> diffSet(Set<E> one, Set<E> another) {
+  public static <E> Set<E> diffSet(Collection<E> one, Set<E> another) {
     Set<E> diff = new HashSet<>(one);
     diff.removeAll(another);
     return diff;

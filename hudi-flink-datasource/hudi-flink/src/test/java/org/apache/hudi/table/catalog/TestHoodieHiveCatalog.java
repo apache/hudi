@@ -54,6 +54,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -205,6 +206,23 @@ public class TestHoodieHiveCatalog {
     } catch (HoodieCatalogException e) {
       assertEquals(String.format("The %s is not hoodie table", tablePath.getObjectName()), e.getMessage());
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testDropTable(boolean external) throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException, IOException {
+    HoodieHiveCatalog catalog = HoodieCatalogTestUtils.createHiveCatalog("myCatalog", external);
+    catalog.open();
+
+    CatalogTable catalogTable = new CatalogTableImpl(schema, Collections.singletonMap(FactoryUtil.CONNECTOR.key(), "hudi"), "hudi table");
+    catalog.createTable(tablePath, catalogTable, false);
+    Table table = catalog.getHiveTable(tablePath);
+    assertEquals(external, Boolean.parseBoolean(table.getParameters().get("EXTERNAL")));
+
+    catalog.dropTable(tablePath, false);
+    Path path = new Path(table.getParameters().get(FlinkOptions.PATH.key()));
+    boolean existing = StreamerUtil.fileExists(FSUtils.getFs(path, new Configuration()), path);
+    assertEquals(external, existing);
   }
 
   @Test

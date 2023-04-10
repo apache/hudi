@@ -27,8 +27,8 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.MappingIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -89,7 +89,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
     UnsafeProjection projection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType);
 
-    return new MappingIterator<>(iterator, data -> {
+    return new CloseableMappingIterator<>(iterator, data -> {
       // NOTE: We have to do [[UnsafeProjection]] of incoming [[InternalRow]] to convert
       //       it to [[UnsafeRow]] holding just raw bytes
       UnsafeRow unsafeRow = projection.apply(data);

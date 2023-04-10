@@ -27,35 +27,38 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class DFSPathSelector implements Serializable {
 
-  protected static volatile Logger log = LogManager.getLogger(DFSPathSelector.class);
+  protected static volatile Logger log = LoggerFactory.getLogger(DFSPathSelector.class);
 
   /**
    * Configs supported.
    */
   public static class Config {
 
-    public static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.dfs.root";
-    public static final String SOURCE_INPUT_SELECTOR = "hoodie.deltastreamer.source.input.selector";
+    @Deprecated
+    public static final String ROOT_INPUT_PATH_PROP = DFSPathSelectorConfig.ROOT_INPUT_PATH.key();
+    @Deprecated
+    public static final String SOURCE_INPUT_SELECTOR = DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR.key();
   }
 
   protected static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
@@ -64,9 +67,9 @@ public class DFSPathSelector implements Serializable {
   protected final TypedProperties props;
 
   public DFSPathSelector(TypedProperties props, Configuration hadoopConf) {
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.ROOT_INPUT_PATH_PROP));
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(DFSPathSelectorConfig.ROOT_INPUT_PATH.key()));
     this.props = props;
-    this.fs = FSUtils.getFs(props.getString(Config.ROOT_INPUT_PATH_PROP), hadoopConf);
+    this.fs = FSUtils.getFs(props.getString(DFSPathSelectorConfig.ROOT_INPUT_PATH.key()), hadoopConf);
   }
 
   /**
@@ -75,7 +78,7 @@ public class DFSPathSelector implements Serializable {
    */
   public static DFSPathSelector createSourceSelector(TypedProperties props,
                                                      Configuration conf) {
-    String sourceSelectorClass = props.getString(DFSPathSelector.Config.SOURCE_INPUT_SELECTOR,
+    String sourceSelectorClass = props.getString(DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR.key(),
         DFSPathSelector.class.getName());
     try {
       DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
@@ -114,9 +117,9 @@ public class DFSPathSelector implements Serializable {
                                                                              long sourceLimit) {
     try {
       // obtain all eligible files under root folder.
-      log.info("Root path => " + props.getString(Config.ROOT_INPUT_PATH_PROP) + " source limit => " + sourceLimit);
+      log.info("Root path => " + props.getString(DFSPathSelectorConfig.ROOT_INPUT_PATH.key()) + " source limit => " + sourceLimit);
       long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
-      List<FileStatus> eligibleFiles = listEligibleFiles(fs, new Path(props.getString(Config.ROOT_INPUT_PATH_PROP)), lastCheckpointTime);
+      List<FileStatus> eligibleFiles = listEligibleFiles(fs, new Path(props.getString(DFSPathSelectorConfig.ROOT_INPUT_PATH.key())), lastCheckpointTime);
       // sort them by modification time.
       eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
       // Filter based on checkpoint & input size, if needed

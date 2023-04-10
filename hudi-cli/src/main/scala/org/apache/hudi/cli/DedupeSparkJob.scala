@@ -17,17 +17,16 @@
 
 package org.apache.hudi.cli
 
-import java.util.stream.Collectors
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
-import org.apache.logging.log4j.LogManager
-import org.apache.logging.log4j.Logger
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.slf4j.LoggerFactory
 
+import java.util.stream.Collectors
 import scala.collection.JavaConversions._
 import scala.collection.mutable.{Buffer, HashMap, HashSet, ListBuffer}
 
@@ -42,7 +41,7 @@ class DedupeSparkJob(basePath: String,
                      dedupeType: DeDupeType.Value) {
 
   val sparkHelper = new SparkHelper(sqlContext, fs)
-  val LOG = LogManager.getLogger(this.getClass)
+  val LOG = LoggerFactory.getLogger(this.getClass)
 
 
   /**

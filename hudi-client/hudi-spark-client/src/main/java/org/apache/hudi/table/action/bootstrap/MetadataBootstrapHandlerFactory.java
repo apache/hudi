@@ -35,7 +35,6 @@ public class MetadataBootstrapHandlerFactory {
     Path sourceFilePath = FileStatusUtils.toPath(srcFileStatus.getPath());
 
     String extension = FSUtils.getFileExtension(sourceFilePath.toString());
-    BootstrapMetadataHandler bootstrapMetadataHandler;
     if (ORC.getFileExtension().equals(extension)) {
       return new OrcBootstrapMetadataHandler(config, table, srcFileStatus);
     } else if (PARQUET.getFileExtension().equals(extension)) {

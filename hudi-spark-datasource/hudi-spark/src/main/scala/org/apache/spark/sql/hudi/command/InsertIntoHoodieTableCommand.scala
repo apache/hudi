@@ -30,6 +30,7 @@ import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql._
+import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 
 /**
  * Command for insert into Hudi table.
@@ -139,7 +140,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
 
     // Make sure we strip out meta-fields from the incoming dataset (these will have to be discarded anyway)
-    val cleanedQuery = stripMetaFields(query)
+    val cleanedQuery = stripMetaFieldAttributes(query)
     // To validate and align properly output of the query, we simply filter out partition columns with already
     // provided static values from the table's schema
     //
@@ -196,7 +197,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
       .filter(pf => staticPartitionValues.contains(pf.name))
       .map(pf => {
         val staticPartitionValue = staticPartitionValues(pf.name)
-        val castExpr = castIfNeeded(Literal.create(staticPartitionValue), pf.dataType, conf)
+        val castExpr = castIfNeeded(Literal.create(staticPartitionValue), pf.dataType)
 
         Alias(castExpr, pf.name)()
       })
@@ -211,15 +212,6 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
           // Make sure we can cast source column to the target column type
           Cast.canCast(sourceColumn.dataType, targetColumn.dataType)
       }
-    }
-  }
-
-  def stripMetaFields(query: LogicalPlan): LogicalPlan = {
-    val filteredOutput = query.output.filterNot(attr => isMetaField(attr.name))
-    if (filteredOutput == query.output) {
-      query
-    } else {
-      Project(filteredOutput, query)
     }
   }
 

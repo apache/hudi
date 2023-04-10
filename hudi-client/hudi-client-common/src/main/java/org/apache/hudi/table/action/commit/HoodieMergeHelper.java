@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
@@ -46,8 +46,8 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -61,7 +61,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.isStrictProjectionOf;
 
 public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMergeHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHelper.class);
 
   private HoodieMergeHelper() {
   }

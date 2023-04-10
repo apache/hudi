@@ -53,7 +53,7 @@ public interface BulkInsertPartitioner<I> extends Serializable {
 
   /**
    * Return file group id prefix for the given data partition.
-   * By defauult, return a new file group id prefix, so that incoming records will route to a fresh new file group
+   * By default, return a new file group id prefix, so that incoming records will route to a fresh new file group
    *
    * @param partitionId data partition
    * @return

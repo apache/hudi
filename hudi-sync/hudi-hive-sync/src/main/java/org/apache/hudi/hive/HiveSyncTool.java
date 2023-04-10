@@ -39,9 +39,9 @@ import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -84,18 +84,19 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 @SuppressWarnings("WeakerAccess")
 public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
-  private static final Logger LOG = LogManager.getLogger(HiveSyncTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveSyncTool.class);
   public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
-  protected final HiveSyncConfig config;
-  protected final String databaseName;
-  protected final String tableName;
+  private HiveSyncConfig config;
+  private final String databaseName;
+  private final String tableName;
+
   protected HoodieSyncClient syncClient;
   protected String snapshotTableName;
   protected Option<String> roTableName;
 
-  protected String hiveSyncTableStrategy;
+  private String hiveSyncTableStrategy;
 
   public HiveSyncTool(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
@@ -203,6 +204,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       } catch (Exception e) {
         throw new HoodieHiveSyncException("Fail to close sync client.", e);
       }
+    }
+    if (config != null) {
+      config = null;
     }
   }
 

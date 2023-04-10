@@ -38,6 +38,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.ClusteringUtil;
@@ -59,11 +60,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -94,7 +95,7 @@ public class IncrementalInputSplits implements Serializable {
   private final RowType rowType;
   private final long maxCompactionMemoryInBytes;
   // for partition pruning
-  private final Set<String> requiredPartitions;
+  private final PartitionPruners.PartitionPruner partitionPruner;
   // skip compaction
   private final boolean skipCompaction;
   // skip clustering
@@ -105,14 +106,14 @@ public class IncrementalInputSplits implements Serializable {
       Path path,
       RowType rowType,
       long maxCompactionMemoryInBytes,
-      @Nullable Set<String> requiredPartitions,
+      @Nullable PartitionPruners.PartitionPruner partitionPruner,
       boolean skipCompaction,
       boolean skipClustering) {
     this.conf = conf;
     this.path = path;
     this.rowType = rowType;
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
-    this.requiredPartitions = requiredPartitions;
+    this.partitionPruner = partitionPruner;
     this.skipCompaction = skipCompaction;
     this.skipClustering = skipClustering;
   }
@@ -187,7 +188,7 @@ public class IncrementalInputSplits implements Serializable {
     if (fullTableScan) {
       // scans the partitions and files directly.
       FileIndex fileIndex = getFileIndex();
-      readPartitions = new HashSet<>(fileIndex.getOrBuildPartitionPaths());
+      readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
       if (readPartitions.size() == 0) {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
@@ -219,7 +220,7 @@ public class IncrementalInputSplits implements Serializable {
         // fallback to full table scan
         // reading from the earliest, scans the partitions and files directly.
         FileIndex fileIndex = getFileIndex();
-        readPartitions = new HashSet<>(fileIndex.getOrBuildPartitionPaths());
+        readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
         if (readPartitions.size() == 0) {
           LOG.warn("No partitions found for reading in user provided path.");
           return Result.EMPTY;
@@ -281,7 +282,7 @@ public class IncrementalInputSplits implements Serializable {
     if (instantRange == null) {
       // reading from the earliest, scans the partitions and files directly.
       FileIndex fileIndex = getFileIndex();
-      readPartitions = new HashSet<>(fileIndex.getOrBuildPartitionPaths());
+      readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
       if (readPartitions.size() == 0) {
         LOG.warn("No partitions found for reading under path: " + path);
         return Result.EMPTY;
@@ -421,12 +422,7 @@ public class IncrementalInputSplits implements Serializable {
   }
 
   private FileIndex getFileIndex() {
-    FileIndex fileIndex = FileIndex.instance(new org.apache.hadoop.fs.Path(path.toUri()), conf, rowType);
-    if (this.requiredPartitions != null) {
-      // apply partition push down
-      fileIndex.setPartitionPaths(this.requiredPartitions);
-    }
-    return fileIndex;
+    return FileIndex.instance(new org.apache.hadoop.fs.Path(path.toUri()), conf, rowType, null, partitionPruner);
   }
 
   /**
@@ -439,9 +435,14 @@ public class IncrementalInputSplits implements Serializable {
   private Set<String> getReadPartitions(List<HoodieCommitMetadata> metadataList) {
     Set<String> partitions = HoodieInputFormatUtils.getWritePartitionPaths(metadataList);
     // apply partition push down
-    if (this.requiredPartitions != null) {
-      return partitions.stream()
-          .filter(this.requiredPartitions::contains).collect(Collectors.toSet());
+    if (this.partitionPruner != null) {
+      Set<String> selectedPartitions = this.partitionPruner.filter(partitions);
+      double total = partitions.size();
+      double selectedNum = selectedPartitions.size();
+      double percentPruned = total == 0 ? 0 : (1 - selectedNum / total) * 100;
+      LOG.info("Selected " + selectedNum + " partitions out of " + total
+          + ", pruned " + percentPruned + "% partitions.");
+      return selectedPartitions;
     }
     return partitions;
   }
@@ -535,7 +536,8 @@ public class IncrementalInputSplits implements Serializable {
    *
    * @return the filtered timeline
    */
-  private HoodieTimeline filterInstantsByCondition(HoodieTimeline timeline) {
+  @VisibleForTesting
+  public HoodieTimeline filterInstantsByCondition(HoodieTimeline timeline) {
     final HoodieTimeline oriTimeline = timeline;
     if (this.skipCompaction) {
       // the compaction commit uses 'commit' as action which is tricky
@@ -597,11 +599,11 @@ public class IncrementalInputSplits implements Serializable {
     private RowType rowType;
     private long maxCompactionMemoryInBytes;
     // for partition pruning
-    private Set<String> requiredPartitions;
+    private PartitionPruners.PartitionPruner partitionPruner;
     // skip compaction
     private boolean skipCompaction = false;
     // skip clustering
-    private boolean skipClustering = true;
+    private boolean skipClustering = false;
 
     public Builder() {
     }
@@ -626,8 +628,8 @@ public class IncrementalInputSplits implements Serializable {
       return this;
     }
 
-    public Builder requiredPartitions(@Nullable Set<String> requiredPartitions) {
-      this.requiredPartitions = requiredPartitions;
+    public Builder partitionPruner(@Nullable PartitionPruners.PartitionPruner partitionPruner) {
+      this.partitionPruner = partitionPruner;
       return this;
     }
 
@@ -644,7 +646,7 @@ public class IncrementalInputSplits implements Serializable {
     public IncrementalInputSplits build() {
       return new IncrementalInputSplits(
           Objects.requireNonNull(this.conf), Objects.requireNonNull(this.path), Objects.requireNonNull(this.rowType),
-          this.maxCompactionMemoryInBytes, this.requiredPartitions, this.skipCompaction, this.skipClustering);
+          this.maxCompactionMemoryInBytes, this.partitionPruner, this.skipCompaction, this.skipClustering);
     }
   }
 }

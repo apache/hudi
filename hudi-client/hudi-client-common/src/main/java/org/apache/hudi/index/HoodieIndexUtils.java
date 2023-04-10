@@ -37,8 +37,8 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -53,7 +53,7 @@ import static java.util.stream.Collectors.toList;
  */
 public class HoodieIndexUtils {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieIndexUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexUtils.class);
 
   /**
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.

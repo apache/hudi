@@ -76,7 +76,7 @@ public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS = ConfigProperty
       .key(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY)
-      .defaultValue(String.valueOf(5000L))
+      .defaultValue(String.valueOf(16000L))
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum amount of time to wait between retries by lock provider client. This bounds"
           + " the maximum delay from the exponential backoff. Currently used by ZK based lock provider only.");
@@ -112,10 +112,10 @@ public class HoodieLockConfig extends HoodieConfig {
       .withDocumentation("For DFS based lock providers, path to store the locks under. use Table's meta path as default");
 
   public static final ConfigProperty<Integer> FILESYSTEM_LOCK_EXPIRE = ConfigProperty
-        .key(FILESYSTEM_LOCK_EXPIRE_PROP_KEY)
-        .defaultValue(0)
-        .sinceVersion("0.12.0")
-        .withDocumentation("For DFS based lock providers, expire time in minutes, must be a nonnegative number, default means no expire");
+      .key(FILESYSTEM_LOCK_EXPIRE_PROP_KEY)
+      .defaultValue(0)
+      .sinceVersion("0.12.0")
+      .withDocumentation("For DFS based lock providers, expire time in minutes, must be a non-negative number, default means no expire");
 
   public static final ConfigProperty<String> HIVE_DATABASE_NAME = ConfigProperty
       .key(HIVE_DATABASE_NAME_PROP_KEY)

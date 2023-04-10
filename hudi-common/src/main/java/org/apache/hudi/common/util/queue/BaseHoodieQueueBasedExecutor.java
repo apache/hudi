@@ -21,8 +21,9 @@ package org.apache.hudi.common.util.queue;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -53,7 +54,7 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
 
   private static final long TERMINATE_WAITING_TIME_SECS = 60L;
 
-  private final Logger logger = LogManager.getLogger(getClass());
+  private final Logger logger = LoggerFactory.getLogger(getClass());
 
   // Executor service used for launching write thread.
   private final ExecutorService producerExecutorService;

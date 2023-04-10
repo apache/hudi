@@ -96,8 +96,8 @@ public class FlinkCompactionConfig extends Configuration {
   public static final String SEQ_FIFO = "FIFO";
   public static final String SEQ_LIFO = "LIFO";
   @Parameter(names = {"--seq"}, description = "Compaction plan execution sequence, two options are supported:\n"
-      + "1). FIFO: execute the oldest plan first;\n"
-      + "2). LIFO: execute the latest plan first, by default LIFO")
+      + "1). FIFO: execute the oldest plan first, by default FIFO;\n"
+      + "2). LIFO: execute the latest plan first")
   public String compactionSeq = SEQ_FIFO;
 
   @Parameter(names = {"--service"}, description = "Flink Compaction runs in service mode, disable by default")

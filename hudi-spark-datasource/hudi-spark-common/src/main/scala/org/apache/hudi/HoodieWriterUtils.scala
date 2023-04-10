@@ -38,10 +38,6 @@ import scala.collection.JavaConverters._
  */
 object HoodieWriterUtils {
 
-  def javaParametersWithWriteDefaults(parameters: java.util.Map[String, String]): java.util.Map[String, String] = {
-    mapAsJavaMap(parametersWithWriteDefaults(parameters.asScala.toMap))
-  }
-
   /**
     * Add default options for unspecified write options keys.
     *
@@ -86,6 +82,21 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(RECONCILE_SCHEMA)
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
+    Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
+  }
+
+  /**
+   * Fetch params by translating alternatives if any. Do not set any default as this method is intended to be called
+   * before validation.
+   * @param parameters hash map of parameters.
+   * @return hash map of raw with translated parameters.
+   */
+  def getParamsWithAlternatives(parameters: Map[String, String]): Map[String, String] = {
+    val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
+    val props = new Properties()
+    props.putAll(parameters)
+    val hoodieConfig: HoodieConfig = new HoodieConfig(props)
+    // do not set any default as this is called before validation.
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
@@ -146,8 +157,7 @@ object HoodieWriterUtils {
 
         val datasourcePreCombineKey = params.getOrElse(PRECOMBINE_FIELD.key(), null)
         val tableConfigPreCombineKey = tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD)
-        if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey
-          && datasourcePreCombineKey != tableConfigPreCombineKey) {
+        if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey && datasourcePreCombineKey != tableConfigPreCombineKey) {
           diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
         }
 

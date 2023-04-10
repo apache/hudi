@@ -19,13 +19,14 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.config.SqlTransformerConfig;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 
@@ -36,25 +37,17 @@ import java.util.UUID;
  */
 public class SqlQueryBasedTransformer implements Transformer {
 
-  private static final Logger LOG = LogManager.getLogger(SqlQueryBasedTransformer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SqlQueryBasedTransformer.class);
 
   private static final String SRC_PATTERN = "<SRC>";
   private static final String TMP_TABLE = "HOODIE_SRC_TMP_TABLE_";
 
-  /**
-   * Configs supported.
-   */
-  static class Config {
-
-    private static final String TRANSFORMER_SQL = "hoodie.deltastreamer.transformer.sql";
-  }
-
   @Override
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
       TypedProperties properties) {
-    String transformerSQL = properties.getString(Config.TRANSFORMER_SQL);
+    String transformerSQL = properties.getString(SqlTransformerConfig.TRANSFORMER_SQL.key());
     if (null == transformerSQL) {
-      throw new IllegalArgumentException("Missing configuration : (" + Config.TRANSFORMER_SQL + ")");
+      throw new IllegalArgumentException("Missing configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL.key() + ")");
     }
 
     // tmp table name doesn't like dashes

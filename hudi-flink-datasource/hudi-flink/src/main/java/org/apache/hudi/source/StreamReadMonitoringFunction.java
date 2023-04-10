@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -44,7 +45,6 @@ import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -107,7 +107,7 @@ public class StreamReadMonitoringFunction
       Path path,
       RowType rowType,
       long maxCompactionMemoryInBytes,
-      @Nullable Set<String> requiredPartitionPaths) {
+      @Nullable PartitionPruners.PartitionPruner partitionPruner) {
     this.conf = conf;
     this.path = path;
     this.interval = conf.getInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
@@ -117,7 +117,7 @@ public class StreamReadMonitoringFunction
         .path(path)
         .rowType(rowType)
         .maxCompactionMemoryInBytes(maxCompactionMemoryInBytes)
-        .requiredPartitions(requiredPartitionPaths)
+        .partitionPruner(partitionPruner)
         .skipCompaction(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_COMPACT))
         .skipClustering(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING))
         .build();

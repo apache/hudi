@@ -21,8 +21,8 @@ package org.apache.hudi.hive.ddl;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -47,7 +47,7 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
  */
 public class JDBCExecutor extends QueryBasedDDLExecutor {
 
-  private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(QueryBasedDDLExecutor.class);
 
   private Connection connection;
 

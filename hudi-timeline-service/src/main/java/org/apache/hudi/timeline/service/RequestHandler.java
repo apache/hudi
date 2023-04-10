@@ -49,9 +49,9 @@ import io.javalin.http.Context;
 import io.javalin.http.Handler;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -68,7 +68,7 @@ import java.util.concurrent.ScheduledExecutorService;
 public class RequestHandler {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  private static final Logger LOG = LogManager.getLogger(RequestHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RequestHandler.class);
 
   private final TimelineService.Config timelineServiceConfig;
   private final FileSystemViewManager viewManager;
@@ -181,19 +181,20 @@ public class RequestHandler {
    * Syncs data-set view if local view is behind.
    */
   private boolean syncIfLocalViewBehind(Context ctx) {
-    if (isLocalViewBehind(ctx)) {
-      String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
-      String lastKnownInstantFromClient = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
-      SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
-      synchronized (view) {
-        if (isLocalViewBehind(ctx)) {
-          HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-          LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
-              + " as last known instant but server has the following last instant on timeline :"
-              + localTimeline.lastInstant());
-          view.sync();
-          return true;
-        }
+    String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
+    SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
+    synchronized (view) {
+      if (isLocalViewBehind(ctx)) {
+
+        String lastKnownInstantFromClient = ctx.queryParamAsClass(
+                RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class)
+            .getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
+        HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
+        LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
+            + " as last known instant but server has the following last instant on timeline :"
+            + localTimeline.lastInstant());
+        view.sync();
+        return true;
       }
     }
     return false;

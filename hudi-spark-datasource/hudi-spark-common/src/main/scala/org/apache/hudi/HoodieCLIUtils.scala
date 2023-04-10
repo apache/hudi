@@ -27,11 +27,11 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.withSparkConf
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
 
-object HoodieCLIUtils {
+object HoodieCLIUtils extends ProvidesHoodieConfig{
 
   def createHoodieClientFromPath(sparkSession: SparkSession,
                                  basePath: String,
@@ -39,11 +39,9 @@ object HoodieCLIUtils {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
       .setConf(sparkSession.sessionState.newHadoopConf()).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val schemaStr = schemaUtil.getTableAvroSchemaWithoutMetadataFields.toString
+    val schemaStr = schemaUtil.getTableAvroSchema(false).toString
     val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
-      withSparkConf(sparkSession, Map.empty)(
-        conf + (DataSourceWriteOptions.TABLE_TYPE.key() -> metaClient.getTableType.name()))
-    )
+      buildHoodieConfig(getHoodieCatalogTable(sparkSession, metaClient.getTableConfig.getTableName)) ++ conf)
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     DataSourceUtils.createHoodieClient(jsc, schemaStr, basePath,
@@ -68,6 +66,18 @@ object HoodieCLIUtils {
         HoodieCatalogTable(sparkSession, TableIdentifier(tableName))
       case Seq(database, tableName) =>
         HoodieCatalogTable(sparkSession, TableIdentifier(tableName, Some(database)))
+      case _ =>
+        throw new SparkException(s"Unsupported identifier $table")
+    }
+  }
+
+  def getTableIdentifier(table: String): (String, Option[String]) = {
+    val arrayStr: Array[String] = table.split('.')
+    arrayStr.toSeq match {
+      case Seq(tableName) =>
+        (tableName, None)
+      case Seq(database, tableName) =>
+        (tableName, Some(database))
       case _ =>
         throw new SparkException(s"Unsupported identifier $table")
     }

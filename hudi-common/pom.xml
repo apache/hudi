@@ -258,7 +258,7 @@
         </exclusion>
       </exclusions>
     </dependency>
-    
+
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-server</artifactId>
@@ -284,6 +284,13 @@
         </exclusion>
       </exclusions>
     </dependency>
+
+<!-- Force to use 2.11.0 since hbase-server requires 2.7+ -->
+   <dependency>
+     <groupId>commons-io</groupId>
+     <artifactId>commons-io</artifactId>
+     <version>${commons.io.version}</version>
+   </dependency>
 
     <!-- LZ4 Hash Utils -->
     <dependency>

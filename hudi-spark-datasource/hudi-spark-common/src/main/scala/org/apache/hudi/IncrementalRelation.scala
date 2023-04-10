@@ -32,15 +32,14 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.table.HoodieSparkTable
-import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.slf4j.LoggerFactory
 
-import java.util.stream.Collectors
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 
@@ -56,7 +55,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
                           val userSchema: Option[StructType],
                           val metaClient: HoodieTableMetaClient) extends BaseRelation with TableScan {
 
-  private val log = LogManager.getLogger(classOf[IncrementalRelation])
+  private val log = LoggerFactory.getLogger(classOf[IncrementalRelation])
 
   val skeletonSchema: StructType = HoodieSparkUtils.getMetaSchema
   private val basePath = metaClient.getBasePathV2
@@ -101,10 +100,10 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
 
     val tableSchema = if (useEndInstantSchema && iSchema.isEmptySchema) {
-      if (commitsToReturn.isEmpty) schemaResolver.getTableAvroSchemaWithoutMetadataFields() else
+      if (commitsToReturn.isEmpty) schemaResolver.getTableAvroSchema(false) else
         schemaResolver.getTableAvroSchema(commitsToReturn.last, false)
     } else {
-      schemaResolver.getTableAvroSchemaWithoutMetadataFields()
+      schemaResolver.getTableAvroSchema(false)
     }
     if (tableSchema.getType == Schema.Type.NULL) {
       // if there is only one commit in the table and is an empty commit without schema, return empty RDD here

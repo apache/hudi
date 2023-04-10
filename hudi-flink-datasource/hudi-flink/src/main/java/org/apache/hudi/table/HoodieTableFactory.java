@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -143,9 +144,26 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * @param schema The table schema
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
+    checkTableType(conf);
+
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
       checkPreCombineKey(conf, schema);
+    }
+  }
+
+  /**
+   * Validate the table type.
+   */
+  private void checkTableType(Configuration conf) {
+    String tableType = conf.get(FlinkOptions.TABLE_TYPE);
+    if (StringUtils.nonEmpty(tableType)) {
+      try {
+        HoodieTableType.valueOf(tableType);
+      } catch (IllegalArgumentException e) {
+        throw new HoodieValidationException("Invalid table type: " + tableType + ". Table type should be either "
+                + HoodieTableType.MERGE_ON_READ + " or " + HoodieTableType.COPY_ON_WRITE + ".");
+      }
     }
   }
 

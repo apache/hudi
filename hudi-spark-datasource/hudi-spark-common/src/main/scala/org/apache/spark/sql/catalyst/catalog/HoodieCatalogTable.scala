@@ -94,7 +94,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   lazy val tableName: String = tableConfig.getTableName
 
   /**
-   * the name of dabase
+   * the name of database
    */
   lazy val databaseName: String = tableConfig.getDatabaseName
 

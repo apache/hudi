@@ -26,8 +26,8 @@ import com.codahale.metrics.MetricRegistry;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.dropwizard.DropwizardExports;
 import io.prometheus.client.exporter.HTTPServer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 
@@ -37,7 +37,7 @@ import java.net.InetSocketAddress;
  */
 public class PrometheusReporter extends MetricsReporter {
 
-  private static final Logger LOG = LogManager.getLogger(PrometheusReporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PrometheusReporter.class);
 
   private HTTPServer httpServer;
   private final DropwizardExports metricExports;

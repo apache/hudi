@@ -35,12 +35,12 @@ import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.types.{ByteType, DataType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
 import javax.annotation.concurrent.NotThreadSafe
@@ -281,14 +281,15 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     // Static partition-path prefix is defined as a prefix of the full partition-path where only
     // first N partition columns (in-order) have proper (static) values bound in equality predicates,
     // allowing in turn to build such prefix to be used in subsequent filtering
-    val staticPartitionColumnNameValuePairs: Seq[(String, Any)] = {
+    val staticPartitionColumnNameValuePairs: Seq[(String, (String, Any))] = {
       // Extract from simple predicates of the form `date = '2022-01-01'` both
       // partition column and corresponding (literal) value
-      val staticPartitionColumnValuesMap = extractEqualityPredicatesLiteralValues(partitionColumnPredicates)
+      val zoneId = configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone)
+      val staticPartitionColumnValuesMap = extractEqualityPredicatesLiteralValues(partitionColumnPredicates, zoneId)
       // NOTE: For our purposes we can only construct partition-path prefix if proper prefix of the
       //       partition-schema has been bound by the partition-predicates
       partitionColumnNames.takeWhile(colName => staticPartitionColumnValuesMap.contains(colName))
-        .map(colName => (colName, staticPartitionColumnValuesMap(colName).get))
+        .map(colName => (colName, (staticPartitionColumnValuesMap(colName)._1, staticPartitionColumnValuesMap(colName)._2.get)))
     }
 
     if (staticPartitionColumnNameValuePairs.isEmpty) {
@@ -301,7 +302,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
       if (staticPartitionColumnNameValuePairs.length == partitionColumnNames.length) {
         // In case composed partition path is complete, we can return it directly avoiding extra listing operation
-        Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnNameValuePairs.map(_._2.asInstanceOf[AnyRef]).toArray))
+        Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnNameValuePairs.map(_._2._2.asInstanceOf[AnyRef]).toArray))
       } else {
         // Otherwise, compile extracted partition values (from query predicates) into a sub-path which is a prefix
         // of the complete partition path, do listing for this prefix-path only
@@ -315,7 +316,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    *
    * @return relative partition path and a flag to indicate if the path is complete (i.e., not a prefix)
    */
-  private def composeRelativePartitionPath(staticPartitionColumnNameValuePairs: Seq[(String, Any)]): String = {
+  private def composeRelativePartitionPath(staticPartitionColumnNameValuePairs: Seq[(String, (String, Any))]): String = {
     checkState(staticPartitionColumnNameValuePairs.nonEmpty)
 
     // Since static partition values might not be available for all columns, we compile
@@ -331,7 +332,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     )
 
     partitionPathFormatter.combine(staticPartitionColumnNames.asJava,
-      staticPartitionColumnValues.map(_.asInstanceOf[AnyRef]): _*)
+      staticPartitionColumnValues.map(_._1): _*)
   }
 
   protected def doParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
@@ -407,24 +408,35 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
 }
 
-object SparkHoodieTableFileIndex {
+object SparkHoodieTableFileIndex extends SparkAdapterSupport {
 
   private def haveProperPartitionValues(partitionPaths: Seq[PartitionPath]) = {
     partitionPaths.forall(_.values.length > 0)
   }
 
-  private def extractEqualityPredicatesLiteralValues(predicates: Seq[Expression]): Map[String, Option[Any]] = {
+  private def extractEqualityPredicatesLiteralValues(predicates: Seq[Expression], zoneId: String): Map[String, (String, Option[Any])] = {
     // TODO support coercible expressions (ie attr-references casted to particular type), similar
     //      to `MERGE INTO` statement
+
+    object ExtractableLiteral {
+      def unapply(exp: Expression): Option[String] = exp match {
+        case Literal(null, _) => None // `null`s can be cast as other types; we want to avoid NPEs.
+        case Literal(value, _: ByteType | IntegerType | LongType | ShortType) => Some(value.toString)
+        case Literal(value, _: StringType) => Some(value.toString)
+        case Literal(value, _: DateType) =>
+          Some(sparkAdapter.getDateFormatter(DateTimeUtils.getTimeZone(zoneId)).format(value.asInstanceOf[Int]))
+        case _ => None
+      }
+    }
+
     // NOTE: To properly support predicates of the form `x = NULL`, we have to wrap result
     //       of the folded expression into [[Some]] (to distinguish it from the case when partition-column
     //       isn't bound to any value by the predicate)
     predicates.flatMap {
-      case EqualTo(attr: AttributeReference, e: Expression) if e.foldable =>
-        Seq((attr.name, Some(e.eval(EmptyRow))))
-      case EqualTo(e: Expression, attr: AttributeReference) if e.foldable =>
-        Seq((attr.name, Some(e.eval(EmptyRow))))
-
+      case EqualTo(attr: AttributeReference, e @ ExtractableLiteral(valueString)) =>
+        Seq((attr.name, (valueString, Some(e.eval(EmptyRow)))))
+      case EqualTo(e @ ExtractableLiteral(valueString), attr: AttributeReference) =>
+        Seq((attr.name, (valueString, Some(e.eval(EmptyRow)))))
       case _ => Seq.empty
     }.toMap
   }

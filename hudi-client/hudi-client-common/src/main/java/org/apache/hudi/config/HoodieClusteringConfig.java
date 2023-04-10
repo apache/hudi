@@ -182,6 +182,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups");
 
+  public static final ConfigProperty<Boolean> PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "single.group.clustering.enabled")
+      .defaultValue(true)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Whether to generate clustering plan when there is only one file group involved, by default true");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_SORT_COLUMNS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "sort.columns")
       .noDefaultValue()
@@ -211,12 +217,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Enable running of clustering service, asynchronously as inserts happen on the table.")
       .withAlternatives("hoodie.datasource.clustering.async.enable");
-
-  public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
-      .key("hoodie.clustering.preserve.commit.metadata")
-      .defaultValue(true)
-      .sinceVersion("0.9.0")
-      .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
   /**
    * @deprecated this setting has no effect. Please refer to clustering configuration, as well as
@@ -469,6 +469,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withSingleGroupClusteringEnabled(Boolean enabled) {
+      clusteringConfig.setValue(PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
     public Builder withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode mode) {
       clusteringConfig.setValue(PLAN_PARTITION_FILTER_MODE_NAME.key(), mode.toString());
       return this;
@@ -567,11 +572,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withAsyncClustering(Boolean asyncClustering) {
       clusteringConfig.setValue(ASYNC_CLUSTERING_ENABLE, String.valueOf(asyncClustering));
-      return this;
-    }
-
-    public Builder withPreserveHoodieCommitMetadata(Boolean preserveHoodieCommitMetadata) {
-      clusteringConfig.setValue(PRESERVE_COMMIT_METADATA, String.valueOf(preserveHoodieCommitMetadata));
       return this;
     }
 

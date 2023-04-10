@@ -48,8 +48,8 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -71,7 +71,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   public static final int DEFAULT_BUFFER_SIZE = 16 * 1024 * 1024; // 16 MB
   private static final int BLOCK_SCAN_READ_BUFFER_SIZE = 1024 * 1024; // 1 MB
-  private static final Logger LOG = LogManager.getLogger(HoodieLogFileReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFileReader.class);
 
   private final FileSystem fs;
   private final Configuration hadoopConf;
@@ -79,13 +79,13 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private final HoodieLogFile logFile;
   private final byte[] magicBuffer = new byte[6];
   private final Schema readerSchema;
-  private InternalSchema internalSchema;
+  private final InternalSchema internalSchema;
   private final String keyField;
-  private boolean readBlockLazily;
+  private final boolean readBlockLazily;
   private long reverseLogFilePosition;
   private long lastReverseLogFilePosition;
-  private boolean reverseReader;
-  private boolean enableRecordLookups;
+  private final boolean reverseReader;
+  private final boolean enableRecordLookups;
   private boolean closed = false;
   private transient Thread shutdownThread = null;
 
@@ -386,12 +386,11 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   private boolean readMagic() throws IOException {
     try {
-      boolean hasMagic = hasNextMagic();
-      if (!hasMagic) {
+      if (!hasNextMagic()) {
         throw new CorruptedLogFileException(
             logFile + " could not be read. Did not find the magic bytes at the start of the block");
       }
-      return hasMagic;
+      return true;
     } catch (EOFException e) {
       // We have reached the EOF
       return false;
@@ -526,7 +525,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private static FSDataInputStream getFSDataInputStreamForGCS(FSDataInputStream fsDataInputStream,
                                                               HoodieLogFile logFile,
                                                               int bufferSize) {
-    // incase of GCS FS, there are two flows.
+    // in case of GCS FS, there are two flows.
     // a. fsDataInputStream.getWrappedStream() instanceof FSInputStream
     // b. fsDataInputStream.getWrappedStream() not an instanceof FSInputStream, but an instance of FSDataInputStream.
     // (a) is handled in the first if block and (b) is handled in the second if block. If not, we fallback to original fsDataInputStream

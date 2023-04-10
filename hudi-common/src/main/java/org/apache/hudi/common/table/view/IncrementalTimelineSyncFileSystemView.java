@@ -45,8 +45,8 @@ import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
  */
 public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTableFileSystemView {
 
-  private static final Logger LOG = LogManager.getLogger(IncrementalTimelineSyncFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(IncrementalTimelineSyncFileSystemView.class);
 
   // Allows incremental Timeline syncing
   private final boolean incrementalTimelineSyncEnabled;
@@ -78,7 +78,18 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   @Override
-  protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
+  public void sync() {
+    try {
+      writeLock.lock();
+      maySyncIncrementally();
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  protected void maySyncIncrementally() {
+    HoodieTimeline oldTimeline = getTimeline();
+    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
     try {
       if (incrementalTimelineSyncEnabled) {
         TimelineDiffResult diffResult = TimelineDiffHelper.getNewInstantsForIncrementalSync(oldTimeline, newTimeline);
@@ -94,14 +105,15 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     } catch (Exception ioe) {
       LOG.error("Got exception trying to perform incremental sync. Reverting to complete sync", ioe);
     }
-
-    super.runSync(oldTimeline, newTimeline);
+    clear();
+    // Initialize with new Hoodie timeline.
+    init(metaClient, newTimeline);
   }
 
   /**
    * Run incremental sync based on the diff result produced.
    *
-   * @param timeline New Timeline
+   * @param timeline   New Timeline
    * @param diffResult Timeline Diff Result
    */
   private void runIncrementalSync(HoodieTimeline timeline, TimelineDiffResult diffResult) {

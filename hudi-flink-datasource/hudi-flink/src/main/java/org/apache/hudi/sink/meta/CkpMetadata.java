@@ -20,7 +20,9 @@ package org.apache.hudi.sink.meta;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
@@ -48,15 +50,15 @@ import java.util.stream.Collectors;
  *
  * <p>Why we use the DFS based message queue instead of sending
  * the {@link org.apache.flink.runtime.operators.coordination.OperatorEvent} ?
- * The write task handles the operator event using the main mailbox executor which has the lowest priority for mails,
- * it is also used to process the inputs. When the write task blocks and waits for the operator event to ack the valid instant to write,
+ * The writer task thread handles the operator event using the main mailbox executor which has the lowest priority for mails,
+ * it is also used to process the inputs. When the writer task blocks and waits for the operator event to ack the valid instant to write,
  * it actually blocks all the subsequent events in the mailbox, the operator event would never be consumed then it causes deadlock.
  *
  * <p>The checkpoint metadata is also more lightweight than the active timeline.
  *
  * <p>NOTE: should be removed in the future if we have good manner to handle the async notifications from driver.
  */
-public class CkpMetadata implements Serializable {
+public class CkpMetadata implements Serializable, AutoCloseable {
   private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LoggerFactory.getLogger(CkpMetadata.class);
@@ -75,12 +77,13 @@ public class CkpMetadata implements Serializable {
   private List<String> instantCache;
 
   private CkpMetadata(Configuration config) {
-    this(FSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)), config.getString(FlinkOptions.PATH));
+    this(FSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)),
+        config.getString(FlinkOptions.PATH), config.getString(FlinkOptions.WRITE_CLIENT_ID));
   }
 
-  private CkpMetadata(FileSystem fs, String basePath) {
+  private CkpMetadata(FileSystem fs, String basePath, String uniqueId) {
     this.fs = fs;
-    this.path = new Path(ckpMetaPath(basePath));
+    this.path = new Path(ckpMetaPath(basePath, uniqueId));
   }
 
   public void close() {
@@ -92,14 +95,13 @@ public class CkpMetadata implements Serializable {
   // -------------------------------------------------------------------------
 
   /**
-   * Initialize the message bus, would keep all the messages.
+   * Initialize the message bus, would clean all the messages
    *
    * <p>This expects to be called by the driver.
    */
   public void bootstrap() throws IOException {
-    if (!fs.exists(path)) {
-      fs.mkdirs(path);
-    }
+    fs.delete(path, true);
+    fs.mkdirs(path);
   }
 
   public void startInstant(String instant) {
@@ -201,6 +203,11 @@ public class CkpMetadata implements Serializable {
     return this.messages.stream().anyMatch(ckpMsg -> instant.equals(ckpMsg.getInstant()) && ckpMsg.isAborted());
   }
 
+  @VisibleForTesting
+  public List<String> getInstantCache() {
+    return this.instantCache;
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -208,12 +215,18 @@ public class CkpMetadata implements Serializable {
     return new CkpMetadata(config);
   }
 
-  public static CkpMetadata getInstance(FileSystem fs, String basePath) {
-    return new CkpMetadata(fs, basePath);
+  public static CkpMetadata getInstance(HoodieTableMetaClient metaClient, String uniqueId) {
+    return new CkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId);
   }
 
-  protected static String ckpMetaPath(String basePath) {
-    return basePath + Path.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + Path.SEPARATOR + CKP_META;
+  public static CkpMetadata getInstance(FileSystem fs, String basePath, String uniqueId) {
+    return new CkpMetadata(fs, basePath, uniqueId);
+  }
+
+  protected static String ckpMetaPath(String basePath, String uniqueId) {
+    // .hoodie/.aux/ckp_meta
+    String metaPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + Path.SEPARATOR + CKP_META;
+    return StringUtils.isNullOrEmpty(uniqueId) ? metaPath : metaPath + "_" + uniqueId;
   }
 
   private Path fullPath(String fileName) {
@@ -221,6 +234,10 @@ public class CkpMetadata implements Serializable {
   }
 
   private List<CkpMessage> scanCkpMetadata(Path ckpMetaPath) throws IOException {
+    // This is required when the storage is minio
+    if (!this.fs.exists(ckpMetaPath)) {
+      return new ArrayList<>();
+    }
     return Arrays.stream(this.fs.listStatus(ckpMetaPath)).map(CkpMessage::new)
         .collect(Collectors.groupingBy(CkpMessage::getInstant)).values().stream()
         .map(messages -> messages.stream().reduce((x, y) -> {

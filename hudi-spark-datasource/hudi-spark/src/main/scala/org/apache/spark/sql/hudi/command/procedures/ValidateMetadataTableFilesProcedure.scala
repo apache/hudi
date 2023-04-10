@@ -44,7 +44,7 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
     StructField("partition", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("file_name", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("is_present_in_fs", DataTypes.BooleanType, nullable = true, Metadata.empty),
-    StructField("is_resent_in_metadata", DataTypes.BooleanType, nullable = true, Metadata.empty),
+    StructField("is_present_in_metadata", DataTypes.BooleanType, nullable = true, Metadata.empty),
     StructField("fs_size", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("metadata_size", DataTypes.LongType, nullable = true, Metadata.empty)
   ))

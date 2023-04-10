@@ -81,5 +81,3 @@ object HdfsParquetImportProcedure {
     override def get() = new HdfsParquetImportProcedure()
   }
 }
-
-

@@ -21,12 +21,12 @@ package org.apache.hudi.client;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public interface RunsTableService {
 
-  Logger LOG = LogManager.getLogger(RunsTableService.class);
+  Logger LOG = LoggerFactory.getLogger(RunsTableService.class);
 
   default boolean tableServicesEnabled(HoodieWriteConfig config) {
     boolean enabled = config.areTableServicesEnabled();

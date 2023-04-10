@@ -28,8 +28,8 @@ import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
@@ -45,7 +45,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
 
   public static final String CLUSTERING_POOL_NAME = "hoodiecluster";
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(AsyncClusteringService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AsyncClusteringService.class);
   private final int maxConcurrentClustering;
   protected transient HoodieEngineContext context;
   private transient BaseClusterer clusteringClient;

@@ -23,8 +23,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -32,7 +32,7 @@ import java.io.IOException;
  * Common utils for Hudi heartbeat
  */
 public class HoodieHeartbeatUtils {
-  private static final Logger LOG = LogManager.getLogger(HoodieHeartbeatUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieHeartbeatUtils.class);
 
   /**
    * Use modification time as last heart beat time.

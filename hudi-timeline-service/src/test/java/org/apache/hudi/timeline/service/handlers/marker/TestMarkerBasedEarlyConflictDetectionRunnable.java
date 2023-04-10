@@ -27,11 +27,11 @@ import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -54,7 +54,7 @@ import static org.mockito.Mockito.when;
  */
 public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(TestMarkerBasedEarlyConflictDetectionRunnable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestMarkerBasedEarlyConflictDetectionRunnable.class);
 
   @BeforeEach
   public void setUp() throws Exception {

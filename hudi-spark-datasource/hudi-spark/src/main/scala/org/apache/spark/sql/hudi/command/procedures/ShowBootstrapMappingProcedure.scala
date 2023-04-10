@@ -75,8 +75,9 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
     if (fileIds.nonEmpty) {
       val fileGroupIds = fileIds.split(",").toList.map((fileId: String) => new HoodieFileGroupId(partitionPath, fileId)).asJava
       mappingList.addAll(indexReader.getSourceFileMappingForFileIds(fileGroupIds).values)
-    } else if (partitionPath.nonEmpty) mappingList.addAll(indexReader.getSourceFileMappingForPartition(partitionPath))
-    else {
+    } else if (partitionPath.nonEmpty) {
+      mappingList.addAll(indexReader.getSourceFileMappingForPartition(partitionPath))
+    } else {
       for (part <- indexedPartitions) {
         mappingList.addAll(indexReader.getSourceFileMappingForPartition(part))
       }
@@ -111,6 +112,3 @@ object ShowBootstrapMappingProcedure {
     override def get() = new ShowBootstrapMappingProcedure
   }
 }
-
-
-

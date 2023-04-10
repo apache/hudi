@@ -20,12 +20,12 @@ package org.apache.hudi.utilities.sources.helpers.gcs;
 
 import org.apache.hudi.common.model.HoodieRecord;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.hudi.DataSourceReadOptions.BEGIN_INSTANTTIME;
 import static org.apache.hudi.DataSourceReadOptions.END_INSTANTTIME;
@@ -43,7 +43,7 @@ public class QueryInfo {
   private final String startInstant;
   private final String endInstant;
 
-  private static final Logger LOG = LogManager.getLogger(QueryInfo.class);
+  private static final Logger LOG = LoggerFactory.getLogger(QueryInfo.class);
 
   public QueryInfo(String queryType, String startInstant, String endInstant) {
     this.queryType = queryType;
@@ -51,7 +51,7 @@ public class QueryInfo {
     this.endInstant = endInstant;
   }
 
-  public Dataset<Row> initializeSourceForFilenames(String srcPath, SparkSession sparkSession) {
+  public Dataset<Row> initCloudObjectMetadata(String srcPath, SparkSession sparkSession) {
     if (isIncremental()) {
       return incrementalQuery(sparkSession).load(srcPath);
     }

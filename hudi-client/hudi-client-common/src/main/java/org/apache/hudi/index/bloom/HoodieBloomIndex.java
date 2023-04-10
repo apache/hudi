@@ -41,8 +41,9 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieRangeInfoHandle;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -62,7 +63,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
  * Indexing mechanism based on bloom filter. Each parquet file includes its row_key bloom filter in its metadata.
  */
 public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
-  private static final Logger LOG = LogManager.getLogger(HoodieBloomIndex.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBloomIndex.class);
 
   private final BaseHoodieBloomIndexHelper bloomIndexHelper;
 
