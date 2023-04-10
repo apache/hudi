@@ -53,8 +53,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -68,12 +67,11 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
-import static org.apache.hudi.common.table.view.FileSystemViewStorageConfig.REMOTE_PORT_NUM;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests the {@link RemoteHoodieTableFileSystemView} with metadata table enabled, using
- * {@link HoodieMetadataFileSystemView} on the timeline server.
+ * {@link HoodieMetadataFileSystemView} on the timeline server..
  */
 public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestHarness {
   private static final Logger LOG = LogManager.getLogger(TestRemoteFileSystemViewWithMetadataTable.class);
@@ -129,9 +127,17 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testMORGetLatestFileSliceWithMetadataTable(boolean useExistingTimelineServer) throws IOException {
+  @Test
+  public void testMORGetLatestFileSliceWithMetadataTableExternalTLS() throws IOException {
+    testMORGetLatestFileSliceWithMetadataTable(false);
+  }
+
+  @Test
+  public void testMORGetLatestFileSliceWithMetadataTableEmbeddedTLS() throws IOException {
+    testMORGetLatestFileSliceWithMetadataTable(true);
+  }
+
+  private void testMORGetLatestFileSliceWithMetadataTable(boolean useExistingTimelineServer) throws IOException {
     // This test utilizes the `HoodieBackedTestDelayedTableMetadata` to make sure the
     // synced file system view is always served.
 
@@ -205,7 +211,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
   }
 
   private SparkRDDWriteClient createWriteClient(Option<TimelineService> timelineService) {
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+    HoodieWriteConfig.Builder writeConfigBuilder = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
@@ -217,14 +223,19 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(3)
             .build())
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withStorageType(FileSystemViewStorageType.REMOTE_ONLY)
-            .withRemoteServerPort(timelineService.isPresent()
-                ? timelineService.get().getServerPort() : REMOTE_PORT_NUM.defaultValue())
-            .build())
         .withAutoCommit(false)
-        .forTable("test_mor_table")
-        .build();
+        .forTable("test_mor_table");
+    if (timelineService.isPresent()) {
+      writeConfigBuilder.withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+          .withStorageType(FileSystemViewStorageType.REMOTE_ONLY)
+          .withRemoteServerPort(timelineService.get().getServerPort())
+          .build());
+    } else {
+      writeConfigBuilder.withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+          .withStorageType(FileSystemViewStorageType.REMOTE_ONLY)
+          .build());
+    }
+    HoodieWriteConfig writeConfig = writeConfigBuilder.build();
     return new SparkRDDWriteClient(context, writeConfig, timelineService);
   }
 

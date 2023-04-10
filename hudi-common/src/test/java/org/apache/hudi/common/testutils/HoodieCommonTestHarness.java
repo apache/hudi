@@ -31,7 +31,7 @@ import java.io.IOException;
 import java.net.URI;
 
 /**
- * The common hoodie test harness to provide the basic infrastructure..
+ * The common hoodie test harness to provide the basic infrastructure.
  */
 public class HoodieCommonTestHarness {
 
