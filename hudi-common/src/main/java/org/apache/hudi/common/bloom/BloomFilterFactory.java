@@ -55,7 +55,7 @@ public class BloomFilterFactory {
     if (bloomFilterTypeCode.equalsIgnoreCase(BloomFilterTypeCode.SIMPLE.name())) {
       return new SimpleBloomFilter(serString);
     } else if (bloomFilterTypeCode.equalsIgnoreCase(BloomFilterTypeCode.DYNAMIC_V0.name())) {
-      return new HoodieDynamicBoundedBloomFilter(serString, BloomFilterTypeCode.DYNAMIC_V0);
+      return new HoodieDynamicBoundedBloomFilter(serString);
     } else {
       throw new IllegalArgumentException("Bloom Filter type code not recognizable " + bloomFilterTypeCode);
     }
