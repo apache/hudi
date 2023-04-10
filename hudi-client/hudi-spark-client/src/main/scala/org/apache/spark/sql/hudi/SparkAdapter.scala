@@ -29,6 +29,7 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan, SubqueryAlias}
+import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources._
@@ -36,7 +37,7 @@ import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.storage.StorageLevel
 
-import java.util.Locale
+import java.util.{Locale, TimeZone}
 
 /**
  * Interface adapting discrepancies and incompatibilities between different Spark versions
@@ -107,6 +108,11 @@ trait SparkAdapter extends Serializable {
    * ParserInterface#parseMultipartIdentifier is supported since spark3, for spark2 this should not be called.
    */
   def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String]
+
+  /**
+   * Get the [[DateFormatter]].
+   */
+  def getDateFormatter(tz: TimeZone): DateFormatter
 
   /**
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
