@@ -298,6 +298,20 @@ mvn -Dsuites="org.apache.spark.sql.hudi.TestSpark3DDL @Test Chinese table " -Dte
 -Dtest=abc will assist in skipping all java tests.
 -Dsuites="org.apache.spark.sql.hudi.TestSpark3DDL @Test Chinese table " filters for a single scala test.
 
+- Run an Integration Test
+
+```shell
+mvn -T 2C -Pintegration-tests -DfailIfNoTests=false -Dit.test=ITTestHoodieSanity#testRunHoodieJavaAppOnMultiPartitionKeysMORTable verify
+```
+
+`verify` phase runs the integration test and cleans up the docker cluster after execution. To retain the docker cluster use
+`integration-test` phase instead.
+
+**Note:** If you encounter `unknown shorthand flag: 'H' in -H`, this error occurs when local environment has docker-compose version >= 2.0.
+The latest docker-compose is accessible using `docker-compose` whereas v1 version is accessible using `docker-compose-v1` locally.<br/>
+You can use `alt def` command to define different docker-compose versions. Refer https://github.com/dotboris/alt. <br/>
+Use `alt use` to use v1 version of docker-compose while running integration test locally.
+
 
 ## Releases
 
