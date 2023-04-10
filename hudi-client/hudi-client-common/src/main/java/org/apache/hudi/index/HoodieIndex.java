@@ -34,6 +34,8 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Base class for different types of indexes to determine the mapping from uuid.
@@ -150,6 +152,10 @@ public abstract class HoodieIndex<I, O> implements Serializable {
    * Each index type should implement its own logic to release any resources acquired during the process.
    */
   public void close() {
+  }
+
+  public List<String> getListOfCommitsExcludeFromArchival(HoodieTable table) {
+    return Collections.emptyList();
   }
 
   public enum IndexType {

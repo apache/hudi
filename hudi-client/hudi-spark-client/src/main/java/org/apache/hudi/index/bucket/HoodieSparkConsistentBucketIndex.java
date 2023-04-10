@@ -46,16 +46,18 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -67,7 +69,7 @@ import scala.Tuple2;
  */
 public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkConsistentBucketIndex.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieSparkConsistentBucketIndex.class);
 
   public HoodieSparkConsistentBucketIndex(HoodieWriteConfig config) {
     super(config);
@@ -149,6 +151,38 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
     return true;
   }
 
+  /***
+   * List of commits that should be excluded from hoodieTimeLine archival process.
+   * This becomes necessary in case of consistent hashing index, as consistent hashing chooses consistent hashing metadata on the basis of latest
+   * replace commit present on the timeline for the partition, if no matching replace commit found for consistent hashing meta file it
+   * uses default meta file and this could result in data duplication.
+   * @param table hoodie table
+   * @return list of replace commits that should be excluded by timeline archival process
+   */
+  @Override
+  public List<String> getListOfCommitsExcludeFromArchival(HoodieTable table) {
+    Map<String, String> partitionVisiteddMap = new HashMap<>();
+    List<String> excludeReplaceCommitList = new ArrayList<>();
+    HoodieTimeline hoodieTimeline = table.getActiveTimeline().getCompletedReplaceTimeline();
+    hoodieTimeline.getInstants().forEach(instant -> {
+      Option<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlanPair =
+          ClusteringUtils.getClusteringPlan(table.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(instant.getTimestamp()));
+      HoodieClusteringPlan plan = instantPlanPair.get().getRight();
+      List<Map<String, String>> partitionMapList = plan.getInputGroups().stream().map(HoodieClusteringGroup::getExtraMetadata).collect(Collectors.toList());
+      partitionMapList.stream().forEach(partitionMap -> {
+        String partition = partitionMap.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
+        if (!partitionVisiteddMap.containsKey(partition)) {
+          String replacedCommit = getLatestMetaFileCommittedForPartition(table, partition);
+          if (Objects.nonNull(replacedCommit)) {
+            excludeReplaceCommitList.add(replacedCommit);
+            partitionVisiteddMap.put(partition, replacedCommit);
+          }
+        }
+      });
+    });
+    return excludeReplaceCommitList;
+  }
+
   @Override
   protected BucketIndexLocationMapper getLocationMapper(HoodieTable table, List<String> partitionPath) {
     return new ConsistentBucketIndexLocationMapper(table, partitionPath);
@@ -203,8 +237,7 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
       };
 
       // Get a valid hashing metadata with the largest (latest) timestamp
-      FileStatus metaFile = Arrays.stream(metaFiles).filter(metaFilePredicate)
-          .max(Comparator.comparing(a -> a.getPath().getName())).orElse(null);
+      FileStatus metaFile = Arrays.stream(metaFiles).filter(metaFilePredicate).max(Comparator.comparing(a -> a.getPath().getName())).orElse(null);
 
       if (metaFile == null) {
         return Option.empty();
@@ -241,6 +274,33 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
       LOG.warn("Failed to update bucket metadata: " + metadata, e);
     }
     return false;
+  }
+
+  /**
+   * Get latest committed metadata file for a partition
+   *
+   * @param table     hoodie table
+   * @param partition partition for which latest committed metadata file needed
+   * @return latest committed metadata file for a partition
+   */
+  private String getLatestMetaFileCommittedForPartition(HoodieTable table, String partition) {
+    HoodieTimeline hoodieTimeline = table.getActiveTimeline().getCompletedReplaceTimeline();
+    Path metadataPath = FSUtils.getPartitionPath(table.getMetaClient().getHashingMetadataPath(), partition);
+    try {
+      FileStatus[] metaFiles = table.getMetaClient().getFs().listStatus(metadataPath);
+      Predicate<FileStatus> metaFilePredicate = fileStatus -> {
+        String filename = fileStatus.getPath().getName();
+        if (!filename.contains(HoodieConsistentHashingMetadata.HASHING_METADATA_FILE_SUFFIX)) {
+          return false;
+        }
+        String timestamp = HoodieConsistentHashingMetadata.getTimestampFromFile(filename);
+        return hoodieTimeline.containsInstant(timestamp) || timestamp.equals(HoodieTimeline.INIT_INSTANT_TS);
+      };
+      FileStatus metaFile = Arrays.stream(metaFiles).filter(metaFilePredicate).max(Comparator.comparing(a -> a.getPath().getName())).orElse(null);
+      return HoodieConsistentHashingMetadata.getTimestampFromFile(metaFile.getPath().getName());
+    } catch (IOException e) {
+      throw new HoodieIndexException("Error while loading hashing metadata", e);
+    }
   }
 
   public class ConsistentBucketIndexLocationMapper implements BucketIndexLocationMapper {
