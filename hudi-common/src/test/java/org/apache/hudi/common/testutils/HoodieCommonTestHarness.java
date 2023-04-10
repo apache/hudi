@@ -35,10 +35,10 @@ import java.net.URI;
  */
 public class HoodieCommonTestHarness {
 
-  protected String tableName = null;
-  protected String basePath = null;
+  protected String tableName;
+  protected String basePath;
   protected URI baseUri;
-  protected HoodieTestDataGenerator dataGen = null;
+  protected HoodieTestDataGenerator dataGen;
   protected HoodieTableMetaClient metaClient;
   @TempDir
   public java.nio.file.Path tempDir;

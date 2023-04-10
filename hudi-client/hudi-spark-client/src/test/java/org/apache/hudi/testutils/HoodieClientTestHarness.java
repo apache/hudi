@@ -125,10 +125,10 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected static int timelineServicePort =
       FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
   private String testMethodName;
-  protected transient JavaSparkContext jsc = null;
-  protected transient HoodieSparkEngineContext context = null;
-  protected transient SparkSession sparkSession = null;
-  protected transient Configuration hadoopConf = null;
+  protected transient JavaSparkContext jsc;
+  protected transient HoodieSparkEngineContext context;
+  protected transient SparkSession sparkSession;
+  protected transient Configuration hadoopConf;
   protected transient SQLContext sqlContext;
   protected transient FileSystem fs;
   protected transient ExecutorService executorService;
@@ -332,6 +332,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected void cleanupTimelineService() {
     if (timelineService != null) {
       timelineService.close();
+      timelineService = null;
     }
   }
 

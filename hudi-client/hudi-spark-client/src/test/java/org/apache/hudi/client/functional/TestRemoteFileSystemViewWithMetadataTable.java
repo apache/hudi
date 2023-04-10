@@ -67,6 +67,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.view.FileSystemViewStorageConfig.REMOTE_PORT_NUM;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -82,7 +83,6 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
     initSparkContexts();
     initFileSystem();
     initMetaClient();
-    initTimelineService();
     dataGen = new HoodieTestDataGenerator(0x1f86);
   }
 
@@ -134,6 +134,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
 
   @Test
   public void testMORGetLatestFileSliceWithMetadataTableEmbeddedTLS() throws IOException {
+    initTimelineService();
     testMORGetLatestFileSliceWithMetadataTable(true);
   }
 
@@ -233,6 +234,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
     } else {
       writeConfigBuilder.withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
           .withStorageType(FileSystemViewStorageType.REMOTE_ONLY)
+          .withRemoteServerPort(REMOTE_PORT_NUM.defaultValue())
           .build());
     }
     HoodieWriteConfig writeConfig = writeConfigBuilder.build();
