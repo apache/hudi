@@ -120,7 +120,7 @@ class RunClusteringProcedure extends BaseProcedure
 
     orderStrategy match {
       case Some(o) =>
-        val strategy = LayoutOptimizationStrategy.valueOf(o.asInstanceOf[String])
+        val strategy = LayoutOptimizationStrategy.fromValue(o.asInstanceOf[String])
         conf = conf ++ Map(
           HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key() -> strategy.name()
         )
