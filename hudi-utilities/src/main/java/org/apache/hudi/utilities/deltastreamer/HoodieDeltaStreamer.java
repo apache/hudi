@@ -742,8 +742,8 @@ public class HoodieDeltaStreamer implements Serializable {
                   scheduledCompactionInstantAndRDD.isPresent() ? HoodieJavaRDD.of(scheduledCompactionInstantAndRDD.get().getRight()) : null);
               if (requestShutdownIfNeeded(lastWriteStatuses)) {
                 LOG.warn("Closing and shutting down ingestion service");
-                onIngestionCompletes(false);
                 waitAsyncServicesFinishAndStop();
+                onIngestionCompletes(false);
                 shutdown(true);
               } else {
                 sleepBeforeNextIngestion(start);
