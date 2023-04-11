@@ -19,11 +19,6 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.lock.LockProvider;
@@ -35,8 +30,14 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -53,7 +54,7 @@ import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PA
  */
 public class FileSystemBasedLockProvider implements LockProvider<String>, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(FileSystemBasedLockProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileSystemBasedLockProvider.class);
   private static final String LOCK_FILE_NAME = "lock";
   private final int lockTimeoutMinutes;
   private final transient FileSystem fs;

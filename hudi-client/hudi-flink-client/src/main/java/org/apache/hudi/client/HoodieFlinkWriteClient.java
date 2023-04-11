@@ -203,7 +203,7 @@ public class HoodieFlinkWriteClient<T> extends
     preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE, table.getMetaClient());
     // create the write handle if not exists
     HoodieWriteMetadata<List<WriteStatus>> result;
-    try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table)) {
+    try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table, true)) {
       result = ((HoodieFlinkTable<T>) table).insertOverwrite(context, closeableHandle.getWriteHandle(), instantTime, records);
     }
     return postWrite(result, instantTime, table);
@@ -223,7 +223,7 @@ public class HoodieFlinkWriteClient<T> extends
     preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE, table.getMetaClient());
     // create the write handle if not exists
     HoodieWriteMetadata<List<WriteStatus>> result;
-    try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table)) {
+    try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table, true)) {
       result = ((HoodieFlinkTable<T>) table).insertOverwriteTable(context, closeableHandle.getWriteHandle(), instantTime, records);
     }
     return postWrite(result, instantTime, table);
@@ -443,6 +443,8 @@ public class HoodieFlinkWriteClient<T> extends
    * @param instantTime The instant time
    * @param table       The table
    * @param recordItr   Record iterator
+   * @param overwrite   Whether this is an overwrite operation
+   *
    * @return Existing write handle or create a new one
    */
   private HoodieWriteHandle<?, ?, ?, ?> getOrCreateWriteHandle(
@@ -450,12 +452,13 @@ public class HoodieFlinkWriteClient<T> extends
       HoodieWriteConfig config,
       String instantTime,
       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
-      Iterator<HoodieRecord<T>> recordItr) {
+      Iterator<HoodieRecord<T>> recordItr,
+      boolean overwrite) {
     // caution: it's not a good practice to modify the handles internal.
     FlinkWriteHandleFactory.Factory<T,
         List<HoodieRecord<T>>,
         List<HoodieKey>,
-        List<WriteStatus>> writeHandleFactory = FlinkWriteHandleFactory.getFactory(table.getMetaClient().getTableConfig(), config);
+        List<WriteStatus>> writeHandleFactory = FlinkWriteHandleFactory.getFactory(table.getMetaClient().getTableConfig(), config, overwrite);
     return writeHandleFactory.create(this.bucketToHandles, record, config, instantTime, table, recordItr);
   }
 
@@ -503,9 +506,16 @@ public class HoodieFlinkWriteClient<T> extends
     AutoCloseableWriteHandle(
         List<HoodieRecord<T>> records,
         String instantTime,
-        HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table
-    ) {
-      this.writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(), instantTime, table, records.listIterator());
+        HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table) {
+      this (records, instantTime, table, false);
+    }
+
+    AutoCloseableWriteHandle(
+        List<HoodieRecord<T>> records,
+        String instantTime,
+        HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+        boolean overwrite) {
+      this.writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(), instantTime, table, records.listIterator(), overwrite);
     }
 
     HoodieWriteHandle<?, ?, ?, ?> getWriteHandle() {

@@ -24,8 +24,8 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This strategy is used for direct marker writers, trying to do early conflict detection.
@@ -35,7 +35,7 @@ import org.apache.log4j.Logger;
 public class SimpleTransactionDirectMarkerBasedDetectionStrategy
     extends SimpleDirectMarkerBasedDetectionStrategy {
 
-  private static final Logger LOG = LogManager.getLogger(
+  private static final Logger LOG = LoggerFactory.getLogger(
       SimpleTransactionDirectMarkerBasedDetectionStrategy.class);
 
   public SimpleTransactionDirectMarkerBasedDetectionStrategy(

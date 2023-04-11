@@ -22,15 +22,15 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Table metadata provided by an internal DFS backed Hudi metadata table,
  * with an intentional delay in `reset()` to test concurrent reads and writes.
  */
 public class HoodieBackedTestDelayedTableMetadata extends HoodieBackedTableMetadata {
-  private static final Logger LOG = LogManager.getLogger(HoodieBackedTestDelayedTableMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTestDelayedTableMetadata.class);
 
   public HoodieBackedTestDelayedTableMetadata(HoodieEngineContext engineContext,
                                               HoodieMetadataConfig metadataConfig,

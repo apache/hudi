@@ -64,9 +64,9 @@ import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -88,7 +88,7 @@ import static org.apache.hudi.table.action.bootstrap.MetadataBootstrapHandlerFac
 public class SparkBootstrapCommitActionExecutor<T>
     extends BaseCommitActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieBootstrapWriteMetadata<HoodieData<WriteStatus>>> {
 
-  private static final Logger LOG = LogManager.getLogger(SparkBootstrapCommitActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkBootstrapCommitActionExecutor.class);
   protected String bootstrapSchema = null;
   private transient FileSystem bootstrapSourceFileSystem;
 

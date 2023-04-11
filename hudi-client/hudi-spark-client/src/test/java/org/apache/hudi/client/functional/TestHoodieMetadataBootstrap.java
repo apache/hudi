@@ -30,13 +30,13 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,7 +53,7 @@ import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 @Tag("functional")
 public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
 
-  private static final Logger LOG = LogManager.getLogger(TestHoodieMetadataBootstrap.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMetadataBootstrap.class);
 
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)

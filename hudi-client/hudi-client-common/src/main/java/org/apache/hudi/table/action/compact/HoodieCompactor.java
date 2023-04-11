@@ -48,8 +48,8 @@ import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -66,7 +66,7 @@ import static java.util.stream.Collectors.toList;
  */
 public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
 
   /**
    * Handles the compaction timeline based on the compaction instant before actual compaction.

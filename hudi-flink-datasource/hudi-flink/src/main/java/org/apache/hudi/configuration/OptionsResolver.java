@@ -59,8 +59,7 @@ public class OptionsResolver {
   public static boolean isAppendMode(Configuration conf) {
     // 1. inline clustering is supported for COW table;
     // 2. async clustering is supported for both COW and MOR table
-    return isCowTable(conf) && isInsertOperation(conf) && !conf.getBoolean(FlinkOptions.INSERT_CLUSTER)
-        || needsScheduleClustering(conf);
+    return isInsertOperation(conf) && ((isCowTable(conf) && !conf.getBoolean(FlinkOptions.INSERT_CLUSTER)) || isMorTable(conf));
   }
 
   /**
@@ -248,6 +247,14 @@ public class OptionsResolver {
     return conf.getBoolean(FlinkOptions.METADATA_ENABLED)
         || conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
             .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+  }
+
+  /**
+   * Returns whether OCC is enabled.
+   */
+  public static boolean isOptimisticConcurrencyControl(Configuration conf) {
+    return conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
+        .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
   }
 
   /**

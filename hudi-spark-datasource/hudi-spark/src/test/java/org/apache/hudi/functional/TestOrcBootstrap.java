@@ -297,7 +297,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
       client.compact(compactionInstant.get());
       checkBootstrapResults(totalRecords, schema, compactionInstant.get(), checkNumRawFiles,
           numInstantsAfterBootstrap + 2, 2, updateTimestamp, updateTimestamp, !deltaCommit,
-          Arrays.asList(compactionInstant.get()), !config.isPreserveHoodieCommitMetadataForCompaction());
+          Arrays.asList(compactionInstant.get()), false);
     }
     client.close();
   }

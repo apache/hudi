@@ -38,8 +38,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.AbstractMap;
@@ -55,7 +55,7 @@ import java.util.stream.Stream;
  */
 public class ClusteringUtils {
 
-  private static final Logger LOG = LogManager.getLogger(ClusteringUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ClusteringUtils.class);
 
   public static final String TOTAL_IO_READ_MB = "TOTAL_IO_READ_MB";
   public static final String TOTAL_LOG_FILE_SIZE = "TOTAL_LOG_FILES_SIZE";
@@ -181,6 +181,7 @@ public class ClusteringUtils {
         .setInputGroups(clusteringGroups)
         .setExtraMetadata(extraMetadata)
         .setStrategy(strategy)
+        .setPreserveHoodieMetadata(true)
         .build();
   }
 

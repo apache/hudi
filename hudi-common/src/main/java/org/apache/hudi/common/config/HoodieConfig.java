@@ -23,8 +23,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.lang.reflect.Modifier;
@@ -37,7 +37,7 @@ import java.util.Properties;
  */
 public class HoodieConfig implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieConfig.class);
 
   protected static final String CONFIG_VALUES_DELIMITER = ",";
 

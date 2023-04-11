@@ -43,8 +43,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -73,7 +73,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serial
  */
 public class FileCreateUtils {
 
-  private static final Logger LOG = LogManager.getLogger(FileCreateUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileCreateUtils.class);
 
   private static final String WRITE_TOKEN = "1-0-1";
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();

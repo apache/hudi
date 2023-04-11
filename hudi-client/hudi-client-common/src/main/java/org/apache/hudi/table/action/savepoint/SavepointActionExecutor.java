@@ -35,8 +35,8 @@ import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -49,7 +49,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
 
 public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieSavepointMetadata> {
 
-  private static final Logger LOG = LogManager.getLogger(SavepointActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SavepointActionExecutor.class);
 
   private final String user;
   private final String comment;

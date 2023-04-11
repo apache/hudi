@@ -77,8 +77,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -94,6 +94,9 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
@@ -113,7 +116,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetada
  */
 public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWriter {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadataWriter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadataWriter.class);
 
   public static final String METADATA_COMPACTION_TIME_SUFFIX = "001";
 
@@ -272,12 +275,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .forTable(tableName)
         // we will trigger cleaning manually, to control the instant times
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withAsyncClean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE.defaultValue())
+            .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
-            .retainCommits(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED.defaultValue())
+            .retainCommits(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED)
             .build())
         // we will trigger archive manually, to ensure only regular writer invokes it
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
@@ -288,9 +291,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
             .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
-            // by default, the HFile does not keep the metadata fields, set up as false
-            // to always use the metadata of the new record.
-            .withPreserveCommitMetadata(false)
             .withEnableOptimizedLogBlocksScan(String.valueOf(writeConfig.enableOptimizedLogBlocksScan()))
             .build())
         .withParallelism(parallelism, parallelism)
@@ -299,7 +299,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withFinalizeWriteParallelism(parallelism)
         .withAllowMultiWriteOnSameInstant(true)
         .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-        .withPopulateMetaFields(HoodieMetadataConfig.POPULATE_META_FIELDS.defaultValue())
+        .withPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS)
         .withReleaseResourceEnabled(writeConfig.areReleaseResourceEnabled());
 
     // RecordKey properties are needed for the metadata table records
@@ -450,9 +450,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get())
           .setBasePath(metadataWriteConfig.getBasePath()).build();
 
-      if (dataWriteConfig.getMetadataConfig().populateMetaFields() != metadataMetaClient.getTableConfig().populateMetaFields()) {
+      if (DEFAULT_METADATA_POPULATE_META_FIELDS != metadataMetaClient.getTableConfig().populateMetaFields()) {
         LOG.info("Re-initiating metadata table properties since populate meta fields have changed");
-        metadataMetaClient = initializeMetaClient(dataWriteConfig.getMetadataConfig().populateMetaFields());
+        metadataMetaClient = initializeMetaClient(DEFAULT_METADATA_POPULATE_META_FIELDS);
       }
 
       final Option<HoodieInstant> latestMetadataInstant =
@@ -566,7 +566,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     String createInstantTime = getInitialCommitInstantTime(dataMetaClient);
 
-    initializeMetaClient(dataWriteConfig.getMetadataConfig().populateMetaFields());
+    initializeMetaClient(DEFAULT_METADATA_POPULATE_META_FIELDS);
     initTableMetadata();
     // if async metadata indexing is enabled,
     // then only initialize files partition as other partitions will be built using HoodieIndexer

@@ -86,7 +86,3 @@ object DeleteSavepointProcedure {
     override def get(): DeleteSavepointProcedure = new DeleteSavepointProcedure()
   }
 }
-
-
-
-

@@ -20,35 +20,39 @@ package org.apache.hudi.utilities.sources.helpers.gcs;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.sources.helpers.IncrSourceCloudStorageHelper;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
 import java.util.List;
+
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.loadAsDataset;
 
 /**
  * Connects to GCS from Spark and downloads data from a given list of files.
  * Assumes SparkContext is already configured with GCS options through GcsEventsHoodieIncrSource.addGcsAccessConfs().
  */
-public class FileDataFetcher implements Serializable {
+public class GcsObjectDataFetcher implements Serializable {
 
   private final String fileFormat;
   private TypedProperties props;
 
-  private static final Logger LOG = LogManager.getLogger(FileDataFetcher.class);
+  private static final Logger LOG = LoggerFactory.getLogger(GcsObjectDataFetcher.class);
 
   private static final long serialVersionUID = 1L;
 
-  public FileDataFetcher(TypedProperties props, String fileFormat) {
+  public GcsObjectDataFetcher(TypedProperties props, String fileFormat) {
     this.fileFormat = fileFormat;
     this.props = props;
   }
 
-  public Option<Dataset<Row>> fetchFileData(SparkSession spark, List<String> filepaths, TypedProperties props) {
-    return IncrSourceCloudStorageHelper.fetchFileData(spark, filepaths, props, fileFormat);
+  public Option<Dataset<Row>> getCloudObjectDataDF(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata, TypedProperties props) {
+    return loadAsDataset(spark, cloudObjectMetadata, props, fileFormat);
   }
 
 }

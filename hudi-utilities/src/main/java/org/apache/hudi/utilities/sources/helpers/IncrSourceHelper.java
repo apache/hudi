@@ -34,22 +34,12 @@ import org.apache.spark.sql.Row;
 
 import java.util.Objects;
 
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT;
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.MISSING_CHECKPOINT_STRATEGY;
-import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.READ_LATEST_INSTANT_ON_MISSING_CKPT;
+import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY;
+import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 
 public class IncrSourceHelper {
 
   private static final String DEFAULT_BEGIN_TIMESTAMP = "000";
-  /**
-   * Kafka reset offset strategies.
-   */
-  public enum MissingCheckpointStrategy {
-    // read from latest commit in hoodie source table
-    READ_LATEST,
-    // read everything upto latest commit
-    READ_UPTO_LATEST_COMMIT
-  }
 
   /**
    * Get a timestamp which is the next value in a descending sequence.
@@ -74,7 +64,8 @@ public class IncrSourceHelper {
    * @return begin and end instants along with query type.
    */
   public static Pair<String, Pair<String, String>> calculateBeginAndEndInstants(JavaSparkContext jssc, String srcBasePath,
-                                                                                 int numInstantsPerFetch, Option<String> beginInstant, MissingCheckpointStrategy missingCheckpointStrategy) {
+                                                                                 int numInstantsPerFetch, Option<String> beginInstant,
+                                                                                MissingCheckpointStrategy missingCheckpointStrategy) {
     ValidationUtils.checkArgument(numInstantsPerFetch > 0,
         "Make sure the config hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
     HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
@@ -148,16 +139,43 @@ public class IncrSourceHelper {
    */
   public static MissingCheckpointStrategy getMissingCheckpointStrategy(TypedProperties props) {
     boolean readLatestOnMissingCkpt = props.getBoolean(
-            READ_LATEST_INSTANT_ON_MISSING_CKPT, DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT);
+            READ_LATEST_INSTANT_ON_MISSING_CKPT.key(), READ_LATEST_INSTANT_ON_MISSING_CKPT.defaultValue());
 
     if (readLatestOnMissingCkpt) {
       return MissingCheckpointStrategy.READ_LATEST;
     }
 
-    if (props.containsKey(MISSING_CHECKPOINT_STRATEGY)) {
-      return MissingCheckpointStrategy.valueOf(props.getString(MISSING_CHECKPOINT_STRATEGY));
+    if (props.containsKey(MISSING_CHECKPOINT_STRATEGY.key())) {
+      return MissingCheckpointStrategy.valueOf(props.getString(MISSING_CHECKPOINT_STRATEGY.key()));
     }
 
     return null;
+  }
+
+  /**
+   * Kafka reset offset strategies.
+   */
+  public enum MissingCheckpointStrategy {
+    READ_LATEST("Read from latest commit in hoodie source table"),
+    READ_UPTO_LATEST_COMMIT("Read everything upto latest commit");
+
+    private final String description;
+
+    MissingCheckpointStrategy(String description) {
+      this.description = description;
+    }
+
+    public String getDescription() {
+      return description;
+    }
+
+    private static MissingCheckpointStrategy nullEnum() {
+      return null;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("%s (%s)", name(), description);
+    }
   }
 }

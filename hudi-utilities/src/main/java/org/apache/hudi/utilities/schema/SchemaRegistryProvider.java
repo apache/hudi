@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -61,11 +62,15 @@ public class SchemaRegistryProvider extends SchemaProvider {
    * Configs supported.
    */
   public static class Config {
-
-    public static final String SRC_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
+    @Deprecated
+    public static final String SRC_SCHEMA_REGISTRY_URL_PROP =
+        HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key();
+    @Deprecated
     public static final String TARGET_SCHEMA_REGISTRY_URL_PROP =
-        "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
-    public static final String SCHEMA_CONVERTER_PROP = "hoodie.deltastreamer.schemaprovider.registry.schemaconverter";
+        HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL.key();
+    @Deprecated
+    public static final String SCHEMA_CONVERTER_PROP =
+        HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key();
     public static final String SSL_KEYSTORE_LOCATION_PROP = "schema.registry.ssl.keystore.location";
     public static final String SSL_TRUSTSTORE_LOCATION_PROP = "schema.registry.ssl.truststore.location";
     public static final String SSL_KEYSTORE_PASSWORD_PROP = "schema.registry.ssl.keystore.password";
@@ -86,8 +91,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   public Schema parseSchemaFromRegistry(String registryUrl) throws IOException {
     String schema = fetchSchemaFromRegistry(registryUrl);
-    SchemaConverter converter = config.containsKey(Config.SCHEMA_CONVERTER_PROP)
-        ? ReflectionUtils.loadClass(config.getString(Config.SCHEMA_CONVERTER_PROP))
+    SchemaConverter converter = config.containsKey(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key())
+        ? ReflectionUtils.loadClass(config.getString(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key()))
         : s -> s;
     return new Schema.Parser().parse(converter.convert(schema));
   }
@@ -142,7 +147,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL_PROP));
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
     if (config.containsKey(Config.SSL_KEYSTORE_LOCATION_PROP)
         || config.containsKey(Config.SSL_TRUSTSTORE_LOCATION_PROP)) {
       setUpSSLStores();
@@ -174,7 +179,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
+    String registryUrl = config.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key());
     try {
       return parseSchemaFromRegistry(registryUrl);
     } catch (IOException ioe) {
@@ -184,8 +189,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   @Override
   public Schema getTargetSchema() {
-    String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
-    String targetRegistryUrl = config.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, registryUrl);
+    String registryUrl = config.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key());
+    String targetRegistryUrl = config.getString(HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL.key(), registryUrl);
     try {
       return parseSchemaFromRegistry(targetRegistryUrl);
     } catch (IOException ioe) {

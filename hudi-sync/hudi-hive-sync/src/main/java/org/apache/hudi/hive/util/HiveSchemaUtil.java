@@ -23,14 +23,14 @@ import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
 
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -53,7 +53,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
  */
 public class HiveSchemaUtil {
 
-  private static final Logger LOG = LogManager.getLogger(HiveSchemaUtil.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveSchemaUtil.class);
   public static final String HIVE_ESCAPE_CHARACTER = "`";
 
   public static final String BOOLEAN_TYPE_NAME = "boolean";

@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.config.JsonKafkaPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -95,7 +96,7 @@ public class JsonKafkaSource extends KafkaSource<String> {
   }
 
   private JavaRDD<String> postProcess(JavaRDD<String> jsonStringRDD) {
-    String postProcessorClassName = this.props.getString(KafkaOffsetGen.Config.JSON_KAFKA_PROCESSOR_CLASS_OPT.key(), null);
+    String postProcessorClassName = this.props.getString(JsonKafkaPostProcessorConfig.JSON_KAFKA_PROCESSOR_CLASS.key(), null);
     // no processor, do nothing
     if (StringUtils.isNullOrEmpty(postProcessorClassName)) {
       return jsonStringRDD;

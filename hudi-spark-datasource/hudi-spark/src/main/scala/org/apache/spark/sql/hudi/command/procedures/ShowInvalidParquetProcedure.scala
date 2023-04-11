@@ -78,6 +78,3 @@ object ShowInvalidParquetProcedure {
     override def get(): ProcedureBuilder = new ShowInvalidParquetProcedure()
   }
 }
-
-
-

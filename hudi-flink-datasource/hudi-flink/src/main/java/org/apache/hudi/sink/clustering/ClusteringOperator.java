@@ -18,23 +18,22 @@
 
 package org.apache.hudi.sink.clustering;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -54,18 +53,17 @@ import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.runtime.memory.MemoryManager;
+import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
-import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
-import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
@@ -92,8 +90,6 @@ import java.util.Spliterators;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
-
 /**
  * Operator to execute the actual clustering task assigned by the clustering plan task.
  * In order to execute scalable, the input should shuffle by the clustering event {@link ClusteringPlanEvent}.
@@ -103,7 +99,6 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private static final Logger LOG = LoggerFactory.getLogger(ClusteringOperator.class);
 
   private final Configuration conf;
-  private final boolean preserveHoodieMetadata;
   private final RowType rowType;
   private int taskID;
   private transient HoodieWriteConfig writeConfig;
@@ -133,10 +128,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
   public ClusteringOperator(Configuration conf, RowType rowType) {
     this.conf = conf;
-    this.preserveHoodieMetadata = conf.getBoolean(HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.key(), HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.defaultValue());
-    this.rowType = this.preserveHoodieMetadata
-        ? BulkInsertWriterHelper.addMetadataFields(rowType, false)
-        : rowType;
+    this.rowType = BulkInsertWriterHelper.addMetadataFields(rowType, false);
     this.asyncClustering = OptionsResolver.needsAsyncClustering(conf);
     this.sortClusteringEnabled = OptionsResolver.sortClusteringEnabled(conf);
 
@@ -152,6 +144,11 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   }
 
   @Override
+  public void setup(StreamTask<?, ?> containingTask, StreamConfig config, Output<StreamRecord<ClusteringCommitEvent>> output) {
+    super.setup(containingTask, config, new MaskingOutputAdapter<>(output));
+  }
+
+  @Override
   public void open() throws Exception {
     super.open();
 
@@ -161,7 +158,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.table = writeClient.getHoodieTable();
 
     this.schema = AvroSchemaConverter.convertToSchema(rowType);
-    this.readerSchema = this.preserveHoodieMetadata ? this.schema : HoodieAvroUtils.addMetadataFields(this.schema);
+    this.readerSchema = this.schema;
     this.requiredPos = getRequiredPositions();
 
     this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType);
@@ -172,16 +169,6 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     }
 
     this.collector = new StreamRecordCollector<>(output);
-  }
-
-  @Override
-  public void processWatermark(Watermark mark) {
-    // no need to propagate the watermark
-  }
-
-  @Override
-  public void processLatencyMarker(LatencyMarker latencyMarker) {
-    // no need to propagate the latencyMarker
   }
 
   @Override
@@ -228,7 +215,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
     BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(this.conf, this.table, this.writeConfig,
         instantTime, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
-        this.rowType, this.preserveHoodieMetadata);
+        this.rowType, true);
 
     List<ClusteringOperation> clusteringOps = clusteringGroupInfo.getOperations();
     boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
@@ -348,9 +335,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
    * Transform IndexedRecord into HoodieRecord.
    */
   private RowData transform(IndexedRecord indexedRecord) {
-    GenericRecord record = this.preserveHoodieMetadata
-        ? (GenericRecord) indexedRecord
-        : buildAvroRecordBySchema(indexedRecord, schema, requiredPos, new GenericRecordBuilder(schema));
+    GenericRecord record = (GenericRecord) indexedRecord;
     return (RowData) avroToRowDataConverter.convert(record);
   }
 

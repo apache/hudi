@@ -236,5 +236,3 @@ object ExportInstantsProcedure {
     override def get() = new ExportInstantsProcedure()
   }
 }
-
-

@@ -31,8 +31,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -44,7 +44,7 @@ import java.util.stream.Stream;
  * Scheduling strategy with restriction that clustering groups can only contain files from same partition.
  */
 public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends ClusteringPlanStrategy<T,I,K,O> {
-  private static final Logger LOG = LogManager.getLogger(PartitionAwareClusteringPlanStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PartitionAwareClusteringPlanStrategy.class);
 
   public PartitionAwareClusteringPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
@@ -122,7 +122,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
         .setInputGroups(clusteringGroups)
         .setExtraMetadata(getExtraMetadata())
         .setVersion(getPlanVersion())
-        .setPreserveHoodieMetadata(getWriteConfig().isPreserveHoodieCommitMetadataForClustering())
+        .setPreserveHoodieMetadata(true)
         .build());
   }
 

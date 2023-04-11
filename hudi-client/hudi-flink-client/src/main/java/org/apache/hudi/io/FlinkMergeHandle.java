@@ -31,8 +31,8 @@ import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -54,7 +54,7 @@ public class FlinkMergeHandle<T, I, K, O>
     extends HoodieMergeHandle<T, I, K, O>
     implements MiniBatchHandle {
 
-  private static final Logger LOG = LogManager.getLogger(FlinkMergeHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkMergeHandle.class);
 
   private boolean isClosed = false;
 

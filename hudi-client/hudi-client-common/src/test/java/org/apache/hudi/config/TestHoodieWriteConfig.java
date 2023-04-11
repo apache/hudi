@@ -47,6 +47,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS;
+import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_COMMITS;
+import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS;
 import static org.apache.hudi.config.HoodieArchivalConfig.ASYNC_ARCHIVE;
 import static org.apache.hudi.config.HoodieCleanConfig.ASYNC_CLEAN;
 import static org.apache.hudi.config.HoodieCleanConfig.AUTO_CLEAN;
@@ -122,6 +125,80 @@ public class TestHoodieWriteConfig {
             EngineType.SPARK, MarkerType.TIMELINE_SERVER_BASED,
             EngineType.FLINK, MarkerType.DIRECT,
             EngineType.JAVA, MarkerType.DIRECT));
+  }
+
+  @Test
+  public void testInferCleaningPolicy() {
+    // If no clean configs are set,
+    // use KEEP_LATEST_COMMITS cleaning policy
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .build())
+        .build();
+    assertEquals(KEEP_LATEST_COMMITS, writeConfig.getCleanerPolicy());
+
+    // If "hoodie.cleaner.commits.retained" is set only,
+    // use KEEP_LATEST_COMMITS cleaning policy
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .retainCommits(10)
+            .build())
+        .build();
+    assertEquals(KEEP_LATEST_COMMITS, writeConfig.getCleanerPolicy());
+
+    // If "hoodie.cleaner.hours.retained" is set only,
+    // use KEEP_LATEST_BY_HOURS cleaning policy
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .cleanerNumHoursRetained(96)
+            .build())
+        .build();
+    assertEquals(KEEP_LATEST_BY_HOURS, writeConfig.getCleanerPolicy());
+
+    // If "hoodie.cleaner.fileversions.retained" is set only,
+    // use KEEP_LATEST_FILE_VERSIONS cleaning policy
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .retainFileVersions(2)
+            .build())
+        .build();
+    assertEquals(KEEP_LATEST_FILE_VERSIONS, writeConfig.getCleanerPolicy());
+
+    // If multiple clean configs are set and the cleaning policy is not set,
+    // use KEEP_LATEST_COMMITS cleaning policy (no inference)
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .cleanerNumHoursRetained(96)
+            .retainFileVersions(2)
+            .build())
+        .build();
+    assertEquals(KEEP_LATEST_COMMITS, writeConfig.getCleanerPolicy());
+
+    // If the cleaning policy is explicitly set, use the configured policy
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(KEEP_LATEST_BY_HOURS)
+            .retainFileVersions(2)
+            .build())
+        .build();
+    assertEquals(KEEP_LATEST_BY_HOURS, writeConfig.getCleanerPolicy());
+
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(KEEP_LATEST_BY_HOURS)
+            .retainCommits(10)
+            .cleanerNumHoursRetained(96)
+            .retainFileVersions(2)
+            .build())
+        .build();
+    assertEquals(KEEP_LATEST_BY_HOURS, writeConfig.getCleanerPolicy());
   }
 
   @ParameterizedTest

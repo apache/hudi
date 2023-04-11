@@ -37,17 +37,16 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieArchivalConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
@@ -58,9 +57,9 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -70,6 +69,9 @@ import java.util.Properties;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -77,7 +79,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_S
 
 public class TestHoodieMetadataBase extends HoodieClientTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(TestHoodieMetadataBase.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMetadataBase.class);
 
   protected static HoodieTestTable testTable;
   protected String metadataTableBasePath;
@@ -90,7 +92,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
   }
 
   public void init(HoodieTableType tableType, HoodieWriteConfig writeConfig) throws IOException {
-    init(tableType, Option.of(writeConfig), true, false, false, false);
+    init(tableType, Option.of(writeConfig), true, false, false);
   }
 
   public void init(HoodieTableType tableType, boolean enableMetadataTable) throws IOException {
@@ -103,12 +105,12 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
 
   public void init(HoodieTableType tableType, boolean enableMetadataTable, boolean enableFullScan, boolean enableMetrics, boolean
       validateMetadataPayloadStateConsistency) throws IOException {
-    init(tableType, Option.empty(), enableMetadataTable, enableFullScan, enableMetrics,
+    init(tableType, Option.empty(), enableMetadataTable, enableMetrics,
         validateMetadataPayloadStateConsistency);
   }
 
   public void init(HoodieTableType tableType, Option<HoodieWriteConfig> writeConfig, boolean enableMetadataTable,
-                   boolean enableFullScan, boolean enableMetrics, boolean validateMetadataPayloadStateConsistency) throws IOException {
+                   boolean enableMetrics, boolean validateMetadataPayloadStateConsistency) throws IOException {
     this.tableType = tableType;
     initPath();
     initSparkContexts("TestHoodieMetadata");
@@ -120,7 +122,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
     this.writeConfig = writeConfig.isPresent()
         ? writeConfig.get() : getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true,
-        enableMetadataTable, enableMetrics, enableFullScan, true,
+        enableMetadataTable, enableMetrics, true,
         validateMetadataPayloadStateConsistency)
         .build();
     initWriteConfigAndMetatableWriter(this.writeConfig, enableMetadataTable);
@@ -328,14 +330,13 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
 
   protected HoodieWriteConfig.Builder getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy policy, boolean autoCommit, boolean useFileListingMetadata,
                                                             boolean enableMetrics) {
-    return getWriteConfigBuilder(policy, autoCommit, useFileListingMetadata, enableMetrics, true, true, false);
+    return getWriteConfigBuilder(policy, autoCommit, useFileListingMetadata, enableMetrics, true, false);
   }
 
   protected HoodieWriteConfig.Builder getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy policy, boolean autoCommit, boolean useFileListingMetadata,
-                                                            boolean enableMetrics, boolean enableFullScan, boolean useRollbackUsingMarkers,
+                                                            boolean enableMetrics, boolean useRollbackUsingMarkers,
                                                             boolean validateMetadataPayloadConsistency) {
     Properties properties = new Properties();
-    properties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withDeleteParallelism(2).withRollbackParallelism(2).withFinalizeWriteParallelism(2)
         .withAutoCommit(autoCommit)
@@ -352,9 +353,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(useFileListingMetadata)
-            .enableFullScan(enableFullScan)
             .enableMetrics(enableMetrics)
-            .withPopulateMetaFields(HoodieMetadataConfig.POPULATE_META_FIELDS.defaultValue())
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
@@ -396,16 +395,16 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
         .forTable(writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX)
         // we will trigger cleaning manually, to control the instant times
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withAsyncClean(writeConfig.isMetadataAsyncClean())
+            .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-            .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
+            .retainCommits(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED)
             .build())
         // we will trigger archival manually, to control the instant times
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
-           .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep).build())
+            .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep).build())
         // we will trigger compaction manually, to control the instant times
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
@@ -416,7 +415,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
         .withFinalizeWriteParallelism(parallelism)
         .withAllowMultiWriteOnSameInstant(true)
         .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-        .withPopulateMetaFields(writeConfig.getMetadataConfig().populateMetaFields());
+        .withPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS);
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();

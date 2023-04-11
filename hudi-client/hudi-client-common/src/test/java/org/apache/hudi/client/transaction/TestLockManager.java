@@ -28,13 +28,13 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.curator.test.TestingServer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class TestLockManager extends HoodieCommonTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(TestLockManager.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestLockManager.class);
 
   private static TestingServer server;
   private static String zk_basePath = "/hudi/test/lock";

@@ -217,13 +217,12 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   }
 
   // TODO: Enable metadata virtual keys in this test once the feature HUDI-2593 is completed
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  public void testLogFileCountsAfterCompaction(boolean preserveCommitMeta) throws Exception {
+  @Test
+  public void testLogFileCountsAfterCompaction() throws Exception {
     boolean populateMetaFields = true;
     // insert 100 records
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true, false, HoodieIndex.IndexType.BLOOM,
-        1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build(), preserveCommitMeta);
+        1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig config = cfgBuilder.build();
 
@@ -304,7 +303,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       List<Row> rows = actual.collectAsList();
       assertEquals(updatedRecords.size(), rows.size());
       for (Row row : rows) {
-        assertEquals(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD), preserveCommitMeta ? newCommitTime : compactionInstantTime);
+        assertEquals(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD), newCommitTime);
       }
     }
   }

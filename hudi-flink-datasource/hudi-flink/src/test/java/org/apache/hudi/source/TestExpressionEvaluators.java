@@ -40,7 +40,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.source.DataPruner.convertColumnStats;
+import static org.apache.hudi.source.prune.DataPruner.convertColumnStats;
 import static org.apache.hudi.source.ExpressionEvaluators.fromExpression;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

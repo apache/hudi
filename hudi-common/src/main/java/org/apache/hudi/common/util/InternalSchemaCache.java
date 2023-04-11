@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -35,12 +34,13 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -55,7 +55,7 @@ import java.util.stream.Collectors;
  * A map of (tablePath, HistorySchemas) is maintained.
  */
 public class InternalSchemaCache {
-  private static final Logger LOG = LogManager.getLogger(InternalSchemaCache.class);
+  private static final Logger LOG = LoggerFactory.getLogger(InternalSchemaCache.class);
   // Use segment lock to reduce competition.
   // the lock size should be powers of 2 for better hash.
   private static Object[] lockList = new Object[16];

@@ -68,8 +68,3 @@ object ShowBootstrapPartitionsProcedure {
     override def get() = new ShowBootstrapPartitionsProcedure
   }
 }
-
-
-
-
-

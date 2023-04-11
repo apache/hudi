@@ -30,8 +30,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
@@ -47,7 +47,7 @@ import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCal
  */
 public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieWriteCommitKafkaCallback.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteCommitKafkaCallback.class);
 
   private HoodieConfig hoodieConfig;
   private String bootstrapServers;

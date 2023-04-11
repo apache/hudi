@@ -53,11 +53,11 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -86,7 +86,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(TestIncrementalFSViewSync.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestIncrementalFSViewSync.class);
   private static final int NUM_FILE_IDS_PER_PARTITION = 10;
   private static final String TEST_WRITE_TOKEN = "1-0-1";
   private static final List<String> PARTITIONS = Arrays.asList("2018/01/01", "2018/01/02", "2019/03/01");

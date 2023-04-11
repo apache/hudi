@@ -32,8 +32,8 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
  */
 public class BulkInsertWriterHelper {
 
-  private static final Logger LOG = LogManager.getLogger(BulkInsertWriterHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BulkInsertWriterHelper.class);
 
   protected final String instantTime;
   protected final int taskPartitionId;

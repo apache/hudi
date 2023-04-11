@@ -21,8 +21,8 @@ package org.apache.hudi.timeline.service.handlers.marker;
 import org.apache.hudi.common.util.HoodieTimer;
 
 import io.javalin.http.Context;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -30,7 +30,7 @@ import java.util.concurrent.CompletableFuture;
  * Future for async marker creation request.
  */
 public class MarkerCreationFuture extends CompletableFuture<String> {
-  private static final Logger LOG = LogManager.getLogger(MarkerCreationFuture.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MarkerCreationFuture.class);
   private final Context context;
   private final String markerDirPath;
   private final String markerName;

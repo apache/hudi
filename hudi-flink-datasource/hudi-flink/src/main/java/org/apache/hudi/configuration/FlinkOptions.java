@@ -31,8 +31,6 @@ import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -41,6 +39,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
+import org.apache.hudi.util.ClientIds;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
@@ -302,10 +301,7 @@ public class FlinkOptions extends HoodieConfig {
       .booleanType()
       .defaultValue(false)// default read as batch
       .withDescription("Whether to skip compaction instants and avoid reading compacted base files for streaming read to improve read performance.\n"
-          + "There are two cases that this option can be used to avoid reading duplicates:\n"
-          + "1) you are definitely sure that the consumer reads [faster than/completes before] any compaction instants "
-          + "when " + HoodieCompactionConfig.PRESERVE_COMMIT_METADATA.key() + " is set to false.\n"
-          + "2) changelog mode is enabled, this option is a solution to keep data integrity");
+          + "This option can be used to avoid reading duplicates when changelog mode is enabled, it is a solution to keep data integrity\n");
 
   // this option is experimental
   public static final ConfigOption<Boolean> READ_STREAMING_SKIP_CLUSTERING = ConfigOptions
@@ -313,10 +309,7 @@ public class FlinkOptions extends HoodieConfig {
           .booleanType()
           .defaultValue(false)
           .withDescription("Whether to skip clustering instants to avoid reading base files of clustering operations for streaming read "
-              + "to improve read performance.\n"
-              + "This option toggled to true to avoid duplicates when: \n"
-              + "1) you are definitely sure that the consumer reads [faster than/completes before] any clustering instants "
-              + "when " + HoodieClusteringConfig.PRESERVE_COMMIT_METADATA.key() + " is set to false.\n");
+              + "to improve read performance.");
 
   public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
@@ -572,7 +565,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> WRITE_CLIENT_ID = ConfigOptions
       .key("write.client.id")
       .stringType()
-      .defaultValue("")
+      .defaultValue(ClientIds.INIT_CLIENT_ID)
       .withDescription("Unique identifier used to distinguish different writer pipelines for concurrent mode");
 
   // ------------------------------------------------------------------------

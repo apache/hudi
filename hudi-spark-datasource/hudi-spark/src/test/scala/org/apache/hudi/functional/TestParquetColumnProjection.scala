@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLates
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.{HadoopMapRedUtils, HoodieTestDataGenerator}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils, HoodieUnsafeRDD}
@@ -50,11 +49,10 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    HoodieMetadataConfig.ENABLE.key -> "true",
+    HoodieMetadataConfig.ENABLE.key -> "true"
     // NOTE: It's critical that we use non-partitioned table, since the way we track amount of bytes read
     //       is not robust, and works most reliably only when we read just a single file. As such, making table
     //       non-partitioned makes it much more likely just a single file will be written
-    DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName
   )
 
   override def conf: SparkConf = conf(getSparkSqlConf)

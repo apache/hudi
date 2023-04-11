@@ -37,19 +37,25 @@ public class BucketIndexConcurrentFileWritesConflictResolutionStrategy
   @Override
   public boolean hasConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
     // TODO : UUID's can clash even for insert/insert, handle that case.
-    Set<String> bucketIdsSetForFirstInstant = extractBucketIds(thisOperation.getMutatedFileIds());
-    Set<String> bucketIdsSetForSecondInstant = extractBucketIds(otherOperation.getMutatedFileIds());
-    Set<String> intersection = new HashSet<>(bucketIdsSetForFirstInstant);
-    intersection.retainAll(bucketIdsSetForSecondInstant);
+    Set<String> partitionBucketIdSetForFirstInstant = thisOperation
+        .getMutatedPartitionAndFileIds()
+        .stream()
+        .map(partitionAndFileId ->
+            BucketIdentifier.partitionBucketIdStr(partitionAndFileId.getLeft(), BucketIdentifier.bucketIdFromFileId(partitionAndFileId.getRight()))
+        ).collect(Collectors.toSet());
+    Set<String> partitionBucketIdSetForSecondInstant = otherOperation
+        .getMutatedPartitionAndFileIds()
+        .stream()
+        .map(partitionAndFileId ->
+            BucketIdentifier.partitionBucketIdStr(partitionAndFileId.getLeft(), BucketIdentifier.bucketIdFromFileId(partitionAndFileId.getRight()))
+        ).collect(Collectors.toSet());
+    Set<String> intersection = new HashSet<>(partitionBucketIdSetForFirstInstant);
+    intersection.retainAll(partitionBucketIdSetForSecondInstant);
     if (!intersection.isEmpty()) {
       LOG.info("Found conflicting writes between first operation = " + thisOperation
           + ", second operation = " + otherOperation + " , intersecting bucket ids " + intersection);
       return true;
     }
     return false;
-  }
-
-  private static Set<String> extractBucketIds(Set<String> fileIds) {
-    return fileIds.stream().map(BucketIdentifier::bucketIdStrFromFileId).collect(Collectors.toSet());
   }
 }

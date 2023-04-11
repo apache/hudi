@@ -32,8 +32,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -82,7 +82,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       add(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS);
     }};
 
-  private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
 
   /**

@@ -137,5 +137,3 @@ object ShowCommitPartitionsProcedure {
     override def get() = new ShowCommitPartitionsProcedure()
   }
 }
-
-

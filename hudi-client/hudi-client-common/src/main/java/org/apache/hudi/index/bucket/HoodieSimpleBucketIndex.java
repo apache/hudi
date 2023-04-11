@@ -25,8 +25,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
@@ -38,7 +39,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieSimpleBucketIndex.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSimpleBucketIndex.class);
 
   public HoodieSimpleBucketIndex(HoodieWriteConfig config) {
     super(config);

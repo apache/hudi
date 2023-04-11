@@ -33,11 +33,11 @@ import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtil
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
-import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.execution.streaming.{Sink, StreamExecution}
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
+import org.slf4j.LoggerFactory
 
 import java.lang
 import java.util.function.{BiConsumer, Function}
@@ -52,7 +52,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     with Serializable {
   @volatile private var latestCommittedBatchId = -1L
 
-  private val log = LogManager.getLogger(classOf[HoodieStreamingSink])
+  private val log = LoggerFactory.getLogger(classOf[HoodieStreamingSink])
 
   private val tablePath = options.get("path")
   if (tablePath.isEmpty || tablePath.get == null) {
