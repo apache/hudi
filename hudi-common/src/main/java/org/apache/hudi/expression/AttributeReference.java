@@ -32,6 +32,12 @@ public class AttributeReference extends LeafExpression {
     this.nullable = true;
   }
 
+  public AttributeReference(String name, Type type, boolean nullable) {
+    this.name = name;
+    this.type = type;
+    this.nullable = nullable;
+  }
+
   public String getName() {
     return name;
   }

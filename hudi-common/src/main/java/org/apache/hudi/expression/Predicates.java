@@ -236,7 +236,7 @@ public class Predicates {
 
     @Override
     public String toString() {
-      return value.toString() + getOperator().symbol
+      return value.toString() + " " + getOperator().symbol + " "
           + validValues.stream().map(Expression::toString).collect(Collectors.joining(",", "(", ")"));
     }
   }
