@@ -92,7 +92,6 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
     cleanupClients();
     cleanupSparkContexts();
     cleanupFileSystem();
-    cleanupDFS();
     cleanupExecutorService();
     cleanupTestDataGenerator();
     System.gc();
