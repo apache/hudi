@@ -26,14 +26,22 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -43,10 +51,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link IncrementalInputSplits}.
@@ -153,24 +161,69 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
         .path(new Path(basePath))
         .rowType(TestConfigurations.ROW_TYPE)
         .build();
-
-    // File slices use the current timestamp as the baseInstantTime (e.g. "20230320110000000"), so choose an end timestamp
-    // such that the current timestamp <= end timestamp based on string comparison
-    HoodieInstant commit = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "3000");
-    timeline.createNewInstant(commit);
-
     IncrementalInputSplits.Result result = iis.inputSplits(metaClient, metaClient.getHadoopConf(), null, false);
+    List<String> partitions = getFilteredPartitions(result);
+    assertEquals(Arrays.asList("par1", "par2", "par3", "par4", "par5", "par6"), partitions);
+  }
 
-    List<String> partitions = result.getInputSplits().stream().map(split -> {
+  @ParameterizedTest
+  @MethodSource("partitionEvaluators")
+  void testInputSplitsWithPartitionPruner(
+      ExpressionEvaluators.Evaluator partitionEvaluator,
+      List<String> expectedPartitions) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    PartitionPruners.PartitionPruner partitionPruner = PartitionPruners.getInstance(
+        Collections.singletonList(partitionEvaluator),
+        Collections.singletonList("partition"),
+        Collections.singletonList(DataTypes.STRING()),
+        PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH,
+        false);
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .partitionPruner(partitionPruner)
+        .build();
+    IncrementalInputSplits.Result result = iis.inputSplits(metaClient, metaClient.getHadoopConf(), null, false);
+    List<String> partitions = getFilteredPartitions(result);
+    assertEquals(expectedPartitions, partitions);
+  }
+
+  private static Stream<Arguments> partitionEvaluators() {
+    FieldReferenceExpression partitionFieldRef = new FieldReferenceExpression("partition", DataTypes.STRING(), 0, 0);
+    // `partition` != 'par3'
+    ExpressionEvaluators.Evaluator notEqualTo = ExpressionEvaluators.NotEqualTo.getInstance()
+        .bindVal(new ValueLiteralExpression("par3"))
+        .bindFieldReference(partitionFieldRef);
+
+    // `partition` >= 'par2'
+    ExpressionEvaluators.Evaluator greaterThan = ExpressionEvaluators.GreaterThanOrEqual.getInstance()
+        .bindVal(new ValueLiteralExpression("par2"))
+        .bindFieldReference(partitionFieldRef);
+
+    // `partition` != 'par3' and `partition` >= 'par2'
+    ExpressionEvaluators.Evaluator and = ExpressionEvaluators.And.getInstance()
+        .bindEvaluator(greaterThan, notEqualTo);
+
+    // `partition` in ('par1', 'par4')
+    ExpressionEvaluators.In in = ExpressionEvaluators.In.getInstance();
+    in.bindFieldReference(partitionFieldRef);
+    in.bindVals("par1", "par4");
+    Object[][] data = new Object[][] {
+        {notEqualTo, Arrays.asList("par1", "par2", "par4")},
+        {greaterThan, Arrays.asList("par2", "par3", "par4")},
+        {and, Arrays.asList("par2", "par4")},
+        {in, Arrays.asList("par1", "par4")}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  private List<String> getFilteredPartitions(IncrementalInputSplits.Result result) {
+    return result.getInputSplits().stream().map(split -> {
       Option<String> basePath = split.getBasePath();
-      assertTrue(basePath.isPresent());
-
-      // The partition is the parent directory of the data file
       String[] pathParts = basePath.get().split("/");
-      assertTrue(pathParts.length >= 2);
       return pathParts[pathParts.length - 2];
     }).collect(Collectors.toList());
-
-    assertEquals(Arrays.asList("par1", "par2", "par3", "par4", "par5", "par6"), partitions);
   }
 }

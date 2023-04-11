@@ -242,7 +242,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
     // TODO move to analysis phase
-    validate(mergeInto)
+    validate
 
     val sourceDF: DataFrame = sourceDataset
     // Create the write parameters
@@ -602,7 +602,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
 
-  def validate(mit: MergeIntoTable): Unit = {
+  def validate(): Unit = {
     checkUpdatingActions(updatingActions)
     checkInsertingActions(insertingActions)
     checkDeletingActions(deletingActions)

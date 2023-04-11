@@ -35,5 +35,3 @@ public interface BootstrapMetadataHandler {
    */
   BootstrapWriteStatus runMetadataBootstrap(String srcPartitionPath, String partitionPath, KeyGeneratorInterface keyGenerator);
 }
-
-
