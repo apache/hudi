@@ -178,7 +178,7 @@ class TestHoodieSparkSqlWriter {
 
     if (enableOCCConfigs) {
       fooTableModifier = fooTableModifier
-        .updated("hoodie.write.concurrency.mode","OPTIMISTIC_CONCURRENCY_CONTROL")
+        .updated("hoodie.write.concurrency.mode","optimistic_concurrency_control")
         .updated("hoodie.cleaner.policy.failed.writes","LAZY")
         .updated("hoodie.write.lock.provider","org.apache.hudi.client.transaction.lock.InProcessLockProvider")
     }

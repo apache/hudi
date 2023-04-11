@@ -24,6 +24,13 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+/**
+ * For any enum field that is going to be used as a config value,
+ * add this annotation by adding @EnumFieldDescription("Your description here.")
+ * directly above the enum field declaration.
+ * Then in your config property add .withDocumentation(YourEnum.class)
+ * see EnumDescription.java
+ */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)

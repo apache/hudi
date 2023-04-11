@@ -128,7 +128,7 @@ public class ConfigProperty<T> implements Serializable {
   }
 
   private boolean isValid(String value) {
-    return validValues == null || validValues.isEmpty() || validValues.contains(value);
+    return validValues == null || validValues.isEmpty() || validValues.contains(value.toUpperCase());
   }
 
   public List<String> getAlternatives() {
@@ -153,7 +153,7 @@ public class ConfigProperty<T> implements Serializable {
       return false;
     }
     if (defaultValue() instanceof String) {
-      return f.getName().equals(defaultValue());
+      return f.getName().equals(((String) defaultValue()).toUpperCase());
     }
     return Enum.valueOf(e, f.getName()).equals(defaultValue());
   }

@@ -259,7 +259,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
              |  type = '$tableType',
              |  primaryKey = 'id',
              |  preCombineField = 'ts',
-             |  hoodie.write.concurrency.mode='OPTIMISTIC_CONCURRENCY_CONTROL',
+             |  hoodie.write.concurrency.mode='optimistic_concurrency_control',
              |  hoodie.cleaner.policy.failed.writes='LAZY',
              |  hoodie.write.lock.provider='org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider'
              | )

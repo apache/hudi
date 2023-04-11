@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 /**
  * Identifies different types of bootstrap.
  */
-@EnumDescription("Bootstrap mode to apply for partition paths that match the regex set in `hoodie.bootstrap.mode.selector.regex`.")
+@EnumDescription("Bootstrap mode for importing an existing table into Hudi")
 public enum BootstrapMode {
   /**
    * In this mode, record level metadata is generated for each source record and both original record and metadata

@@ -2307,7 +2307,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public WriteConcurrencyMode getWriteConcurrencyMode() {
-    return WriteConcurrencyMode.valueOf(getStringOrDefault(WRITE_CONCURRENCY_MODE));
+    return WriteConcurrencyMode.valueOf(getStringOrDefault(WRITE_CONCURRENCY_MODE).toUpperCase());
   }
 
   public boolean isEarlyConflictDetectionEnable() {

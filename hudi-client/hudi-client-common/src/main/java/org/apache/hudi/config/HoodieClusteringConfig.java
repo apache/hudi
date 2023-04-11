@@ -712,17 +712,40 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
   }
 
-  @EnumDescription("Clustering mode to use.")
   public enum ClusteringOperator {
 
-    @EnumFieldDescription("Only schedule the clustering plan.")
-    SCHEDULE,
+    /**
+     * only schedule the clustering plan
+     */
+    SCHEDULE("schedule"),
 
-    @EnumFieldDescription("Only execute pending clustering plans.")
-    EXECUTE,
+    /**
+     * only execute then pending clustering plans
+     */
+    EXECUTE("execute"),
 
-    @EnumFieldDescription("Schedule cluster first, and execute all pending clustering plans.")
-    SCHEDULE_AND_EXECUTE;
+    /**
+     * schedule cluster first, and execute all pending clustering plans
+     */
+    SCHEDULE_AND_EXECUTE("scheduleandexecute");
+
+    private static final Map<String, ClusteringOperator> VALUE_TO_ENUM_MAP =
+            TypeUtils.getValueToEnumMap(ClusteringOperator.class, e -> e.value);
+
+    private final String value;
+
+    ClusteringOperator(String value) {
+      this.value = value;
+    }
+
+    @Nonnull
+    public static ClusteringOperator fromValue(String value) {
+      ClusteringOperator enumValue = VALUE_TO_ENUM_MAP.get(value);
+      if (enumValue == null) {
+        throw new HoodieException(String.format("Invalid value (%s)", value));
+      }
+      return enumValue;
+    }
 
     public boolean isSchedule() {
       return this != ClusteringOperator.EXECUTE;
@@ -730,6 +753,10 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public boolean isExecute() {
       return this != ClusteringOperator.SCHEDULE;
+    }
+
+    public String getValue() {
+      return value;
     }
   }
 }
