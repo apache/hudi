@@ -39,6 +39,7 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.Assertions;
 
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -281,5 +282,40 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         this.fs.getScheme() + ":" + rollbackMetadata.get(DEFAULT_SECOND_PARTITION_PATH).getSuccessDeleteFiles().get(0));
 
     assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, commitInstant.getTimestamp()).doesMarkerDirExist());
+  }
+
+  @Test
+  public void testRollbackBackup() throws Exception {
+    final String p1 = "2015/03/16";
+    final String p2 = "2015/03/17";
+    final String p3 = "2016/03/15";
+    // Let's create some commit files and parquet files
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient)
+        .withPartitionMetaFiles(p1, p2, p3)
+        .addCommit("001")
+        .withBaseFilesInPartition(p1, "id11")
+        .withBaseFilesInPartition(p2, "id12")
+        .withLogFile(p1, "id11", 3)
+        .addCommit("002")
+        .withBaseFilesInPartition(p1, "id21")
+        .withBaseFilesInPartition(p2, "id22");
+
+    HoodieTable table = this.getHoodieTable(metaClient, getConfigBuilder().withRollbackBackupEnabled(true).build());
+    HoodieInstant needRollBackInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "002");
+
+    // Create the rollback plan and perform the rollback
+    BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
+        new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, false,
+        table.getConfig().shouldRollbackUsingMarkers());
+    copyOnWriteRollbackPlanActionExecutor.execute();
+
+    CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "003",
+        needRollBackInstant, true, false);
+    copyOnWriteRollbackActionExecutor.execute();
+
+    // Completed and inflight instants should have been backed up
+    Path backupDir = new Path(metaClient.getMetaPath(), table.getConfig().getRollbackBackupDirectory());
+    assertTrue(fs.exists(new Path(backupDir, testTable.getCommitFilePath("002").getName())));
+    assertTrue(fs.exists(new Path(backupDir, testTable.getInflightCommitFilePath("002").getName())));
   }
 }

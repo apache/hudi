@@ -31,6 +31,7 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -806,5 +807,18 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public HoodieActiveTimeline reload() {
     return new HoodieActiveTimeline(metaClient);
+  }
+
+  public void copyInstant(HoodieInstant instant, Path dstDir) {
+    Path srcPath = new Path(metaClient.getMetaPath(), instant.getFileName());
+    Path dstPath = new Path(dstDir, instant.getFileName());
+    try {
+      FileSystem srcFs = srcPath.getFileSystem(metaClient.getHadoopConf());
+      FileSystem dstFs = dstPath.getFileSystem(metaClient.getHadoopConf());
+      dstFs.mkdirs(dstDir);
+      FileUtil.copy(srcFs, srcPath, dstFs, dstPath, false, true, srcFs.getConf());
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not copy instant from " + srcPath + " to " + dstPath, e);
+    }
   }
 }

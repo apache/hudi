@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
@@ -45,6 +46,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -211,6 +213,8 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       validateRollbackCommitSequence();
     }
 
+    backupRollbackInstantsIfNeeded();
+
     try {
       List<HoodieRollbackStat> stats = executeRollback(hoodieRollbackPlan);
       LOG.info("Rolled back inflight instant " + instantTimeToRollback);
@@ -295,6 +299,41 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     if (HoodieTimeline.compareTimestamps(instantToRollback.getTimestamp(), HoodieTimeline.EQUALS, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS)) {
       LOG.info("Dropping bootstrap index as metadata bootstrap commit is getting rolled back !!");
       BootstrapIndex.getBootstrapIndex(table.getMetaClient()).dropIndex();
+    }
+  }
+
+  private void backupRollbackInstantsIfNeeded() {
+    if (!config.shouldBackupRollbacks()) {
+      // Backup not required
+      return;
+    }
+
+    Path backupDir = new Path(config.getRollbackBackupDirectory());
+    if (!backupDir.isAbsolute()) {
+      // Path specified is relative to the meta directory
+      backupDir = new Path(table.getMetaClient().getMetaPath(), config.getRollbackBackupDirectory());
+    }
+
+    // Determine the instants to back up
+    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+    List<HoodieInstant> instantsToBackup = new ArrayList<>(3);
+    instantsToBackup.add(instantToRollback);
+    if (instantToRollback.isCompleted()) {
+      instantsToBackup.add(HoodieTimeline.getInflightInstant(instantToRollback, table.getMetaClient()));
+      instantsToBackup.add(HoodieTimeline.getRequestedInstant(instantToRollback));
+    }
+    if (instantToRollback.isInflight()) {
+      instantsToBackup.add(HoodieTimeline.getRequestedInstant(instantToRollback));
+    }
+
+    for (HoodieInstant instant : instantsToBackup) {
+      try {
+        activeTimeline.copyInstant(instant, backupDir);
+        LOG.info(String.format("Copied instant %s to backup dir %s during rollback at %s", instant, backupDir, instantTime));
+      } catch (HoodieIOException e) {
+        // Ignoring error in backing up
+        LOG.warn("Failed to backup rollback instant: " + e.getMessage());
+      }
     }
   }
 }
