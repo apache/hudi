@@ -127,12 +127,12 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
   }
 
   @Test
-  public void testMORGetLatestFileSliceWithMetadataTableExternalTLS() throws IOException {
+  public void testMORGetLatestFileSliceWithMetadataTableEmbeddedTLS() throws IOException {
     testMORGetLatestFileSliceWithMetadataTable(false);
   }
 
   @Test
-  public void testMORGetLatestFileSliceWithMetadataTableEmbeddedTLS() throws IOException {
+  public void testMORGetLatestFileSliceWithMetadataTableExternalTLS() throws IOException {
     initTimelineService();
     testMORGetLatestFileSliceWithMetadataTable(true);
   }

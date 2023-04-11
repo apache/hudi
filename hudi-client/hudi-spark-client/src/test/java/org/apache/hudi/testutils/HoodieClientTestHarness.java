@@ -317,6 +317,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     if (tableName != null && !tableName.isEmpty()) {
       properties.put(HoodieTableConfig.NAME.key(), tableName);
     }
+    LOG.warn("XXX Initializing meta client with " + basePath + " " + new Path(basePath).getFileSystem(hadoopConf).getScheme());
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType, properties);
   }
 
@@ -474,8 +475,15 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       throw new IllegalStateException("The base path has not been initialized.");
     }
 
+    try {
+      LOG.warn("XXX Base path " + basePath + " " + new Path(basePath).getFileSystem(configuration).getScheme());
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
     fs = FSUtils.getFs(basePath, configuration);
+    LOG.warn("XXX Fs " + fs.getScheme());
     if (fs instanceof LocalFileSystem) {
+      LOG.warn("XXX Deduced as local FS " + basePath);
       LocalFileSystem lfs = (LocalFileSystem) fs;
       // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream
       // This causes ClassCastExceptions in LogRecordScanner (and potentially other places) calling fs.open
