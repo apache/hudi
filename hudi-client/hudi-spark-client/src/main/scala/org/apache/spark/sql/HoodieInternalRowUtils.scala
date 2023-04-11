@@ -224,29 +224,32 @@ object HoodieInternalRowUtils {
         fieldNameStack.pop()
 
         (fieldUpdater, ordinal, value) => {
-          val prevArrayData = value.asInstanceOf[ArrayData]
-          val prevArray = prevArrayData.toObjectArray(prevElementType)
+          if (value == null) {
+            fieldUpdater.setNullAt(ordinal)
+          } else {
+            val prevArrayData = value.asInstanceOf[ArrayData]
+            val prevArray = prevArrayData.toObjectArray(prevElementType)
 
-          val newArrayData = createArrayData(newElementType, prevArrayData.numElements())
-          val elementUpdater = new ArrayDataUpdater(newArrayData)
+            val newArrayData = createArrayData(newElementType, prevArrayData.numElements())
+            val elementUpdater = new ArrayDataUpdater(newArrayData)
 
-          var i = 0
-          while (i < prevArray.length) {
-            val element = prevArray(i)
-            if (element == null) {
-              if (!containsNull) {
-                throw new HoodieException(
-                  s"Array value at path '${fieldNameStack.asScala.mkString(".")}' is not allowed to be null")
+            var i = 0
+            while (i < prevArray.length) {
+              val element = prevArray(i)
+              if (element == null) {
+                if (!containsNull) {
+                  throw new HoodieException(
+                    s"Array value at path '${fieldNameStack.asScala.mkString(".")}' is not allowed to be null")
+                } else {
+                  elementUpdater.setNullAt(i)
+                }
               } else {
-                elementUpdater.setNullAt(i)
+                elementWriter(elementUpdater, i, element)
               }
-            } else {
-              elementWriter(elementUpdater, i, element)
+              i += 1
             }
-            i += 1
-          }
-
           fieldUpdater.set(ordinal, newArrayData)
+          }
         }
 
       case (MapType(_, newValueType, _), MapType(_, prevValueType, valueContainsNull)) =>
@@ -255,30 +258,34 @@ object HoodieInternalRowUtils {
         fieldNameStack.pop()
 
         (updater, ordinal, value) =>
-          val mapData = value.asInstanceOf[MapData]
-          val prevKeyArrayData = mapData.keyArray
-          val prevValueArrayData = mapData.valueArray
-          val prevValueArray = prevValueArrayData.toObjectArray(prevValueType)
+          if (value == null) {
+            updater.setNullAt(ordinal)
+          } else {
+            val mapData = value.asInstanceOf[MapData]
+            val prevKeyArrayData = mapData.keyArray
+            val prevValueArrayData = mapData.valueArray
+            val prevValueArray = prevValueArrayData.toObjectArray(prevValueType)
 
-          val newValueArray = createArrayData(newValueType, mapData.numElements())
-          val valueUpdater = new ArrayDataUpdater(newValueArray)
-          var i = 0
-          while (i < prevValueArray.length) {
-            val value = prevValueArray(i)
-            if (value == null) {
-              if (!valueContainsNull) {
-                throw new HoodieException(s"Map value at path ${fieldNameStack.asScala.mkString(".")} is not allowed to be null")
+            val newValueArray = createArrayData(newValueType, mapData.numElements())
+            val valueUpdater = new ArrayDataUpdater(newValueArray)
+            var i = 0
+            while (i < prevValueArray.length) {
+              val value = prevValueArray(i)
+              if (value == null) {
+                if (!valueContainsNull) {
+                  throw new HoodieException(s"Map value at path ${fieldNameStack.asScala.mkString(".")} is not allowed to be null")
+                } else {
+                  valueUpdater.setNullAt(i)
+                }
               } else {
-                valueUpdater.setNullAt(i)
+                valueWriter(valueUpdater, i, value)
               }
-            } else {
-              valueWriter(valueUpdater, i, value)
+              i += 1
             }
-            i += 1
-          }
 
-          // NOTE: Key's couldn't be transformed and have to always be of [[StringType]]
-          updater.set(ordinal, new ArrayBasedMapData(prevKeyArrayData, newValueArray))
+            // NOTE: Key's couldn't be transformed and have to always be of [[StringType]]
+            updater.set(ordinal, new ArrayBasedMapData(prevKeyArrayData, newValueArray))
+          }
 
       case (newDecimal: DecimalType, _) =>
         prevDataType match {
