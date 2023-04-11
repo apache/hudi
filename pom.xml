@@ -2208,6 +2208,7 @@
         <orc.spark.version>1.7.8</orc.spark.version>
         <avro.version>1.11.1</avro.version>
         <antlr.version>4.8</antlr.version>
+        <zk-curator.version>2.13.0</zk-curator.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
@@ -2249,6 +2250,7 @@
         <orc.spark.version>1.5.13</orc.spark.version>
         <avro.version>1.8.2</avro.version>
         <antlr.version>4.8-1</antlr.version>
+        <zk-curator.version>2.13.0</zk-curator.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -2290,6 +2292,7 @@
         <orc.spark.version>1.6.12</orc.spark.version>
         <avro.version>1.10.2</avro.version>
         <antlr.version>4.8</antlr.version>
+        <zk-curator.version>2.13.0</zk-curator.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -2332,6 +2335,7 @@
         <orc.spark.version>1.7.8</orc.spark.version>
         <avro.version>1.11.1</avro.version>
         <antlr.version>4.8</antlr.version>
+        <zk-curator.version>2.13.0</zk-curator.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
