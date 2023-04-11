@@ -180,7 +180,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     builder.addParameter(TIMELINE_HASH, timeline.getTimelineHash());
 
     String url = builder.toString();
-    LOG.info("Sending request : (" + url + ")");
+    LOG.warn("XXX Sending request : (" + url + ")" + ", with port " + serverPort);
     Response response = retryHelper != null ? retryHelper.start(() -> get(timeoutMs, url, method)) : get(timeoutMs, url, method);
     String content = response.returnContent().asString(Consts.UTF_8);
     return (T) mapper.readValue(content, reference);

@@ -64,7 +64,7 @@ public class EmbeddedTimelineServerHelper {
   private static EmbeddedTimelineService startTimelineService(
       HoodieEngineContext context, HoodieWriteConfig config) throws IOException {
     // Run Embedded Timeline Server
-    LOG.info("Starting Timeline service !!");
+    LOG.warn("XXX Starting Timeline service !!");
     Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
     EmbeddedTimelineService timelineService = new EmbeddedTimelineService(
         context, hostAddr.orElse(null), config);
@@ -82,6 +82,8 @@ public class EmbeddedTimelineServerHelper {
       HoodieWriteConfig config) {
     // Allow executor to find this newly instantiated timeline service
     if (config.isEmbeddedTimelineServerEnabled()) {
+      LOG.warn("XXX Updating write config w/ TLS port " + timelineServer.getRemoteFileSystemViewConfig().getRemoteViewServerPort()
+          + ", " + timelineServer.getRemoteFileSystemViewConfig().getRemoteViewServerHost());
       config.setViewStorageConfig(timelineServer.getRemoteFileSystemViewConfig());
     }
   }

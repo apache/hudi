@@ -129,6 +129,11 @@ public class HoodieTableMetaClient implements Serializable {
     this.basePath = new SerializablePath(new CachingPath(basePath));
     this.metaPath = new SerializablePath(new CachingPath(basePath, METAFOLDER_NAME));
     this.fs = getFs();
+    try {
+      LOG.warn("XXX Checking tbale validity for " + this.basePath.get() + " " + fs.getScheme() + ", isExists " + fs.exists(this.basePath.get()));
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
     TableNotFoundException.checkTableValidity(fs, this.basePath.get(), metaPath.get());
     this.tableConfig = new HoodieTableConfig(fs, metaPath.toString(), payloadClassName);
     this.tableType = tableConfig.getTableType();

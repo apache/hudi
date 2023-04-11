@@ -21,6 +21,8 @@ package org.apache.hudi.exception;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -31,6 +33,8 @@ import java.io.IOException;
  * <p>
  */
 public class TableNotFoundException extends HoodieException {
+
+  private static final Logger LOG = LogManager.getLogger(TableNotFoundException.class);
 
   public TableNotFoundException(String basePath) {
     super(getErrorMessage(basePath));
@@ -53,10 +57,11 @@ public class TableNotFoundException extends HoodieException {
         throw new TableNotFoundException(metaPathDir.toString());
       }
     } catch (FileNotFoundException | IllegalArgumentException e) {
+      LOG.warn("XXX FileNotFoundException | IllegalArgumentException " + fs.getScheme() + ". msg : " + e.getMessage());
       // if the base path is file:///, then we have a IllegalArgumentException
       throw new TableNotFoundException(metaPathDir.toString(), e);
     } catch (IOException e) {
-      throw new HoodieIOException("Could not check if " + basePathDir + " is a valid table", e);
+      throw new HoodieIOException("Could not check if " + basePathDir + " is a valid table " + fs.getScheme(), e);
     }
   }
 }

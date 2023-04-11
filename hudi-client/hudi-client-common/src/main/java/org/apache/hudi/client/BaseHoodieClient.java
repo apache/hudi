@@ -106,6 +106,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       if (!timelineServer.isPresent()) {
         // Run Embedded Timeline Server
         try {
+          LOG.warn("XXX Starting embedded timeline server for " + config.getBasePath());
           timelineServer = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(context, config);
         } catch (IOException e) {
           LOG.warn("Unable to start timeline service. Proceeding as if embedded server is disabled", e);

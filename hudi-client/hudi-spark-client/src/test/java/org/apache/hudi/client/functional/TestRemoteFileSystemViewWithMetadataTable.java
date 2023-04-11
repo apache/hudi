@@ -100,7 +100,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
   @Override
   public void initTimelineService() {
     // Start a timeline server that are running across multiple commits
-    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(hadoopConf);
 
     try {
       HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
@@ -108,6 +108,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withRemoteServerPort(incrementTimelineServicePortToUse()).build())
           .build();
+      LOG.warn("XXX Starting timeline server in test with port " + config.getViewStorageConfig().getRemoteViewServerPort());
       timelineService = new TimelineService(localEngineContext, new Configuration(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
@@ -120,7 +121,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
                   config.getViewStorageConfig().getSpillableDir(), true)));
       timelineService.startService();
       timelineServicePort = timelineService.getServerPort();
-      LOG.info("Started timeline server on port: " + timelineServicePort);
+      LOG.warn("XXX Started timeline server on port: " + timelineServicePort);
     } catch (Exception ex) {
       throw new RuntimeException(ex);
     }
@@ -228,7 +229,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
     if (timelineService.isPresent()) {
       writeConfigBuilder.withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
           .withStorageType(FileSystemViewStorageType.REMOTE_ONLY)
-          .withRemoteServerPort(timelineService.get().getServerPort())
+          .withRemoteServerPort(timelineServicePort)
           .build());
     } else {
       writeConfigBuilder.withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
