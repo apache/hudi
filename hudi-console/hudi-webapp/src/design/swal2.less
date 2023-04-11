@@ -1,0 +1,121 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+.swal2-container {
+  .api-exception {
+    font-size: 0.75rem;
+    text-align: left;
+    color: #25292e;
+    border: 1px solid #eee;
+    background: #f6f8fa;
+    padding: 16px;
+    overflow: auto;
+    line-height: 1.45;
+    border-radius: 6px;
+  }
+}
+
+[data-theme="dark"] {
+
+  .swal2-popup.swal2-toast {
+    background: #19191a;
+  }
+
+  .swal2-container.swal2-backdrop-show,
+  .swal2-container.swal2-noanimation {
+    background: hsl(0deg 0% 100% / 40%) !important;
+  }
+
+  .swal2-popup {
+    background: #19191a;
+  }
+
+  .swal2-title {
+    color: #e1e1e1;
+  }
+
+  .swal2-styled.swal2-default-outline:focus {
+    box-shadow: 0 0 0 1px #19191a, 0 0 0 3px hsl(210deg 47% 69% / 50%);
+  }
+
+  .swal2-footer {
+    border-top: 1px solid #555;
+    color: #bbb;
+  }
+
+  .swal2-timer-progress-bar {
+    background: hsl(0deg 0% 88% / 60%);
+  }
+
+  .swal2-html-container {
+    color: #e1e1e1;
+
+    .api-exception {
+      color: #f1f6fb;
+      border: 1px solid #282828;
+      background: #222;
+    }
+  }
+
+  .swal2-input,
+  .swal2-file,
+  .swal2-textarea {
+    background: #323234;
+    color: #e1e1e1;
+  }
+
+  .swal2-range {
+    background: #19191a;
+  }
+
+  .swal2-range output {
+    color: #e1e1e1;
+  }
+
+  .swal2-file {
+    background: #323234;
+  }
+
+  .swal2-select {
+    background: #323234;
+    color: #e1e1e1;
+  }
+
+  .swal2-radio,
+  .swal2-checkbox {
+    background: #19191a;
+    color: #e1e1e1;
+  }
+
+  .swal2-validation-message {
+    background: #323234;
+    color: #e1e1e1;
+  }
+
+  .swal2-progress-steps .swal2-progress-step.swal2-active-progress-step ~ .swal2-progress-step {
+    background: #58585b;
+    color: #fff;
+  }
+
+  .swal2-progress-steps .swal2-progress-step.swal2-active-progress-step ~ .swal2-progress-step-line {
+    background: #58585b;
+  }
+
+  body.swal2-no-backdrop .swal2-container .swal2-modal {
+    box-shadow: 0 0 10px hsl(240deg 2% 10% / 75%);
+  }
+}

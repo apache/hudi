@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one or more
+  ~ contributor license agreements.  See the NOTICE file distributed with
+  ~ this work for additional information regarding copyright ownership.
+  ~ The ASF licenses this file to You under the Apache License, Version 2.0
+  ~ (the "License"); you may not use this file except in compliance with
+  ~ the License.  You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.apache.hudi.console.system.mapper.RoleMapper">
+    <resultMap id="roleMap" type="org.apache.hudi.console.system.entity.Role">
+        <result column="role_id" jdbcType="BIGINT" property="roleId"/>
+        <result column="role_name" jdbcType="VARCHAR" property="roleName"/>
+        <result column="role_code" jdbcType="VARCHAR" property="roleCode"/>
+        <result column="remark" jdbcType="VARCHAR" property="remark"/>
+        <result column="create_time" jdbcType="TIMESTAMP" property="createTime"/>
+        <result column="modify_time" jdbcType="TIMESTAMP" property="modifyTime"/>
+    </resultMap>
+
+    <select id="findRole" resultType="org.apache.hudi.console.system.entity.Role" parameterType="org.apache.hudi.console.system.entity.Role">
+        select * from t_role
+        <where>
+            <if test="role.roleName != null and role.roleName != ''">
+                and role_name like '%${role.roleName}%'
+            </if>
+            <if test="role.createTimeFrom != null and role.createTimeFrom !=''">
+                and  create_time &gt; #{role.createTimeFrom}
+            </if>
+            <if test="role.createTimeTo!= null and role.createTimeTo !=''">
+                and  create_time &lt; #{role.createTimeTo}
+            </if>
+        </where>
+        <if test="role.sortField != null and role.sortField != ''">
+            order by ${role.sortField} ${role.sortOrder}
+        </if>
+    </select>
+
+</mapper>

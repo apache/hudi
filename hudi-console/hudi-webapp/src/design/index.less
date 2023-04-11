@@ -1,0 +1,109 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+@import 'src/design/transition/index.less';
+@import 'src/design/var/index.less';
+@import 'public.less';
+@import 'src/design/ant/index.less';
+@import 'src/design/theme.less';
+@import 'src/design/nprogress.less';
+@import 'src/design/swal2.less';
+
+input:-webkit-autofill {
+  box-shadow: 0 0 0 1000px transparent inset !important;
+}
+
+[data-theme='dark'] {
+  input:-webkit-autofill {
+    box-shadow: none !important;
+    -webkit-text-fill-color: #fff;
+  }
+
+  .@{namespace}-login-form input:-webkit-autofill {
+    -webkit-text-fill-color: #000 !important;
+  }
+}
+
+:-webkit-autofill {
+  transition: background-color 5000s ease-in-out 0s !important;
+}
+
+html {
+  overflow: hidden;
+  text-size-adjust: 100%;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  overflow-x: hidden;
+
+  &.color-weak {
+    filter: invert(80%);
+  }
+
+  &.gray-mode {
+    filter: grayscale(100%);
+    filter: progid:dximagetransform.microsoft.basicimage(grayscale=1);
+  }
+}
+
+a:focus,
+a:active,
+button,
+div,
+svg,
+span {
+  outline: none;
+}
+
+.ant-radio-button-wrapper:first-child {
+  border-radius: 2px 0 0 2px !important;
+}
+
+.ant-radio-button-wrapper:last-child {
+  border-radius: 0 2px 2px 0 !important;
+}
+
+.margin-view-overlays {
+  border-right: 1px solid @border-color-base;
+}
+
+.monaco-editor .margin-view-overlays .current-line-margin,
+.current-line,
+.current-line-both {
+  border: 1px solid rgba(122 200 255/ 20%) !important;
+  background-color: rgba(122 200 255 / 20%);
+}
+
+.box-content__full {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 600;
+  height: auto !important;
+  background-color: @background-color-base;
+  padding: 10px;
+}
+
+.basic-title {
+  font-size: 18px;
+  font-weight: bold;
+}

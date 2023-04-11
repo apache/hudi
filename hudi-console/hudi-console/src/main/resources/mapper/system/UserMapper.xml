@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one or more
+  ~ contributor license agreements.  See the NOTICE file distributed with
+  ~ this work for additional information regarding copyright ownership.
+  ~ The ASF licenses this file to You under the Apache License, Version 2.0
+  ~ (the "License"); you may not use this file except in compliance with
+  ~ the License.  You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.apache.hudi.console.system.mapper.UserMapper">
+    <resultMap id="BaseResultMap" type="org.apache.hudi.console.system.entity.User">
+        <id column="user_id" jdbcType="BIGINT" property="userId"/>
+        <result column="username" jdbcType="VARCHAR" property="username"/>
+        <result column="nick_name" jdbcType="VARCHAR" property="nickName"/>
+        <result column="password" jdbcType="VARCHAR" property="password"/>
+        <result column="email" jdbcType="VARCHAR" property="email"/>
+        <result column="mobile" jdbcType="VARCHAR" property="mobile"/>
+        <result column="status" jdbcType="CHAR" property="status"/>
+        <result column="create_time" jdbcType="TIMESTAMP" property="createTime"/>
+        <result column="modify_time" jdbcType="TIMESTAMP" property="modifyTime"/>
+        <result column="last_login_time" jdbcType="TIMESTAMP" property="lastLoginTime"/>
+        <result column="sex" jdbcType="CHAR" property="sex"/>
+        <result column="avatar" jdbcType="VARCHAR" property="avatar"/>
+        <result column="description" jdbcType="VARCHAR" property="description"/>
+    </resultMap>
+
+    <select id="findUserDetail" resultType="org.apache.hudi.console.system.entity.User" parameterType="org.apache.hudi.console.system.entity.User">
+        select * from t_user
+        <where>
+            <if test="user.username != null and user.username != ''">
+                and username like '%${user.username}%'
+            </if>
+            <if test="user.createTimeFrom != null and user.createTimeFrom !=''">
+                and create_time &gt; #{user.createTimeFrom}
+            </if>
+            <if test="user.createTimeTo!= null and user.createTimeTo !=''">
+                and create_time &lt; #{user.createTimeTo}
+            </if>
+            <if test="user.sex != null and user.sex != ''">
+                and sex = #{user.sex}
+            </if>
+            <if test="user.status != null and user.status != ''">
+                and status = #{user.status}
+            </if>
+        </where>
+        <if test="user.sortField != null and user.sortField != ''">
+            order by ${user.sortField} ${user.sortOrder}
+        </if>
+    </select>
+
+    <select id="getNoTokenUser" resultType="org.apache.hudi.console.system.entity.User" parameterType="org.apache.hudi.console.system.entity.User">
+        select u.* from t_user u left join t_access_token t
+        on u.user_id = t.user_id
+        where t.user_id is null
+    </select>
+
+</mapper>
