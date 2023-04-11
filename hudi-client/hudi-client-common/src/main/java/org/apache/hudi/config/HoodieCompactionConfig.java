@@ -151,12 +151,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of "
           + "latest partitions to compact during a compaction run.");
 
-  public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
-      .key("hoodie.compaction.preserve.commit.metadata")
-      .defaultValue(true)
-      .sinceVersion("0.11.0")
-      .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
-
   /**
    * Configs related to specific table types.
    */
@@ -420,11 +414,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withCompactionLogFileNumThreshold(int logFileNumThreshold) {
       compactionConfig.setValue(COMPACTION_LOG_FILE_NUM_THRESHOLD, String.valueOf(logFileNumThreshold));
-      return this;
-    }
-
-    public Builder withPreserveCommitMetadata(boolean preserveCommitMetadata) {
-      compactionConfig.setValue(PRESERVE_COMMIT_METADATA, String.valueOf(preserveCommitMetadata));
       return this;
     }
 

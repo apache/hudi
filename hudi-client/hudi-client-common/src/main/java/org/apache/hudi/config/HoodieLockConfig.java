@@ -76,7 +76,7 @@ public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS = ConfigProperty
       .key(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY)
-      .defaultValue(String.valueOf(5000L))
+      .defaultValue(String.valueOf(16000L))
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum amount of time to wait between retries by lock provider client. This bounds"
           + " the maximum delay from the exponential backoff. Currently used by ZK based lock provider only.");

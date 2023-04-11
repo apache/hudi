@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.hudi.cli.BootstrapExecutorUtils
 import org.apache.hudi.cli.HDFSParquetImporterUtils.{buildProperties, readConfig}
 import org.apache.hudi.common.config.TypedProperties
@@ -67,7 +67,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val table = getArgValueOrDefault(args, PARAMETERS(0))
     val tableType = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
     val bootstrapPath = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
     val basePath = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
@@ -85,6 +85,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     val propsFilePath = getArgValueOrDefault(args, PARAMETERS(15)).get.asInstanceOf[String]
     val bootstrapOverwrite = getArgValueOrDefault(args, PARAMETERS(16)).get.asInstanceOf[Boolean]
 
+    val (tableName, database) = HoodieCLIUtils.getTableIdentifier(table.get.asInstanceOf[String])
     val configs: util.List[String] = new util.ArrayList[String]
 
     val properties: TypedProperties = if (propsFilePath == null || propsFilePath.isEmpty) buildProperties(configs)
@@ -108,7 +109,10 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     val fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration)
 
     val cfg = new BootstrapExecutorUtils.Config()
-    cfg.setTableName(tableName.get.asInstanceOf[String])
+    cfg.setTableName(tableName)
+    if (database.isDefined) {
+      cfg.setDatabase(database.get)
+    }
     cfg.setTableType(tableType)
     cfg.setBasePath(basePath)
     cfg.setBaseFileFormat(baseFileFormat)
@@ -134,8 +138,3 @@ object RunBootstrapProcedure {
     override def get() = new RunBootstrapProcedure
   }
 }
-
-
-
-
-
