@@ -3030,24 +3030,26 @@ public class HoodieWriteConfig extends HoodieConfig {
             .equals(HoodieFailedWritesCleaningPolicy.EAGER.name()), "To enable optimistic concurrency control, set hoodie.cleaner.policy.failed.writes=LAZY");
       }
 
-      HoodieCleaningPolicy.valueOf(writeConfig.getString(CLEANER_POLICY));
-      // Ensure minInstantsToKeep > cleanerCommitsRetained, otherwise we will archive some
-      // commit instant on timeline, that still has not been cleaned. Could miss some data via incr pull
-      int minInstantsToKeep = Integer.parseInt(writeConfig.getStringOrDefault(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP));
-      int maxInstantsToKeep = Integer.parseInt(writeConfig.getStringOrDefault(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP));
-      int cleanerCommitsRetained =
-          Integer.parseInt(writeConfig.getStringOrDefault(HoodieCleanConfig.CLEANER_COMMITS_RETAINED));
-      checkArgument(maxInstantsToKeep > minInstantsToKeep,
-          String.format(
-              "Increase %s=%d to be greater than %s=%d.",
-              HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), maxInstantsToKeep,
-              HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep));
-      checkArgument(minInstantsToKeep > cleanerCommitsRetained,
-          String.format(
-              "Increase %s=%d to be greater than %s=%d. Otherwise, there is risk of incremental pull "
-                  + "missing data from few instants.",
-              HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep,
-              HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained));
+      HoodieCleaningPolicy cleaningPolicy = HoodieCleaningPolicy.valueOf(writeConfig.getString(CLEANER_POLICY));
+      if (cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS) {
+        // Ensure minInstantsToKeep > cleanerCommitsRetained, otherwise we will archive some
+        // commit instant on timeline, that still has not been cleaned. Could miss some data via incr pull
+        int minInstantsToKeep = Integer.parseInt(writeConfig.getStringOrDefault(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP));
+        int maxInstantsToKeep = Integer.parseInt(writeConfig.getStringOrDefault(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP));
+        int cleanerCommitsRetained =
+            Integer.parseInt(writeConfig.getStringOrDefault(HoodieCleanConfig.CLEANER_COMMITS_RETAINED));
+        checkArgument(maxInstantsToKeep > minInstantsToKeep,
+            String.format(
+                "Increase %s=%d to be greater than %s=%d.",
+                HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), maxInstantsToKeep,
+                HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep));
+        checkArgument(minInstantsToKeep > cleanerCommitsRetained,
+            String.format(
+                "Increase %s=%d to be greater than %s=%d. Otherwise, there is risk of incremental pull "
+                    + "missing data from few instants.",
+                HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep,
+                HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained));
+      }
 
       boolean inlineCompact = writeConfig.getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
       boolean inlineCompactSchedule = writeConfig.getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT);
