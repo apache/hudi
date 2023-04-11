@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
@@ -63,11 +62,6 @@ public class RDDCustomColumnsSortPartitioner<T>
     return records.sortBy(
         record -> {
           Object[] columnValues = record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
-          for (int i = 0; i < columnValues.length; i++) {
-            if (columnValues[i] == null) {
-              throw new HoodieValidationException("There is a null value from " + sortColumns[i]);
-            }
-          }
           return FlatLists.ofComparableArray(columnValues);
         },
         true, outputSparkPartitions);
