@@ -125,7 +125,7 @@ public class KafkaOffsetGen {
     public static OffsetRange[] computeOffsetRanges(Map<TopicPartition, Long> fromOffsetMap,
                                                     Map<TopicPartition, Long> toOffsetMap,
                                                     long numEvents,
-                                                    long maxEventsPerPartition) {
+                                                    long minPartitions) {
 
       Comparator<OffsetRange> byPartition = Comparator.comparing(OffsetRange::partition);
 
@@ -166,17 +166,38 @@ public class KafkaOffsetGen {
         }
       }
 
-      LOG.info("before split by count: " + CheckpointUtils.offsetsStringfy(ranges));
-      ranges = CheckpointUtils.splitRangesByCount(ranges, maxEventsPerPartition);
-      LOG.info("after split by count: " + CheckpointUtils.offsetsStringfy(ranges));
+      LOG.info("before split, range count " + ranges.length + ", detail ranges: " + CheckpointUtils.offsetsStringfy(ranges));
+      ranges = CheckpointUtils.splitRangesToMinPartitions(ranges, minPartitions);
+      LOG.info("after split, range count " + ranges.length + ", detail ranges: " + CheckpointUtils.offsetsStringfy(ranges));
 
       return ranges;
     }
 
-    public static OffsetRange[] splitRangesByCount(OffsetRange[] oldRanges, long maxEvents) {
+    // the number of the result ranges can be less or more than minPartitions due to rounding
+    public static OffsetRange[] splitRangesToMinPartitions(OffsetRange[] oldRanges, long minPartitions) {
+      if (minPartitions <= 0 || minPartitions <= oldRanges.length) {
+        return oldRanges;
+      }
+
       List<OffsetRange> newRanges = new ArrayList<>();
+      // split offset ranges to smaller ones.
+      long totalSize = totalNewMessages(oldRanges);
       for (OffsetRange range : oldRanges) {
-        newRanges.addAll(splitSingleRange(range, maxEvents));
+        TopicPartition tp = range.topicPartition();
+        long size = range.count();
+        long parts = Math.max(1, Math.round(1.0 * size / totalSize * minPartitions));
+        long remaining = size;
+        long startOffset = range.fromOffset();
+        for (int part = 0; part < parts; part++) {
+          long thisPartition = remaining / (parts - part);
+          remaining -= thisPartition;
+          long endOffset = Math.min(startOffset + thisPartition, range.untilOffset());
+          OffsetRange offsetRange = OffsetRange.create(tp, startOffset, endOffset);
+          if (offsetRange.count() > 0) {
+            newRanges.add(offsetRange);
+          }
+          startOffset = endOffset;
+        }
       }
       return newRanges.toArray(new OffsetRange[0]);
     }
@@ -303,11 +324,11 @@ public class KafkaOffsetGen {
       throw new HoodieException("sourceLimit should not be less than the number of kafka partitions");
     }
 
-    long maxEventsPerPartition = props.getLong(KafkaSourceConfig.MAX_EVENTS_PER_KAFKA_PARTITION.key(),
-            KafkaSourceConfig.MAX_EVENTS_PER_KAFKA_PARTITION.defaultValue());
-    LOG.info("getNextOffsetRanges set config " + KafkaSourceConfig.MAX_EVENTS_PER_KAFKA_PARTITION.key() + " to " + maxEventsPerPartition);
+    long minPartitions = props.getLong(KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(),
+            KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.defaultValue());
+    LOG.info("getNextOffsetRanges set config " + KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key() + " to " + minPartitions);
 
-    return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents, maxEventsPerPartition);
+    return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents, minPartitions);
   }
 
   /**
