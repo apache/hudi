@@ -216,7 +216,7 @@ public class OptionsResolver {
    * Returns the supplemental logging mode.
    */
   public static HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode(Configuration conf) {
-    String mode = conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE);
+    String mode = conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE).toUpperCase();
     return HoodieCDCSupplementalLoggingMode.valueOf(mode);
   }
 
