@@ -45,8 +45,6 @@ import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -80,9 +78,8 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
 
   @BeforeEach
   public void setUp() throws Exception {
-    initPath();
+    basePath = tempDir.toUri().toString();
     initSparkContexts();
-    initFileSystem();
     initMetaClient();
     initTimelineService();
     dataGen = new HoodieTestDataGenerator(0x1f86);
@@ -93,8 +90,6 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
     cleanupTimelineService();
     cleanupClients();
     cleanupSparkContexts();
-    cleanupFileSystem();
-    cleanupExecutorService();
     dataGen = null;
     System.gc();
   }
@@ -110,10 +105,10 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withRemoteServerPort(incrementTimelineServicePortToUse()).build())
           .build();
-      timelineService = new TimelineService(localEngineContext, new Configuration(),
+      timelineService = new TimelineService(localEngineContext, metaClient.getHadoopConf(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          FileSystem.get(new Configuration()),
+          metaClient.getFs(),
           FileSystemViewManager.createViewManager(
               context, config.getMetadataConfig(), config.getViewStorageConfig(),
               config.getCommonConfig(),
