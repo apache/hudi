@@ -41,8 +41,8 @@ parameters:
     default:
       - 'hudi-spark-datasource'
       - 'hudi-spark-datasource/hudi-spark'
-      - 'hudi-spark-datasource/hudi-spark2'
-      - 'hudi-spark-datasource/hudi-spark2-common'
+      - 'hudi-spark-datasource/hudi-spark3'
+      - 'hudi-spark-datasource/hudi-spark3-common'
       - 'hudi-spark-datasource/hudi-spark-common'
   - name: job4UTModules
     type: object
@@ -62,8 +62,8 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
-      - '!hudi-spark-datasource/hudi-spark2'
-      - '!hudi-spark-datasource/hudi-spark2-common'
+      - '!hudi-spark-datasource/hudi-spark3'
+      - '!hudi-spark-datasource/hudi-spark3-common'
       - '!hudi-spark-datasource/hudi-spark-common'
   - name: job4FTModules
     type: object
@@ -83,7 +83,7 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink1.16.x'
 
 variables:
-  BUILD_PROFILES: '-Dscala-2.11 -Dspark2.4 -Dflink1.16'
+  BUILD_PROFILES: '-Dscala-2.12 -Dspark3.2 -Dflink1.16'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
   MVN_OPTS_INSTALL: '-Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
@@ -118,7 +118,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB1_MODULES),hudi-client/hudi-spark-client
               publishJUnitResults: true
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '1.11'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
             displayName: FT common flink
@@ -127,7 +127,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB1_MODULES)
               publishJUnitResults: true
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '1.11'
               mavenOptions: '-Xmx4g'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
@@ -151,7 +151,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_MODULES)
               publishJUnitResults: true
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '1.11'
               mavenOptions: '-Xmx4g'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
@@ -175,7 +175,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB3_MODULES)
               publishJUnitResults: true
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '1.11'
               mavenOptions: '-Xmx4g'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
@@ -199,7 +199,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
               publishJUnitResults: true
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '1.11'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
             displayName: FT other modules
@@ -208,7 +208,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)
               publishJUnitResults: true
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '1.11'
               mavenOptions: '-Xmx4g'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
@@ -232,7 +232,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test
               publishJUnitResults: true
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '1.11'
               mavenOptions: '-Xmx4g'
           - task: AzureCLI@2
             displayName: Prepare for IT
