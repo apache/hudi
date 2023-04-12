@@ -657,6 +657,11 @@ public class DeltaSync implements Serializable, Closeable {
     Option<String> resumeCheckpointStr = Option.empty();
     // try get checkpoint from commits(including commit and deltacommit)
     // in COW migrating to MOR case, the first batch of the deltastreamer will lost the checkpoint from COW table, cause the dataloss
+    HoodieTimeline deltaCommitTimeline = commitsTimelineOpt.get().filter(instant -> instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
+    // has deltacommit means this is a MOR table, we should get .deltacommit as before
+    if (!deltaCommitTimeline.empty()) {
+      commitsTimelineOpt = Option.of(deltaCommitTimeline);
+    }
     Option<HoodieInstant> lastCommit = commitsTimelineOpt.get().lastInstant();
     if (lastCommit.isPresent()) {
       // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
