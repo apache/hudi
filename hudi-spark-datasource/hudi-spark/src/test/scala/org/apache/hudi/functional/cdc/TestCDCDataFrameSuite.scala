@@ -20,7 +20,7 @@ package org.apache.hudi.functional.cdc
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.op_key_only
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
@@ -545,7 +545,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
   @ParameterizedTest
   @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
   def testCDCWithMultiBlocksAndLogFiles(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
-    val (blockSize, logFileSize) = if (loggingMode == op_key_only) {
+    val (blockSize, logFileSize) = if (loggingMode == OP_KEY_ONLY) {
       // only op and key will be stored in cdc log file, we set the smaller values for the two configs.
       // so that it can also write out more than one cdc log file
       // and each of cdc log file has more that one data block as we expect.

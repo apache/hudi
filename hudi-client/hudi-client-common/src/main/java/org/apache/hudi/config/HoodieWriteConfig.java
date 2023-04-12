@@ -2416,7 +2416,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode() {
     return HoodieCDCSupplementalLoggingMode.valueOf(
-        getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE));
+        getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE).toUpperCase());
   }
 
   /**
