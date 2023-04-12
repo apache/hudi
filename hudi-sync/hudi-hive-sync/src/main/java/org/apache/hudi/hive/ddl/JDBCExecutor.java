@@ -154,7 +154,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
       LOG.info("No partitions to add for " + tableName);
       return;
     }
-    LOG.info("Adding partitions " + partitionsToDrop.size() + " to table " + tableName);
+    LOG.info("Drop partitions " + partitionsToDrop.size() + " to table " + tableName);
     List<String> sqls = constructDropPartitions(tableName, partitionsToDrop);
     sqls.stream().forEach(sql -> runSQL(sql));
   }
