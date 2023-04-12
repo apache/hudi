@@ -49,7 +49,7 @@ elif [[ ${SPARK_PROFILE} == 'spark3.1' ]]; then
   SPARK_HADOOP_VERSION=2.7
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1136hive313spark313
+  IMAGE_TAG=flink1136hive313spark313openjdk11
 elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
