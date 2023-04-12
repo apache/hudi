@@ -40,7 +40,7 @@
   <!-- set autoCreateAll = false for hive 2.x -->
   <property>
     <name>datanucleus.schema.autoCreateAll</name>
-    <value>true</value>
+    <value>false</value>
   </property>
   <property>
     <name>javax.jdo.option.ConnectionDriverName</name>
