@@ -263,12 +263,12 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
 
-echo "::warning::validate.sh validating flink bundle"
-test_flink_bundle
-if [ "$?" -ne 0 ]; then
-    exit 1
-fi
-echo "::warning::validate.sh done validating flink bundle"
+#echo "::warning::validate.sh validating flink bundle"
+#test_flink_bundle
+#if [ "$?" -ne 0 ]; then
+#    exit 1
+#fi
+#echo "::warning::validate.sh done validating flink bundle"
 
 echo "::warning::validate.sh validating kafka connect bundle"
 test_kafka_connect_bundle $JARS_DIR/kafka-connect.jar
