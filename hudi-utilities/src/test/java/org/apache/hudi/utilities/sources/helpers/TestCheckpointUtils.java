@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -226,33 +225,25 @@ public class TestCheckpointUtils {
   @Test
   public void testSplitAndMergeRanges() {
     OffsetRange range = OffsetRange.apply(TEST_TOPIC_NAME, 0, 0, 100);
-    List<OffsetRange> rangeList = CheckpointUtils.splitSingleRange(range, 50);
-    assertEquals(2, rangeList.size());
-    assertEquals(50, rangeList.get(0).count());
-    assertEquals(0, rangeList.get(0).fromOffset());
-    assertEquals(50, rangeList.get(0).untilOffset());
-    assertEquals(50, rangeList.get(1).count());
-    assertEquals(50, rangeList.get(1).fromOffset());
-    assertEquals(100, rangeList.get(1).untilOffset());
-
-    OffsetRange[] mergedRanges = CheckpointUtils.mergeRangesByTp(rangeList.toArray(new OffsetRange[0]));
-    assertEquals(1, mergedRanges.length);
+    OffsetRange[] ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {0, 0}),
+        makeOffsetMap(new int[] {0, 1}, new long[] {100, 500}), 600, 3);
+    assertEquals(4, ranges.length);
+    OffsetRange[] mergedRanges = CheckpointUtils.mergeRangesByTp(ranges);
+    assertEquals(2, mergedRanges.length);
+    assertEquals(0, mergedRanges[0].partition());
     assertEquals(0, mergedRanges[0].fromOffset());
     assertEquals(100, mergedRanges[0].untilOffset());
+    assertEquals(1, mergedRanges[1].partition());
+    assertEquals(0, mergedRanges[1].fromOffset());
+    assertEquals(500, mergedRanges[1].untilOffset());
 
-    rangeList = CheckpointUtils.splitSingleRange(range, 30);
-    assertEquals(4, rangeList.size());
-    assertEquals(25, rangeList.get(0).count());
-    assertEquals(25, rangeList.get(1).count());
-    assertEquals(25, rangeList.get(1).fromOffset());
-    assertEquals(50, rangeList.get(1).untilOffset());
-    assertEquals(25, rangeList.get(2).count());
-    assertEquals(25, rangeList.get(3).count());
-
-    mergedRanges = CheckpointUtils.mergeRangesByTp(rangeList.toArray(new OffsetRange[0]));
+    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
+        makeOffsetMap(new int[] {0}, new long[] {1000}), 300, 3);
+    assertEquals(3, ranges.length);
+    mergedRanges = CheckpointUtils.mergeRangesByTp(ranges);
     assertEquals(1, mergedRanges.length);
     assertEquals(0, mergedRanges[0].fromOffset());
-    assertEquals(100, mergedRanges[0].untilOffset());
+    assertEquals(300, mergedRanges[0].untilOffset());
   }
 
   private static Map<TopicPartition, Long> makeOffsetMap(int[] partitions, long[] offsets) {

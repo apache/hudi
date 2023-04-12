@@ -218,21 +218,6 @@ public class KafkaOffsetGen {
       return newRanges.toArray(new OffsetRange[0]);
     }
 
-    public static List<OffsetRange> splitSingleRange(OffsetRange range, long maxEvents) {
-      List<OffsetRange> newRanges = new ArrayList<>();
-      if (range.count() <= maxEvents) {
-        newRanges.add(range);
-        return newRanges;
-      }
-      long partsNum = (range.count() + maxEvents - 1) / maxEvents;
-      long step = range.count() / partsNum;
-      for (long start = range.fromOffset(); start < range.untilOffset(); start += step) {
-        long end = Math.min(start + step, range.untilOffset());
-        newRanges.add(OffsetRange.create(range.topicPartition(), start, end));
-      }
-      return newRanges;
-    }
-
     public static long totalNewMessages(OffsetRange[] ranges) {
       return Arrays.stream(ranges).mapToLong(OffsetRange::count).sum();
     }
