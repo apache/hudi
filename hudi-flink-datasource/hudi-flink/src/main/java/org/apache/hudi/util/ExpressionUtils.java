@@ -167,6 +167,8 @@ public class ExpressionUtils {
       case SMALLINT:
       case INTEGER:
         return expr.getValueAs(Integer.class).orElse(null);
+      case BIGINT:
+        return expr.getValueAs(Long.class).orElse(null);
       case FLOAT:
         return expr.getValueAs(Float.class).orElse(null);
       case DOUBLE:
