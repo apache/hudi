@@ -298,10 +298,12 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
   @Test
   def testMergeOnReadIncrementalRelationWithDeltaLogs(): Unit = {
-    val tablePath = s"$basePath/mor-no-logs"
+    val tablePath = s"$basePath/mor-with-logs-incr"
     val targetRecordsCount = 100
 
     bootstrapMORTableWithDeltaLog(tablePath, targetRecordsCount, defaultWriteOpts, populateMetaFields = true)
+
+    println(s"Running test for $tablePath / incremental")
     /**
      * State of timeline and updated data
      * +--------------+--------------+--------------+--------------+--------------------+--------------+--------------+--------------+
@@ -324,7 +326,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
     val inputDf = spark.read.format("hudi")
       .options(readOpts)
-      .load(tablePath)
+      .load()
     val commitNum = inputDf.select("rider").distinct().collect().length
     assertTrue(commitNum > 1)
   }
