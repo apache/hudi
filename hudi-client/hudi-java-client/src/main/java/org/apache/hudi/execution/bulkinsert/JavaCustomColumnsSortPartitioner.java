@@ -52,13 +52,13 @@ public class JavaCustomColumnsSortPartitioner<T>
   public List<HoodieRecord<T>> repartitionRecords(
       List<HoodieRecord<T>> records, int outputPartitions) {
     return records.stream().sorted((o1, o2) -> {
-      FlatLists.ComparableList<Comparable> cmp1 = FlatLists.ofComparableArray(
+      FlatLists.ComparableList<Comparable> values1 = FlatLists.ofComparableArray(
           HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord) o1, sortColumnNames, schema, consistentLogicalTimestampEnabled)
       );
-      FlatLists.ComparableList<Comparable> cmp2 = FlatLists.ofComparableArray(
+      FlatLists.ComparableList<Comparable> values2 = FlatLists.ofComparableArray(
           HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord) o2, sortColumnNames, schema, consistentLogicalTimestampEnabled)
       );
-      return cmp1.compareTo(cmp2);
+      return values1.compareTo(values2);
     }).collect(Collectors.toList());
   }
 

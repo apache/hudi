@@ -248,9 +248,9 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         throw new HoodieIOException("unable to read value for " + sortColumns);
       }
     }, (o1, o2) -> {
-        FlatLists.ComparableList obj1 = FlatLists.ofComparableArray(o1.toArray());
-        FlatLists.ComparableList obj2 = FlatLists.ofComparableArray(o2.toArray());
-        return obj1.compareTo(obj2);
+        FlatLists.ComparableList values1 = FlatLists.ofComparableArray(o1.toArray());
+        FlatLists.ComparableList values2 = FlatLists.ofComparableArray(o2.toArray());
+        return values1.compareTo(values2);
       });
 
     return comparator;
