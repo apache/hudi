@@ -64,7 +64,8 @@ public class TestObjectSizeCalculator {
       assertEquals(168, getObjectSize(stringArray));
       assertEquals(144, getObjectSize(stringBuilder));
       assertEquals(72, getObjectSize(DayOfWeek.TUESDAY));
-      assertEquals(1256, getObjectSize(Schema.create(Schema.Type.STRING)));
+      assertEquals(HoodieAvroUtils.gteqAvro1_9() ? 1256 : 1176,
+          getObjectSize(Schema.create(Schema.Type.STRING)));
       assertEquals(96, getObjectSize(person));
     } else {
       assertEquals(56, getObjectSize(string));
