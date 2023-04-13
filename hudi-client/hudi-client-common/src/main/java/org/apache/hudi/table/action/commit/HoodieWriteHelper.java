@@ -78,8 +78,9 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }
-      HoodieKey reducedKey = rec1.getData().equals(reducedRecord.getData()) ? rec1.getKey() : rec2.getKey();
-      HoodieOperation operation = rec1.getData().equals(reducedRecord.getData()) ? rec1.getOperation() : rec2.getOperation();
+      boolean choosePrev = rec1.getData().equals(reducedRecord.getData());
+      HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
+      HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
       return reducedRecord.newInstance(reducedKey, operation);
     }, reduceParallelism).map(Pair::getRight);
   }
