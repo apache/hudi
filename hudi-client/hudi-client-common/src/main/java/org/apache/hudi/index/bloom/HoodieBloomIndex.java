@@ -234,8 +234,8 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
           new BloomIndexFileInfo(
               FSUtils.getFileId(entry.getKey().getRight()),
               // NOTE: Here we assume that the type of the primary key field is string
-              (String) unwrapStatisticValueWrapper(entry.getValue().getMinValue()),
-              (String) unwrapStatisticValueWrapper(entry.getValue().getMaxValue())
+              unwrapStatisticValueWrapper(entry.getValue().getMinValue()).toString(),
+              unwrapStatisticValueWrapper(entry.getValue().getMaxValue()).toString()
           )));
     }
 
