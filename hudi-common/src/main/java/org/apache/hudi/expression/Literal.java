@@ -19,11 +19,65 @@
 package org.apache.hudi.expression;
 
 import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.internal.schema.Types;
 
 import javax.xml.bind.DatatypeConverter;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.util.UUID;
 
 public class Literal<T> extends LeafExpression {
+
+  public static <V> Literal from(V value) {
+    if (value instanceof Integer || value instanceof Short) {
+      return new Literal<>(value, Types.IntType.get());
+    }
+
+    if (value instanceof Byte) {
+      return new Literal<>(((Byte)value).intValue(), Types.IntType.get());
+    }
+
+    if (value instanceof Long) {
+      return new Literal<>(value, Types.LongType.get());
+    }
+
+    if (value instanceof Boolean) {
+      return new Literal<>(value, Types.BooleanType.get());
+    }
+
+    if (value instanceof Double) {
+      return new Literal<>(value, Types.DoubleType.get());
+    }
+
+    if (value instanceof Float) {
+      return new Literal<>(value, Types.FloatType.get());
+    }
+
+    if (value instanceof BigDecimal) {
+      BigDecimal decimal = (BigDecimal) value;
+      return new Literal<>(value, Types.DecimalType.get(decimal.precision(), decimal.scale()));
+    }
+
+    if (value instanceof CharSequence) {
+      return new Literal<>(value, Types.StringType.get());
+    }
+
+    if (value instanceof byte[]) {
+      byte[] bytes = (byte[]) value;
+      return new Literal<>(ByteBuffer.wrap(bytes), Types.FixedType.getFixed(bytes.length));
+    }
+
+    if (value instanceof ByteBuffer) {
+      return new Literal<>(value, Types.BinaryType.get());
+    }
+
+    if (value instanceof UUID) {
+      return new Literal<>(value, Types.UUIDType.get());
+    }
+
+    throw new IllegalArgumentException("Cannot convert value from class "
+        + value.getClass().getName() + " to Literal");
+  }
 
   private final T value;
   private final Type type;

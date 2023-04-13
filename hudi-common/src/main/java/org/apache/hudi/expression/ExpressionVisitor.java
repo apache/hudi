@@ -29,7 +29,7 @@ public interface ExpressionVisitor<T> {
 
   T visitLiteral(Literal literal);
 
-  T visitAttribute(AttributeReference attribute);
+  T visitNameReference(NameReference attribute);
 
   T visitBoundReference(BoundReference boundReference);
 

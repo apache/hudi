@@ -23,7 +23,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
-import org.apache.hudi.expression.AttributeReference;
+import org.apache.hudi.expression.NameReference;
 import org.apache.hudi.expression.BinaryLike;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Literal;
@@ -92,9 +92,8 @@ public class PartitionFilterGenerator {
 
       for (int i = 0; i < partitionFields.size(); i++) {
         FieldSchema field = partitionFields.get(i);
-        Literal literal = buildLiteralExpression(partitionValues.get(i), field.getType());
-        BinaryLike exp = Predicates.eq(new AttributeReference(field.getName(), literal.getDataType()),
-            literal);
+        BinaryLike exp = Predicates.eq(new NameReference(field.getName()),
+            buildLiteralExpression(partitionValues.get(i), field.getType()));
         if (root != null) {
           root = Predicates.and(root, exp);
         } else {
@@ -175,22 +174,19 @@ public class PartitionFilterGenerator {
       String[] values = fieldWithValues.getValue();
 
       if (values.length == 1) {
-        Literal literal = buildLiteralExpression(values[0], fieldSchema.getType());
-        return Predicates.eq(new AttributeReference(fieldSchema.getName(), literal.getDataType()),
-            literal);
+        return Predicates.eq(new NameReference(fieldSchema.getName()),
+            buildLiteralExpression(values[0], fieldSchema.getType()));
       }
 
       Arrays.sort(values, new ValueComparator(fieldSchema.getType()));
 
-      Literal begin = buildLiteralExpression(values[0], fieldSchema.getType());
-      Literal end = buildLiteralExpression(values[values.length - 1], fieldSchema.getType());
       return Predicates.and(
           Predicates.gteq(
-              new AttributeReference(fieldSchema.getName(), begin.getDataType()),
-              begin),
+              new NameReference(fieldSchema.getName()),
+              buildLiteralExpression(values[0], fieldSchema.getType())),
           Predicates.lteq(
-              new AttributeReference(fieldSchema.getName(), end.getDataType()),
-              end));
+              new NameReference(fieldSchema.getName()),
+              buildLiteralExpression(values[values.length - 1], fieldSchema.getType())));
     })
         .filter(Objects::nonNull)
         .reduce(null, (result, expr) -> {

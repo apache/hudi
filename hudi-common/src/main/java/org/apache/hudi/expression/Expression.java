@@ -20,9 +20,10 @@ package org.apache.hudi.expression;
 
 import org.apache.hudi.internal.schema.Type;
 
+import java.io.Serializable;
 import java.util.List;
 
-public interface Expression {
+public interface Expression extends Serializable {
 
   enum Operator {
     TRUE("TRUE", "TRUE"),
@@ -35,6 +36,9 @@ public interface Expression {
     GT_EQ(">=", ">="),
     LT_EQ("<=", "<="),
     STARTS_WITH(null, null),
+    CONTAINS(null, null),
+    IS_NULL(null, null),
+    IS_NOT_NULL(null, null),
     IN("IN", "IN"),
     NOT("NOT", "NOT");
 

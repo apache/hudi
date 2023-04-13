@@ -44,11 +44,11 @@ public class TestPartialBindVisitor {
   public void testPartialBindIfAllExisting() {
     PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
 
-    Predicates.BinaryComparison eq = Predicates.eq(new AttributeReference("a", Types.StringType.get()),
+    Predicates.BinaryComparison eq = Predicates.eq(new NameReference("a"),
         new Literal<>("Jane", Types.StringType.get()));
-    Predicates.BinaryComparison gt = Predicates.gt(new AttributeReference("c", Types.IntType.get()),
+    Predicates.BinaryComparison gt = Predicates.gt(new NameReference("c"),
         new Literal<>(10, Types.IntType.get()));
-    Predicates.In in = Predicates.in(new AttributeReference("d", Types.LongType.get()),
+    Predicates.In in = Predicates.in(new NameReference("d"),
         Arrays.asList(new Literal<>(10L, Types.IntType.get()), new Literal<>(13L, Types.IntType.get())));
 
     Predicates.And expr = Predicates.and(eq, Predicates.or(gt, in));
@@ -64,11 +64,11 @@ public class TestPartialBindVisitor {
   public void testPartialBindIfFieldMissing() {
     PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
 
-    Predicates.BinaryComparison eq = Predicates.eq(new AttributeReference("a", Types.StringType.get()),
+    Predicates.BinaryComparison eq = Predicates.eq(new NameReference("a"),
         new Literal<>("Jane", Types.StringType.get()));
-    Predicates.BinaryComparison lt = Predicates.lt(new AttributeReference("m", Types.IntType.get()),
+    Predicates.BinaryComparison lt = Predicates.lt(new NameReference("m"),
         new Literal<>(10, Types.IntType.get()));
-    Predicates.BinaryComparison gteq = Predicates.gteq(new AttributeReference("d", Types.LongType.get()),
+    Predicates.BinaryComparison gteq = Predicates.gteq(new NameReference("d"),
         new Literal<>(10L, Types.LongType.get()));
 
     Predicates.And expr = Predicates.and(eq, Predicates.or(lt, gteq));

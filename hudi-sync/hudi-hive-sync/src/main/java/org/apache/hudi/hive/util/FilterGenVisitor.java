@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hive.util;
 
-import org.apache.hudi.expression.AttributeReference;
+import org.apache.hudi.expression.NameReference;
 import org.apache.hudi.expression.BoundReference;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.ExpressionVisitor;
@@ -118,7 +118,7 @@ public class FilterGenVisitor implements ExpressionVisitor<String> {
   }
 
   @Override
-  public String visitAttribute(AttributeReference attribute) {
+  public String visitNameReference(NameReference attribute) {
     return attribute.getName();
   }
 

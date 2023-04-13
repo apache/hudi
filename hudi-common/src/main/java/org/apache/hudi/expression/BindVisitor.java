@@ -18,6 +18,7 @@
 
 package org.apache.hudi.expression;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.Types;
 
 import java.util.List;
@@ -109,7 +110,7 @@ public class BindVisitor implements ExpressionVisitor<Expression>  {
   }
 
   @Override
-  public Expression visitAttribute(AttributeReference attribute) {
+  public Expression visitNameReference(NameReference attribute) {
     // TODO Should consider caseSensitive?
     Types.Field field = recordType.field(attribute.getName());
 
@@ -118,7 +119,7 @@ public class BindVisitor implements ExpressionVisitor<Expression>  {
           + " cannot be bound from schema " + recordType);
     }
 
-    return new BoundReference(field.fieldId(), field.type(), attribute.isNullable());
+    return new BoundReference(field.fieldId(), field.type());
   }
 
   @Override
@@ -155,6 +156,23 @@ public class BindVisitor implements ExpressionVisitor<Expression>  {
           .collect(Collectors.toList());
 
       return Predicates.in(valueExpression, validValues);
+    }
+
+    if (predicate instanceof Predicates.IsNull) {
+      Predicates.IsNull isNull = (Predicates.IsNull) predicate;
+      return Predicates.isNull(isNull.child.accept(this));
+    }
+
+    if (predicate instanceof Predicates.IsNotNull) {
+      Predicates.IsNotNull isNotNull = (Predicates.IsNotNull) predicate;
+      return Predicates.isNotNull(isNotNull.child.accept(this));
+    }
+
+    if (predicate instanceof Predicates.StringContains) {
+      Predicates.StringContains contains = (Predicates.StringContains) predicate;
+      Expression left = contains.getLeft().accept(this);
+      Expression right = contains.getRight().accept(this);
+      return Predicates.contains(left, right);
     }
 
     throw new IllegalArgumentException("The expression " + this + "cannot be visited as predicate");

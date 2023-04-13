@@ -18,6 +18,7 @@
 
 package org.apache.hudi.expression;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.Types;
 
 import java.util.List;
@@ -35,7 +36,7 @@ public class PartialBindVisitor extends BindVisitor {
    * will handle it.
    */
   @Override
-  public Expression visitAttribute(AttributeReference attribute) {
+  public Expression visitNameReference(NameReference attribute) {
     // TODO Should consider caseSensitive?
     Types.Field field = recordType.field(attribute.getName());
 
@@ -43,7 +44,7 @@ public class PartialBindVisitor extends BindVisitor {
       return null;
     }
 
-    return new BoundReference(field.fieldId(), field.type(), attribute.isNullable());
+    return new BoundReference(field.fieldId(), field.type());
   }
 
   /**
@@ -52,17 +53,6 @@ public class PartialBindVisitor extends BindVisitor {
    */
   @Override
   public Expression visitPredicate(Predicate predicate) {
-    if (predicate instanceof Predicates.Not) {
-      Expression expr = ((Predicates.Not) predicate).child.accept(this);
-      if (expr instanceof Predicates.True) {
-        return alwaysFalse();
-      }
-      if (expr instanceof Predicates.False) {
-        return alwaysTrue();
-      }
-
-      return Predicates.not(expr);
-    }
 
     if (predicate instanceof Predicates.BinaryComparison) {
       Predicates.BinaryComparison binaryExp = (Predicates.BinaryComparison) predicate;
@@ -77,6 +67,18 @@ public class PartialBindVisitor extends BindVisitor {
 
         return new Predicates.BinaryComparison(left, binaryExp.getOperator(), right);
       }
+    }
+
+    if (predicate instanceof Predicates.Not) {
+      Expression expr = ((Predicates.Not) predicate).child.accept(this);
+      if (expr instanceof Predicates.True) {
+        return alwaysFalse();
+      }
+      if (expr instanceof Predicates.False) {
+        return alwaysTrue();
+      }
+
+      return Predicates.not(expr);
     }
 
     if (predicate instanceof Predicates.In) {
@@ -94,6 +96,35 @@ public class PartialBindVisitor extends BindVisitor {
       return Predicates.in(valueExpression, validValues);
     }
 
-    throw new IllegalArgumentException("The expression " + this + "cannot be visited as predicate");
+    if (predicate instanceof Predicates.IsNull) {
+      Predicates.IsNull isNull = (Predicates.IsNull) predicate;
+      return Option.ofNullable(isNull.child.accept(this))
+          .map(expr -> (Expression)Predicates.isNull(expr))
+          .orElse(alwaysTrue());
+    }
+
+    if (predicate instanceof Predicates.IsNotNull) {
+      Predicates.IsNotNull isNotNull = (Predicates.IsNotNull) predicate;
+      return Option.ofNullable(isNotNull.child.accept(this))
+          .map(expr -> (Expression)Predicates.isNotNull(expr))
+          .orElse(alwaysTrue());
+    }
+
+    if (predicate instanceof Predicates.StringContains) {
+      Predicates.StringContains contains = (Predicates.StringContains) predicate;
+      Expression left = contains.getLeft().accept(this);
+      if (left == null) {
+        return alwaysTrue();
+      } else {
+        Expression right = contains.getRight().accept(this);
+        if (right == null) {
+          return alwaysTrue();
+        }
+
+        return Predicates.contains(left, right);
+      }
+    }
+
+    throw new IllegalArgumentException("The expression " + predicate + " cannot be visited as predicate");
   }
 }

@@ -36,14 +36,15 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.expression.ArrayData;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.internal.schema.utils.Conversions;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -146,16 +147,23 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
     return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, reuse);
   }
 
-  static ArrayData extractPartitionValues(String relativePartitionPath, boolean hiveStylePartitioningEnabled) {
+  static ArrayData extractPartitionValues(Types.RecordType partitionFields,
+                                          String relativePartitionPath,
+                                          boolean hiveStylePartitioningEnabled) {
     List<Object> partitionValues;
+    String[] partitionFragments = relativePartitionPath.split("/");
     if (hiveStylePartitioningEnabled) {
-      partitionValues = Arrays.stream(relativePartitionPath.split("/"))
-          .map(kv -> (Object) kv.split("=")[1])
-          .collect(Collectors.toList());
+      partitionValues = IntStream.range(0, partitionFragments.length)
+          .mapToObj(idx -> {
+            String partitionValue = partitionFragments[idx].split("=")[1];
+            return Conversions.fromPartitionString(partitionValue, partitionFields.field(idx).type());
+          }).collect(Collectors.toList());
     } else {
-      partitionValues = Arrays.stream(relativePartitionPath.split("/"))
-          .map(v -> (Object) v)
-          .collect(Collectors.toList());
+      partitionValues = IntStream.range(0, partitionFragments.length)
+          .mapToObj(idx -> {
+            String partitionValue = partitionFragments[idx];
+            return Conversions.fromPartitionString(partitionValue, partitionFields.field(idx).type());
+          }).collect(Collectors.toList());
     }
 
     return new ArrayData(partitionValues);
@@ -166,7 +174,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    */
   FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException;
 
-  List<String> getPartitionPathByExpression(Expression expression, Types.RecordType schema) throws IOException;
+  List<String> getPartitionPathByExpression(Expression expression, Types.RecordType partitionFields) throws IOException;
 
   /**
    * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.

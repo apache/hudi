@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe
+import org.apache.hudi.internal.schema.Types.RecordType
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
@@ -225,7 +226,16 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         logInfo("Partition path prefix analysis is disabled; falling back to fetching all partitions")
         getAllQueryPartitionPaths.asScala
       } else {
-        tryListByPartitionPathPrefix(partitionColumnNames, partitionPruningPredicates)
+        if (true) {
+          val expression = SparkFilterHelper.convertFilters(
+            partitionPruningPredicates.flatMap {
+              expr => sparkAdapter.translateFilter(expr)
+            })
+
+          listPartitionPaths(SparkFilterHelper.convertDataType(partitionSchema).asInstanceOf[RecordType], expression).asScala
+        } else {
+          tryListByPartitionPathPrefix(partitionColumnNames, partitionPruningPredicates)
+        }
       }
 
       // NOTE: In some cases, like for ex, when non-encoded slash '/' is used w/in the partition column's value,

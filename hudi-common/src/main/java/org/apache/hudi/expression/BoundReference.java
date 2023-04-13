@@ -24,12 +24,10 @@ public class BoundReference extends LeafExpression {
 
   private final int ordinal;
   private final Type type;
-  private final boolean nullable;
 
-  public BoundReference(int ordinal, Type type, boolean nullable) {
+  public BoundReference(int ordinal, Type type) {
     this.ordinal = ordinal;
     this.type = type;
-    this.nullable = nullable;
   }
 
   @Override
@@ -50,6 +48,6 @@ public class BoundReference extends LeafExpression {
   @Override
   public String toString() {
     return "boundReference[ordinal: " + ordinal + ", type: "
-        + type.typeId().getName() + ", nullable: " + nullable + "]";
+        + type.typeId().getName() + "]";
   }
 }

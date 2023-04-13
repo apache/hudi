@@ -20,22 +20,12 @@ package org.apache.hudi.expression;
 
 import org.apache.hudi.internal.schema.Type;
 
-public class AttributeReference extends LeafExpression {
+public class NameReference extends LeafExpression {
 
   private final String name;
-  private final Type type;
-  private final boolean nullable;
 
-  public AttributeReference(String name, Type type) {
+  public NameReference(String name) {
     this.name = name;
-    this.type = type;
-    this.nullable = true;
-  }
-
-  public AttributeReference(String name, Type type, boolean nullable) {
-    this.name = name;
-    this.type = type;
-    this.nullable = nullable;
   }
 
   public String getName() {
@@ -44,20 +34,16 @@ public class AttributeReference extends LeafExpression {
 
   @Override
   public Type getDataType() {
-    return type;
-  }
-
-  public boolean isNullable() {
-    return nullable;
+    throw new UnsupportedOperationException("NameReference is not bound yet");
   }
 
   @Override
   public <T> T accept(ExpressionVisitor<T> exprVisitor) {
-    return exprVisitor.visitAttribute(this);
+    return exprVisitor.visitNameReference(this);
   }
 
   @Override
   public String toString() {
-    return name + "[type: " + type.typeId().getName() + ", nullable: " + nullable + "]";
+    return "NameReference(name=" + name + ")";
   }
 }

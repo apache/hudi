@@ -29,6 +29,14 @@ import java.util.stream.Collectors;
 
 public class Predicates {
 
+  public static True alwaysTrue() {
+    return True.get();
+  }
+
+  public static False alwaysFalse() {
+    return False.get();
+  }
+
   public static And and(Expression left, Expression right) {
     return new And(left, right);
   }
@@ -61,8 +69,20 @@ public class Predicates {
     return new BinaryComparison(left, Expression.Operator.STARTS_WITH, right);
   }
 
+  public static StringContains contains(Expression left, Expression right) {
+    return new StringContains(left, right);
+  }
+
   public static In in(Expression left, List<Expression> validExpressions) {
     return new In(left, validExpressions);
+  }
+
+  public static IsNull isNull(Expression child) {
+    return new IsNull(child);
+  }
+
+  public static IsNotNull isNotNull(Expression child) {
+    return new IsNotNull(child);
   }
 
   public static Not not(Expression expr) {
@@ -203,6 +223,25 @@ public class Predicates {
     }
   }
 
+  public static class StringContains extends BinaryLike implements Predicate {
+
+    StringContains(Expression left, Expression right) {
+      super(left, Operator.CONTAINS, right);
+      assert left.getDataType().typeId() == Type.TypeID.STRING;
+      assert right.getDataType().typeId() == Type.TypeID.STRING;
+    }
+
+    @Override
+    public String toString() {
+      return getLeft().toString() + ".contains(" + getRight().toString() + ")";
+    }
+
+    @Override
+    public Object eval(StructLike data) {
+      return getLeft().eval(data).toString().startsWith(getRight().eval(data).toString());
+    }
+  }
+
   public static class In implements Predicate {
 
     protected final Expression value;
@@ -238,6 +277,64 @@ public class Predicates {
     public String toString() {
       return value.toString() + " " + getOperator().symbol + " "
           + validValues.stream().map(Expression::toString).collect(Collectors.joining(",", "(", ")"));
+    }
+  }
+
+  public static class IsNull implements Predicate {
+
+    protected final Expression child;
+
+    public IsNull(Expression child) {
+      this.child = child;
+    }
+
+    @Override
+    public List<Expression> getChildren() {
+      return Collections.singletonList(child);
+    }
+
+    @Override
+    public Boolean eval(StructLike data) {
+      return child.eval(data) == null;
+    }
+
+    @Override
+    public Operator getOperator() {
+      return Operator.IS_NULL;
+    }
+
+    @Override
+    public String toString() {
+      return child.toString() + " IS NULL";
+    }
+  }
+
+  public static class IsNotNull implements Predicate {
+
+    protected final Expression child;
+
+    public IsNotNull(Expression child) {
+      this.child = child;
+    }
+
+    @Override
+    public List<Expression> getChildren() {
+      return Collections.singletonList(child);
+    }
+
+    @Override
+    public Boolean eval(StructLike data) {
+      return child.eval(data) != null;
+    }
+
+    @Override
+    public Operator getOperator() {
+      return Operator.IS_NOT_NULL;
+    }
+
+    @Override
+    public String toString() {
+      return child.toString() + " IS NOT NULL";
     }
   }
 
