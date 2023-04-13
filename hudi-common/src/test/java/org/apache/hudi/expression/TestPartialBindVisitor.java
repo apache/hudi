@@ -45,11 +45,11 @@ public class TestPartialBindVisitor {
     PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
 
     Predicates.BinaryComparison eq = Predicates.eq(new NameReference("a"),
-        new Literal<>("Jane", Types.StringType.get()));
+        Literal.from("Jane"));
     Predicates.BinaryComparison gt = Predicates.gt(new NameReference("c"),
-        new Literal<>(10, Types.IntType.get()));
+        Literal.from(10));
     Predicates.In in = Predicates.in(new NameReference("d"),
-        Arrays.asList(new Literal<>(10L, Types.IntType.get()), new Literal<>(13L, Types.IntType.get())));
+        Arrays.asList(Literal.from(10L), Literal.from(13L)));
 
     Predicates.And expr = Predicates.and(eq, Predicates.or(gt, in));
     Expression binded = expr.accept(partialBindVisitor);
@@ -65,11 +65,11 @@ public class TestPartialBindVisitor {
     PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
 
     Predicates.BinaryComparison eq = Predicates.eq(new NameReference("a"),
-        new Literal<>("Jane", Types.StringType.get()));
+        Literal.from("Jane"));
     Predicates.BinaryComparison lt = Predicates.lt(new NameReference("m"),
-        new Literal<>(10, Types.IntType.get()));
+        Literal.from(10));
     Predicates.BinaryComparison gteq = Predicates.gteq(new NameReference("d"),
-        new Literal<>(10L, Types.LongType.get()));
+        Literal.from(10L));
 
     Predicates.And expr = Predicates.and(eq, Predicates.or(lt, gteq));
     // Since Attribute m does not exist in the schema, so the OR expression is always true,

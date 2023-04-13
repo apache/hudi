@@ -151,8 +151,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Expression boundedExpr = expression.accept(new BindVisitor(partitionFields, false));
     boolean hiveStylePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getHiveStylePartitioningEnable());
     return getAllPartitionPaths().stream()
-        .filter(p -> (boolean) boundedExpr.eval(HoodieTableMetadata.
-            extractPartitionValues(partitionFields, p, hiveStylePartitioningEnabled)))
+        .filter(p -> (boolean) boundedExpr.eval(HoodieTableMetadata
+            .extractPartitionValues(partitionFields, p, hiveStylePartitioningEnabled)))
         .collect(Collectors.toList());
   }
 

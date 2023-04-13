@@ -37,7 +37,6 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.expression.ArrayData;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.PartialBindVisitor;
 import org.apache.hudi.internal.schema.Types;
@@ -126,20 +125,20 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
           if (fileStatus.isDirectory()) {
             String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath());
             if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, fileStatus.getPath())) {
-              if ((Boolean) boundedExpr.eval(HoodieTableMetadata.
-                  extractPartitionValues(partitionFields, relativePartitionPath, hiveStylePartitioningEnabled))) {
+              if ((Boolean) boundedExpr.eval(HoodieTableMetadata
+                  .extractPartitionValues(partitionFields, relativePartitionPath, hiveStylePartitioningEnabled))) {
                 return Pair.of(Option.of(relativePartitionPath), Option.empty());
               }
             } else if (!fileStatus.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
-              if ((Boolean) boundedExpr.eval(HoodieTableMetadata.
-                  extractPartitionValues(partitionFields, relativePartitionPath, hiveStylePartitioningEnabled))) {
+              if ((Boolean) boundedExpr.eval(HoodieTableMetadata
+                  .extractPartitionValues(partitionFields, relativePartitionPath, hiveStylePartitioningEnabled))) {
                 return Pair.of(Option.empty(), Option.of(fileStatus.getPath()));
               }
             }
           } else if (fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
             String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath().getParent());
-            if ((Boolean) boundedExpr.eval(HoodieTableMetadata.
-                extractPartitionValues(partitionFields, relativePartitionPath, hiveStylePartitioningEnabled))) {
+            if ((Boolean) boundedExpr.eval(HoodieTableMetadata
+                .extractPartitionValues(partitionFields, relativePartitionPath, hiveStylePartitioningEnabled))) {
               return Pair.of(Option.of(relativePartitionPath), Option.empty());
             }
           }

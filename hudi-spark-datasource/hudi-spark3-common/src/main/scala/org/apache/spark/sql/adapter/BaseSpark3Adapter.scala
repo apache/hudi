@@ -95,6 +95,10 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def translateFilter(predicate: Expression,
                                supportNestedPredicatePushdown: Boolean = false): Option[Filter] = {
+    if (supportNestedPredicatePushdown) {
+      throw new UnsupportedOperationException("Nested predicate push down is not supported")
+    }
+
     DataSourceStrategy.translateFilter(predicate, supportNestedPredicatePushdown)
   }
 }

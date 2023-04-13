@@ -18,7 +18,6 @@
 
 package org.apache.hudi.expression;
 
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.Types;
 
 import java.util.List;
