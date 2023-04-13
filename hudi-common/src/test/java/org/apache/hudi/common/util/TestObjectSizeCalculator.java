@@ -59,12 +59,27 @@ public class TestObjectSizeCalculator {
     String name = "Alice Bob";
     Person person = new Person(name);
 
+    if (getVersion() > 8) {
+      assertEquals(48, getObjectSize(string));
+      assertEquals(168, getObjectSize(stringArray));
+      assertEquals(144, getObjectSize(stringBuilder));
+      assertEquals(72, getObjectSize(DayOfWeek.TUESDAY));
+      assertEquals(1256, getObjectSize(Schema.create(Schema.Type.STRING)));
+      assertEquals(96, getObjectSize(person));
+    } else {
+      assertEquals(56, getObjectSize(string));
+      assertEquals(184, getObjectSize(stringArray));
+      assertEquals(240, getObjectSize(stringBuilder));
+      assertEquals(80, getObjectSize(DayOfWeek.TUESDAY));
+      // Since avro 1.9, Schema use ConcurrentHashMap instead of LinkedHashMap to
+      // implement props, which will change the size of the object.
+      assertEquals(HoodieAvroUtils.gteqAvro1_9() ? 1320 : 1240,
+          getObjectSize(Schema.create(Schema.Type.STRING)));
+      assertEquals(104, getObjectSize(person));
+    }
     assertEquals(40, getObjectSize(emptyString));
-    assertEquals(56, getObjectSize(string));
-    assertEquals(184, getObjectSize(stringArray));
     assertEquals(416, getObjectSize(anotherStringArray));
     assertEquals(40, getObjectSize(stringList));
-    assertEquals(240, getObjectSize(stringBuilder));
     assertEquals(16, getObjectSize(maxIntPrimitive));
     assertEquals(16, getObjectSize(minIntPrimitive));
     assertEquals(16, getObjectSize(maxInteger));
@@ -72,16 +87,23 @@ public class TestObjectSizeCalculator {
     assertEquals(24, getObjectSize(zeroLong));
     assertEquals(24, getObjectSize(zeroDouble));
     assertEquals(16, getObjectSize(booleanField));
-    assertEquals(80, getObjectSize(DayOfWeek.TUESDAY));
     assertEquals(16, getObjectSize(object));
     assertEquals(32, getObjectSize(emptyClass));
     assertEquals(40, getObjectSize(stringClass));
     assertEquals(40, getObjectSize(payloadClass));
-    // Since avro 1.9, Schema use ConcurrentHashMap instead of LinkedHashMap to
-    // implement props, which will change the size of the object.
-    assertEquals(HoodieAvroUtils.gteqAvro1_9() ? 1320 : 1240,
-        getObjectSize(Schema.create(Schema.Type.STRING)));
-    assertEquals(104, getObjectSize(person));
+  }
+
+  private static int getVersion() {
+    String version = System.getProperty("java.version");
+    if (version.startsWith("1.")) {
+      version = version.substring(2, 3);
+    } else {
+      int dot = version.indexOf(".");
+      if (dot != -1) {
+        version = version.substring(0, dot);
+      }
+    }
+    return Integer.parseInt(version);
   }
 
   class EmptyClass {
