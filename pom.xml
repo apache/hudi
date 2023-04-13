@@ -167,7 +167,7 @@
     <caffeine.version>2.9.1</caffeine.version>
     <commons.io.version>2.11.0</commons.io.version>
     <scala11.version>2.11.12</scala11.version>
-    <scala12.version>2.12.10</scala12.version>
+    <scala12.version>2.12.17</scala12.version>
     <scala.version>${scala11.version}</scala.version>
     <scala.collection-compat.version>2.8.1</scala.collection-compat.version>
     <scala.binary.version>2.11</scala.binary.version>
