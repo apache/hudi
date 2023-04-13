@@ -59,7 +59,7 @@ public class TestObjectSizeCalculator {
     String name = "Alice Bob";
     Person person = new Person(name);
 
-    if (getVersion() > 8) {
+    if (getVersion() == 11 || getVersion() == 17) {
       assertEquals(48, getObjectSize(string));
       assertEquals(168, getObjectSize(stringArray));
       assertEquals(144, getObjectSize(stringBuilder));
