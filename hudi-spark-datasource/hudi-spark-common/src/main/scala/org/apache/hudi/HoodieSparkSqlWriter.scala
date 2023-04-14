@@ -1003,18 +1003,16 @@ object HoodieSparkSqlWriter {
                                        tableConfig: HoodieTableConfig,
                                        parameters: Map[String, String], configuration: Configuration): Boolean = {
     log.info(s"Config.inlineCompactionEnabled ? ${client.getConfig.inlineCompactionEnabled}")
-    if (asyncCompactionTriggerFnDefined && !client.getConfig.inlineCompactionEnabled
-      && parameters.get(ASYNC_COMPACT_ENABLE.key).exists(r => r.toBoolean)) {
-      tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
-    } else {
-      false
-    }
+    (asyncCompactionTriggerFnDefined && !client.getConfig.inlineCompactionEnabled
+      && parameters.get(ASYNC_COMPACT_ENABLE.key).exists(r => r.toBoolean)
+      && tableConfig.getTableType == HoodieTableType.MERGE_ON_READ)
   }
 
   private def isAsyncClusteringEnabled(client: SparkRDDWriteClient[_],
                                        parameters: Map[String, String]): Boolean = {
     log.info(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
-    asyncClusteringTriggerFnDefined && client.getConfig.isAsyncClusteringEnabled
+    (asyncClusteringTriggerFnDefined && !client.getConfig.inlineClusteringEnabled
+      && client.getConfig.isAsyncClusteringEnabled)
   }
 
   /**
