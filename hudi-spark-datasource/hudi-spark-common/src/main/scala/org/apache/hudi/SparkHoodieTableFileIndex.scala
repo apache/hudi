@@ -300,7 +300,9 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       // prefix to try to reduce the scope of the required file-listing
       val relativePartitionPathPrefix = composeRelativePartitionPath(staticPartitionColumnNameValuePairs)
 
-      if (staticPartitionColumnNameValuePairs.length == partitionColumnNames.length) {
+      if (!metaClient.getFs.exists(new Path(getBasePath, relativePartitionPathPrefix))) {
+        Seq()
+      } else if (staticPartitionColumnNameValuePairs.length == partitionColumnNames.length) {
         // In case composed partition path is complete, we can return it directly avoiding extra listing operation
         Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnNameValuePairs.map(_._2._2.asInstanceOf[AnyRef]).toArray))
       } else {
