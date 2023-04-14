@@ -160,5 +160,3 @@ last_modified_at: 2022-12-21T15:59:57-04:00
 
 58. [Data Analysis for Apache Hudi Blogs on Medium with Pandas](https://www.youtube.com/watch?v=a7FD4zIOwVg)- By Soumil Shah, Mar 24th 2023
 
-58. [How to scrape all Blogs about a topic from medium like pro with Python](https://www.youtube.com/watch?v=-KUSaC_1X6M)- By Soumil Shah, Mar 24th 2023
-
