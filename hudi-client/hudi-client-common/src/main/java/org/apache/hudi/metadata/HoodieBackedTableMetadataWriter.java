@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
@@ -170,9 +171,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           "Cleaning is controlled internally for Metadata table.");
       ValidationUtils.checkArgument(!this.metadataWriteConfig.inlineCompactionEnabled(),
           "Compaction is controlled internally for metadata table.");
-      // Metadata Table cannot have metadata listing turned on. (infinite loop, much?)
+      // Auto commit is required
       ValidationUtils.checkArgument(this.metadataWriteConfig.shouldAutoCommit(),
           "Auto commit is required for Metadata Table");
+      ValidationUtils.checkArgument(this.metadataWriteConfig.getWriteStatusClassName().equals(FailOnFirstErrorWriteStatus.class.getName()),
+          "MDT should use " + FailOnFirstErrorWriteStatus.class.getName());
+      // Metadata Table cannot have metadata listing turned on. (infinite loop, much?)
       ValidationUtils.checkArgument(!this.metadataWriteConfig.isMetadataTableEnabled(),
           "File listing cannot be used for Metadata Table");
 
@@ -300,6 +304,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withAllowMultiWriteOnSameInstant(true)
         .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
         .withPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS)
+        .withWriteStatusClass(FailOnFirstErrorWriteStatus.class)
         .withReleaseResourceEnabled(writeConfig.areReleaseResourceEnabled());
 
     // RecordKey properties are needed for the metadata table records
@@ -1051,7 +1056,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // b. There could be DT inflights after latest delta commit in MDT and we are ok with it. bcoz, the contract is, latest compaction instant time in MDT represents
     // any instants before that is already synced with metadata table.
     // c. Do consider out of order commits. For eg, c4 from DT could complete before c3. and we can't trigger compaction in MDT with c4 as base instant time, until every
-    // instant before c4 is synced with metadata table. 
+    // instant before c4 is synced with metadata table.
     List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
         .findInstantsBeforeOrEquals(latestDeltaCommitTimeInMetadataTable).getInstants();
 
