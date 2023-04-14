@@ -79,8 +79,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.Properties;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -1116,9 +1116,9 @@ public class HoodieAvroUtils {
    * Given avro records, rewrites them with new schema.
    *
    * @param oldRecords oldRecords to be rewrite
-   * @param newSchema newSchema used to rewrite oldRecord
+   * @param newSchema  newSchema used to rewrite oldRecord
    * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
-   * @return a iterator of rewrote GeneriRcords
+   * @return an iterator of rewrote {@link GenericRecord}
    */
   public static Iterator<GenericRecord> rewriteRecordWithNewSchema(Iterator<GenericRecord> oldRecords, Schema newSchema, Map<String, String> renameCols, boolean validate) {
     if (oldRecords == null || newSchema == null) {

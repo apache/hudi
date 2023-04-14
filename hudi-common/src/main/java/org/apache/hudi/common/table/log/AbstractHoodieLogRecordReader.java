@@ -33,9 +33,9 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -408,7 +408,7 @@ public abstract class AbstractHoodieLogRecordReader {
        * First traversal to identify the rollback blocks and valid data and compacted blocks.
        *
        * Scanning blocks is easy to do in single writer mode, where the rollback block is right after the effected data blocks.
-       * With multiwriter mode the blocks can be out of sync. An example scenario.
+       * With multi-writer mode the blocks can be out of sync. An example scenario.
        * B1, B2, B3, B4, R1(B3), B5
        * In this case, rollback block R1 is invalidating the B3 which is not the previous block.
        * This becomes more complicated if we have compacted blocks, which are data blocks created using log compaction.

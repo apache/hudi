@@ -242,7 +242,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("0.13.0")
-      .withDocumentation("Optimized log blocks scanner that addresses all the multiwriter use-cases while appending to log files. "
+      .withDocumentation("Optimized log blocks scanner that addresses all the multi-writer use-cases while appending to log files. "
           + "It also differentiates original blocks written by ingestion writers and compacted blocks written by log compaction.");
 
   private HoodieMetadataConfig() {

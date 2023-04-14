@@ -121,7 +121,7 @@ public class HoodiePartitionMetadata {
         fs.rename(tmpMetaPath, metaPath);
       }
     } catch (IOException ioe) {
-      LOG.warn("Error trying to save partition metadata (this is okay, as long as atleast 1 of these succced), "
+      LOG.warn("Error trying to save partition metadata (this is okay, as long as at least 1 of these succeeded), "
           + partitionPath, ioe);
     } finally {
       if (!metafileExists) {
