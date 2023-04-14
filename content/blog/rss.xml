@@ -4,9 +4,17 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Mon, 20 Mar 2023 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Fri, 07 Apr 2023 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Speed up your write latencies using Bucket Index in Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2023/04/07/Speed-up-your-write-latencies-using-Bucket-Index-in-Apache-Hudi</link>
+            <guid>/2023/04/07/Speed-up-your-write-latencies-using-Bucket-Index-in-Apache-Hudi</guid>
+            <pubDate>Fri, 07 Apr 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/speed-up-your-write-latencies-using-bucket-index-in-apache-hudi-2f7c297493dc">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Introducing native support for Apache Hudi, Delta Lake, and Apache Iceberg on AWS Glue for Apache Spark, Part 2: AWS Glue Studio Visual Editor]]></title>
             <link>https://hudi.apache.org/blog/2023/03/20/Introducing-native-support-for-Apache Hudi-Delta-Lake-and-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark-Part-2-AWS-Glue-Studio-Visual-Editor</link>
@@ -16,16 +24,12 @@
             <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/part-2-glue-studio-visual-editor-introducing-native-support-for-apache-hudi-delta-lake-and-apache-iceberg-on-aws-glue-for-apache-spark/">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
-            <title><![CDATA[Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi]]></title>
+            <title><![CDATA[Setting Uber’s Transactional Data Lake in Motion with Incremental ETL Using Apache Hudi]]></title>
             <link>https://hudi.apache.org/blog/2023/03/16/Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi</link>
             <guid>/2023/03/16/Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi</guid>
             <pubDate>Thu, 16 Mar 2023 00:00:00 GMT</pubDate>
-            <description><![CDATA[---]]></description>
-            <content:encoded><![CDATA[<hr/><p>title: &quot;Setting Uber’s Transactional Data Lake in Motion with Incremental ETL Using Apache Hudi&quot;
-authors: </p><ul><li>name: Vinoth Govindarajan</li><li>name: Saketh Chintapalli</li><li>name: Yogesh Saswade</li><li>name: Aayush Bareja
-category: blog
-image: /assets/images/blog/hudi-lakehouse-architecture-uber.png
-tags:</li><li>incremental pipeline</li><li>datalake</li><li>hudi</li><li>medallion architecture</li></ul><hr/><div url="https://www.uber.com/blog/ubers-lakehouse-architecture/">Redirecting... please wait!! </div>]]></content:encoded>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.uber.com/blog/ubers-lakehouse-architecture/">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Automate schema evolution at scale with Apache Hudi in AWS Glue | Amazon Web Services]]></title>
