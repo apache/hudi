@@ -38,7 +38,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
@@ -63,7 +62,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     try {
       this.partitionValueExtractor =
-          (PartitionValueExtractor) Class.forName(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
+          (PartitionValueExtractor) Class.forName(config.getMetaSyncPartitionExtractorClass()).newInstance();
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
           "Failed to initialize PartitionValueExtractor class " + config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS), e);
@@ -76,19 +75,27 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
    */
   public abstract void runSQL(String sql);
 
+  /**
+   * Create a database with the given name.
+   *
+   * @param databaseName name of database to be created.
+   */
   @Override
   public void createDatabase(String databaseName) {
-    runSQL("create database if not exists " + databaseName);
+    String createTableSQL = HiveSchemaUtil.generateCreateDataBaseDDL(databaseName);
+    LOG.info("Creating database with {}.", createTableSQL);
+    runSQL(createTableSQL);
   }
 
   @Override
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
-                          Map<String, String> tableProperties) {
+  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
+      String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
+      Map<String, String> tableProperties) {
     try {
       String createSQLQuery =
-          HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, config, inputFormatClass,
+          HiveSchemaUtil.generateCreateTableDDL(config, databaseName, tableName, storageSchema, inputFormatClass,
               outputFormatClass, serdeClass, serdeProperties, tableProperties);
-      LOG.info("Creating table with " + createSQLQuery);
+      LOG.info("Creating table with {}.", createSQLQuery);
       runSQL(createSQLQuery);
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to create table " + tableName, e);
@@ -145,19 +152,29 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
       String type = field.getValue().getLeft();
       String comment = field.getValue().getRight();
       comment = comment.replace("'","");
-      sql.append("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
-              .append(databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
-              .append(HIVE_ESCAPE_CHARACTER).append(tableName)
-              .append(HIVE_ESCAPE_CHARACTER)
-              .append(" CHANGE COLUMN `").append(name).append("` `").append(name)
-              .append("` ").append(type).append(" comment '").append(comment).append("' ");
+      sql.append("ALTER TABLE ")
+         .append(HIVE_ESCAPE_CHARACTER)
+         .append(databaseName)
+         .append(HIVE_ESCAPE_CHARACTER)
+         .append(".")
+         .append(HIVE_ESCAPE_CHARACTER)
+         .append(tableName)
+         .append(HIVE_ESCAPE_CHARACTER)
+         .append(" CHANGE COLUMN `")
+         .append(name)
+         .append("` `")
+         .append(name)
+         .append("` ")
+         .append(type)
+         .append(" comment '")
+         .append(comment).append("' ");
       runSQL(sql.toString());
     }
   }
 
   private List<String> constructAddPartitions(String tableName, List<String> partitions) {
     List<String> result = new ArrayList<>();
-    int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+    int batchSyncPartitionNum = config.getHiveBatchSyncPartitionNum();
     StringBuilder alterSQL = getAlterTablePrefix(tableName);
     for (int i = 0; i < partitions.size(); i++) {
       String partitionClause = getPartitionClause(partitions.get(i));

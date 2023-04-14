@@ -32,6 +32,7 @@ import java.util.Map;
  */
 public interface DDLExecutor extends AutoCloseable {
 
+
   /**
    * @param databaseName name of database to be created.
    */

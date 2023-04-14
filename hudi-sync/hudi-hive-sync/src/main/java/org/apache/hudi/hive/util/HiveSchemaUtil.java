@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive.util;
 
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
@@ -31,6 +32,7 @@ import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.stringtemplate.v4.ST;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -40,12 +42,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 
 /**
@@ -54,8 +56,34 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
 public class HiveSchemaUtil {
 
   private static final Logger LOG = LoggerFactory.getLogger(HiveSchemaUtil.class);
-  public static final String HIVE_ESCAPE_CHARACTER = "`";
 
+  private static final String DATABASE_NAME = "DATABASE_NAME";
+  private static final String EXTERNAL = "external";
+  private static final String TABLE_NAME = "TABLE_NAME";
+  private static final String LIST_COLUMNS = "columns";
+  private static final String PARTITIONS = "partitions";
+  private static final String ROW_FORMAT = "row_format";
+  private static final String LOCATION_BLOCK = "location_block";
+  private static final String LOCATION = "location";
+  private static final String PROPERTIES = "properties";
+
+  private static final String BUCKETS = "buckets";
+
+  private static final String CREATE_DATABASE_STMT =
+      "CREATE DATABASE IF NOT EXISTS <" + DATABASE_NAME + ">;";
+
+  private static final String CREATE_TABLE_TEMPLATE =
+      "CREATE <" + EXTERNAL + ">TABLE <if(" + DATABASE_NAME + ")>`<" + DATABASE_NAME + ">`.<endif>"
+      + "`<" + TABLE_NAME + ">`(\n"
+      + "<" + LIST_COLUMNS + ">)\n"
+      + "<" + PARTITIONS + ">\n"
+      + "<" + BUCKETS + ">\n"
+      + "<" + ROW_FORMAT + ">\n"
+      + "<" + LOCATION_BLOCK + ">"
+      + "TBLPROPERTIES (\n"
+      + "<" + PROPERTIES + ">)";
+
+  public static final String HIVE_ESCAPE_CHARACTER = "`";
   public static final String BOOLEAN_TYPE_NAME = "boolean";
   public static final String INT_TYPE_NAME = "int";
   public static final String BIGINT_TYPE_NAME = "bigint";
@@ -460,46 +488,37 @@ public class HiveSchemaUtil {
     return columns.toString();
   }
 
-  public static String generateCreateDDL(String tableName, MessageType storageSchema, HiveSyncConfig config, String inputFormatClass,
-                                         String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
-                                         Map<String, String> tableProperties) throws IOException {
-    Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
-    String columns = generateSchemaString(storageSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS), config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
+  /**
+   * Generate CreateDataBase SQL.
+   *
+   * @param databaseName databaseName.
+   * @return createDatabase SQL.
+   */
+  public static String generateCreateDataBaseDDL(String databaseName) {
+    ST command = new ST(CREATE_DATABASE_STMT);
+    command.add(DATABASE_NAME, databaseName);
+    return command.render();
+  }
 
-    List<String> partitionFields = new ArrayList<>();
-    for (String partitionKey : config.getSplitStrings(META_SYNC_PARTITION_FIELDS)) {
-      String partitionKeyWithTicks = tickSurround(partitionKey);
-      partitionFields.add(new StringBuilder().append(partitionKeyWithTicks).append(" ")
-          .append(getPartitionKeyType(hiveSchema, partitionKeyWithTicks)).toString());
-    }
-
-    String partitionsStr = String.join(",", partitionFields);
-    StringBuilder sb = new StringBuilder();
-    if (config.getBoolean(HIVE_CREATE_MANAGED_TABLE)) {
-      sb.append("CREATE TABLE IF NOT EXISTS ");
-    } else {
-      sb.append("CREATE EXTERNAL TABLE IF NOT EXISTS ");
-    }
-    sb.append(HIVE_ESCAPE_CHARACTER).append(config.getStringOrDefault(META_SYNC_DATABASE_NAME)).append(HIVE_ESCAPE_CHARACTER)
-            .append(".").append(HIVE_ESCAPE_CHARACTER).append(tableName).append(HIVE_ESCAPE_CHARACTER);
-    sb.append("( ").append(columns).append(")");
+  public static String generateCreateTableDDL(HiveSyncConfig config, String dataBaseName, String tableName,
+      MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass,
+      Map<String, String> serdeProperties, Map<String, String> tableProperties) throws IOException {
+    ST command = new ST(CREATE_TABLE_TEMPLATE);
+    command.add(DATABASE_NAME, tickSurround(dataBaseName));
+    command.add(TABLE_NAME, tickSurround(tableName));
+    command.add(EXTERNAL, getExternal(config));
+    command.add(LIST_COLUMNS, getColumns(storageSchema, config));
     if (!config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
-      sb.append(" PARTITIONED BY (").append(partitionsStr).append(")");
+      command.add(PARTITIONS, getPartitions(storageSchema, config));
     }
+    command.add(ROW_FORMAT, getRowFormat(serdeClass, serdeProperties,
+        inputFormatClass, outputFormatClass));
     if (config.getString(HIVE_SYNC_BUCKET_SYNC_SPEC) != null) {
-      sb.append(' ' + config.getString(HIVE_SYNC_BUCKET_SYNC_SPEC) + ' ');
+      command.add(BUCKETS, config.getBuckets());
     }
-    sb.append(" ROW FORMAT SERDE '").append(serdeClass).append("'");
-    if (serdeProperties != null && !serdeProperties.isEmpty()) {
-      sb.append(" WITH SERDEPROPERTIES (").append(propertyToString(serdeProperties)).append(")");
-    }
-    sb.append(" STORED AS INPUTFORMAT '").append(inputFormatClass).append("'");
-    sb.append(" OUTPUTFORMAT '").append(outputFormatClass).append("' LOCATION '").append(config.getAbsoluteBasePath()).append("'");
-
-    if (tableProperties != null && !tableProperties.isEmpty()) {
-      sb.append(" TBLPROPERTIES(").append(propertyToString(tableProperties)).append(")");
-    }
-    return sb.toString();
+    command.add(LOCATION, config.getAbsoluteBasePath());
+    command.add(PROPERTIES, propertyToString(tableProperties));
+    return command.render();
   }
 
   private static String propertyToString(Map<String, String> properties) {
@@ -526,5 +545,53 @@ public class HiveSchemaUtil {
     // TODO - all partition fields should be part of the schema. datestr is treated as special.
     // Dont do that
     return STRING_TYPE_NAME;
+  }
+
+  private static String getExternal(HiveSyncConfig config) {
+    return config.getHiveCreateExternalTable() ? "EXTERNAL " : "";
+  }
+
+  private static String getRowFormat(String serdeClass, Map<String, String> serdeParams,
+      String inputFormatClass, String outputFormatClass) {
+    StringBuilder rowFormat = new StringBuilder();
+    rowFormat.append("ROW FORMAT SERDE \n").append("  '" + serdeClass + "' \n");
+    if (!serdeParams.isEmpty()) {
+      appendSerdeParams(rowFormat, serdeParams);
+      rowFormat.append(" \n");
+    }
+    rowFormat.append("STORED AS INPUTFORMAT \n  '" + inputFormatClass + "' \n")
+        .append("OUTPUTFORMAT \n  '" + outputFormatClass + "'");
+    return rowFormat.toString();
+  }
+
+  public static void appendSerdeParams(StringBuilder builder, Map<String, String> serdeParams) {
+    SortedMap<String, String> sortedSerdeParams = new TreeMap<>(serdeParams);
+    List<String> serdeCols = new ArrayList<>();
+    for (Map.Entry<String, String> entry : sortedSerdeParams.entrySet()) {
+      serdeCols.add("  '" + entry.getKey() + "'='" + entry.getValue() + "'");
+    }
+    builder.append("WITH SERDEPROPERTIES ( \n")
+        .append(StringUtils.join(serdeCols, ", \n"))
+        .append(')');
+  }
+
+  private static String getPartitions(MessageType storageSchema, HiveSyncConfig config)
+      throws IOException {
+    Map<String, String> hiveSchema =
+        convertParquetSchemaToHiveSchema(storageSchema, config.getIsHiveSupportTimestampType());
+    List<String> partitionFields = new ArrayList<>();
+    for (String partitionKey : config.getSplitStrings(META_SYNC_PARTITION_FIELDS)) {
+      String partitionKeyWithTicks = tickSurround(partitionKey);
+      partitionFields.add(new StringBuilder().append(partitionKeyWithTicks).append(" ")
+              .append(getPartitionKeyType(hiveSchema, partitionKeyWithTicks)).toString());
+    }
+    String partitionsStr = String.join(",", partitionFields);
+    return "PARTITIONED BY ( \n" + partitionsStr + ")";
+  }
+
+  private static String getColumns(MessageType storageSchema, HiveSyncConfig config)
+      throws IOException {
+    return generateSchemaString(storageSchema,
+        config.getMetaSyncPartitionFields(), config.getIsHiveSupportTimestampType());
   }
 }

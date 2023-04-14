@@ -105,12 +105,13 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
 
   @Override
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
-      String outputFormatClass, String serdeClass,
-      Map<String, String> serdeProperties, Map<String, String> tableProperties) {
+      String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
+      Map<String, String> tableProperties) {
     try {
-      LOG.info("Creating table:{}", tableName);
-      String createSQLQuery = HiveSchemaUtil.generateCreateDDL(tableName, storageSchema,
-          config, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
+      LOG.info("Creating table {}.{}.", databaseName, tableName);
+      String createSQLQuery = HiveSchemaUtil.generateCreateTableDDL(config, databaseName,
+          tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass,
+          serdeProperties, tableProperties);
       executeAdbSql(createSQLQuery);
     } catch (IOException e) {
       throw new HoodieException("Fail to create table:" + tableName, e);

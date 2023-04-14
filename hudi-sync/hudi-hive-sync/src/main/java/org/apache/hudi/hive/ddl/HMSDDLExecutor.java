@@ -52,8 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
@@ -106,7 +104,7 @@ public class HMSDDLExecutor implements DDLExecutor {
 
       List<FieldSchema> fieldSchema = HiveSchemaUtil.convertMapSchemaToHiveFieldSchema(mapSchema, syncConfig);
 
-      List<FieldSchema> partitionSchema = syncConfig.getSplitStrings(META_SYNC_PARTITION_FIELDS).stream().map(partitionKey -> {
+      List<FieldSchema> partitionSchema = syncConfig.getMetaSyncPartitionFields().stream().map(partitionKey -> {
         String partitionKeyType = HiveSchemaUtil.getPartitionKeyType(mapSchema, partitionKey);
         return new FieldSchema(partitionKey, partitionKeyType.toLowerCase(), "");
       }).collect(Collectors.toList());
@@ -120,13 +118,13 @@ public class HMSDDLExecutor implements DDLExecutor {
       storageDescriptor.setCols(fieldSchema);
       storageDescriptor.setInputFormat(inputFormatClass);
       storageDescriptor.setOutputFormat(outputFormatClass);
-      storageDescriptor.setLocation(syncConfig.getString(META_SYNC_BASE_PATH));
+      storageDescriptor.setLocation(syncConfig.getMetaSyncBasePath());
       serdeProperties.put("serialization.format", "1");
       storageDescriptor.setSerdeInfo(new SerDeInfo(null, serdeClass, serdeProperties));
       newTb.setSd(storageDescriptor);
       newTb.setPartitionKeys(partitionSchema);
 
-      if (!syncConfig.getBoolean(HIVE_CREATE_MANAGED_TABLE)) {
+      if (syncConfig.getHiveCreateExternalTable()) {
         newTb.putToParameters("EXTERNAL", "TRUE");
         newTb.setTableType(TableType.EXTERNAL_TABLE.toString());
       }
@@ -136,7 +134,7 @@ public class HMSDDLExecutor implements DDLExecutor {
       }
       client.createTable(newTb);
     } catch (Exception e) {
-      LOG.error("failed to create table " + tableName, e);
+      LOG.error("failed to create table {}.", tableName, e);
       throw new HoodieHiveSyncException("failed to create table " + tableName, e);
     }
   }
@@ -192,7 +190,7 @@ public class HMSDDLExecutor implements DDLExecutor {
     LOG.info("Adding partitions {} to table {}.", addPartitions.size(), tableName);
     try {
       StorageDescriptor sd = client.getTable(databaseName, tableName).getSd();
-      int batchSyncPartitionNum = syncConfig.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+      int batchSyncPartitionNum = syncConfig.getHiveBatchSyncPartitionNum();
       for (List<String> batch : CollectionUtils.batches(addPartitions, batchSyncPartitionNum)) {
         List<Partition> partitionList = new ArrayList<>();
         batch.forEach(partition -> {

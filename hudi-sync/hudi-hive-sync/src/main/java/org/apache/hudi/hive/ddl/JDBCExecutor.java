@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
@@ -161,7 +160,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
 
   private List<String> constructDropPartitions(String tableName, List<String> partitions) {
     List<String> result = new ArrayList<>();
-    int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+    int batchSyncPartitionNum = config.getHiveBatchSyncPartitionNum();
     StringBuilder alterSQL = getAlterTableDropPrefix(tableName);
 
     for (int i = 0; i < partitions.size(); i++) {
