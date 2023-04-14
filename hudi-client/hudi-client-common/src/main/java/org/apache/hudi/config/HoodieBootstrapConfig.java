@@ -34,6 +34,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
+import static org.apache.hudi.client.bootstrap.BootstrapMode.FULL_RECORD;
+import static org.apache.hudi.client.bootstrap.BootstrapMode.METADATA_ONLY;
+
 /**
  * Bootstrap specific configs.
  */
@@ -82,7 +85,6 @@ public class HoodieBootstrapConfig extends HoodieConfig {
   public static final ConfigProperty<String> KEYGEN_TYPE = ConfigProperty
       .key("hoodie.bootstrap.keygen.type")
       .defaultValue(KeyGeneratorType.SIMPLE.name())
-      .sinceVersion("0.9.0");
       .markAdvanced()
       .sinceVersion("0.9.0")
       .withDocumentation(KeyGeneratorType.class);
