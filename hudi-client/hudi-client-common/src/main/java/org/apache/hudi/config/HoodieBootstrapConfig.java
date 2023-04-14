@@ -52,44 +52,52 @@ public class HoodieBootstrapConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PARTITION_SELECTOR_REGEX_MODE = ConfigProperty
       .key("hoodie.bootstrap.mode.selector.regex.mode")
-      .defaultValue(BootstrapMode.METADATA_ONLY.name())
-      .withDocumentation(BootstrapMode.class)
-      .sinceVersion("0.6.0");
-
+      .defaultValue(METADATA_ONLY.name())
+      .markAdvanced()
+      .sinceVersion("0.6.0")
+      .withValidValues(METADATA_ONLY.name(), FULL_RECORD.name())
+      .withDocumentation(BootstrapMode.class);
 
   public static final ConfigProperty<String> MODE_SELECTOR_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.mode.selector")
       .defaultValue(MetadataOnlyBootstrapModeSelector.class.getCanonicalName())
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped");
 
   public static final ConfigProperty<String> FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.full.input.provider")
       .defaultValue("org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider")
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Class to use for reading the bootstrap dataset partitions/files, for Bootstrap mode FULL_RECORD");
 
   public static final ConfigProperty<String> KEYGEN_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.keygen.class")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Key generator implementation to be used for generating keys from the bootstrapped dataset");
 
   public static final ConfigProperty<String> KEYGEN_TYPE = ConfigProperty
       .key("hoodie.bootstrap.keygen.type")
       .defaultValue(KeyGeneratorType.SIMPLE.name())
-      .withDocumentation(KeyGeneratorType.class)
       .sinceVersion("0.9.0");
+      .markAdvanced()
+      .sinceVersion("0.9.0")
+      .withDocumentation(KeyGeneratorType.class);
 
   public static final ConfigProperty<String> PARTITION_PATH_TRANSLATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.partitionpath.translator.class")
       .defaultValue(IdentityBootstrapPartitionPathTranslator.class.getName())
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Translates the partition paths from the bootstrapped data into how is laid out as a Hudi table.");
 
   public static final ConfigProperty<String> PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.bootstrap.parallelism")
       .defaultValue("1500")
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("For metadata-only bootstrap, Hudi parallelizes the operation so that "
           + "each table partition is handled by one Spark task. This config limits the number "
@@ -104,12 +112,14 @@ public class HoodieBootstrapConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARTITION_SELECTOR_REGEX_PATTERN = ConfigProperty
       .key("hoodie.bootstrap.mode.selector.regex")
       .defaultValue(".*")
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Matches each bootstrap dataset partition against this regex and applies the mode below to it.");
 
   public static final ConfigProperty<String> INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.index.class")
       .defaultValue(HFileBootstrapIndex.class.getName())
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Implementation to use, for mapping a skeleton base file to a bootstrap base file.");
 

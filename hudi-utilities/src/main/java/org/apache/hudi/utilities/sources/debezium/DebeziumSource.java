@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
+import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
@@ -242,8 +243,8 @@ public abstract class DebeziumSource extends RowSource {
 
   @Override
   public void onCommit(String lastCkptStr) {
-    if (this.props.getBoolean(KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET.key(),
-        KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET.defaultValue())) {
+    if (this.props.getBoolean(KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET.key(),
+        KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET.defaultValue())) {
       offsetGen.commitOffsetToKafka(lastCkptStr);
     }
   }

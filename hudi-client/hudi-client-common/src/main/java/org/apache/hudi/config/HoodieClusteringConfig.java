@@ -75,12 +75,14 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<String> DAYBASED_LOOKBACK_PARTITIONS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.lookback.partitions")
       .defaultValue("2")
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Number of partitions to list to create ClusteringPlan");
 
   public static final ConfigProperty<String> PARTITION_FILTER_BEGIN_PARTITION = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "cluster.begin.partition")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Begin partition used to filter partition (inclusive), only effective when the filter mode '"
           + PLAN_PARTITION_FILTER_MODE + "' is " + ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
@@ -88,6 +90,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARTITION_FILTER_END_PARTITION = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "cluster.end.partition")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("End partition used to filter partition (inclusive), only effective when the filter mode '"
           + PLAN_PARTITION_FILTER_MODE + "' is " + ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
@@ -101,18 +104,21 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARTITION_REGEX_PATTERN = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "partition.regex.pattern")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Filter clustering partitions that matched regex pattern");
 
   public static final ConfigProperty<String> PARTITION_SELECTED = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "partition.selected")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Partitions to run clustering");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.plan.strategy.class")
       .defaultValue(SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY)
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan "
           + "i.e select what file groups are being clustered. Default strategy, looks at the clustering small file size limit (determined by "
@@ -121,6 +127,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<String> EXECUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.execution.strategy.class")
       .defaultValue(SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY)
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Config to provide a strategy class (subclass of RunClusteringStrategy) to define how the "
           + " clustering plan is executed. By default, we sort the file groups in th plan by the specified columns, while "
@@ -136,30 +143,35 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<String> INLINE_CLUSTERING_MAX_COMMITS = ConfigProperty
       .key("hoodie.clustering.inline.max.commits")
       .defaultValue("4")
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Config to control frequency of clustering planning");
 
   public static final ConfigProperty<String> ASYNC_CLUSTERING_MAX_COMMITS = ConfigProperty
       .key("hoodie.clustering.async.max.commits")
       .defaultValue("4")
+      .markAdvanced()
       .sinceVersion("0.9.0")
       .withDocumentation("Config to control frequency of async clustering");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.skipfromlatest.partitions")
       .defaultValue("0")
+      .markAdvanced()
       .sinceVersion("0.9.0")
       .withDocumentation("Number of partitions to skip from latest when choosing partitions to create ClusteringPlan");
 
   public static final ConfigProperty<ClusteringPlanPartitionFilterMode> PLAN_PARTITION_FILTER_MODE_NAME = ConfigProperty
       .key(PLAN_PARTITION_FILTER_MODE)
       .defaultValue(ClusteringPlanPartitionFilterMode.NONE)
-      .withDocumentation(ClusteringPlanPartitionFilterMode.class)
-      .sinceVersion("0.11.0");
+      .markAdvanced()
+      .sinceVersion("0.11.0")
+      .withDocumentation(ClusteringPlanPartitionFilterMode.class);
 
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
       .defaultValue(String.valueOf(2 * 1024 * 1024 * 1024L))
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Each clustering operation can create multiple output file groups. Total amount of data processed by clustering operation"
           + " is defined by below two properties (CLUSTERING_MAX_BYTES_PER_GROUP * CLUSTERING_MAX_NUM_GROUPS)."
@@ -168,6 +180,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_GROUPS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.num.groups")
       .defaultValue("30")
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism");
 
@@ -178,20 +191,23 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups");
 
   public static final ConfigProperty<Boolean> PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED = ConfigProperty
-      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + ".single.group.clustering.enabled")
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "single.group.clustering.enabled")
       .defaultValue(true)
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Whether to generate clustering plan when there is only one file group involved, by default true");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_SORT_COLUMNS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "sort.columns")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Columns to sort the data by when clustering");
 
   public static final ConfigProperty<String> UPDATES_STRATEGY = ConfigProperty
       .key("hoodie.clustering.updates.strategy")
       .defaultValue("org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy")
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Determines how to handle updates, deletes to file groups that are under clustering."
           + " Default strategy just rejects the update");
@@ -199,6 +215,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<String> SCHEDULE_INLINE_CLUSTERING = ConfigProperty
       .key("hoodie.clustering.schedule.inline")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("When set to true, clustering service will be attempted for inline scheduling after each write. Users have to ensure "
           + "they have a separate job to run async clustering(execution) for the one scheduled by this writer. Users can choose to set both "
           + "`hoodie.clustering.inline` and `hoodie.clustering.schedule.inline` to false and have both scheduling and execution triggered by any async process, on which "
@@ -213,12 +230,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Enable running of clustering service, asynchronously as inserts happen on the table.")
       .withAlternatives("hoodie.datasource.clustering.async.enable");
 
-  public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
-      .key("hoodie.clustering.preserve.commit.metadata")
-      .defaultValue(true)
-      .sinceVersion("0.9.0")
-      .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
-
   /**
    * @deprecated this setting has no effect. Please refer to clustering configuration, as well as
    * {@link #LAYOUT_OPTIMIZE_STRATEGY} config to enable advanced record layout optimization strategies
@@ -226,6 +237,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty LAYOUT_OPTIMIZE_ENABLE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "enable")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .deprecatedAfter("0.11.0")
       .withDocumentation("This setting has no effect. Please refer to clustering configuration, as well as "
@@ -246,6 +258,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
       .defaultValue("linear")
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("Determines ordering strategy used in records layout optimization. "
           + "Currently supported strategies are \"linear\", \"z-order\" and \"hilbert\" values are supported.");
@@ -273,8 +286,9 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "curve.build.method")
       .defaultValue(SpatialCurveCompositionStrategyType.DIRECT.name())
-      .withDocumentation(SpatialCurveCompositionStrategyType.class)
-      .sinceVersion("0.10.0");
+      .markAdvanced()
+      .sinceVersion("0.10.0")
+      .withDocumentation(SpatialCurveCompositionStrategyType.class);
 
   /**
    * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD} value
@@ -287,6 +301,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "build.curve.sample.size")
       .defaultValue("200000")
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("Determines target sample size used by the Boundary-based Interleaved Index method "
           + "of building space-filling curve. Larger sample size entails better layout optimization outcomes, "
@@ -298,6 +313,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "data.skipping.enable")
       .defaultValue(true)
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .deprecatedAfter("0.11.0")
       .withDocumentation("Enable data skipping by collecting statistics once layout optimization is complete.");
@@ -305,6 +321,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT = ConfigProperty
       .key("hoodie.clustering.rollback.pending.replacecommit.on.conflict")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("If updates are allowed to file groups pending clustering, then set this config to rollback failed or pending clustering instants. "
           + "Pending clustering will be rolled back ONLY IF there is conflict between incoming upsert and filegroup to be clustered. "
@@ -571,11 +588,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withAsyncClustering(Boolean asyncClustering) {
       clusteringConfig.setValue(ASYNC_CLUSTERING_ENABLE, String.valueOf(asyncClustering));
-      return this;
-    }
-
-    public Builder withPreserveHoodieCommitMetadata(Boolean preserveHoodieCommitMetadata) {
-      clusteringConfig.setValue(PRESERVE_COMMIT_METADATA, String.valueOf(preserveHoodieCommitMetadata));
       return this;
     }
 

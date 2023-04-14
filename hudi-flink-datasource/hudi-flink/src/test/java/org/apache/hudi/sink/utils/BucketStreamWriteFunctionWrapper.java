@@ -165,15 +165,6 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     }
   }
 
-  public void checkpointFails(long checkpointId) {
-    coordinator.notifyCheckpointAborted(checkpointId);
-  }
-
-  public void subTaskFails(int taskID) throws Exception {
-    coordinator.subtaskFailed(taskID, new RuntimeException("Dummy exception"));
-    setupWriteFunction();
-  }
-
   public void close() throws Exception {
     coordinator.close();
     ioManager.close();

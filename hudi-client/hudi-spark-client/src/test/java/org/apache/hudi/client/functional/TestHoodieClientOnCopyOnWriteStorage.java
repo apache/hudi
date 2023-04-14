@@ -199,15 +199,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     return Arrays.stream(new Boolean[][] {{true}, {false}}).map(Arguments::of);
   }
 
-  private static Stream<Arguments> populateMetaFieldsAndPreserveMetadataParams() {
-    return Arrays.stream(new Boolean[][] {
-        {true, true},
-        {false, true},
-        {true, false},
-        {false, false}
-    }).map(Arguments::of);
-  }
-
   private static Stream<Arguments> rollbackFailedCommitsParams() {
     return Stream.of(
         Arguments.of(HoodieFailedWritesCleaningPolicy.LAZY, true),
@@ -1040,8 +1031,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .withCompactionConfig(
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(10000).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
-            .withBloomIndexUpdatePartitionPath(true)
-            .withGlobalSimpleIndexUpdatePartitionPath(true)
             .build()).withTimelineLayoutVersion(VERSION_0).build();
 
     HoodieTableMetaClient.withPropertyBuilder()
@@ -1518,12 +1507,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource("populateMetaFieldsAndPreserveMetadataParams")
-  public void testSimpleClustering(boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
+  @MethodSource("populateMetaFieldsParams")
+  public void testSimpleClustering(boolean populateMetaFields) throws Exception {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
-        .withPreserveHoodieCommitMetadata(preserveCommitMetadata).build();
+        .build();
     testInsertAndClustering(clusteringConfig, populateMetaFields, true, false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
 
@@ -1567,7 +1556,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   public void testRolblackOfRegularCommitWithPendingReplaceCommitInTimeline() throws Exception {
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
-        .withPreserveHoodieCommitMetadata(true).build();
+        .build();
     // trigger clustering, but do not complete
     testInsertAndClustering(clusteringConfig, true, false, false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
 
@@ -1606,7 +1595,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(false).withScheduleInlineClustering(scheduleInlineClustering)
-        .withPreserveHoodieCommitMetadata(true).build();
+        .build();
 
     HoodieWriteConfig config = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withAutoCommit(false)
         .withClusteringConfig(clusteringConfig)
@@ -1633,26 +1622,26 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource("populateMetaFieldsAndPreserveMetadataParams")
-  public void testClusteringWithSortColumns(boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
+  @MethodSource("populateMetaFieldsParams")
+  public void testClusteringWithSortColumns(boolean populateMetaFields) throws Exception {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
         .withClusteringSortColumns(populateMetaFields ? "_hoodie_record_key" : "_row_key")
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
-        .withPreserveHoodieCommitMetadata(preserveCommitMetadata).build();
+        .build();
     testInsertAndClustering(clusteringConfig, populateMetaFields, true, false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
 
   @ParameterizedTest
-  @MethodSource("populateMetaFieldsAndPreserveMetadataParams")
-  public void testClusteringWithSortOneFilePerGroup(boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
+  @MethodSource("populateMetaFieldsParams")
+  public void testClusteringWithSortOneFilePerGroup(boolean populateMetaFields) throws Exception {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
         .withClusteringSortColumns("begin_lat,begin_lon")
         .withClusteringPlanStrategyClass(SparkSingleFileSortPlanStrategy.class.getName())
         .withClusteringExecutionStrategyClass(SparkSingleFileSortExecutionStrategy.class.getName())
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1)
-        .withPreserveHoodieCommitMetadata(preserveCommitMetadata).build();
+        .build();
     // note that assertSameFileIds is true for this test because of the plan and execution strategy
     testInsertAndClustering(clusteringConfig, populateMetaFields, true, true, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
@@ -1923,7 +1912,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     SparkRDDWriteClient client = getHoodieWriteClient(config);
     String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusterMetadata = client.cluster(clusteringCommitTime, completeClustering);
-    if (config.isPreserveHoodieCommitMetadataForClustering() && config.populateMetaFields()) {
+    if (config.populateMetaFields()) {
       verifyRecordsWrittenWithPreservedMetadata(new HashSet<>(allRecords.getRight()), allRecords.getLeft(), clusterMetadata.getWriteStatuses().collect());
     } else {
       verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft(), clusterMetadata.getWriteStatuses().collect(), config);

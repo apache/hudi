@@ -129,9 +129,10 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
 
   public static final ConfigProperty<String> TAGGED_RECORD_STORAGE_LEVEL_VALUE = ConfigProperty
-       .key("hoodie.write.tagged.record.storage.level")
-       .defaultValue("MEMORY_AND_DISK_SER")
-       .withDocumentation("Determine what level of persistence is used to cache write RDDs. "
+      .key("hoodie.write.tagged.record.storage.level")
+      .defaultValue("MEMORY_AND_DISK_SER")
+      .markAdvanced()
+      .withDocumentation("Determine what level of persistence is used to cache write RDDs. "
           + "Refer to org.apache.spark.storage.StorageLevel for different values");
 
   public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
@@ -143,12 +144,14 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> WRITE_PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.payload.class")
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
+      .markAdvanced()
       .withDocumentation("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. "
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
 
   public static final ConfigProperty<String> RECORD_MERGER_IMPLS = ConfigProperty
       .key("hoodie.datasource.write.record.merger.impls")
       .defaultValue(HoodieAvroRecordMerger.class.getName())
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
           + "These merger impls will filter by hoodie.datasource.write.record.merger.strategy "
@@ -157,24 +160,29 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
       .key("hoodie.datasource.write.record.merger.strategy")
       .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
 
   public static final ConfigProperty<String> KEYGENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.class")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator` "
           + "extract a key out of incoming records.");
 
   public static final ConfigProperty<String> WRITE_EXECUTOR_TYPE = ConfigProperty
       .key("hoodie.write.executor.type")
       .defaultValue(ExecutorType.SIMPLE.name())
-      .withDocumentation(ExecutorType.class)
-      .sinceVersion("0.13.0");
+      .withValidValues(Arrays.stream(ExecutorType.values()).map(Enum::name).toArray(String[]::new))
+      .markAdvanced()
+      .sinceVersion("0.13.0")
+      .withDocumentation(ExecutorType.class);
 
   public static final ConfigProperty<String> KEYGENERATOR_TYPE = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.type")
       .defaultValue(KeyGeneratorType.SIMPLE.name())
+      .markAdvanced()
       .withDocumentation(KeyGeneratorType.class,
           "**Note** This is being actively worked on. Please use "
               + "`hoodie.datasource.write.keygenerator.class` instead.");
@@ -182,6 +190,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty
       .key("hoodie.rollback.using.markers")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("Enables a more efficient mechanism for rollbacks based on the marker files generated "
           + "during the writes. Turned on by default.");
 
@@ -189,6 +198,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.timeline.layout.version")
       .defaultValue(Integer.toString(TimelineLayoutVersion.CURR_VERSION))
       .withValidValues(Integer.toString(TimelineLayoutVersion.VERSION_0),Integer.toString(TimelineLayoutVersion.VERSION_1))
+      .markAdvanced()
       .sinceVersion("0.5.1")
       .withDocumentation("Controls the layout of the timeline. Version 0 relied on renames, Version 1 (default) models "
           + "the timeline as an immutable log relying only on atomic writes for object storage.");
@@ -197,8 +207,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.table.base.file.format")
       .defaultValue(HoodieFileFormat.PARQUET)
       .withValidValues(HoodieFileFormat.PARQUET.name(), HoodieFileFormat.ORC.name(), HoodieFileFormat.HFILE.name())
-      .withDocumentation(HoodieFileFormat.class, "File format to store all the base file data.")
-      .withAlternatives("hoodie.table.ro.file.format");
+      .withAlternatives("hoodie.table.ro.file.format")
+      .markAdvanced()
+      .withDocumentation(HoodieFileFormat.class, "File format to store all the base file data.");
 
   public static final ConfigProperty<String> BASE_PATH = ConfigProperty
       .key("hoodie.base.path")
@@ -219,22 +230,26 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> INTERNAL_SCHEMA_STRING = ConfigProperty
       .key("hoodie.internal.schema")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Schema string representing the latest schema of the table. Hudi passes this to "
           + "implementations of evolution of schema");
 
   public static final ConfigProperty<Boolean> ENABLE_INTERNAL_SCHEMA_CACHE = ConfigProperty
       .key("hoodie.schema.cache.enable")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("cache query internalSchemas in driver/executor side");
 
   public static final ConfigProperty<String> AVRO_SCHEMA_VALIDATE_ENABLE = ConfigProperty
       .key("hoodie.avro.schema.validate")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("Validate the schema used for the write against the latest schema, for backwards compatibility.");
 
   public static final ConfigProperty<String> SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP = ConfigProperty
       .key("hoodie.datasource.write.schema.allow.auto.evolution.column.drop")
       .defaultValue("false")
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Controls whether table's schema is allowed to automatically evolve when "
           + "incoming batch's schema can have any of the columns dropped. By default, Hudi will not "
@@ -244,6 +259,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> INSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.insert.shuffle.parallelism")
       .defaultValue("0")
+      .markAdvanced()
       .withDocumentation("Parallelism for inserting records into the table. Inserts can shuffle "
           + "data before writing to tune file sizes and optimize the storage layout. Before "
           + "0.13.0 release, if users do not configure it, Hudi would use 200 as the default "
@@ -257,6 +273,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> BULKINSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.bulkinsert.shuffle.parallelism")
       .defaultValue("0")
+      .markAdvanced()
       .withDocumentation("For large initial imports using bulk_insert operation, controls the "
           + "parallelism to use for sort modes or custom partitioning done before writing records "
           + "to the table. Before 0.13.0 release, if users do not configure it, Hudi would use "
@@ -271,12 +288,14 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS = ConfigProperty
       .key("hoodie.bulkinsert.user.defined.partitioner.sort.columns")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. "
           + "For example 'column1,column2'");
 
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME = ConfigProperty
       .key("hoodie.bulkinsert.user.defined.partitioner.class")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("If specified, this class will be used to re-partition records before they are bulk inserted. This can be used to sort, pack, cluster data"
           + " optimally for common query patterns. For now we support a build-in user defined bulkinsert partitioner org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner"
           + " which can does sorting based on specified column values set by " + BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS.key());
@@ -284,6 +303,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> UPSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.upsert.shuffle.parallelism")
       .defaultValue("0")
+      .markAdvanced()
       .withDocumentation("Parallelism to use for upsert operation on the table. Upserts can "
           + "shuffle data to perform index lookups, file sizing, bin packing records optimally "
           + "into file groups. Before 0.13.0 release, "
@@ -298,6 +318,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> DELETE_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.delete.shuffle.parallelism")
       .defaultValue("0")
+      .markAdvanced()
       .withDocumentation("Parallelism used for delete operation. Delete operations also performs "
           + "shuffles, similar to upsert operation. Before 0.13.0 release, "
           + "if users do not configure it, Hudi would use 200 as the default "
@@ -309,6 +330,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> ROLLBACK_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.rollback.parallelism")
       .defaultValue("100")
+      .markAdvanced()
       .withDocumentation("This config controls the parallelism for rollback of commits. "
           + "Rollbacks perform deletion of files or logging delete blocks to file groups on "
           + "storage in parallel. The configure value limits the parallelism so that the number "
@@ -318,29 +340,35 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> WRITE_BUFFER_LIMIT_BYTES_VALUE = ConfigProperty
       .key("hoodie.write.buffer.limit.bytes")
       .defaultValue(String.valueOf(4 * 1024 * 1024))
+      .markAdvanced()
+      .markAdvanced()
       .withDocumentation("Size of in-memory buffer used for parallelizing network reads and lake storage writes.");
 
   public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_BUFFER_LIMIT_BYTES = ConfigProperty
       .key("hoodie.write.executor.disruptor.buffer.limit.bytes")
       .defaultValue(String.valueOf(1024))
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("The size of the Disruptor Executor ring buffer, must be power of 2");
 
   public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY = ConfigProperty
       .key("hoodie.write.executor.disruptor.wait.strategy")
       .defaultValue(DisruptorWaitStrategyType.BLOCKING_WAIT.name())
-      .withDocumentation(DisruptorWaitStrategyType.class)
-      .sinceVersion("0.13.0");
+      .markAdvanced()
+      .sinceVersion("0.13.0")
+      .withDocumentation(DisruptorWaitStrategyType.class);
 
   public static final ConfigProperty<String> COMBINE_BEFORE_INSERT = ConfigProperty
       .key("hoodie.combine.before.insert")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("When inserted records share same key, controls whether they should be first combined (i.e de-duplicated) before"
           + " writing to storage.");
 
   public static final ConfigProperty<String> COMBINE_BEFORE_UPSERT = ConfigProperty
       .key("hoodie.combine.before.upsert")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("When upserted records share same key, controls whether they should be first combined (i.e de-duplicated) before"
           + " writing to storage. This should be turned off only if you are absolutely certain that there are no duplicates incoming, "
           + " otherwise it can lead to duplicate keys and violate the uniqueness guarantees.");
@@ -348,30 +376,35 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> COMBINE_BEFORE_DELETE = ConfigProperty
       .key("hoodie.combine.before.delete")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("During delete operations, controls whether we should combine deletes (and potentially also upserts) before "
           + " writing to storage.");
 
   public static final ConfigProperty<String> WRITE_STATUS_STORAGE_LEVEL_VALUE = ConfigProperty
       .key("hoodie.write.status.storage.level")
       .defaultValue("MEMORY_AND_DISK_SER")
+      .markAdvanced()
       .withDocumentation("Write status objects hold metadata about a write (stats, errors), that is not yet committed to storage. "
           + "This controls the how that information is cached for inspection by clients. We rarely expect this to be changed.");
 
   public static final ConfigProperty<String> AUTO_COMMIT_ENABLE = ConfigProperty
       .key("hoodie.auto.commit")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("Controls whether a write operation should auto commit. This can be turned off to perform inspection"
           + " of the uncommitted write before deciding to commit.");
 
   public static final ConfigProperty<String> WRITE_STATUS_CLASS_NAME = ConfigProperty
       .key("hoodie.writestatus.class")
       .defaultValue(WriteStatus.class.getName())
+      .markAdvanced()
       .withDocumentation("Subclass of " + WriteStatus.class.getName() + " to be used to collect information about a write. Can be "
           + "overridden to collection additional metrics/statistics about the data if needed.");
 
   public static final ConfigProperty<String> FINALIZE_WRITE_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.finalize.write.parallelism")
       .defaultValue("200")
+      .markAdvanced()
       .withDocumentation("Parallelism for the write finalization internal operation, which involves removing any partially written "
           + "files from lake storage, before committing the write. Reduce this value, if the high number of tasks incur delays for smaller tables "
           + "or low latency writes.");
@@ -379,12 +412,14 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> MARKERS_TYPE = ConfigProperty
       .key("hoodie.write.markers.type")
       .defaultValue(MarkerType.TIMELINE_SERVER_BASED.name())
-      .withDocumentation(MarkerType.class)
-      .sinceVersion("0.9.0");
+      .markAdvanced()
+      .sinceVersion("0.9.0")
+      .withDocumentation(MarkerType.class);
 
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.num_threads")
       .defaultValue(20)
+      .markAdvanced()
       .sinceVersion("0.9.0")
       .withDocumentation("Number of threads to use for batch processing marker "
           + "creation requests at the timeline server");
@@ -392,63 +427,74 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Long> MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.interval_ms")
       .defaultValue(50L)
+      .markAdvanced()
       .sinceVersion("0.9.0")
       .withDocumentation("The batch interval in milliseconds for marker creation batch processing");
 
   public static final ConfigProperty<String> MARKERS_DELETE_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.markers.delete.parallelism")
       .defaultValue("100")
+      .markAdvanced()
       .withDocumentation("Determines the parallelism for deleting marker files, which are used to track all files (valid or invalid/partial) written during "
           + "a write operation. Increase this value if delays are observed, with large batch writes.");
 
   public static final ConfigProperty<String> BULK_INSERT_SORT_MODE = ConfigProperty
       .key("hoodie.bulkinsert.sort.mode")
       .defaultValue(BulkInsertSortMode.NONE.name())
+      .markAdvanced()
       .withDocumentation(BulkInsertSortMode.class);
 
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_ENABLE = ConfigProperty
       .key("hoodie.embed.timeline.server")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("When true, spins up an instance of the timeline server (meta server that serves cached file listings, statistics),"
           + "running on each writer's driver process, accepting requests during the write from executors.");
 
   public static final ConfigProperty<Boolean> EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED = ConfigProperty
       .key("hoodie.embed.timeline.server.reuse.enabled")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Controls whether the timeline server instance should be cached and reused across the JVM (across task lifecycles)"
           + "to avoid startup costs. This should rarely be changed.");
 
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_PORT_NUM = ConfigProperty
       .key("hoodie.embed.timeline.server.port")
       .defaultValue("0")
+      .markAdvanced()
       .withDocumentation("Port at which the timeline server listens for requests. When running embedded in each writer, it picks "
           + "a free port and communicates to all the executors. This should rarely be changed.");
 
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_NUM_SERVER_THREADS = ConfigProperty
       .key("hoodie.embed.timeline.server.threads")
       .defaultValue("-1")
+      .markAdvanced()
       .withDocumentation("Number of threads to serve requests in the timeline server. By default, auto configured based on the number of underlying cores.");
 
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_COMPRESS_ENABLE = ConfigProperty
       .key("hoodie.embed.timeline.server.gzip")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("Controls whether gzip compression is used, for large responses from the timeline server, to improve latency.");
 
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_USE_ASYNC_ENABLE = ConfigProperty
       .key("hoodie.embed.timeline.server.async")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("Controls whether or not, the requests to the timeline server are processed in asynchronous fashion, "
           + "potentially improving throughput.");
 
   public static final ConfigProperty<String> FAIL_ON_TIMELINE_ARCHIVING_ENABLE = ConfigProperty
       .key("hoodie.fail.on.timeline.archiving")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("Timeline archiving removes older instants from the timeline, after each write operation, to minimize metadata overhead. "
           + "Controls whether or not, the write should be failed as well, if such archiving fails.");
 
   public static final ConfigProperty<String> FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION = ConfigProperty
       .key("hoodie.fail.writes.on.inline.table.service.exception")
       .defaultValue("true")
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Table services such as compaction and clustering can fail and prevent syncing to "
           + "the metaclient. Set this to true to fail writes when table services fail");
@@ -456,45 +502,53 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Long> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.initial_interval_ms")
       .defaultValue(2000L)
+      .markAdvanced()
       .withDocumentation("Initial time between successive attempts to ensure written data's metadata is consistent on storage. Grows with exponential"
           + " backoff after the initial value.");
 
   public static final ConfigProperty<Long> MAX_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.max_interval_ms")
       .defaultValue(300000L)
+      .markAdvanced()
       .withDocumentation("Max time to wait between successive attempts at performing consistency checks");
 
   public static final ConfigProperty<Integer> MAX_CONSISTENCY_CHECKS = ConfigProperty
       .key("hoodie.consistency.check.max_checks")
       .defaultValue(7)
+      .markAdvanced()
       .withDocumentation("Maximum number of checks, for consistency of written data.");
 
   public static final ConfigProperty<String> MERGE_DATA_VALIDATION_CHECK_ENABLE = ConfigProperty
       .key("hoodie.merge.data.validation.enabled")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("When enabled, data validation checks are performed during merges to ensure expected "
           + "number of records after merge operation.");
 
   public static final ConfigProperty<String> MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE = ConfigProperty
       .key("hoodie.merge.allow.duplicate.on.inserts")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("When enabled, we allow duplicate keys even if inserts are routed to merge with an existing file (for ensuring file sizing)."
           + " This is only relevant for insert operation, since upsert, delete operations will ensure unique key constraints are maintained.");
 
   public static final ConfigProperty<Integer> MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT = ConfigProperty
       .key("hoodie.merge.small.file.group.candidates.limit")
       .defaultValue(1)
+      .markAdvanced()
       .withDocumentation("Limits number of file groups, whose base file satisfies small-file limit, to consider for appending records during upsert operation. "
           + "Only applicable to MOR tables");
 
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_INTERVAL_IN_MS = ConfigProperty
       .key("hoodie.client.heartbeat.interval_in_ms")
       .defaultValue(60 * 1000)
+      .markAdvanced()
       .withDocumentation("Writers perform heartbeats to indicate liveness. Controls how often (in ms), such heartbeats are registered to lake storage.");
 
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES = ConfigProperty
       .key("hoodie.client.heartbeat.tolerable.misses")
       .defaultValue(2)
+      .markAdvanced()
       .withDocumentation("Number of heartbeat misses, before a writer is deemed not alive and all pending writes are aborted.");
 
   public static final ConfigProperty<String> WRITE_CONCURRENCY_MODE = ConfigProperty
@@ -505,6 +559,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
       .key("hoodie.write.schema")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Config allowing to override writer's schema. This might be necessary in "
           + "cases when writer's schema derived from the incoming dataset might actually be different from "
           + "the schema we actually want to use when writing. This, for ex, could be the case for"
@@ -525,24 +580,28 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE = ConfigProperty
       .key("_.hoodie.allow.multi.write.on.same.instant")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("");
 
   public static final ConfigProperty<String> AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE = ConfigProperty
       .key(AVRO_SCHEMA_STRING.key() + ".external.transformation")
       .defaultValue("false")
       .withAlternatives(AVRO_SCHEMA_STRING.key() + ".externalTransformation")
+      .markAdvanced()
       .withDocumentation("When enabled, records in older schema are rewritten into newer schema during upsert,delete and background"
           + " compaction,clustering operations.");
 
   public static final ConfigProperty<Boolean> ALLOW_EMPTY_COMMIT = ConfigProperty
       .key("hoodie.allow.empty.commit")
       .defaultValue(true)
+      .markAdvanced()
       .withDocumentation("Whether to allow generation of empty commits, even if no data was written in the commit. "
           + "It's useful in cases where extra metadata needs to be published regardless e.g tracking source offsets when ingesting data");
 
   public static final ConfigProperty<Boolean> ALLOW_OPERATION_METADATA_FIELD = ConfigProperty
       .key("hoodie.allow.operation.metadata.field")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.9.0")
       .withDocumentation("Whether to include '_hoodie_operation' in the metadata fields. "
           + "Once enabled, all the changes of a record are persisted to the delta log directly without merge");
@@ -550,30 +609,35 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> FILEID_PREFIX_PROVIDER_CLASS = ConfigProperty
       .key("hoodie.fileid.prefix.provider.class")
       .defaultValue(RandomFileIdPrefixProvider.class.getName())
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`");
 
   public static final ConfigProperty<Boolean> TABLE_SERVICES_ENABLED = ConfigProperty
       .key("hoodie.table.services.enabled")
       .defaultValue(true)
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Master control to disable all table services including archive, clean, compact, cluster, etc.");
 
   public static final ConfigProperty<Boolean> RELEASE_RESOURCE_ENABLE = ConfigProperty
       .key("hoodie.release.resource.on.completion.enable")
       .defaultValue(true)
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Control to enable release all persist rdds when the spark job finish.");
 
   public static final ConfigProperty<Boolean> AUTO_ADJUST_LOCK_CONFIGS = ConfigProperty
       .key("hoodie.auto.adjust.lock.configs")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Auto adjust lock configurations when metadata table is enabled and for async table services.");
 
   public static final ConfigProperty<Boolean> SKIP_DEFAULT_PARTITION_VALIDATION = ConfigProperty
       .key("hoodie.skip.default.partition.validation")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.12.0")
       .withDocumentation("When table is upgraded from pre 0.12 to 0.12, we check for \"default\" partition and fail if found one. "
           + "Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation");
@@ -581,6 +645,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.detection.strategy")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withInferFunction(cfg -> {
         MarkerType markerType = MarkerType.valueOf(cfg.getStringOrDefault(MARKERS_TYPE).toUpperCase());
@@ -593,6 +658,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_ENABLE = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.detection.enable")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Whether to enable early conflict detection based on markers. "
           + "It eagerly detects writing conflict before create markers and fails fast if a "
@@ -601,6 +667,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_INITIAL_DELAY_MS = ConfigProperty
       .key(CONCURRENCY_PREFIX + "async.conflict.detector.initial_delay_ms")
       .defaultValue(0L)
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Used for timeline-server-based markers with "
           + "`AsyncTimelineServerBasedDetectionStrategy`. "
@@ -609,6 +676,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Long> ASYNC_CONFLICT_DETECTOR_PERIOD_MS = ConfigProperty
       .key(CONCURRENCY_PREFIX + "async.conflict.detector.period_ms")
       .defaultValue(30000L)
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Used for timeline-server-based markers with "
           + "`AsyncTimelineServerBasedDetectionStrategy`. "
@@ -617,6 +685,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.check.commit.conflict")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Whether to enable commit conflict checking or not during early "
           + "conflict detection.");
@@ -624,6 +693,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> SENSITIVE_CONFIG_KEYS_FILTER = ConfigProperty
       .key("hoodie.sensitive.config.keys")
       .defaultValue("ssl,tls,sasl,auth,credentials")
+      .markAdvanced()
       .withDocumentation("Comma separated list of filters for sensitive config keys. Delta Streamer "
           + "will not print any configuration which contains the configured filter. For example with "
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
@@ -1502,14 +1572,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
   }
 
-  public boolean isPreserveHoodieCommitMetadataForClustering() {
-    return getBoolean(HoodieClusteringConfig.PRESERVE_COMMIT_METADATA);
-  }
-
-  public boolean isPreserveHoodieCommitMetadataForCompaction() {
-    return getBoolean(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA);
-  }
-
   public boolean isClusteringEnabled() {
     // TODO: future support async clustering
     return inlineClusteringEnabled() || isAsyncClusteringEnabled();
@@ -2272,6 +2334,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   /**
    * Hoodie Client Lock Configs.
+   *
    * @return
    */
   public boolean isAutoAdjustLockConfigs() {

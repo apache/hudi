@@ -30,10 +30,9 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 
 import scala.collection.JavaConverters._
-import scala.collection.Seq
 
 class TestCreateTable extends HoodieSparkSqlTestBase {
 
@@ -85,6 +84,11 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertResult(databaseName)(tableConfig.getDatabaseName)
     assertResult(tableName)(tableConfig.getTableName)
     assertFalse(tableConfig.contains(OPERATION.key()))
+
+    val schemaOpt = tableConfig.getTableCreateSchema
+    assertTrue(schemaOpt.isPresent, "Table create schema should be persisted")
+    assertFalse(schemaOpt.get().getFields.asScala.exists(f => HoodieRecord.HOODIE_META_COLUMNS.contains(f.name())),
+      "Table create schema should not include metadata fields")
 
     spark.sql("use default")
   }

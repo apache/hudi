@@ -86,7 +86,3 @@ object RollbackToSavepointProcedure {
     override def get(): RollbackToSavepointProcedure = new RollbackToSavepointProcedure()
   }
 }
-
-
-
-

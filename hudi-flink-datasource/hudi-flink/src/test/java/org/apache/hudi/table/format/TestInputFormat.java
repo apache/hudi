@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.IncrementalInputSplits;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
@@ -44,7 +45,12 @@ import org.apache.hudi.utils.TestUtils;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplit;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.expressions.CallExpression;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -58,7 +64,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -340,7 +345,6 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .requiredPartitions(Collections.emptySet())
         .skipCompaction(false)
         .build();
 
@@ -382,7 +386,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .requiredPartitions(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4")))
+        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipCompaction(false)
         .build();
 
@@ -421,7 +425,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .requiredPartitions(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4")))
+        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipCompaction(true)
         .build();
 
@@ -488,7 +492,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .requiredPartitions(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4")))
+        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipClustering(true)
         .build();
 
@@ -552,7 +556,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .requiredPartitions(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4")))
+        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .build();
 
     // default read the latest commit
@@ -586,10 +590,14 @@ public class TestInputFormat {
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    Map<String, String> prunedPartitions = new HashMap<>();
-    prunedPartitions.put("partition", "par1");
     // prune to only be with partition 'par1'
-    tableSource.applyPartitions(Collections.singletonList(prunedPartitions));
+    FieldReferenceExpression partRef = new FieldReferenceExpression("partition", DataTypes.STRING(), 4, 4);
+    ValueLiteralExpression partLiteral = new ValueLiteralExpression("par1", DataTypes.STRING().notNull());
+    CallExpression partFilter = new CallExpression(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(partRef, partLiteral),
+        DataTypes.BOOLEAN());
+    tableSource.applyFilters(Arrays.asList(partFilter));
     InputFormat<RowData, ?> inputFormat = tableSource.getInputFormat();
 
     List<RowData> result = readData(inputFormat);

@@ -26,6 +26,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import javax.annotation.concurrent.Immutable;
+
 import java.util.Properties;
 
 /**
@@ -41,11 +42,13 @@ public class HoodieLayoutConfig extends HoodieConfig {
   public static final ConfigProperty<String> LAYOUT_TYPE = ConfigProperty
       .key("hoodie.storage.layout.type")
       .defaultValue(HoodieStorageLayout.LayoutType.DEFAULT.name())
+      .markAdvanced()
       .withDocumentation(HoodieStorageLayout.LayoutType.class);
 
   public static final ConfigProperty<String> LAYOUT_PARTITIONER_CLASS_NAME = ConfigProperty
       .key("hoodie.storage.layout.partitioner.class")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Partitioner class, it is used to distribute data in a specific way.");
 
   public static final String SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME =

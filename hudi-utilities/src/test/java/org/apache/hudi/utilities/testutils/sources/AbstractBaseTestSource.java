@@ -25,9 +25,9 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.collection.RocksDBBasedMap;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.AvroSource;
-import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -63,9 +63,9 @@ public abstract class AbstractBaseTestSource extends AvroSource {
 
   public static void initDataGen(TypedProperties props, int partition) {
     try {
-      boolean useRocksForTestDataGenKeys = props.getBoolean(SourceConfigs.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS,
-          SourceConfigs.DEFAULT_USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS);
-      String baseStoreDir = props.getString(SourceConfigs.ROCKSDB_BASE_DIR_FOR_TEST_DATAGEN_KEYS,
+      boolean useRocksForTestDataGenKeys = props.getBoolean(SourceTestConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS.key(),
+          SourceTestConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS.defaultValue());
+      String baseStoreDir = props.getString(SourceTestConfig.ROCKSDB_BASE_DIR_FOR_TEST_DATAGEN_KEYS.key(),
           File.createTempFile("test_data_gen", ".keys").getParent()) + "/" + partition;
       LOG.info("useRocksForTestDataGenKeys=" + useRocksForTestDataGenKeys + ", BaseStoreDir=" + baseStoreDir);
       dataGeneratorMap.put(partition, new HoodieTestDataGenerator(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS,
@@ -107,7 +107,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
   protected static Stream<GenericRecord> fetchNextBatch(TypedProperties props, int sourceLimit, String instantTime,
       int partition) {
     int maxUniqueKeys =
-        props.getInteger(SourceConfigs.MAX_UNIQUE_RECORDS_PROP, SourceConfigs.DEFAULT_MAX_UNIQUE_RECORDS);
+        props.getInteger(SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.defaultValue());
 
     HoodieTestDataGenerator dataGenerator = dataGeneratorMap.get(partition);
 

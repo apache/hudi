@@ -181,6 +181,7 @@ public class ClusteringUtils {
         .setInputGroups(clusteringGroups)
         .setExtraMetadata(extraMetadata)
         .setStrategy(strategy)
+        .setPreserveHoodieMetadata(true)
         .build();
   }
 
