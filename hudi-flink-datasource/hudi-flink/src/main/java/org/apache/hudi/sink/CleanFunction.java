@@ -60,11 +60,13 @@ public class CleanFunction<T> extends AbstractRichFunction
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    LOG.info(String.format("exec clean with instant time %s...", instantTime));
-    executor.execute(() -> writeClient.clean(instantTime), "wait for cleaning finish");
+    if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+      this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
+      this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
+      String instantTime = HoodieActiveTimeline.createNewInstantTime();
+      LOG.info(String.format("exec clean with instant time %s...", instantTime));
+      executor.execute(() -> writeClient.clean(instantTime), "wait for cleaning finish");
+    }
   }
 
   @Override
