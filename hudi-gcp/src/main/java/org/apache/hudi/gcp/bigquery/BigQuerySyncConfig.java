@@ -54,17 +54,20 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
   public static final ConfigProperty<String> BIGQUERY_SYNC_PROJECT_ID = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.project_id")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Name of the target project in BigQuery");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_DATASET_NAME = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.dataset_name")
       .noDefaultValue()
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(DATABASE_NAME)))
+      .markAdvanced()
       .withDocumentation("Name of the target dataset in BigQuery");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_DATASET_LOCATION = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.dataset_location")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Location of the target dataset in BigQuery");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_TABLE_NAME = ConfigProperty
@@ -72,22 +75,26 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       .noDefaultValue()
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HOODIE_TABLE_NAME_KEY))
           .or(() -> Option.ofNullable(cfg.getString(HOODIE_WRITE_TABLE_NAME_KEY))))
+      .markAdvanced()
       .withDocumentation("Name of the target table in BigQuery");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_SOURCE_URI = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.source_uri")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Name of the source uri gcs path of the table");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_SOURCE_URI_PREFIX = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.source_uri_prefix")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Name of the source uri gcs path prefix of the table");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_SYNC_BASE_PATH = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.base_path")
       .noDefaultValue()
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(META_SYNC_BASE_PATH)))
+      .markAdvanced()
       .withDocumentation("Base path of the hoodie table to sync");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_PARTITION_FIELDS = ConfigProperty
@@ -95,18 +102,21 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       .noDefaultValue()
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
           .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
+      .markAdvanced()
       .withDocumentation("Comma-delimited partition fields. Default to non-partitioned.");
 
   public static final ConfigProperty<Boolean> BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.use_file_listing_from_metadata")
       .defaultValue(DEFAULT_METADATA_ENABLE_FOR_READERS)
       .withInferFunction(cfg -> Option.of(cfg.getBooleanOrDefault(HoodieMetadataConfig.ENABLE, DEFAULT_METADATA_ENABLE_FOR_READERS)))
+      .markAdvanced()
       .withDocumentation("Fetch file listing from Hudi's metadata");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.assume_date_partitioning")
       .defaultValue(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING.defaultValue())
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING)))
+      .markAdvanced()
       .withDocumentation("Assume standard yyyy/mm/dd partitioning, this"
           + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter");
 

@@ -37,16 +37,19 @@ public class HoodieCommonConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
       .key("hoodie.schema.on.read.enable")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Enables support for Schema Evolution feature");
 
   public static final ConfigProperty<String> TIMESTAMP_AS_OF = ConfigProperty
       .key("as.of.instant")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The query instant for time travel. Without specified this option, we query the latest snapshot.");
 
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("This config controls how writer's schema will be selected based on the incoming batch's "
           + "schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's "
           + "schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation "
@@ -58,6 +61,7 @@ public class HoodieCommonConfig extends HoodieConfig {
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
       .defaultValue(ExternalSpillableMap.DiskMapType.BITCASK)
+      .markAdvanced()
       .withDocumentation("When handling input data that cannot be held in memory, to merge with a file on storage, a spillable diskmap is employed.  "
           + "By default, we use a persistent hashmap based loosely on bitcask, that offers O(1) inserts, lookups. "
           + "Change this to `ROCKS_DB` to prefer using rocksDB, for handling the spill.");
@@ -65,6 +69,7 @@ public class HoodieCommonConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> DISK_MAP_BITCASK_COMPRESSION_ENABLED = ConfigProperty
       .key("hoodie.common.diskmap.compression.enabled")
       .defaultValue(true)
+      .markAdvanced()
       .withDocumentation("Turn on compression for BITCASK disk map used by the External Spillable Map");
 
   public ExternalSpillableMap.DiskMapType getSpillableDiskMapType() {
