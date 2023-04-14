@@ -223,9 +223,9 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   }
 
   @Test
-  public void testErrorEventsForDataInRowForamt() throws IOException {
+  public void testErrorEventsForDataInRowFormat() throws IOException {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInRowForamt";
+    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInRowFormat";
 
     testUtils.createTopic(topic, 2);
     List<TopicPartition> topicPartitions = new ArrayList<>();
