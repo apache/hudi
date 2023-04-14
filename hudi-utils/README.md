@@ -24,29 +24,10 @@ mvn clean
 mvn install
 ```
 
-When new config classes are added, or existing ones are moved to a separate module, 
-please add the corresponding bundle for configurations of that module to be picked up.
-Set the appropriate SNAPSHOT version and execute the below commands. Below commands are in the [generate_configs.sh](generate_config.sh) script.
-```shell
-VERSION=0.13.0
+When new config classes are added, or existing ones are moved to a separate module, please add the corresponding bundle 
+for configurations of that module to the script [`generate_configs.sh`](generate_config.sh) to be picked up.
+Set the appropriate version (either a snapshot version like `0.14.0-SNAPSHOT` or a public release version
+like `0.13.0`) in the script [`generate_configs.sh`](generate_config.sh) and run it to automatically generate the
+configuration documentation.
 
-JARS=(
-"$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.11/$VERSION-SNAPSHOT/hudi-utilities-bundle_2.11-$VERSION-SNAPSHOT.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-spark2.4-bundle_2.11/$VERSION-SNAPSHOT/hudi-spark2.4-bundle_2.11-$VERSION-SNAPSHOT.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-flink1.14-bundle_2.11/$VERSION-SNAPSHOT/hudi-flink1.14-bundle_2.11-$VERSION-SNAPSHOT.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-kafka-connect-bundle/$VERSION-SNAPSHOT/hudi-kafka-connect-bundle-$VERSION-SNAPSHOT.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-datahub-sync-bundle/$VERSION-SNAPSHOT/hudi-datahub-sync-bundle-$VERSION-SNAPSHOT.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-gcp-bundle/$VERSION-SNAPSHOT/hudi-gcp-bundle-$VERSION-SNAPSHOT.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-aws-bundle/$VERSION-SNAPSHOT/hudi-aws-bundle-$VERSION-SNAPSHOT.jar"
-)
-
-printf -v CLASSPATH ':%s' "${JARS[@]}"
-echo "CLASSPATH=$CLASSPATH"
-
-java -cp target/hudi-utils-1.0-SNAPSHOT-jar-with-dependencies.jar$CLASSPATH \
-org.apache.hudi.utils.HoodieConfigDocGenerator
-
-cp /tmp/configurations.md ../website/docs/configurations.md
-```
-
-Once complete, please put up a patch with latest configurations.
+Once complete, please put up a patch with the latest configurations.
