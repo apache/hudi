@@ -5,7 +5,7 @@ toc: true
 last_modified_at:
 ---
 
-## Async Compaction
+## Async Compaction-demo
 Compaction is executed asynchronously with Hudi by default. Async Compaction is performed in 2 steps:
 
 1. ***Compaction Scheduling***: This is done by the ingestion job. In this step, Hudi scans the partitions and selects **file
