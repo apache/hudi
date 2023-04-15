@@ -189,15 +189,15 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.simple.index.parallelism")
-      .defaultValue("100")
+      .defaultValue("0")
       .markAdvanced()
       .withDocumentation("Only applies if index type is SIMPLE. "
           + "This limits the parallelism of fetching records from the base files of affected "
-          + "partitions. The index picks the configured parallelism if the number of base "
-          + "files is larger than this configured value; otherwise, the number of base files "
-          + "is used as the parallelism. If the indexing stage is slow due to the limited "
-          + "parallelism, you can increase this to tune the performance.");
-
+          + "partitions. By default, this is auto computed based on input workload characteristics. "
+          + "If the parallelism is explicitly configured by the user, The index picks the configured "
+          + "parallelism if the number of base files is larger than this configured value; otherwise, "
+          + "the number of base files is used as the parallelism. If the indexing stage is slow due to "
+          + "the limited parallelism, you can increase this to tune the performance.");
   public static final ConfigProperty<String> GLOBAL_SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.global.simple.index.parallelism")
       .defaultValue("100")

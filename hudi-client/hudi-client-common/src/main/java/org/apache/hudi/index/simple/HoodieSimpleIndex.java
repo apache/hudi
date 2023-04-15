@@ -107,11 +107,16 @@ public class HoodieSimpleIndex
           .getString(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE));
     }
 
+    int inputParallelism = inputRecords.getNumPartitions();
+    int configuredSampleIndexParallelism = config.getSimpleIndexParallelism();
+    // NOTE: Target parallelism could be overridden by the config
+    int targetParallelism =
+        configuredSampleIndexParallelism > 0 ? configuredSampleIndexParallelism : inputParallelism;
     HoodiePairData<HoodieKey, HoodieRecord<R>> keyedInputRecords =
         inputRecords.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
     HoodiePairData<HoodieKey, HoodieRecordLocation> existingLocationsOnTable =
         fetchRecordLocationsForAffectedPartitions(keyedInputRecords.keys(), context, hoodieTable,
-            config.getSimpleIndexParallelism());
+            targetParallelism);
 
     HoodieData<HoodieRecord<R>> taggedRecords =
         keyedInputRecords.leftOuterJoin(existingLocationsOnTable).map(entry -> {
