@@ -75,11 +75,11 @@ import java.util.Properties;
  * --test-continuous-mode \
  * --min-sync-interval-seconds 20
  */
-public class HoodieContinousTestSuiteWriter extends HoodieTestSuiteWriter {
+public class HoodieContinuousTestSuiteWriter extends HoodieTestSuiteWriter {
 
-  private static Logger log = LoggerFactory.getLogger(HoodieContinousTestSuiteWriter.class);
+  private static Logger log = LoggerFactory.getLogger(HoodieContinuousTestSuiteWriter.class);
 
-  public HoodieContinousTestSuiteWriter(JavaSparkContext jsc, Properties props, HoodieTestSuiteJob.HoodieTestSuiteConfig cfg, String schema) throws Exception {
+  public HoodieContinuousTestSuiteWriter(JavaSparkContext jsc, Properties props, HoodieTestSuiteJob.HoodieTestSuiteConfig cfg, String schema) throws Exception {
     super(jsc, props, cfg, schema);
   }
 

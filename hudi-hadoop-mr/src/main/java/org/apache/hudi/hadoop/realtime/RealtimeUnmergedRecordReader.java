@@ -18,11 +18,6 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
@@ -38,6 +33,12 @@ import org.apache.hudi.hadoop.RecordReaderValueIterator;
 import org.apache.hudi.hadoop.SafeParquetRecordReaderWrapper;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -61,11 +62,11 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
   private final Iterator<ArrayWritable> iterator;
 
   /**
-   * Construct a Unmerged record reader that parallely consumes both parquet and log records and buffers for upstream
+   * Construct a Unmerged record reader that in parallel consumes both parquet and log records and buffers for upstream
    * clients to consume.
    *
-   * @param split File split
-   * @param job Job Configuration
+   * @param split      File split
+   * @param job        Job Configuration
    * @param realReader Parquet Reader
    */
   public RealtimeUnmergedRecordReader(RealtimeSplit split, JobConf job,
