@@ -52,7 +52,7 @@ public enum KeyGeneratorType {
   CUSTOM,
 
   /**
-   * Simple Key generator for unpartitioned Hive Tables.
+   * Simple Key generator for non-partitioned Hive Tables.
    */
   NON_PARTITION,
 

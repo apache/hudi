@@ -140,7 +140,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Filter this timeline to just include the in-flights excluding major and minor compaction instants.
    *
-   * @return New instance of HoodieTimeline with just in-flights excluding majoe and minor compaction instants
+   * @return New instance of HoodieTimeline with just in-flights excluding major and minor compaction instants
    */
   HoodieTimeline filterPendingExcludingMajorAndMinorCompaction();
 
@@ -535,7 +535,7 @@ public interface HoodieTimeline extends Serializable {
     return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
   }
 
-  // Log comaction action
+  // Log compaction action
   static String makeInflightLogCompactionFileName(String instantTime) {
     return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_LOG_COMPACTION_EXTENSION);
   }
