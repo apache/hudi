@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecordStatus;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -362,7 +363,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
             LOG.info("multiPutBatchSize for this job: " + this.multiPutBatchSize);
             // Create a rate limiter that allows `multiPutBatchSize` operations per second
             // Any calls beyond `multiPutBatchSize` within a second will be rate limited
-            for (HoodieRecord rec : writeStatus.getWrittenRecords()) {
+            for (HoodieRecordStatus rec : writeStatus.getWrittenRecords()) {
               if (!writeStatus.isErrored(rec.getKey())) {
                 Option<HoodieRecordLocation> loc = rec.getNewLocation();
                 if (loc.isPresent()) {

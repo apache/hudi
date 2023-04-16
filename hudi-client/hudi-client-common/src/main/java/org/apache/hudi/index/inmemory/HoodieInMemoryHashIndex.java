@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieRecordStatus;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -79,10 +80,10 @@ public class HoodieInMemoryHashIndex
       HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     return writeStatuses.map(writeStatus -> {
-      for (HoodieRecord record : writeStatus.getWrittenRecords()) {
-        if (!writeStatus.isErrored(record.getKey())) {
-          HoodieKey key = record.getKey();
-          Option<HoodieRecordLocation> newLocation = record.getNewLocation();
+      for (HoodieRecordStatus recordStatus : writeStatus.getWrittenRecords()) {
+        if (!writeStatus.isErrored(recordStatus.getKey())) {
+          HoodieKey key = recordStatus.getKey();
+          Option<HoodieRecordLocation> newLocation = recordStatus.getNewLocation();
           if (newLocation.isPresent()) {
             recordLocationMap.put(key, newLocation.get());
           } else {
