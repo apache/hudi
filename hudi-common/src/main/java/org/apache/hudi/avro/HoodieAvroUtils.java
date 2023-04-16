@@ -741,29 +741,24 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Gets record column values into one object.
+   * Gets record column values into object array.
    *
    * @param record  Hoodie record.
    * @param columns Names of the columns to get values.
    * @param schema  {@link Schema} instance.
-   * @return Column value if a single column, or concatenated String values by comma.
+   * @return Column value.
    */
-  public static Object getRecordColumnValues(HoodieAvroRecord record,
-                                             String[] columns,
-                                             Schema schema, boolean consistentLogicalTimestampEnabled) {
+  public static Object[] getRecordColumnValues(HoodieAvroRecord record,
+                                               String[] columns,
+                                               Schema schema,
+                                               boolean consistentLogicalTimestampEnabled) {
     try {
       GenericRecord genericRecord = (GenericRecord) ((HoodieAvroIndexedRecord) record.toIndexedRecord(schema, new Properties()).get()).getData();
-      if (columns.length == 1) {
-        return HoodieAvroUtils.getNestedFieldVal(genericRecord, columns[0], true, consistentLogicalTimestampEnabled);
-      } else {
-        // TODO this is inefficient, instead we can simply return array of Comparable
-        StringBuilder sb = new StringBuilder();
-        for (String col : columns) {
-          sb.append(HoodieAvroUtils.getNestedFieldValAsString(genericRecord, col, true, consistentLogicalTimestampEnabled));
-        }
-
-        return sb.toString();
+      List<Object> list = new ArrayList<>();
+      for (String col : columns) {
+        list.add(HoodieAvroUtils.getNestedFieldVal(genericRecord, col, true, consistentLogicalTimestampEnabled));
       }
+      return list.toArray();
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read record with key:" + record.getKey(), e);
     }

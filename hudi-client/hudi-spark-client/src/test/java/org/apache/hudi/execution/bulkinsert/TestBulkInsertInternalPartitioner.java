@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -210,7 +211,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
 
   @Test
   public void testCustomColumnSortPartitioner() {
-    String sortColumnString = "rider";
+    String sortColumnString = "begin_lat";
     String[] sortColumns = sortColumnString.split(",");
     Comparator<HoodieRecord<? extends HoodieRecordPayload>> columnComparator = getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, sortColumns);
 
@@ -238,16 +239,19 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
     Comparator<HoodieRecord<? extends HoodieRecordPayload>> comparator = Comparator.comparing(record -> {
       try {
         GenericRecord genericRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
-        StringBuilder sb = new StringBuilder();
+        List<Object> keys = new ArrayList<>();
         for (String col : sortColumns) {
-          sb.append(genericRecord.get(col));
+          keys.add(genericRecord.get(col));
         }
-
-        return sb.toString();
+        return keys;
       } catch (IOException e) {
         throw new HoodieIOException("unable to read value for " + sortColumns);
       }
-    });
+    }, (o1, o2) -> {
+        FlatLists.ComparableList values1 = FlatLists.ofComparableArray(o1.toArray());
+        FlatLists.ComparableList values2 = FlatLists.ofComparableArray(o2.toArray());
+        return values1.compareTo(values2);
+      });
 
     return comparator;
   }

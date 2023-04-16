@@ -20,7 +20,7 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -30,7 +30,7 @@ import org.apache.spark.api.java.JavaRDD;
 import java.util.Arrays;
 
 /**
- * A partitioner that does sorting based on specified column values for each RDD partition.
+ * A partitioner that does sort based on specified column values for each RDD partition.
  *
  * @param <T> HoodieRecordPayload type
  */
@@ -61,13 +61,8 @@ public class RDDCustomColumnsSortPartitioner<T>
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
     return records.sortBy(
         record -> {
-          Object recordValue = record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
-          // null values are replaced with empty string for null_first order
-          if (recordValue == null) {
-            return StringUtils.EMPTY_STRING;
-          } else {
-            return StringUtils.objToString(recordValue);
-          }
+          Object[] columnValues = record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
+          return FlatLists.ofComparableArray(columnValues);
         },
         true, outputSparkPartitions);
   }
