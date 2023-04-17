@@ -55,11 +55,11 @@ public class ExpressionUtils {
    */
   public static String[] referencedColumns(List<ResolvedExpression> exprs) {
     return exprs.stream()
-        .map(ExpressionUtils::getReferencedColumns)
-        .filter(columns -> columns.length > 0)
-        .flatMap(Arrays::stream)
-        .distinct() // deduplication
-        .toArray(String[]::new);
+                .map(ExpressionUtils::getReferencedColumns)
+                .filter(columns -> columns.length > 0)
+                .flatMap(Arrays::stream)
+                .distinct() // deduplication
+                .toArray(String[]::new);
   }
 
   /**
@@ -81,7 +81,7 @@ public class ExpressionUtils {
         || funcDef == BuiltInFunctionDefinitions.AND
         || funcDef == BuiltInFunctionDefinitions.OR) {
       return callExpression.getChildren().stream()
-          .allMatch(ExpressionUtils::isSimpleCallExpression);
+                           .allMatch(ExpressionUtils::isSimpleCallExpression);
     }
     if (!(funcDef == BuiltInFunctionDefinitions.IN
         || funcDef == BuiltInFunctionDefinitions.EQUALS
@@ -103,7 +103,7 @@ public class ExpressionUtils {
     if (funcDef == BuiltInFunctionDefinitions.IS_NULL
         || funcDef == BuiltInFunctionDefinitions.IS_NOT_NULL) {
       return callExpression.getChildren().stream()
-          .allMatch(e -> e instanceof FieldReferenceExpression);
+                           .allMatch(e -> e instanceof FieldReferenceExpression);
     }
     // handle binary operator
     return isFieldReferenceAndLiteral(callExpression.getChildren());
@@ -126,15 +126,15 @@ public class ExpressionUtils {
         || funcDef == BuiltInFunctionDefinitions.AND
         || funcDef == BuiltInFunctionDefinitions.OR) {
       return callExpr.getChildren().stream()
-          .map(e -> getReferencedColumns((ResolvedExpression) e))
-          .flatMap(Arrays::stream)
-          .toArray(String[]::new);
+                     .map(e -> getReferencedColumns((ResolvedExpression) e))
+                     .flatMap(Arrays::stream)
+                     .toArray(String[]::new);
     }
 
     return expression.getChildren().stream()
-        .filter(expr -> expr instanceof FieldReferenceExpression)
-        .map(expr -> ((FieldReferenceExpression) expr).getName())
-        .toArray(String[]::new);
+                     .filter(expr -> expr instanceof FieldReferenceExpression)
+                     .map(expr -> ((FieldReferenceExpression) expr).getName())
+                     .toArray(String[]::new);
   }
 
   /**
@@ -150,21 +150,23 @@ public class ExpressionUtils {
     switch (logicalType.getTypeRoot()) {
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         return expr.getValueAs(LocalDateTime.class)
-            .map(ldt -> ldt.toInstant(ZoneOffset.UTC).toEpochMilli())
-            .orElse(null);
+                   .map(ldt -> ldt.toInstant(ZoneOffset.UTC).toEpochMilli())
+                   .orElse(null);
       case TIME_WITHOUT_TIME_ZONE:
         return expr.getValueAs(LocalTime.class)
-            .map(lt -> lt.get(ChronoField.MILLI_OF_DAY))
-            .orElse(null);
+                   .map(lt -> lt.get(ChronoField.MILLI_OF_DAY))
+                   .orElse(null);
       case DATE:
         return expr.getValueAs(LocalDate.class)
-            .map(LocalDate::toEpochDay)
-            .orElse(null);
+                   .map(LocalDate::toEpochDay)
+                   .orElse(null);
       // NOTE: All integral types of size less than Int are encoded as Ints in MT
       case BOOLEAN:
         return expr.getValueAs(Boolean.class).orElse(null);
       case TINYINT:
+        return expr.getValueAs(Byte.class).orElse(null);
       case SMALLINT:
+        return expr.getValueAs(Short.class).orElse(null);
       case INTEGER:
         return expr.getValueAs(Integer.class).orElse(null);
       case BIGINT:
@@ -188,8 +190,8 @@ public class ExpressionUtils {
 
   public static List<ResolvedExpression> filterSimpleCallExpression(List<ResolvedExpression> exprs) {
     return exprs.stream()
-        .filter(ExpressionUtils::isSimpleCallExpression)
-        .collect(Collectors.toList());
+                .filter(ExpressionUtils::isSimpleCallExpression)
+                .collect(Collectors.toList());
   }
 
   /**
@@ -240,8 +242,8 @@ public class ExpressionUtils {
 
     if (funcDef == BuiltInFunctionDefinitions.AND) {
       callExpr.getChildren().stream()
-          .filter(child -> child instanceof CallExpression)
-          .forEach(child -> splitByAnd((CallExpression) child, result));
+              .filter(child -> child instanceof CallExpression)
+              .forEach(child -> splitByAnd((CallExpression) child, result));
     } else {
       result.add(callExpr);
     }
@@ -257,16 +259,16 @@ public class ExpressionUtils {
     List<Expression> children = expr.getChildren();
     // if any child expr reference a non-partition field, returns false.
     return children.stream()
-        .allMatch(
-            child -> {
-              if (child instanceof FieldReferenceExpression) {
-                FieldReferenceExpression refExpr = (FieldReferenceExpression) child;
-                return parFieldPos.contains(refExpr.getFieldIndex());
-              } else if (child instanceof CallExpression) {
-                return isPartitionCallExpr((CallExpression) child, parFieldPos);
-              } else {
-                return true;
-              }
-            });
+                   .allMatch(
+                       child -> {
+                         if (child instanceof FieldReferenceExpression) {
+                           FieldReferenceExpression refExpr = (FieldReferenceExpression) child;
+                           return parFieldPos.contains(refExpr.getFieldIndex());
+                         } else if (child instanceof CallExpression) {
+                           return isPartitionCallExpr((CallExpression) child, parFieldPos);
+                         } else {
+                           return true;
+                         }
+                       });
   }
 }
