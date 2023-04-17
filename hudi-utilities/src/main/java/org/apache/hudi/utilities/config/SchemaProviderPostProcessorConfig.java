@@ -41,36 +41,43 @@ public class SchemaProviderPostProcessorConfig extends HoodieConfig {
   public static final ConfigProperty<String> SCHEMA_POST_PROCESSOR = ConfigProperty
       .key(HoodieSchemaProviderConfig.SCHEMAPROVIDER_CONFIG_PREFIX + "schema_post_processor")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The class name of the schema post processor.");
 
   public static final ConfigProperty<String> DELETE_COLUMN_POST_PROCESSOR_COLUMN = ConfigProperty
       .key(PREFIX + "delete.columns")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Columns to delete in the schema post processor.");
 
   public static final ConfigProperty<String> SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP = ConfigProperty
       .key(PREFIX + "add.column.name")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("New column's name");
 
   public static final ConfigProperty<String> SCHEMA_POST_PROCESSOR_ADD_COLUMN_TYPE_PROP = ConfigProperty
       .key(PREFIX + "add.column.type")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("New column's type");
 
   public static final ConfigProperty<Boolean> SCHEMA_POST_PROCESSOR_ADD_COLUMN_NULLABLE_PROP = ConfigProperty
       .key(PREFIX + "add.column.nullable")
       .defaultValue(true)
+      .markAdvanced()
       .withDocumentation("New column's nullable");
 
   public static final ConfigProperty<String> SCHEMA_POST_PROCESSOR_ADD_COLUMN_DEFAULT_PROP = ConfigProperty
       .key(PREFIX + "add.column.default")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("New column's default value");
 
   public static final ConfigProperty<String> SCHEMA_POST_PROCESSOR_ADD_COLUMN_DOC_PROP = ConfigProperty
       .key(PREFIX + "add.column.doc")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Docs about new column");
 
 }

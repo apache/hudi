@@ -866,7 +866,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(11, statuses.length);
     refreshFsView();
 
-    // Check files as of lastest commit.
+    // Check files as of latest commit.
     List<FileSlice> allSlices = rtView.getAllFileSlices("2016/05/01").collect(Collectors.toList());
     assertEquals(isLatestFileSliceOnly ? 4 : 8, allSlices.size());
     Map<String, Long> fileSliceMap =
@@ -1434,7 +1434,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime2);
     saveAsComplete(commitTimeline, instant2, Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
 
-    //make sure view doesnt include fileId1
+    //make sure view doesn't include fileId1
     refreshFsView();
     assertEquals(0, roView.getLatestBaseFiles(partitionPath1)
         .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
@@ -1590,7 +1590,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         .setClusteringPlan(plan).setOperationType(WriteOperationType.CLUSTER.name()).build();
     metaClient.getActiveTimeline().saveToPendingReplaceCommit(instant2, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
 
-    //make sure view doesnt include fileId1
+    //make sure view doesn't include fileId1
     refreshFsView();
     Set<String> fileIds =
         fsView.getFileGroupsInPendingClustering().map(e -> e.getLeft().getFileId()).collect(Collectors.toSet());
@@ -1942,7 +1942,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   }
 
   /**
-   * Used to verify fils system view on various file systems.
+   * Used to verify file system view on various file systems.
    */
   protected void verifyFileSystemView(String partitionPath, FileSystemViewExpectedState expectedState,
                                       SyncableFileSystemView tableFileSystemView) {

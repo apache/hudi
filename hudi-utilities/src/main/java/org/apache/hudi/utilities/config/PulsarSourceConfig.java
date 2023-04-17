@@ -39,6 +39,7 @@ public class PulsarSourceConfig extends HoodieConfig {
   public static final ConfigProperty<Long> PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD = ConfigProperty
       .key("hoodie.deltastreamer.source.pulsar.maxRecords")
       .defaultValue(5_000_000L)
+      .markAdvanced()
       .withDocumentation("Max number of records obtained in a single each batch");
 
   public static final ConfigProperty<String> PULSAR_SOURCE_TOPIC_NAME = ConfigProperty
@@ -59,6 +60,7 @@ public class PulsarSourceConfig extends HoodieConfig {
   public static final ConfigProperty<OffsetAutoResetStrategy> PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY = ConfigProperty
       .key("hoodie.deltastreamer.source.pulsar.offset.autoResetStrategy")
       .defaultValue(OffsetAutoResetStrategy.LATEST)
+      .markAdvanced()
       .withDocumentation("Policy determining how offsets shall be automatically reset in case there's "
           + "no checkpoint information present");
 

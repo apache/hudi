@@ -46,31 +46,37 @@ public class S3SourceConfig extends HoodieConfig {
   public static final ConfigProperty<String> S3_SOURCE_QUEUE_REGION = ConfigProperty
       .key(S3_SOURCE_PREFIX + "queue.region")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Case-sensitive region name of the cloud provider for the queue. For example, \"us-east-1\".");
 
   public static final ConfigProperty<String> S3_SOURCE_QUEUE_FS = ConfigProperty
       .key(S3_SOURCE_PREFIX + "queue.fs")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("File system corresponding to queue. For example, for AWS SQS it is s3/s3a.");
 
   public static final ConfigProperty<String> S3_QUEUE_LONG_POLL_WAIT = ConfigProperty
       .key(S3_SOURCE_PREFIX + "queue.long.poll.wait")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Long poll wait time in seconds, If set as 0 then client will fetch on short poll basis.");
 
   public static final ConfigProperty<String> S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH = ConfigProperty
       .key(S3_SOURCE_PREFIX + "queue.max.messages.per.batch")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Max messages for each batch of delta streamer run. Source will process these maximum number of message at a time.");
 
   public static final ConfigProperty<String> S3_SOURCE_QUEUE_MAX_MESSAGES_PER_REQUEST = ConfigProperty
       .key(S3_SOURCE_PREFIX + "queue.max.messages.per.request")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Max messages for each request");
 
   public static final ConfigProperty<String> S3_SOURCE_QUEUE_VISIBILITY_TIMEOUT = ConfigProperty
       .key(S3_SOURCE_PREFIX + "queue.visibility.timeout")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Visibility timeout for messages in queue. After we consume the message, queue will move the consumed "
           + "messages to in-flight state, these messages can't be consumed again by source for this timeout period.");
 }

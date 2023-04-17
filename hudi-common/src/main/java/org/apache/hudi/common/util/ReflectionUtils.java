@@ -188,7 +188,7 @@ public class ReflectionUtils {
     } catch (NoSuchMethodException e) {
       throw new HoodieException(String.format("Unable to find the method %s of the class %s ",  methodName, clazz), e);
     } catch (InvocationTargetException | IllegalAccessException e) {
-      throw new HoodieException(String.format("Unable to invoke the methond %s of the class %s ",  methodName, clazz), e);
+      throw new HoodieException(String.format("Unable to invoke the method %s of the class %s ", methodName, clazz), e);
     }
   }
 
