@@ -245,8 +245,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return this.currentLocation != null;
   }
 
-  public HoodieRecordStatus getStatus() {
-    return new HoodieRecordStatus(key, currentLocation, newLocation);
+  public IndexItem getIndexItem() {
+    return new IndexItem(key, currentLocation, newLocation);
   }
 
   @Override

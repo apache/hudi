@@ -311,7 +311,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
       actualPartitionNumRecords.put(
           partitionPath,
           actualPartitionNumRecords.getOrDefault(partitionPath, 0L) + writeStatus.getTotalRecords());
-      assertEquals(0, writeStatus.getFailedRecords().size());
+      assertEquals(0, writeStatus.getFailedRecordIndexes().size());
     }
 
     assertEquals(expectedPartitionNumRecords, actualPartitionNumRecords);

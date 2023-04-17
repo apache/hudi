@@ -51,7 +51,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieRecordStatus;
+import org.apache.hudi.common.model.IndexItem;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
@@ -499,7 +499,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       List<WriteStatus> statuses = writeFn.apply(client, recordList, newCommitTime).collect();
       assertNoWriteErrors(statuses);
       assertEquals(2, statuses.size());
-      assertNodupesInPartition(statuses.stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
+      assertNodupesInPartition(statuses.stream().map(WriteStatus::getWrittenRecordIndexes).flatMap(Collection::stream)
           .collect(Collectors.toList()));
     }
   }
@@ -509,9 +509,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
    *
    * @param records List of Hoodie records
    */
-  void assertNodupesInPartition(List<HoodieRecordStatus> records) {
+  void assertNodupesInPartition(List<IndexItem> records) {
     Map<String, Set<String>> partitionToKeys = new HashMap<>();
-    for (HoodieRecordStatus r : records) {
+    for (IndexItem r : records) {
       String key = r.getRecordKey();
       String partitionPath = r.getPartitionPath();
       if (!partitionToKeys.containsKey(partitionPath)) {

@@ -331,7 +331,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
           (long) statuses.stream().map(status -> status.getStat().getNumInserts()).reduce((a, b) -> a + b).get());
       // Verify all records have location set
       statuses.forEach(writeStatus -> {
-        writeStatus.getWrittenRecords().forEach(r -> {
+        writeStatus.getWrittenRecordIndexes().forEach(r -> {
           // Ensure New Location is set
           assertTrue(r.getNewLocation().isPresent());
         });

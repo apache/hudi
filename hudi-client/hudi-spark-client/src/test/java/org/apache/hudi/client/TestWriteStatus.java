@@ -42,8 +42,8 @@ public class TestWriteStatus {
     for (int i = 0; i < 1000; i++) {
       status.markFailure(mock(HoodieRecord.class), t, null);
     }
-    assertTrue(status.getFailedRecords().size() > 0);
-    assertTrue(status.getFailedRecords().size() < 150); // 150 instead of 100, to prevent flaky test
+    assertTrue(status.getFailedRecordIndexes().size() > 0);
+    assertTrue(status.getFailedRecordIndexes().size() < 150); // 150 instead of 100, to prevent flaky test
     assertTrue(status.hasErrors());
   }
 
@@ -55,9 +55,9 @@ public class TestWriteStatus {
       status.markSuccess(mock(HoodieRecord.class), Option.empty());
       status.markFailure(mock(HoodieRecord.class), t, Option.empty());
     }
-    assertEquals(1000, status.getFailedRecords().size());
+    assertEquals(1000, status.getFailedRecordIndexes().size());
     assertTrue(status.hasErrors());
-    assertTrue(status.getWrittenRecords().isEmpty());
+    assertTrue(status.getWrittenRecordIndexes().isEmpty());
     assertEquals(2000, status.getTotalRecords());
   }
 

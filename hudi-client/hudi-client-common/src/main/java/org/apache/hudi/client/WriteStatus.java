@@ -22,7 +22,7 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordStatus;
+import org.apache.hudi.common.model.IndexItem;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
@@ -53,9 +53,9 @@ public class WriteStatus implements Serializable {
 
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
-  private final List<HoodieRecordStatus> writtenRecords = new ArrayList<>();
+  private final List<IndexItem> writtenRecordIndexes = new ArrayList<>();
 
-  private final List<HoodieRecordStatus> failedRecords = new ArrayList<>();
+  private final List<IndexItem> failedRecordIndexes = new ArrayList<>();
 
   private Throwable globalError = null;
 
@@ -93,7 +93,7 @@ public class WriteStatus implements Serializable {
    */
   public void markSuccess(HoodieRecord record, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
-      writtenRecords.add(record.getStatus());
+      writtenRecordIndexes.add(record.getIndexItem());
     }
     totalRecords++;
 
@@ -131,9 +131,9 @@ public class WriteStatus implements Serializable {
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
   public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
-    if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
+    if (failedRecordIndexes.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
-      failedRecords.add(record.getStatus());
+      failedRecordIndexes.add(record.getIndexItem());
       errors.put(record.getKey(), t);
     }
     totalRecords++;
@@ -172,12 +172,12 @@ public class WriteStatus implements Serializable {
     this.globalError = t;
   }
 
-  public List<HoodieRecordStatus> getWrittenRecords() {
-    return writtenRecords;
+  public List<IndexItem> getWrittenRecordIndexes() {
+    return writtenRecordIndexes;
   }
 
-  public List<HoodieRecordStatus> getFailedRecords() {
-    return failedRecords;
+  public List<IndexItem> getFailedRecordIndexes() {
+    return failedRecordIndexes;
   }
 
   public HoodieWriteStat getStat() {

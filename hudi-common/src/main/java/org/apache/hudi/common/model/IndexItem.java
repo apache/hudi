@@ -27,7 +27,7 @@ import com.esotericsoftware.kryo.io.Output;
 
 import java.io.Serializable;
 
-public class HoodieRecordStatus implements Serializable, KryoSerializable {
+public class IndexItem implements Serializable, KryoSerializable {
 
 
   /**
@@ -67,9 +67,9 @@ public class HoodieRecordStatus implements Serializable, KryoSerializable {
     return Option.ofNullable(this.newLocation);
   }
 
-  public HoodieRecordStatus(HoodieKey key,
-                            HoodieRecordLocation currentLocation,
-                            HoodieRecordLocation newLocation) {
+  public IndexItem(HoodieKey key,
+                   HoodieRecordLocation currentLocation,
+                   HoodieRecordLocation newLocation) {
     this.key = key;
     this.currentLocation = currentLocation;
     this.newLocation = newLocation;
