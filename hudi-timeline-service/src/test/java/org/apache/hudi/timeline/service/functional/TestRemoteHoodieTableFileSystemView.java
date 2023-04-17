@@ -118,7 +118,9 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     view.getLatestBaseFiles();
     // org.eclipse.jetty.util.thread.QueuedThreadPool `_name`
     // io.javalin.jetty.JettyUtil.defaultThreadPool `JettyServerThreadPool`
-    Thread.getAllStackTraces().keySet().stream().filter(t -> t.getName().startsWith("qtp") || t.getName().startsWith("Jetty"))
+    Thread.getAllStackTraces().keySet().stream().filter(t -> t.getName().startsWith("qtp")
+            || t.getName().startsWith("Jetty")
+            || t.getName().startsWith("TimelineService-JettyScheduler"))
         .forEach(t -> assertTrue(t.isDaemon()));
     server.close();
   }

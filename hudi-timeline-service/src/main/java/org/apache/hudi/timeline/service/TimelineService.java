@@ -341,13 +341,7 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-    int maxThreads;
-    if (timelineServerConf.numThreads > 0) {
-      maxThreads = timelineServerConf.numThreads;
-    } else {
-      // io.javalin.jetty.JettyUtil.defaultThreadPool
-      maxThreads = 250;
-    }
+    int maxThreads = timelineServerConf.numThreads > 0 ? timelineServerConf.numThreads : 250;
     QueuedThreadPool pool = new QueuedThreadPool(maxThreads, 8, 60_000);
     pool.setDaemon(true);
     final Server server = new Server(pool);
