@@ -304,6 +304,7 @@ public class ParquetRowDataWriter {
   }
 
   private long timestampToInt64(TimestampData timestampData) {
+    timestampData = DateUtils.normalLocalDateToUTC(timestampData);
     return utcTimestamp ? timestampData.getMillisecond() : timestampData.toTimestamp().getTime();
   }
 
@@ -334,6 +335,7 @@ public class ParquetRowDataWriter {
   private Binary timestampToInt96(TimestampData timestampData) {
     int julianDay;
     long nanosOfDay;
+    timestampData = DateUtils.normalLocalDateToUTC(timestampData);
     if (utcTimestamp) {
       long mills = timestampData.getMillisecond();
       julianDay = (int) ((mills / MILLIS_IN_DAY) + JULIAN_EPOCH_OFFSET_DAYS);
