@@ -150,6 +150,13 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     this.stateTransitionTime = "";
   }
 
+  public HoodieInstant(State state, String action, String timestamp, String stateTransitionTime) {
+    this.state = state;
+    this.action = action;
+    this.timestamp = timestamp;
+    this.stateTransitionTime = stateTransitionTime;
+  }
+
   public boolean isCompleted() {
     return state == State.COMPLETED;
   }

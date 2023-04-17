@@ -84,6 +84,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
   private static final String ACTION_TYPE_KEY = "actionType";
   private static final String ACTION_STATE = "actionState";
+  private static final String STATE_TRANSITION_TIME = "stateTransitionTime";
   private HoodieTableMetaClient metaClient;
   private final Map<String, byte[]> readCommits = new HashMap<>();
 
@@ -191,7 +192,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
         return null;
       });
     }
-    return new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action, instantTime);
+    return new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
+        instantTime, Option.ofNullable(record.get(STATE_TRANSITION_TIME)).orElse("").toString());
   }
 
   @Nonnull
