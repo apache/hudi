@@ -774,7 +774,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Long> CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigOptions
       .key("clustering.plan.strategy.small.file.limit")
       .longType()
-      .defaultValue(600 * 1024 * 1024L) // default 600 MB
+      .defaultValue(600L) // default 600 MB
       .withDescription("Files smaller than the size specified here are candidates for clustering, default 600 MB");
 
   public static final ConfigOption<String> CLUSTERING_SORT_COLUMNS = ConfigOptions
