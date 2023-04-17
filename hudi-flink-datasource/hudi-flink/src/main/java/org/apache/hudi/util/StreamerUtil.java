@@ -221,7 +221,8 @@ public class StreamerUtil {
     // Hadoop FileSystem
     FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
     try {
-      return fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
+      return fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
+          && fs.exists(new Path(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME), HoodieTableConfig.HOODIE_PROPERTIES_FILE));
     } catch (IOException e) {
       throw new HoodieException("Error while checking whether table exists under path:" + basePath, e);
     }
