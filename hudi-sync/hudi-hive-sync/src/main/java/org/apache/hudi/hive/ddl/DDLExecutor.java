@@ -32,8 +32,9 @@ import java.util.Map;
  */
 public interface DDLExecutor extends AutoCloseable {
 
-
   /**
+   * Create a database with the given name.
+   *
    * @param databaseName name of database to be created.
    */
   void createDatabase(String databaseName);
@@ -41,7 +42,7 @@ public interface DDLExecutor extends AutoCloseable {
   /**
    * Creates a table with the following properties.
    *
-   * @param tableName
+   * @param tableName table name.
    * @param storageSchema
    * @param inputFormatClass
    * @param outputFormatClass
@@ -49,14 +50,14 @@ public interface DDLExecutor extends AutoCloseable {
    * @param serdeProperties
    * @param tableProperties
    */
-  void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
-                   String outputFormatClass, String serdeClass,
-                   Map<String, String> serdeProperties, Map<String, String> tableProperties);
+  void createTable(String tableName, MessageType storageSchema,
+    String inputFormatClass, String outputFormatClass, String serdeClass,
+    Map<String, String> serdeProperties, Map<String, String> tableProperties);
 
   /**
    * Updates the table with the newSchema.
    *
-   * @param tableName
+   * @param tableName table name.
    * @param newSchema
    */
   void updateTableDefinition(String tableName, MessageType newSchema);
@@ -64,7 +65,7 @@ public interface DDLExecutor extends AutoCloseable {
   /**
    * Fetches tableSchema for a table.
    *
-   * @param tableName
+   * @param tableName table name.
    * @return
    */
   Map<String, String> getTableSchema(String tableName);
@@ -72,7 +73,7 @@ public interface DDLExecutor extends AutoCloseable {
   /**
    * Adds partition to table.
    *
-   * @param tableName
+   * @param tableName table name.
    * @param partitionsToAdd
    */
   void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
@@ -80,7 +81,7 @@ public interface DDLExecutor extends AutoCloseable {
   /**
    * Updates partitions for a given table.
    *
-   * @param tableName
+   * @param tableName table name.
    * @param changedPartitions
    */
   void updatePartitionsToTable(String tableName, List<String> changedPartitions);
@@ -88,7 +89,7 @@ public interface DDLExecutor extends AutoCloseable {
   /**
    * Drop partitions for a given table.
    *
-   * @param tableName
+   * @param tableName table name.
    * @param partitionsToDrop
    */
   void dropPartitionsToTable(String tableName, List<String> partitionsToDrop);
@@ -96,7 +97,7 @@ public interface DDLExecutor extends AutoCloseable {
   /**
    * update table comments
    *
-   * @param tableName
+   * @param tableName table name.
    * @param newSchema Map key: field name, Map value: [field type, field comment]
    */
   void updateTableComments(String tableName, Map<String, Pair<String, String>> newSchema);

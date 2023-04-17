@@ -54,7 +54,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
           UserGroupInformation.getCurrentUser().getShortUserName());
       SessionState.start(this.sessionState);
       this.sessionState.setCurrentDatabase(databaseName);
-      this.hiveDriver = new org.apache.hadoop.hive.ql.Driver(config.getHiveConf());
+      this.hiveDriver = new Driver(config.getHiveConf());
       this.hmsddlExecutor = new HMSDDLExecutor(config, metaStoreClient);
     } catch (Exception e) {
       if (sessionState != null) {
@@ -77,7 +77,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       if (hiveDriver != null) {
         HoodieTimer timer = HoodieTimer.start();
         hiveDriver.run(sql);
-        LOG.info("Time taken to execute [%s]: %s ms", sql, timer.endTimer());
+        LOG.info("Time taken to execute [{}]: {} ms.", sql, timer.endTimer());
       }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL.", e);

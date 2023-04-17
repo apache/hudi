@@ -134,10 +134,10 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   @Override
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
     if (changedPartitions.isEmpty()) {
-      LOG.info("No partitions to change for " + tableName);
+      LOG.info("No partitions to change for {}.{}.", databaseName, tableName);
       return;
     }
-    LOG.info("Changing partitions " + changedPartitions.size() + " on " + tableName);
+    LOG.info("Changing partitions {} on {}.{}.", changedPartitions.size(), databaseName, tableName);
     List<String> sqls = constructChangePartitions(tableName, changedPartitions);
     for (String sql : sqls) {
       runSQL(sql);

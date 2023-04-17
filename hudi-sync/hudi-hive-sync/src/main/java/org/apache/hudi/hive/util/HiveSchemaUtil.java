@@ -18,17 +18,22 @@
 
 package org.apache.hudi.hive.util;
 
+import org.apache.hadoop.hive.ql.ErrorMsg;
+import org.apache.hadoop.hive.serde.serdeConstants;
+import org.apache.hadoop.hive.serde2.SerDeException;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
 
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hudi.internal.schema.Types;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.apache.parquet.schema.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,14 +68,14 @@ public class HiveSchemaUtil {
   private static final String LIST_COLUMNS = "columns";
   private static final String PARTITIONS = "partitions";
   private static final String ROW_FORMAT = "row_format";
-  private static final String LOCATION_BLOCK = "location_block";
   private static final String LOCATION = "location";
+  private static final String LOCATION_BLOCK = "location_block";
   private static final String PROPERTIES = "properties";
 
   private static final String BUCKETS = "buckets";
 
   private static final String CREATE_DATABASE_STMT =
-      "CREATE DATABASE IF NOT EXISTS <" + DATABASE_NAME + ">;";
+      "CREATE DATABASE IF NOT EXISTS <" + DATABASE_NAME + ">";
 
   private static final String CREATE_TABLE_TEMPLATE =
       "CREATE <" + EXTERNAL + ">TABLE <if(" + DATABASE_NAME + ")>`<" + DATABASE_NAME + ">`.<endif>"
@@ -83,8 +88,10 @@ public class HiveSchemaUtil {
       + "TBLPROPERTIES (\n"
       + "<" + PROPERTIES + ">)";
 
+  private static final String CREATE_TABLE_TEMPLATE_LOCATION = "LOCATION\n" +
+      "<" + LOCATION + ">\n";
+
   public static final String HIVE_ESCAPE_CHARACTER = "`";
-  public static final String BOOLEAN_TYPE_NAME = "boolean";
   public static final String INT_TYPE_NAME = "int";
   public static final String BIGINT_TYPE_NAME = "bigint";
   public static final String FLOAT_TYPE_NAME = "float";
@@ -258,9 +265,8 @@ public class HiveSchemaUtil {
   private static String convertField(final Type parquetType, boolean supportTimestamp, boolean doFormat) {
     StringBuilder field = new StringBuilder();
     if (parquetType.isPrimitive()) {
-      final PrimitiveType.PrimitiveTypeName parquetPrimitiveTypeName =
-          parquetType.asPrimitiveType().getPrimitiveTypeName();
       final OriginalType originalType = parquetType.getOriginalType();
+
       if (originalType == OriginalType.DECIMAL) {
         final DecimalMetadata decimalMetadata = parquetType.asPrimitiveType().getDecimalMetadata();
         return field.append("DECIMAL(").append(decimalMetadata.getPrecision()).append(doFormat ? " , " : ",")
@@ -271,52 +277,7 @@ public class HiveSchemaUtil {
         return field.append("TIMESTAMP").toString();
       }
 
-      // TODO - fix the method naming here
-      return parquetPrimitiveTypeName.convert(new PrimitiveType.PrimitiveTypeNameConverter<String, RuntimeException>() {
-        @Override
-        public String convertBOOLEAN(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return BOOLEAN_TYPE_NAME;
-        }
-
-        @Override
-        public String convertINT32(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return INT_TYPE_NAME;
-        }
-
-        @Override
-        public String convertINT64(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return BIGINT_TYPE_NAME;
-        }
-
-        @Override
-        public String convertINT96(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "timestamp-millis";
-        }
-
-        @Override
-        public String convertFLOAT(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return FLOAT_TYPE_NAME;
-        }
-
-        @Override
-        public String convertDOUBLE(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return DOUBLE_TYPE_NAME;
-        }
-
-        @Override
-        public String convertFIXED_LEN_BYTE_ARRAY(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return BINARY_TYPE_NAME;
-        }
-
-        @Override
-        public String convertBINARY(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          if (originalType == OriginalType.UTF8 || originalType == OriginalType.ENUM) {
-            return STRING_TYPE_NAME;
-          } else {
-            return BINARY_TYPE_NAME;
-          }
-        }
-      });
+      return convertPrimitiveType(parquetType);
     } else {
       GroupType parquetGroupType = parquetType.asGroupType();
       OriginalType originalType = parquetGroupType.getOriginalType();
@@ -368,6 +329,46 @@ public class HiveSchemaUtil {
     }
   }
 
+  private static String convertPrimitiveType(Type parquetType) {
+
+    final PrimitiveType primitiveType = parquetType.asPrimitiveType();
+    final PrimitiveTypeName primitiveTypeName = primitiveType.getPrimitiveTypeName();
+    final OriginalType originalType = parquetType.getOriginalType();
+
+    switch (primitiveTypeName) {
+      case INT96:
+        return Types.TimestampType.get().toString();
+      case INT32:
+        return Types.IntType.get().toString();
+      case INT64:
+        return Types.BigIntType.get().toString();
+      case BOOLEAN:
+        return Types.BooleanType.get().toString();
+      case FLOAT:
+        return Types.FloatType.get().toString();
+      case DOUBLE:
+        return Types.DoubleType.get().toString();
+      case BINARY:
+        if (originalType == OriginalType.UTF8 || originalType == OriginalType.ENUM) {
+          return Types.StringType.get().toString();
+        } else {
+          return Types.BinaryType.get().toString();
+        }
+      default:
+        throw new UnsupportedOperationException("Unhandled type" + primitiveTypeName.name());
+    }
+  }
+
+  private static String convertPrimitiveType(OriginalType originalType) {
+    /*switch (originalType) {
+      case DECIMAL:
+
+        return field.append("DECIMAL(").append(decimalMetadata.getPrecision()).append(doFormat ? " , " : ",")
+            .append(decimalMetadata.getScale()).append(")").toString();
+    }*/
+    return "";
+  }
+
   /**
    * Return a 'struct' Hive schema from a list of Parquet fields.
    *
@@ -402,14 +403,20 @@ public class HiveSchemaUtil {
     return doFormat ? tickSurround(result) : result;
   }
 
-  private static String tickSurround(String result) {
-    if (!result.startsWith("`")) {
-      result = "`" + result;
+  /**
+   * @param pString
+   * @return
+   */
+  private static String tickSurround(String pString) {
+    StringBuilder result = new StringBuilder();
+    if (!pString.startsWith("`")) {
+      result.append("`");
     }
-    if (!result.endsWith("`")) {
-      result = result + "`";
+    result.append(pString);
+    if (!pString.endsWith("`")) {
+      result.append("`");
     }
-    return result;
+    return result.toString();
   }
 
   private static String removeSurroundingTick(String result) {
@@ -500,12 +507,28 @@ public class HiveSchemaUtil {
     return command.render();
   }
 
+  /**
+   * Generate CreateTable SQL.
+   *
+   * @param config HiveSyncConfig.
+   * @param dataBaseName databaseName.
+   * @param tableName tableName.
+   * @param storageSchema parquet Schema.
+   * @param inputFormatClass inputFormatClass.
+   * @param outputFormatClass outputFormatClass.
+   * @param serdeClass serdeClass.
+   * @param serdeProperties serdeProperties.
+   * @param tableProperties tableProperties.
+   * @return createTable SQL.
+   *
+   * @throws IOException
+   */
   public static String generateCreateTableDDL(HiveSyncConfig config, String dataBaseName, String tableName,
       MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass,
       Map<String, String> serdeProperties, Map<String, String> tableProperties) throws IOException {
     ST command = new ST(CREATE_TABLE_TEMPLATE);
-    command.add(DATABASE_NAME, tickSurround(dataBaseName));
-    command.add(TABLE_NAME, tickSurround(tableName));
+    command.add(DATABASE_NAME, dataBaseName);
+    command.add(TABLE_NAME, tableName);
     command.add(EXTERNAL, getExternal(config));
     command.add(LIST_COLUMNS, getColumns(storageSchema, config));
     if (!config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
@@ -516,7 +539,7 @@ public class HiveSchemaUtil {
     if (config.getString(HIVE_SYNC_BUCKET_SYNC_SPEC) != null) {
       command.add(BUCKETS, config.getBuckets());
     }
-    command.add(LOCATION, config.getAbsoluteBasePath());
+    command.add(LOCATION_BLOCK, getLocationBlock(config.getAbsoluteBasePath()));
     command.add(PROPERTIES, propertyToString(tableProperties));
     return command.render();
   }
@@ -593,5 +616,11 @@ public class HiveSchemaUtil {
       throws IOException {
     return generateSchemaString(storageSchema,
         config.getMetaSyncPartitionFields(), config.getIsHiveSupportTimestampType());
+  }
+
+  private static String getLocationBlock(String location) {
+    ST locationBlock = new ST(CREATE_TABLE_TEMPLATE_LOCATION);
+    locationBlock.add(LOCATION, "  '" + location + "'");
+    return locationBlock.render();
   }
 }
