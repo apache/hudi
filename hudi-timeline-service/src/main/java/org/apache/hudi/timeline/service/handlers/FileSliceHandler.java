@@ -96,13 +96,15 @@ public class FileSliceHandler extends Handler {
   }
 
   public List<FileGroupDTO> getAllFileGroups(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath).map(FileGroupDTO::fromFileGroup)
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath)
         .collect(Collectors.toList());
+    return FileGroupDTO.fromFileGroup(fileGroups);
   }
 
   public List<FileGroupDTO> getReplacedFileGroupsBeforeOrOn(String basePath, String maxCommitTime, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getReplacedFileGroupsBeforeOrOn(maxCommitTime, partitionPath).map(FileGroupDTO::fromFileGroup)
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getReplacedFileGroupsBeforeOrOn(maxCommitTime, partitionPath)
         .collect(Collectors.toList());
+    return FileGroupDTO.fromFileGroup(fileGroups);
   }
 
   public List<FileGroupDTO> getReplacedFileGroupsBefore(String basePath, String maxCommitTime, String partitionPath) {
@@ -112,8 +114,9 @@ public class FileSliceHandler extends Handler {
   }
   
   public List<FileGroupDTO> getAllReplacedFileGroups(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getAllReplacedFileGroups(partitionPath).map(FileGroupDTO::fromFileGroup)
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllReplacedFileGroups(partitionPath)
         .collect(Collectors.toList());
+    return FileGroupDTO.fromFileGroup(fileGroups);
   }
 
   public List<ClusteringOpDTO> getFileGroupsInPendingClustering(String basePath) {

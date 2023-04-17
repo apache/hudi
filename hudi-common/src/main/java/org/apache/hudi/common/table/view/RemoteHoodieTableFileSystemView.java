@@ -398,7 +398,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<FileGroupDTO> fileGroups = executeRequest(ALL_FILEGROUPS_FOR_PARTITION_URL, paramsMap,
           new TypeReference<List<FileGroupDTO>>() {}, RequestMethod.GET);
-      return fileGroups.stream().map(dto -> FileGroupDTO.toFileGroup(dto, metaClient));
+      return FileGroupDTO.toFileGroup(fileGroups, metaClient);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
@@ -410,7 +410,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<FileGroupDTO> fileGroups = executeRequest(ALL_REPLACED_FILEGROUPS_BEFORE_OR_ON, paramsMap,
           new TypeReference<List<FileGroupDTO>>() {}, RequestMethod.GET);
-      return fileGroups.stream().map(dto -> FileGroupDTO.toFileGroup(dto, metaClient));
+      return FileGroupDTO.toFileGroup(fileGroups, metaClient);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
@@ -434,7 +434,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<FileGroupDTO> fileGroups = executeRequest(ALL_REPLACED_FILEGROUPS_PARTITION, paramsMap,
           new TypeReference<List<FileGroupDTO>>() {}, RequestMethod.GET);
-      return fileGroups.stream().map(dto -> FileGroupDTO.toFileGroup(dto, metaClient));
+      return FileGroupDTO.toFileGroup(fileGroups, metaClient);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
