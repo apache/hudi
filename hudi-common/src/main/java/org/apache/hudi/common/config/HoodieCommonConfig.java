@@ -75,9 +75,10 @@ public class HoodieCommonConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME = ConfigProperty
       .key("hoodie.incremental.fetch.instant.by.state.transition.time")
       .defaultValue(false)
-      .sinceVersion("0.13.0")
+      .sinceVersion("0.14.0")
       .withDocumentation("For incremental mode, whether to enable to pull commits in range by stateTransitionTime "
-          + "instead of commit timestamp");
+          + "instead of commit timestamp. Please be aware that enabling this will result in"
+          + "`begin.instanttime` and `end.instanttime` using `stateTransitionTime` instead of the instant's commit time.");
 
   public static final ConfigProperty<String> HOODIE_FS_ATOMIC_CREATION_SUPPORT = ConfigProperty
       .key("hoodie.fs.atomic_creation.support")
