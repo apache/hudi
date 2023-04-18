@@ -275,6 +275,13 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns the index key field values.
+   */
+  public static String[] getIndexKeys(Configuration conf) {
+    return getIndexKeyField(conf).split(",");
+  }
+
+  /**
    * Returns the conflict resolution strategy.
    */
   public static ConflictResolutionStrategy getConflictResolutionStrategy(Configuration conf) {

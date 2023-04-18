@@ -58,7 +58,7 @@ public class KeyGeneratorOptions extends HoodieConfig {
       .key("hoodie.datasource.write.partitionpath.field")
       .noDefaultValue()
       .withDocumentation("Partition path field. Value to be used at the partitionPath component of HoodieKey. "
-          + "Actual value ontained by invoking .toString()");
+          + "Actual value obtained by invoking .toString()");
 
   public static final ConfigProperty<String> KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled")

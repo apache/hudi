@@ -148,7 +148,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpointThrows(4, "Timeout(1000ms) while waiting for instant initialize")
         .assertEmptyEvent()
         .subTaskFails(0, 3)
-        .assertEmptyEvent()
+        // the last checkpoint instant was rolled back by subTaskFails(0, 2)
+        // with EAGER cleaning strategy
+        .assertNoEvent()
         .end();
   }
 

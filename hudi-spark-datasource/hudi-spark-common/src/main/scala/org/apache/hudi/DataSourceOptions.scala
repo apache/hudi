@@ -198,7 +198,7 @@ object DataSourceReadOptions {
     .markAdvanced()
     .withDocumentation("When doing an incremental query whether we should fall back to full table scans if file does not exist.")
 
-  val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
+  val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
@@ -256,8 +256,6 @@ object DataSourceReadOptions {
   * Options supported for writing hoodie tables.
   */
 object DataSourceWriteOptions {
-
-  import DataSourceOptionsHelper._
 
   val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.value
   val INSERT_OPERATION_OPT_VAL = WriteOperationType.INSERT.value
@@ -491,7 +489,7 @@ object DataSourceWriteOptions {
     .markAdvanced()
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
 
-  val RECONCILE_SCHEMA: ConfigProperty[Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA.markAdvanced()
+  val RECONCILE_SCHEMA: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
@@ -582,7 +580,7 @@ object DataSourceWriteOptions {
     .sinceVersion("0.9.0")
     .withDocumentation("This class is used by kafka client to deserialize the records")
 
-  val DROP_PARTITION_COLUMNS: ConfigProperty[Boolean] = HoodieTableConfig.DROP_PARTITION_COLUMNS.markAdvanced()
+  val DROP_PARTITION_COLUMNS: ConfigProperty[java.lang.Boolean] = HoodieTableConfig.DROP_PARTITION_COLUMNS
 
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated
