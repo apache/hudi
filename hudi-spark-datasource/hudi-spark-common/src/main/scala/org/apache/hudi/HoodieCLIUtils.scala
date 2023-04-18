@@ -40,8 +40,12 @@ object HoodieCLIUtils extends ProvidesHoodieConfig{
       .setConf(sparkSession.sessionState.newHadoopConf()).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
     val schemaStr = schemaUtil.getTableAvroSchema(false).toString
+    val table = metaClient.getTableConfig.getDatabaseName match {
+      case databaseName: String => databaseName + "." + metaClient.getTableConfig.getTableName
+      case _ => metaClient.getTableConfig.getTableName
+    }
     val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
-      buildHoodieConfig(getHoodieCatalogTable(sparkSession, metaClient.getTableConfig.getTableName)) ++ conf)
+      buildHoodieConfig(getHoodieCatalogTable(sparkSession, table)) ++ conf)
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     DataSourceUtils.createHoodieClient(jsc, schemaStr, basePath,
