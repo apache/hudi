@@ -20,7 +20,6 @@ package org.apache.hudi.console;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.context.ApplicationPidFileWriter;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Slf4j
@@ -28,11 +27,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class HudiConsoleBootstrap {
   public static void main(String[] args) {
-    SpringApplication application = new SpringApplication(HudiConsoleBootstrap.class);
-    String pid = System.getProperties().getProperty("pid");
-    if (pid != null) {
-      application.addListeners(new ApplicationPidFileWriter(pid));
-    }
-    application.run();
+      new SpringApplication(HudiConsoleBootstrap.class).run(args);
   }
 }

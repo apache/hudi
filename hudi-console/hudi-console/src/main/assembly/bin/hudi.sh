@@ -339,10 +339,9 @@ start() {
     APP_CLASSPATH+=":${HADOOP_HOME}/etc/hadoop"
   fi
 
-  PARAM_CLI="org.apache.hudi.flink.core.conf.ParameterCli"
   # shellcheck disable=SC2034
   # shellcheck disable=SC2006
-  vmOption=`$_RUNJAVA -cp "$APP_CLASSPATH" $PARAM_CLI --vmopt`
+  vmOption=`$_RUNJAVA -cp "$APP_CLASSPATH"`
 
   JAVA_OPTS="""
   $vmOption
@@ -368,32 +367,16 @@ start() {
     -Dpid="\"${APP_PID}\"" \
     org.apache.hudi.console.HudiConsoleBootstrap >> "$APP_OUT" 2>&1 "&"
 
+    local PID=$!
 
-   if [ $? -eq "0" ]; then
-      local SLEEP_INTERVAL=5
-      local STARTED=0
-      while [ $SLEEP_INTERVAL -ge 0 ]; do
-         # shellcheck disable=SC2236
-         if [ -f "$APP_PID" ]; then
-           if [ -s "$APP_PID" ]; then
-             # shellcheck disable=SC2006
-             echo_g "Hudi start successful. pid: `cat "$APP_PID"`"
-             STARTED=1
-             break
-           fi
-         fi
-         if [ $SLEEP_INTERVAL -gt 0 ]; then
-           sleep 1
-         fi
-         # shellcheck disable=SC2006
-         SLEEP_INTERVAL=`expr $SLEEP_INTERVAL - 1 `
-      done
-      if [ $STARTED -eq 0 ] ;then
-        echo_g "Hudi start successful."
-      fi
-   else
-      echo_r "Hudi start failed."
-   fi
+    # Add to pid file if successful start
+    if [[ ${PID} =~ ${IS_NUMBER} ]] && kill -0 $PID > /dev/null 2>&1 ; then
+      echo $PID > "$APP_PID"
+      echo_g "Hudi Console start successful. pid: `cat "$APP_PID"`"
+    else
+      echo_r "Hudi Console  start failed."
+      exit 1
+    fi
 }
 
 debug() {

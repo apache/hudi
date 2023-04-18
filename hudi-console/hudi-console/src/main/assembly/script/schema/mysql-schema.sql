@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-create database if not exists `streampark` character set utf8mb4 collate utf8mb4_general_ci;
-use streampark;
+create database if not exists `hudi` character set utf8mb4 collate utf8mb4_general_ci;
+use hudi;
 
 set names utf8mb4;
 set foreign_key_checks = 0;

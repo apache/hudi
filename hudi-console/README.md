@@ -36,17 +36,16 @@ analytical datasets on DFS (Cloud stores, HDFS or any Hadoop FileSystem compatib
 
 ## 🚀 What is Hudi Console?
 
-<h4>StreamPark is a stream processing development framework and professional management platform. </h4>
+<h4>Upserts, Deletes And Incremental Processing on Big Data.</h4>
 
-> StreamPark is a streaming application development framework. Aimed at ease building and managing streaming applications, StreamPark provides development framework for writing stream processing application with Apache Flink and Apache Spark, More other engines will be supported in the future. Also, StreamPark is a professional management platform for streaming application
-, including application development, debugging, interactive query, deployment, operation, maintenance, etc. It was initially known as StreamX and renamed to StreamPark in August 2022.
+> TODO
 
 ## 🔨 How to Build
 
 ```shell
 git clone git@github.com:apache/hudi.git
 cd hudi/hudi-console
-./build.sh
+mvn -Pdist -DskipTests clean package
 ```
 
 ## 🤝 Contribution
