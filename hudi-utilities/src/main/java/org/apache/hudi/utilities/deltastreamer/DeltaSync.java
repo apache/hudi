@@ -289,7 +289,6 @@ public class DeltaSync implements Serializable, Closeable {
     // Register User Provided schema first
     registerAvroSchemas(schemaProvider);
 
-    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames));
 
     this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, getHoodieClientConfig(this.schemaProvider));
     this.hoodieMetrics = new HoodieMetrics(getHoodieClientConfig(this.schemaProvider));
@@ -306,6 +305,9 @@ public class DeltaSync implements Serializable, Closeable {
     this.formatAdapter = new SourceFormatAdapter(
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics),
         this.errorTableWriter, Option.of(props));
+
+    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames), this.errorTableWriter.isPresent());
+
   }
 
   /**
