@@ -41,6 +41,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -1191,6 +1192,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         tableServiceClient.setTableServiceTimer(operationType);
         break;
       default:
+    }
+
+    // Keep hoodie.properties updated from write config
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (!StringUtils.isNullOrEmpty(config.getTableName()) && !config.getTableName().equals(tableConfig.getTableName())) {
+      LOG.info("Table name for dataset has changed from " + tableConfig.getTableName() + " to " + config.getTableName());
+      tableConfig.setTableName(config.getTableName());
+      HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), tableConfig.getProps());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      ValidationUtils.checkState(metaClient.getTableConfig().getTableName().equals(config.getTableName()),
+          "Table name should be updated to " + config.getTableName());
     }
 
     return table;

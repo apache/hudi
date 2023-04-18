@@ -2651,6 +2651,35 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 3);
   }
 
+  /**
+   * Test table name updated in hoodie.properties
+   */
+  @Test
+  public void testTableNameUpdate() throws IOException {
+    HoodieWriteConfig config = getConfigBuilder(TRIP_EXAMPLE_SCHEMA).build();
+
+    dataGen = new HoodieTestDataGenerator(new String[] {"2015/03/16"});
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+
+    // First inserts
+    String commitTime = "001";
+    client.startCommitWithTime(commitTime);
+    List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime, 5);
+    JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
+    client.upsert(insertRecordsRDD1, commitTime).collect();
+    assertEquals(metaClient.getTableConfig().getTableName(), config.getTableName());
+
+    // Change table name and perform another write
+    config = getConfigBuilder(TRIP_EXAMPLE_SCHEMA).forTable("table2").build();
+    client = getHoodieWriteClient(config);
+    commitTime = "002";
+    client.startCommitWithTime(commitTime);
+    client.upsert(insertRecordsRDD1, commitTime).collect();
+    metaClient = metaClient.reload(metaClient);
+    assertEquals(metaClient.getTableConfig().getTableName(), config.getTableName());
+    assertEquals(metaClient.getTableConfig().getTableName(), "table2");
+  }
+
   private Pair<Path, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String instantTime, boolean enableOptimisticConsistencyGuard)
       throws Exception {
     HoodieWriteConfig cfg = !enableOptimisticConsistencyGuard ? (getConfigBuilder().withAutoCommit(false)

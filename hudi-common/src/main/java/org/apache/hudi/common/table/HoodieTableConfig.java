@@ -506,6 +506,10 @@ public class HoodieTableConfig extends HoodieConfig {
     setValue(VERSION, Integer.toString(tableVersion.versionCode()));
   }
 
+  public void setTableName(String name) {
+    setValue(NAME, name);
+  }
+
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
