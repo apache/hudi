@@ -239,7 +239,7 @@ object HoodieSparkSqlTestBase {
       .setBasePath(tablePath)
       .build()
 
-    val cleanInstant = metaClient.getActiveTimeline.getCleanerTimeline.filterCompletedInstants().lastInstant().get()
+    val cleanInstant = metaClient.reloadActiveTimeline().getCleanerTimeline.filterCompletedInstants().lastInstant().get()
     TimelineMetadataUtils.deserializeHoodieCleanMetadata(metaClient
       .getActiveTimeline.getInstantDetails(cleanInstant).get)
   }
