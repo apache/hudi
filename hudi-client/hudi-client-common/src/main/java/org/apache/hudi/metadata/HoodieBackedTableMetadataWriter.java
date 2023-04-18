@@ -741,7 +741,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     LOG.info(String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
         fileGroupCount, metadataPartition.getPartitionPath(), metadataPartition.getFileIdPrefix(), instantTime));
     for (int i = 0; i < fileGroupCount; ++i) {
-      final String fileGroupFileId = String.format("%s%04d", metadataPartition.getFileIdPrefix(), i);
+      final String fileGroupFileId = HoodieTableMetadataUtil.getFileIDForFileGroup(metadataPartition, i);
       try {
         HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
             .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
@@ -847,7 +847,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // convert metadata and filter only the entries whose partition path are in partitionsToUpdate
       Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap = convertMetadataFunction.convertMetadata().entrySet().stream()
           .filter(entry -> partitionsToUpdate.contains(entry.getKey().getPartitionPath())).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-      commit(instantTime, partitionRecordsMap, !doNotTriggerTableService && canTriggerTableService);
+      commit(instantTime, partitionRecordsMap, !doNotTriggerTableService && canTriggerTableService, false);
     }
   }
 
@@ -971,7 +971,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, metadataMetaClient.getActiveTimeline(),
               rollbackMetadata, getRecordsGenerationParams(), instantTime,
               metadata.getSyncedInstantTime(), wasSynced);
-      commit(instantTime, records, false);
+      commit(instantTime, records, false, false);
       closeInternal();
     }
   }
@@ -988,11 +988,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    *
    * @param instantTime            - Action instant time for this commit
    * @param partitionRecordsMap    - Map of partition name to its records to commit
-   * @param canTriggerTableService true if table services can be scheduled and executed. false otherwise.
+   * @param canTriggerTableService - true if table services can be scheduled and executed. false otherwise.
+   * @param initialCommit          - true if this is an initial commit false otherwise.
+   *                                 Specifying this allows the implementation to optimize writes into MDT for the very first time.
    */
   protected abstract void commit(
       String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap,
-      boolean canTriggerTableService);
+      boolean canTriggerTableService,
+      boolean initialCommit);
 
   /**
    * Tag each record with the location in the given partition.
@@ -1160,7 +1163,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
     }
 
-    commit(createInstantTime, partitionToRecordsMap, false);
+    commit(createInstantTime, partitionToRecordsMap, false, true);
   }
 
   private HoodieData<HoodieRecord> getFilesPartitionRecords(String createInstantTime, List<DirectoryInfo> partitionInfoList, HoodieRecord allPartitionRecord) {

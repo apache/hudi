@@ -1005,6 +1005,57 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
+   * Return the complete fileID for a file group within a MDT partition.
+   *
+   * MDT fileGroups have the format <fileIDPrefix>-<index>. The fileIDPrefix is hardcoded for each MDT partition and index is an integer.
+   *
+   * @param partitionType The type of the MDT partition
+   * @param index Index of the file group within the partition
+   * @return The fileID
+   */
+  public static String getFileIDForFileGroup(MetadataPartitionType metadataPartition, int index) {
+    return String.format("%s%04d", metadataPartition.getFileIdPrefix(), index);
+  }
+
+  /**
+   * Extract the index from the fileID of a file group in the MDT partition. See {@code getFileIDForFileGroup} for the format of the fileID.
+   *
+   * @param fileId fileID of a file group.
+   * @return The index of file group
+   */
+  public static int getFileGroupIndexFromFileId(String fileId) {
+    final int endIndex = getFileIdLengthWithoutFileIndex(fileId);
+    final int fromIndex = fileId.lastIndexOf("-", endIndex);
+    return Integer.parseInt(fileId.substring(fromIndex, endIndex));
+  }
+
+  /**
+   * Extract the fileID prefix from the fileID of a file group in the MDT partition. See {@code getFileIDForFileGroup} for the format of the fileID.
+   *
+   * @param fileId fileID of a file group.
+   * @return The index of file group
+   */
+  public static String getFileGroupPrefix(String fileId) {
+    return fileId.substring(0, getFileIdLengthWithoutFileIndex(fileId));
+  }
+
+  /**
+   * Returns the length of the fileID ignoring the fileIndex suffix
+   *
+   * 0.10 version MDT code added -0 (0th fileIndex) to the fileID. This was removed later.
+   *
+   * Examples:
+   *   0.11+ version: fileID: files-0000     returns 10
+   *   0.10 version:   fileID: files-0000-0  returns 10
+   *
+   * @param fileId
+   * @return The length of the fileID ignoring the fileIndex suffix
+   */
+  private static int getFileIdLengthWithoutFileIndex(String fileId) {
+    return fileId.endsWith("-0") ? fileId.length() - 2 : fileId.length();
+  }
+
+  /**
    * Get the latest file slices for a Metadata Table partition. If the file slice is
    * because of pending compaction instant, then merge the file slice with the one
    * just before the compaction instant time. The list of file slices returned is
