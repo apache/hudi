@@ -28,6 +28,7 @@
 # and it contains the CI environment-specific variables.
 
 HUDI_VERSION=$1
+JAVA_RUNTIME_VERSION=$2
 
 # choose versions based on build profiles
 if [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
@@ -49,7 +50,7 @@ elif [[ ${SPARK_PROFILE} == 'spark3.1' ]]; then
   SPARK_HADOOP_VERSION=2.7
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1136hive313spark313
+  IMAGE_TAG=flink1136hive313spark313openjdk1117
 elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -59,7 +60,7 @@ elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
   SPARK_HADOOP_VERSION=2.7
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1146hive313spark323
+  IMAGE_TAG=flink1146hive313spark323openjdk1117
 elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -69,7 +70,7 @@ elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
   SPARK_HADOOP_VERSION=2
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1153hive313spark331
+  IMAGE_TAG=flink1153hive313spark331openjdk1117
 fi
 
 # Copy bundle jars to temp dir for mounting
@@ -108,4 +109,4 @@ docker build \
 
 # run validation script in docker
 docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -v $TMP_DATA_DIR:/opt/bundle-validation/data \
-  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh
+  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION

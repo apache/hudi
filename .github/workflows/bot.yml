@@ -145,12 +145,31 @@ jobs:
         include:
           - flinkProfile: 'flink1.16'
             sparkProfile: 'spark3.3'
+            javaRuntimeProfile: 'openjdk8'
           - flinkProfile: 'flink1.15'
             sparkProfile: 'spark3.3'
+            javaRuntimeProfile: 'openjdk8'
           - flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.2'
+            javaRuntimeProfile: 'openjdk8'
           - flinkProfile: 'flink1.13'
             sparkProfile: 'spark3.1'
+            javaRuntimeProfile: 'openjdk8'
+          - flinkProfile: 'flink1.16'
+            sparkProfile: 'spark3.3'
+            javaRuntimeProfile: 'openjdk11'
+          - flinkProfile: 'flink1.15'
+            sparkProfile: 'spark3.3'
+            javaRuntimeProfile: 'openjdk11'
+          - flinkProfile: 'flink1.14'
+            sparkProfile: 'spark3.2'
+            javaRuntimeProfile: 'openjdk11'
+          - flinkProfile: 'flink1.13'
+            sparkProfile: 'spark3.1'
+            javaRuntimeProfile: 'openjdk11'
+          - flinkProfile: 'flink1.16'
+            sparkProfile: 'spark3.3'
+            javaRuntimeProfile: 'openjdk17'
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -173,7 +192,8 @@ jobs:
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          JAVA_RUNTIME_PROFILE: ${{ matrix.javaRuntimeProfile }}
           SCALA_PROFILE: 'scala-2.12'
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
+          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION $JAVA_RUNTIME_PROFILE
