@@ -1051,7 +1051,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // b. There could be DT inflights after latest delta commit in MDT and we are ok with it. bcoz, the contract is, latest compaction instant time in MDT represents
     // any instants before that is already synced with metadata table.
     // c. Do consider out of order commits. For eg, c4 from DT could complete before c3. and we can't trigger compaction in MDT with c4 as base instant time, until every
-    // instant before c4 is synced with metadata table. 
+    // instant before c4 is synced with metadata table.
     List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
         .findInstantsBeforeOrEquals(latestDeltaCommitTimeInMetadataTable).getInstants();
 
