@@ -102,7 +102,7 @@ public class TimelineService {
     @Parameter(names = {"--rocksdb-path", "-rp"}, description = "Root directory for RocksDB")
     public String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH.defaultValue();
 
-    @Parameter(names = {"--threads", "-t"}, description = "Number of threads to use for serving requests")
+    @Parameter(names = {"--threads", "-t"}, description = "Number of threads to use for serving requests. The default number is 250")
     public int numThreads = DEFAULT_NUM_THREADS;
 
     @Parameter(names = {"--async"}, description = "Use asyncronous request processing")
