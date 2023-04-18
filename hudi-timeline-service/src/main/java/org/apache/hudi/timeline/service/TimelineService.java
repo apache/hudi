@@ -49,7 +49,7 @@ public class TimelineService {
 
   private static final Logger LOG = LoggerFactory.getLogger(TimelineService.class);
   private static final int START_SERVICE_MAX_RETRIES = 16;
-  private static final int DEFAULT_NUM_THREADS = -1;
+  private static final int DEFAULT_NUM_THREADS = 250;
 
   private int serverPort;
   private Config timelineServerConf;
@@ -341,7 +341,7 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-    int maxThreads = timelineServerConf.numThreads > 0 ? timelineServerConf.numThreads : 250;
+    int maxThreads = timelineServerConf.numThreads > 0 ? timelineServerConf.numThreads : DEFAULT_NUM_THREADS;
     QueuedThreadPool pool = new QueuedThreadPool(maxThreads, 8, 60_000);
     pool.setDaemon(true);
     final Server server = new Server(pool);
