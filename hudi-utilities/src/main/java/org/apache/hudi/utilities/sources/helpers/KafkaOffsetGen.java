@@ -62,6 +62,8 @@ public class KafkaOffsetGen {
 
   private static final Logger LOG = LoggerFactory.getLogger(KafkaOffsetGen.class);
   private static final String METRIC_NAME_KAFKA_DELAY_COUNT = "kafkaDelayCount";
+  private static final Comparator<OffsetRange> SORT_BY_PARTITION = Comparator.comparing(OffsetRange::partition);
+
   public static final String KAFKA_CHECKPOINT_TYPE_TIMESTAMP = "timestamp";
 
   /**
@@ -93,24 +95,11 @@ public class KafkaOffsetGen {
      */
     public static String offsetsToStr(OffsetRange[] ranges) {
       // merge the ranges by partition to maintain one offset range map to one topic partition.
-      ranges = mergeRangesByTp(ranges);
+      ranges = mergeRangesByTopicPartition(ranges);
       StringBuilder sb = new StringBuilder();
       // at least 1 partition will be present.
       sb.append(ranges[0].topic() + ",");
       sb.append(Arrays.stream(ranges).map(r -> String.format("%s:%d", r.partition(), r.untilOffset()))
-              .collect(Collectors.joining(",")));
-      return sb.toString();
-    }
-
-    /**
-     * Stringfy the offset ranges, used for logging
-     * Format: topic,0:fromOffset0->toOffset0,1:fromOffset1->toOffset1,...
-     */
-    public static String offsetsStringfy(OffsetRange[] ranges) {
-      StringBuilder sb = new StringBuilder();
-      // at least 1 partition will be present.
-      sb.append(ranges[0].topic() + ",");
-      sb.append(Arrays.stream(ranges).map(r -> String.format("%s:%d->%d", r.partition(), r.fromOffset(), r.untilOffset()))
               .collect(Collectors.joining(",")));
       return sb.toString();
     }
@@ -126,51 +115,69 @@ public class KafkaOffsetGen {
                                                     Map<TopicPartition, Long> toOffsetMap,
                                                     long numEvents,
                                                     long minPartitions) {
-
-      Comparator<OffsetRange> byPartition = Comparator.comparing(OffsetRange::partition);
-
-      // Create initial offset ranges for each 'to' partition, with from = to offsets.
+      // Create initial offset ranges for each 'to' partition, with default from = 0 offsets.
       OffsetRange[] ranges = toOffsetMap.keySet().stream().map(tp -> {
         long fromOffset = fromOffsetMap.getOrDefault(tp, 0L);
-        return OffsetRange.create(tp, fromOffset, fromOffset);
+        return OffsetRange.create(tp, fromOffset, toOffsetMap.get(tp));
       })
-          .sorted(byPartition)
+          .sorted(SORT_BY_PARTITION)
           .collect(Collectors.toList())
           .toArray(new OffsetRange[toOffsetMap.size()]);
+      LOG.debug("numEvents {}, minPartitions {}, ranges {}", numEvents, minPartitions, ranges);
 
+      boolean needSplitToMinPartitions = minPartitions > toOffsetMap.size();
+      long totalEvents = totalNewMessages(ranges);
       long allocedEvents = 0;
       Set<Integer> exhaustedPartitions = new HashSet<>();
+      List<OffsetRange> finalRanges = new ArrayList<>();
+      // choose the numEvents with min(totalEvents, numEvents)
+      numEvents = Math.min(totalEvents, numEvents);
+
       // keep going until we have events to allocate and partitions still not exhausted.
       while (allocedEvents < numEvents && exhaustedPartitions.size() < toOffsetMap.size()) {
-        long remainingEvents = numEvents - allocedEvents;
-        long eventsPerPartition =
-                (long) Math.ceil((1.0 * remainingEvents) / (toOffsetMap.size() - exhaustedPartitions.size()));
-
         // Allocate the remaining events to non-exhausted partitions, in round robin fashion
+        Set<Integer> allocatedPartitionsThisLoop = new HashSet<>(exhaustedPartitions);
         for (int i = 0; i < ranges.length; i++) {
-          OffsetRange range = ranges[i];
-          if (!exhaustedPartitions.contains(range.partition())) {
-            long toOffsetMax = toOffsetMap.get(range.topicPartition());
-            long toOffset = Math.min(toOffsetMax, range.untilOffset() + eventsPerPartition);
-            if (toOffset == toOffsetMax) {
-              exhaustedPartitions.add(range.partition());
-            }
-            allocedEvents += toOffset - range.untilOffset();
-            // We need recompute toOffset if allocedEvents larger than numEvents.
-            if (allocedEvents > numEvents) {
-              long offsetsToAdd = Math.min(eventsPerPartition, (numEvents - allocedEvents));
-              toOffset = Math.min(toOffsetMax, toOffset + offsetsToAdd);
-            }
-            ranges[i] = OffsetRange.create(range.topicPartition(), range.fromOffset(), toOffset);
+          long remainingEvents = numEvents - allocedEvents;
+          long remainingPartitions = toOffsetMap.size() - allocatedPartitionsThisLoop.size();
+          // if need tp split into minPartitions, recalculate the remainingPartitions
+          if (needSplitToMinPartitions) {
+            remainingPartitions = minPartitions - finalRanges.size();
           }
+          long eventsPerPartition = (long) Math.ceil((1.0 * remainingEvents) / remainingPartitions);
+
+          OffsetRange range = ranges[i];
+          if (exhaustedPartitions.contains(range.partition())) {
+            continue;
+          }
+
+          long toOffset = Math.min(range.untilOffset(), range.fromOffset() + eventsPerPartition);
+          if (toOffset == range.untilOffset()) {
+            exhaustedPartitions.add(range.partition());
+          }
+          allocedEvents += toOffset - range.fromOffset();
+          // We need recompute toOffset if allocedEvents larger than numEvents.
+          if (allocedEvents > numEvents) {
+            long offsetsToAdd = Math.min(eventsPerPartition, (numEvents - allocedEvents));
+            toOffset = Math.min(range.untilOffset(), toOffset + offsetsToAdd);
+          }
+          OffsetRange thisRange = OffsetRange.create(range.topicPartition(), range.fromOffset(), toOffset);
+          // filter out the empty ranges
+          if (thisRange.count() > 0) {
+            finalRanges.add(thisRange);
+          }
+          ranges[i] = OffsetRange.create(range.topicPartition(), range.fromOffset() + thisRange.count(), range.untilOffset());
+          allocatedPartitionsThisLoop.add(range.partition());
         }
       }
 
-      LOG.info("before split, range count " + ranges.length + ", detail ranges: " + CheckpointUtils.offsetsStringfy(ranges));
-      ranges = CheckpointUtils.splitRangesToMinPartitions(ranges, minPartitions);
-      LOG.info("after split, range count " + ranges.length + ", detail ranges: " + CheckpointUtils.offsetsStringfy(ranges));
-
-      return ranges;
+      if (!needSplitToMinPartitions) {
+        LOG.debug("final ranges merged by topic partition {}", Arrays.toString(mergeRangesByTopicPartition(finalRanges.toArray(new OffsetRange[0]))));
+        return mergeRangesByTopicPartition(finalRanges.toArray(new OffsetRange[0]));
+      }
+      finalRanges.sort(SORT_BY_PARTITION);
+      LOG.debug("final ranges {}", Arrays.toString(finalRanges.toArray(new OffsetRange[0])));
+      return finalRanges.toArray(new OffsetRange[0]);
     }
 
     // the number of the result ranges can be less or more than minPartitions due to rounding
@@ -203,11 +210,11 @@ public class KafkaOffsetGen {
     }
 
     /**
-     * Merge ranges by partition, because we need to maintain the checkpoint with one offset range per topic partition.
+     * Merge ranges by topic partition, because we need to maintain the checkpoint with one offset range per topic partition.
      * @param oldRanges to merge
      * @return ranges merged by partition
      */
-    public static OffsetRange[] mergeRangesByTp(OffsetRange[] oldRanges) {
+    public static OffsetRange[] mergeRangesByTopicPartition(OffsetRange[] oldRanges) {
       List<OffsetRange> newRanges = new ArrayList<>();
       Map<TopicPartition, List<OffsetRange>> tpOffsets = Arrays.stream(oldRanges).collect(Collectors.groupingBy(OffsetRange::topicPartition));
       for (Map.Entry<TopicPartition, List<OffsetRange>> entry : tpOffsets.entrySet()) {
@@ -215,6 +222,8 @@ public class KafkaOffsetGen {
         long until = entry.getValue().stream().map(OffsetRange::untilOffset).max(Long::compare).get();
         newRanges.add(OffsetRange.create(entry.getKey(), from, until));
       }
+      // make sure the result ranges is order by partition
+      newRanges.sort(SORT_BY_PARTITION);
       return newRanges.toArray(new OffsetRange[0]);
     }
 

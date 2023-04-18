@@ -63,15 +63,15 @@ public class KafkaSourceConfig extends HoodieConfig {
       .defaultValue(5000000L)
       .withDocumentation("Maximum number of records obtained in each batch.");
 
-  // the documentation is copied from the minPartition definition of kafka structured streaming
+  // the documentation is inspired by the minPartition definition of kafka structured streaming
   public static final ConfigProperty<Long> KAFKA_SOURCE_MIN_PARTITIONS = ConfigProperty
           .key(PREFIX + "minPartitions")
           .defaultValue(0L)
           .withDocumentation("Desired minimum number of partitions to read from Kafka. "
-              + "By default, Spark has a 1-1 mapping of topicPartitions to Spark partitions consuming from Kafka. "
+              + "By default, Hudi has a 1-1 mapping of topicPartitions to Hudi partitions consuming from Kafka. "
               + "If set this option to a value greater than topicPartitions, "
-              + "Spark will divvy up large Kafka partitions to smaller pieces. "
-              + "Please note that this configuration is like a hint: the number of Spark tasks will be approximately minPartitions. "
+              + "Hudi will divvy up large Kafka partitions to smaller pieces. "
+              + "Please note that this configuration is like a hint: the number of input tasks will be approximately minPartitions. "
               + "It can be less or more depending on rounding errors or Kafka partitions that didn't receive any new data.");
 
   public static final ConfigProperty<String> KAFKA_TOPIC_NAME = ConfigProperty

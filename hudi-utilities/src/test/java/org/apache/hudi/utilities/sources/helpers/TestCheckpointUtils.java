@@ -71,22 +71,7 @@ public class TestCheckpointUtils {
   }
 
   @Test
-  public void testOffsetStringfy() {
-    OffsetRange[] ranges =
-        CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
-            makeOffsetMap(new int[] {0, 1}, new long[] {300000, 350000}), 1000000L, 0);
-    assertEquals(TEST_TOPIC_NAME + ",0:200000->300000,1:250000->350000", CheckpointUtils.offsetsStringfy(ranges));
-
-    ranges = new OffsetRange[] {
-        OffsetRange.apply(TEST_TOPIC_NAME, 0, 0, 100),
-        OffsetRange.apply(TEST_TOPIC_NAME, 0, 100, 200),
-        OffsetRange.apply(TEST_TOPIC_NAME, 1, 100, 200),
-        OffsetRange.apply(TEST_TOPIC_NAME, 1, 200, 300)};
-    assertEquals(TEST_TOPIC_NAME + ",0:0->100,0:100->200,1:100->200,1:200->300", CheckpointUtils.offsetsStringfy(ranges));
-  }
-
-  @Test
-  public void testComputeOffsetRanges() {
+  public void testComputeOffsetRangesWithoutMinPartitions() {
     // test totalNewMessages()
     long totalMsgs = CheckpointUtils.totalNewMessages(new OffsetRange[] {OffsetRange.apply(TEST_TOPIC_NAME, 0, 0, 100),
         OffsetRange.apply(TEST_TOPIC_NAME, 0, 100, 200)});
@@ -99,7 +84,8 @@ public class TestCheckpointUtils {
     assertEquals(200000, CheckpointUtils.totalNewMessages(ranges));
 
     // should only consume upto limit
-    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
+    ranges = CheckpointUtils.computeOffsetRanges(
+        makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
         makeOffsetMap(new int[] {0, 1}, new long[] {300000, 350000}), 10000, 0);
     assertEquals(10000, CheckpointUtils.totalNewMessages(ranges));
     assertEquals(200000, ranges[0].fromOffset());
@@ -134,13 +120,13 @@ public class TestCheckpointUtils {
     assertEquals(1001, CheckpointUtils.totalNewMessages(ranges));
     assertEquals(100, ranges[0].count());
     assertEquals(226, ranges[1].count());
-    assertEquals(226, ranges[2].count());
-    assertEquals(226, ranges[3].count());
-    assertEquals(223, ranges[4].count());
+    assertEquals(225, ranges[2].count());
+    assertEquals(225, ranges[3].count());
+    assertEquals(225, ranges[4].count());
   }
 
   @Test
-  public void testSplitRangeToMinPartitions() {
+  public void testComputeOffsetRangesWithMinPartitions() {
     // default(0) minPartitions
     OffsetRange[] ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
         makeOffsetMap(new int[] {0}, new long[] {1000}), 300, 0);
@@ -180,25 +166,23 @@ public class TestCheckpointUtils {
     // N skewed TopicPartitions to M offset ranges
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {0, 0}),
         makeOffsetMap(new int[] {0, 1}, new long[] {100, 500}), 600, 3);
-    assertEquals(4, ranges.length);
+    assertEquals(3, ranges.length);
     assertEquals(0, ranges[0].fromOffset());
     assertEquals(100, ranges[0].untilOffset());
     assertEquals(0, ranges[1].fromOffset());
-    assertEquals(166, ranges[1].untilOffset());
-    assertEquals(166, ranges[2].fromOffset());
-    assertEquals(333, ranges[2].untilOffset());
-    assertEquals(333, ranges[3].fromOffset());
-    assertEquals(500, ranges[3].untilOffset());
+    assertEquals(250, ranges[1].untilOffset());
+    assertEquals(250, ranges[2].fromOffset());
+    assertEquals(500, ranges[2].untilOffset());
 
     // range inexact multiple of minPartitions
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
         makeOffsetMap(new int[] {0}, new long[] {100}), 600, 3);
     assertEquals(3, ranges.length);
     assertEquals(0, ranges[0].fromOffset());
-    assertEquals(33, ranges[0].untilOffset());
-    assertEquals(33, ranges[1].fromOffset());
-    assertEquals(66, ranges[1].untilOffset());
-    assertEquals(66, ranges[2].fromOffset());
+    assertEquals(34, ranges[0].untilOffset());
+    assertEquals(34, ranges[1].fromOffset());
+    assertEquals(67, ranges[1].untilOffset());
+    assertEquals(67, ranges[2].fromOffset());
     assertEquals(100, ranges[2].untilOffset());
 
     // ignore empty ranges
@@ -211,6 +195,12 @@ public class TestCheckpointUtils {
     assertEquals(400, ranges[1].untilOffset());
     assertEquals(400, ranges[2].fromOffset());
     assertEquals(600, ranges[2].untilOffset());
+
+    // all empty ranges
+    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}),
+        makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}), 600, 3);
+    assertEquals(0, CheckpointUtils.totalNewMessages(ranges));
+    assertEquals(0, ranges.length);
 
     // minPartitions more than maxEvents
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
@@ -226,9 +216,9 @@ public class TestCheckpointUtils {
   public void testSplitAndMergeRanges() {
     OffsetRange range = OffsetRange.apply(TEST_TOPIC_NAME, 0, 0, 100);
     OffsetRange[] ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {0, 0}),
-        makeOffsetMap(new int[] {0, 1}, new long[] {100, 500}), 600, 3);
+        makeOffsetMap(new int[] {0, 1}, new long[] {100, 500}), 600, 4);
     assertEquals(4, ranges.length);
-    OffsetRange[] mergedRanges = CheckpointUtils.mergeRangesByTp(ranges);
+    OffsetRange[] mergedRanges = CheckpointUtils.mergeRangesByTopicPartition(ranges);
     assertEquals(2, mergedRanges.length);
     assertEquals(0, mergedRanges[0].partition());
     assertEquals(0, mergedRanges[0].fromOffset());
@@ -240,7 +230,7 @@ public class TestCheckpointUtils {
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
         makeOffsetMap(new int[] {0}, new long[] {1000}), 300, 3);
     assertEquals(3, ranges.length);
-    mergedRanges = CheckpointUtils.mergeRangesByTp(ranges);
+    mergedRanges = CheckpointUtils.mergeRangesByTopicPartition(ranges);
     assertEquals(1, mergedRanges.length);
     assertEquals(0, mergedRanges[0].fromOffset());
     assertEquals(300, mergedRanges[0].untilOffset());

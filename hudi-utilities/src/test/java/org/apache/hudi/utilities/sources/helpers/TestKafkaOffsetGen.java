@@ -100,9 +100,8 @@ public class TestKafkaOffsetGen {
     testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", "string"));
     OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 500, metrics);
-    assertEquals(1, nextOffsetRanges.length);
-    assertEquals(1000, nextOffsetRanges[0].fromOffset());
-    assertEquals(1000, nextOffsetRanges[0].untilOffset());
+    // from latest, should be empty ranges
+    assertEquals(0, nextOffsetRanges.length);
   }
 
   @Test
@@ -165,10 +164,8 @@ public class TestKafkaOffsetGen {
     // committed offsets are not present for the consumer group
     kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group", "string"));
     nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
-    assertEquals(500, nextOffsetRanges[0].fromOffset());
-    assertEquals(500, nextOffsetRanges[0].untilOffset());
-    assertEquals(500, nextOffsetRanges[1].fromOffset());
-    assertEquals(500, nextOffsetRanges[1].untilOffset());
+    // there are all empty ranges which are all filtered
+    assertEquals(0, nextOffsetRanges.length);
   }
 
   @Test
