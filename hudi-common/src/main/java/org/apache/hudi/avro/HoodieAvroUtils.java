@@ -1018,9 +1018,8 @@ public class HoodieAvroUtils {
                   || oldSchema.getType() == Schema.Type.LONG
                   || oldSchema.getType() == Schema.Type.FLOAT) {
             LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
-            RoundingMode roundingMode = getRoundingModeForRewrite(oldSchema.getType());
             // due to Java, there will be precision problems in direct conversion, we should use string instead of use double
-            BigDecimal bigDecimal = new java.math.BigDecimal(oldValue.toString()).setScale(decimal.getScale(), roundingMode);
+            BigDecimal bigDecimal = new java.math.BigDecimal(oldValue.toString()).setScale(decimal.getScale(), RoundingMode.HALF_UP);
             return DECIMAL_CONVERSION.toFixed(bigDecimal, newSchema, newSchema.getLogicalType());
           }
         }
@@ -1028,32 +1027,6 @@ public class HoodieAvroUtils {
       default:
     }
     throw new AvroRuntimeException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
-  }
-
-  /**
-   * When there is a lost in scale, rounding is required to be performed when performing casts.
-   * For types that have a fix scale, the results of the cast will need to be the same for COW and MOR.
-   * <p>
-   * NOTE: COW uses Spark's default rounding of HALF_UP (if Spark entry points are used).
-   * <p>
-   * Floating point types are not considered here as they are susceptible to floating point rounding errors.
-   * <p>
-   * Summary:
-   * <ul>
-   *   <li>double/string -> decimal: HALF_UP</li>
-   *   <li>float -> decimal: HALF_EVEN</li>
-   * </ul>
-   *
-   * @param oldSchemaType The old schema type to cast from.
-   * @return rounding mode to use
-   */
-  private static RoundingMode getRoundingModeForRewrite(Schema.Type oldSchemaType) {
-    // ensure that the rounding mode is consistent between COW (uses spark's rounding) and MOR tables
-    if (oldSchemaType == Schema.Type.DOUBLE || oldSchemaType == Schema.Type.STRING) {
-      return RoundingMode.HALF_UP;
-    } else {
-      return RoundingMode.HALF_EVEN;
-    }
   }
 
   /**

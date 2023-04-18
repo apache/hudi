@@ -845,8 +845,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"alter table $tableName alter column price type decimal(4, 2)")
 
           // Not checking answer as this is an unsafe casting operation, just need to make sure that error is not thrown
-          // Floating point errors can cause a difference between COW (uses Spark's rounding scheme)
-          // and MOR (uses Hudi defined HALF_EVEN rounding) tables
           spark.sql(s"select id, name, cast(price as string), ts from $tableName")
         }
       }
