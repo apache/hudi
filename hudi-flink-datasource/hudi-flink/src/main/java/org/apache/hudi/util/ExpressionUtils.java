@@ -158,9 +158,13 @@ public class ExpressionUtils {
       case BOOLEAN:
         return expr.getValueAs(Boolean.class).orElse(null);
       case TINYINT:
+        return expr.getValueAs(Byte.class).orElse(null);
       case SMALLINT:
+        return expr.getValueAs(Short.class).orElse(null);
       case INTEGER:
         return expr.getValueAs(Integer.class).orElse(null);
+      case BIGINT:
+        return expr.getValueAs(Long.class).orElse(null);
       case FLOAT:
         return expr.getValueAs(Float.class).orElse(null);
       case DOUBLE:
