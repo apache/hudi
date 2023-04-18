@@ -47,6 +47,7 @@ public enum StorageSchemes {
   // Aliyun OSS
   OSS("oss", false, null, null),
   // View FS for federated setups. If federating across cloud stores, then append support is false
+  // View FS support atomic creation
   VIEWFS("viewfs", true, null, true),
   //ALLUXIO
   ALLUXIO("alluxio", false, null, null),
