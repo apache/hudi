@@ -375,21 +375,6 @@ public class HoodieTableMetadataUtil {
         .collect(Collectors.toList());
   }
 
-  private static List<String> getPartitionsDeleted(HoodieCommitMetadata commitMetadata) {
-    /*if (commitMetadata instanceof HoodieReplaceCommitMetadata
-        && WriteOperationType.DELETE_PARTITION.equals(commitMetadata.getOperationType())) {
-      Map<String, List<String>> partitionToReplaceFileIds =
-          ((HoodieReplaceCommitMetadata) commitMetadata).getPartitionToReplaceFileIds();
-
-      return partitionToReplaceFileIds.keySet().stream()
-          // We need to make sure we properly handle case of non-partitioned tables
-          .map(HoodieTableMetadataUtil::getPartitionIdentifier)
-          .collect(Collectors.toList());
-    }*/
-
-    return Collections.emptyList();
-  }
-
   /**
    * Convert commit action metadata to bloom filter records.
    *

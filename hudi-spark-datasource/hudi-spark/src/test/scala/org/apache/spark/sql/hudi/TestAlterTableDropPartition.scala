@@ -18,13 +18,17 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.avro.model.HoodieCleanMetadata
+import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.{getLastCleanMetadata, getLastCommitMetadata}
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
 
@@ -133,6 +137,9 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         // trigger clean so that partition deletion kicks in.
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
+
+        val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
+        assertTrue(cleanMetadata.totalFilesDeleted > 0)
 
         val partitionPath = if (urlencode) {
           PartitionPathEncodeUtils.escapePathName("2021/10/01")
@@ -311,6 +318,9 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
 
+        val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
+        assertTrue(cleanMetadata.totalFilesDeleted > 0)
+
         checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
           Seq(2, "l4", "v1", "2021", "10", "02")
         )
@@ -377,6 +387,9 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         // trigger clean so that partition deletion kicks in.
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
+
+        val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
+        assertTrue(cleanMetadata.totalFilesDeleted > 0)
 
         // insert data
         spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
