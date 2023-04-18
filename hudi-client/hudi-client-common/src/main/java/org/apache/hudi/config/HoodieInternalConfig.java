@@ -34,6 +34,7 @@ public class HoodieInternalConfig extends HoodieConfig {
   public static final ConfigProperty<String> BULKINSERT_INPUT_DATA_SCHEMA_DDL = ConfigProperty
       .key("hoodie.bulkinsert.schema.ddl")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Schema set for row writer/bulk insert.");
 
   /**

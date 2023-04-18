@@ -60,9 +60,9 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
 
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
-      super.timeline
+      metaClient.getCommitsAndCompactionTimeline
     } else {
-      super.timeline.findInstantsInRange(startTimestamp, endTimestamp)
+      metaClient.getCommitsAndCompactionTimeline.findInstantsInRange(startTimestamp, endTimestamp)
     }
   }
 

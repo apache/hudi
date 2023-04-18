@@ -59,7 +59,7 @@ public class FileSystemTestUtils {
   }
 
   public static Path getPhantomFile(Path outerPath, long startOffset, long inlineLength) {
-    // Generate phathom inline file
+    // Generate phantom inline file
     return InLineFSUtils.getInlineFilePath(outerPath, FILE_SCHEME, startOffset, inlineLength);
   }
 

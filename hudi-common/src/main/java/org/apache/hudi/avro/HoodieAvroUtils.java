@@ -79,8 +79,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.Properties;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -741,29 +741,24 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Gets record column values into one object.
+   * Gets record column values into object array.
    *
    * @param record  Hoodie record.
    * @param columns Names of the columns to get values.
    * @param schema  {@link Schema} instance.
-   * @return Column value if a single column, or concatenated String values by comma.
+   * @return Column value.
    */
-  public static Object getRecordColumnValues(HoodieAvroRecord record,
-                                             String[] columns,
-                                             Schema schema, boolean consistentLogicalTimestampEnabled) {
+  public static Object[] getRecordColumnValues(HoodieAvroRecord record,
+                                               String[] columns,
+                                               Schema schema,
+                                               boolean consistentLogicalTimestampEnabled) {
     try {
       GenericRecord genericRecord = (GenericRecord) ((HoodieAvroIndexedRecord) record.toIndexedRecord(schema, new Properties()).get()).getData();
-      if (columns.length == 1) {
-        return HoodieAvroUtils.getNestedFieldVal(genericRecord, columns[0], true, consistentLogicalTimestampEnabled);
-      } else {
-        // TODO this is inefficient, instead we can simply return array of Comparable
-        StringBuilder sb = new StringBuilder();
-        for (String col : columns) {
-          sb.append(HoodieAvroUtils.getNestedFieldValAsString(genericRecord, col, true, consistentLogicalTimestampEnabled));
-        }
-
-        return sb.toString();
+      List<Object> list = new ArrayList<>();
+      for (String col : columns) {
+        list.add(HoodieAvroUtils.getNestedFieldVal(genericRecord, col, true, consistentLogicalTimestampEnabled));
       }
+      return list.toArray();
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read record with key:" + record.getKey(), e);
     }
@@ -1116,9 +1111,9 @@ public class HoodieAvroUtils {
    * Given avro records, rewrites them with new schema.
    *
    * @param oldRecords oldRecords to be rewrite
-   * @param newSchema newSchema used to rewrite oldRecord
+   * @param newSchema  newSchema used to rewrite oldRecord
    * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
-   * @return a iterator of rewrote GeneriRcords
+   * @return an iterator of rewrote {@link GenericRecord}
    */
   public static Iterator<GenericRecord> rewriteRecordWithNewSchema(Iterator<GenericRecord> oldRecords, Schema newSchema, Map<String, String> renameCols, boolean validate) {
     if (oldRecords == null || newSchema == null) {

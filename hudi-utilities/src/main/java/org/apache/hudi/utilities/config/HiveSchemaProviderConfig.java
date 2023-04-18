@@ -40,20 +40,24 @@ public class HiveSchemaProviderConfig extends HoodieConfig {
   public static final ConfigProperty<String> SOURCE_SCHEMA_DATABASE = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "source.schema.hive.database")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Hive database from where source schema can be fetched");
 
   public static final ConfigProperty<String> SOURCE_SCHEMA_TABLE = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "source.schema.hive.table")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Hive table from where source schema can be fetched");
 
   public static final ConfigProperty<String> TARGET_SCHEMA_DATABASE = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "target.schema.hive.database")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Hive database from where target schema can be fetched");
 
   public static final ConfigProperty<String> TARGET_SCHEMA_TABLE = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "target.schema.hive.table")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Hive table from where target schema can be fetched");
 }
