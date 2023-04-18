@@ -25,22 +25,8 @@ import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
-import org.apache.flink.table.types.AtomicDataType;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.BigIntType;
-import org.apache.flink.table.types.logical.BooleanType;
-import org.apache.flink.table.types.logical.DateType;
-import org.apache.flink.table.types.logical.DecimalType;
-import org.apache.flink.table.types.logical.DoubleType;
-import org.apache.flink.table.types.logical.FloatType;
-import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.table.types.logical.SmallIntType;
-import org.apache.flink.table.types.logical.TimeType;
-import org.apache.flink.table.types.logical.TimestampType;
-import org.apache.flink.table.types.logical.TinyIntType;
-import org.apache.flink.table.types.logical.VarBinaryType;
-import org.apache.flink.table.types.logical.VarCharType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -75,23 +61,22 @@ class TestExpressionUtils {
       DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3))
   ).notNull();
 
-
   private static final DataType ROW_DATA_TYPE_FIELD_NON_NULL = DataTypes.ROW(
-      DataTypes.FIELD("f_tinyint", new AtomicDataType(new TinyIntType(false))),
-      DataTypes.FIELD("f_smallint", new AtomicDataType(new SmallIntType(false))),
-      DataTypes.FIELD("f_int", new AtomicDataType(new IntType(false))),
-      DataTypes.FIELD("f_long", new AtomicDataType(new BigIntType(false))),
-      DataTypes.FIELD("f_float", new AtomicDataType(new FloatType(false))),
-      DataTypes.FIELD("f_double", new AtomicDataType(new DoubleType(false))),
-      DataTypes.FIELD("f_boolean", new AtomicDataType(new BooleanType(false))),
-      DataTypes.FIELD("f_decimal", new AtomicDataType(new DecimalType(false, 10, 2))),
-      DataTypes.FIELD("f_bytes", new AtomicDataType(new VarBinaryType(false, 10))),
-      DataTypes.FIELD("f_string", new AtomicDataType(new VarCharType(false, 10))),
-      DataTypes.FIELD("f_time", new AtomicDataType(new TimeType(false, 3))),
-      DataTypes.FIELD("f_date", new AtomicDataType(new DateType(false))),
-      DataTypes.FIELD("f_timestamp", new AtomicDataType(new TimestampType(false, 3)))
+      DataTypes.FIELD("f_tinyint", DataTypes.TINYINT().notNull()),
+      DataTypes.FIELD("f_smallint", DataTypes.SMALLINT().notNull()),
+      DataTypes.FIELD("f_int", DataTypes.INT().notNull()),
+      DataTypes.FIELD("f_long", DataTypes.BIGINT().notNull()),
+      DataTypes.FIELD("f_float", DataTypes.FLOAT().notNull()),
+      DataTypes.FIELD("f_double", DataTypes.DOUBLE().notNull()),
+      DataTypes.FIELD("f_boolean", DataTypes.BOOLEAN().notNull()),
+      DataTypes.FIELD("f_decimal", DataTypes.DECIMAL(10, 2).notNull()),
+      DataTypes.FIELD("f_bytes", DataTypes.VARBINARY(10).notNull()),
+      DataTypes.FIELD("f_string", DataTypes.VARCHAR(10).notNull()),
+      DataTypes.FIELD("f_time", DataTypes.TIME(3).notNull()),
+      DataTypes.FIELD("f_date", DataTypes.DATE().notNull()),
+      DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3).notNull())
   ).notNull();
-
+  
   @Test
   void getValueFromLiteralForNull() {
     List<RowType.RowField> fields = ((RowType) ROW_DATA_TYPE.getLogicalType()).getFields();
