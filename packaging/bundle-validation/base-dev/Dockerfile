@@ -28,40 +28,48 @@ ARG DERBY_VERSION=10.14.1.0
 ARG FLINK_VERSION=1.13.6
 ARG SPARK_VERSION=3.1.3
 ARG SPARK_HADOOP_VERSION=2.7
+ARG CONFLUENT_MAJOR_VERSION=5.5
 ARG CONFLUENT_VERSION=5.5.12
 ARG KAFKA_CONNECT_HDFS_VERSION=10.1.13
 
-RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz -P "$WORKDIR" \
+ADD https://archive.apache.org/dist/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz $WORKDIR
+RUN cd $WORKDIR \
     && tar -xf $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz -C $WORKDIR/ \
     && rm $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz
 ENV HADOOP_HOME=$WORKDIR/hadoop-$HADOOP_VERSION
 
-RUN wget https://archive.apache.org/dist/hive/hive-$HIVE_VERSION/apache-hive-$HIVE_VERSION-bin.tar.gz -P "$WORKDIR" \
+ADD https://archive.apache.org/dist/hive/hive-$HIVE_VERSION/apache-hive-$HIVE_VERSION-bin.tar.gz $WORKDIR
+RUN cd $WORKDIR \
     && tar -xf $WORKDIR/apache-hive-$HIVE_VERSION-bin.tar.gz -C $WORKDIR/ \
     && rm $WORKDIR/apache-hive-$HIVE_VERSION-bin.tar.gz
 ENV HIVE_HOME=$WORKDIR/apache-hive-$HIVE_VERSION-bin
 
-RUN wget https://archive.apache.org/dist/db/derby/db-derby-$DERBY_VERSION/db-derby-$DERBY_VERSION-bin.tar.gz -P "$WORKDIR" \
+ADD https://archive.apache.org/dist/db/derby/db-derby-$DERBY_VERSION/db-derby-$DERBY_VERSION-bin.tar.gz $WORKDIR
+RUN cd $WORKDIR \
     && tar -xf $WORKDIR/db-derby-$DERBY_VERSION-bin.tar.gz -C $WORKDIR/ \
     && rm $WORKDIR/db-derby-$DERBY_VERSION-bin.tar.gz
 ENV DERBY_HOME=$WORKDIR/db-derby-$DERBY_VERSION-bin
 
-RUN wget https://archive.apache.org/dist/flink/flink-$FLINK_VERSION/flink-$FLINK_VERSION-bin-scala_2.12.tgz -P "$WORKDIR" \
+ADD https://archive.apache.org/dist/flink/flink-$FLINK_VERSION/flink-$FLINK_VERSION-bin-scala_2.12.tgz $WORKDIR
+RUN cd $WORKDIR \
     && tar -xf $WORKDIR/flink-$FLINK_VERSION-bin-scala_2.12.tgz -C $WORKDIR/ \
     && rm $WORKDIR/flink-$FLINK_VERSION-bin-scala_2.12.tgz
 ENV FLINK_HOME=$WORKDIR/flink-$FLINK_VERSION
 
-RUN wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -P "$WORKDIR" \
+ADD https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz $WORKDIR
+RUN cd $WORKDIR \
     && tar -xf $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -C $WORKDIR/ \
     && rm $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz
 ENV SPARK_HOME=$WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION
 
-RUN wget https://packages.confluent.io/archive/${CONFLUENT_VERSION%.*}/confluent-community-$CONFLUENT_VERSION-2.12.tar.gz -P "$WORKDIR" \
+ADD https://packages.confluent.io/archive/${CONFLUENT_MAJOR_VERSION}/confluent-community-$CONFLUENT_VERSION-2.12.tar.gz $WORKDIR
+RUN cd $WORKDIR \
     && tar -xf $WORKDIR/confluent-community-$CONFLUENT_VERSION-2.12.tar.gz -C $WORKDIR/ \
     && rm $WORKDIR/confluent-community-$CONFLUENT_VERSION-2.12.tar.gz
 ENV CONFLUENT_HOME=$WORKDIR/confluent-$CONFLUENT_VERSION
 
-RUN wget https://d1i4a15mxbxib1.cloudfront.net/api/plugins/confluentinc/kafka-connect-hdfs/versions/$KAFKA_CONNECT_HDFS_VERSION/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip -P "$WORKDIR" \
+ADD https://d1i4a15mxbxib1.cloudfront.net/api/plugins/confluentinc/kafka-connect-hdfs/versions/$KAFKA_CONNECT_HDFS_VERSION/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip $WORKDIR
+RUN cd $WORKDIR \
     && mkdir $WORKDIR/kafka-connectors \
     && unzip $WORKDIR/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip -d $WORKDIR/kafka-connectors/ \
     && rm $WORKDIR/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip \
