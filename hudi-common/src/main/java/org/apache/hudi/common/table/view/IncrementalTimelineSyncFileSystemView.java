@@ -422,7 +422,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
         .map(FileSlice::getBaseFile).filter(Option::isPresent).map(Option::get)
         .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-    // Note: Delta Log Files and Data FIles can be empty when adding/removing pending compactions
+    // Note: Delta Log Files and Data Files can be empty when adding/removing pending compactions
     Map<String, HoodieBaseFile> deltaDataFiles = deltaFileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
         .map(FileSlice::getBaseFile).filter(Option::isPresent).map(Option::get)
         .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))

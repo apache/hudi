@@ -39,10 +39,12 @@ public class GCSEventsSourceConfig extends HoodieConfig {
   public static final ConfigProperty<String> GOOGLE_PROJECT_ID = ConfigProperty
       .key("hoodie.deltastreamer.source.gcs.project.id")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The GCP Project Id where the Pubsub Subscription to ingest from resides. Needed to connect to the Pubsub subscription");
 
   public static final ConfigProperty<String> PUBSUB_SUBSCRIPTION_ID = ConfigProperty
       .key("hoodie.deltastreamer.source.gcs.subscription.id")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The GCP Pubsub subscription id for the GCS Notifications. Needed to connect to the Pubsub subscription");
 }

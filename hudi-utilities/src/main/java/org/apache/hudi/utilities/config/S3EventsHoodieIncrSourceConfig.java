@@ -40,31 +40,37 @@ public class S3EventsHoodieIncrSourceConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> S3_INCR_ENABLE_EXISTS_CHECK = ConfigProperty
       .key("hoodie.deltastreamer.source.s3incr.check.file.exists")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Control whether we do existence check for files before consuming them");
 
   public static final ConfigProperty<String> S3_KEY_PREFIX = ConfigProperty
       .key("hoodie.deltastreamer.source.s3incr.key.prefix")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Control whether to filter the s3 objects starting with this prefix");
 
   public static final ConfigProperty<String> S3_FS_PREFIX = ConfigProperty
       .key("hoodie.deltastreamer.source.s3incr.fs.prefix")
       .defaultValue("s3")
+      .markAdvanced()
       .withDocumentation("The file system prefix.");
 
   public static final ConfigProperty<String> S3_IGNORE_KEY_PREFIX = ConfigProperty
       .key("hoodie.deltastreamer.source.s3incr.ignore.key.prefix")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Control whether to ignore the s3 objects starting with this prefix");
 
   public static final ConfigProperty<String> S3_IGNORE_KEY_SUBSTRING = ConfigProperty
       .key("hoodie.deltastreamer.source.s3incr.ignore.key.substring")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Control whether to ignore the s3 objects with this substring");
 
   public static final ConfigProperty<String> SPARK_DATASOURCE_OPTIONS = ConfigProperty
       .key("hoodie.deltastreamer.source.s3incr.spark.datasource.options")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Json string, passed to the reader while loading dataset. Example delta streamer conf \n"
           + " --hoodie-conf hoodie.deltastreamer.source.s3incr.spark.datasource.options={\"header\":\"true\",\"encoding\":\"UTF-8\"}");
 }
