@@ -128,6 +128,11 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     stateInitializationContext.getOperatorStateStore().checkpointBegin(checkpointId);
   }
 
+  @Override
+  public void endInput() {
+    writeFunction.endInput();
+  }
+
   public void checkpointComplete(long checkpointId) {
     stateInitializationContext.getOperatorStateStore().checkpointSuccess(checkpointId);
     coordinator.notifyCheckpointComplete(checkpointId);

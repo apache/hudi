@@ -104,7 +104,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     validateClusteringInstant(fileIds3, partitionPath1, clusterTime, fileGroupToInstantMap);
   }
 
-  // replacecommit.inflight doesnt have clustering plan. 
+  // replacecommit.inflight doesn't have clustering plan.
   // Verify that getClusteringPlan fetches content from corresponding requested file.
   @Test
   public void testClusteringPlanInflight() throws Exception {

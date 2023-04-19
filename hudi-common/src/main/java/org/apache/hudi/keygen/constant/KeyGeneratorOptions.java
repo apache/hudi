@@ -37,6 +37,7 @@ public class KeyGeneratorOptions extends HoodieConfig {
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = ConfigProperty
       .key("hoodie.datasource.write.partitionpath.urlencode")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("Should we url encode the partition path value, before creating the folder structure.");
 
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = ConfigProperty
@@ -57,11 +58,12 @@ public class KeyGeneratorOptions extends HoodieConfig {
       .key("hoodie.datasource.write.partitionpath.field")
       .noDefaultValue()
       .withDocumentation("Partition path field. Value to be used at the partitionPath component of HoodieKey. "
-          + "Actual value ontained by invoking .toString()");
+          + "Actual value obtained by invoking .toString()");
 
   public static final ConfigProperty<String> KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("When set to true, consistent value will be generated for a logical timestamp type column, "
           + "like timestamp-millis and timestamp-micros, irrespective of whether row-writer is enabled. Disabled by default so "
           + "as not to break the pipeline that deploy either fully row-writer path or non row-writer path. For example, "

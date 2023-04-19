@@ -42,12 +42,14 @@ public class ProtoClassBasedSchemaProviderConfig extends HoodieConfig {
   public static final ConfigProperty<String> PROTO_SCHEMA_CLASS_NAME = ConfigProperty
       .key(PROTO_SCHEMA_PROVIDER_PREFIX + "class.name")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("The Protobuf Message class used as the source for the schema.");
 
   public static final ConfigProperty<Boolean> PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS = ConfigProperty
       .key(PROTO_SCHEMA_PROVIDER_PREFIX + "flatten.wrappers")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("When set to true wrapped primitives like Int64Value are translated to a record with a single 'value' field. By default, the value is false and the wrapped primitives are "
           + "treated as a nullable value");
@@ -55,6 +57,7 @@ public class ProtoClassBasedSchemaProviderConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS = ConfigProperty
       .key(PROTO_SCHEMA_PROVIDER_PREFIX + "timestamps.as.records")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("When set to true Timestamp fields are translated to a record with a seconds and nanos field. By default, the value is false and the timestamp is converted to a long with "
           + "the timestamp-micros logical type");
@@ -62,6 +65,7 @@ public class ProtoClassBasedSchemaProviderConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> PROTO_SCHEMA_MAX_RECURSION_DEPTH = ConfigProperty
       .key(PROTO_SCHEMA_PROVIDER_PREFIX + "max.recursion.depth")
       .defaultValue(5)
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("The max depth to unravel the Proto schema when translating into an Avro schema. Setting this depth allows the user to convert a schema that is recursive in proto into "
           + "something that can be represented in their lake format like Parquet. After a given class has been seen N times within a single branch, the schema provider will create a record with a "

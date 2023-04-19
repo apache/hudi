@@ -39,55 +39,66 @@ public class JdbcSourceConfig extends HoodieConfig {
   public static final ConfigProperty<String> URL = ConfigProperty
       .key("hoodie.deltastreamer.jdbc.url")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("JDBC url for the Hoodie datasource.");
 
   public static final ConfigProperty<String> USER = ConfigProperty
       .key("hoodie.deltastreamer.jdbc.user")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Username used for JDBC connection");
 
   public static final ConfigProperty<String> PASSWORD = ConfigProperty
       .key("hoodie.deltastreamer.jdbc.password")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Password used for JDBC connection");
 
   public static final ConfigProperty<String> PASSWORD_FILE = ConfigProperty
       .key("hoodie.deltastreamer.jdbc.password.file")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Base-path for the JDBC password file.");
 
   public static final ConfigProperty<String> DRIVER_CLASS = ConfigProperty
       .key("hoodie.deltastreamer.jdbc.driver.class")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Driver class used for JDBC connection");
 
   public static final ConfigProperty<String> RDBMS_TABLE_NAME = ConfigProperty
       .key("hoodie.deltastreamer.jdbc.table.name")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("RDBMS table to pull");
 
   public static final ConfigProperty<String> INCREMENTAL_COLUMN = ConfigProperty
       .key("hoodie.deltastreamer.jdbc.table.incr.column.name")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("If run in incremental mode, this field is to pull new data incrementally");
 
   public static final ConfigProperty<String> IS_INCREMENTAL = ConfigProperty
       .key("hoodie.deltastreamer.jdbc.incr.pull")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Will the JDBC source do an incremental pull?");
 
   public static final ConfigProperty<String> EXTRA_OPTIONS = ConfigProperty
       .key("hoodie.deltastreamer.jdbc.extra.options.")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Used to set any extra options the user specifies for jdbc");
 
   public static final ConfigProperty<String> STORAGE_LEVEL = ConfigProperty
       .key("hoodie.deltastreamer.jdbc.storage.level")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Used to control the persistence level. Default value: MEMORY_AND_DISK_SER");
 
   public static final ConfigProperty<String> FALLBACK_TO_FULL_FETCH = ConfigProperty
       .key("hoodie.deltastreamer.jdbc.incr.fallback.to.full.fetch")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("If set true, makes incremental fetch to fallback to full fetch in case of any error");
 }
