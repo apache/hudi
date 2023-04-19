@@ -242,11 +242,9 @@ public class StreamReadMonitoringFunction
     if (checkpointLock != null) {
       // this is to cover the case where cancel() is called before the run()
       synchronized (checkpointLock) {
-        issuedInstant = null;
         isRunning = false;
       }
     } else {
-      issuedInstant = null;
       isRunning = false;
     }
   }
