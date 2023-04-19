@@ -176,16 +176,6 @@ public class HoodieAvroUtils {
     return reader.read(null, decoder);
   }
 
-  /**
-   * Convert json bytes back into avro record.
-   */
-  public static GenericRecord jsonBytesToAvro(byte[] bytes, Schema schema) throws IOException {
-    ByteArrayInputStream bio = new ByteArrayInputStream(bytes);
-    JsonDecoder jsonDecoder = DecoderFactory.get().jsonDecoder(schema, bio);
-    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
-    return reader.read(null, jsonDecoder);
-  }
-
   public static boolean isMetadataField(String fieldName) {
     return HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(fieldName);
   }
