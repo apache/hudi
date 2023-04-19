@@ -62,6 +62,9 @@ class RollbackToSavepointProcedure extends BaseProcedure with ProcedureBuilder w
 
     try {
       client.restoreToSavepoint(instantTime)
+      if (tableName.isDefined) {
+        spark.catalog.refreshTable(tableName.get.asInstanceOf[String])
+      }
       logInfo("The commit $instantTime rolled back.")
       result = true
     } catch {

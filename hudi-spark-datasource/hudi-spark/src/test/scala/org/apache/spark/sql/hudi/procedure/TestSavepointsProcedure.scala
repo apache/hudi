@@ -173,4 +173,56 @@ class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
       checkAnswer(s"""call rollback_to_savepoint('$tableName', '${commits.apply(0).getString(0)}')""")(Seq(true))
     }
   }
+
+  test("Test Call rollback_to_savepoint Procedure with refreshTable") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath + "/" + tableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+
+      val commits = spark.sql(s"""call show_commits(table => '$tableName')""").collect()
+        .map(c => c.getString(0)).sorted
+      assertResult(3) {
+        commits.length
+      }
+
+      // create 3 savepoints
+      checkAnswer(s"""call create_savepoint('$tableName', '${commits(0)}')""")(Seq(true))
+      checkAnswer(s"""call create_savepoint('$tableName', '${commits(1)}')""")(Seq(true))
+
+      spark.table(s"$tableName").select("id").cache()
+      assertCached(spark.table(s"$tableName").select("id"), 1)
+
+      // rollback to the second savepoint with the table name
+      checkAnswer(s"""call rollback_to_savepoint('$tableName', '${commits(1)}')""")(Seq(true))
+      assertCached(spark.table(s"$tableName").select("id"), 0)
+      checkAnswer(
+        s"""call delete_savepoint('$tableName', '${commits(1)}')""".stripMargin)(Seq(true))
+
+      // rollback to the first savepoint with the table base path
+      checkAnswer(
+        s"""call rollback_to_savepoint('$tableName', '${commits(0)}')""".stripMargin)(Seq(true))
+      // Check cache whether invalidate
+      assertCached(spark.table(s"$tableName").select("id"), 0)
+    }
+  }
 }
