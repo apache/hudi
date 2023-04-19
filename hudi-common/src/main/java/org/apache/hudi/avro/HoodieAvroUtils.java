@@ -321,11 +321,6 @@ public class HoodieAvroUtils {
     return record;
   }
 
-  public static GenericRecord addOperationToRecord(GenericRecord record, HoodieOperation operation) {
-    record.put(HoodieRecord.OPERATION_METADATA_FIELD, operation.getName());
-    return record;
-  }
-
   /**
    * Adds the Hoodie commit metadata into the provided Generic Record.
    */
@@ -753,20 +748,6 @@ public class HoodieAvroUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read record with key:" + record.getKey(), e);
     }
-  }
-
-  /**
-   * Gets record column values into one object.
-   *
-   * @param record  Hoodie record.
-   * @param columns Names of the columns to get values.
-   * @param schema  {@link SerializableSchema} instance.
-   * @return Column value if a single column, or concatenated String values by comma.
-   */
-  public static Object getRecordColumnValues(HoodieAvroRecord record,
-                                             String[] columns,
-                                             SerializableSchema schema, boolean consistentLogicalTimestampEnabled) {
-    return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);
   }
 
   // TODO java-doc
