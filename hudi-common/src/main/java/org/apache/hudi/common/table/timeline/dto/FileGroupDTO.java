@@ -59,7 +59,7 @@ public class FileGroupDTO {
 
     List<FileGroupDTO> fileGroupDTOs = fileGroups.stream()
         .map(fg -> FileGroupDTO.fromFileGroup(fg, false)).collect(Collectors.toList());
-    // Timeline exists only in the first file group. Optimisation to reduce payload size.
+    // Timeline exists only in the first file group DTO. Optimisation to reduce payload size.
     fileGroupDTOs.set(0, FileGroupDTO.fromFileGroup(fileGroups.get(0), true));
     return fileGroupDTOs;
   }
@@ -73,7 +73,7 @@ public class FileGroupDTO {
       return Stream.empty();
     }
 
-    // Timeline exists only in the first file group. Optimisation to reduce payload size.
+    // Timeline exists only in the first file group DTO. Optimisation to reduce payload size.
     HoodieTimeline timeline = toFileGroup(dtos.get(0), metaClient).getTimeline();
     return dtos.stream().map(dto -> toFileGroup(dto, metaClient, timeline));
   }
