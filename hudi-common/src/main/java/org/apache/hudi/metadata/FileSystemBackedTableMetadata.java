@@ -39,6 +39,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.PartialBindVisitor;
+import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.internal.schema.Types;
 
 import java.io.IOException;
@@ -95,64 +96,16 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public List<String> getPartitionPathByExpression(Expression expression, Types.RecordType partitionFields) throws IOException {
-    List<Path> pathsToList = new CopyOnWriteArrayList<>();
-    pathsToList.add(new Path(datasetBasePath));
-    List<String> partitionPaths = new CopyOnWriteArrayList<>();
-    int partitionLevel = 0;
-    while (!pathsToList.isEmpty()) {
-      // TODO: Get the parallelism from HoodieWriteConfig
-      int listingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, pathsToList.size());
-
-      // List all directories in parallel
-      List<FileStatus> dirToFileListing = engineContext.flatMap(pathsToList, path -> {
-        FileSystem fileSystem = path.getFileSystem(hadoopConf.get());
-        return Arrays.stream(fileSystem.listStatus(path));
-      }, listingParallelism);
-      pathsToList.clear();
-      Types.RecordType currentSchema = Types.RecordType.get(partitionFields.fields().subList(0, ++partitionLevel));
-      PartialBindVisitor partialBindVisitor = new PartialBindVisitor(currentSchema, false);
-      Expression boundedExpr = expression.accept(partialBindVisitor);
-
-      // if current dictionary contains PartitionMetadata, add it to result
-      // if current dictionary does not contain PartitionMetadata, add it to queue to be processed.
-      int fileListingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, dirToFileListing.size());
-      if (!dirToFileListing.isEmpty()) {
-        // result below holds a list of pair. first entry in the pair optionally holds the deduced list of partitions.
-        // and second entry holds optionally a directory path to be processed further.
-        List<Pair<Option<String>, Option<Path>>> result = engineContext.map(dirToFileListing, fileStatus -> {
-          FileSystem fileSystem = fileStatus.getPath().getFileSystem(hadoopConf.get());
-          if (fileStatus.isDirectory()) {
-            String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath());
-            if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, fileStatus.getPath())) {
-              if ((Boolean) boundedExpr.eval(HoodieTableMetadata
-                  .extractPartitionValues(partitionFields, relativePartitionPath, hiveStylePartitioningEnabled))) {
-                return Pair.of(Option.of(relativePartitionPath), Option.empty());
-              }
-            } else if (!fileStatus.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
-              if ((Boolean) boundedExpr.eval(HoodieTableMetadata
-                  .extractPartitionValues(partitionFields, relativePartitionPath, hiveStylePartitioningEnabled))) {
-                return Pair.of(Option.empty(), Option.of(fileStatus.getPath()));
-              }
-            }
-          } else if (fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
-            String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath().getParent());
-            if ((Boolean) boundedExpr.eval(HoodieTableMetadata
-                .extractPartitionValues(partitionFields, relativePartitionPath, hiveStylePartitioningEnabled))) {
-              return Pair.of(Option.of(relativePartitionPath), Option.empty());
-            }
-          }
-          return Pair.of(Option.empty(), Option.empty());
-        }, fileListingParallelism);
-
-        partitionPaths.addAll(result.stream().filter(entry -> entry.getKey().isPresent()).map(entry -> entry.getKey().get())
-            .collect(Collectors.toList()));
-
-        pathsToList.addAll(result.stream().filter(entry -> entry.getValue().isPresent()).map(entry -> entry.getValue().get())
-            .collect(Collectors.toList()));
+  public List<String> getPartitionPathByExpression(List<String> relativePathPrefixes,
+                                                   Types.RecordType partitionFields,
+                                                   Expression expression) throws IOException {
+    return relativePathPrefixes.stream().flatMap(relativePathPrefix -> {
+      try {
+        return getPartitionPathWithPathPrefix(relativePathPrefix, partitionFields, expression).stream();
+      } catch (IOException e) {
+        throw new HoodieIOException("Error fetching partition paths with relative path: " + relativePathPrefix, e);
       }
-    }
-    return partitionPaths;
+    }).collect(Collectors.toList());
   }
 
   @Override
@@ -166,11 +119,38 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
     }).collect(Collectors.toList());
   }
 
+  private int getRelativePathPartitionLevel(String relativePathPrefix) {
+    if (StringUtils.isNullOrEmpty(relativePathPrefix)) {
+      return 0;
+    }
+
+    int level = 0;
+    for (int i = 1; i < relativePathPrefix.length() - 1; i++) {
+      if (relativePathPrefix.charAt(i) == '/') {
+        level++;
+      }
+    }
+    if (relativePathPrefix.startsWith("/")) {
+      level--;
+    }
+    if (relativePathPrefix.endsWith("/")) {
+      level--;
+    }
+    return level;
+  }
+
   private List<String> getPartitionPathWithPathPrefix(String relativePathPrefix) throws IOException {
+    return getPartitionPathWithPathPrefix(relativePathPrefix, null, null);
+  }
+
+  private List<String> getPartitionPathWithPathPrefix(String relativePathPrefix,
+                                                      Types.RecordType partitionFields,
+                                                      Expression expression) throws IOException {
     List<Path> pathsToList = new CopyOnWriteArrayList<>();
     pathsToList.add(StringUtils.isNullOrEmpty(relativePathPrefix)
         ? new Path(datasetBasePath) : new Path(datasetBasePath, relativePathPrefix));
     List<String> partitionPaths = new CopyOnWriteArrayList<>();
+    int partitionLevel = getRelativePathPartitionLevel(relativePathPrefix);
 
     while (!pathsToList.isEmpty()) {
       // TODO: Get the parallelism from HoodieWriteConfig

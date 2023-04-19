@@ -48,6 +48,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
+import scala.util.Try
 
 /**
  * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
@@ -226,16 +227,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         logInfo("Partition path prefix analysis is disabled; falling back to fetching all partitions")
         getAllQueryPartitionPaths.asScala
       } else {
-        if (true) {
-          val expression = SparkFilterHelper.convertFilters(
-            partitionPruningPredicates.flatMap {
-              expr => sparkAdapter.translateFilter(expr)
-            })
-
-          listPartitionPaths(SparkFilterHelper.convertDataType(partitionSchema).asInstanceOf[RecordType], expression).asScala
-        } else {
-          tryListByPartitionPathPrefix(partitionColumnNames, partitionPruningPredicates)
-        }
+        tryPushDownPartitionPredicates(partitionColumnNames, partitionPruningPredicates)
       }
 
       // NOTE: In some cases, like for ex, when non-encoded slash '/' is used w/in the partition column's value,
@@ -270,7 +262,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   // NOTE: Here we try to to achieve efficiency in avoiding necessity to recursively list deep folder structures of
   //       partitioned tables w/ multiple partition columns, by carefully analyzing provided partition predicates:
   //
-  //       In cases when partition-predicates have
+  // 1. Firstly, when partition-predicates have
   //         - The form of equality predicates w/ static literals (for ex, like `date = '2022-01-01'`)
   //         - Fully specified proper prefix of the partition schema (ie fully binding first N columns
   //           of the partition schema adhering to hereby described rules)
@@ -284,11 +276,12 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   //
   //    country_code: string (for ex, 'us')
   //    date: string (for ex, '2022-01-01')
+  //    hour: string (for ex, '08')
   //
   // Table's folder structure:
   //    us/
-  //     |- 2022-01-01/
-  //     |- 2022-01-02/
+  //     |- 2022-01-01/06
+  //     |- 2022-01-02/07
   //     ...
   //
   // In case we have incoming query specifies following predicates:
@@ -296,7 +289,15 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   //    `... WHERE country_code = 'us' AND date = '2022-01-01'`
   //
   // We can deduce full partition-path w/o doing a single listing: `us/2022-01-01`
-  private def tryListByPartitionPathPrefix(partitionColumnNames: Seq[String], partitionColumnPredicates: Seq[Expression]) = {
+  //
+  // 2. Try to push down all partition predicates when listing the sub-folder.
+  // In case we have incoming query specifies following predicates:
+  //
+  //    `... WHERE country_code = 'us' AND date = '2022-01-01' and hour = '06'`
+  //
+  // We can deduce full partition-path w/o doing a single listing: `us/2022-01-01`, and then push down
+  // these filters when listing `us/2022-01-01` to get the directory 'us/2022-01-01/06'
+  private def tryPushDownPartitionPredicates(partitionColumnNames: Seq[String], partitionColumnPredicates: Seq[Expression]) = {
     // Static partition-path prefix is defined as a prefix of the full partition-path where only
     // first N partition columns (in-order) have proper (static) values bound in equality predicates,
     // allowing in turn to build such prefix to be used in subsequent filtering
@@ -326,8 +327,16 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnNameValuePairs.map(_._2._2.asInstanceOf[AnyRef]).toArray))
       } else {
         // Otherwise, compile extracted partition values (from query predicates) into a sub-path which is a prefix
-        // of the complete partition path, do listing for this prefix-path only
-        listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala
+        // of the complete partition path, do listing for this prefix-path and filter them with partitionPredicates
+        Try {
+          SparkFilterHelper.convertDataType(partitionSchema).asInstanceOf[RecordType]
+        }.map { partitionRecordType =>
+          val convertedFilters = SparkFilterHelper.convertFilters(
+            partitionColumnPredicates.flatMap {
+              expr => sparkAdapter.translateFilter(expr)
+            })
+          listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava, partitionRecordType, convertedFilters).asScala
+        }.getOrElse(listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala)
       }
     }
   }

@@ -147,10 +147,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public List<String> getPartitionPathByExpression(Expression expression, Types.RecordType partitionFields) throws IOException {
+  public List<String> getPartitionPathByExpression(List<String> relativePathPrefixes,
+                                                   Types.RecordType partitionFields,
+                                                   Expression expression) throws IOException {
     Expression boundedExpr = expression.accept(new BindVisitor(partitionFields, false));
     boolean hiveStylePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getHiveStylePartitioningEnable());
-    return getAllPartitionPaths().stream()
+    return getPartitionPathWithPathPrefixes(relativePathPrefixes)
+        .stream()
         .filter(p -> (boolean) boundedExpr.eval(HoodieTableMetadata
             .extractPartitionValues(partitionFields, p, hiveStylePartitioningEnabled)))
         .collect(Collectors.toList());

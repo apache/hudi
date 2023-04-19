@@ -272,10 +272,13 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         ));
   }
 
-  protected List<PartitionPath> listPartitionPaths(Types.RecordType partitionFields, Expression partitionColumnPredicates) {
+  protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths,
+                                                   Types.RecordType partitionFields,
+                                                   Expression partitionColumnPredicates) {
     List<String> matchedPartitionPaths;
     try {
-      matchedPartitionPaths = tableMetadata.getPartitionPathByExpression(partitionColumnPredicates, partitionFields);
+      matchedPartitionPaths = tableMetadata.getPartitionPathByExpression(relativePartitionPaths,
+          partitionFields, partitionColumnPredicates);
     } catch (IOException e) {
       throw new HoodieIOException("Error fetching partition paths", e);
     }

@@ -41,6 +41,7 @@ import org.apache.hudi.internal.schema.utils.Conversions;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -150,6 +151,18 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   static ArrayData extractPartitionValues(Types.RecordType partitionFields,
                                           String relativePartitionPath,
                                           boolean hiveStylePartitioningEnabled) {
+    if (partitionFields.fields().size() == 1) {
+      // SinglePartPartitionValue, which might contain slashes.
+      String partitionValue;
+      if (hiveStylePartitioningEnabled) {
+        partitionValue = relativePartitionPath.split("=")[1];
+      } else {
+        partitionValue = relativePartitionPath;
+      }
+      return new ArrayData(Collections.singletonList(Conversions
+          .fromPartitionString(partitionValue, partitionFields.field(0).type())));
+    }
+
     List<Object> partitionValues;
     String[] partitionFragments = relativePartitionPath.split("/");
     if (hiveStylePartitioningEnabled) {
@@ -174,7 +187,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    */
   FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException;
 
-  List<String> getPartitionPathByExpression(Expression expression, Types.RecordType partitionFields) throws IOException;
+  /**
+   * Retrieve the paths of partitions under the provided sub-directories,
+   * and filter these partitions using the provided {@link Expression}.
+   */
+  List<String> getPartitionPathByExpression(List<String> relativePathPrefixes,
+                                            Types.RecordType partitionFields,
+                                            Expression expression) throws IOException;
 
   /**
    * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.
