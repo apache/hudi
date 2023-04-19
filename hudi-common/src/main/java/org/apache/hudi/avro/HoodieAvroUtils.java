@@ -62,6 +62,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
@@ -988,15 +989,8 @@ public class HoodieAvroUtils {
                   || oldSchema.getType() == Schema.Type.LONG
                   || oldSchema.getType() == Schema.Type.FLOAT) {
             LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
-            BigDecimal bigDecimal = null;
-            if (oldSchema.getType() == Schema.Type.STRING) {
-              bigDecimal = new java.math.BigDecimal(oldValue.toString())
-                      .setScale(decimal.getScale());
-            } else {
-              // Due to Java, there will be precision problems in direct conversion, we should use string instead of use double
-              bigDecimal = new java.math.BigDecimal(oldValue.toString())
-                      .setScale(decimal.getScale());
-            }
+            // due to Java, there will be precision problems in direct conversion, we should use string instead of use double
+            BigDecimal bigDecimal = new java.math.BigDecimal(oldValue.toString()).setScale(decimal.getScale(), RoundingMode.HALF_UP);
             return DECIMAL_CONVERSION.toFixed(bigDecimal, newSchema, newSchema.getLogicalType());
           }
         }
@@ -1048,7 +1042,7 @@ public class HoodieAvroUtils {
     } else if (schema.getTypes().size() == 1) {
       actualSchema = schema.getTypes().get(0);
     } else {
-      // deal complex union. this should not happened in hoodie,
+      // deal complex union. this should not happen in hoodie,
       // since flink/spark do not write this type.
       int i = GenericData.get().resolveUnion(schema, data);
       actualSchema = schema.getTypes().get(i);
