@@ -276,7 +276,10 @@ public class HoodieDeltaStreamer implements Serializable {
             + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
             + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
             + "allows a SQL query templated to be passed as a transformation function). "
-            + "Pass a comma-separated list of subclass names to chain the transformations.")
+            + "Pass a comma-separated list of subclass names to chain the transformations. Transformer can also include "
+            + "a suffix. This suffix can be appended with the property keys to identify properties related to the transformer. "
+            + "E:g - tr1:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer can be used along with property key "
+            + "hoodie.deltastreamer.transformer.sql.tr1. Here tr1 is a suffix used to identify the keys specific to this transformer.")
     public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
