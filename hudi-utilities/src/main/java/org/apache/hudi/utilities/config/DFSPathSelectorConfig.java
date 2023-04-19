@@ -39,6 +39,7 @@ public class DFSPathSelectorConfig extends HoodieConfig {
   public static final ConfigProperty<String> SOURCE_INPUT_SELECTOR = ConfigProperty
       .key("hoodie.deltastreamer.source.input.selector")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Source input selector");
 
   public static final ConfigProperty<String> ROOT_INPUT_PATH = ConfigProperty

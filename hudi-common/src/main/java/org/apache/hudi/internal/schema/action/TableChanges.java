@@ -291,7 +291,9 @@ public class TableChanges {
     }
   }
 
-  /** Deal with add columns changes for table. */
+  /**
+   * Deal with add columns changes for table.
+   */
   public static class ColumnAddChange extends TableChange.BaseColumnChange {
     private final Map<String, Integer> fullColName2Id = new HashMap<>();
     private final Map<Integer, ArrayList<Types.Field>> parentId2AddCols = new HashMap<>();
@@ -301,8 +303,8 @@ public class TableChanges {
       return new ColumnAddChange(internalSchema);
     }
 
-    public Type applyAdd(Types.Field orignalField, Type type) {
-      int fieldId = orignalField.fieldId();
+    public Type applyAdd(Types.Field originalField, Type type) {
+      int fieldId = originalField.fieldId();
       ArrayList<Types.Field> addFields = parentId2AddCols.getOrDefault(fieldId, new ArrayList<>());
       ArrayList<ColumnPositionChange> pchanges = positionChangeMap.getOrDefault(fieldId, new ArrayList<>());
 

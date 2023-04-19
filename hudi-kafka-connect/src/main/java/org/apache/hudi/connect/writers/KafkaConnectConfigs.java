@@ -50,12 +50,14 @@ public class KafkaConnectConfigs extends HoodieConfig {
   public static final ConfigProperty<String> CONTROL_TOPIC_NAME = ConfigProperty
       .key("hoodie.kafka.control.topic")
       .defaultValue("hudi-control-topic")
+      .markAdvanced()
       .withDocumentation("Kafka topic name used by the Hudi Sink Connector for "
           + "sending and receiving control messages. Not used for data records.");
 
   public static final ConfigProperty<String> SCHEMA_PROVIDER_CLASS = ConfigProperty
       .key("hoodie.schemaprovider.class")
       .defaultValue(FilebasedSchemaProvider.class.getName())
+      .markAdvanced()
       .withDocumentation("subclass of org.apache.hudi.schema.SchemaProvider "
           + "to attach schemas to input & target table data, built in options: "
           + "org.apache.hudi.schema.FilebasedSchemaProvider.");
@@ -63,12 +65,14 @@ public class KafkaConnectConfigs extends HoodieConfig {
   public static final ConfigProperty<String> COMMIT_INTERVAL_SECS = ConfigProperty
       .key("hoodie.kafka.commit.interval.secs")
       .defaultValue("60")
+      .markAdvanced()
       .withDocumentation("The interval at which Hudi will commit the records written "
           + "to the files, making them consumable on the read-side.");
 
   public static final ConfigProperty<String> COORDINATOR_WRITE_TIMEOUT_SECS = ConfigProperty
       .key("hoodie.kafka.coordinator.write.timeout.secs")
       .defaultValue("300")
+      .markAdvanced()
       .withDocumentation("The timeout after sending an END_COMMIT until when "
           + "the coordinator will wait for the write statuses from all the partitions"
           + "to ignore the current commit and start a new commit.");
@@ -76,33 +80,39 @@ public class KafkaConnectConfigs extends HoodieConfig {
   public static final ConfigProperty<String> ASYNC_COMPACT_ENABLE = ConfigProperty
       .key("hoodie.kafka.compaction.async.enable")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("Controls whether async compaction should be turned on for MOR table writing.");
 
   public static final ConfigProperty<String> META_SYNC_ENABLE = ConfigProperty
       .key("hoodie.meta.sync.enable")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("Enable Meta Sync such as Hive");
 
   public static final ConfigProperty<String> META_SYNC_CLASSES = ConfigProperty
       .key("hoodie.meta.sync.classes")
       .defaultValue(HiveSyncTool.class.getName())
+      .markAdvanced()
       .withDocumentation("Meta sync client tool, using comma to separate multi tools");
 
   public static final ConfigProperty<Boolean> ALLOW_COMMIT_ON_ERRORS = ConfigProperty
       .key("hoodie.kafka.allow.commit.on.errors")
       .defaultValue(true)
+      .markAdvanced()
       .withDocumentation("Commit even when some records failed to be written");
 
   // Reference https://docs.confluent.io/kafka-connect-hdfs/current/configuration_options.html#hdfs
   public static final ConfigProperty<String> HADOOP_CONF_DIR = ConfigProperty
-          .key("hadoop.conf.dir")
-          .noDefaultValue()
-          .withDocumentation("The Hadoop configuration directory.");
+      .key("hadoop.conf.dir")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("The Hadoop configuration directory.");
 
   public static final ConfigProperty<String> HADOOP_HOME = ConfigProperty
-          .key("hadoop.home")
-          .noDefaultValue()
-          .withDocumentation("The Hadoop home directory.");
+      .key("hadoop.home")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("The Hadoop home directory.");
 
   protected KafkaConnectConfigs() {
     super();

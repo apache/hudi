@@ -32,6 +32,7 @@ import org.apache.flink.table.types.logical.RowType;
 import javax.annotation.Nullable;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -39,6 +40,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -164,9 +166,13 @@ public class ExpressionUtils {
       case BOOLEAN:
         return expr.getValueAs(Boolean.class).orElse(null);
       case TINYINT:
+        return expr.getValueAs(Byte.class).orElse(null);
       case SMALLINT:
+        return expr.getValueAs(Short.class).orElse(null);
       case INTEGER:
         return expr.getValueAs(Integer.class).orElse(null);
+      case BIGINT:
+        return expr.getValueAs(Long.class).orElse(null);
       case FLOAT:
         return expr.getValueAs(Float.class).orElse(null);
       case DOUBLE:
@@ -182,6 +188,73 @@ public class ExpressionUtils {
       default:
         throw new UnsupportedOperationException("Unsupported type: " + logicalType);
     }
+  }
+
+  /**
+   * Returns the field as part of a hoodie key with given value literal expression.
+   *
+   * <p>CAUTION: the data type and value parsing should follow the impl of {@link #getValueFromLiteral(ValueLiteralExpression)}.
+   *
+   * <p>CAUTION: the data and timestamp conversion should follow the impl if {@code HoodieAvroUtils.convertValueForAvroLogicalTypes}.
+   *
+   * <p>Returns null if the value can not parse as the output data type correctly,
+   * should call {@code ValueLiteralExpression.isNull} first to decide whether
+   * the literal is NULL.
+   */
+  @Nullable
+  public static Object getKeyFromLiteral(ValueLiteralExpression expr, boolean logicalTimestamp) {
+    Object val = getValueFromLiteral(expr);
+    if (val == null) {
+      return null;
+    }
+    LogicalType logicalType = expr.getOutputDataType().getLogicalType();
+    switch (logicalType.getTypeRoot()) {
+      case TIMESTAMP_WITHOUT_TIME_ZONE:
+        return logicalTimestamp ? new Timestamp((long) val) : val;
+      case DATE:
+        return LocalDate.ofEpochDay((long) val);
+      default:
+        return val;
+    }
+  }
+
+  /**
+   * Returns whether all the fields {@code fields} are involved in the filtering predicates.
+   *
+   * @param exprs  The filters
+   * @param fields The field set
+   */
+  public static boolean isFilteringByAllFields(List<ResolvedExpression> exprs, Set<String> fields) {
+    if (exprs.size() != fields.size()) {
+      return false;
+    }
+    Set<String> referencedPks = exprs.stream()
+        .map(ResolvedExpression::getChildren)
+        .flatMap(Collection::stream)
+        .filter(expr -> expr instanceof FieldReferenceExpression)
+        .map(rExpr -> ((FieldReferenceExpression) rExpr).getName())
+        .collect(Collectors.toSet());
+    return referencedPks.size() == fields.size();
+  }
+
+  /**
+   * Returns whether the given expression {@code resolvedExpr} is a
+   * literal equivalence predicate within the fields {@code fields}.
+   */
+  public static boolean isEqualsLitExpr(ResolvedExpression resolvedExpr, Set<String> fields) {
+    CallExpression callExpr = (CallExpression) resolvedExpr;
+    FunctionDefinition funcDef = callExpr.getFunctionDefinition();
+    if (funcDef != BuiltInFunctionDefinitions.EQUALS) {
+      return false;
+    }
+
+    if (!isFieldReferenceAndLiteral(callExpr.getChildren())) {
+      return false;
+    }
+
+    return callExpr.getChildren().stream()
+        .filter(expr -> expr instanceof FieldReferenceExpression)
+        .anyMatch(expr -> fields.contains(((FieldReferenceExpression) expr).getName()));
   }
 
   public static List<ResolvedExpression> filterSimpleCallExpression(List<ResolvedExpression> exprs) {

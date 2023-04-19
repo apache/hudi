@@ -620,10 +620,10 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    */
   private void performClean(String instant, List<String> files, String cleanInstant)
       throws IOException {
-    Map<String, List<String>> partititonToFiles = deleteFiles(files);
-    List<HoodieCleanStat> cleanStats = partititonToFiles.entrySet().stream().map(e ->
+    Map<String, List<String>> partitionToFiles = deleteFiles(files);
+    List<HoodieCleanStat> cleanStats = partitionToFiles.entrySet().stream().map(e ->
         new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, e.getKey(), e.getValue(), e.getValue(),
-        new ArrayList<>(), Integer.toString(Integer.parseInt(instant) + 1), "")).collect(Collectors.toList());
+            new ArrayList<>(), Integer.toString(Integer.parseInt(instant) + 1), "")).collect(Collectors.toList());
 
     HoodieInstant cleanInflightInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant);
     metaClient.getActiveTimeline().createNewInstant(cleanInflightInstant);
@@ -641,8 +641,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    */
   private void performRestore(HoodieInstant instant, List<String> files, String rollbackInstant,
       boolean isRestore) throws IOException {
-    Map<String, List<String>> partititonToFiles = deleteFiles(files);
-    List<HoodieRollbackStat> rollbackStats = partititonToFiles.entrySet().stream().map(e ->
+    Map<String, List<String>> partitionToFiles = deleteFiles(files);
+    List<HoodieRollbackStat> rollbackStats = partitionToFiles.entrySet().stream().map(e ->
         new HoodieRollbackStat(e.getKey(), e.getValue(), new ArrayList<>(), new HashMap<>())
     ).collect(Collectors.toList());
 
@@ -677,16 +677,16 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    * @param files List of files to be deleted
    */
   private Map<String, List<String>> deleteFiles(List<String> files) throws IOException {
-    Map<String, List<String>> partititonToFiles = new HashMap<>();
-    PARTITIONS.forEach(p -> partititonToFiles.put(p, new ArrayList<>()));
+    Map<String, List<String>> partitionToFiles = new HashMap<>();
+    PARTITIONS.forEach(p -> partitionToFiles.put(p, new ArrayList<>()));
 
     for (String f : files) {
       java.nio.file.Path fullPath = Paths.get(metaClient.getBasePathV2().toString(), f);
       Files.delete(fullPath);
       String partition = PARTITIONS.stream().filter(f::startsWith).findAny().get();
-      partititonToFiles.get(partition).add(fullPath.toUri().toString());
+      partitionToFiles.get(partition).add(fullPath.toUri().toString());
     }
-    return partititonToFiles;
+    return partitionToFiles;
   }
 
   /**
@@ -795,9 +795,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   /**
    * Perform one or more rounds of ingestion/compaction and validate incremental timeline syncing.
    *
-   * @param view Hoodie View
-   * @param instants Ingestion/Commit INstants
-   * @param deltaCommit Delta COmmit ?
+   * @param view                      Hoodie View
+   * @param instants                  Ingestion/Commit Instants
+   * @param deltaCommit               Delta Commit
    * @param baseInstantForDeltaCommit Base Instant to be used in case of delta-commit
    * @return List of new file created
    */

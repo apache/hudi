@@ -151,11 +151,13 @@ public abstract class HoodieIngestionService extends HoodieAsyncService {
     public static final ConfigProperty<Boolean> INGESTION_IS_CONTINUOUS = ConfigProperty
         .key("hoodie.utilities.ingestion.is.continuous")
         .defaultValue(false)
+        .markAdvanced()
         .withDocumentation("Indicate if the ingestion runs in a continuous loop.");
 
     public static final ConfigProperty<Integer> INGESTION_MIN_SYNC_INTERNAL_SECONDS = ConfigProperty
         .key("hoodie.utilities.ingestion.min.sync.internal.seconds")
         .defaultValue(0)
+        .markAdvanced()
         .withDocumentation("the minimum sync interval of each ingestion in continuous mode");
 
     public static Builder newBuilder() {

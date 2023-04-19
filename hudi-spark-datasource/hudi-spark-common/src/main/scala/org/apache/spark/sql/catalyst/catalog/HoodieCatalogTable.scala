@@ -19,6 +19,7 @@ package org.apache.spark.sql.catalyst.catalog
 
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
@@ -171,6 +172,10 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   def initHoodieTable(): Unit = {
     logInfo(s"Init hoodie.properties for ${table.identifier.unquotedString}")
     val (finalSchema, tableConfigs) = parseSchemaAndConfigs()
+    // The TableSchemaResolver#getTableAvroSchemaInternal has a premise that
+    // the table create schema does not include the metadata fields.
+    // When flag includeMetadataFields is false, no metadata fields should be included in the resolved schema.
+    val dataSchema = removeMetaFields(finalSchema)
 
     table = table.copy(schema = finalSchema)
 
@@ -187,11 +192,11 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
         .setDatabaseName(catalogDatabaseName)
-        .setTableCreateSchema(SchemaConverters.toAvroType(finalSchema).toString())
+        .setTableCreateSchema(SchemaConverters.toAvroType(dataSchema).toString())
         .initTable(hadoopConf, tableLocation)
     } else {
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
-      val schema = SchemaConverters.toAvroType(finalSchema, false, recordName, namespace)
+      val schema = SchemaConverters.toAvroType(dataSchema, nullable = false, recordName, namespace)
       val partitionColumns = if (table.partitionColumnNames.isEmpty) {
         null
       } else {

@@ -95,6 +95,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
       case INSERT_OVERWRITE:
       case UPSERT:
       case DELETE:
+      case BULK_INSERT:
         return true;
       default:
         return false;

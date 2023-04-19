@@ -44,18 +44,21 @@ public class HoodiePayloadConfig extends HoodieConfig {
   public static final ConfigProperty<String> ORDERING_FIELD = ConfigProperty
       .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
       .defaultValue("ts")
+      .markAdvanced()
       .withDocumentation("Table column/field name to order records that have the same key, before "
           + "merging and writing to storage.");
 
   public static final ConfigProperty<String> EVENT_TIME_FIELD = ConfigProperty
       .key(PAYLOAD_EVENT_TIME_FIELD_PROP_KEY)
       .defaultValue("ts")
+      .markAdvanced()
       .withDocumentation("Table column/field name to derive timestamp associated with the records. This can"
           + "be useful for e.g, determining the freshness of the table.");
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
+      .markAdvanced()
       .withDocumentation("This needs to be same as class used during insert/upserts. Just like writing, compaction also uses "
         + "the record payload class to merge records in the log against each other, merge again with the base file and "
         + "produce the final record to be written after compaction.");
