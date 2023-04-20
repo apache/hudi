@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -108,6 +109,19 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
       }
     }).run();
     view.getLatestBaseFiles();
+    server.close();
+  }
+
+  @Test
+  public void testJettyServerDaemonThread() {
+    // Service is available.
+    view.getLatestBaseFiles();
+    // org.eclipse.jetty.util.thread.QueuedThreadPool `_name`
+    // io.javalin.jetty.JettyUtil.defaultThreadPool `JettyServerThreadPool`
+    Thread.getAllStackTraces().keySet().stream().filter(t -> t.getName().startsWith("qtp")
+            || t.getName().startsWith("Jetty")
+            || t.getName().startsWith("TimelineService-JettyScheduler"))
+        .forEach(t -> assertTrue(t.isDaemon()));
     server.close();
   }
 }

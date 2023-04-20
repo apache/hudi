@@ -129,10 +129,11 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
     ResultSet result = null;
     try {
       DatabaseMetaData databaseMetaData = connection.getMetaData();
-      result = databaseMetaData.getColumns(null, databaseName, tableName, null);
+      String catalog = connection.getCatalog();
+      result = databaseMetaData.getColumns(catalog, databaseName, tableName, "%");
       while (result.next()) {
-        String columnName = result.getString(4);
-        String columnType = result.getString(6);
+        String columnName = result.getString("COLUMN_NAME");
+        String columnType = result.getString("TYPE_NAME");
         if ("DECIMAL".equals(columnType)) {
           int columnSize = result.getInt("COLUMN_SIZE");
           int decimalDigits = result.getInt("DECIMAL_DIGITS");
@@ -154,7 +155,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
       LOG.info("No partitions to add for " + tableName);
       return;
     }
-    LOG.info("Adding partitions " + partitionsToDrop.size() + " to table " + tableName);
+    LOG.info("Dropping partitions " + partitionsToDrop.size() + " from table " + tableName);
     List<String> sqls = constructDropPartitions(tableName, partitionsToDrop);
     sqls.stream().forEach(sql -> runSQL(sql));
   }

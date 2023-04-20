@@ -519,7 +519,12 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
         EqualTo(attribute("region_code"), literal("1"))),
         "dt = '2023/01/01' and region_code = '1'",
         enablePartitionPathPrefixAnalysis,
-        Seq(("1", "2023/01/01")))
+        Seq(("1", "2023/01/01"))),
+      // no partition matched
+      (Seq(EqualTo(attribute("region_code"), literal("0"))),
+        "region_code = '0'",
+        enablePartitionPathPrefixAnalysis,
+        Seq())
     )
 
     testCases.foreach(testCase => {

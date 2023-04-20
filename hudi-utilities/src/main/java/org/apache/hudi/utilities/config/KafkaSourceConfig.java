@@ -41,26 +41,31 @@ public class KafkaSourceConfig extends HoodieConfig {
   public static final ConfigProperty<String> KAFKA_CHECKPOINT_TYPE = ConfigProperty
       .key(PREFIX + "checkpoint.type")
       .defaultValue("string")
+      .markAdvanced()
       .withDocumentation("Kafka checkpoint type.");
 
   public static final ConfigProperty<Long> KAFKA_FETCH_PARTITION_TIME_OUT = ConfigProperty
       .key(PREFIX + "fetch_partition.time.out")
       .defaultValue(300 * 1000L)
+      .markAdvanced()
       .withDocumentation("Time out for fetching partitions. 5min by default");
 
   public static final ConfigProperty<Boolean> ENABLE_KAFKA_COMMIT_OFFSET = ConfigProperty
       .key(PREFIX + "enable.commit.offset")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Automatically submits offset to kafka.");
 
   public static final ConfigProperty<Boolean> ENABLE_FAIL_ON_DATA_LOSS = ConfigProperty
       .key(PREFIX + "enable.failOnDataLoss")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Fail when checkpoint goes out of bounds instead of seeking to earliest offsets.");
 
   public static final ConfigProperty<Long> MAX_EVENTS_FROM_KAFKA_SOURCE = ConfigProperty
       .key("hoodie.deltastreamer.kafka.source.maxEvents")
       .defaultValue(5000000L)
+      .markAdvanced()
       .withDocumentation("Maximum number of records obtained in each batch.");
 
   public static final ConfigProperty<String> KAFKA_TOPIC_NAME = ConfigProperty
@@ -72,7 +77,8 @@ public class KafkaSourceConfig extends HoodieConfig {
   public static final ConfigProperty<KafkaResetOffsetStrategies> KAFKA_AUTO_OFFSET_RESET = ConfigProperty
       .key("auto.offset.reset")
       .defaultValue(KafkaResetOffsetStrategies.LATEST)
-          .withDocumentation("Kafka consumer strategy for reading data.");
+      .markAdvanced()
+      .withDocumentation("Kafka consumer strategy for reading data.");
 
   /**
    * Kafka reset offset strategies.

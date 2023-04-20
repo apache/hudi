@@ -24,8 +24,10 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.source.stats.ColumnStatsIndices;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
@@ -47,6 +49,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -63,25 +66,26 @@ public class FileIndex {
   private final RowType rowType;
   private final boolean tableExists;
   private final HoodieMetadataConfig metadataConfig;
-  private final PartitionPruners.PartitionPruner partitionPruner;
-  private final DataPruner dataPruner;
-  private List<String> partitionPaths;      // cache of partition paths
+  private final PartitionPruners.PartitionPruner partitionPruner; // for partition pruning
+  private final DataPruner dataPruner;                            // for data skipping
+  private final int dataBucket;                                   // for bucket pruning
+  private List<String> partitionPaths;                            // cache of partition paths
 
-  private FileIndex(Path path, Configuration conf, RowType rowType, DataPruner dataPruner, PartitionPruners.PartitionPruner partitionPruner) {
+  private FileIndex(Path path, Configuration conf, RowType rowType, DataPruner dataPruner, PartitionPruners.PartitionPruner partitionPruner, int dataBucket) {
     this.path = path;
     this.rowType = rowType;
     this.tableExists = StreamerUtil.tableExists(path.toString(), HadoopConfigurations.getHadoopConf(conf));
     this.metadataConfig = metadataConfig(conf);
     this.dataPruner = isDataSkippingFeasible(conf.getBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? dataPruner : null;
     this.partitionPruner = partitionPruner;
+    this.dataBucket = dataBucket;
   }
 
-  public static FileIndex instance(Path path, Configuration conf, RowType rowType) {
-    return new FileIndex(path, conf, rowType, null, null);
-  }
-
-  public static FileIndex instance(Path path, Configuration conf, RowType rowType, DataPruner dataPruner, PartitionPruners.PartitionPruner partitionPruner) {
-    return new FileIndex(path, conf, rowType, dataPruner, partitionPruner);
+  /**
+   * Returns the builder.
+   */
+  public static Builder builder() {
+    return new Builder();
   }
 
   /**
@@ -141,23 +145,36 @@ public class FileIndex {
       return new FileStatus[0];
     }
     String[] partitions = getOrBuildPartitionPaths().stream().map(p -> fullPartitionPath(path, p)).toArray(String[]::new);
-    FileStatus[] allFileStatus = FSUtils.getFilesInPartitions(HoodieFlinkEngineContext.DEFAULT, metadataConfig, path.toString(),
-            partitions)
-        .values().stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
-    Set<String> candidateFiles = candidateFilesInMetadataTable(allFileStatus);
+    FileStatus[] allFiles = FSUtils.getFilesInPartitions(HoodieFlinkEngineContext.DEFAULT, metadataConfig, path.toString(), partitions)
+        .values().stream()
+        .flatMap(Arrays::stream)
+        .toArray(FileStatus[]::new);
+
+    if (allFiles.length == 0) {
+      // returns early for empty table.
+      return allFiles;
+    }
+
+    // bucket pruning
+    if (this.dataBucket >= 0) {
+      String bucketIdStr = BucketIdentifier.bucketIdStr(this.dataBucket);
+      FileStatus[] filesAfterBucketPruning = Arrays.stream(allFiles)
+          .filter(fileStatus -> fileStatus.getPath().getName().contains(bucketIdStr))
+          .toArray(FileStatus[]::new);
+      logPruningMsg(allFiles.length, filesAfterBucketPruning.length, "bucket pruning");
+      allFiles = filesAfterBucketPruning;
+    }
+
+    // data skipping
+    Set<String> candidateFiles = candidateFilesInMetadataTable(allFiles);
     if (candidateFiles == null) {
       // no need to filter by col stats or error occurs.
-      return allFileStatus;
+      return allFiles;
     }
-    FileStatus[] results = Arrays.stream(allFileStatus).parallel()
+    FileStatus[] results = Arrays.stream(allFiles).parallel()
         .filter(fileStatus -> candidateFiles.contains(fileStatus.getPath().getName()))
         .toArray(FileStatus[]::new);
-    double totalFileSize = allFileStatus.length;
-    double resultFileSize = results.length;
-    double skippingPercent = totalFileSize != 0 ? (totalFileSize - resultFileSize) / totalFileSize : 0;
-    LOG.info("Total files: " + totalFileSize
-        + "; candidate files after data skipping: " + resultFileSize
-        + "; skipping percent " + skippingPercent);
+    logPruningMsg(allFiles.length, results.length, "data skipping");
     return results;
   }
 
@@ -198,7 +215,7 @@ public class FileIndex {
    *
    * <p>The {@code filters} must all be simple.
    *
-   * @return list of pruned (data-skipped) candidate base-files' names
+   * @return set of pruned (data-skipped) candidate base-files' names
    */
   @Nullable
   private Set<String> candidateFilesInMetadataTable(FileStatus[] allFileStatus) {
@@ -289,5 +306,74 @@ public class FileIndex {
       }
     }
     return false;
+  }
+
+  private void logPruningMsg(int numTotalFiles, int numLeftFiles, String action) {
+    LOG.info("\n"
+        + "------------------------------------------------------------\n"
+        + "---------- action:        {}\n"
+        + "---------- total files:   {}\n"
+        + "---------- left files:    {}\n"
+        + "---------- skipping rate: {}\n"
+        + "------------------------------------------------------------",
+        action, numTotalFiles, numLeftFiles, percentage(numTotalFiles, numLeftFiles));
+  }
+
+  private static double percentage(double total, double left) {
+    return (total - left) / total;
+  }
+
+  // -------------------------------------------------------------------------
+  //  Inner class
+  // -------------------------------------------------------------------------
+
+  /**
+   * Builder for {@link FileIndex}.
+   */
+  public static class Builder {
+    private Path path;
+    private Configuration conf;
+    private RowType rowType;
+    private DataPruner dataPruner;
+    private PartitionPruners.PartitionPruner partitionPruner;
+    private int dataBucket = PrimaryKeyPruners.BUCKET_ID_NO_PRUNING;
+
+    private Builder() {
+    }
+
+    public Builder path(Path path) {
+      this.path = path;
+      return this;
+    }
+
+    public Builder conf(Configuration conf) {
+      this.conf = conf;
+      return this;
+    }
+
+    public Builder rowType(RowType rowType) {
+      this.rowType = rowType;
+      return this;
+    }
+
+    public Builder dataPruner(DataPruner dataPruner) {
+      this.dataPruner = dataPruner;
+      return this;
+    }
+
+    public Builder partitionPruner(PartitionPruners.PartitionPruner partitionPruner) {
+      this.partitionPruner = partitionPruner;
+      return this;
+    }
+
+    public Builder dataBucket(int dataBucket) {
+      this.dataBucket = dataBucket;
+      return this;
+    }
+
+    public FileIndex build() {
+      return new FileIndex(Objects.requireNonNull(path), Objects.requireNonNull(conf), Objects.requireNonNull(rowType),
+          dataPruner, partitionPruner, dataBucket);
+    }
   }
 }

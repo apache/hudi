@@ -16,13 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.cli
+package org.apache.hudi.io.storage;
 
-object DeDupeType extends Enumeration {
+import org.apache.hudi.common.util.Option;
 
-  type dedupeType = Value
+import org.apache.spark.sql.catalyst.InternalRow;
 
-  val INSERT_TYPE = Value("insert_type")
-  val UPDATE_TYPE = Value("update_type")
-  val UPSERT_TYPE = Value("upsert_type")
+public class HoodieSparkBootstrapFileReader extends HoodieBootstrapFileReader<InternalRow> {
+
+  public HoodieSparkBootstrapFileReader(HoodieFileReader<InternalRow> skeletonFileReader, HoodieFileReader<InternalRow> dataFileReader, Option<String[]> partitionFields, Object[] partitionValues) {
+    super(skeletonFileReader, dataFileReader, partitionFields, partitionValues);
+  }
+
+  @Override
+  protected void setPartitionField(int position, Object fieldValue, InternalRow row) {
+    if (row.isNullAt(position)) {
+      row.update(position, fieldValue);
+    }
+  }
 }

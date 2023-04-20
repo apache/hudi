@@ -74,6 +74,7 @@ class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder
       }
 
       val result = if (client.rollback(instantTime)) true else false
+      spark.catalog.refreshTable(table)
       val outputRow = Row(result)
 
       Seq(outputRow)

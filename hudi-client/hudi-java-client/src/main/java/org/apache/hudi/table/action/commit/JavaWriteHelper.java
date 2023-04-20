@@ -79,7 +79,7 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.
-      return reducedRecord.newInstance(rec1.getKey());
+      return reducedRecord.newInstance(rec1.getKey(), rec1.getOperation());
     }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
   }
 }

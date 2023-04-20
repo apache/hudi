@@ -40,5 +40,6 @@ public class HiveIncrPullSourceConfig extends HoodieConfig {
   public static final ConfigProperty<String> ROOT_INPUT_PATH = ConfigProperty
       .key("hoodie.deltastreamer.source.incrpull.root")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The root path of Hive incremental pulling source.");
 }

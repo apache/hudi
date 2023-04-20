@@ -53,30 +53,36 @@ public class HoodieSchemaProviderConfig extends HoodieConfig {
   public static final ConfigProperty<String> SCHEMA_CONVERTER = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "registry.schemaconverter")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The class name of the custom schema converter to use.");
 
   public static final ConfigProperty<Boolean> SPARK_AVRO_POST_PROCESSOR_ENABLE = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "spark_avro_post_processor.enable")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Whether to enable Spark Avro post processor.");
 
   public static final ConfigProperty<String> SCHEMA_REGISTRY_BASE_URL = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "registry.baseUrl")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The base URL of the schema registry.");
 
   public static final ConfigProperty<String> SCHEMA_REGISTRY_URL_SUFFIX = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "registry.urlSuffix")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The suffix of the URL for the schema registry.");
 
   public static final ConfigProperty<String> SCHEMA_REGISTRY_SOURCE_URL_SUFFIX = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "registry.sourceUrlSuffix")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The source URL suffix.");
 
   public static final ConfigProperty<String> SCHEMA_REGISTRY_TARGET_URL_SUFFIX = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "registry.targetUrlSuffix")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The target URL suffix.");
 }
