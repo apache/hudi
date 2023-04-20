@@ -1089,26 +1089,27 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertFalse(replacedFilePaths.isEmpty());
 
     // Step 4 : Add commits with insert of 1 record and trigger sync/async cleaner and archive.
+    List<String> configs = getAsyncServicesConfigs(1, "true", "true", "6", "", "");
+    configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_POLICY.key(), "KEEP_LATEST_COMMITS"));
+    configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1"));
+    configs.add(String.format("%s=%s", HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "4"));
+    configs.add(String.format("%s=%s", HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "5"));
+    configs.add(String.format("%s=%s", HoodieCleanConfig.ASYNC_CLEAN.key(), asyncClean));
+    configs.add(String.format("%s=%s", HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key(), "1"));
+    configs.add(String.format("%s=%s", HoodieWriteConfig.MARKERS_TYPE.key(), "DIRECT"));
+    if (asyncClean) {
+      configs.add(String.format("%s=%s", HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+          WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()));
+      configs.add(String.format("%s=%s", HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
+          HoodieFailedWritesCleaningPolicy.LAZY.name()));
+      configs.add(String.format("%s=%s", HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
+          InProcessLockProvider.class.getName()));
+    }
+    TestHelpers.addRecordMerger(recordType, configs);
+    cfg.configs = configs;
+    cfg.continuousMode = false;
+
     for (int i = 0; i < 2; i++) {
-      List<String> configs = getAsyncServicesConfigs(1, "true", "true", "6", "", "");
-      configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_POLICY.key(), "KEEP_LATEST_COMMITS"));
-      configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1"));
-      configs.add(String.format("%s=%s", HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "4"));
-      configs.add(String.format("%s=%s", HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "5"));
-      configs.add(String.format("%s=%s", HoodieCleanConfig.ASYNC_CLEAN.key(), asyncClean));
-      configs.add(String.format("%s=%s", HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key(), "1"));
-      configs.add(String.format("%s=%s", HoodieWriteConfig.MARKERS_TYPE.key(), "DIRECT"));
-      if (asyncClean) {
-        configs.add(String.format("%s=%s", HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
-            WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()));
-        configs.add(String.format("%s=%s", HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
-            HoodieFailedWritesCleaningPolicy.LAZY.name()));
-        configs.add(String.format("%s=%s", HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
-            InProcessLockProvider.class.getName()));
-      }
-      TestHelpers.addRecordMerger(recordType, configs);
-      cfg.configs = configs;
-      cfg.continuousMode = false;
       ds = new HoodieDeltaStreamer(cfg, jsc);
       ds.sync();
     }
