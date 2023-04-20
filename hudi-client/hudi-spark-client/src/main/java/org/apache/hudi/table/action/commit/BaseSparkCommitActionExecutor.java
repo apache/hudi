@@ -160,18 +160,14 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     // Handle records update with clustering
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
 
-    WorkloadProfile workloadProfile = null;
-    if (isWorkloadProfileNeeded()) {
-      context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
-      workloadProfile = new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
-      LOG.debug("Input workload profile :" + workloadProfile);
-    }
+    context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
+    WorkloadProfile workloadProfile =
+            new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
+    LOG.debug("Input workload profile :" + workloadProfile);
 
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);
-    if (isWorkloadProfileNeeded()) {
-      saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
-    }
+    saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
 
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
