@@ -72,7 +72,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
-
+import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -296,6 +296,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withInlineCompaction(false)
             .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
             .withEnableOptimizedLogBlocksScan(String.valueOf(writeConfig.enableOptimizedLogBlocksScan()))
+            // Compaction on metadata table is used as a barrier for archiving on main dataset and for validating the
+            // deltacommits having corresponding completed commits. Therefore, we need to compact all fileslices of all
+            // partitions together requiring UnBoundedCompactionStrategy.
+            .withCompactionStrategy(new UnBoundedCompactionStrategy())
             .build())
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)
