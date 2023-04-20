@@ -42,6 +42,7 @@ import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieFileIndex, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
+import org.apache.spark.paths.SparkPath
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -419,7 +420,7 @@ class HoodieCDCRDD(
             assert(currentCDCFileSplit.getCdcFiles != null && currentCDCFileSplit.getCdcFiles.size() == 1)
             val absCDCPath = new Path(basePath, currentCDCFileSplit.getCdcFiles.get(0))
             val fileStatus = fs.getFileStatus(absCDCPath)
-            val pf = PartitionedFile(InternalRow.empty, absCDCPath.toUri.toString, 0, fileStatus.getLen)
+            val pf = PartitionedFile(InternalRow.empty, SparkPath.fromPath(absCDCPath), 0, fileStatus.getLen)
             recordIter = parquetReader(pf)
           case BASE_FILE_DELETE =>
             assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)
@@ -525,7 +526,7 @@ class HoodieCDCRDD(
       val baseFileStatus = fs.getFileStatus(new Path(fileSlice.getBaseFile.get().getPath))
       val basePartitionedFile = PartitionedFile(
         InternalRow.empty,
-        pathToString(baseFileStatus.getPath),
+        SparkPath.fromPath(baseFileStatus.getPath),
         0,
         baseFileStatus.getLen
       )

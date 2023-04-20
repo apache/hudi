@@ -112,8 +112,8 @@
     <junit.vintage.version>5.7.2</junit.vintage.version>
     <junit.platform.version>1.7.2</junit.platform.version>
     <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
-    <log4j2.version>2.17.2</log4j2.version>
-    <slf4j.version>1.7.36</slf4j.version>
+    <log4j2.version>2.20.0</log4j2.version>
+    <slf4j.version>2.0.7</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.10.1</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
@@ -131,7 +131,7 @@
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
     <spark2.version>2.4.4</spark2.version>
-    <spark3.version>3.3.1</spark3.version>
+    <spark3.version>3.4.0</spark3.version>
     <sparkbundle.version></sparkbundle.version>
     <flink1.16.version>1.16.0</flink1.16.version>
     <flink1.15.version>1.15.1</flink1.15.version>
@@ -157,6 +157,7 @@
     <spark31.version>3.1.3</spark31.version>
     <spark32.version>3.2.3</spark32.version>
     <spark33.version>3.3.1</spark33.version>
+    <spark34.version>3.4.0</spark34.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <!-- NOTE: Different Spark versions might require different number of shared
                modules being incorporated, hence we're creating multiple placeholders
@@ -166,10 +167,10 @@
     <avro.version>1.8.2</avro.version>
     <caffeine.version>2.9.1</caffeine.version>
     <scala11.version>2.11.12</scala11.version>
-    <scala12.version>2.12.10</scala12.version>
+    <scala12.version>2.12.17</scala12.version>
     <scala.version>${scala11.version}</scala.version>
     <scala.collection-compat.version>2.8.1</scala.collection-compat.version>
-    <scala.binary.version>2.11</scala.binary.version>
+    <scala.binary.version>2.12</scala.binary.version>
     <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
@@ -204,7 +205,7 @@
     <shadeSources>true</shadeSources>
     <zk-curator.version>2.7.1</zk-curator.version>
     <disruptor.version>3.4.2</disruptor.version>
-    <antlr.version>4.7</antlr.version>
+    <antlr.version>4.9.3</antlr.version>
     <aws.sdk.version>1.12.22</aws.sdk.version>
     <proto.version>3.21.5</proto.version>
     <protoc.version>3.21.5</protoc.version>
@@ -2195,13 +2196,13 @@
     <profile>
       <id>spark3</id>
       <properties>
-        <spark3.version>${spark33.version}</spark3.version>
+        <spark3.version>${spark34.version}</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>3</sparkbundle.version>
         <scala12.version>2.12.15</scala12.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <hudi.spark.module>hudi-spark3.3.x</hudi.spark.module>
+        <hudi.spark.module>hudi-spark3.4.x</hudi.spark.module>
         <!-- This glob has to include hudi-spark3-common, hudi-spark3.2plus-common -->
         <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
         <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
@@ -2211,11 +2212,11 @@
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
-        <parquet.version>1.12.2</parquet.version>
-        <orc.spark.version>1.7.8</orc.spark.version>
+        <parquet.version>1.12.3</parquet.version>
+        <orc.spark.version>1.8.3</orc.spark.version>
         <avro.version>1.11.1</avro.version>
-        <antlr.version>4.8</antlr.version>
-        <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
+        <antlr.version>4.9.3</antlr.version>
+        <fasterxml.spark3.version>2.14.2</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -2225,7 +2226,7 @@
         <skipITs>true</skipITs>
       </properties>
       <modules>
-        <module>hudi-spark-datasource/hudi-spark3.3.x</module>
+        <module>hudi-spark-datasource/hudi-spark3.4.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
         <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>

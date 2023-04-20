@@ -203,7 +203,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
           // NOTE: We have to specify table's base-path explicitly, since we're requesting Spark to read it as a
           //       list of globbed paths which complicates partitioning discovery for Spark.
           //       Please check [[PartitioningAwareFileIndex#basePaths]] comment for more details.
-          PartitioningAwareFileIndex.BASE_PATH_PARAM -> metaClient.getBasePathV2.toString
+          FileIndexOptions.BASE_PATH_PARAM -> metaClient.getBasePathV2.toString
         ),
         partitionColumns = partitionColumns
       )

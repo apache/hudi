@@ -62,7 +62,9 @@ object HoodieAnalysis {
         session => instantiateKlass(spark3AnalysisClass, session)
 
       val resolveAlterTableCommandsClass =
-        if (HoodieSparkUtils.gteqSpark3_3)
+        if (HoodieSparkUtils.gteqSpark3_4)
+          "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
+        else if (HoodieSparkUtils.gteqSpark3_3)
           "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
         else "org.apache.spark.sql.hudi.Spark32ResolveHudiAlterTableCommand"
       val resolveAlterTableCommands: RuleBuilder =
@@ -106,7 +108,9 @@ object HoodieAnalysis {
     val optimizerRules = ListBuffer[RuleBuilder]()
     if (HoodieSparkUtils.gteqSpark3_1) {
       val nestedSchemaPruningClass =
-        if (HoodieSparkUtils.gteqSpark3_3) {
+        if (HoodieSparkUtils.gteqSpark3_4)
+          "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
+        else if (HoodieSparkUtils.gteqSpark3_3) {
           "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
         } else if (HoodieSparkUtils.gteqSpark3_2) {
           "org.apache.spark.sql.execution.datasources.Spark32NestedSchemaPruning"
@@ -160,7 +164,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
       // Convert to MergeIntoHoodieTableCommand
-      case m @ MergeIntoTable(target, _, _, _, _)
+      case m @ MergeIntoTable(target, _, _, _, _,_)
         if m.resolved && sparkAdapter.isHoodieTable(target, sparkSession) =>
           MergeIntoHoodieTableCommand(m)
 
@@ -287,7 +291,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
     // Resolve merge into
-    case mergeInto @ MergeIntoTable(target, source, mergeCondition, matchedActions, notMatchedActions)
+    case mergeInto @ MergeIntoTable(target, source, mergeCondition, matchedActions, notMatchedActions, _)
       if sparkAdapter.isHoodieTable(target, sparkSession) && target.resolved =>
       val resolver = sparkSession.sessionState.conf.resolver
       val resolvedSource = analyzer.execute(source)
@@ -455,7 +459,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       }
       // Return the resolved MergeIntoTable
       MergeIntoTable(target, resolvedSource, resolvedMergeCondition,
-        resolvedMatchedActions, resolvedNotMatchedActions)
+        resolvedMatchedActions, resolvedNotMatchedActions, Seq.empty)
 
     // Resolve update table
     case UpdateTable(table, assignments, condition)
