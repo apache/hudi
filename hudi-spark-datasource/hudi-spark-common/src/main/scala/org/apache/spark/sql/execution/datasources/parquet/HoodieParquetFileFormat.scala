@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat.FILE_FORMAT_ID
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{AtomicType, StructType}
 
 
 class HoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport {
@@ -33,6 +33,11 @@ class HoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport
   override def shortName(): String = FILE_FORMAT_ID
 
   override def toString: String = "Hoodie-Parquet"
+
+  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
+    val conf = sparkSession.sessionState.conf
+    conf.parquetVectorizedReaderEnabled && schema.forall(_.dataType.isInstanceOf[AtomicType])
+  }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,

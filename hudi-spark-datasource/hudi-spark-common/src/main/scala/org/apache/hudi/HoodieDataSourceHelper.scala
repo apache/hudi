@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
+import org.apache.spark.paths.SparkPath
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
@@ -85,7 +86,7 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
     (0L until file.getLen by maxSplitBytes).map { offset =>
       val remaining = file.getLen - offset
       val size = if (remaining > maxSplitBytes) maxSplitBytes else remaining
-      PartitionedFile(partitionValues, filePath.toUri.toString, offset, size)
+      PartitionedFile(partitionValues, SparkPath.fromPath(filePath), offset, size)
     }
   }
 
