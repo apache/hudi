@@ -682,13 +682,28 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /**
    * Type of a strategy for building Z-order/Hilbert space-filling curves.
    */
-  @EnumDescription("Type of a strategy for building Z-order/Hilbert space-filling curves.")
+  @EnumDescription("This configuration only has effect if `hoodie.layout.optimize.strategy` is "
+      + "set to either \"z-order\" or \"hilbert\" (i.e. leveraging space-filling curves). This "
+      + "configuration controls the type of a strategy to use for building the space-filling "
+      + "curves, tackling specifically how the Strings are ordered based on the curve. "
+      + "Since we truncate the String to 8 bytes for ordering, there are two issues: (1) it "
+      + "can lead to poor aggregation effect, (2) the truncation of String longer than 8 bytes "
+      + "loses the precision, if the Strings are different but the 8-byte prefix is the same. "
+      + "The boundary-based interleaved index method (\"SAMPLE\") has better generalization, "
+      + "solving the two problems above, but is slower than direct method (\"DIRECT\"). "
+      + "User should benchmark the write and query performance before tweaking this in "
+      + "production, if this is actually a problem. Please refer to RFC-28 for more details.")
   public enum SpatialCurveCompositionStrategyType {
 
-    @EnumFieldDescription("Faster than sampling")
+    @EnumFieldDescription("This strategy builds the spatial curve in full, filling in all of "
+        + "the individual points corresponding to each individual record, which requires less "
+        + "compute.")
     DIRECT,
 
-    @EnumFieldDescription("Produces a better layout compared to DIRECT strategy")
+    @EnumFieldDescription("This strategy leverages boundary-base interleaved index method "
+        + "(described in more details in Amazon DynamoDB blog "
+        + "https://aws.amazon.com/cn/blogs/database/tag/z-order/) and produces a better layout "
+        + "compared to DIRECT strategy.  It requires more compute and is slower.")
     SAMPLE
   }
 

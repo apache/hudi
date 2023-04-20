@@ -154,13 +154,18 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public void close() {
   }
 
-  @EnumDescription("Determines how records are indexed. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java engines.")
+  @EnumDescription("Determines how input records are indexed, i.e., looked up based on the key "
+      + "for the location in the existing table. Default is SIMPLE on Spark engine, and INMEMORY "
+      + "on Flink and Java engines.")
   public enum IndexType {
 
-    @EnumFieldDescription("Index mapping is managed in an external Apache HBase table.")
+    @EnumFieldDescription("uses an external managed Apache HBase table to store record key to "
+        + "location mapping. HBase index is a global index, enforcing key uniqueness across all "
+        + "partitions in the table.")
     HBASE,
 
-    @EnumFieldDescription("In memory index")
+    @EnumFieldDescription("Uses in-memory hashmap in Spark and Java engine and Flink in-memory "
+        + "state in Flink for indexing.")
     INMEMORY,
 
     @EnumFieldDescription("Employs bloom filters built out of the record keys, "
@@ -183,21 +188,25 @@ public abstract class HoodieIndex<I, O> implements Serializable {
         + "Key uniqueness is enforced across all partitions in the table.")
     GLOBAL_SIMPLE,
 
-    @EnumFieldDescription("Bucket Index is targeted to locate the record fast by hash in big data scenarios. "
-        + "Use `hoodie.index.bucket.engine` to choose bucket engine type.")
+    @EnumFieldDescription("locates the file group containing the record fast by using bucket "
+        + "hashing, particularly beneficial in large scale. Use `hoodie.index.bucket.engine` to "
+        + "choose bucket engine type, i.e., how buckets are generated.")
     BUCKET,
-    @EnumFieldDescription("Internal Config")
+    @EnumFieldDescription("Internal Config for indexing based on Flink state.")
     FLINK_STATE
   }
 
-  @EnumDescription("Determines bucket index to use when `hoodie.index.type` is set to `BUCKET`.")
+  @EnumDescription("Determines the type of bucketing or hashing to use when `hoodie.index.type`"
+      + " is set to `BUCKET`.")
   public enum BucketIndexEngineType {
 
-    @EnumFieldDescription("Mandatory for COW tables when using BUCKET index. Uses a fixed number of buckets.")
+    @EnumFieldDescription("Uses a fixed number of buckets for file groups which cannot shrink or "
+        + "expand. This works for both COW and MOR tables.")
     SIMPLE,
 
-    @EnumFieldDescription("Consistent hashing supports dynamic resizing of the number of bucket, solving potential "
-        + "data skew and file size issues of the SIMPLE hashing engine. Consistent hashing only works with MOR tables.")
+    @EnumFieldDescription("Supports dynamic number of buckets with bucket resizing to properly "
+        + "size each bucket. This solves potential data skew problem where one bucket can be "
+        + "significantly larger than others in SIMPLE engine type. This only works with MOR tables.")
     CONSISTENT_HASHING
   }
 }
