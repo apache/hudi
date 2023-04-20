@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.avro.specific.SpecificRecordBase;
@@ -165,11 +164,6 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       List<WriteStatus> statuses = preppedRecordList.size() > 0
           ? writeClient.upsertPreppedRecords(preppedRecordList, instantTime)
           : Collections.emptyList();
-      statuses.forEach(writeStatus -> {
-        if (writeStatus.hasErrors()) {
-          throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
-        }
-      });
       // flink does not support auto-commit yet, also the auto commit logic is not complete as BaseHoodieWriteClient now.
       writeClient.commit(instantTime, statuses, Option.empty(), HoodieActiveTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
 
