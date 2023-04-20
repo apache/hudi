@@ -328,8 +328,9 @@ class TestDataSourceForBootstrap {
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime3, isPartitioned = true, isHiveStylePartitioned = true)
   }
 
-  @Test
-  def testMetadataBootstrapMORPartitionedInlineClustering(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testMetadataBootstrapMORPartitionedInlineClustering(enableRowWriter: Boolean): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
     // Prepare source data
@@ -366,6 +367,7 @@ class TestDataSourceForBootstrap {
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, enableRowWriter.toString)
       .option(HoodieClusteringConfig.INLINE_CLUSTERING.key, "true")
       .option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key, "1")
       .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "datestr")
