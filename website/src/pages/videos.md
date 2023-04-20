@@ -154,9 +154,76 @@ last_modified_at: 2022-12-21T15:59:57-04:00
 
 56. [Push Hudi Commit Notification TO HTTP URI with Callback](https://www.youtube.com/watch?v=dX5ENGnL4cA)- By Soumil Shah, Mar 18th 2023
 
-56. [RFC - 18: Insert Overwrite in Apache Hudi with Example](https://www.youtube.com/watch?v=BKfKfn0h92M)- By Soumil Shah, Mar 19th 2023
+57. [RFC - 18: Insert Overwrite in Apache Hudi with Example](https://www.youtube.com/watch?v=BKfKfn0h92M)- By Soumil Shah, Mar 19th 2023
 
-57. [RFC 42: Consistent Hashing in APache Hudi MOR Tables](https://www.youtube.com/watch?v=zN8JOBKXxP0)- By Soumil Shah, Mar 21st 2023
+58. [RFC 42: Consistent Hashing in Apache Hudi MOR Tables](https://www.youtube.com/watch?v=zN8JOBKXxP0)- By Soumil Shah, Mar 21st 2023
 
-58. [Data Analysis for Apache Hudi Blogs on Medium with Pandas](https://www.youtube.com/watch?v=a7FD4zIOwVg)- By Soumil Shah, Mar 24th 2023
+59. [Data Analysis for Apache Hudi Blogs on Medium with Pandas](https://www.youtube.com/watch?v=a7FD4zIOwVg)- By Soumil Shah, Mar 24th 2023
 
+60. [Weekend Project |Build CDC Pipeline from Microsoft SQL Server into Apache Hudi #1](https://www.youtube.com/watch?v=XS0qgfZ4cTA)- By Soumil Shah, Mar 25th 2023
+
+61. [Build CDC Pipeline from Microsoft SQL Server into Apache Hudi with AWS DMS | PART 1](https://www.youtube.com/watch?v=XNf0fF786fg)- By Soumil Shah, Mar 25th 2023
+
+62. [Build CDC Pipeline from Microsoft SQL Server into Apache Hudi with AWS DMS | PART 2](https://www.youtube.com/watch?v=u94lVX-N1AM)- By Soumil Shah, Mar 25th 2023
+
+63. [Build CDC Pipeline from Microsoft SQL Server into Apache Hudi with AWS DMS | PART 3](https://www.youtube.com/watch?v=XmOlrfBa3Vc)- By Soumil Shah, Mar 25th 2023
+
+64. [Build CDC Pipeline from Microsoft SQL Server into Apache Hudi with AWS DMS | PART 4](https://www.youtube.com/watch?v=7kod85gKE3s)- By Soumil Shah, Mar 25th 2023
+
+65. [Build CDC Pipeline from Microsoft SQL Server into Apache Hudi with AWS DMS | PART 5](https://www.youtube.com/watch?v=-jr1zxvN598)- By Soumil Shah, Mar 25th 2023
+
+66. [Podcast 1: What is Apache Hudi](https://www.youtube.com/watch?v=wco8ZkgF9QU)- By Soumil Shah, Mar 25th 2023
+
+67. [Podcast 2: Why Lake house architecture is being adopted by businesses, and how hudi can assist you](https://www.youtube.com/watch?v=4U8mtrvfc24)- By Soumil Shah, Mar 25th 2023
+
+68. [Podcast 3 : Benefits of Using a Transactional Data Lake and How Apache Hudi Can Help](https://www.youtube.com/watch?v=s4aZgmWKA-w)- By Soumil Shah, Mar 25th 2023
+
+69. [Podcast: Exploring Copy on Write Table Type in Apache Hudi: Benefits and Use Cases](https://www.youtube.com/watch?v=qo7B0D1_Ajo)- By Soumil Shah, Mar 25th 2023
+
+70. [Podcast: Maximizing Efficiency with Merge on Read Table Type in Apache Hudi: Benefits and Use Cases](https://www.youtube.com/watch?v=Ex5wda96_-c)- By Soumil Shah, Mar 25th 2023
+
+71. [Podcast: Optimizing Data Lake Performance with Apache Hudi Compaction: Strategies and Benefits](https://www.youtube.com/watch?v=AFAsEBMdvyE)- By Soumil Shah, Mar 25th 2023
+
+72. [Podcast: Maximizing Data Management Efficiency with Apache Hudi's Clustering Feature](https://www.youtube.com/watch?v=o9yDQOYxh64)- By Soumil Shah, Mar 25th 2023
+
+73. [Podcast: Importance of Data Governance and Apache Hudi in Managing a Data Lake: The Case of Grofers](https://www.youtube.com/watch?v=v39tPxzKgQ0)- By Soumil Shah, Mar 25th 2023
+
+74. [How to use Apache Hudi with AWS Glue Studio Visual Editor | Hands on Lab](https://www.youtube.com/watch?v=q73uNI35Nos)- By Soumil Shah, Mar 26th 2023
+
+75. [Podcast Uber's Game-Changing Data Management with Apache Hudi Delta Streamer](https://www.youtube.com/watch?v=PstYB2BIFto)- By Soumil Shah, Mar 30th 2023
+
+76. [Project: Using Apache Hudi Deltastreamer and AWS DMS Hands on Lab# Part 1](https://www.youtube.com/watch?v=D9L0NLSqC1s)- By Soumil Shah, Mar 30th 2023
+
+77. [Project : Using Apache Hudi Deltastreamer and AWS DMS Hands on Lab# Part 2](https://www.youtube.com/watch?v=HR5A6iGb4LE)- By Soumil Shah, Mar 30th 2023
+
+78. [Project : Using Apache Hudi Deltastreamer and AWS DMS Hands on Lab# Part 3](https://www.youtube.com/watch?v=rnyj5gkIPKA)- By Soumil Shah, Mar 30th 2023
+
+79. [Project : Using Apache Hudi Deltastreamer and AWS DMS Hands on Lab# Part 4](https://www.youtube.com/watch?v=J1xvPIcDIaQ)- By Soumil Shah, Mar 30th 2023
+
+80. [Project : Using Apache Hudi Deltastreamer and AWS DMS Hands on Lab# Part 5](https://www.youtube.com/watch?v=xmdQWc1Z19c)- By Soumil Shah, Mar 31st 2023
+
+81. [Learn How to Integrate Apache Hudi with Redshift Spectrum Hands on Labs with Code](https://www.youtube.com/watch?v=j1_Xwqp3pKE)- By Soumil Shah, April 2nd 2023
+
+82. [Running Apache Hudi Delta Streamer On EMR Serverless Hands on Lab step by step guide](https://www.youtube.com/watch?v=jvbHUl9A4tQ)- By Soumil Shah, April 4th 2023
+
+83. [Getting Alerts when hudi Delta Streamer Fails with Event Driven Approach using Lambdas &Event Bridge](https://www.youtube.com/watch?v=d9jIvQYTc6k)- By Soumil Shah, April 5th 2023
+
+84. [Efficient Data Lake Management with Apache Hudi Cleaner: Benefits of Scheduling Data Cleaning #1](https://www.youtube.com/watch?v=CEzgFtmVjx4)- By Soumil Shah, April 6th 2023
+
+85. [Efficient Data Lake Management with Apache Hudi Cleaner: Benefits of Scheduling Data Cleaning #2](https://www.youtube.com/watch?v=RbBF9Ys2GqM)- By Soumil Shah, April 6th 2023
+
+86. [Advantages of Metadata Indexing and Asynchronous Indexing in Hudi Hands on Lab](https://www.youtube.com/watch?v=TSphQCsY4pY)- By Soumil Shah, April 7th 2023
+
+87. [Understanding Clustering in Apache Hudi and the Benefits of Asynchronous Clustering](https://www.youtube.com/watch?v=R_sm4wlGXuE)- By Soumil Shah, April 8th 2023
+
+88. [Bootstrapping in Apache Hudi on EMR Serverless with Lab](https://www.youtube.com/watch?v=iTNLqbW3YYA)- By Soumil Shah, April 9th 2023
+
+89. [Journey to Hudi Transactional Data Lake Mastery: How I Learned and Succeeded](https://www.youtube.com/watch?v=TsHM63xk3XQ)- By Soumil Shah, April 11th 2023
+
+90. [Learn about Apache Hudi Transformers with Hands on Lab](https://www.youtube.com/watch?v=AprlZ8hGdJo)- By Soumil Shah, April 11th 2023
+
+91. [Podcast: Unleashing the Power of Data: The Epic Story Behind Apache Hudi's Creation by Uber](https://www.youtube.com/watch?v=u455oMYKGys)- By Soumil Shah, April 11th 2023
+
+92. [Efficient Data Ingestion with Glue Concurrency and Hudi Data Lake](https://www.youtube.com/watch?v=G_Xd1haycqE)- By Soumil Shah, April 12th 2023
+
+93. [Effortlessly Sync Your JDBC Source to Hudi Transactional Datalake: No DMS or Debezium Required!](https://www.youtube.com/watch?v=PTz2Td-tlRg)- By Soumil Shah, April 20th 2023
