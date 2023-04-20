@@ -61,6 +61,8 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
       metaClient.getCommitsAndCompactionTimeline
+    } else if (useStateTransitionTime) {
+      metaClient.getCommitsAndCompactionTimeline.findInstantsInRangeByStateTransitionTs(startTimestamp, endTimestamp)
     } else {
       metaClient.getCommitsAndCompactionTimeline.findInstantsInRange(startTimestamp, endTimestamp)
     }
@@ -133,16 +135,16 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   // Validate this Incremental implementation is properly configured
   validate()
 
-  private val useStateTransitionTime = optParams.get(DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.key)
-    .map(_.toBoolean)
-    .getOrElse(DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.defaultValue)
+  protected val useStateTransitionTime: Boolean =
+    optParams.get(DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.key)
+      .map(_.toBoolean)
+      .getOrElse(DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.defaultValue)
 
   protected def startTimestamp: String = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
-  protected def endTimestamp: String = if (useStateTransitionTime) {
-    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, super.timeline.lastInstant().get.getStateTransitionTime)
-  } else {
-    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, super.timeline.lastInstant().get.getTimestamp)
-  }
+  protected def endTimestamp: String = optParams.getOrElse(
+    DataSourceReadOptions.END_INSTANTTIME.key,
+    if (useStateTransitionTime) super.timeline.lastInstant().get.getStateTransitionTime
+    else super.timeline.lastInstant().get.getTimestamp)
 
   protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(startTimestamp)
   protected def endInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(endTimestamp)
