@@ -694,7 +694,8 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
            |  type = 'cow',
            |  preCombineField = 'ts',
            |  hoodie.index.type = 'BUCKET',
-           |  hoodie.bucket.index.hash.field = 'id'
+           |  hoodie.bucket.index.hash.field = 'id',
+           |  hoodie.datasource.write.recordkey.field = 'id'
            | )
            | partitioned by (ts)
            | location '$basePath'
