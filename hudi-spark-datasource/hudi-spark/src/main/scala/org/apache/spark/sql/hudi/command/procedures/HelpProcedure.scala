@@ -34,7 +34,6 @@ class HelpProcedure extends BaseProcedure with ProcedureBuilder with Logging {
     StructField("result", DataTypes.StringType, nullable = true, Metadata.empty)
   ))
 
-
   /**
    * Returns the description of this procedure.
    */
@@ -54,8 +53,9 @@ class HelpProcedure extends BaseProcedure with ProcedureBuilder with Logging {
       result.append("synopsis").append(line)
         .append(tab).append("call [command]([key1]=>[value1],[key2]=>[value2])").append(line)
       result.append("commands and description").append(line)
-      procedures.keySet.foreach(name => {
-        val builderSupplier: Option[Supplier[ProcedureBuilder]] = procedures.get(name)
+      procedures.toSeq.sortBy(_._1).foreach(procedure => {
+        val name = procedure._1
+        val builderSupplier: Option[Supplier[ProcedureBuilder]] = Option.apply(procedure._2)
         if (builderSupplier.isDefined) {
           val procedure: Procedure = builderSupplier.get.get().build
           result.append(tab)
