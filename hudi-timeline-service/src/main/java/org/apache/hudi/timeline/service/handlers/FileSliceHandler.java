@@ -124,6 +124,12 @@ public class FileSliceHandler extends Handler {
         .collect(Collectors.toList());
     return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
+
+  public List<FileGroupDTO> getReplacedFileGroupsAfterOrOn(String basePath, String minCommitTime, String partitionPath) {
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getReplacedFileGroupsAfterOrOn(minCommitTime, partitionPath)
+        .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
+  }
   
   public List<FileGroupDTO> getAllReplacedFileGroups(String basePath, String partitionPath) {
     List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllReplacedFileGroups(partitionPath)

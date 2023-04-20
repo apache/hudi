@@ -104,6 +104,9 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String ALL_REPLACED_FILEGROUPS_BEFORE =
       String.format("%s/%s", BASE_URL, "filegroups/replaced/before/");
 
+  public static final String ALL_REPLACED_FILEGROUPS_AFTER_OR_ON =
+          String.format("%s/%s", BASE_URL, "filegroups/replaced/afteroron/");
+
   public static final String ALL_REPLACED_FILEGROUPS_PARTITION =
       String.format("%s/%s", BASE_URL, "filegroups/replaced/partition/");
   
@@ -123,6 +126,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String BASEPATH_PARAM = "basepath";
   public static final String INSTANT_PARAM = "instant";
   public static final String MAX_INSTANT_PARAM = "maxinstant";
+  public static final String MIN_INSTANT_PARAM = "mininstant";
   public static final String INSTANTS_PARAM = "instants";
   public static final String FILEID_PARAM = "fileid";
   public static final String LAST_INSTANT_TS = "lastinstantts";
@@ -444,6 +448,18 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<FileGroupDTO> fileGroups = executeRequest(ALL_REPLACED_FILEGROUPS_BEFORE, paramsMap,
           new TypeReference<List<FileGroupDTO>>() {}, RequestMethod.GET);
+      return DTOUtils.fileGroupDTOsToFileGroups(fileGroups, metaClient);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Stream<HoodieFileGroup> getReplacedFileGroupsAfterOrOn(String minCommitTime, String partitionPath) {
+    Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MIN_INSTANT_PARAM, minCommitTime);
+    try {
+      List<FileGroupDTO> fileGroups = executeRequest(ALL_REPLACED_FILEGROUPS_AFTER_OR_ON, paramsMap,
+              new TypeReference<List<FileGroupDTO>>() {}, RequestMethod.GET);
       return DTOUtils.fileGroupDTOsToFileGroups(fileGroups, metaClient);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
