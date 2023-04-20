@@ -45,9 +45,6 @@ const JoinCommunity = () => {
   const firstRow = communityData.slice(0,2);
   const secondRow = communityData.slice(2,5);
 
-  console.log('firstRow', firstRow)
-  console.log('secondRow', secondRow)
-
   return (
     <div className={styles.joinCommunityWrapper}>
       <div className="container">
