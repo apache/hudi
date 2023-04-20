@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.io.Serializable;
 import java.util.Comparator;
@@ -57,8 +58,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   public static final Comparator<HoodieInstant> STATE_TRANSITION_COMPARATOR =
       Comparator.comparing(HoodieInstant::getStateTransitionTime)
-          .thenComparing(HoodieInstant::getTimestamp)
-          .thenComparing(ACTION_COMPARATOR).thenComparing(HoodieInstant::getState);
+          .thenComparing(COMPARATOR);
 
   public static String getComparableAction(String action) {
     return COMPARABLE_ACTIONS.getOrDefault(action, action);
@@ -140,14 +140,14 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     this.state = isInflight ? State.INFLIGHT : State.COMPLETED;
     this.action = action;
     this.timestamp = timestamp;
-    this.stateTransitionTime = "";
+    this.stateTransitionTime = null;
   }
 
   public HoodieInstant(State state, String action, String timestamp) {
     this.state = state;
     this.action = action;
     this.timestamp = timestamp;
-    this.stateTransitionTime = "";
+    this.stateTransitionTime = null;
   }
 
   public HoodieInstant(State state, String action, String timestamp, String stateTransitionTime) {
@@ -277,6 +277,6 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   public String toString() {
     return "[" + ((isInflight() || isRequested()) ? "==>" : "")
         + timestamp + "__" + action + "__" + state
-        + (stateTransitionTime.isEmpty() ? "" : ("__" + stateTransitionTime)) + "]";
+        + (StringUtils.isNullOrEmpty(stateTransitionTime) ? "" : ("__" + stateTransitionTime)) + "]";
   }
 }

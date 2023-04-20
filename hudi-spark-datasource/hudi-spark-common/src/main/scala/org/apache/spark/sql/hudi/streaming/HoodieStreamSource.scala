@@ -69,6 +69,11 @@ class HoodieStreamSource(
     parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
     parameters.get(DataSourceReadOptions.INCREMENTAL_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
 
+  private val useStateTransitionTime =
+    parameters.get(DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.key())
+      .map(_.toBoolean)
+      .getOrElse(DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.defaultValue())
+
   @transient private lazy val initialOffsets = {
     val metadataLog = new HoodieMetadataLog(sqlContext.sparkSession, metadataPath)
     metadataLog.get(0).getOrElse {
@@ -101,11 +106,15 @@ class HoodieStreamSource(
     metaClient.reloadActiveTimeline()
     metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants() match {
       case activeInstants if !activeInstants.empty() =>
-        val timestamp = activeInstants.getInstantsOrderedByStateTransitionTs
-          .skip(activeInstants.countInstants() - 1)
-          .findFirst()
-          .get()
-          .getStateTransitionTime
+        val timestamp = if (useStateTransitionTime) {
+          activeInstants.getInstantsOrderedByStateTransitionTs
+            .skip(activeInstants.countInstants() - 1)
+            .findFirst()
+            .get()
+            .getStateTransitionTime
+        } else {
+          activeInstants.lastInstant().get().getTimestamp
+        }
         Some(HoodieSourceOffset(timestamp))
       case _ =>
         None
@@ -142,8 +151,7 @@ class HoodieStreamSource(
         // Consume the data between (startCommitTime, endCommitTime]
         val incParams = parameters ++ Map(
           DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-          // Will force to use state transition time to fetch commits to avoid the commit missing issue
-          DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.key -> "true",
+          DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.key() -> useStateTransitionTime.toString,
           DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCommitTime(startOffset),
           DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime
         )
