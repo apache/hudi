@@ -24,8 +24,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.FileSystem;
-
 public abstract class HoodieIOHandle<T, I, K, O> {
 
   protected final String instantTime;

@@ -26,8 +26,8 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.Map;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Statistics about a single Hoodie write operation.
@@ -36,7 +36,7 @@ public class HoodieWriteStat implements Serializable {
 
   public static final String NULL_COMMIT = "null";
 
-  private static final Logger LOG = LogManager.getLogger(HoodieWriteStat.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteStat.class);
 
   /**
    * Id of the file being written.

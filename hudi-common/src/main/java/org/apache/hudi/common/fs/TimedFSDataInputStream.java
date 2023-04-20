@@ -26,8 +26,6 @@ import org.apache.hadoop.io.ByteBufferPool;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.EnumSet;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
  * Wrapper over <code>FSDataInputStream</code> that also times the operations.

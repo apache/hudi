@@ -38,8 +38,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_BASE_PATH_KEY;
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_BASE_PATH_KEY;
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
 import static org.junit.jupiter.api.Assertions.assertEquals;

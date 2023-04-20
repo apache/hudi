@@ -57,9 +57,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
-
 /**
  * Scans through all the blocks in a list of HoodieLogFile and builds up a compacted/merged list of records which will
  * be used as a lookup table when merging the base columnar file with the redo log file.

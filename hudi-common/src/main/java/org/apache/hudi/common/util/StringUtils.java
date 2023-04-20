@@ -158,4 +158,17 @@ public class StringUtils {
     }
     return input.substring(0, i);
   }
+
+  public static int countMatches(final String str, final String sub) {
+    if (isNullOrEmpty(str) || isNullOrEmpty(sub)) {
+      return 0;
+    }
+    int count = 0;
+    int idx = 0;
+    while ((idx = str.indexOf(sub, idx)) != -1) {
+      count++;
+      idx += sub.length();
+    }
+    return count;
+  }
 }
