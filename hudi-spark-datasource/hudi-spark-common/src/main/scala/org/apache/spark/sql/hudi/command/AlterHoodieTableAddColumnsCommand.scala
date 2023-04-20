@@ -84,7 +84,6 @@ case class AlterHoodieTableAddColumnsCommand(
 
     SchemaUtils.checkColumnNameDuplication(
       newSqlDataSchema.map(_.name),
-      "in the table definition of " + table.identifier,
       conf.caseSensitiveAnalysis)
 
     sparkSession.sessionState.catalog.alterTableDataSchema(tableId, newSqlDataSchema)

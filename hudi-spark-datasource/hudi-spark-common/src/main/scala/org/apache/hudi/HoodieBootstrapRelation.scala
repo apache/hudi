@@ -23,6 +23,7 @@ import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, 
 import org.apache.hudi.HoodieBootstrapRelation.validate
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.spark.paths.SparkPath
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -75,12 +76,12 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       if (baseFile.getBootstrapBaseFile.isPresent) {
         val partitionValues =
           getPartitionColumnsAsInternalRowInternal(baseFile.getFileStatus, extractPartitionValuesFromPartitionPath = isPartitioned)
-        val dataFile = PartitionedFile(partitionValues, baseFile.getBootstrapBaseFile.get().getPath, 0, baseFile.getBootstrapBaseFile.get().getFileLen)
-        val skeletonFile = Option(PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen))
+        val dataFile = PartitionedFile(partitionValues, SparkPath.fromPathString(baseFile.getBootstrapBaseFile.get().getPath, 0, baseFile.getBootstrapBaseFile.get().getFileLen)
+        val skeletonFile = Option(PartitionedFile(InternalRow.empty, SparkPath.fromPathString(baseFile.getPath), 0, baseFile.getFileLen))
 
         HoodieBootstrapSplit(dataFile, skeletonFile)
       } else {
-        val dataFile = PartitionedFile(getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getPath, 0, baseFile.getFileLen)
+        val dataFile = PartitionedFile(getPartitionColumnsAsInternalRow(baseFile.getFileStatus), SparkPath.fromPathString(baseFile.getPath), 0, baseFile.getFileLen)
         HoodieBootstrapSplit(dataFile)
       }
     }
