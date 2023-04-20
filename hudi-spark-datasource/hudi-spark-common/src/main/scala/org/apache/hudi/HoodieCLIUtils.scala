@@ -33,10 +33,10 @@ import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapA
 
 object HoodieCLIUtils {
 
-  def createHoodieClientFromPath(sparkSession: SparkSession,
-                                 basePath: String,
-                                 conf: Map[String, String],
-                                 tableName: Option[String]): SparkRDDWriteClient[_] = {
+  def createHoodieWriteClient(sparkSession: SparkSession,
+                              basePath: String,
+                              conf: Map[String, String],
+                              tableName: Option[String]): SparkRDDWriteClient[_] = {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
       .setConf(sparkSession.sessionState.newHadoopConf()).build()
     val schemaUtil = new TableSchemaResolver(metaClient)

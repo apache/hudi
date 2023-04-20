@@ -55,7 +55,7 @@ class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder
     val basePath = hoodieCatalogTable.tableLocation
     var client: SparkRDDWriteClient[_] = null
     try {
-      client = createHoodieClient(jsc, basePath)
+      client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, Map.empty, Option(table))
       client.getConfig.setValue(ROLLBACK_USING_MARKERS_ENABLE, "false")
       val config = getWriteConfig(basePath)
       val metaClient = HoodieTableMetaClient.builder
