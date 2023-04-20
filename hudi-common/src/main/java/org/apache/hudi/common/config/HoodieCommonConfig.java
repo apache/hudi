@@ -67,6 +67,15 @@ public class HoodieCommonConfig extends HoodieConfig {
       .defaultValue(true)
       .withDocumentation("Turn on compression for BITCASK disk map used by the External Spillable Map");
 
+  public static final ConfigProperty<String> HOODIE_FS_ATOMIC_CREATION_SUPPORT = ConfigProperty
+      .key("hoodie.fs.atomic_creation.support")
+      .defaultValue("")
+      .withDocumentation("This config is used to specify the file system which supports atomic file creation . "
+          + "atomic means that an operation either succeeds and has an effect or has fails and has no effect;"
+          + " now this feature is used by FileSystemLockProvider to guaranteeing that only one writer can create the lock file at a time."
+          + " since some FS does not support atomic file creation (eg: S3), we decide the FileSystemLockProvider only support HDFS,local FS"
+          + " and View FS as default. if you want to use FileSystemLockProvider with other FS, you can set this config with the FS scheme, eg: fs1,fs2");
+
   public ExternalSpillableMap.DiskMapType getSpillableDiskMapType() {
     return ExternalSpillableMap.DiskMapType.valueOf(getString(SPILLABLE_DISK_MAP_TYPE).toUpperCase(Locale.ROOT));
   }
