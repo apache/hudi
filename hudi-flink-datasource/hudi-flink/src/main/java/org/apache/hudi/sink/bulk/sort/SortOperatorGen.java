@@ -20,8 +20,10 @@ package org.apache.hudi.sink.bulk.sort;
 
 import org.apache.hudi.adapter.SortCodeGeneratorAdapter;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.table.api.TableConfig;
+import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
 import org.apache.flink.table.planner.plan.nodes.exec.spec.SortSpec;
@@ -42,11 +44,17 @@ public class SortOperatorGen {
     this.rowType = rowType;
   }
 
-  public OneInputStreamOperator<RowData, RowData> createSortOperator() {
+  public OneInputStreamOperator<RowData, RowData> createSortOperator(Configuration conf) {
     SortCodeGenerator codeGen = createSortCodeGenerator();
     return new SortOperator(
         codeGen.generateNormalizedKeyComputer("SortComputer"),
-        codeGen.generateRecordComparator("SortComparator"));
+        codeGen.generateRecordComparator("SortComparator"),
+        conf.get(ExecutionConfigOptions.TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES),
+        conf.get(ExecutionConfigOptions.TABLE_EXEC_SPILL_COMPRESSION_ENABLED),
+        (int) conf.get(
+                    ExecutionConfigOptions
+                            .TABLE_EXEC_SPILL_COMPRESSION_BLOCK_SIZE).getBytes(),
+        conf.get(ExecutionConfigOptions.TABLE_EXEC_SORT_ASYNC_MERGE_ENABLED));
   }
 
   public SortCodeGenerator createSortCodeGenerator() {

@@ -64,6 +64,7 @@ import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
+import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
@@ -362,7 +363,12 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             binarySerializer,
             computer,
             comparator,
-            getContainingTask().getJobConfiguration());
+            this.conf.get(ExecutionConfigOptions.TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES),
+            this.conf.get(ExecutionConfigOptions.TABLE_EXEC_SPILL_COMPRESSION_ENABLED),
+            (int) this.conf.get(
+                                ExecutionConfigOptions
+                                        .TABLE_EXEC_SPILL_COMPRESSION_BLOCK_SIZE).getBytes(),
+           this.conf.get(ExecutionConfigOptions.TABLE_EXEC_SORT_ASYNC_MERGE_ENABLED));
     sorter.startThreads();
 
     // register the metrics.
