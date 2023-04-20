@@ -71,6 +71,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.compress.Compression;
+import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.io.IOUtils;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter;
 import org.junit.jupiter.api.AfterAll;
@@ -87,10 +89,13 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -113,6 +118,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.Mockito.when;
 
@@ -129,6 +135,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   private static FileSystem fs;
   private Path partitionPath;
   private String spillableBasePath;
+
+  private final SecureRandom rand = new SecureRandom(new byte[] {0x1, 0x2, 0x3});
 
   @BeforeAll
   public static void setUpClass() throws IOException, InterruptedException {
@@ -2553,6 +2561,174 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
       assertEquals(expectedReadBytes.get(dataBlockType), bytesRead, "Read bytes have to match");
     }
+  }
+
+  @Test
+  public void testCorruptBlocks() throws IOException, URISyntaxException, InterruptedException {
+    List<byte[]> corruptBlocks = createCorruptDataBlocksForTest();
+    int maxTotalBlocks = 20;
+    int runs = 10;
+    Writer writer =
+        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
+    HoodieLogFile logFile = writer.getLogFile();
+    Path logPath = logFile.getPath();
+    fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
+
+    for (; runs >= 0; runs--) {
+      int totalBlocksForThisRun = rand.nextInt(maxTotalBlocks) + 1;
+      fs.create(logPath).close();
+      boolean[] verify = new boolean[totalBlocksForThisRun];
+      List<List<IndexedRecord>> goodBlocks = new ArrayList<>();
+      for (int i = 0; i < totalBlocksForThisRun; i++) {
+        boolean pickCorruptBlock = rand.nextBoolean();
+        if (pickCorruptBlock) {
+          byte[] corruptBlock = corruptBlocks.get(rand.nextInt(corruptBlocks.size()));
+          FSDataOutputStream outputStream = fs.append(logPath);
+          outputStream.write(corruptBlock);
+          outputStream.close();
+        } else {
+          addGoodBlockToLogFile(goodBlocks);
+        }
+        verify[i] = pickCorruptBlock;
+      }
+
+      Reader reader = HoodieLogFormat.newReader(fs, logFile, SchemaTestUtil.getSimpleSchema());
+      int curr = 0;
+      int dataBlocksGenerated = 0;
+      int dataBlocksSeen = 0;
+      ByteArrayOutputStream bOStream = new ByteArrayOutputStream();
+      IOUtils.copyBytes(fs.open(logPath), bOStream, 4096);
+      try {
+        while (reader.hasNext()) {
+          HoodieLogBlockType generatedType = verify[curr] ? HoodieLogBlockType.CORRUPT_BLOCK : HoodieLogBlockType.AVRO_DATA_BLOCK;
+          HoodieLogBlock block = reader.next();
+
+          if (block.getBlockType().equals(HoodieLogBlockType.AVRO_DATA_BLOCK)) {
+            HoodieAvroDataBlock blk = (HoodieAvroDataBlock) block;
+            assertEquals(getRecords(blk), goodBlocks.get(dataBlocksGenerated));
+          }
+
+          dataBlocksGenerated += (generatedType.equals(HoodieLogBlockType.AVRO_DATA_BLOCK)) ? 1 : 0;
+          dataBlocksSeen += (block.getBlockType().equals(HoodieLogBlockType.AVRO_DATA_BLOCK)) ? 1 : 0;
+
+          assertEquals(generatedType, block.getBlockType(), Arrays.toString(bOStream.toByteArray()));
+
+          curr++;
+        }
+        reader.close();
+      } catch (Exception e) {
+        System.out.println(Arrays.toString(bOStream.toByteArray()));
+        fail(e);
+      }
+      assertEquals(dataBlocksGenerated, dataBlocksSeen);
+    }
+    writer.close();
+  }
+
+  private void addGoodBlockToLogFile(List<List<IndexedRecord>> goodDataBlocks) throws IOException, URISyntaxException, InterruptedException {
+    Writer writer =
+        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
+    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
+    HoodieDataBlock dataBlock = getDataBlock(HoodieLogBlockType.AVRO_DATA_BLOCK, records, header);
+    goodDataBlocks.add(new ArrayList<IndexedRecord>(records));
+    writer.appendBlock(dataBlock);
+    writer.close();
+  }
+
+  private List<byte[]> createCorruptDataBlocksForTest() throws IOException, URISyntaxException {
+    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 10);
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
+    HoodieDataBlock block = getDataBlock(HoodieLogBlockType.AVRO_DATA_BLOCK, records, header);
+
+    byte[] corruptMagic = new byte[] {0x1, 0x2};
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    long startSize = outputStream.size();
+
+    // 1. Write the magic header for the start of the block
+    outputStream.write(HoodieLogFormat.MAGIC);
+    byte[] onlyMagic = appendRandomBytesAtEnd(outputStream.toByteArray(), 20);
+
+    // bytes for header
+    byte[] headerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockHeader());
+
+    // content bytes
+    byte[] content = block.getContentBytes();
+    // bytes for footer
+    byte[] footerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockFooter());
+
+    // 2. Write the total size of the block (excluding Magic)
+    outputStream.write(longToBytes(getLogBlockLength(content.length, headerBytes.length, footerBytes.length)));
+    byte[] corruptAfterBlockLength = appendRandomBytesAtEnd(outputStream.toByteArray(), 20);
+
+    // 3. Write the version of this log block
+    outputStream.write(intToBytes(1));
+    byte[] corruptAfterLogBlockVersion = appendRandomBytesAtEnd(outputStream.toByteArray(), 20);
+    // 4. Write the block type
+    outputStream.write(intToBytes(block.getBlockType().ordinal()));
+
+    // 5. Write the headers for the log block
+    outputStream.write(headerBytes);
+    byte[] corruptAfterHeader = appendRandomBytesAtEnd(outputStream.toByteArray(), 20);
+    // 6. Write the size of the content block
+    outputStream.write(intToBytes(content.length));
+    byte[] corruptAfterContentLength = appendRandomBytesAtEnd(outputStream.toByteArray(), 20);
+    // 7. Write the contents of the data block
+    outputStream.write(content);
+    byte[] corruptAfterContent = appendRandomBytesAtEnd(outputStream.toByteArray(), 20);
+    // 8. Write the footers for the log block
+    outputStream.write(footerBytes);
+    byte[] corruptAfterFooter = appendRandomBytesAtEnd(outputStream.toByteArray(), 20);
+    // 9. Write the total size of the log block (including magic) which is everything written
+    // until now (for reverse pointer)
+    // Update: this information is now used in determining if a block is corrupt by comparing to the
+    //   block size in header. This change assumes that the block size will be the last data written
+    //   to a block. Read will break if any data is written past this point for a block.
+    outputStream.write(longToBytes(outputStream.size() - startSize));
+    byte[] eofAfterContentLength = outputStream.toByteArray();
+    byte[] corruptAtTheEnd = appendRandomBytesAtEnd(outputStream.toByteArray(), 20);
+
+    return Arrays.asList(
+        onlyMagic,
+        corruptAfterBlockLength,
+        corruptAfterContent,
+        corruptAfterLogBlockVersion,
+        corruptAfterHeader,
+        corruptAfterContentLength,
+        corruptAfterFooter,
+        eofAfterContentLength,
+        corruptAtTheEnd
+    );
+  }
+
+  private byte[] appendRandomBytesAtEnd(byte[] toByteArray, int randomBytesToAppend) {
+    byte[] buf = new byte[randomBytesToAppend + toByteArray.length];
+    System.arraycopy(toByteArray, 0, buf, 0, toByteArray.length);
+    Bytes.random(buf, toByteArray.length, randomBytesToAppend);
+    return buf;
+  }
+
+  private byte[] intToBytes(int n) {
+    return ByteBuffer.allocate(Integer.BYTES).putInt(n).array();
+  }
+
+  private byte[] longToBytes(long n) {
+    return ByteBuffer.allocate(Long.BYTES).putLong(n).array();
+  }
+
+  private long getLogBlockLength(int contentLength, int headerLength, int footerLength) {
+    return Integer.BYTES + // Number of bytes to write version
+        Integer.BYTES + // Number of bytes to write ordinal
+        headerLength + // Length of the headers
+        Long.BYTES + // Number of bytes used to write content length
+        contentLength + // Length of the content
+        footerLength + // Length of the footers
+        Long.BYTES; // bytes to write totalLogBlockLength at end of block (for reverse ptr)
   }
 
   private static HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<IndexedRecord> records,
