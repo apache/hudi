@@ -564,7 +564,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     BaseFileReader(
       read = partitionedFile => {
-        val extension = FSUtils.getFileExtension(partitionedFile.filePath)
+        val extension = FSUtils.getFileExtension(partitionedFile.filePath.toString)
         if (tableBaseFileFormat.getFileExtension.equals(extension)) {
           read(partitionedFile)
         } else {
@@ -715,7 +715,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
     partitionedFile => {
       val hadoopConf = hadoopConfBroadcast.value.get()
-      val reader = new HoodieAvroHFileReader(hadoopConf, new Path(partitionedFile.filePath),
+      val reader = new HoodieAvroHFileReader(hadoopConf, partitionedFile.filePath.toPath,
         new CacheConfig(hadoopConf))
 
       val requiredRowSchema = requiredDataSchema.structTypeSchema

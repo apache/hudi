@@ -342,7 +342,7 @@ object LogFileIterator {
     // Determine partition path as an immediate parent folder of either
     //    - The base file
     //    - Some log file
-    split.dataFile.map(baseFile => new Path(baseFile.filePath))
+    split.dataFile.map(baseFile => baseFile.filePath.toPath)
       .getOrElse(split.logFiles.head.getPath)
       .getParent
   }
