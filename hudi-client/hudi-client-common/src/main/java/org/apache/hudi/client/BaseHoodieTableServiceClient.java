@@ -110,6 +110,15 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     }
   }
 
+  protected void waitForAsyncServiceCompletion(){
+    if (config.isAutoClean() & config.isAsyncClean()) {
+      asyncClean();
+    }
+    if (config.isAutoArchive() & config.isAsyncArchive()) {
+      asyncArchive();
+    }
+  }
+
   protected void asyncClean() {
     AsyncCleanerService.waitForCompletion(asyncCleanerService);
   }

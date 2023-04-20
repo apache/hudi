@@ -98,6 +98,8 @@ public class HoodieCompactor {
         + "Set \"execute\" means execute a compact plan at given instant which means --instant-time is needed here; "
         + "Set \"scheduleAndExecute\" means make a compact plan first and execute that plan immediately", required = false)
     public String runningMode = null;
+    @Parameter(names = {"--async-service-enable", "-async"}, description = "Whether to execute cleanup and archive in asynchronous mode, disabled by default", required = false)
+    public Boolean asyncSerivceEanble = false;
     @Parameter(names = {"--strategy", "-st"}, description = "Strategy Class", required = false)
     public String strategyClassName = LogFileSizeBasedCompactionStrategy.class.getName();
     @Parameter(names = {"--help", "-h"}, help = true)
@@ -125,6 +127,7 @@ public class HoodieCompactor {
           + "   --retry " + retry + ", \n"
           + "   --schedule " + runSchedule + ", \n"
           + "   --mode " + runningMode + ", \n"
+          + "   --async-service-enable " + asyncSerivceEanble + ", \n"
           + "   --strategy " + strategyClassName + ", \n"
           + "   --props " + propsFilePath + ", \n"
           + "   --hoodie-conf " + configs
@@ -252,7 +255,7 @@ public class HoodieCompactor {
     LOG.info("Schema --> : " + schemaStr);
 
     try (SparkRDDWriteClient<HoodieRecordPayload> client =
-             UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+             UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props, cfg.asyncSerivceEanble)) {
       // If no compaction instant is provided by --instant-time, find the earliest scheduled compaction
       // instant from the active timeline
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
@@ -269,13 +272,14 @@ public class HoodieCompactor {
         }
       }
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
+      cleanAfterCompact(client);
       return UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
     }
   }
 
   private Option<String> doSchedule(JavaSparkContext jsc) {
     try (SparkRDDWriteClient client =
-             UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props)) {
+             UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props, cfg.asyncSerivceEanble)) {
 
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
         LOG.warn("No instant time is provided for scheduling compaction.");
@@ -294,5 +298,13 @@ public class HoodieCompactor {
     }
     Schema schema = schemaUtil.getTableAvroSchema(false);
     return schema.toString();
+  }
+
+  private void cleanAfterCompact(SparkRDDWriteClient client) {
+    client.waitForAsyncServiceCompletion();
+    if (client.getConfig().isAutoClean() && !client.getConfig().isAsyncClean()) {
+      LOG.info("Start to clean synchronously.");
+      client.clean();
+    }
   }
 }
