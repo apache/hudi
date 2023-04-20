@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 
@@ -150,7 +151,8 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   static ArrayData extractPartitionValues(Types.RecordType partitionFields,
                                           String relativePartitionPath,
-                                          boolean hiveStylePartitioningEnabled) {
+                                          boolean hiveStylePartitioningEnabled,
+                                          boolean urlEncodePartitioningEnabled) {
     if (partitionFields.fields().size() == 1) {
       // SinglePartPartitionValue, which might contain slashes.
       String partitionValue;
@@ -159,8 +161,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
       } else {
         partitionValue = relativePartitionPath;
       }
-      return new ArrayData(Collections.singletonList(Conversions
-          .fromPartitionString(partitionValue, partitionFields.field(0).type())));
+      return new ArrayData(Collections.singletonList(Conversions.fromPartitionString(
+          urlEncodePartitioningEnabled ? PartitionPathEncodeUtils.unescapePathName(partitionValue) : partitionValue,
+          partitionFields.field(0).type())));
     }
 
     List<Object> partitionValues;
@@ -169,13 +172,17 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
       partitionValues = IntStream.range(0, partitionFragments.length)
           .mapToObj(idx -> {
             String partitionValue = partitionFragments[idx].split("=")[1];
-            return Conversions.fromPartitionString(partitionValue, partitionFields.field(idx).type());
+            return Conversions.fromPartitionString(
+                urlEncodePartitioningEnabled ? PartitionPathEncodeUtils.unescapePathName(partitionValue) : partitionValue,
+                partitionFields.field(idx).type());
           }).collect(Collectors.toList());
     } else {
       partitionValues = IntStream.range(0, partitionFragments.length)
           .mapToObj(idx -> {
             String partitionValue = partitionFragments[idx];
-            return Conversions.fromPartitionString(partitionValue, partitionFields.field(idx).type());
+            return Conversions.fromPartitionString(
+                urlEncodePartitioningEnabled ? PartitionPathEncodeUtils.unescapePathName(partitionValue) : partitionValue,
+                partitionFields.field(idx).type());
           }).collect(Collectors.toList());
     }
 

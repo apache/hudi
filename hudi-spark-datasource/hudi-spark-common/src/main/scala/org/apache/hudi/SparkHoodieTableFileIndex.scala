@@ -48,7 +48,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 /**
  * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
@@ -297,7 +297,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   //
   // We can deduce full partition-path w/o doing a single listing: `us/2022-01-01`, and then push down
   // these filters when listing `us/2022-01-01` to get the directory 'us/2022-01-01/06'
-  private def tryPushDownPartitionPredicates(partitionColumnNames: Seq[String], partitionColumnPredicates: Seq[Expression]) = {
+  private def tryPushDownPartitionPredicates(partitionColumnNames: Seq[String], partitionColumnPredicates: Seq[Expression]): Seq[PartitionPath] = {
     // Static partition-path prefix is defined as a prefix of the full partition-path where only
     // first N partition columns (in-order) have proper (static) values bound in equality predicates,
     // allowing in turn to build such prefix to be used in subsequent filtering
@@ -312,7 +312,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         .map(colName => (colName, (staticPartitionColumnValuesMap(colName)._1, staticPartitionColumnValuesMap(colName)._2.get)))
     }
 
-    if (staticPartitionColumnNameValuePairs.isEmpty) {
+     if (staticPartitionColumnNameValuePairs.isEmpty) {
       logDebug("Unable to compose relative partition path prefix from the predicates; falling back to fetching all partitions")
       getAllQueryPartitionPaths.asScala
     } else {
@@ -330,13 +330,17 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         // of the complete partition path, do listing for this prefix-path and filter them with partitionPredicates
         Try {
           SparkFilterHelper.convertDataType(partitionSchema).asInstanceOf[RecordType]
-        }.map { partitionRecordType =>
-          val convertedFilters = SparkFilterHelper.convertFilters(
-            partitionColumnPredicates.flatMap {
-              expr => sparkAdapter.translateFilter(expr)
-            })
-          listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava, partitionRecordType, convertedFilters).asScala
-        }.getOrElse(listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala)
+        } match {
+          case Success(partitionRecordType) if partitionRecordType.fields().size() == _partitionSchemaFromProperties.size =>
+            val convertedFilters = SparkFilterHelper.convertFilters(
+              partitionColumnPredicates.flatMap {
+                expr => sparkAdapter.translateFilter(expr)
+              })
+            listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava, partitionRecordType, convertedFilters).asScala
+          case _ =>
+            log.warn("Met incompatible issue when converting to hudi data type, rollback to list by prefix directly")
+            listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala
+        }
       }
     }
   }
