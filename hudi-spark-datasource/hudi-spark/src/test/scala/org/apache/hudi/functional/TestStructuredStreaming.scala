@@ -19,7 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER
-import org.apache.hudi.HoodieSinkCheckpoint.SINK_CHECKPOINT_KEY
+import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieStorageConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.TableNotFoundException
 import org.apache.hudi.testutils.HoodieClientTestBase
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSinkCheckpoint}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, Trigger}
@@ -281,7 +281,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       .start(destPath)
 
     query1.processAllAvailable()
-    val metaClient = HoodieTableMetaClient.builder
+    var metaClient = HoodieTableMetaClient.builder
       .setConf(fs.getConf).setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
 
     assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier1", "0")
@@ -310,19 +310,64 @@ class TestStructuredStreaming extends HoodieClientTestBase {
 
     assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier2", "0")
     assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier1", "1")
+
+
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+
+    val query3 = spark.readStream
+      .schema(schema)
+      .json(sourcePath)
+      .writeStream
+      .format("org.apache.hudi")
+      .options(commonOpts)
+      .outputMode(OutputMode.Append)
+      .option(STREAMING_CHECKPOINT_IDENTIFIER.key(), "streaming_identifier1")
+      .option("checkpointLocation", s"${basePath}/checkpoint1")
+      .start(destPath)
+
+    query3.processAllAvailable()
+    metaClient = HoodieTableMetaClient.builder
+      .setConf(fs.getConf).setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
+
+    assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier1", "2")
+    assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier2", "0")
+  }
+
+  @Test
+  def testStructuredStreamingForDefaultIdentifier(): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+
+    val records1 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    val schema = inputDF1.schema
+
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+
+    val query1 = spark.readStream
+      .schema(schema)
+      .json(sourcePath)
+      .writeStream
+      .format("org.apache.hudi")
+      .options(commonOpts)
+      .outputMode(OutputMode.Append)
+      .option("checkpointLocation", s"$basePath/checkpoint1")
+      .start(destPath)
+
+    query1.processAllAvailable()
+    val metaClient = HoodieTableMetaClient.builder
+      .setConf(fs.getConf).setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
+
+    assertLatestCheckpointInfoMatched(metaClient, STREAMING_CHECKPOINT_IDENTIFIER.defaultValue(), "0")
+    query1.stop()
   }
 
   def assertLatestCheckpointInfoMatched(metaClient: HoodieTableMetaClient,
                                         identifier: String,
                                         expectBatchId: String): Unit = {
     metaClient.reloadActiveTimeline()
-    val lastCheckpointCommitMetadata = CommitUtils.getLatestCommitMetadataWithValidCheckpointInfo(
-      metaClient.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY)
-
-    assertTrue(lastCheckpointCommitMetadata.isPresent)
-    val checkpointMap = HoodieSinkCheckpoint.fromJson(lastCheckpointCommitMetadata.get().getMetadata(SINK_CHECKPOINT_KEY))
-
-    assertEquals(checkpointMap.get(identifier).orNull, expectBatchId)
+    val lastCheckpoint = CommitUtils.getValidCheckpointForCurrentWriter(
+      metaClient.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY, identifier)
+    assertEquals(lastCheckpoint.get(), expectBatchId)
   }
 
   def structuredStreamingForTestClusteringRunner(sourcePath: String, destPath: String, tableType: HoodieTableType,

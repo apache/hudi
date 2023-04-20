@@ -17,9 +17,8 @@
 package org.apache.hudi
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.HoodieSinkCheckpoint.SINK_CHECKPOINT_KEY
+import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -28,8 +27,8 @@ import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.ValidationUtils.{checkArgument, checkState}
-import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, JsonUtils, StringUtils}
+import org.apache.hudi.common.util.ValidationUtils.checkArgument
+import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
 import org.apache.log4j.LogManager
@@ -120,29 +119,9 @@ class HoodieStreamingSink(sqlContext: SQLContext,
           sqlContext, mode, updatedOptions, data, hoodieTableConfig, writeClient, Some(triggerAsyncCompactor), Some(triggerAsyncClustering),
           extraPreCommitFn = Some(new BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata] {
 
-            override def accept(metaClient: HoodieTableMetaClient,
-                                newCommitMetadata: HoodieCommitMetadata): Unit = {
-              options.get(STREAMING_CHECKPOINT_IDENTIFIER.key()) match {
-                case Some(identifier) =>
-                  // Fetch the latestCommit with checkpoint Info again to avoid concurrency issue in multi-write scenario.
-                  val lastCheckpointCommitMetadata = CommitUtils.getLatestCommitMetadataWithValidCheckpointInfo(
-                    metaClient.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY)
-                  var checkpointString = ""
-                  if (lastCheckpointCommitMetadata.isPresent) {
-                    val lastCheckpoint = lastCheckpointCommitMetadata.get.getMetadata(SINK_CHECKPOINT_KEY)
-                    if (!StringUtils.isNullOrEmpty(lastCheckpoint)) {
-                      checkpointString = HoodieSinkCheckpoint.toJson(HoodieSinkCheckpoint.fromJson(lastCheckpoint) + (identifier -> batchId.toString))
-                    } else {
-                      checkpointString = HoodieSinkCheckpoint.toJson(Map(identifier -> batchId.toString))
-                    }
-                  } else {
-                    checkpointString = HoodieSinkCheckpoint.toJson(Map(identifier -> batchId.toString))
-                  }
-
-                  newCommitMetadata.addMetadata(SINK_CHECKPOINT_KEY, checkpointString)
-                case None =>
-                  // No op since keeping batch id in memory only.
-              }
+            override def accept(metaClient: HoodieTableMetaClient, newCommitMetadata: HoodieCommitMetadata): Unit = {
+              val identifier = options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue())
+              newCommitMetadata.addMetadata(SINK_CHECKPOINT_KEY, CommitUtils.getCheckpointValueAsString(identifier, String.valueOf(batchId)))
             }
           }))
       )
@@ -316,19 +295,12 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
   private def canSkipBatch(incomingBatchId: Long, operationType: String): Boolean = {
     if (!DELETE_OPERATION_OPT_VAL.equals(operationType)) {
-      options.get(STREAMING_CHECKPOINT_IDENTIFIER.key()) match {
-        case Some(identifier) =>
-          // get the latest checkpoint from the commit metadata to check if the microbatch has already been prcessed or not
-          val commitMetadata = CommitUtils.getLatestCommitMetadataWithValidCheckpointInfo(
-            metaClient.get.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY)
-          if (commitMetadata.isPresent) {
-            val lastCheckpoint = commitMetadata.get.getMetadata(SINK_CHECKPOINT_KEY)
-            if (!StringUtils.isNullOrEmpty(lastCheckpoint)) {
-              HoodieSinkCheckpoint.fromJson(lastCheckpoint).get(identifier).foreach(commitBatchId =>
-                latestCommittedBatchId = commitBatchId.toLong)
-            }
-          }
-        case None =>
+      val identifier = options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue())
+      // get the latest checkpoint from the commit metadata to check if the microbatch has already been processed or not
+      val lastCheckpoint = CommitUtils.getValidCheckpointForCurrentWriter(
+        metaClient.get.getActiveTimeline.getWriteTimeline, SINK_CHECKPOINT_KEY, identifier)
+      if (lastCheckpoint.isPresent) {
+        latestCommittedBatchId = lastCheckpoint.get().toLong
       }
       latestCommittedBatchId >= incomingBatchId
     } else {
@@ -338,26 +310,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   }
 }
 
-/**
- * SINK_CHECKPOINT_KEY holds a map of batchId to writer context (composed of applicationId and queryId).
- * This is a util object to serialize/deserialize map to/from json.
- */
-object HoodieSinkCheckpoint {
-
-  lazy val mapper: ObjectMapper = {
-    val _mapper = JsonUtils.getObjectMapper
-    _mapper.registerModule(DefaultScalaModule)
-    _mapper
-  }
+object HoodieStreamingSink {
 
   // This constant serves as the checkpoint key for streaming sink so that each microbatch is processed exactly-once.
   val SINK_CHECKPOINT_KEY = "_hudi_streaming_sink_checkpoint"
-
-  def toJson(checkpoint: Map[String, String]): String = {
-    mapper.writeValueAsString(checkpoint)
-  }
-
-  def fromJson(json: String): Map[String, String] = {
-    mapper.readValue(json, classOf[Map[String, String]])
-  }
 }
