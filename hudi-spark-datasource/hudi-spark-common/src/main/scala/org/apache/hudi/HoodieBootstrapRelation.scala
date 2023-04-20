@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
+import org.apache.spark.paths.SparkPath
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
@@ -79,11 +80,11 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
       var dataFile: PartitionedFile = null
 
       if (hoodieBaseFile.getBootstrapBaseFile.isPresent) {
-        skeletonFile = Option(PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen))
-        dataFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getBootstrapBaseFile.get().getPath, 0,
+        skeletonFile = Option(PartitionedFile(InternalRow.empty, SparkPath.fromPathString(hoodieBaseFile.getPath), 0, hoodieBaseFile.getFileLen))
+        dataFile = PartitionedFile(InternalRow.empty, SparkPath.fromPathString(hoodieBaseFile.getBootstrapBaseFile.get().getPath), 0,
           hoodieBaseFile.getBootstrapBaseFile.get().getFileLen)
       } else {
-        dataFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen)
+        dataFile = PartitionedFile(InternalRow.empty, SparkPath.fromPathString(hoodieBaseFile.getPath), 0, hoodieBaseFile.getFileLen)
       }
       HoodieBootstrapSplit(dataFile, skeletonFile)
     })

@@ -126,7 +126,7 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     val pushDownDate = sqlConf.parquetFilterPushDownDate
     val pushDownTimestamp = sqlConf.parquetFilterPushDownTimestamp
     val pushDownDecimal = sqlConf.parquetFilterPushDownDecimal
-    val pushDownStringStartWith = sqlConf.parquetFilterPushDownStringStartWith
+    val pushDownStringStartWith = sqlConf.parquetFilterPushDownStringPredicate
     val pushDownInFilterThreshold = sqlConf.parquetFilterPushDownInFilterThreshold
     val isCaseSensitive = sqlConf.caseSensitiveAnalysis
     val parquetOptions = new ParquetOptions(options, sparkSession.sessionState.conf)
@@ -136,7 +136,7 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     (file: PartitionedFile) => {
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
 
-      val filePath = new Path(new URI(file.filePath))
+      val filePath = file.filePath.toPath
       val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
       val sharedConf = broadcastedHadoopConf.value.value

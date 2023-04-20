@@ -33,6 +33,8 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory  {
     conf.setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(),
         SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
     conf.setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());
+    conf.setIfUnset(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED().key(), SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED().defaultValueString());
+    conf.setIfUnset(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG().key(), SQLConf.LEGACY_PARQUET_NANOS_AS_LONG().defaultValueString());
     return new HoodieSparkParquetReader(conf, path);
   }
 
