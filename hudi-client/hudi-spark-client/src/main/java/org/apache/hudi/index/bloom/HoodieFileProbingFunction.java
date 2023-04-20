@@ -19,6 +19,7 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.utils.LazyIterableIterator;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -31,6 +32,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieKeyLookupResult;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
@@ -114,6 +116,9 @@ public class HoodieFileProbingFunction implements
         return Collections.emptyList();
       }
 
+      FileSystem fs = baseFileOnlyViewBroadcast.getValue().getMetaClient().getFs();
+      HoodieConfig config = baseFileOnlyViewBroadcast.getValue().getMetaClient().getTableConfig();
+
       return fileToLookupResults.entrySet().stream()
           .map(entry -> {
             Pair<String, String> partitionPathFileNamePair = entry.getKey();
@@ -129,8 +134,9 @@ public class HoodieFileProbingFunction implements
             // TODO add assertion that file is checked only once
 
             final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
-            List<String> matchingKeys = HoodieIndexUtils.filterKeysFromFile(new Path(dataFile.getPath()),
-                candidateRecordKeys, hadoopConf.get());
+            List<String> matchingKeys = HoodieIndexUtils.filterKeysFromFile(fs, new Path(dataFile.getPath()),
+                  candidateRecordKeys, hadoopConf.get(), config);
+
 
             LOG.debug(
                 String.format("Bloom filter candidates (%d) / false positives (%d), actual matches (%d)",

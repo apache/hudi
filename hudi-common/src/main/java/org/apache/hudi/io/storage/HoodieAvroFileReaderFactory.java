@@ -18,7 +18,10 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.config.HoodieConfig;
+
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 
@@ -26,17 +29,17 @@ import java.io.IOException;
 
 public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
 
-  protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
-    return new HoodieAvroParquetReader(conf, path);
+  protected HoodieFileReader newParquetFileReader(Configuration conf, Path path, HoodieConfig hoodieConfig) {
+    return new HoodieAvroParquetReader(conf, path, hoodieConfig);
   }
 
-  protected HoodieFileReader newHFileFileReader(Configuration conf, Path path) throws IOException {
+  protected HoodieFileReader newHFileFileReader(Configuration conf, FileSystem fs, Path path) throws IOException {
     CacheConfig cacheConfig = new CacheConfig(conf);
-    return new HoodieAvroHFileReader(conf, path, cacheConfig);
+    return new HoodieAvroHFileReader(conf, fs, path, cacheConfig);
   }
 
   @Override
-  protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
-    return new HoodieAvroOrcReader(conf, path);
+  protected HoodieFileReader newOrcFileReader(Configuration conf, Path path, HoodieConfig hoodieConfig) {
+    return new HoodieAvroOrcReader(conf, path, hoodieConfig);
   }
 }

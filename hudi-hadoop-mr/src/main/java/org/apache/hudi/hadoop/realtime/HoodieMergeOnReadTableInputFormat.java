@@ -170,7 +170,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
 
     // build fileGroup from fsView
     List<FileStatus> affectedFileStatus = Arrays.asList(HoodieInputFormatUtils
-        .listAffectedFilesForCommits(job, new Path(tableMetaClient.getBasePath()), metadataList));
+        .listAffectedFilesForCommits(tableMetaClient.getFs(), metadataList, tableMetaClient.getBasePath()));
     // step3
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(tableMetaClient, commitsTimelineToReturn, affectedFileStatus.toArray(new FileStatus[0]));
     // build fileGroup from fsView

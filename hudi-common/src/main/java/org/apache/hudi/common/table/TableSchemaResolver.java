@@ -19,6 +19,8 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -314,28 +316,31 @@ public class TableSchemaResolver {
   }
 
   private MessageType readSchemaFromParquetBaseFile(Path parquetFilePath) throws IOException {
-    LOG.info("Reading schema from " + parquetFilePath);
+    LOG.info("Reading schema from logical path: " + parquetFilePath);
 
-    FileSystem fs = metaClient.getRawFs();
+    HoodieWrapperFileSystem fs = metaClient.getFs();
+    Path hoodieParquetFilePath = HoodieWrapperFileSystem.convertToHoodiePath(parquetFilePath, fs.getConf());
     ParquetMetadata fileFooter =
-        ParquetFileReader.readFooter(fs.getConf(), parquetFilePath, ParquetMetadataConverter.NO_FILTER);
+        ParquetFileReader.readFooter(
+            FSUtils.registerFileSystemWithStorageStrategy(parquetFilePath, fs.getConf(), metaClient.tableConfig),
+            hoodieParquetFilePath,
+            ParquetMetadataConverter.NO_FILTER);
     return fileFooter.getFileMetaData().getSchema();
   }
 
   private MessageType readSchemaFromHFileBaseFile(Path hFilePath) throws IOException {
-    LOG.info("Reading schema from " + hFilePath);
+    LOG.info("Reading schema from logical path: " + hFilePath);
 
-    FileSystem fs = metaClient.getRawFs();
+    HoodieWrapperFileSystem fs = metaClient.getFs();
     CacheConfig cacheConfig = new CacheConfig(fs.getConf());
-    HoodieAvroHFileReader hFileReader = new HoodieAvroHFileReader(fs.getConf(), hFilePath, cacheConfig);
+    HoodieAvroHFileReader hFileReader = new HoodieAvroHFileReader(fs.getConf(), fs, hFilePath, cacheConfig);
     return convertAvroSchemaToParquet(hFileReader.getSchema());
   }
 
   private MessageType readSchemaFromORCBaseFile(Path orcFilePath) throws IOException {
-    LOG.info("Reading schema from " + orcFilePath);
+    LOG.info("Reading schema from logical path: " + orcFilePath);
 
-    FileSystem fs = metaClient.getRawFs();
-    HoodieAvroOrcReader orcReader = new HoodieAvroOrcReader(fs.getConf(), orcFilePath);
+    HoodieAvroOrcReader orcReader = new HoodieAvroOrcReader(metaClient.getFs().getConf(), orcFilePath, metaClient.getTableConfig());
     return convertAvroSchemaToParquet(orcReader.getSchema());
   }
 
@@ -360,7 +365,7 @@ public class TableSchemaResolver {
   }
 
   private MessageType readSchemaFromLogFile(Path path) throws IOException {
-    return readSchemaFromLogFile(metaClient.getRawFs(), path);
+    return readSchemaFromLogFile(metaClient.getFs(), path);
   }
 
   /**

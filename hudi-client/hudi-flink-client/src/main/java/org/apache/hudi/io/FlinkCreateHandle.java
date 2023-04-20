@@ -115,11 +115,16 @@ public class FlinkCreateHandle<T, I, K, O>
     // Write to a new file which behaves like a different task write.
     try {
       int rollNumber = 0;
-      while (fs.exists(path)) {
+      // NOTE: File paths and directories are handled differently by HoodieWrapperFileSystem
+      // dirExists is for directories and exists is for files
+      if (!fs.dirExists(partitionPath, fileId)) {
+        return path;
+      }
+      do {
         Path existing = path;
         path = newFilePathWithRollover(rollNumber++);
         LOG.warn("Duplicate write for INSERT bucket with path: " + existing + ", rolls over to new path: " + path);
-      }
+      } while (fs.exists(path));
       return path;
     } catch (IOException e) {
       throw new HoodieException("Checking existing path for create handle error: " + path, e);

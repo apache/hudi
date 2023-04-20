@@ -177,6 +177,12 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     addFilesToView(fileStatuses);
   }
 
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+      Map<String, FileStatus[]> partitionFiles) {
+    this(metaClient, visibleActiveTimeline);
+    addFilesToView(partitionFiles);
+  }
+
   /**
    * This method is only used when this object is deserialized in a spark executor.
    *

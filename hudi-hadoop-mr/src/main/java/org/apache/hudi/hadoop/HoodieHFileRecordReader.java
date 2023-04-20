@@ -48,7 +48,7 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
   public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
     FileSplit fileSplit = (FileSplit) split;
     Path path = fileSplit.getPath();
-    reader = new HoodieAvroHFileReader(conf, path, new CacheConfig(conf));
+    reader = new HoodieAvroHFileReader(conf, path.getFileSystem(conf), path, new CacheConfig(conf));
 
     schema = reader.getSchema();
     valueObj = new ArrayWritable(Writable.class, new Writable[schema.getFields().size()]);

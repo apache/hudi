@@ -20,6 +20,7 @@ package org.apache.hudi.common.functional;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -1079,7 +1080,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     List<String> allLogFiles =
-        FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        FSUtils.getAllLogFiles((HoodieWrapperFileSystem) fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
@@ -1166,7 +1167,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     List<String> allLogFiles =
-        FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        FSUtils.getAllLogFiles((HoodieWrapperFileSystem) fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
@@ -1258,7 +1259,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     List<String> allLogFiles =
-        FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        FSUtils.getAllLogFiles((HoodieWrapperFileSystem) fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
@@ -1339,7 +1340,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(deleteBlock);
 
     List<String> allLogFiles =
-        FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        FSUtils.getAllLogFiles((HoodieWrapperFileSystem) fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
@@ -1503,7 +1504,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(deleteBlock3);
 
     List<String> allLogFiles =
-        FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        FSUtils.getAllLogFiles((HoodieWrapperFileSystem) fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
@@ -1616,7 +1617,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(commandBlock);
 
     List<String> allLogFiles =
-        FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        FSUtils.getAllLogFiles((HoodieWrapperFileSystem) fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     // all data must be rolled back before merge
@@ -1691,7 +1692,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(commandBlock);
 
     List<String> allLogFiles =
-        FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        FSUtils.getAllLogFiles((HoodieWrapperFileSystem) fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -1748,7 +1749,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(commandBlock);
 
     List<String> allLogFiles =
-        FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        FSUtils.getAllLogFiles((HoodieWrapperFileSystem) fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -1824,7 +1825,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(commandBlock);
 
     List<String> allLogFiles =
-        FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        FSUtils.getAllLogFiles((HoodieWrapperFileSystem) fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -1936,7 +1937,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     List<String> allLogFiles =
-        FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        FSUtils.getAllLogFiles((HoodieWrapperFileSystem) fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -2118,7 +2119,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     FileCreateUtils.createDeltaCommit(basePath, "108", fs);
 
     List<String> allLogFiles =
-        FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        FSUtils.getAllLogFiles((HoodieWrapperFileSystem) fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -2208,7 +2209,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
       // From the two log files generated, read the records
-      List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1",
+      List<String> allLogFiles = FSUtils.getAllLogFiles((HoodieWrapperFileSystem) fs, partitionPath, "test-fileid1",
           HoodieLogFile.DELTA_EXTENSION, "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
       HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()

@@ -143,7 +143,7 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
   @Override
   protected void setWriteStatusPath() {
     // should still report the old file path.
-    writeStatus.getStat().setPath(new Path(config.getBasePath()), oldFilePath);
+    writeStatus.getStat().setPath(FSUtils.getRelativeFilePathStr(partitionPath, oldFilePath.getName()));
   }
 
   boolean needsUpdateLocation() {

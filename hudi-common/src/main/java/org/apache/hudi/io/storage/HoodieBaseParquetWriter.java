@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -45,7 +46,8 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
   private long recordCountForNextSizeCheck;
 
   public HoodieBaseParquetWriter(Path file,
-                                 HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
+                                 HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig,
+                                 HoodieConfig hoodieConfig) throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
         ParquetFileWriter.Mode.CREATE,
         parquetConfig.getWriteSupport(),
@@ -56,7 +58,7 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
         parquetConfig.dictionaryEnabled(),
         DEFAULT_IS_VALIDATING_ENABLED,
         DEFAULT_WRITER_VERSION,
-        FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
+        FSUtils.registerFileSystemWithStorageStrategy(file, parquetConfig.getHadoopConf(), hoodieConfig));
 
     // We cannot accurately measure the snappy compressed output file size. We are choosing a
     // conservative 10%

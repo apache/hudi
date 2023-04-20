@@ -24,6 +24,7 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -115,7 +116,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           new Configuration(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()), true);
       try (HoodieAvroParquetWriter writer = new HoodieAvroParquetWriter(
           new Path(Paths.get(basePath, partition, fileName).toString()), config, currentInstantTime,
-          contextSupplier, populateMetaFields)) {
+          contextSupplier, populateMetaFields, metaClient.getTableConfig())) {
         int seqId = 1;
         for (HoodieRecord record : records) {
           GenericRecord avroRecord = (GenericRecord) ((HoodieRecordPayload) record.getData()).getInsertValue(schema).get();
@@ -137,6 +138,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
       HoodieOrcConfig config = new HoodieOrcConfig(conf, CompressionKind.ZLIB, orcStripSize, orcBlockSize, maxFileSize, filter);
       try (HoodieAvroOrcWriter writer = new HoodieAvroOrcWriter(
           currentInstantTime,
+          baseFilePath.getFileSystem(conf),
           new Path(Paths.get(basePath, partition, fileName).toString()),
           config, schema, contextSupplier)) {
         int seqId = 1;

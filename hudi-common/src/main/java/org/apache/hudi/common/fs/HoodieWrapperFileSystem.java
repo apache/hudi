@@ -19,9 +19,14 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.storage.HoodieStorageStrategy;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableConfig.StorageStrategy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.CachingPath;
@@ -51,12 +56,15 @@ import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Progressable;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
@@ -90,9 +98,11 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
 
   private ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams = new ConcurrentHashMap<>();
-  private FileSystem fileSystem;
+  private FileSystem storageFileSystem;
+  private FileSystem tableFileSystem;
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
+  private HoodieStorageStrategy storageStrategy;
 
   /**
    * Checked function interface.
@@ -135,9 +145,18 @@ public class HoodieWrapperFileSystem extends FileSystem {
   public HoodieWrapperFileSystem() {}
 
   public HoodieWrapperFileSystem(FileSystem fileSystem, ConsistencyGuard consistencyGuard) {
-    this.fileSystem = fileSystem;
+    this.tableFileSystem = fileSystem;
+    this.storageFileSystem = fileSystem;
     this.uri = fileSystem.getUri();
     this.consistencyGuard = consistencyGuard;
+  }
+
+  public HoodieWrapperFileSystem(FileSystem tableFileSystem, FileSystem storageFileSystem, ConsistencyGuard consistencyGuard, HoodieStorageStrategy storageStrategy) {
+    this.tableFileSystem = tableFileSystem;
+    this.storageFileSystem = storageFileSystem;
+    this.uri = tableFileSystem.getUri();
+    this.consistencyGuard = consistencyGuard;
+    this.storageStrategy = storageStrategy;
   }
 
   public static Path convertToHoodiePath(Path file, Configuration conf) {
@@ -186,11 +205,25 @@ public class HoodieWrapperFileSystem extends FileSystem {
     } else {
       this.uri = uri;
     }
-    this.fileSystem = FSUtils.getFs(path.toString(), conf);
+    this.tableFileSystem = FSUtils.getFs(path.toString(), conf);
+
     // Do not need to explicitly initialize the default filesystem, its done already in the above
     // FileSystem.get
     // fileSystem.initialize(FileSystem.getDefaultUri(conf), conf);
     // fileSystem.setConf(conf);
+
+    // extracting properties from conf to initialize storage strategy
+    String storageStrategyClass =
+        conf.get(HoodieTableConfig.HOODIE_STORAGE_STRATEGY_CLASS_NAME_KEY, StorageStrategy.DEFAULT.value);
+    String basePath = conf.get(HoodieTableConfig.HOODIE_BASE_PATH_KEY);
+    Map<String, String> storageStrategyProps = new HashMap<>();
+    String storagePath = conf.get(HoodieTableConfig.HOODIE_STORAGE_PATH_KEY);
+    storageStrategyProps.put(HoodieTableConfig.HOODIE_STORAGE_PATH_KEY, storagePath);
+    storageStrategyProps.put(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, conf.get(HoodieTableConfig.HOODIE_TABLE_NAME_KEY));
+
+    this.storageFileSystem = FSUtils.getFs(storagePath, conf);
+    this.storageStrategy = (HoodieStorageStrategy) ReflectionUtils
+        .loadClass(storageStrategyClass, new Class[]{String.class, Map.class}, basePath, storageStrategyProps);
   }
 
   @Override
@@ -200,7 +233,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path f, int bufferSize) throws IOException {
-    return wrapInputStream(f, fileSystem.open(convertToDefaultPath(f), bufferSize));
+    return wrapInputStream(f, getFileSystem(f).open(convertToDefaultPath(f), bufferSize));
   }
 
   @Override
@@ -209,7 +242,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
       final Path translatedPath = convertToDefaultPath(f);
       return wrapOutputStream(f,
-          fileSystem.create(translatedPath, permission, overwrite, bufferSize, replication, blockSize, progress));
+          getFileSystem(translatedPath).create(translatedPath, permission, overwrite, bufferSize, replication, blockSize, progress));
     });
   }
 
@@ -235,42 +268,42 @@ public class HoodieWrapperFileSystem extends FileSystem {
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
-      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite));
+      return wrapOutputStream(f, getFileSystem(f).create(convertToDefaultPath(f), overwrite));
     });
   }
 
   @Override
   public FSDataOutputStream create(Path f) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
-      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f)));
+      return wrapOutputStream(f, getFileSystem(f).create(convertToDefaultPath(f)));
     });
   }
 
   @Override
   public FSDataOutputStream create(Path f, Progressable progress) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
-      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), progress));
+      return wrapOutputStream(f, getFileSystem(f).create(convertToDefaultPath(f), progress));
     });
   }
 
   @Override
   public FSDataOutputStream create(Path f, short replication) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
-      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), replication));
+      return wrapOutputStream(f, getFileSystem(f).create(convertToDefaultPath(f), replication));
     });
   }
 
   @Override
   public FSDataOutputStream create(Path f, short replication, Progressable progress) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
-      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), replication, progress));
+      return wrapOutputStream(f, getFileSystem(f).create(convertToDefaultPath(f), replication, progress));
     });
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
-      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize));
+      return wrapOutputStream(f, getFileSystem(f).create(convertToDefaultPath(f), overwrite, bufferSize));
     });
   }
 
@@ -278,7 +311,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, Progressable progress)
       throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
-      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, progress));
+      return wrapOutputStream(f, getFileSystem(f).create(convertToDefaultPath(f), overwrite, bufferSize, progress));
     });
   }
 
@@ -287,7 +320,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
                                    Progressable progress) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
       return wrapOutputStream(f,
-          fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize, progress));
+          getFileSystem(f).create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize, progress));
     });
   }
 
@@ -296,7 +329,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
                                    short replication, long blockSize, Progressable progress) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
       return wrapOutputStream(f,
-          fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication, blockSize, progress));
+          getFileSystem(f).create(convertToDefaultPath(f), permission, flags, bufferSize, replication, blockSize, progress));
     });
   }
 
@@ -304,7 +337,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags, int bufferSize,
                                    short replication, long blockSize, Progressable progress, Options.ChecksumOpt checksumOpt) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
-      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication,
+      return wrapOutputStream(f, getFileSystem(f).create(convertToDefaultPath(f), permission, flags, bufferSize, replication,
           blockSize, progress, checksumOpt));
     });
   }
@@ -314,13 +347,13 @@ public class HoodieWrapperFileSystem extends FileSystem {
       throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
       return wrapOutputStream(f,
-          fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize));
+          getFileSystem(f).create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize));
     });
   }
 
   @Override
   public FSDataOutputStream append(Path f, int bufferSize, Progressable progress) throws IOException {
-    return wrapOutputStream(f, fileSystem.append(convertToDefaultPath(f), bufferSize, progress));
+    return wrapOutputStream(f, getFileSystem(f).append(convertToDefaultPath(f), bufferSize, progress));
   }
 
   @Override
@@ -332,7 +365,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
         throw new HoodieException("Timed out waiting for " + src + " to appear", e);
       }
 
-      boolean success = fileSystem.rename(convertToDefaultPath(src), convertToDefaultPath(dst));
+      boolean success = getFileSystem(src).rename(convertToDefaultPath(src), convertToDefaultPath(dst));
 
       if (success) {
         try {
@@ -354,7 +387,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   @Override
   public boolean delete(Path f, boolean recursive) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.delete.name(), f, () -> {
-      boolean success = fileSystem.delete(convertToDefaultPath(f), recursive);
+      boolean success = getFileSystem(f).delete(convertToDefaultPath(f), recursive);
 
       if (success) {
         try {
@@ -370,24 +403,24 @@ public class HoodieWrapperFileSystem extends FileSystem {
   @Override
   public FileStatus[] listStatus(Path f) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.listStatus.name(), f, () -> {
-      return fileSystem.listStatus(convertToDefaultPath(f));
+      return getFileSystem(f).listStatus(convertToDefaultPath(f));
     });
   }
 
   @Override
   public Path getWorkingDirectory() {
-    return convertToHoodiePath(fileSystem.getWorkingDirectory());
+    return convertToHoodiePath(getTableFileSystem().getWorkingDirectory());
   }
 
   @Override
   public void setWorkingDirectory(Path newDir) {
-    fileSystem.setWorkingDirectory(convertToDefaultPath(newDir));
+    getFileSystem(newDir).setWorkingDirectory(convertToDefaultPath(newDir));
   }
 
   @Override
   public boolean mkdirs(Path f, FsPermission permission) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.mkdirs.name(), f, () -> {
-      boolean success = fileSystem.mkdirs(convertToDefaultPath(f), permission);
+      boolean success = getFileSystem(f).mkdirs(convertToDefaultPath(f), permission);
       if (success) {
         try {
           consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
@@ -407,7 +440,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
       } catch (TimeoutException e) {
         // pass
       }
-      return fileSystem.getFileStatus(convertToDefaultPath(f));
+      return getFileSystem(f).getFileStatus(convertToDefaultPath(f));
     });
   }
 
@@ -418,62 +451,62 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public String getCanonicalServiceName() {
-    return fileSystem.getCanonicalServiceName();
+    return getTableFileSystem().getCanonicalServiceName();
   }
 
   @Override
   public String getName() {
-    return fileSystem.getName();
+    return getTableFileSystem().getName();
   }
 
   @Override
   public Path makeQualified(Path path) {
-    return convertToHoodiePath(fileSystem.makeQualified(convertToDefaultPath(path)));
+    return convertToHoodiePath(getFileSystem(path).makeQualified(convertToDefaultPath(path)));
   }
 
   @Override
   public Token<?> getDelegationToken(String renewer) throws IOException {
-    return fileSystem.getDelegationToken(renewer);
+    return getTableFileSystem().getDelegationToken(renewer);
   }
 
   @Override
   public Token<?>[] addDelegationTokens(String renewer, Credentials credentials) throws IOException {
-    return fileSystem.addDelegationTokens(renewer, credentials);
+    return getTableFileSystem().addDelegationTokens(renewer, credentials);
   }
 
   @Override
   public FileSystem[] getChildFileSystems() {
-    return fileSystem.getChildFileSystems();
+    return getTableFileSystem().getChildFileSystems();
   }
 
   @Override
   public BlockLocation[] getFileBlockLocations(FileStatus file, long start, long len) throws IOException {
-    return fileSystem.getFileBlockLocations(file, start, len);
+    return getFileSystem(file.getPath()).getFileBlockLocations(file, start, len);
   }
 
   @Override
   public BlockLocation[] getFileBlockLocations(Path p, long start, long len) throws IOException {
-    return fileSystem.getFileBlockLocations(convertToDefaultPath(p), start, len);
+    return getFileSystem(p).getFileBlockLocations(convertToDefaultPath(p), start, len);
   }
 
   @Override
   public FsServerDefaults getServerDefaults() throws IOException {
-    return fileSystem.getServerDefaults();
+    return getTableFileSystem().getServerDefaults();
   }
 
   @Override
   public FsServerDefaults getServerDefaults(Path p) throws IOException {
-    return fileSystem.getServerDefaults(convertToDefaultPath(p));
+    return getFileSystem(p).getServerDefaults(convertToDefaultPath(p));
   }
 
   @Override
   public Path resolvePath(Path p) throws IOException {
-    return convertToHoodiePath(fileSystem.resolvePath(convertToDefaultPath(p)));
+    return convertToHoodiePath(getFileSystem(p).resolvePath(convertToDefaultPath(p)));
   }
 
   @Override
   public FSDataInputStream open(Path f) throws IOException {
-    return wrapInputStream(f, fileSystem.open(convertToDefaultPath(f)));
+    return wrapInputStream(f, getFileSystem(f).open(convertToDefaultPath(f)));
   }
 
   @Override
@@ -481,7 +514,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
                                                long blockSize, Progressable progress) throws IOException {
     Path p = convertToDefaultPath(f);
     return wrapOutputStream(p,
-        fileSystem.createNonRecursive(p, overwrite, bufferSize, replication, blockSize, progress));
+        getFileSystem(f).createNonRecursive(p, overwrite, bufferSize, replication, blockSize, progress));
   }
 
   @Override
@@ -489,7 +522,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
                                                short replication, long blockSize, Progressable progress) throws IOException {
     Path p = convertToDefaultPath(f);
     return wrapOutputStream(p,
-        fileSystem.createNonRecursive(p, permission, overwrite, bufferSize, replication, blockSize, progress));
+        getFileSystem(p).createNonRecursive(p, permission, overwrite, bufferSize, replication, blockSize, progress));
   }
 
   @Override
@@ -497,12 +530,12 @@ public class HoodieWrapperFileSystem extends FileSystem {
                                                int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
     Path p = convertToDefaultPath(f);
     return wrapOutputStream(p,
-        fileSystem.createNonRecursive(p, permission, flags, bufferSize, replication, blockSize, progress));
+        getFileSystem(p).createNonRecursive(p, permission, flags, bufferSize, replication, blockSize, progress));
   }
 
   @Override
   public boolean createNewFile(Path f) throws IOException {
-    boolean newFile = fileSystem.createNewFile(convertToDefaultPath(f));
+    boolean newFile = getFileSystem(f).createNewFile(convertToDefaultPath(f));
     if (newFile) {
       try {
         consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
@@ -515,18 +548,18 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataOutputStream append(Path f) throws IOException {
-    return wrapOutputStream(f, fileSystem.append(convertToDefaultPath(f)));
+    return wrapOutputStream(f, getFileSystem(f).append(convertToDefaultPath(f)));
   }
 
   @Override
   public FSDataOutputStream append(Path f, int bufferSize) throws IOException {
-    return wrapOutputStream(f, fileSystem.append(convertToDefaultPath(f), bufferSize));
+    return wrapOutputStream(f, getFileSystem(f).append(convertToDefaultPath(f), bufferSize));
   }
 
   @Override
   public void concat(Path trg, Path[] psrcs) throws IOException {
     Path[] psrcsNew = convertDefaults(psrcs);
-    fileSystem.concat(convertToDefaultPath(trg), psrcsNew);
+    getFileSystem(trg).concat(convertToDefaultPath(trg), psrcsNew);
     try {
       consistencyGuard.waitTillFileAppears(convertToDefaultPath(trg));
     } catch (TimeoutException e) {
@@ -536,12 +569,12 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public short getReplication(Path src) throws IOException {
-    return fileSystem.getReplication(convertToDefaultPath(src));
+    return getFileSystem(src).getReplication(convertToDefaultPath(src));
   }
 
   @Override
   public boolean setReplication(Path src, short replication) throws IOException {
-    return fileSystem.setReplication(convertToDefaultPath(src), replication);
+    return getFileSystem(src).setReplication(convertToDefaultPath(src), replication);
   }
 
   @Override
@@ -553,100 +586,106 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean deleteOnExit(Path f) throws IOException {
-    return fileSystem.deleteOnExit(convertToDefaultPath(f));
+    return getFileSystem(f).deleteOnExit(convertToDefaultPath(f));
   }
 
   @Override
   public boolean cancelDeleteOnExit(Path f) {
-    return fileSystem.cancelDeleteOnExit(convertToDefaultPath(f));
+    return getFileSystem(f).cancelDeleteOnExit(convertToDefaultPath(f));
   }
 
   @Override
   public boolean exists(Path f) throws IOException {
-    return fileSystem.exists(convertToDefaultPath(f));
+    return getFileSystem(f).exists(convertToDefaultPath(f));
   }
 
   @Override
   public boolean isDirectory(Path f) throws IOException {
-    return fileSystem.isDirectory(convertToDefaultPath(f));
+    return getFileSystem(f).isDirectory(convertToDefaultPath(f));
   }
 
   @Override
   public boolean isFile(Path f) throws IOException {
-    return fileSystem.isFile(convertToDefaultPath(f));
+    return getFileSystem(f).isFile(convertToDefaultPath(f));
   }
 
   @Override
   public long getLength(Path f) throws IOException {
-    return fileSystem.getLength(convertToDefaultPath(f));
+    return getFileSystem(f).getLength(convertToDefaultPath(f));
   }
 
   @Override
   public ContentSummary getContentSummary(Path f) throws IOException {
-    return fileSystem.getContentSummary(convertToDefaultPath(f));
+    return getFileSystem(f).getContentSummary(convertToDefaultPath(f));
   }
 
   @Override
   public RemoteIterator<Path> listCorruptFileBlocks(Path path) throws IOException {
-    return fileSystem.listCorruptFileBlocks(convertToDefaultPath(path));
+    return getFileSystem(path).listCorruptFileBlocks(convertToDefaultPath(path));
   }
 
   @Override
   public FileStatus[] listStatus(Path f, PathFilter filter) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.listStatus.name(), f, () -> {
-      return fileSystem.listStatus(convertToDefaultPath(f), filter);
+      return getFileSystem(f).listStatus(convertToDefaultPath(f), filter);
+    });
+  }
+
+  public FileStatus[] listStatus(Path path, String fileId, PathFilter filter) throws IOException {
+    return executeFuncWithTimeMetrics(MetricName.listStatus.name(), path, () -> {
+      return getFileSystem(path).listStatus(convertToDefaultPath(path, fileId), filter);
     });
   }
 
   @Override
   public FileStatus[] listStatus(Path[] files) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.listStatus.name(), files.length > 0 ? files[0] : null, () -> {
-      return fileSystem.listStatus(convertDefaults(files));
+      return getFileSystem(files[0]).listStatus(convertDefaults(files));
     });
   }
 
   @Override
   public FileStatus[] listStatus(Path[] files, PathFilter filter) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.listStatus.name(), files.length > 0 ? files[0] : null, () -> {
-      return fileSystem.listStatus(convertDefaults(files), filter);
+      return getFileSystem(files[0]).listStatus(convertDefaults(files), filter);
     });
   }
 
   @Override
   public FileStatus[] globStatus(Path pathPattern) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.globStatus.name(), pathPattern, () -> {
-      return fileSystem.globStatus(convertToDefaultPath(pathPattern));
+      return getFileSystem(pathPattern).globStatus(convertToDefaultPath(pathPattern));
     });
   }
 
   @Override
   public FileStatus[] globStatus(Path pathPattern, PathFilter filter) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.globStatus.name(), pathPattern, () -> {
-      return fileSystem.globStatus(convertToDefaultPath(pathPattern), filter);
+      return getFileSystem(pathPattern).globStatus(convertToDefaultPath(pathPattern), filter);
     });
   }
 
   @Override
   public RemoteIterator<LocatedFileStatus> listLocatedStatus(Path f) throws IOException {
-    return fileSystem.listLocatedStatus(convertToDefaultPath(f));
+    return getFileSystem(f).listLocatedStatus(convertToDefaultPath(f));
   }
 
   @Override
   public RemoteIterator<LocatedFileStatus> listFiles(Path f, boolean recursive) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.listFiles.name(), f, () -> {
-      return fileSystem.listFiles(convertToDefaultPath(f), recursive);
+      return getFileSystem(f).listFiles(convertToDefaultPath(f), recursive);
     });
   }
 
   @Override
   public Path getHomeDirectory() {
-    return convertToHoodiePath(fileSystem.getHomeDirectory());
+    return convertToHoodiePath(getTableFileSystem().getHomeDirectory());
   }
 
   @Override
   public boolean mkdirs(Path f) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.mkdirs.name(), f, () -> {
-      boolean success = fileSystem.mkdirs(convertToDefaultPath(f));
+      boolean success = getFileSystem(f).mkdirs(convertToDefaultPath(f));
       if (success) {
         try {
           consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
@@ -660,7 +699,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public void copyFromLocalFile(Path src, Path dst) throws IOException {
-    fileSystem.copyFromLocalFile(convertToLocalPath(src), convertToDefaultPath(dst));
+    getFileSystem(src).copyFromLocalFile(convertToLocalPath(src), convertToDefaultPath(dst));
     try {
       consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
     } catch (TimeoutException e) {
@@ -670,7 +709,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public void moveFromLocalFile(Path[] srcs, Path dst) throws IOException {
-    fileSystem.moveFromLocalFile(convertLocalPaths(srcs), convertToDefaultPath(dst));
+    getFileSystem(dst).moveFromLocalFile(convertLocalPaths(srcs), convertToDefaultPath(dst));
     try {
       consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
     } catch (TimeoutException e) {
@@ -680,7 +719,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public void moveFromLocalFile(Path src, Path dst) throws IOException {
-    fileSystem.moveFromLocalFile(convertToLocalPath(src), convertToDefaultPath(dst));
+    getFileSystem(dst).moveFromLocalFile(convertToLocalPath(src), convertToDefaultPath(dst));
     try {
       consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
     } catch (TimeoutException e) {
@@ -690,7 +729,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public void copyFromLocalFile(boolean delSrc, Path src, Path dst) throws IOException {
-    fileSystem.copyFromLocalFile(delSrc, convertToLocalPath(src), convertToDefaultPath(dst));
+    getFileSystem(dst).copyFromLocalFile(delSrc, convertToLocalPath(src), convertToDefaultPath(dst));
     try {
       consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
     } catch (TimeoutException e) {
@@ -700,7 +739,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public void copyFromLocalFile(boolean delSrc, boolean overwrite, Path[] srcs, Path dst) throws IOException {
-    fileSystem.copyFromLocalFile(delSrc, overwrite, convertLocalPaths(srcs), convertToDefaultPath(dst));
+    getFileSystem(dst).copyFromLocalFile(delSrc, overwrite, convertLocalPaths(srcs), convertToDefaultPath(dst));
     try {
       consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
     } catch (TimeoutException e) {
@@ -710,7 +749,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public void copyFromLocalFile(boolean delSrc, boolean overwrite, Path src, Path dst) throws IOException {
-    fileSystem.copyFromLocalFile(delSrc, overwrite, convertToLocalPath(src), convertToDefaultPath(dst));
+    getFileSystem(dst).copyFromLocalFile(delSrc, overwrite, convertToLocalPath(src), convertToDefaultPath(dst));
     try {
       consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
     } catch (TimeoutException e) {
@@ -720,33 +759,33 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public void copyToLocalFile(Path src, Path dst) throws IOException {
-    fileSystem.copyToLocalFile(convertToDefaultPath(src), convertToLocalPath(dst));
+    getFileSystem(src).copyToLocalFile(convertToDefaultPath(src), convertToLocalPath(dst));
   }
 
   @Override
   public void moveToLocalFile(Path src, Path dst) throws IOException {
-    fileSystem.moveToLocalFile(convertToDefaultPath(src), convertToLocalPath(dst));
+    getFileSystem(src).moveToLocalFile(convertToDefaultPath(src), convertToLocalPath(dst));
   }
 
   @Override
   public void copyToLocalFile(boolean delSrc, Path src, Path dst) throws IOException {
-    fileSystem.copyToLocalFile(delSrc, convertToDefaultPath(src), convertToLocalPath(dst));
+    getFileSystem(src).copyToLocalFile(delSrc, convertToDefaultPath(src), convertToLocalPath(dst));
   }
 
   @Override
   public void copyToLocalFile(boolean delSrc, Path src, Path dst, boolean useRawLocalFileSystem) throws IOException {
-    fileSystem.copyToLocalFile(delSrc, convertToDefaultPath(src), convertToLocalPath(dst), useRawLocalFileSystem);
+    getFileSystem(src).copyToLocalFile(delSrc, convertToDefaultPath(src), convertToLocalPath(dst), useRawLocalFileSystem);
   }
 
   @Override
   public Path startLocalOutput(Path fsOutputFile, Path tmpLocalFile) throws IOException {
     return convertToHoodiePath(
-        fileSystem.startLocalOutput(convertToDefaultPath(fsOutputFile), convertToDefaultPath(tmpLocalFile)));
+        getFileSystem(fsOutputFile).startLocalOutput(convertToDefaultPath(fsOutputFile), convertToDefaultPath(tmpLocalFile)));
   }
 
   @Override
   public void completeLocalOutput(Path fsOutputFile, Path tmpLocalFile) throws IOException {
-    fileSystem.completeLocalOutput(convertToDefaultPath(fsOutputFile), convertToDefaultPath(tmpLocalFile));
+    getFileSystem(fsOutputFile).completeLocalOutput(convertToDefaultPath(fsOutputFile), convertToDefaultPath(tmpLocalFile));
   }
 
   @Override
@@ -758,187 +797,190 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public long getUsed() throws IOException {
-    return fileSystem.getUsed();
+    return getTableFileSystem().getUsed();
   }
 
   @Override
   public long getBlockSize(Path f) throws IOException {
-    return fileSystem.getBlockSize(convertToDefaultPath(f));
+    return getFileSystem(f).getBlockSize(convertToDefaultPath(f));
   }
 
   @Override
   public long getDefaultBlockSize() {
-    return fileSystem.getDefaultBlockSize();
+    return getTableFileSystem().getDefaultBlockSize();
   }
 
   @Override
   public long getDefaultBlockSize(Path f) {
-    return fileSystem.getDefaultBlockSize(convertToDefaultPath(f));
+    return getFileSystem(f).getDefaultBlockSize(convertToDefaultPath(f));
   }
 
   @Override
   public short getDefaultReplication() {
-    return fileSystem.getDefaultReplication();
+    return getTableFileSystem().getDefaultReplication();
   }
 
   @Override
   public short getDefaultReplication(Path path) {
-    return fileSystem.getDefaultReplication(convertToDefaultPath(path));
+    return getFileSystem(path).getDefaultReplication(convertToDefaultPath(path));
   }
 
   @Override
   public void access(Path path, FsAction mode) throws IOException {
-    fileSystem.access(convertToDefaultPath(path), mode);
+    getFileSystem(path).access(convertToDefaultPath(path), mode);
   }
 
   @Override
   public void createSymlink(Path target, Path link, boolean createParent) throws IOException {
-    fileSystem.createSymlink(convertToDefaultPath(target), convertToDefaultPath(link), createParent);
+    getFileSystem(target).createSymlink(convertToDefaultPath(target), convertToDefaultPath(link), createParent);
   }
 
   @Override
   public FileStatus getFileLinkStatus(Path f) throws IOException {
-    return fileSystem.getFileLinkStatus(convertToDefaultPath(f));
+    return getFileSystem(f).getFileLinkStatus(convertToDefaultPath(f));
   }
 
   @Override
   public boolean supportsSymlinks() {
-    return fileSystem.supportsSymlinks();
+    return getTableFileSystem().supportsSymlinks();
   }
 
   @Override
   public Path getLinkTarget(Path f) throws IOException {
-    return convertToHoodiePath(fileSystem.getLinkTarget(convertToDefaultPath(f)));
+    return convertToHoodiePath(getFileSystem(f).getLinkTarget(convertToDefaultPath(f)));
   }
 
   @Override
   public FileChecksum getFileChecksum(Path f) throws IOException {
-    return fileSystem.getFileChecksum(convertToDefaultPath(f));
+    return getFileSystem(f).getFileChecksum(convertToDefaultPath(f));
   }
 
   @Override
   public FileChecksum getFileChecksum(Path f, long length) throws IOException {
-    return fileSystem.getFileChecksum(convertToDefaultPath(f), length);
+    return getFileSystem(f).getFileChecksum(convertToDefaultPath(f), length);
   }
 
   @Override
   public void setVerifyChecksum(boolean verifyChecksum) {
-    fileSystem.setVerifyChecksum(verifyChecksum);
+    tableFileSystem.setVerifyChecksum(verifyChecksum);
+    storageFileSystem.setVerifyChecksum(verifyChecksum);
   }
 
   @Override
   public void setWriteChecksum(boolean writeChecksum) {
-    fileSystem.setWriteChecksum(writeChecksum);
+    tableFileSystem.setWriteChecksum(writeChecksum);
+    storageFileSystem.setWriteChecksum(writeChecksum);
   }
 
   @Override
   public FsStatus getStatus() throws IOException {
-    return fileSystem.getStatus();
+    return getTableFileSystem().getStatus();
   }
 
   @Override
   public FsStatus getStatus(Path p) throws IOException {
-    return fileSystem.getStatus(convertToDefaultPath(p));
+    return getFileSystem(p).getStatus(convertToDefaultPath(p));
   }
 
   @Override
   public void setPermission(Path p, FsPermission permission) throws IOException {
-    fileSystem.setPermission(convertToDefaultPath(p), permission);
+    getFileSystem(p).setPermission(convertToDefaultPath(p), permission);
   }
 
   @Override
   public void setOwner(Path p, String username, String groupname) throws IOException {
-    fileSystem.setOwner(convertToDefaultPath(p), username, groupname);
+    getFileSystem(p).setOwner(convertToDefaultPath(p), username, groupname);
   }
 
   @Override
   public void setTimes(Path p, long mtime, long atime) throws IOException {
-    fileSystem.setTimes(convertToDefaultPath(p), mtime, atime);
+    getFileSystem(p).setTimes(convertToDefaultPath(p), mtime, atime);
   }
 
   @Override
   public Path createSnapshot(Path path, String snapshotName) throws IOException {
-    return convertToHoodiePath(fileSystem.createSnapshot(convertToDefaultPath(path), snapshotName));
+    return convertToHoodiePath(
+        getFileSystem(path).createSnapshot(convertToDefaultPath(path), snapshotName));
   }
 
   @Override
   public void renameSnapshot(Path path, String snapshotOldName, String snapshotNewName) throws IOException {
-    fileSystem.renameSnapshot(convertToDefaultPath(path), snapshotOldName, snapshotNewName);
+    getFileSystem(path).renameSnapshot(convertToDefaultPath(path), snapshotOldName, snapshotNewName);
   }
 
   @Override
   public void deleteSnapshot(Path path, String snapshotName) throws IOException {
-    fileSystem.deleteSnapshot(convertToDefaultPath(path), snapshotName);
+    getFileSystem(path).deleteSnapshot(convertToDefaultPath(path), snapshotName);
   }
 
   @Override
   public void modifyAclEntries(Path path, List<AclEntry> aclSpec) throws IOException {
-    fileSystem.modifyAclEntries(convertToDefaultPath(path), aclSpec);
+    getFileSystem(path).modifyAclEntries(convertToDefaultPath(path), aclSpec);
   }
 
   @Override
   public void removeAclEntries(Path path, List<AclEntry> aclSpec) throws IOException {
-    fileSystem.removeAclEntries(convertToDefaultPath(path), aclSpec);
+    getFileSystem(path).removeAclEntries(convertToDefaultPath(path), aclSpec);
   }
 
   @Override
   public void removeDefaultAcl(Path path) throws IOException {
-    fileSystem.removeDefaultAcl(convertToDefaultPath(path));
+    getFileSystem(path).removeDefaultAcl(convertToDefaultPath(path));
   }
 
   @Override
   public void removeAcl(Path path) throws IOException {
-    fileSystem.removeAcl(convertToDefaultPath(path));
+    getFileSystem(path).removeAcl(convertToDefaultPath(path));
   }
 
   @Override
   public void setAcl(Path path, List<AclEntry> aclSpec) throws IOException {
-    fileSystem.setAcl(convertToDefaultPath(path), aclSpec);
+    getFileSystem(path).setAcl(convertToDefaultPath(path), aclSpec);
   }
 
   @Override
   public AclStatus getAclStatus(Path path) throws IOException {
-    return fileSystem.getAclStatus(convertToDefaultPath(path));
+    return getFileSystem(path).getAclStatus(convertToDefaultPath(path));
   }
 
   @Override
   public void setXAttr(Path path, String name, byte[] value) throws IOException {
-    fileSystem.setXAttr(convertToDefaultPath(path), name, value);
+    getFileSystem(path).setXAttr(convertToDefaultPath(path), name, value);
   }
 
   @Override
   public void setXAttr(Path path, String name, byte[] value, EnumSet<XAttrSetFlag> flag) throws IOException {
-    fileSystem.setXAttr(convertToDefaultPath(path), name, value, flag);
+    getFileSystem(path).setXAttr(convertToDefaultPath(path), name, value, flag);
   }
 
   @Override
   public byte[] getXAttr(Path path, String name) throws IOException {
-    return fileSystem.getXAttr(convertToDefaultPath(path), name);
+    return getFileSystem(path).getXAttr(convertToDefaultPath(path), name);
   }
 
   @Override
   public Map<String, byte[]> getXAttrs(Path path) throws IOException {
-    return fileSystem.getXAttrs(convertToDefaultPath(path));
+    return getFileSystem(path).getXAttrs(convertToDefaultPath(path));
   }
 
   @Override
   public Map<String, byte[]> getXAttrs(Path path, List<String> names) throws IOException {
-    return fileSystem.getXAttrs(convertToDefaultPath(path), names);
+    return getFileSystem(path).getXAttrs(convertToDefaultPath(path), names);
   }
 
   @Override
   public List<String> listXAttrs(Path path) throws IOException {
-    return fileSystem.listXAttrs(convertToDefaultPath(path));
+    return getFileSystem(path).listXAttrs(convertToDefaultPath(path));
   }
 
   @Override
   public void removeXAttr(Path path, String name) throws IOException {
-    fileSystem.removeXAttr(convertToDefaultPath(path), name);
+    getFileSystem(path).removeXAttr(convertToDefaultPath(path), name);
   }
 
   @Override
   public Configuration getConf() {
-    return fileSystem.getConf();
+    return getTableFileSystem().getConf();
   }
 
   @Override
@@ -948,25 +990,122 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public int hashCode() {
-    return fileSystem.hashCode();
+    return getTableFileSystem().hashCode();
   }
 
   @Override
   public boolean equals(Object obj) {
-    return fileSystem.equals(obj);
+    return getTableFileSystem().equals(obj);
   }
 
   @Override
   public String toString() {
-    return fileSystem.toString();
+    return getTableFileSystem().toString();
   }
 
   public Path convertToHoodiePath(Path oldPath) {
     return convertPathWithScheme(oldPath, getHoodieScheme(getScheme()));
   }
 
+  /* NOTE: Can only be used when oldPath is a file path */
   private Path convertToDefaultPath(Path oldPath) {
+    return convertPathWithScheme(convertToPhysicalFilePath(oldPath), getScheme());
+  }
+
+  /* NOTE: Can only be used when oldPath is a directory */
+  private Path convertToDefaultPath(Path oldPath, String fileId) {
+    return convertPathWithScheme(convertToPhysicalPath(oldPath, fileId), getScheme());
+  }
+
+  private Path convertToDefaultScheme(Path oldPath) {
     return convertPathWithScheme(oldPath, getScheme());
+  }
+
+  /**
+   * Return a physical location for a logical directory
+   *
+   * @param path logical directory
+   * @param fileId fileId
+   * @return physical directory where this file is located
+   * */
+  private Path convertToPhysicalPath(Path path, String fileId) {
+    String pathStr = getPathStrWithoutScheme(path.toString());
+
+    if (shouldConvert(pathStr)) {
+      String partition = FSUtils.getRelativePartitionPath(new CachingPath(storageStrategy.getBasePath()), path);
+      return new Path(storageStrategy.storageLocation(partition, fileId));
+    } else {
+      return path;
+    }
+  }
+
+  /** Return physical file path for a logical file path
+   *
+   * @param filePath logical path to a file
+   * @return physical path to a file
+   * */
+  private Path convertToPhysicalFilePath(Path filePath) {
+    String pathStr = getPathStrWithoutScheme(filePath.toString());
+
+    if (shouldConvert(pathStr)) {
+      String partition = FSUtils.getRelativePartitionPath(new CachingPath(storageStrategy.getBasePath()),
+          getPathStrWithoutScheme(filePath.getParent().toString()));
+      String fileName = filePath.getName();
+      String fileId = FSUtils.getFileId(fileName);
+      Path physicalPath = new Path(String.format("%s/%s", storageStrategy.storageLocation(partition, fileId), fileName));
+      LOG.info("wrapperFS, logical: " + filePath);
+      LOG.info("wrapperFS, partition: " + partition);
+      LOG.info("wrapperFS, physical: " + physicalPath);
+      return physicalPath;
+    } else {
+      return filePath;
+    }
+  }
+
+  private boolean shouldConvert(String pathStr) {
+    return storageStrategy != null
+        && !storageStrategy.getClass().getName().equals(StorageStrategy.DEFAULT.value)
+        && !pathStr.contains(HoodieTableMetaClient.METAFOLDER_NAME)
+        && pathStr.startsWith(storageStrategy.getBasePath())
+        && !pathStr.contains(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
+  }
+
+  /* ONLY for Spark relation */
+  public Path convertPath(Path filePath) {
+    return convertToPhysicalFilePath(filePath);
+  }
+
+  /**
+   * Check if a physical location exist with partition path and file ID
+   *
+   * @param partitionPath partition path of a file
+   * @param fileId fileId
+   * @return if this location exist
+   * */
+  public boolean dirExists(String partitionPath, String fileId) {
+    Path physicalPath = new Path(storageStrategy.storageLocation(partitionPath, fileId));
+    try {
+      // use raw file system
+      return getFileSystem(physicalPath).exists(physicalPath);
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Failed to check if dir exists, dir:" + physicalPath, ioe);
+    }
+  }
+
+  /**
+   * Create physical partition folder for a file
+   * @param partitionPath partition path of this file. e.g. 2023/02/01
+   * @param fileId fileId
+   * @return if this path is created successfully
+   * */
+  public boolean mkPath(String partitionPath, String fileId) {
+    Path physicalPath = new Path(storageStrategy.storageLocation(partitionPath, fileId));
+    try {
+      // use raw file system
+      return getFileSystem(physicalPath).mkdirs(physicalPath);
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Failed to make dir " + physicalPath, ioe);
+    }
   }
 
   private Path convertToLocalPath(Path oldPath) {
@@ -1003,7 +1142,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   protected boolean needCreateTempFile() {
-    return HDFS.getScheme().equals(fileSystem.getScheme());
+    return HDFS.getScheme().equals(getTableFileSystem().getScheme());
   }
 
   /**
@@ -1024,18 +1163,18 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
     try {
       if (!content.isPresent()) {
-        fsout = fileSystem.create(fullPath, false);
+        fsout = getFileSystem(fullPath).create(fullPath, false);
       }
 
       if (content.isPresent() && needTempFile) {
         Path parent = fullPath.getParent();
         tmpPath = new Path(parent, fullPath.getName() + TMP_PATH_POSTFIX);
-        fsout = fileSystem.create(tmpPath, false);
+        fsout = getFileSystem(tmpPath).create(tmpPath, false);
         fsout.write(content.get());
       }
 
       if (content.isPresent() && !needTempFile) {
-        fsout = fileSystem.create(fullPath, false);
+        fsout = getFileSystem(fullPath).create(fullPath, false);
         fsout.write(content.get());
       }
     } catch (IOException e) {
@@ -1053,7 +1192,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
       try {
         if (null != tmpPath) {
-          fileSystem.rename(tmpPath, fullPath);
+          getFileSystem(tmpPath).rename(tmpPath, fullPath);
         }
       } catch (IOException e) {
         throw new HoodieIOException("Failed to rename " + tmpPath + " to the target " + fullPath, e);
@@ -1061,7 +1200,76 @@ public class HoodieWrapperFileSystem extends FileSystem {
     }
   }
 
-  public FileSystem getFileSystem() {
-    return fileSystem;
+  public FileSystem getFileSystem(Path path) {
+    if (path == null
+        || storageStrategy == null
+        || storageStrategy.getClass().getName().equals(StorageStrategy.DEFAULT.value)) {
+      return tableFileSystem;
+    }
+
+    // non-default storage strategy
+    String pathStr = getPathStrWithoutScheme(path.toString());
+    String storagePathWithoutScheme = getPathStrWithoutScheme(storageStrategy.getStoragePath());
+
+    if (shouldConvert(pathStr)
+        || pathStr.startsWith(storagePathWithoutScheme)) {
+      return storageFileSystem;
+    } else if (pathStr.startsWith(storageStrategy.getBasePath())) {
+      // meta file or default storage strategy
+      return tableFileSystem;
+    }
+
+    LOG.error("Can't get the correct FS for path: " + path + ", trying with metaFileSystem");
+    return tableFileSystem;
+  }
+
+  public FileSystem getTableFileSystem() {
+    return tableFileSystem;
+  }
+
+  /**
+   * Extract partition path with table name, table base path, and full partition path
+   *
+   * @param tableName table name
+   * @param basePath table base path
+   * @param fullPartitionPath full partition path.
+   *                          When using default storage strategy: base_path/partition_path
+   *                          When using non-default storage strategy: storage_location/table_name/partition_path
+   * */
+  public static String getPartitionPath(String tableName, Path basePath, Path fullPartitionPath) {
+    String fullPartitionPathStr = getPathStrWithoutScheme(fullPartitionPath.toString());
+
+    int tableNameStartIndex = fullPartitionPathStr.lastIndexOf(tableName);
+    if (tableNameStartIndex == -1) {
+      // could be partition metadata, fall back to extract partition with the base path
+      return FSUtils.getRelativePartitionPath(basePath, fullPartitionPath);
+    }
+
+    // Partition-Path could be empty for non-partitioned tables
+    return tableNameStartIndex + tableName.length() == fullPartitionPathStr.length()
+        ? ""
+        : fullPartitionPathStr.substring(tableNameStartIndex + tableName.length() + 1);
+  }
+
+  public static String getPathStrWithoutScheme(String pathStr) {
+    int start = 0;
+    int slash = pathStr.indexOf(47);
+    int colon;
+    if (StringUtils.countMatches(pathStr, ":") > 2) {
+      colon = pathStr.indexOf(":/");
+    } else {
+      colon = pathStr.indexOf(58);
+    }
+
+    if (colon != -1 && (slash == -1 || colon < slash)) {
+      start = colon + 1;
+      while (pathStr.startsWith("//", start)) {
+        start++;
+      }
+    } else if (slash != -1) {
+      start = slash;
+    }
+
+    return pathStr.substring(start);
   }
 }

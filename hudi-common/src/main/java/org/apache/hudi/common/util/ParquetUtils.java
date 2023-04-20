@@ -90,7 +90,7 @@ public class ParquetUtils extends BaseFileUtils {
     ParquetMetadata footer;
     try {
       // TODO(vc): Should we use the parallel reading version here?
-      footer = ParquetFileReader.readFooter(FSUtils.getFs(parquetFilePath.toString(), conf).getConf(), parquetFilePath);
+      footer = ParquetFileReader.readFooter(FSUtils.prepareHadoopConf(conf), parquetFilePath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath, e);
     }

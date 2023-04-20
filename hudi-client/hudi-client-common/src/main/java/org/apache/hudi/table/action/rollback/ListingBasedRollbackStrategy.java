@@ -239,7 +239,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                                                     String baseFileExtension, HoodieWrapperFileSystem fs)
       throws IOException {
     SerializablePathFilter pathFilter = getSerializablePathFilter(baseFileExtension, instantToRollback.getTimestamp());
-    Path[] filePaths = getFilesFromCommitMetadata(basePath, commitMetadata, partitionPath);
+    Path[] filePaths = getFilesFromCommitMetadata(commitMetadata, basePath, partitionPath);
 
     return fs.listStatus(Arrays.stream(filePaths).filter(entry -> {
       try {
@@ -257,7 +257,6 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       throws IOException {
     SerializablePathFilter pathFilter = getSerializablePathFilter(baseFileExtension, instantToRollback.getTimestamp());
     Path[] filePaths = listFilesToBeDeleted(basePath, partitionPath);
-
     return fs.listStatus(filePaths, pathFilter);
   }
 
@@ -271,7 +270,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     return new Path[] {FSUtils.getPartitionPath(basePath, partitionPath)};
   }
 
-  private static Path[] getFilesFromCommitMetadata(String basePath, HoodieCommitMetadata commitMetadata, String partitionPath) {
+  private static Path[] getFilesFromCommitMetadata(HoodieCommitMetadata commitMetadata, String basePath, String partitionPath) {
     List<String> fullPaths = commitMetadata.getFullPathsByPartitionPath(basePath, partitionPath);
     return fullPaths.stream().map(Path::new).toArray(Path[]::new);
   }

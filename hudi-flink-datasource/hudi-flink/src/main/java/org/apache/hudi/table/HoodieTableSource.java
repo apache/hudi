@@ -98,6 +98,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -326,17 +327,19 @@ public class HoodieTableSource implements
     if (relPartitionPaths.size() == 0) {
       return Collections.emptyList();
     }
-    FileStatus[] fileStatuses = fileIndex.getFilesInPartitions();
-    if (fileStatuses.length == 0) {
+
+    Map<String, FileStatus[]> partitionToFiles = fileIndex.getPartitionToFiles();
+    if (partitionToFiles.size() == 0) {
       throw new HoodieException("No files found for reading in user provided path.");
     }
 
+    // file-slice after pending compaction-requested instant-time is also considered valid
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
-        // file-slice after pending compaction-requested instant-time is also considered valid
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), fileStatuses);
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), partitionToFiles);
     String latestCommit = fsView.getLastInstant().get().getTimestamp();
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     final AtomicInteger cnt = new AtomicInteger(0);
+
     // generates one input split for each file group
     return relPartitionPaths.stream()
         .map(relPartitionPath -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, latestCommit)

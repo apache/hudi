@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -206,7 +207,10 @@ public class FSUtils {
   }
 
   public static String getFileId(String fullFileName) {
-    return fullFileName.split("_")[0];
+    String firstPart = fullFileName.split("_")[0];
+    return firstPart.startsWith(".")
+        ? firstPart.substring(1)
+        : firstPart;
   }
 
   /**
@@ -225,24 +229,24 @@ public class FSUtils {
     return datePartitions;
   }
 
+  public static String getRelativePartitionPath(Path basePath, String fullPartitionPathStr) {
+    basePath = getPathWithoutSchemeAndAuthority(basePath);
+    int partitionStartIndex = fullPartitionPathStr.indexOf(basePath.getName(),
+        basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
+
+    // Partition-Path could be empty for non-partitioned tables
+    return partitionStartIndex + basePath.getName().length() == fullPartitionPathStr.length() ? ""
+        : fullPartitionPathStr.substring(partitionStartIndex + basePath.getName().length() + 1);
+  }
+
   /**
    * Given a base partition and a partition path, return relative path of partition path to the base path.
    */
   public static String getRelativePartitionPath(Path basePath, Path fullPartitionPath) {
-    basePath = getPathWithoutSchemeAndAuthority(basePath);
     fullPartitionPath = getPathWithoutSchemeAndAuthority(fullPartitionPath);
 
     String fullPartitionPathStr = fullPartitionPath.toString();
-
-    if (!fullPartitionPathStr.startsWith(basePath.toString())) {
-      throw new IllegalArgumentException("Partition path does not belong to base-path");
-    }
-
-    int partitionStartIndex = fullPartitionPathStr.indexOf(basePath.getName(),
-        basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
-    // Partition-Path could be empty for non-partitioned tables
-    return partitionStartIndex + basePath.getName().length() == fullPartitionPathStr.length() ? ""
-        : fullPartitionPathStr.substring(partitionStartIndex + basePath.getName().length() + 1);
+    return getRelativePartitionPath(basePath, fullPartitionPathStr);
   }
 
   /**
@@ -546,19 +550,19 @@ public class FSUtils {
   /**
    * Get the latest log file for the passed in file-id in the partition path
    */
-  public static Option<HoodieLogFile> getLatestLogFile(FileSystem fs, Path partitionPath, String fileId,
+  public static Option<HoodieLogFile> getLatestLogFile(HoodieWrapperFileSystem fs, Path fullPartitionPath, String fileId,
                                                        String logFileExtension, String baseCommitTime) throws IOException {
-    return getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
+    return getLatestLogFile(getAllLogFiles(fs, fullPartitionPath, fileId, logFileExtension, baseCommitTime));
   }
 
   /**
    * Get all the log files for the passed in file-id in the partition path.
    */
-  public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath, final String fileId,
+  public static Stream<HoodieLogFile> getAllLogFiles(HoodieWrapperFileSystem fs, Path fullPartitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {
     try {
       PathFilter pathFilter = path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension);
-      return Arrays.stream(fs.listStatus(partitionPath, pathFilter))
+      return Arrays.stream(fs.listStatus(fullPartitionPath, fileId, pathFilter))
           .map(HoodieLogFile::new)
           .filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
     } catch (FileNotFoundException e) {
@@ -569,10 +573,10 @@ public class FSUtils {
   /**
    * Get the latest log version for the fileId in the partition path.
    */
-  public static Option<Pair<Integer, String>> getLatestLogVersion(FileSystem fs, Path partitionPath,
+  public static Option<Pair<Integer, String>> getLatestLogVersion(HoodieWrapperFileSystem fs, Path fullPartitionPath,
       final String fileId, final String logFileExtension, final String baseCommitTime) throws IOException {
     Option<HoodieLogFile> latestLogFile =
-        getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
+        getLatestLogFile(getAllLogFiles(fs, fullPartitionPath, fileId, logFileExtension, baseCommitTime));
     if (latestLogFile.isPresent()) {
       return Option
           .of(Pair.of(latestLogFile.get().getLogVersion(), getWriteTokenFromLogPath(latestLogFile.get().getPath())));
@@ -583,10 +587,10 @@ public class FSUtils {
   /**
    * computes the next log version for the specified fileId in the partition path.
    */
-  public static int computeNextLogVersion(FileSystem fs, Path partitionPath, final String fileId,
+  public static int computeNextLogVersion(HoodieWrapperFileSystem fs, Path fullPartitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {
     Option<Pair<Integer, String>> currentVersionWithWriteToken =
-        getLatestLogVersion(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
+        getLatestLogVersion(fs, fullPartitionPath, fileId, logFileExtension, baseCommitTime);
     // handle potential overflow
     return (currentVersionWithWriteToken.isPresent()) ? currentVersionWithWriteToken.get().getKey() + 1
         : HoodieLogFile.LOGFILE_BASE_VERSION;
@@ -633,17 +637,35 @@ public class FSUtils {
     return sizeInBytes / (1024 * 1024);
   }
 
-  public static Path getPartitionPath(String basePath, String partitionPath) {
+  public static String stripLeadingSlash(String pathStr) {
+    return pathStr.startsWith("/") ? pathStr.substring(1) : pathStr;
+  }
+
+  /**
+   * Return logical relative file path as string with given partition path and file name
+   * @param partitionPath partition path, e.g. country=usa, 2022/02/22
+   * @param fileName Hudi file name
+   * @return logical relative file path in string e.g. country=usa/abcde.parquet
+   * */
+  public static String getRelativeFilePathStr(String partitionPath, String fileName) {
+    return (partitionPath.isEmpty() ? "" : partitionPath + "/") + fileName;
+  }
+
+  public static String getPartitionPathStr(String basePath, String partitionPath) {
     if (StringUtils.isNullOrEmpty(partitionPath)) {
-      return new Path(basePath);
+      return basePath;
     }
 
     // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
     //       absolute path
-    String properPartitionPath = partitionPath.startsWith("/")
-        ? partitionPath.substring(1)
-        : partitionPath;
-    return getPartitionPath(new CachingPath(basePath), properPartitionPath);
+    String properPartitionPath = stripLeadingSlash(partitionPath);
+    return String.format("%s/%s", basePath, properPartitionPath);
+  }
+
+  public static Path getPartitionPath(String basePath, String partitionPath) {
+    String pathStr = getPartitionPathStr(basePath, partitionPath);
+
+    return new Path(pathStr);
   }
 
   public static Path getPartitionPath(Path basePath, String partitionPath) {
@@ -702,20 +724,22 @@ public class FSUtils {
     return returnConf;
   }
 
-  /**
-   * Get the FS implementation for this table.
-   * @param path  Path String
-   * @param hadoopConf  Serializable Hadoop Configuration
-   * @param consistencyGuardConfig Consistency Guard Config
-   * @return HoodieWrapperFileSystem
-   */
-  public static HoodieWrapperFileSystem getFs(String path, SerializableConfiguration hadoopConf,
-      ConsistencyGuardConfig consistencyGuardConfig) {
-    FileSystem fileSystem = FSUtils.getFs(path, hadoopConf.newCopy());
-    return new HoodieWrapperFileSystem(fileSystem,
-        consistencyGuardConfig.isConsistencyCheckEnabled()
-            ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig)
-            : new NoOpConsistencyGuard());
+  /* Return a copied conf with storage strategy set*/
+  public static Configuration registerFileSystemWithStorageStrategy(Path file, Configuration conf, HoodieConfig config) {
+    Configuration returnConf = new Configuration(conf);
+    String hoodieScheme = HoodieWrapperFileSystem.getHoodieScheme(FSUtils.getFs(file, conf).getScheme());
+    returnConf.set(String.format("fs.%s.impl", hoodieScheme), HoodieWrapperFileSystem.class.getName());
+    // have to disable fs cache so Hudi can access multiple tables in one session
+    returnConf.set(String.format("fs.%s.impl.disable.cache", hoodieScheme), "true");
+
+    // register needed info for initializing storage strategy
+    returnConf.set(HoodieTableConfig.HOODIE_STORAGE_STRATEGY_CLASS_NAME_KEY, config.getStringOrDefault(HoodieTableConfig.HOODIE_STORAGE_STRATEGY_CLASS_NAME));
+    String basePath = config.getString(HoodieTableConfig.HOODIE_BASE_PATH_KEY);
+    returnConf.set(HoodieTableConfig.HOODIE_BASE_PATH_KEY, basePath);
+    returnConf.set(HoodieTableConfig.HOODIE_STORAGE_PATH_KEY, config.getStringOrDefault(HoodieTableConfig.HOODIE_STORAGE_PATH, basePath));
+    returnConf.set(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, config.getString(HoodieTableConfig.HOODIE_TABLE_NAME_KEY));
+
+    return returnConf;
   }
 
   /**

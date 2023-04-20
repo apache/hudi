@@ -38,7 +38,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
@@ -331,7 +330,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
    *
    * @param partitionPath The absolute path of the partition
    */
-  FileStatus[] fetchAllFilesInPartition(Path partitionPath) throws IOException {
+  FileStatus[] fetchAllFilesInPartition(Path partitionPath) {
     String relativePartitionPath = FSUtils.getRelativePartitionPath(dataBasePath.get(), partitionPath);
     String recordKey = relativePartitionPath.isEmpty() ? NON_PARTITIONED_NAME : relativePartitionPath;
 
@@ -343,11 +342,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     FileStatus[] statuses = recordOpt.map(record -> {
       HoodieMetadataPayload metadataPayload = record.getData();
       checkForSpuriousDeletes(metadataPayload, recordKey);
-      try {
-        return metadataPayload.getFileStatuses(getHadoopConf(), partitionPath);
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to extract file-statuses from the payload", e);
-      }
+      return metadataPayload.getFileStatuses(dataMetaClient.getFs(), partitionPath);
     })
         .orElse(new FileStatus[0]);
 
@@ -370,7 +365,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         getRecordsByKeys(new ArrayList<>(partitionIdToPathMap.keySet()), MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
-    FileSystem fs = partitionPaths.get(0).getFileSystem(getHadoopConf());
+    FileSystem fs = dataMetaClient.getFs();
 
     Map<String, FileStatus[]> partitionPathToFilesMap = partitionIdRecordPairs.parallelStream()
         .map(pair -> {
@@ -384,6 +379,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
             checkForSpuriousDeletes(metadataPayload, partitionId);
 
             FileStatus[] files = metadataPayload.getFileStatuses(fs, partitionPath);
+
+            // return Pair<logicalPath, statuses>
             return Pair.of(partitionPath.toString(), files);
           })
               .orElse(null);

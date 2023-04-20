@@ -76,6 +76,7 @@ public class HoodieRowDataFileWriterFactory {
         writeConfig.getParquetMaxFileSize(),
         writeSupport.getHadoopConf(),
         writeConfig.getParquetCompressionRatio(),
-        writeConfig.parquetDictionaryEnabled()));
+        writeConfig.parquetDictionaryEnabled()),
+        writeConfig);
   }
 }

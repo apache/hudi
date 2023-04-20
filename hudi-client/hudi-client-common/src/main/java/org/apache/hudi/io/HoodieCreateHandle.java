@@ -93,7 +93,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setStat(new HoodieWriteStat());
-
     this.path = makeNewPath(partitionPath);
 
     try {
@@ -102,7 +101,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           hoodieTable.getPartitionMetafileFormat());
       partitionMetadata.trySave(getPartitionId());
       createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
-      this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getHadoopConf(), config,
+      this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, fs, path, hoodieTable.getHadoopConf(), config,
         writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
@@ -234,7 +233,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     stat.setNumInserts(insertRecordsWritten);
     stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
     stat.setFileId(writeStatus.getFileId());
-    stat.setPath(new Path(config.getBasePath()), path);
+    stat.setPath(FSUtils.getRelativeFilePathStr(partitionPath, path.getName()));
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
 
     long fileSize = FSUtils.getFileSize(fs, path);

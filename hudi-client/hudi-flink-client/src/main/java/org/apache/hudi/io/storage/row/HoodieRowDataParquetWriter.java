@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
@@ -40,16 +41,17 @@ public class HoodieRowDataParquetWriter extends ParquetWriter<RowData>
   private final long maxFileSize;
   private final HoodieRowDataParquetWriteSupport writeSupport;
 
-  public HoodieRowDataParquetWriter(Path file, HoodieParquetConfig<HoodieRowDataParquetWriteSupport> parquetConfig)
+  public HoodieRowDataParquetWriter(Path file, HoodieParquetConfig<HoodieRowDataParquetWriteSupport> parquetConfig, HoodieConfig hoodieConfig)
       throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
         ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),
         parquetConfig.getBlockSize(), parquetConfig.getPageSize(), parquetConfig.getPageSize(),
         DEFAULT_IS_DICTIONARY_ENABLED, DEFAULT_IS_VALIDATING_ENABLED,
-        DEFAULT_WRITER_VERSION, FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
+        DEFAULT_WRITER_VERSION,
+        FSUtils.registerFileSystemWithStorageStrategy(file, parquetConfig.getHadoopConf(), hoodieConfig));
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf());
-    this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(FSUtils.registerFileSystem(file,
-        parquetConfig.getHadoopConf()));
+    this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(
+        FSUtils.registerFileSystemWithStorageStrategy(file, parquetConfig.getHadoopConf(), hoodieConfig));
     this.maxFileSize = parquetConfig.getMaxFileSize()
         + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
     this.writeSupport = parquetConfig.getWriteSupport();

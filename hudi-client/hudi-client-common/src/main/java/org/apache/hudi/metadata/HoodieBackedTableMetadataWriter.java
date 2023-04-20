@@ -570,7 +570,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     initTableMetadata();
     // if async metadata indexing is enabled,
     // then only initialize files partition as other partitions will be built using HoodieIndexer
-    List<MetadataPartitionType> enabledPartitionTypes =  new ArrayList<>();
+    List<MetadataPartitionType> enabledPartitionTypes = new ArrayList<>();
     if (dataWriteConfig.isMetadataAsyncIndex()) {
       enabledPartitionTypes.add(MetadataPartitionType.FILES);
     } else {
@@ -1118,13 +1118,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // If not, last completed commit in data table will be chosen as the initial commit time.
       LOG.info("Triggering empty Commit to metadata to initialize");
     } else {
-      List<DirectoryInfo> partitionInfoList = listAllPartitions(dataMetaClient);
-      Map<String, Map<String, Long>> partitionToFilesMap = partitionInfoList.stream()
-          .map(p -> {
-            String partitionName = HoodieTableMetadataUtil.getPartitionIdentifier(p.getRelativePath());
-            return Pair.of(partitionName, p.getFileNameToSizeMap());
-          })
-          .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+      Map<String, Map<String, Long>> partitionToFilesMap = getPartitionToFilesMap();
 
       int totalDataFilesCount = partitionToFilesMap.values().stream().mapToInt(Map::size).sum();
       List<String> partitions = new ArrayList<>(partitionToFilesMap.keySet());
@@ -1132,7 +1126,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       if (partitionTypes.contains(MetadataPartitionType.FILES)) {
         // Record which saves the list of all partitions
         HoodieRecord allPartitionRecord = HoodieMetadataPayload.createPartitionListRecord(partitions);
-        HoodieData<HoodieRecord> filesPartitionRecords = getFilesPartitionRecords(createInstantTime, partitionInfoList, allPartitionRecord);
+        HoodieData<HoodieRecord> filesPartitionRecords = getFilesPartitionRecords(createInstantTime, partitionToFilesMap, allPartitionRecord);
         ValidationUtils.checkState(filesPartitionRecords.count() == (partitions.size() + 1));
         partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecords);
       }
@@ -1154,23 +1148,33 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     commit(createInstantTime, partitionToRecordsMap, false);
   }
 
-  private HoodieData<HoodieRecord> getFilesPartitionRecords(String createInstantTime, List<DirectoryInfo> partitionInfoList, HoodieRecord allPartitionRecord) {
+  protected Map<String, Map<String, Long>> getPartitionToFilesMap() {
+    List<DirectoryInfo> partitionInfoList = listAllPartitions(dataMetaClient);
+    return partitionInfoList.stream()
+        .map(p -> {
+          String partitionName = HoodieTableMetadataUtil.getPartitionIdentifier(p.getRelativePath());
+          return Pair.of(partitionName, p.getFileNameToSizeMap());
+        })
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+  }
+
+  private HoodieData<HoodieRecord> getFilesPartitionRecords(String createInstantTime, Map<String, Map<String, Long>> partitionToFilesMap, HoodieRecord allPartitionRecord) {
     HoodieData<HoodieRecord> filesPartitionRecords = engineContext.parallelize(Arrays.asList(allPartitionRecord), 1);
-    if (partitionInfoList.isEmpty()) {
+    if (partitionToFilesMap.isEmpty()) {
       return filesPartitionRecords;
     }
 
-    HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
-      Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
-      // filter for files that are part of the completed commits
-      Map<String, Long> validFileNameToSizeMap = fileNameToSizeMap.entrySet().stream().filter(fileSizePair -> {
+    List<Pair<String, Map<String, Long>>> partitionToFilesList = partitionToFilesMap.entrySet()
+        .stream().map(entry -> Pair.of(entry.getKey(), entry.getValue())).collect(Collectors.toList());
+
+    HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionToFilesList, partitionToFilesList.size()).map(partitionToFiles -> {
+      Map<String, Long> validFileNameToSizeMap = partitionToFiles.getRight().entrySet().stream().filter(fileSizePair -> {
         String commitTime = FSUtils.getCommitTime(fileSizePair.getKey());
         return HoodieTimeline.compareTimestamps(commitTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, createInstantTime);
       }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
       // Record which saves files within a partition
-      return HoodieMetadataPayload.createPartitionFilesRecord(
-          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), Option.of(validFileNameToSizeMap), Option.empty());
+      return HoodieMetadataPayload.createPartitionFilesRecord(partitionToFiles.getLeft(), Option.of(validFileNameToSizeMap), Option.empty());
     });
 
     return filesPartitionRecords.union(fileListRecords);

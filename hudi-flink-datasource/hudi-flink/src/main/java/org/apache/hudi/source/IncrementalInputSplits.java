@@ -213,8 +213,8 @@ public class IncrementalInputSplits implements Serializable {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
-      FileStatus[] files = WriteProfiles.getRawWritePathsOfInstants(path, hadoopConf, metadataList, metaClient.getTableType());
-      FileSystem fs = FSUtils.getFs(path.toString(), hadoopConf);
+      FileStatus[] files = WriteProfiles.getRawWritePathsOfInstants(path, metadataList, metaClient);
+      FileSystem fs = FSUtils.getFs(files[0].getPath().toString(), hadoopConf);
       if (Arrays.stream(files).anyMatch(fileStatus -> !StreamerUtil.fileExists(fs, fileStatus.getPath()))) {
         LOG.warn("Found deleted files in metadata, fall back to full table scan.");
         // fallback to full table scan
@@ -329,7 +329,7 @@ public class IncrementalInputSplits implements Serializable {
         LOG.warn("No partitions found for reading under path: " + path);
         return Result.EMPTY;
       }
-      fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList, metaClient.getTableType());
+      fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList, metaClient);
 
       if (fileStatuses.length == 0) {
         LOG.warn("No files found for reading under path: " + path);

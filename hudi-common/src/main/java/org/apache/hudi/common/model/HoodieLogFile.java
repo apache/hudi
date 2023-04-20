@@ -19,9 +19,10 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.hadoop.CachingPath;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
@@ -107,6 +108,13 @@ public class HoodieLogFile implements Serializable {
     return new Path(pathStr);
   }
 
+  public Path getHadoopPath() {
+    if (fileStatus != null) {
+      return fileStatus.getPath();
+    }
+    return new CachingPath(pathStr);
+  }
+
   public String getFileName() {
     return getPath().getName();
   }
@@ -127,7 +135,7 @@ public class HoodieLogFile implements Serializable {
     this.fileStatus = fileStatus;
   }
 
-  public HoodieLogFile rollOver(FileSystem fs, String logWriteToken) throws IOException {
+  public HoodieLogFile rollOver(HoodieWrapperFileSystem fs, String logWriteToken) throws IOException {
     String fileId = getFileId();
     String baseCommitTime = getBaseCommitTime();
     Path path = getPath();

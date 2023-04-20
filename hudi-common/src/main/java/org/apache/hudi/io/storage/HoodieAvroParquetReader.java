@@ -19,6 +19,9 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -57,11 +60,11 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
   private final BaseFileUtils parquetUtils;
   private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
 
-  public HoodieAvroParquetReader(Configuration configuration, Path path) {
+  public HoodieAvroParquetReader(Configuration configuration, Path path, HoodieConfig hoodieConfig) {
     // We have to clone the Hadoop Config as it might be subsequently modified
     // by the Reader (for proper config propagation to Parquet components)
-    this.conf = tryOverrideDefaultConfigs(new Configuration(configuration));
-    this.path = path;
+    this.conf = FSUtils.registerFileSystemWithStorageStrategy(path, tryOverrideDefaultConfigs(new Configuration(configuration)), hoodieConfig);
+    this.path = HoodieWrapperFileSystem.convertToHoodiePath(path, configuration);
     this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
   }
 

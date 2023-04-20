@@ -82,7 +82,12 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     HoodieRecordMerger recordMerger = table.getConfig().getRecordMerger();
 
     HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(recordMerger.getRecordType())
-            .getFileReader(table.getHadoopConf(), sourceFilePath);
+        .getFileReader(
+            table.getHadoopConf(),
+            table.getMetaClient().getFs(),
+            sourceFilePath,
+            table.getConfig());
+
     try {
       Function<HoodieRecord, HoodieRecord> transformer = record -> {
         String recordKey = record.getRecordKey(schema, Option.of(keyGenerator));

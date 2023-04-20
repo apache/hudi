@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 
@@ -50,8 +51,9 @@ public class HoodieAvroParquetWriter
                                  HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig,
                                  String instantTime,
                                  TaskContextSupplier taskContextSupplier,
-                                 boolean populateMetaFields) throws IOException {
-    super(file, (HoodieParquetConfig) parquetConfig);
+                                 boolean populateMetaFields,
+                                 HoodieConfig hoodieConfig) throws IOException {
+    super(file, (HoodieParquetConfig) parquetConfig, hoodieConfig);
     this.fileName = file.getName();
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;

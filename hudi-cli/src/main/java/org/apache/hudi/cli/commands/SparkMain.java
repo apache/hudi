@@ -469,7 +469,7 @@ public class SparkMain {
       // after re-writing, we can safely delete older partition.
       deleteOlderPartition(basePath, oldPartition, recordsToRewrite, propsMap);
       // also, we can physically delete the old partition.
-      FileSystem fs = FSUtils.getFs(new Path(basePath), metaClient.getHadoopConf());
+      FileSystem fs = metaClient.getFs();
       try {
         fs.delete(new Path(basePath, oldPartition), true);
       } catch (IOException e) {

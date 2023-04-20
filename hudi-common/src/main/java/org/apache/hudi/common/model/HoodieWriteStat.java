@@ -26,6 +26,8 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.Map;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * Statistics about a single Hoodie write operation.
@@ -33,6 +35,8 @@ import java.util.Map;
 public class HoodieWriteStat implements Serializable {
 
   public static final String NULL_COMMIT = "null";
+
+  private static final Logger LOG = LogManager.getLogger(HoodieWriteStat.class);
 
   /**
    * Id of the file being written.
@@ -362,8 +366,9 @@ public class HoodieWriteStat implements Serializable {
   }
 
   /**
-   * Set path and tempPath relative to the given basePath.
+   * Set path and tempPath relative to the given base path.
    */
+  @Deprecated
   public void setPath(Path basePath, Path path) {
     this.path = path.toString().replace(basePath + "/", "");
   }

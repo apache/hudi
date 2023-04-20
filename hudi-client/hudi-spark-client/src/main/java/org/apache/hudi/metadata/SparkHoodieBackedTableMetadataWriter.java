@@ -95,7 +95,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     return create(conf, writeConfig, context, Option.empty(), Option.empty());
   }
 
-  <T extends SpecificRecordBase> SparkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
+  public <T extends SpecificRecordBase> SparkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
                                                                       HoodieWriteConfig writeConfig,
                                                                       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                                       HoodieEngineContext engineContext,

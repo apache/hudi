@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.KeyValue;
@@ -72,12 +73,12 @@ public class HoodieAvroHFileWriter
   // This is private in CacheConfig so have been copied here.
   private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
-  public HoodieAvroHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
-                               TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
+  public HoodieAvroHFileWriter(String instantTime, FileSystem fs, Path file, HoodieHFileConfig hfileConfig, Schema schema,
+                           TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
 
     Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
-    this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
+    this.fs = (HoodieWrapperFileSystem) fs;
     this.hfileConfig = hfileConfig;
     this.schema = schema;
     this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));

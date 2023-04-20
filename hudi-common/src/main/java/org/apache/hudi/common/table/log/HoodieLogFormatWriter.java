@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieLogFormat.WriterBuilder;
@@ -50,7 +51,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private HoodieLogFile logFile;
   private FSDataOutputStream output;
 
-  private final FileSystem fs;
+  private final HoodieWrapperFileSystem fs;
   private final long sizeThreshold;
   private final Integer bufferSize;
   private final Short replication;
@@ -61,7 +62,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private static final String APPEND_UNAVAILABLE_EXCEPTION_MESSAGE = "not sufficiently replicated yet";
 
   HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold, String rolloverLogWriteToken) {
-    this.fs = fs;
+    this.fs = (HoodieWrapperFileSystem) fs;
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
     this.bufferSize = bufferSize;
@@ -312,12 +313,12 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       rollOver();
       createNewFile();
     } else if (e.getClassName().contentEquals(RecoveryInProgressException.class.getName())
-        && (fs instanceof DistributedFileSystem)) {
+        && (fs.getFileSystem(path) instanceof DistributedFileSystem)) {
       // this happens when either another task executor writing to this file died or
       // data node is going down. Note that we can only try to recover lease for a DistributedFileSystem.
       // ViewFileSystem unfortunately does not support this operation
       LOG.warn("Trying to recover log on path " + path);
-      if (FSUtils.recoverDFSFileLease((DistributedFileSystem) fs, path)) {
+      if (FSUtils.recoverDFSFileLease((DistributedFileSystem) fs.getFileSystem(path), path)) {
         LOG.warn("Recovered lease on path " + path);
         // try again
         this.output = fs.append(path, bufferSize);

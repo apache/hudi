@@ -22,7 +22,7 @@ import org.apache.hadoop.fs.{GlobPattern, Path}
 import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.fs.{FSUtils, HoodieWrapperFileSystem}
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -217,7 +217,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
           var doFullTableScan = false
 
           if (fallbackToFullTableScan) {
-            val fs = basePath.getFileSystem(sqlContext.sparkContext.hadoopConfiguration);
+            val fs = metaClient.getFs
             val timer = HoodieTimer.start
 
             val allFilesToCheck = filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths
@@ -245,11 +245,13 @@ class IncrementalRelation(val sqlContext: SQLContext,
             }
 
             if (regularFileIdToFullPath.nonEmpty) {
+              val physicalPaths = filteredRegularFullPaths
+                .map(pathStr => metaClient.getFs.convertPath(new Path(pathStr)).toString)
               df = df.union(sqlContext.read.options(sOpts)
                 .schema(usedSchema).format(formatClassName)
                 // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
                 .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
-                .load(filteredRegularFullPaths.toList: _*)
+                .load(physicalPaths.toList: _*)
                 .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
                   commitsToReturn.head.getTimestamp))
                 .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
