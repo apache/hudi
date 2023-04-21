@@ -16,7 +16,7 @@
 #
 FROM adoptopenjdk/openjdk8:alpine
 
-RUN apk add --no-cache --upgrade bash curl jq
+RUN apk add --no-cache --upgrade bash curl jq openjdk11 openjdk17 --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
 
 RUN mkdir /opt/bundle-validation
 ENV WORKDIR=/opt/bundle-validation
