@@ -18,12 +18,14 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.avro.model.HoodieCleanMetadata
 import org.apache.hudi.{HoodieSparkRecordMerger, HoodieSparkUtils}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
@@ -229,6 +231,17 @@ object HoodieSparkSqlTestBase {
       .build()
 
     metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getRight
+  }
+
+  def getLastCleanMetadata(spark: SparkSession, tablePath: String) = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(spark.sparkContext.hadoopConfiguration)
+      .setBasePath(tablePath)
+      .build()
+
+    val cleanInstant = metaClient.reloadActiveTimeline().getCleanerTimeline.filterCompletedInstants().lastInstant().get()
+    TimelineMetadataUtils.deserializeHoodieCleanMetadata(metaClient
+      .getActiveTimeline.getInstantDetails(cleanInstant).get)
   }
 
   private def checkMessageContains(e: Throwable, text: String): Boolean =
