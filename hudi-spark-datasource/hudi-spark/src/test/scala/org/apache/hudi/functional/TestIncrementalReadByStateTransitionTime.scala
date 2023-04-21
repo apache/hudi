@@ -31,7 +31,7 @@ import org.junit.jupiter.params.provider.EnumSource
 
 import scala.collection.JavaConversions.asScalaBuffer
 
-class TestIncrementalReadWithStateTransitionTime extends HoodieSparkClientTestBase  {
+class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase  {
 
   var spark: SparkSession = null
 
