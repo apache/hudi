@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink.partitioner;
 
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.profile.WriteProfile;
@@ -26,9 +28,6 @@ import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.action.commit.SmallFile;
 import org.apache.hudi.util.StreamerUtil;
-
-import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -92,6 +91,8 @@ public class BucketAssigner implements AutoCloseable {
    */
   private final Map<String, NewFileAssignState> newFileAssignStates;
 
+  private final Map<String, String> fileGroupMapping;
+
   /**
    * Num of accumulated successful checkpoints, used for cleaning the new file assign state.
    */
@@ -112,6 +113,7 @@ public class BucketAssigner implements AutoCloseable {
     this.bucketInfoMap = new HashMap<>();
     this.smallFileAssignMap = new HashMap<>();
     this.newFileAssignStates = new HashMap<>();
+    this.fileGroupMapping = new HashMap<>();
   }
 
   /**
@@ -204,6 +206,7 @@ public class BucketAssigner implements AutoCloseable {
       // (start checkpoint, checkpoint success(and instant committed))
       // would be assigned to a fresh new data bucket which is not the right behavior.
       this.newFileAssignStates.clear();
+      this.fileGroupMapping.clear();
       this.accCkp = 0;
     }
     this.smallFileAssignMap.clear();

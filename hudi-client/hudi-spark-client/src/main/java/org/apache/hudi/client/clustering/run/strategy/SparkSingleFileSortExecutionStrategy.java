@@ -79,7 +79,7 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
     newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(Long.MAX_VALUE));
 
     return HoodieDatasetBulkInsertHelper.bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
-        getRowPartitioner(strategyParams, schema), numOutputGroups, shouldPreserveHoodieMetadata);
+        getRowPartitioner(strategyParams, extraMetadata, schema), numOutputGroups, shouldPreserveHoodieMetadata);
   }
 
   @Override
@@ -103,6 +103,6 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
     newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(Long.MAX_VALUE));
 
     return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
-        false, getRDDPartitioner(strategyParams, schema), true, numOutputGroups, new SingleFileHandleCreateFactory(fileGroupIdList.get(0).getFileId(), shouldPreserveHoodieMetadata));
+        false, getRDDPartitioner(strategyParams, extraMetadata, schema), true, numOutputGroups, new SingleFileHandleCreateFactory(fileGroupIdList.get(0).getFileId(), shouldPreserveHoodieMetadata));
   }
 }

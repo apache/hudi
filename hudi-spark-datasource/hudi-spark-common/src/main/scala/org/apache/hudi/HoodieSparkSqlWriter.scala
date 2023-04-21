@@ -549,7 +549,7 @@ object HoodieSparkSqlWriter {
         userDefinedBulkInsertPartitionerOpt.get
       } else {
         BulkInsertInternalPartitionerWithRowsFactory.get(
-          writeConfig.getBulkInsertSortMode, isTablePartitioned)
+          writeConfig.getBulkInsertSortMode, isTablePartitioned, null)
       }
     } else {
       // Sort modes are not yet supported when meta fields are disabled

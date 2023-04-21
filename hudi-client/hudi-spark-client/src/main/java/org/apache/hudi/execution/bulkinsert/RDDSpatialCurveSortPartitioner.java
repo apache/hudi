@@ -51,8 +51,9 @@ public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
                                         String[] orderByColumns,
                                         HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
                                         HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType,
-                                        Schema schema) {
-    super(orderByColumns, layoutOptStrategy, curveCompositionStrategyType);
+                                        Schema schema,
+                                        String targetFileGroupId) {
+    super(orderByColumns, layoutOptStrategy, curveCompositionStrategyType, targetFileGroupId);
     this.sparkEngineContext = sparkEngineContext;
     this.schema = new SerializableSchema(schema);
   }

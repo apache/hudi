@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.sort.SpaceCurveSortingHelper;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -33,9 +34,12 @@ public abstract class SpatialCurveSortPartitionerBase<T> implements BulkInsertPa
   private final HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy;
   private final HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType;
 
+  private final String targetFileGroupId;
+
   public SpatialCurveSortPartitionerBase(String orderByColumns,
                                          HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
-                                         HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType) {
+                                         HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType,
+                                         String targetFileGroupId) {
     if (orderByColumns != null) {
       this.orderByColumns = Arrays.stream(orderByColumns.split(","))
           .map(String::trim).toArray(String[]::new);
@@ -45,14 +49,17 @@ public abstract class SpatialCurveSortPartitionerBase<T> implements BulkInsertPa
     }
     this.layoutOptStrategy = layoutOptStrategy;
     this.curveCompositionStrategyType = curveCompositionStrategyType;
+    this.targetFileGroupId = targetFileGroupId;
   }
 
   public SpatialCurveSortPartitionerBase(String[] orderByColumns,
                                          HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
-                                         HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType) {
+                                         HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType,
+                                         String targetFileGroupId) {
     this.orderByColumns = orderByColumns;
     this.layoutOptStrategy = layoutOptStrategy;
     this.curveCompositionStrategyType = curveCompositionStrategyType;
+    this.targetFileGroupId = targetFileGroupId;
   }
 
   /**
@@ -79,5 +86,14 @@ public abstract class SpatialCurveSortPartitionerBase<T> implements BulkInsertPa
   @Override
   public boolean arePartitionRecordsSorted() {
     return true;
+  }
+
+  @Override
+  public String getFileIdPfx(int partitionId) {
+    if (StringUtils.isNullOrEmpty(targetFileGroupId)) {
+      return BulkInsertPartitioner.super.getFileIdPfx(partitionId);
+    } else {
+      return targetFileGroupId;
+    }
   }
 }

@@ -33,12 +33,16 @@ public class RowCustomColumnsSortPartitioner implements BulkInsertPartitioner<Da
 
   private final String[] sortColumnNames;
 
-  public RowCustomColumnsSortPartitioner(HoodieWriteConfig config) {
+  private final String targetFileGroupId;
+
+  public RowCustomColumnsSortPartitioner(HoodieWriteConfig config, String targetFileGroupId) {
     this.sortColumnNames = getSortColumnName(config);
+    this.targetFileGroupId = targetFileGroupId;
   }
 
-  public RowCustomColumnsSortPartitioner(String[] columnNames) {
+  public RowCustomColumnsSortPartitioner(String[] columnNames, String targetFileGroupId) {
     this.sortColumnNames = columnNames;
+    this.targetFileGroupId = targetFileGroupId;
   }
 
   @Override

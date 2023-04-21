@@ -31,15 +31,18 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.fs.FSUtils.NEW_FILE_GROUP_KEY_IN_CLUSTERING_PLAN;
 
 /**
  * Scheduling strategy with restriction that clustering groups can only contain files from same partition.
@@ -105,6 +108,8 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
         .setStrategyParams(getStrategyParams())
         .build();
 
+    generateNewFileGroupIdWhenNeeded(clusteringGroups);
+
     return Option.of(HoodieClusteringPlan.newBuilder()
         .setStrategy(strategy)
         .setInputGroups(clusteringGroups)
@@ -112,6 +117,20 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
         .setVersion(getPlanVersion())
         .setPreserveHoodieMetadata(getWriteConfig().isPreserveHoodieCommitMetadataForClustering())
         .build());
+  }
+
+  private void generateNewFileGroupIdWhenNeeded(List<HoodieClusteringGroup> clusteringGroups) {
+    if (getWriteConfig().isGenerateFileGroupAdvance()) {
+      for (HoodieClusteringGroup group : clusteringGroups) {
+        String newFileIdPfx = FSUtils.createNewFileIdPfx();
+        Map<String, String> extraMeta = group.getExtraMetadata();
+        if (extraMeta == null) {
+          extraMeta = new HashMap<>();
+        }
+        extraMeta.put(NEW_FILE_GROUP_KEY_IN_CLUSTERING_PLAN, newFileIdPfx);
+        group.setExtraMetadata(extraMeta);
+      }
+    }
   }
 
   public List<String> getMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {

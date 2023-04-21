@@ -43,16 +43,20 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
   private final SerializableSchema serializableSchema;
   private final boolean consistentLogicalTimestampEnabled;
 
-  public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
+  private final String targetFileGroupId;
+
+  public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config, String targetFileGroupId) {
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
     this.sortColumnNames = getSortColumnName(config);
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
+    this.targetFileGroupId = targetFileGroupId;
   }
 
-  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled) {
+  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled, String targetFileGroupId) {
     this.sortColumnNames = columnNames;
     this.serializableSchema = new SerializableSchema(schema);
     this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
+    this.targetFileGroupId = targetFileGroupId;
   }
 
   @Override

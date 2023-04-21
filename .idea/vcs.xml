@@ -16,6 +16,5 @@
   </component>
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/src_release/hudi-tmp-clone" vcs="Git" />
   </component>
 </project>

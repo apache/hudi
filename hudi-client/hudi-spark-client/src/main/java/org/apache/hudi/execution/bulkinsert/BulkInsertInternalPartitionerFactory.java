@@ -30,28 +30,29 @@ import org.apache.hudi.table.HoodieTable;
 public abstract class BulkInsertInternalPartitionerFactory {
 
   public static BulkInsertPartitioner get(HoodieTable table, HoodieWriteConfig config) {
-    return get(config.getBulkInsertSortMode(), table.isPartitioned(), false);
+    return get(config.getBulkInsertSortMode(), table.isPartitioned(), false, null);
   }
 
   public static BulkInsertPartitioner get(
       HoodieTable table, HoodieWriteConfig config, boolean enforceNumOutputPartitions) {
-    return get(config.getBulkInsertSortMode(), table.isPartitioned(), enforceNumOutputPartitions);
+    return get(config.getBulkInsertSortMode(), table.isPartitioned(), enforceNumOutputPartitions, null);
   }
 
   public static BulkInsertPartitioner get(BulkInsertSortMode sortMode, boolean isTablePartitioned) {
-    return get(sortMode, isTablePartitioned, false);
+    return get(sortMode, isTablePartitioned, false, null);
   }
 
   public static BulkInsertPartitioner get(BulkInsertSortMode sortMode,
                                           boolean isTablePartitioned,
-                                          boolean enforceNumOutputPartitions) {
+                                          boolean enforceNumOutputPartitions,
+                                          String targetFileGroupId) {
     switch (sortMode) {
       case NONE:
-        return new NonSortPartitioner(enforceNumOutputPartitions);
+        return new NonSortPartitioner(enforceNumOutputPartitions, targetFileGroupId);
       case GLOBAL_SORT:
-        return new GlobalSortPartitioner();
+        return new GlobalSortPartitioner(targetFileGroupId);
       case PARTITION_SORT:
-        return new RDDPartitionSortPartitioner();
+        return new RDDPartitionSortPartitioner(targetFileGroupId);
       case PARTITION_PATH_REPARTITION:
         return new PartitionPathRepartitionPartitioner(isTablePartitioned);
       case PARTITION_PATH_REPARTITION_AND_SORT:

@@ -20,6 +20,7 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -38,32 +39,43 @@ import scala.Tuple2;
  * @param <T> HoodieRecordPayload type
  */
 public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+      implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+
+  private final String targetGroupId;
+
+  public RDDPartitionSortPartitioner(String targetGroupId) {
+    this.targetGroupId = targetGroupId;
+  }
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
     return records.coalesce(outputSparkPartitions)
-        .mapToPair(record ->
-            new Tuple2<>(
-                new StringBuilder()
-                    .append(record.getPartitionPath())
-                    .append("+")
-                    .append(record.getRecordKey())
-                    .toString(), record))
-        .mapPartitions(partition -> {
-          // Sort locally in partition
-          List<Tuple2<String, HoodieRecord<T>>> recordList = new ArrayList<>();
-          for (; partition.hasNext(); ) {
-            recordList.add(partition.next());
-          }
-          Collections.sort(recordList, (o1, o2) -> o1._1.compareTo(o2._1));
-          return recordList.stream().map(e -> e._2).iterator();
-        });
+          .mapToPair(record ->
+                new Tuple2<>(
+                      new StringBuilder()
+                            .append(record.getPartitionPath())
+                            .append("+")
+                            .append(record.getRecordKey())
+                            .toString(), record))
+          .mapPartitions(partition -> {
+            // Sort locally in partition
+            List<Tuple2<String, HoodieRecord<T>>> recordList = new ArrayList<>();
+            for (; partition.hasNext(); ) {
+              recordList.add(partition.next());
+            }
+            Collections.sort(recordList, (o1, o2) -> o1._1.compareTo(o2._1));
+            return recordList.stream().map(e -> e._2).iterator();
+          });
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
     return true;
+  }
+
+  @Override
+  public String getFileIdPfx(int partitionId) {
+    return StringUtils.isNullOrEmpty(targetGroupId) ? BulkInsertPartitioner.super.getFileIdPfx(partitionId) : targetGroupId;
   }
 }

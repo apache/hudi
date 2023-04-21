@@ -211,6 +211,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
+  public static final ConfigProperty<Boolean> GENERATE_FILE_GROUP_ADVANCE = ConfigProperty
+          .key("hoodie.clustering.generate.file.group.advance")
+          .defaultValue(true)
+          .sinceVersion("0.14.0")
+          .withDocumentation("When rewriting data, ");
+
   /**
    * @deprecated this setting has no effect. Please refer to clustering configuration, as well as
    * {@link #LAYOUT_OPTIMIZE_STRATEGY} config to enable advanced record layout optimization strategies

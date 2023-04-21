@@ -30,12 +30,13 @@ import org.apache.spark.sql.Row;
 public abstract class BulkInsertInternalPartitionerWithRowsFactory {
 
   public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode,
-                                                        boolean isTablePartitioned) {
-    return get(sortMode, isTablePartitioned, false);
+                                                        boolean isTablePartitioned,
+                                                        String targetFileGroupId) {
+    return get(sortMode, isTablePartitioned, false, targetFileGroupId);
   }
 
   public static BulkInsertPartitioner<Dataset<Row>> get(
-      BulkInsertSortMode sortMode, boolean isTablePartitioned, boolean enforceNumOutputPartitions) {
+      BulkInsertSortMode sortMode, boolean isTablePartitioned, boolean enforceNumOutputPartitions, String targetFileGroupId) {
     switch (sortMode) {
       case NONE:
         return new NonSortPartitionerWithRows(enforceNumOutputPartitions);
