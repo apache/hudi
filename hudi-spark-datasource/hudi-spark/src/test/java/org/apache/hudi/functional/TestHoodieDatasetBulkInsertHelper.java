@@ -45,6 +45,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import scala.Tuple2;
 import scala.collection.JavaConversions;
@@ -75,15 +76,6 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
 
   public TestHoodieDatasetBulkInsertHelper() throws IOException {
     init();
-  }
-
-  /**
-   * args for schema evolution test.
-   */
-  private static Stream<Arguments> providePreCombineArgs() {
-    return Stream.of(
-        Arguments.of(false),
-        Arguments.of(true));
   }
 
   private void init() throws IOException {
@@ -125,6 +117,10 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     } else { // NonPartitioned key gen
       props = getPropsForNonPartitionedKeyGen(recordKeyField);
     }
+
+    boolean isNonPartitionedKeyGen = keyGenClass.equals(NonpartitionedKeyGenerator.class.getName());
+    boolean isComplexKeyGen = keyGenClass.equals(ComplexKeyGenerator.class.getName());
+
     HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(props).combineInput(false, false).build();
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
@@ -139,8 +135,6 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
       assertEquals(entry.getValue(), resultSchema.fieldIndex(entry.getKey()));
     }
 
-    boolean isNonPartitionedKeyGen = keyGenClass.equals(NonpartitionedKeyGenerator.class.getName());
-    boolean isComplexKeyGen = keyGenClass.equals(ComplexKeyGenerator.class.getName());
 
     result.toJavaRDD().foreach(entry -> {
       String recordKey = isComplexKeyGen ? String.format("%s:%s", recordKeyField, entry.getAs(recordKeyField)) : entry.getAs(recordKeyField).toString();
@@ -192,7 +186,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
   }
 
   @ParameterizedTest
-  @MethodSource("providePreCombineArgs")
+  @CsvSource(value = { "true", "false" })
   public void testBulkInsertPreCombine(boolean enablePreCombine) {
     HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet("_row_key"))
             .combineInput(enablePreCombine, enablePreCombine)

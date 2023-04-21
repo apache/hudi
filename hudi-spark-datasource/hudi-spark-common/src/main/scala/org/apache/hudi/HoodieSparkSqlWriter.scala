@@ -25,6 +25,7 @@ import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAv
 import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
+import org.apache.hudi.HoodieDatasetBulkInsertHelper.prepareForBulkInsert
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -772,15 +773,15 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  def bulkInsertAsRow(sqlContext: SQLContext,
-                      hoodieConfig: HoodieConfig,
-                      df: DataFrame,
-                      tblName: String,
-                      basePath: Path,
-                      path: String,
-                      instantTime: String,
-                      writerSchema: Schema,
-                      isTablePartitioned: Boolean): (Boolean, common.util.Option[String]) = {
+  private def bulkInsertAsRow(sqlContext: SQLContext,
+                              hoodieConfig: HoodieConfig,
+                              df: DataFrame,
+                              tblName: String,
+                              basePath: Path,
+                              path: String,
+                              instantTime: String,
+                              writerSchema: Schema,
+                              isTablePartitioned: Boolean): (Boolean, common.util.Option[String]) = {
     if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
       throw new HoodieException("Dropping duplicates with bulk_insert in row writer path is not supported yet")
     }
@@ -794,19 +795,15 @@ object HoodieSparkSqlWriter {
     val populateMetaFields = hoodieConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS)
 
     val bulkInsertPartitionerRows: BulkInsertPartitioner[Dataset[Row]] = if (populateMetaFields) {
-      val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
-      if (userDefinedBulkInsertPartitionerOpt.isPresent) {
-        userDefinedBulkInsertPartitionerOpt.get
-      } else {
-        BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig, isTablePartitioned)
-      }
+      toScalaOption(DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig))
+        .getOrElse(BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig, isTablePartitioned))
     } else {
       // Sort modes are not yet supported when meta fields are disabled
       new NonSortPartitionerWithRows()
     }
 
     val shouldDropPartitionColumns = hoodieConfig.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
-    val hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(df, writeConfig, bulkInsertPartitionerRows, shouldDropPartitionColumns)
+    val hoodieDF = prepareForBulkInsert(df, writeConfig, bulkInsertPartitionerRows, shouldDropPartitionColumns)
 
     val optsOverrides = Map(
       HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED ->

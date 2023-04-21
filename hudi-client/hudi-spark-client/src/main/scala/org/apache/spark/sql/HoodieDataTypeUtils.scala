@@ -18,9 +18,28 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.spark.sql.types._
 
+import scala.jdk.CollectionConverters.collectionAsScalaIterableConverter
+
 object HoodieDataTypeUtils {
+
+  /**
+   * Checks whether provided schema contains Hudi's meta-fields
+   *
+   * NOTE: This method validates presence of just one field [[HoodieRecord.RECORD_KEY_METADATA_FIELD]],
+   * however assuming that meta-fields should either be omitted or specified in full
+   */
+  def hasMetaFields(structType: StructType): Boolean =
+    structType.getFieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD).isDefined
+
+  // TODO scala-doc
+  def addMetaFields(schema: StructType): StructType = {
+    val metaFieldNames = HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq
+    val dataFields = schema.fields.filterNot(f => metaFieldNames.contains(f.name))
+    StructType(metaFieldNames.map(StructField(_, StringType)) ++ dataFields)
+  }
 
   /**
    * Parses provided [[jsonSchema]] into [[StructType]].
