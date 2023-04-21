@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.dto.DTOUtils;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -149,7 +150,7 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     // Timeline exists only in the first file group DTO. Optimisation to reduce payload size.
     Field timelineDTOField = FileGroupDTO.class.getDeclaredField("timeline");
     timelineDTOField.setAccessible(true);
-    List<FileGroupDTO> fileGroupDTOs = FileGroupDTO.fromFileGroup(fileGroups);
+    List<FileGroupDTO> fileGroupDTOs = DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
     assertNotNull(timelineDTOField.get(fileGroupDTOs.get(0)));
     // Verify other DTO objects do not contain timeline
     assertNull(timelineDTOField.get(fileGroupDTOs.get(1)));
@@ -166,7 +167,7 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
   }
 
   private Stream<HoodieFileGroup> readFileGroupStream(String result, ObjectMapper mapper) throws IOException {
-    return FileGroupDTO.toFileGroup((List<FileGroupDTO>) mapper.readValue(result, new TypeReference<List<FileGroupDTO>>() {}),
+    return DTOUtils.fileGroupDTOsToFileGroups((List<FileGroupDTO>) mapper.readValue(result, new TypeReference<List<FileGroupDTO>>() {}),
         metaClient);
   }
 
