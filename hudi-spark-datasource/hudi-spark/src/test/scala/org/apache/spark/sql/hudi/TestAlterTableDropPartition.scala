@@ -396,6 +396,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
 
+        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+
         // trigger clean so that partition deletion kicks in.
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
