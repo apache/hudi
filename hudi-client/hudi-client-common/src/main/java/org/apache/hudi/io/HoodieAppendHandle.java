@@ -114,9 +114,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   // Total number of bytes written during this append phase (an estimation)
   protected long estimatedNumberOfBytesWritten;
   // Number of records that must be written to meet the max block size for a log block
-  private int numberOfRecords = 0;
+  private long numberOfRecords = 0;
   // Max block size to limit to for a log block
-  private final int maxBlockSize = config.getLogFileDataBlockMaxSize();
+  private final long maxBlockSize = config.getLogFileDataBlockMaxSize();
   // Header metadata for a log block
   protected final Map<HeaderMetadataType, String> header = new HashMap<>();
   private SizeEstimator<HoodieRecord> sizeEstimator;
@@ -592,7 +592,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
 
     // Append if max number of records reached to achieve block size
-    if (numberOfRecords >= (int) (maxBlockSize / averageRecordSize)) {
+    if (numberOfRecords >= (long) (maxBlockSize / averageRecordSize)) {
       // Recompute averageRecordSize before writing a new block and update existing value with
       // avg of new and old
       LOG.info("Flush log block to disk, the current avgRecordSize => " + averageRecordSize);

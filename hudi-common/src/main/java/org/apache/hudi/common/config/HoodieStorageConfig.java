@@ -312,7 +312,7 @@ public class HoodieStorageConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder logFileDataBlockMaxSize(int dataBlockSize) {
+    public Builder logFileDataBlockMaxSize(long dataBlockSize) {
       storageConfig.setValue(LOGFILE_DATA_BLOCK_MAX_SIZE, String.valueOf(dataBlockSize));
       return this;
     }
