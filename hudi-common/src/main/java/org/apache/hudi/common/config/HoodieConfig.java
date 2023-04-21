@@ -31,6 +31,7 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * This class deals with {@link ConfigProperty} and provides get/set functionalities.
@@ -53,7 +54,7 @@ public class HoodieConfig implements Serializable {
 
   public <T> void setValue(ConfigProperty<T> cfg, String val) {
     cfg.checkValues(val);
-    props.setProperty(cfg.key(), val);
+    props.setProperty(cfg.key(), cfg.shouldCapitalize() ? val.toUpperCase() : val);
   }
 
   public <T> void setValue(String key, String val) {
