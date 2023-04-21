@@ -36,11 +36,11 @@ import java.util.function.Supplier
 import scala.collection.JavaConverters._
 class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "table_type", DataTypes.StringType, None),
-    ProcedureParameter.required(2, "bootstrap_path", DataTypes.StringType, None),
-    ProcedureParameter.required(3, "base_path", DataTypes.StringType, None),
-    ProcedureParameter.required(4, "rowKey_field", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "table_type", DataTypes.StringType),
+    ProcedureParameter.required(2, "bootstrap_path", DataTypes.StringType),
+    ProcedureParameter.required(3, "base_path", DataTypes.StringType),
+    ProcedureParameter.required(4, "rowKey_field", DataTypes.StringType),
     ProcedureParameter.optional(5, "base_file_format", DataTypes.StringType, "PARQUET"),
     ProcedureParameter.optional(6, "partition_path_field", DataTypes.StringType, ""),
     ProcedureParameter.optional(7, "bootstrap_index_class", DataTypes.StringType, "org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex"),
