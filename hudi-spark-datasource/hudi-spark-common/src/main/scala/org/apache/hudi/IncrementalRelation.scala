@@ -65,9 +65,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
     metaClient)
   private val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
 
-  private val useStateTransitionTime = optParams.get(DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.key)
+  private val useStateTransitionTime = optParams.get(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key)
     .map(_.toBoolean)
-    .getOrElse(DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.defaultValue)
+    .getOrElse(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.defaultValue)
 
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")

@@ -116,7 +116,7 @@ object DataSourceReadOptions {
     .withDocumentation("Instant time to start incrementally pulling data from. The instanttime here need not necessarily " +
       "correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. " +
       "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `"
-      + HoodieCommonConfig.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.key() + "` enabled, will use instant's "
+      + HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key() + "` enabled, will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
   val END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
@@ -124,7 +124,7 @@ object DataSourceReadOptions {
     .noDefaultValue()
     .withDocumentation("Instant time to limit incrementally fetched data to. " +
       "New data written with an instant_time <= END_INSTANTTIME are fetched out. Note that if `"
-      + HoodieCommonConfig.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.key() + "` enabled, will use instant's "
+      + HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key() + "` enabled, will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
@@ -204,8 +204,7 @@ object DataSourceReadOptions {
 
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
 
-  val INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME: ConfigProperty[Boolean] =
-    HoodieCommonConfig.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME
+  val READ_BY_STATE_TRANSITION_TIME: ConfigProperty[Boolean] = HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME
 
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */

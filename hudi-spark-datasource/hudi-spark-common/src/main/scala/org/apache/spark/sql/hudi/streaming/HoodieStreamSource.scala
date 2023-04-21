@@ -70,9 +70,9 @@ class HoodieStreamSource(
     parameters.get(DataSourceReadOptions.INCREMENTAL_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
 
   private val useStateTransitionTime =
-    parameters.get(DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.key())
+    parameters.get(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key())
       .map(_.toBoolean)
-      .getOrElse(DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.defaultValue())
+      .getOrElse(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.defaultValue())
 
   @transient private lazy val initialOffsets = {
     val metadataLog = new HoodieMetadataLog(sqlContext.sparkSession, metadataPath)
@@ -151,7 +151,7 @@ class HoodieStreamSource(
         // Consume the data between (startCommitTime, endCommitTime]
         val incParams = parameters ++ Map(
           DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-          DataSourceReadOptions.INCREMENTAL_FETCH_INSTANT_BY_STATE_TRANSITION_TIME.key() -> useStateTransitionTime.toString,
+          DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key() -> useStateTransitionTime.toString,
           DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCommitTime(startOffset),
           DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime
         )

@@ -42,6 +42,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private static final Pattern NAME_FORMAT =
       Pattern.compile("^(\\d+)(\\.\\w+)(\\.\\D+)?$");
 
+  private static final String DELIMITER = ".";
+
   private static final String FILE_NAME_FORMAT_ERROR = "The fileName %s doesn't match instant format";
 
   /**
@@ -83,7 +85,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       return fileName.substring(matcher.group(1).length());
     }
 
-    return "";
+    return StringUtils.EMPTY_STRING;
   }
 
   /**
@@ -117,12 +119,12 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       if (matcher.group(2).equals(HoodieTimeline.INFLIGHT_EXTENSION)) {
         // This is to support backwards compatibility on how in-flight commit files were written
         // General rule is inflight extension is .<action>.inflight, but for commit it is .inflight
-        action = "commit";
+        action = HoodieTimeline.COMMIT_ACTION;
         state = State.INFLIGHT;
       } else {
-        action = matcher.group(2).replaceFirst(".", "");
+        action = matcher.group(2).replaceFirst(DELIMITER, StringUtils.EMPTY_STRING);
         if (matcher.groupCount() == 3 && matcher.group(3) != null) {
-          state = State.valueOf(matcher.group(3).replaceFirst(".", "").toUpperCase());
+          state = State.valueOf(matcher.group(3).replaceFirst(DELIMITER, StringUtils.EMPTY_STRING).toUpperCase());
         } else {
           // Like 20230104152218702.commit
           state = State.COMPLETED;
