@@ -243,7 +243,7 @@ public class OptionsResolver {
   /**
    * Returns whether the writer txn should be guarded by lock.
    */
-  public static boolean needsGuardByLock(Configuration conf) {
+  public static boolean isLockRequired(Configuration conf) {
     return conf.getBoolean(FlinkOptions.METADATA_ENABLED)
         || conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
             .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
