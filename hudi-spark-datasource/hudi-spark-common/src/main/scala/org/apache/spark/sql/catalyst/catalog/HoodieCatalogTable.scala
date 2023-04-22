@@ -19,7 +19,6 @@ package org.apache.spark.sql.catalyst.catalog
 
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
@@ -51,7 +50,7 @@ import scala.collection.mutable
  */
 class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) extends Logging {
 
-  assert(table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi", "It's not a Hudi table")
+  assert(table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi", s" ${table.qualifiedName} is not a Hudi table")
 
   private val hadoopConf = spark.sessionState.newHadoopConf
 
