@@ -26,7 +26,7 @@ import org.apache.hudi.common.config.EnumFieldDescription;
  * Marker type indicating how markers are stored in the file system.
  */
 @EnumDescription("Marker type indicating how markers are stored in the file system, used for "
-    + "identifying the file written and cleaning up files not commmited which should be deleted.")
+    + "identifying the files written and cleaning up files not committed which should be deleted.")
 public enum MarkerType {
 
   @EnumFieldDescription("Individual marker file corresponding to each data file is directly created by the writer.")

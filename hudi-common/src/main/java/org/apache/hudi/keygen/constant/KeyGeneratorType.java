@@ -28,7 +28,8 @@ import java.util.List;
 /**
  * Types of {@link org.apache.hudi.keygen.KeyGenerator}.
  */
-@EnumDescription("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`.")
+@EnumDescription("Key generator type, indicating the key generator class to use, that implements "
+    + "`org.apache.hudi.keygen.KeyGenerator`.")
 public enum KeyGeneratorType {
 
   @EnumFieldDescription("Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
@@ -37,7 +38,7 @@ public enum KeyGeneratorType {
   @EnumFieldDescription("Complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
   COMPLEX,
 
-  @EnumFieldDescription("Key generator, that relies on timestamps for partitioning field. Still picks record key by name.")
+  @EnumFieldDescription("Timestamp-based key generator, that relies on timestamps for partitioning field. Still picks record key by name.")
   TIMESTAMP,
 
   @EnumFieldDescription("This is a generic implementation type of KeyGenerator where users can configure record key as a single field or "
@@ -47,7 +48,7 @@ public enum KeyGeneratorType {
       + " properties.put(\"hoodie.datasource.write.partitionpath.field\", \"field1:PartitionKeyType1,field2:PartitionKeyType2\").")
   CUSTOM,
 
-  @EnumFieldDescription("Simple Key generator for unpartitioned Hive Tables.")
+  @EnumFieldDescription("Simple Key generator for non-partitioned tables.")
   NON_PARTITION,
 
   @EnumFieldDescription("Key generator for deletes using global indices.")

@@ -145,7 +145,7 @@ public class ConfigProperty<T> implements Serializable {
   }
 
   public <U extends Enum<U>> ConfigProperty<T> withDocumentation(Class<U> e) {
-    return withDocumentation(e,"");
+    return withDocumentation(e, "");
   }
 
   private <U extends Enum<U>> boolean isDefaultField(Class<U> e, Field f) {

@@ -33,8 +33,8 @@ public enum BulkInsertSortMode {
   @EnumFieldDescription("This ensures best file sizes, with lowest memory overhead at cost of sorting.")
   GLOBAL_SORT,
 
-  @EnumFieldDescription("Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing low. "
-      + "File sizing is not as good as GLOBAL_SORT.")
+  @EnumFieldDescription("Strikes a balance by only sorting within a Spark RDD partition, still "
+      + "keeping the memory overhead of writing low. File sizing is not as good as GLOBAL_SORT.")
   PARTITION_SORT,
 
   @EnumFieldDescription("This ensures that the data for a single physical partition in the table is written by the same Spark executor. "

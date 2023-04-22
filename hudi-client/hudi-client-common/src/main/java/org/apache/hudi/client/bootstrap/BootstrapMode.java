@@ -40,6 +40,6 @@ public enum BootstrapMode {
    */
   @EnumFieldDescription("In this mode, the full record data is not copied into Hudi therefore it avoids full cost of rewriting the dataset. "
       + "Instead, 'skeleton' files containing just the corresponding metadata columns are added to the Hudi table. Hudi relies on the data "
-      + "in the original table and will face data-loss or corruption if files bootstrapped from the original table are deleted or modified.")
+      + "in the original table and will face data-loss or corruption if files in the original table location are deleted or modified.")
   METADATA_ONLY
 }

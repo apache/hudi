@@ -28,21 +28,20 @@ import org.apache.hudi.common.config.EnumFieldDescription;
     + "slices files to re-claim space. Long running query plans may often refer to older "
     + "file slices and will break if those are cleaned, before the query has had a chance "
     + "to run. So, it is good to make sure that the data is retained for more than the "
-    + "maximum query execution time. ")
+    + "maximum query execution time. By default, the cleaning policy is determined based "
+    + "on one of the following configs explicitly set by the user (at most one of them can "
+    + "be set; otherwise, KEEP_LATEST_COMMITS cleaning policy is used).")
 public enum HoodieCleaningPolicy {
 
-  @EnumFieldDescription("The KEEP_LATEST_FILE_VERSIONS cleaning "
-      + "policy is used, which keeps the last N versions of the file slices written, "
-      + "determined by \"hoodie.cleaner.fileversions.retained\"; ")
+  @EnumFieldDescription("keeps the last N versions of the file slices written; used "
+      + "when \"hoodie.cleaner.fileversions.retained\" is explicitly set only.")
   KEEP_LATEST_FILE_VERSIONS,
 
-  @EnumFieldDescription("The KEEP_LATEST_COMMITS cleaning policy is "
-      + "used, which keeps the file slices written by the last N commits, determined by "
-      + "\"hoodie.cleaner.commits.retained\"; ")
+  @EnumFieldDescription("keeps the file slices written by the last N commits; used "
+      + "when \"hoodie.cleaner.commits.retained\" is explicitly set only.")
   KEEP_LATEST_COMMITS,
 
-  @EnumFieldDescription("The KEEP_LATEST_BY_HOURS cleaning policy is "
-      + "used, which keeps the file slices written in the last N hours based on the commit "
-      + "time, determined by \"hoodie.cleaner.hours.retained\"; ")
+  @EnumFieldDescription("keeps the file slices written in the last N hours based on "
+      + "the commit time; used when \"hoodie.cleaner.hours.retained\" is explicitly set only.")
   KEEP_LATEST_BY_HOURS
 }
