@@ -48,6 +48,11 @@ cd hudi/hudi-console
 mvn -Pdist -DskipTests clean package
 ```
 
+## login
+
+default account: `admin/hudi`
+
+
 ## 🤝 Contribution
 
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/apache/hudi/pulls)

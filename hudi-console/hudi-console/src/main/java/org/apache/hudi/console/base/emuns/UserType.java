@@ -24,10 +24,10 @@ import java.util.Arrays;
 /** The user type. */
 public enum UserType {
 
-  /** The admin of StreamPark. */
+  /** The admin of HUDI-Console. */
   ADMIN(1),
 
-  /** The user of StreamPark. */
+  /** The user of HUDI-Console. */
   USER(2);
 
   @EnumValue private final int code;

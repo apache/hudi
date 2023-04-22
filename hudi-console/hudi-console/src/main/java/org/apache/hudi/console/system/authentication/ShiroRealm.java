@@ -84,6 +84,6 @@ public class ShiroRealm extends AuthorizingRealm {
     if (user == null) {
       throw new AuthenticationException("ERROR Incorrect username or password!");
     }
-    return new SimpleAuthenticationInfo(token, token, "streampark_shiro_realm");
+    return new SimpleAuthenticationInfo(token, token, "hudi_shiro_realm");
   }
 }

@@ -23,7 +23,7 @@ import org.springframework.context.annotation.Configuration;
 
 @Data
 @Configuration
-@ConfigurationProperties(prefix = "streampark.shiro")
+@ConfigurationProperties(prefix = "hudi.shiro")
 public class ShiroProperties {
 
   private String anonUrl;

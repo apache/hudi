@@ -31,7 +31,7 @@ public class EncryptUtils {
 
   private static final int KEY_SIZE = 128;
 
-  private static final String DEFAULT_KEY = DigestUtils.md5Hex("ApacheStreamPark");
+  private static final String DEFAULT_KEY = DigestUtils.md5Hex("ApacheHudi");
 
   private static final String ALGORITHM = "AES";
 

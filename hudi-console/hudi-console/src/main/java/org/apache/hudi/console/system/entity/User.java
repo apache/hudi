@@ -49,7 +49,7 @@ public class User implements Serializable {
 
   public static final String SEX_UNKNOW = "2";
 
-  public static final String DEFAULT_PASSWORD = "streampark666";
+  public static final String DEFAULT_PASSWORD = "hudi666";
 
   @TableId(type = IdType.AUTO)
   private Long userId;

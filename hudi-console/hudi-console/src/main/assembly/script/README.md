@@ -11,13 +11,13 @@ If you use PostgreSQL as the Hudi database, please execute `pgsql-schema.sql` fi
 
 ## Upgrade Guide
 
-When upgrading StreamPark from an old version to a new version, you need to execute some SQL to upgrade the schema and data of the database.
+When upgrading HUDI Console from an old version to a new version, you need to execute some SQL to upgrade the schema and data of the database.
 
 We sorted out the upgrade sql in the upgrade directory, you can choose `mysql` or `pgsql` according to your database. And we have sorted out
-the corresponding upgrade SQL for each version of StreamPark. The `version.sql` means: upgrade from the previous version to the current
+the corresponding upgrade SQL for each version of HUDI-Console. The `version.sql` means: upgrade from the previous version to the current
 version, and it includes schema changes and data changes.
 
 For example:
 
-- `1.2.3.sql` needs to be executed when StreamPark is upgraded from `1.2.2` to `1.2.3`.
-- `1.2.3.sql` and `2.0.0.sql`  needs to be executed when StreamPark is upgraded from `1.2.2` to `2.0.0`. 
+- `1.2.3.sql` needs to be executed when HUDI-Console is upgraded from `1.2.2` to `1.2.3`.
+- `1.2.3.sql` and `2.0.0.sql`  needs to be executed when HUDI-Console is upgraded from `1.2.2` to `2.0.0`. 
