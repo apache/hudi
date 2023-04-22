@@ -2003,8 +2003,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieStorageConfig.PARQUET_PAGE_SIZE);
   }
 
-  public int getLogFileDataBlockMaxSize() {
-    return getInt(HoodieStorageConfig.LOGFILE_DATA_BLOCK_MAX_SIZE);
+  public long getLogFileDataBlockMaxSize() {
+    return getLong(HoodieStorageConfig.LOGFILE_DATA_BLOCK_MAX_SIZE);
   }
 
   public double getParquetCompressionRatio() {
