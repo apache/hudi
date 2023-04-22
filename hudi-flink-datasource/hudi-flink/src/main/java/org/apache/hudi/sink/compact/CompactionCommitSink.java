@@ -109,6 +109,11 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   @Override
   public void invoke(CompactionCommitEvent event, Context context) throws Exception {
     final String instant = event.getInstant();
+    if (event.isFailed() || event.getWriteStatuses().stream().anyMatch(writeStatus -> writeStatus.getTotalErrorRecords() > 0)) {
+      LOG.warn("Receive abnormal CompactionCommitEvent of instant " + instant + ", task ID is " + event.getTaskID()
+              + ", is failed: " + event.isFailed() + ", error record count: "
+              + event.getWriteStatuses().stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum));
+    }
     commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
         .put(event.getFileId(), event);
     commitIfNecessary(instant, commitBuffer.get(instant).values());
