@@ -1088,12 +1088,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     assertFalse(replacedFilePaths.isEmpty());
 
-    // Step 4 : Insert 1 record and trigger sync/async cleaner and archive.
+    // Step 4 : Add commits with insert of 1 record and trigger sync/async cleaner and archive.
     List<String> configs = getAsyncServicesConfigs(1, "true", "true", "6", "", "");
     configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_POLICY.key(), "KEEP_LATEST_COMMITS"));
     configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1"));
-    configs.add(String.format("%s=%s", HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2"));
-    configs.add(String.format("%s=%s", HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3"));
+    configs.add(String.format("%s=%s", HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "4"));
+    configs.add(String.format("%s=%s", HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "5"));
     configs.add(String.format("%s=%s", HoodieCleanConfig.ASYNC_CLEAN.key(), asyncClean));
     configs.add(String.format("%s=%s", HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key(), "1"));
     configs.add(String.format("%s=%s", HoodieWriteConfig.MARKERS_TYPE.key(), "DIRECT"));
@@ -1108,8 +1108,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.addRecordMerger(recordType, configs);
     cfg.configs = configs;
     cfg.continuousMode = false;
-    ds = new HoodieDeltaStreamer(cfg, jsc);
-    ds.sync();
+
+    for (int i = 0; i < 2; i++) {
+      ds = new HoodieDeltaStreamer(cfg, jsc);
+      ds.sync();
+    }
 
     // Step 5 : Make sure that firstReplaceHoodieInstant is archived.
     long count = meta.reloadActiveTimeline().getCompletedReplaceTimeline().getInstantsAsStream().filter(instant -> firstReplaceHoodieInstant.get().equals(instant)).count();

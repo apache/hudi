@@ -371,8 +371,8 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
   protected HoodieWriteConfig getMetadataWriteConfig(HoodieWriteConfig writeConfig) {
     int parallelism = writeConfig.getMetadataInsertParallelism();
 
-    int minCommitsToKeep = Math.max(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMinCommitsToKeep());
-    int maxCommitsToKeep = Math.max(writeConfig.getMetadataMaxCommitsToKeep(), writeConfig.getMaxCommitsToKeep());
+    int minCommitsToKeep = writeConfig.getMinCommitsToKeep();
+    int maxCommitsToKeep = writeConfig.getMaxCommitsToKeep();
 
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()

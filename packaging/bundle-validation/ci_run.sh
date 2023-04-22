@@ -28,6 +28,7 @@
 # and it contains the CI environment-specific variables.
 
 HUDI_VERSION=$1
+JAVA_RUNTIME_VERSION=$2
 
 # choose versions based on build profiles
 if [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
@@ -108,4 +109,4 @@ docker build \
 
 # run validation script in docker
 docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -v $TMP_DATA_DIR:/opt/bundle-validation/data \
-  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh
+  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION

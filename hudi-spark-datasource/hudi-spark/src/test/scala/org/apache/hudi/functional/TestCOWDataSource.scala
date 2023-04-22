@@ -51,7 +51,7 @@ import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
@@ -489,7 +489,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
    * Test for https://issues.apache.org/jira/browse/HUDI-1615. Null Schema in BulkInsert row writer flow.
    * This was reported by customer when archival kicks in as the schema in commit metadata is not set for bulk_insert
    * row writer flow.
-   * In this test, we trigger a round of bulk_inserts and set archive related configs to be minimal. So, after 4 rounds,
+   * In this test, we trigger a round of bulk_inserts and set archive related configs to be minimal. So, after 6 rounds,
    * archival should kick in and 2 commits should be archived. If schema is valid, no exception will be thrown. If not,
    * NPE will be thrown.
    */
@@ -499,14 +499,14 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     var structType : StructType = null
-    for (i <- 1 to 4) {
+    for (i <- 1 to 7) {
       val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).toList
       val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
       structType = inputDF.schema
       inputDF.write.format("hudi")
         .options(writeOpts)
-        .option("hoodie.keep.min.commits", "1")
-        .option("hoodie.keep.max.commits", "2")
+        .option("hoodie.keep.min.commits", "4")
+        .option("hoodie.keep.max.commits", "5")
         .option("hoodie.cleaner.commits.retained", "0")
         .option("hoodie.datasource.write.row.writer.enable", "true")
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
@@ -515,6 +515,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
 
     val tableMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath).build()
+    assertFalse(tableMetaClient.getArchivedTimeline.empty())
+
     val actualSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false)
     val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(commonOpts(HoodieWriteConfig.TBL_NAME.key))
     spark.sparkContext.getConf.registerKryoClasses(

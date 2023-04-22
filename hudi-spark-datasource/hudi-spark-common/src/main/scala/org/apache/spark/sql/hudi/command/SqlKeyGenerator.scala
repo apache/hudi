@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.HoodieKey
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
@@ -30,11 +29,11 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{StructType, TimestampType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.joda.time.format.DateTimeFormat
+
 import java.sql.Timestamp
 import java.util
 import java.util.Collections
 import java.util.concurrent.TimeUnit.{MICROSECONDS, MILLISECONDS}
-import org.apache.spark.sql.catalyst.InternalRow
 
 /**
  * Custom Spark-specific [[KeyGenerator]] overriding behavior handling [[TimestampType]] partition values
@@ -58,8 +57,7 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
 
         val convertedKeyGenClassName = HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(originalKeyGenClassName)
 
-        val keyGenProps = new TypedProperties()
-        keyGenProps.putAll(props)
+        val keyGenProps = TypedProperties.fromMap(props)
         keyGenProps.remove(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME)
         keyGenProps.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, convertedKeyGenClassName)
 

@@ -18,8 +18,8 @@
 package org.apache.spark.sql.hudi.command
 
 import java.nio.charset.StandardCharsets
-
 import org.apache.avro.Schema
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
@@ -101,10 +101,11 @@ object AlterHoodieTableAddColumnsCommand {
   def commitWithSchema(schema: Schema, hoodieCatalogTable: HoodieCatalogTable,
       sparkSession: SparkSession): Unit = {
 
+    val writeSchema = HoodieAvroUtils.removeMetadataFields(schema);
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     val client = DataSourceUtils.createHoodieClient(
       jsc,
-      schema.toString,
+      writeSchema.toString,
       hoodieCatalogTable.tableLocation,
       hoodieCatalogTable.tableName,
       HoodieWriterUtils.parametersWithWriteDefaults(hoodieCatalogTable.catalogProperties).asJava
