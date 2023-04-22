@@ -36,12 +36,15 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 @EnumDescription("Change log capture supplemental logging mode. The supplemental log is used for "
     + "accelerating the generation of change log details.")
 public enum HoodieCDCSupplementalLoggingMode {
-  @EnumFieldDescription("Record keys, the reader needs to figure out the update before image and after image")
+  @EnumFieldDescription("Only keeping record keys in the supplemental logs, so the reader needs "
+      + "to figure out the update before image and after image.")
   OP_KEY_ONLY,
 
-  @EnumFieldDescription("Before images, the reader needs to figure out the update after images")
+  @EnumFieldDescription("Keeping the before images in the supplemental logs, so the reader needs "
+      + "to figure out the update after images.")
   DATA_BEFORE,
 
-  @EnumFieldDescription("Before and after images, the reader can generate the details directly from the log")
+  @EnumFieldDescription("Keeping the before and after images in the supplemental logs, so the "
+      + "reader can generate the details directly from the logs.")
   DATA_BEFORE_AFTER
 }

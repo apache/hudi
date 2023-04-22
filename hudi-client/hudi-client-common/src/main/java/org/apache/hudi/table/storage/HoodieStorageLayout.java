@@ -55,10 +55,13 @@ public abstract class HoodieStorageLayout implements Serializable {
   @EnumDescription("Determines how the files are organized within a table.")
   public enum LayoutType {
 
-    @EnumFieldDescription("")
+    @EnumFieldDescription("Each file group contains records of a certain set of keys, "
+        + "without particular grouping criteria.")
     DEFAULT,
 
-    @EnumFieldDescription("")
+    @EnumFieldDescription("Each file group contains records of a set of keys which map "
+        + "to a certain range of hash values, so that using the hash function can easily "
+        + "identify the file group a record belongs to, based on the record key.")
     BUCKET
   }
 }

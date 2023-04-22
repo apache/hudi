@@ -28,7 +28,7 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 @EnumDescription("Filter type used by Bloom filter.")
 public enum BloomFilterTypeCode {
 
-  @EnumFieldDescription("")
+  @EnumFieldDescription("Bloom filter that is based on the configured size.")
   SIMPLE,
 
   @EnumFieldDescription("Bloom filter that is auto sized based on number of keys.")
