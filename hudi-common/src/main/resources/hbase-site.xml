@@ -158,7 +158,7 @@ possible configurations would overwhelm and obscure the important.
   <property>
     <name>hbase.master.logcleaner.plugins</name>
     <value>
-      org.apache.hudi.org.apache.hadoop.hbase.master.cleaner.TimeToLiveLogCleaner,org.apache.hudi.org.apache.hadoop.hbase.master.cleaner.TimeToLiveProcedureWALCleaner,org.apache.hudi.org.apache.hadoop.hbase.master.cleaner.TimeToLiveMasterLocalStoreWALCleaner
+      org.apache.hadoop.hbase.master.cleaner.TimeToLiveLogCleaner,org.apache.hadoop.hbase.master.cleaner.TimeToLiveProcedureWALCleaner,org.apache.hadoop.hbase.master.cleaner.TimeToLiveMasterLocalStoreWALCleaner
     </value>
     <description>A comma-separated list of BaseLogCleanerDelegate invoked by
       the LogsCleaner service. These WAL cleaners are called in order,
@@ -178,7 +178,7 @@ possible configurations would overwhelm and obscure the important.
   <property>
     <name>hbase.master.hfilecleaner.plugins</name>
     <value>
-      org.apache.hudi.org.apache.hadoop.hbase.master.cleaner.TimeToLiveHFileCleaner,org.apache.hudi.org.apache.hadoop.hbase.master.cleaner.TimeToLiveMasterLocalStoreHFileCleaner
+      org.apache.hadoop.hbase.master.cleaner.TimeToLiveHFileCleaner,org.apache.hadoop.hbase.master.cleaner.TimeToLiveMasterLocalStoreHFileCleaner
     </value>
     <description>A comma-separated list of BaseHFileCleanerDelegate invoked by
       the HFileCleaner service. These HFiles cleaners are called in order,
@@ -328,12 +328,12 @@ possible configurations would overwhelm and obscure the important.
   </property>
   <property>
     <name>hbase.regionserver.hlog.reader.impl</name>
-    <value>org.apache.hudi.org.apache.hadoop.hbase.regionserver.wal.ProtobufLogReader</value>
+    <value>org.apache.hadoop.hbase.regionserver.wal.ProtobufLogReader</value>
     <description>The WAL file reader implementation.</description>
   </property>
   <property>
     <name>hbase.regionserver.hlog.writer.impl</name>
-    <value>org.apache.hudi.org.apache.hadoop.hbase.regionserver.wal.ProtobufLogWriter</value>
+    <value>org.apache.hadoop.hbase.regionserver.wal.ProtobufLogWriter</value>
     <description>The WAL file writer implementation.</description>
   </property>
   <property>
@@ -393,7 +393,7 @@ possible configurations would overwhelm and obscure the important.
   </property>
   <property>
     <name>hbase.regionserver.region.split.policy</name>
-    <value>org.apache.hudi.org.apache.hadoop.hbase.regionserver.SteppingSplitPolicy</value>
+    <value>org.apache.hadoop.hbase.regionserver.SteppingSplitPolicy</value>
     <description>
       A split policy determines when a region should be split. The various
       other split policies that are available currently are BusyRegionSplitPolicy,
@@ -1369,7 +1369,7 @@ possible configurations would overwhelm and obscure the important.
     <name>hbase.coprocessor.master.classes</name>
     <value></value>
     <description>A comma-separated list of
-      org.apache.hudi.org.apache.hadoop.hbase.coprocessor.MasterObserver coprocessors that are
+      org.apache.hadoop.hbase.coprocessor.MasterObserver coprocessors that are
       loaded by default on the active HMaster process. For any implemented
       coprocessor methods, the listed classes will be called in order. After
       implementing your own MasterObserver, just put it in HBase's classpath
@@ -1694,7 +1694,7 @@ possible configurations would overwhelm and obscure the important.
   </property>
   <property>
     <name>hbase.status.publisher.class</name>
-    <value>org.apache.hudi.org.apache.hadoop.hbase.master.ClusterStatusPublisher$MulticastPublisher</value>
+    <value>org.apache.hadoop.hbase.master.ClusterStatusPublisher$MulticastPublisher</value>
     <description>
       Implementation of the status publication with a multicast message.
     </description>
@@ -1735,14 +1735,14 @@ possible configurations would overwhelm and obscure the important.
   </property>
   <property>
     <name>hbase.rest.filter.classes</name>
-    <value>org.apache.hudi.org.apache.hadoop.hbase.rest.filter.GzipFilter</value>
+    <value>org.apache.hadoop.hbase.rest.filter.GzipFilter</value>
     <description>
       Servlet filters for REST service.
     </description>
   </property>
   <property>
     <name>hbase.master.loadbalancer.class</name>
-    <value>org.apache.hudi.org.apache.hadoop.hbase.master.balancer.StochasticLoadBalancer</value>
+    <value>org.apache.hadoop.hbase.master.balancer.StochasticLoadBalancer</value>
     <description>
       Class used to execute the regions balancing when the period occurs.
       See the class comment for more on how it works
@@ -1760,7 +1760,7 @@ possible configurations would overwhelm and obscure the important.
   </property>
   <property>
     <name>hbase.master.normalizer.class</name>
-    <value>org.apache.hudi.org.apache.hadoop.hbase.master.normalizer.SimpleRegionNormalizer</value>
+    <value>org.apache.hadoop.hbase.master.normalizer.SimpleRegionNormalizer</value>
     <description>
       Class used to execute the region normalization when the period occurs.
       See the class comment for more on how it works
@@ -1812,7 +1812,7 @@ possible configurations would overwhelm and obscure the important.
     <name>hbase.procedure.regionserver.classes</name>
     <value></value>
     <description>A comma-separated list of
-      org.apache.hudi.org.apache.hadoop.hbase.procedure.RegionServerProcedureManager procedure managers that are
+      org.apache.hadoop.hbase.procedure.RegionServerProcedureManager procedure managers that are
       loaded by default on the active HRegionServer process. The lifecycle methods (init/start/stop)
       will be called by the active HRegionServer process to perform the specific globally barriered
       procedure. After implementing your own RegionServerProcedureManager, just put it in
@@ -1823,7 +1823,7 @@ possible configurations would overwhelm and obscure the important.
     <name>hbase.procedure.master.classes</name>
     <value></value>
     <description>A comma-separated list of
-      org.apache.hudi.org.apache.hadoop.hbase.procedure.MasterProcedureManager procedure managers that are
+      org.apache.hadoop.hbase.procedure.MasterProcedureManager procedure managers that are
       loaded by default on the active HMaster process. A procedure is identified by its signature and
       users can use the signature and an instant name to trigger an execution of a globally barriered
       procedure. After implementing your own MasterProcedureManager, just put it in HBase's classpath
@@ -1832,7 +1832,7 @@ possible configurations would overwhelm and obscure the important.
   </property>
   <property>
     <name>hbase.coordinated.state.manager.class</name>
-    <value>org.apache.hudi.org.apache.hadoop.hbase.coordination.ZkCoordinatedStateManager</value>
+    <value>org.apache.hadoop.hbase.coordination.ZkCoordinatedStateManager</value>
     <description>Fully qualified name of class implementing coordinated state manager.</description>
   </property>
   <property>
@@ -1862,10 +1862,10 @@ possible configurations would overwhelm and obscure the important.
   </property>
   <property>
     <name>hbase.http.filter.initializers</name>
-    <value>org.apache.hudi.org.apache.hadoop.hbase.http.lib.StaticUserWebFilter</value>
+    <value>org.apache.hadoop.hbase.http.lib.StaticUserWebFilter</value>
     <description>
       A comma separated list of class names. Each class in the list must extend
-      org.apache.hudi.org.apache.hadoop.hbase.http.FilterInitializer. The corresponding Filter will
+      org.apache.hadoop.hbase.http.FilterInitializer. The corresponding Filter will
       be initialized. Then, the Filter will be applied to all user facing jsp
       and servlet web pages.
       The ordering of the list defines the ordering of the filters.
@@ -1891,7 +1891,7 @@ possible configurations would overwhelm and obscure the important.
   </property>
   <property>
     <name>hbase.replication.rpc.codec</name>
-    <value>org.apache.hudi.org.apache.hadoop.hbase.codec.KeyValueCodecWithTags</value>
+    <value>org.apache.hadoop.hbase.codec.KeyValueCodecWithTags</value>
     <description>
       The codec that is to be used when replication is enabled so that
       the tags are also replicated. This is used along with HFileV3 which
@@ -2009,7 +2009,7 @@ possible configurations would overwhelm and obscure the important.
   </property>
   <property>
     <name>hbase.mob.compactor.class</name>
-    <value>org.apache.hudi.org.apache.hadoop.hbase.mob.compactions.PartitionedMobCompactor</value>
+    <value>org.apache.hadoop.hbase.mob.compactions.PartitionedMobCompactor</value>
     <description>
       Implementation of mob compactor, the default one is PartitionedMobCompactor.
     </description>
@@ -2153,7 +2153,7 @@ possible configurations would overwhelm and obscure the important.
   <property>
     <name>hbase.namedqueue.provider.classes</name>
     <value>
-      org.apache.hudi.org.apache.hadoop.hbase.namequeues.impl.SlowLogQueueService,org.apache.hudi.org.apache.hadoop.hbase.namequeues.impl.BalancerDecisionQueueService,org.apache.hudi.org.apache.hadoop.hbase.namequeues.impl.BalancerRejectionQueueService
+      org.apache.hadoop.hbase.namequeues.impl.SlowLogQueueService,org.apache.hadoop.hbase.namequeues.impl.BalancerDecisionQueueService,org.apache.hadoop.hbase.namequeues.impl.BalancerRejectionQueueService
     </value>
     <description>
       Default values for NamedQueueService implementors. This comma separated full class names
@@ -2161,7 +2161,7 @@ possible configurations would overwhelm and obscure the important.
       LogEvent handler service. One example of NamedQueue service is SlowLogQueueService which
       is used to store slow/large RPC logs in ringbuffer at each RegionServer.
       All implementors of NamedQueueService should be found under package:
-      "org.apache.hudi.org.apache.hadoop.hbase.namequeues.impl"
+      "org.apache.hadoop.hbase.namequeues.impl"
     </description>
   </property>
   <property>
