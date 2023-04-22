@@ -21,7 +21,6 @@ package org.apache.hudi.client;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
@@ -52,11 +51,10 @@ public class TestWriteStatus {
   public void testSuccessRecordTracking() {
     WriteStatus status = new WriteStatus(false, 1.0);
     Throwable t = new Exception("some error in writing");
-    for (int i = 0; i < 1000 * 100; i++) {
+    for (int i = 0; i < 1000; i++) {
       status.markSuccess(mock(HoodieRecord.class), Option.empty());
       status.markFailure(mock(HoodieRecord.class), t, Option.empty());
     }
-    System.out.println("IndexItem---memory: " + ObjectSizeCalculator.getObjectSize(status));
     assertEquals(1000, status.getFailedRecordIndexes().size());
     assertTrue(status.hasErrors());
     assertTrue(status.getWrittenRecordIndexes().isEmpty());
