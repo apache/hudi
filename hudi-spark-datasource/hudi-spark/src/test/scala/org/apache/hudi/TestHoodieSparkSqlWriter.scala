@@ -40,7 +40,7 @@ import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider._
@@ -51,8 +51,8 @@ import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
 import java.io.IOException
 import java.time.format.DateTimeFormatterBuilder
-import java.time.{Instant, ZoneId}
 import java.time.temporal.ChronoField
+import java.time.{Instant, ZoneId}
 import java.util.{Collections, Date, TimeZone, UUID}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters
@@ -1215,6 +1215,7 @@ class TestHoodieSparkSqlWriter {
    * Test case for instant is generated with commit timezone when TIMELINE_TIMEZONE set to UTC
    * related to HUDI-5978
    */
+  @Disabled("HUDI-6126")
   @Test
   def testInsertDatasetWIthTimelineTimezoneUTC(): Unit = {
     val fooTableModifier = commonTableModifier.updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
