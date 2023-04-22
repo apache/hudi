@@ -1106,7 +1106,7 @@ public class TestCleaner extends HoodieClientTestBase {
                 .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withArchivalConfig(
             HoodieArchivalConfig.newBuilder()
-                .archiveCommitsWith(3, 4).build())
+                .archiveCommitsWith(4, 5).build())
         .withMarkersType(MarkerType.DIRECT.name())
         .withPath(basePath)
         .build();
@@ -1149,10 +1149,13 @@ public class TestCleaner extends HoodieClientTestBase {
 
     // empty commits
     testTable.addCommit("5");
+    testTable.addCommit("6");
 
     // archive commit 1, 2
     new HoodieTimelineArchiver<>(config, HoodieSparkTable.create(config, context, metaClient))
         .archiveIfRequired(context, false);
+    assertFalse(metaClient.reloadActiveTimeline().containsInstant("1"));
+    assertFalse(metaClient.reloadActiveTimeline().containsInstant("2"));
 
     runCleaner(config);
     assertFalse(testTable.baseFileExists(p1, "1", file1P1), "Clean old FileSlice in p1 by fallback to full clean");

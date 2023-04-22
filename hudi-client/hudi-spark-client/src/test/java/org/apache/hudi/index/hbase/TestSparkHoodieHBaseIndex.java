@@ -21,6 +21,7 @@ package org.apache.hudi.index.hbase;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -483,8 +484,9 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
     // Load to memory
     Map<String, String> params = new HashMap<String, String>();
     params.put(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1");
-    params.put(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3");
-    params.put(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2");
+    params.put(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key(), "3");
+    params.put(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "5");
+    params.put(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "4");
     HoodieWriteConfig config = getConfigBuilder(100, false, false).withProps(params).build();
 
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
@@ -492,14 +494,17 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
 
     // make first commit with 20 records
     JavaRDD<HoodieRecord> writeRecords1 = generateAndCommitRecords(writeClient, 20);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    String commit1 = metaClient.getActiveTimeline().firstInstant().get().getTimestamp();
 
-    // Make 3 additional commits, so that first commit is archived
-    for (int nCommit = 0; nCommit < 3; nCommit++) {
+    // Make 6 additional commits, so that first commit is archived
+    for (int nCommit = 0; nCommit < 6; nCommit++) {
       generateAndCommitRecords(writeClient, 20);
     }
 
     // tagLocation for the first set of records (for the archived commit), hbaseIndex should tag them as valid
     metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertTrue(metaClient.getArchivedTimeline().containsInstant(commit1));
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     JavaRDD<HoodieRecord> javaRDD1 = tagLocation(index, writeRecords1, hoodieTable);
     assertEquals(20, javaRDD1.filter(HoodieRecord::isCurrentLocationKnown).collect().size());

@@ -59,6 +59,11 @@ public interface TestFunctionWrapper<I> {
   void checkpointFunction(long checkpointId) throws Exception;
 
   /**
+   * End inputs for all the operators in the wrapper.
+   */
+  void endInput();
+
+  /**
    * Mark checkpoint with id {code checkpointId} as success.
    */
   void checkpointComplete(long checkpointId);

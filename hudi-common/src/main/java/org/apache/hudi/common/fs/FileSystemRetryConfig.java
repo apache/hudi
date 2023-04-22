@@ -69,7 +69,7 @@ public class FileSystemRetryConfig  extends HoodieConfig {
       .defaultValue("")
       .markAdvanced()
       .sinceVersion("0.11.0")
-      .withDocumentation("The class name of the Exception that needs to be re-tryed, separated by commas. "
+      .withDocumentation("The class name of the Exception that needs to be retried, separated by commas. "
           + "Default is empty which means retry all the IOException and RuntimeException from FileSystem");
 
   private FileSystemRetryConfig() {

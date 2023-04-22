@@ -44,7 +44,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
-import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
@@ -213,15 +212,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
-    try {
-      // Because the partition of BaseTableMetadata has been deleted,
-      // all partition information can only be obtained from FileSystemBackedTableMetadata.
-      FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(context,
-          context.getHadoopConf(), config.getBasePath(), config.shouldAssumeDatePartitioning());
-      return fsBackedTableMetadata.getAllPartitionPaths();
-    } catch (IOException e) {
-      return Collections.emptyList();
-    }
+    return FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), config.getBasePath());
   }
 
   /**

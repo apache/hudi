@@ -35,7 +35,7 @@ public enum MetadataPartitionType {
   private final String fileIdPrefix;
   // Total file groups
   // TODO fix: enum should not have any mutable aspect as this compromises whole idea
-  //      of the inum being static, immutable entity
+  //      of the enum being static, immutable entity
   private int fileGroupCount = 1;
 
   MetadataPartitionType(final String partitionPath, final String fileIdPrefix) {

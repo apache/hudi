@@ -62,7 +62,7 @@ public class HoodieCommonTestHarness {
   }
 
   /**
-   * Initializes a test data generator which used to generate test datas.
+   * Initializes a test data generator which used to generate test data.
    */
   protected void initTestDataGenerator() {
     dataGen = new HoodieTestDataGenerator();

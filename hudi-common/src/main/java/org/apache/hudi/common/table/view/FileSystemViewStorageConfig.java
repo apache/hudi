@@ -163,7 +163,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
       .defaultValue("")
       .markAdvanced()
       .sinceVersion("0.12.1")
-      .withDocumentation("The class name of the Exception that needs to be re-tryed, separated by commas. "
+      .withDocumentation("The class name of the Exception that needs to be retried, separated by commas. "
           + "Default is empty which means retry all the IOException and RuntimeException from Remote Request.");
 
   public static final ConfigProperty<String> REMOTE_BACKUP_VIEW_ENABLE = ConfigProperty

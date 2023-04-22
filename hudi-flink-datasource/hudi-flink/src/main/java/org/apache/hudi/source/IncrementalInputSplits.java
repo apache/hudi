@@ -422,7 +422,12 @@ public class IncrementalInputSplits implements Serializable {
   }
 
   private FileIndex getFileIndex() {
-    return FileIndex.instance(new org.apache.hadoop.fs.Path(path.toUri()), conf, rowType, null, partitionPruner);
+    return FileIndex.builder()
+        .path(new org.apache.hadoop.fs.Path(path.toUri()))
+        .conf(conf)
+        .rowType(rowType)
+        .partitionPruner(partitionPruner)
+        .build();
   }
 
   /**

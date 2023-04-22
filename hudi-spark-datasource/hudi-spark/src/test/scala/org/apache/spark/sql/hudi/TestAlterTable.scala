@@ -17,8 +17,12 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.spark.sql.catalyst.TableIdentifier
+import org.junit.jupiter.api.Assertions.assertFalse
+
+import scala.collection.JavaConverters._
 
 class TestAlterTable extends HoodieSparkSqlTestBase {
 
@@ -50,6 +54,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         assertResult("primary id") (
           catalogTable.schema(catalogTable.schema.fieldIndex("id")).getComment().get
         )
+        validateTableSchema(tablePath)
         spark.sql(s"alter table $tableName change column name name string comment 'name column'")
         spark.sessionState.catalog.refreshTable(new TableIdentifier(tableName))
         catalogTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName))
@@ -59,6 +64,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         assertResult("name column") (
           catalogTable.schema(catalogTable.schema.fieldIndex("name")).getComment().get
         )
+        validateTableSchema(tablePath)
 
         // alter table name.
         val newTableName = s"${tableName}_1"
@@ -74,6 +80,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         val metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath)
           .setConf(hadoopConf).build()
         assertResult(newTableName) (metaClient.getTableConfig.getTableName)
+        validateTableSchema(tablePath)
 
         // insert some data
         spark.sql(s"insert into $newTableName values(1, 'a1', 10, 1000)")
@@ -87,6 +94,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
           Seq(1, "a1", 10.0, 1000, null)
         )
+        validateTableSchema(tablePath)
 
         // change column's data type
         checkExceptionContain(s"alter table $newTableName change column id id bigint") (
@@ -168,6 +176,16 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  def validateTableSchema(tablePath: String): Unit = {
+    val hadoopConf = spark.sessionState.newHadoopConf()
+    val metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath)
+      .setConf(hadoopConf).build()
+
+    val schema = new TableSchemaResolver(metaClient).getTableAvroSchema(false)
+    assertFalse(schema.getFields.asScala.exists(f => HoodieRecord.HOODIE_META_COLUMNS.contains(f.name())),
+      "Metadata fields should be excluded from the table schema")
+  }
+
   test("Test Alter Rename Table") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
@@ -240,6 +258,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
   test("Test Alter Table With OCC") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
