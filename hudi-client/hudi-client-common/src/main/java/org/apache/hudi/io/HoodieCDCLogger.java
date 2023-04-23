@@ -58,8 +58,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before;
-import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before_after;
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.DATA_BEFORE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER;
 
 /**
  * This class encapsulates all the cdc-writing functions.
@@ -243,10 +243,10 @@ public class HoodieCDCLogger implements Closeable {
   // -------------------------------------------------------------------------
 
   private CDCTransformer getTransformer() {
-    if (cdcSupplementalLoggingMode == data_before_after) {
+    if (cdcSupplementalLoggingMode == DATA_BEFORE_AFTER) {
       return (operation, recordKey, oldRecord, newRecord) ->
           HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), commitTime, removeCommitMetadata(oldRecord), removeCommitMetadata(newRecord));
-    } else if (cdcSupplementalLoggingMode == data_before) {
+    } else if (cdcSupplementalLoggingMode == DATA_BEFORE) {
       return (operation, recordKey, oldRecord, newRecord) ->
           HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), recordKey, removeCommitMetadata(oldRecord));
     } else {

@@ -21,6 +21,8 @@ package org.apache.hudi.config;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
@@ -164,14 +166,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .defaultValue(ClusteringPlanPartitionFilterMode.NONE)
       .markAdvanced()
       .sinceVersion("0.11.0")
-      .withDocumentation("Partition filter mode used in the creation of clustering plan. Available values are - "
-          + "NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate."
-          + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
-          + PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
-          + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
-          + PARTITION_FILTER_END_PARTITION.key() + "']."
-          + "DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, "
-          + "which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour.");
+      .withDocumentation(ClusteringPlanPartitionFilterMode.class);
 
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
@@ -262,11 +257,10 @@ public class HoodieClusteringConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
-      .defaultValue("linear")
+      .defaultValue(LayoutOptimizationStrategy.LINEAR.name())
       .markAdvanced()
       .sinceVersion("0.10.0")
-      .withDocumentation("Determines ordering strategy used in records layout optimization. "
-          + "Currently supported strategies are \"linear\", \"z-order\" and \"hilbert\" values are supported.");
+      .withDocumentation(LayoutOptimizationStrategy.class);
 
   /**
    * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_STRATEGY} value is set to
@@ -290,12 +284,10 @@ public class HoodieClusteringConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "curve.build.method")
-      .defaultValue("direct")
+      .defaultValue(SpatialCurveCompositionStrategyType.DIRECT.name())
       .markAdvanced()
       .sinceVersion("0.10.0")
-      .withDocumentation("Controls how data is sampled to build the space-filling curves. "
-          + "Two methods: \"direct\", \"sample\". The direct method is faster than the sampling, "
-          + "however sample method would produce a better data layout.");
+      .withDocumentation(SpatialCurveCompositionStrategyType.class);
 
   /**
    * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD} value
@@ -687,61 +679,38 @@ public class HoodieClusteringConfig extends HoodieConfig {
   }
 
   /**
-   * Type of a strategy for building Z-order/Hilbert space-filling curves.
+   * Type of strategy for building Z-order/Hilbert space-filling curves.
    */
+  @EnumDescription("Type of a strategy for building Z-order/Hilbert space-filling curves.")
   public enum SpatialCurveCompositionStrategyType {
-    DIRECT("direct"),
-    SAMPLE("sample");
 
-    private static final Map<String, SpatialCurveCompositionStrategyType> VALUE_TO_ENUM_MAP =
-        TypeUtils.getValueToEnumMap(SpatialCurveCompositionStrategyType.class, e -> e.value);
+    @EnumFieldDescription("Faster than sampling")
+    DIRECT,
 
-    private final String value;
-
-    SpatialCurveCompositionStrategyType(String value) {
-      this.value = value;
-    }
-
-    public static SpatialCurveCompositionStrategyType fromValue(String value) {
-      SpatialCurveCompositionStrategyType enumValue = VALUE_TO_ENUM_MAP.get(value);
-      if (enumValue == null) {
-        throw new HoodieException(String.format("Invalid value (%s)", value));
-      }
-
-      return enumValue;
-    }
+    @EnumFieldDescription("Produces a better layout compared to DIRECT strategy")
+    SAMPLE
   }
 
   /**
    * Layout optimization strategies such as Z-order/Hilbert space-curves, etc
    */
+  @EnumDescription("Determines ordering strategy for records layout optimization.")
   public enum LayoutOptimizationStrategy {
-    LINEAR("linear"),
-    ZORDER("z-order"),
-    HILBERT("hilbert");
+    @EnumFieldDescription("Orders records lexicographically")
+    LINEAR,
 
-    private static final Map<String, LayoutOptimizationStrategy> VALUE_TO_ENUM_MAP =
-        TypeUtils.getValueToEnumMap(LayoutOptimizationStrategy.class, e -> e.value);
+    @EnumFieldDescription("Orders records along Z-order spatial-curve.")
+    ZORDER,
 
-    private final String value;
+    @EnumFieldDescription("Orders records along Hilbert's spatial-curve.")
+    HILBERT
+  }
 
-    LayoutOptimizationStrategy(String value) {
-      this.value = value;
+  public static LayoutOptimizationStrategy resolveLayoutOptimizationStrategy(String cfgVal) {
+    if (cfgVal.equalsIgnoreCase("z-order")) {
+      return LayoutOptimizationStrategy.ZORDER;
     }
-
-    @Nonnull
-    public static LayoutOptimizationStrategy fromValue(String value) {
-      LayoutOptimizationStrategy enumValue = VALUE_TO_ENUM_MAP.get(value);
-      if (enumValue == null) {
-        throw new HoodieException(String.format("Invalid value (%s)", value));
-      }
-
-      return enumValue;
-    }
-
-    public String getValue() {
-      return value;
-    }
+    return LayoutOptimizationStrategy.valueOf(cfgVal.toUpperCase());
   }
 
   public enum ClusteringOperator {

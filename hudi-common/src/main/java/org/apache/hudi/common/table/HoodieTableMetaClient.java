@@ -894,7 +894,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     public PropertyBuilder setCDCSupplementalLoggingMode(String cdcSupplementalLoggingMode) {
-      this.cdcSupplementalLoggingMode = cdcSupplementalLoggingMode;
+      this.cdcSupplementalLoggingMode = cdcSupplementalLoggingMode.toUpperCase();
       return this;
     }
 

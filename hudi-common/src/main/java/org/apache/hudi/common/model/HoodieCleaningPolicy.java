@@ -18,9 +18,31 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
+
 /**
  * Hoodie cleaning policies.
  */
+@EnumDescription("Cleaning policy to be used. The cleaner service deletes older file "
+    + "slices files to re-claim space. Long running query plans may often refer to older "
+    + "file slices and will break if those are cleaned, before the query has had a chance "
+    + "to run. So, it is good to make sure that the data is retained for more than the "
+    + "maximum query execution time. ")
 public enum HoodieCleaningPolicy {
-  KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_COMMITS, KEEP_LATEST_BY_HOURS
+
+  @EnumFieldDescription("The KEEP_LATEST_FILE_VERSIONS cleaning "
+      + "policy is used, which keeps the last N versions of the file slices written, "
+      + "determined by \"hoodie.cleaner.fileversions.retained\"; ")
+  KEEP_LATEST_FILE_VERSIONS,
+
+  @EnumFieldDescription("The KEEP_LATEST_COMMITS cleaning policy is "
+      + "used, which keeps the file slices written by the last N commits, determined by "
+      + "\"hoodie.cleaner.commits.retained\"; ")
+  KEEP_LATEST_COMMITS,
+
+  @EnumFieldDescription("The KEEP_LATEST_BY_HOURS cleaning policy is "
+      + "used, which keeps the file slices written in the last N hours based on the commit "
+      + "time, determined by \"hoodie.cleaner.hours.retained\"; ")
+  KEEP_LATEST_BY_HOURS
 }

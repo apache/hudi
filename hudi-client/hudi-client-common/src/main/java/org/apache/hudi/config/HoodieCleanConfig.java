@@ -33,9 +33,7 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 /**
  * Clean related config.
@@ -70,6 +68,7 @@ public class HoodieCleanConfig extends HoodieConfig {
   public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy")
       .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+      .withDocumentation(HoodieCleaningPolicy.class)
       .markAdvanced()
       .withInferFunction(cfg -> {
         boolean isCommitsRetainedConfigured = cfg.contains(CLEANER_COMMITS_RETAINED_KEY);
@@ -91,24 +90,7 @@ public class HoodieCleanConfig extends HoodieConfig {
           return Option.of(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name());
         }
         return Option.empty();
-      })
-      .withDocumentation("Cleaning policy to be used. The cleaner service deletes older file "
-          + "slices files to re-claim space. Long running query plans may often refer to older "
-          + "file slices and will break if those are cleaned, before the query has had a chance "
-          + "to run. So, it is good to make sure that the data is retained for more than the "
-          + "maximum query execution time. "
-          + "By default, the cleaning policy is determined based on one of the following configs "
-          + "explicitly set by the user (at most one of them can be set; otherwise, "
-          + "KEEP_LATEST_COMMITS cleaning policy is used): "
-          + "(1) \"hoodie.cleaner.commits.retained\": the KEEP_LATEST_COMMITS cleaning policy is "
-          + "used, which keeps the file slices written by the last N commits, determined by "
-          + "\"hoodie.cleaner.commits.retained\"; "
-          + "(2) \"hoodie.cleaner.hours.retained\": the KEEP_LATEST_BY_HOURS cleaning policy is "
-          + "used, which keeps the file slices written in the last N hours based on the commit "
-          + "time, determined by \"hoodie.cleaner.hours.retained\"; "
-          + "(3) \"hoodie.cleaner.fileversions.retained\": the KEEP_LATEST_FILE_VERSIONS cleaning "
-          + "policy is used, which keeps the last N versions of the file slices written, "
-          + "determined by \"hoodie.cleaner.fileversions.retained\".");
+      });
 
   public static final ConfigProperty<String> CLEANER_COMMITS_RETAINED = ConfigProperty
       .key(CLEANER_COMMITS_RETAINED_KEY)
@@ -134,8 +116,7 @@ public class HoodieCleanConfig extends HoodieConfig {
       .key("hoodie.clean.trigger.strategy")
       .defaultValue(CleaningTriggerStrategy.NUM_COMMITS.name())
       .markAdvanced()
-      .withDocumentation("Controls how cleaning is scheduled. Valid options: "
-          + Arrays.stream(CleaningTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
+      .withDocumentation(CleaningTriggerStrategy.class);
 
   public static final ConfigProperty<String> CLEAN_MAX_COMMITS = ConfigProperty
       .key("hoodie.clean.max.commits")
@@ -157,15 +138,13 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withInferFunction(cfg -> {
         Option<String> writeConcurrencyModeOpt = Option.ofNullable(cfg.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE));
         if (!writeConcurrencyModeOpt.isPresent()
-            || !writeConcurrencyModeOpt.get().equals(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
+            || !writeConcurrencyModeOpt.get().equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
           return Option.empty();
         }
         return Option.of(HoodieFailedWritesCleaningPolicy.LAZY.name());
       })
       .markAdvanced()
-      .withDocumentation("Cleaning policy for failed writes to be used. Hudi will delete any files written by "
-          + "failed writes to re-claim space. Choose to perform this rollback of failed writes eagerly before "
-          + "every writer starts (only supported for single writer) or lazily by the cleaner (required for multi-writers)");
+      .withDocumentation(HoodieFailedWritesCleaningPolicy.class);
 
   public static final ConfigProperty<String> CLEANER_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.cleaner.parallelism")

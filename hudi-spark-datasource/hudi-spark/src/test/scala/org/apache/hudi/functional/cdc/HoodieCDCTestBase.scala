@@ -33,7 +33,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{data_before, op_key_only}
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, OP_KEY_ONLY}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull}
@@ -144,10 +144,10 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     val cdcRecord = cdcRecords.head.getData.asInstanceOf[GenericRecord]
     // check schema
     assertEquals(cdcRecord.getSchema, cdcSchema)
-    if (loggingMode == op_key_only) {
+    if (loggingMode == OP_KEY_ONLY) {
       // check record key
       assert(cdcRecords.map(_.getData.asInstanceOf[GenericRecord].get(1).toString).sorted == newHoodieRecords.map(_.getKey.getRecordKey).sorted)
-    } else if (loggingMode == data_before) {
+    } else if (loggingMode == DATA_BEFORE) {
       // check record key
       assert(cdcRecords.map(_.getData.asInstanceOf[GenericRecord].get(1).toString).sorted == newHoodieRecords.map(_.getKey.getRecordKey).sorted)
       // check before
@@ -190,10 +190,10 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     val cdcRecord = cdcRecords.head.asInstanceOf[GenericRecord]
     // check schema
     assertEquals(cdcRecord.getSchema, cdcSchema)
-    if (loggingMode == op_key_only) {
+    if (loggingMode == OP_KEY_ONLY) {
       // check record key
       assert(cdcRecords.map(_.get(1).toString).sorted == deletedKeys.map(_.getRecordKey).sorted)
-    } else if (loggingMode == data_before) {
+    } else if (loggingMode == DATA_BEFORE) {
       // check record key
       assert(cdcRecords.map(_.get(1).toString).sorted == deletedKeys.map(_.getRecordKey).sorted)
     } else {

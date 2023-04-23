@@ -468,7 +468,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   //              | ----- txn2 ----- |
   @Test
   public void testWriteMultiWriterInvolved() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
@@ -497,7 +497,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   //                       | ----- txn2 ----- |
   @Test
   public void testWriteMultiWriterPartialOverlapping() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 

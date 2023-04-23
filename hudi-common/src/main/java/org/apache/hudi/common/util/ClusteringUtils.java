@@ -132,7 +132,7 @@ public class ClusteringUtils {
     } catch (Exception e) {
       if (e instanceof IllegalStateException && e.getMessage().contains("Duplicate key")) {
         throw new HoodieException("Found duplicate file groups pending clustering. If you're running deltastreamer in continuous mode, consider adding delay using --min-sync-interval-seconds. "
-            + "Or consider setting write concurrency mode to optimistic_concurrency_control.", e);
+            + "Or consider setting write concurrency mode to OPTIMISTIC_CONCURRENCY_CONTROL.", e);
       }
       throw new HoodieException("Error getting all file groups in pending clustering", e);
     }

@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
-import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, JsonUtils, StringUtils}
+import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, ConfigUtils, JsonUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
@@ -227,7 +227,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   }
 
   private def getStreamIdentifier(options: Map[String, String]) : Option[String] = {
-    if (WriteConcurrencyMode.valueOf(options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
+    if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
       WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.SINGLE_WRITER) {
       // for single writer model, we will fetch default if not set.
       Some(options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue()))

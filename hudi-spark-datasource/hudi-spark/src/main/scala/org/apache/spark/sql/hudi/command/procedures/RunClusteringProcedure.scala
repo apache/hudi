@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.common.util.{ClusteringUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieClusteringConfig
-import org.apache.hudi.config.HoodieClusteringConfig.{ClusteringOperator, LayoutOptimizationStrategy}
+import org.apache.hudi.config.HoodieClusteringConfig.ClusteringOperator
 import org.apache.hudi.exception.HoodieClusteringException
 import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex}
 import org.apache.spark.internal.Logging
@@ -123,9 +123,9 @@ class RunClusteringProcedure extends BaseProcedure
 
     orderStrategy match {
       case Some(o) =>
-        val strategy = LayoutOptimizationStrategy.fromValue(o.asInstanceOf[String])
+        val strategy =  HoodieClusteringConfig.resolveLayoutOptimizationStrategy(o.asInstanceOf[String])
         conf = conf ++ Map(
-          HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key() -> strategy.getValue
+          HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key() -> strategy.name()
         )
       case _ =>
         logInfo("No order strategy")

@@ -128,7 +128,7 @@ object CDCRelation {
 
   /**
    * CDC Schema For Spark.
-   * Also it's schema when `hoodie.table.cdc.supplemental.logging.mode` is [[data_before_after]].
+   * Also it's schema when `hoodie.table.cdc.supplemental.logging.mode` is [[DATA_BEFORE_AFTER]].
    * Here we use the debezium format.
    */
   val FULL_CDC_SPARK_SCHEMA: StructType = {
@@ -143,7 +143,7 @@ object CDCRelation {
   }
 
   /**
-   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging.mode` is [[op_key_only]].
+   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging.mode` is [[OP_KEY_ONLY]].
    */
   val MIN_CDC_SPARK_SCHEMA: StructType = {
     StructType(
@@ -155,7 +155,7 @@ object CDCRelation {
   }
 
   /**
-   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging.mode` is [[data_before]].
+   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging.mode` is [[DATA_BEFORE]].
    */
   val CDC_WITH_BEFORE_SPARK_SCHEMA: StructType = {
     StructType(

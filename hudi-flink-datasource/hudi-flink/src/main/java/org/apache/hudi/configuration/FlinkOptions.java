@@ -52,7 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before_after;
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 
 /**
@@ -175,7 +175,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> SUPPLEMENTAL_LOGGING_MODE = ConfigOptions
       .key("cdc.supplemental.logging.mode")
       .stringType()
-      .defaultValue(data_before_after.name())
+      .defaultValue(DATA_BEFORE_AFTER.name())
       .withFallbackKeys(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key())
       .withDescription("Setting 'op_key_only' persists the 'op' and the record key only, "
           + "setting 'data_before' persists the additional 'before' image, "

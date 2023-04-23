@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import java.io.Serializable;
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -57,6 +58,8 @@ public class ConfigProperty<T> implements Serializable {
 
   private final boolean advanced;
 
+  private final boolean autoCapitalize;
+
   private final String[] alternatives;
 
   // provide the ability to infer config value based on other configs
@@ -65,7 +68,7 @@ public class ConfigProperty<T> implements Serializable {
   ConfigProperty(String key, T defaultValue, String docOnDefaultValue, String doc,
                  Option<String> sinceVersion, Option<String> deprecatedVersion,
                  Option<Function<HoodieConfig, Option<T>>> inferFunc, Set<String> validValues,
-                 boolean advanced, String... alternatives) {
+                 boolean advanced, boolean autoCapitalize, String... alternatives) {
     this.key = Objects.requireNonNull(key);
     this.defaultValue = defaultValue;
     this.docOnDefaultValue = docOnDefaultValue;
@@ -75,6 +78,7 @@ public class ConfigProperty<T> implements Serializable {
     this.inferFunction = inferFunc;
     this.validValues = validValues;
     this.advanced = advanced;
+    this.autoCapitalize = autoCapitalize;
     this.alternatives = alternatives;
   }
 
@@ -119,11 +123,15 @@ public class ConfigProperty<T> implements Serializable {
   }
 
   public void checkValues(String value) {
-    if (validValues != null && !validValues.isEmpty() && !validValues.contains(value)) {
+    if (!isValid(value)) {
       throw new IllegalArgumentException(
           "The value of " + key + " should be one of "
               + String.join(",", validValues) + ", but was " + value);
     }
+  }
+
+  private boolean isValid(String value) {
+    return validValues == null || validValues.isEmpty() || validValues.contains(value.toUpperCase());
   }
 
   public List<String> getAlternatives() {
@@ -134,41 +142,88 @@ public class ConfigProperty<T> implements Serializable {
     return advanced;
   }
 
+  public boolean shouldCapitalize() {
+    return autoCapitalize;
+  }
+
   public ConfigProperty<T> withDocumentation(String doc) {
     Objects.requireNonNull(doc);
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, autoCapitalize, alternatives);
+  }
+
+  public <U extends Enum<U>> ConfigProperty<T> withDocumentation(Class<U> e) {
+    return withDocumentation(e,"");
+  }
+
+  private <U extends Enum<U>> boolean isDefaultField(Class<U> e, Field f) {
+    if (!hasDefaultValue()) {
+      return false;
+    }
+    if (defaultValue() instanceof String) {
+      return f.getName().equals(((String) defaultValue()).toUpperCase());
+    }
+    return Enum.valueOf(e, f.getName()).equals(defaultValue());
+  }
+
+  public <U extends Enum<U>> ConfigProperty<T> withDocumentation(Class<U> e, String doc) {
+    Objects.requireNonNull(e);
+    StringBuilder sb = new StringBuilder();
+    if (StringUtils.nonEmpty(doc)) {
+      sb.append(doc);
+      sb.append('\n');
+    }
+    sb.append(e.getName());
+    sb.append(": ");
+    EnumDescription description =  e.getAnnotation(EnumDescription.class);
+    Objects.requireNonNull(description);
+    sb.append(description.value());
+    for (Field f: e.getFields()) {
+      if (isValid(f.getName())) {
+        EnumFieldDescription fieldDescription = f.getAnnotation(EnumFieldDescription.class);
+        Objects.requireNonNull(fieldDescription);
+        sb.append("\n    ");
+        sb.append(f.getName());
+        if (isDefaultField(e, f)) {
+          sb.append("(default)");
+        }
+        sb.append(": ");
+        sb.append(fieldDescription.value());
+      }
+    }
+
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, sb.toString(), sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, true, alternatives);
   }
 
   public ConfigProperty<T> withValidValues(String... validValues) {
     Objects.requireNonNull(validValues);
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, new HashSet<>(Arrays.asList(validValues)), advanced, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, new HashSet<>(Arrays.asList(validValues)), advanced, autoCapitalize,alternatives);
   }
 
   public ConfigProperty<T> withAlternatives(String... alternatives) {
     Objects.requireNonNull(alternatives);
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, autoCapitalize, alternatives);
   }
 
   public ConfigProperty<T> sinceVersion(String sinceVersion) {
     Objects.requireNonNull(sinceVersion);
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, Option.of(sinceVersion), deprecatedVersion, inferFunction, validValues, advanced, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, Option.of(sinceVersion), deprecatedVersion, inferFunction, validValues, advanced, autoCapitalize, alternatives);
   }
 
   public ConfigProperty<T> deprecatedAfter(String deprecatedVersion) {
     Objects.requireNonNull(deprecatedVersion);
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, Option.of(deprecatedVersion), inferFunction, validValues, advanced, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, Option.of(deprecatedVersion), inferFunction, validValues, advanced, autoCapitalize, alternatives);
   }
 
   public ConfigProperty<T> withInferFunction(Function<HoodieConfig, Option<T>> inferFunction) {
     Objects.requireNonNull(inferFunction);
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, Option.of(inferFunction), validValues, advanced, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, Option.of(inferFunction), validValues, advanced, autoCapitalize, alternatives);
   }
 
   /**
    * Marks the config as an advanced config.
    */
   public ConfigProperty<T> markAdvanced() {
-    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, true, alternatives);
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, true, autoCapitalize, alternatives);
   }
 
   /**
@@ -208,7 +263,7 @@ public class ConfigProperty<T> implements Serializable {
     public <T> ConfigProperty<T> defaultValue(T value, String docOnDefaultValue) {
       Objects.requireNonNull(value);
       Objects.requireNonNull(docOnDefaultValue);
-      ConfigProperty<T> configProperty = new ConfigProperty<>(key, value, docOnDefaultValue, "", Option.empty(), Option.empty(), Option.empty(), Collections.emptySet(), false);
+      ConfigProperty<T> configProperty = new ConfigProperty<>(key, value, docOnDefaultValue, "", Option.empty(), Option.empty(), Option.empty(), Collections.emptySet(), false, false);
       return configProperty;
     }
 
@@ -218,7 +273,7 @@ public class ConfigProperty<T> implements Serializable {
 
     public ConfigProperty<String> noDefaultValue(String docOnDefaultValue) {
       ConfigProperty<String> configProperty = new ConfigProperty<>(key, null, docOnDefaultValue, "", Option.empty(),
-          Option.empty(), Option.empty(), Collections.emptySet(), false);
+          Option.empty(), Option.empty(), Collections.emptySet(), false, false);
       return configProperty;
     }
   }

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util.queue;
 
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import java.util.ArrayList;
@@ -27,12 +29,15 @@ import java.util.List;
 /**
  * Enum for the type of waiting strategy in Disruptor Queue.
  */
+@EnumDescription("Strategy employed for making Disruptor Executor wait on a cursor.")
 public enum DisruptorWaitStrategyType {
 
   /**
    * The BlockingWaitStrategy is the slowest of the available wait strategies, but is the most conservative with the respect to CPU usage
    * and will give the most consistent behaviour across the widest variety of deployment options.
    */
+  @EnumFieldDescription("The slowest of the available wait strategies. However, it is the most conservative with the respect to CPU usage and "
+      + "will give the most consistent behaviour across the widest variety of deployment options.")
   BLOCKING_WAIT,
 
   /**
@@ -40,22 +45,33 @@ public enum DisruptorWaitStrategyType {
    * The difference is that the `SleepingWaitStrategy` uses a call to `LockSupport.parkNanos(1)` in the middle of the loop.
    * On a typical Linux system this will pause the thread for around 60µs.
    */
+  @EnumFieldDescription("Like the `BLOCKING_WAIT` strategy, it attempts to be conservative with CPU usage by using a simple busy wait loop. "
+   + "The difference is that the `SLEEPING_WAIT` strategy uses a call to `LockSupport.parkNanos(1)` in the middle of the loop. "
+   + "On a typical Linux system this will pause the thread for around 60µs.")
   SLEEPING_WAIT,
 
   /**
-   * The `YieldingWaitStrategy` is one of two WaitStrategies that can be use in low-latency systems.
+   * The `YieldingWaitStrategy` is one of two WaitStrategies that can be used in low-latency systems.
    * It is designed for cases where there is the option to burn CPU cycles with the goal of improving latency.
    * The `YieldingWaitStrategy` will busy spin, waiting for the sequence to increment to the appropriate value.
    * Inside the body of the loop `Thread#yield()` will be called allowing other queued threads to run.
    * This is the recommended wait strategy when you need very high performance, and the number of `EventHandler` threads is lower than the total number of logical cores,
    * e.g. you have hyper-threading enabled.
    */
+  @EnumFieldDescription("The `YIELDING_WAIT` strategy is one of two wait strategy that can be used in low-latency systems. "
+    + "It is designed for cases where there is an opportunity to burn CPU cycles with the goal of improving latency. "
+    + "The `YIELDING_WAIT` strategy will busy spin, waiting for the sequence to increment to the appropriate value. "
+    + "Inside the body of the loop `Thread#yield()` will be called allowing other queued threads to run. "
+    + "This is the recommended wait strategy when you need very high performance, and the number of `EventHandler` threads is lower than the total number of logical cores, "
+    + "such as when hyper-threading is enabled.")
   YIELDING_WAIT,
 
   /**
    * The `BusySpinWaitStrategy` is the highest performing WaitStrategy.
    * Like the `YieldingWaitStrategy`, it can be used in low-latency systems, but puts the highest constraints on the deployment environment.
    */
+  @EnumFieldDescription("The `BUSY_SPIN_WAIT` strategy is the highest performing wait strategy. "
+    + "Like the `YIELDING_WAIT` strategy, it can be used in low-latency systems, but puts the highest constraints on the deployment environment.")
   BUSY_SPIN_WAIT;
 
   public static List<String> getNames() {
