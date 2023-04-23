@@ -100,16 +100,18 @@ public class ClusteringUtil {
   }
 
   /**
-   * Returns whether the given instant {@code instant} is with clustering operation.
+   * Returns whether the given instant {@code instant} is with compaction operation.
    */
-  public static boolean isClusteringInstant(HoodieInstant instant, HoodieTimeline timeline) {
-    if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
-      return false;
-    }
-    try {
-      return TimelineUtils.getCommitMetadata(instant, timeline).getOperationType().equals(WriteOperationType.CLUSTER);
-    } catch (IOException e) {
-      throw new HoodieException("Resolve replace commit metadata error for instant: " + instant, e);
+  public static boolean isCompactionInstant(HoodieInstant instant, HoodieTimeline timeline) {
+    // the compaction commit uses 'commit' as action when state is complete which is tricky
+    if (instant.isCompleted()) {
+      try {
+        return TimelineUtils.getCommitMetadata(instant, timeline).getOperationType().equals(WriteOperationType.COMPACT);
+      } catch (IOException e) {
+        throw new HoodieException("Resolve compaction commit metadata error for instant: " + instant, e);
+      }
+    } else {
+      return instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION);
     }
   }
 }

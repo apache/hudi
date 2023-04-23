@@ -545,11 +545,10 @@ public class IncrementalInputSplits implements Serializable {
   public HoodieTimeline filterInstantsByCondition(HoodieTimeline timeline) {
     final HoodieTimeline oriTimeline = timeline;
     if (this.skipCompaction) {
-      // the compaction commit uses 'commit' as action which is tricky
-      timeline = timeline.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
+      timeline = timeline.filter(instant -> !ClusteringUtil.isCompactionInstant(instant, oriTimeline));
     }
     if (this.skipClustering) {
-      timeline = timeline.filter(instant -> !ClusteringUtil.isClusteringInstant(instant, oriTimeline));
+      timeline = timeline.filter(instant -> !instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
     }
     return timeline;
   }
