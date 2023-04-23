@@ -41,6 +41,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieDependentSystemUnavailableException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
@@ -227,14 +228,6 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
     return key;
   }
 
-  private boolean checkIfValidCommit(HoodieTableMetaClient metaClient, String commitTs) {
-    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
-    // Check if the last commit ts for this row is 1) present in the timeline or
-    // 2) is less than the first commit ts in the timeline
-    return !commitTimeline.empty()
-        && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
-  }
-
   /**
    * Function that tags each HoodieRecord with an existing location, if known.
    */
@@ -258,6 +251,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
         List<Get> statements = new ArrayList<>();
         List<HoodieRecord> currentBatchOfRecords = new LinkedList<>();
         // Do the tagging.
+        HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
         while (hoodieRecordIterator.hasNext()) {
           HoodieRecord rec = hoodieRecordIterator.next();
           statements.add(generateStatement(rec.getRecordKey()));
@@ -281,7 +275,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
             String commitTs = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN));
             String fileId = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN));
             String partitionPath = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN));
-            if (!checkIfValidCommit(metaClient, commitTs)) {
+            if (!HoodieIndexUtils.checkIfValidCommit(completedCommitsTimeline, commitTs)) {
               // if commit is invalid, treat this as a new taggedRecord
               taggedRecords.add(currentRecord);
               continue;

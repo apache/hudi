@@ -166,12 +166,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
-    // Get schema from the header
-    Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-
     FileSystem fs = FSUtils.getFs(pathForReader.toString(), FSUtils.buildInlineConf(getBlockContentLocation().get().getHadoopConf()));
     // Read the content
-    HoodieAvroHFileReader reader = new HoodieAvroHFileReader(fs, pathForReader, content, Option.of(writerSchema));
+    HoodieAvroHFileReader reader = new HoodieAvroHFileReader(fs, pathForReader, content, Option.of(getSchemaFromHeader()));
     return unsafeCast(reader.getRecordIterator(readerSchema));
   }
 
@@ -196,7 +193,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     Collections.sort(sortedKeys);
 
     final HoodieAvroHFileReader reader =
-             new HoodieAvroHFileReader(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf));
+             new HoodieAvroHFileReader(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf),
+             Option.of(getSchemaFromHeader()));
 
     // Get writer's schema from the header
     final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator =

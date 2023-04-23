@@ -92,7 +92,7 @@ public class HoodieCDCLogger implements Closeable {
   private final CDCTransformer transformer;
 
   // Max block size to limit to for a log block
-  private final int maxBlockSize;
+  private final long maxBlockSize;
 
   // Average cdc record size. This size is updated at the end of every log block flushed to disk
   private long averageCDCRecordSize = 0;

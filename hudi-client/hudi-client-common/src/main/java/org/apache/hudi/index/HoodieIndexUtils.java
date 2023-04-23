@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -167,5 +168,11 @@ public class HoodieIndexUtils {
       throw new HoodieIndexException("Error checking candidate keys against file.", e);
     }
     return foundRecordKeys;
+  }
+
+  public static boolean checkIfValidCommit(HoodieTimeline commitTimeline, String commitTs) {
+    // Check if the last commit ts for this row is 1) present in the timeline or
+    // 2) is less than the first commit ts in the timeline
+    return !commitTimeline.empty() && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
   }
 }
