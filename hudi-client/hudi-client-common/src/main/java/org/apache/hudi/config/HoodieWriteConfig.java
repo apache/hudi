@@ -2251,7 +2251,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * File listing metadata configs.
    */
   public boolean isMetadataTableEnabled() {
-    return metadataConfig.enabled();
+    return getBooleanOrDefault(HoodieMetadataConfig.ENABLE);
   }
 
   public int getMetadataInsertParallelism() {
@@ -2405,8 +2405,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * Returns whether the explicit guard of lock is required.
    */
-  public boolean needsLockGuard() {
-    return isMetadataTableEnabled() || getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+  public boolean isLockRequired() {
+    return !isDefaultLockProvider() || getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+  }
+
+  /**
+   * Returns whether the lock provider is default.
+   */
+  private boolean isDefaultLockProvider() {
+    return HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue().equals(getLockProviderClass());
   }
 
   /**
@@ -2957,30 +2964,27 @@ public class HoodieWriteConfig extends HoodieConfig {
       autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
     }
 
-    private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
-      if (writeConfig.isAutoAdjustLockConfigs()) {
-        // auto adjustment is required only for deltastreamer and spark streaming where async table services can be executed in the same JVM.
-        boolean isMetadataTableEnabled = writeConfig.getBoolean(HoodieMetadataConfig.ENABLE);
+    private boolean isLockRequiredForSingleWriter() {
+      // When metadata table is enabled, lock provider must be used for
+      // single writer with async table services.
+      // Async table services can update the metadata table and a lock provider is
+      // needed to guard against any concurrent table write operations. If user has
+      // not configured any lock provider, let's use the InProcess lock provider.
+      return writeConfig.isMetadataTableEnabled() && writeConfig.areAnyTableServicesAsync()
+          && !writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+    }
 
-        if (isMetadataTableEnabled) {
-          // When metadata table is enabled, optimistic concurrency control must be used for
-          // single writer with async table services.
-          // Async table services can update the metadata table and a lock provider is
-          // needed to guard against any concurrent table write operations. If user has
-          // not configured any lock provider, let's use the InProcess lock provider.
-          boolean areTableServicesEnabled = writeConfig.areTableServicesEnabled();
-          boolean areAsyncTableServicesEnabled = writeConfig.areAnyTableServicesAsync();
-          if (!isLockProviderPropertySet && areTableServicesEnabled && areAsyncTableServicesEnabled) {
-            // This is targeted at Single writer with async table services
-            // If user does not set the lock provider, likely that the concurrency mode is not set either
-            // Override the configs for metadata table
-            writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
-                InProcessLockProvider.class.getName());
-            LOG.info(String.format("Automatically set %s=%s since user has not set the "
-                    + "lock provider for single writer with async table services",
-                HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
-          }
-        }
+    private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
+      if (!isLockProviderPropertySet && writeConfig.isAutoAdjustLockConfigs() && isLockRequiredForSingleWriter()) {
+        // auto adjustment is required only for deltastreamer and spark streaming where async table services can be executed in the same JVM.
+        // This is targeted at Single writer with async table services
+        // If user does not set the lock provider, likely that the concurrency mode is not set either
+        // Override the configs for metadata table
+        writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
+            InProcessLockProvider.class.getName());
+        LOG.info(String.format("Automatically set %s=%s since user has not set the "
+                + "lock provider for single writer with async table services",
+            HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
       }
 
       // We check if "hoodie.cleaner.policy.failed.writes"

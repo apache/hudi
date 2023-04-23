@@ -68,38 +68,36 @@ public class LockManager implements Serializable, AutoCloseable {
   }
 
   public void lock() {
-    if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-      LockProvider lockProvider = getLockProvider();
-      int retryCount = 0;
-      boolean acquired = false;
-      while (retryCount <= maxRetries) {
-        try {
-          metrics.startLockApiTimerContext();
-          acquired = lockProvider.tryLock(writeConfig.getLockAcquireWaitTimeoutInMs(), TimeUnit.MILLISECONDS);
-          if (acquired) {
-            metrics.updateLockAcquiredMetric();
-            break;
-          }
-          metrics.updateLockNotAcquiredMetric();
-          LOG.info("Retrying to acquire lock. Current lock owner information : " + lockProvider.getCurrentOwnerLockInfo());
-          Thread.sleep(maxWaitTimeInMs);
-        } catch (HoodieLockException | InterruptedException e) {
-          metrics.updateLockNotAcquiredMetric();
-          if (retryCount >= maxRetries) {
-            throw new HoodieLockException("Unable to acquire lock, lock object " + lockProvider.getLock(), e);
-          }
-          try {
-            Thread.sleep(maxWaitTimeInMs);
-          } catch (InterruptedException ex) {
-            // ignore InterruptedException here
-          }
-        } finally {
-          retryCount++;
+    LockProvider lockProvider = getLockProvider();
+    int retryCount = 0;
+    boolean acquired = false;
+    while (retryCount <= maxRetries) {
+      try {
+        metrics.startLockApiTimerContext();
+        acquired = lockProvider.tryLock(writeConfig.getLockAcquireWaitTimeoutInMs(), TimeUnit.MILLISECONDS);
+        if (acquired) {
+          metrics.updateLockAcquiredMetric();
+          break;
         }
+        metrics.updateLockNotAcquiredMetric();
+        LOG.info("Retrying to acquire lock. Current lock owner information : " + lockProvider.getCurrentOwnerLockInfo());
+        Thread.sleep(maxWaitTimeInMs);
+      } catch (HoodieLockException | InterruptedException e) {
+        metrics.updateLockNotAcquiredMetric();
+        if (retryCount >= maxRetries) {
+          throw new HoodieLockException("Unable to acquire lock, lock object " + lockProvider.getLock(), e);
+        }
+        try {
+          Thread.sleep(maxWaitTimeInMs);
+        } catch (InterruptedException ex) {
+          // ignore InterruptedException here
+        }
+      } finally {
+        retryCount++;
       }
-      if (!acquired) {
-        throw new HoodieLockException("Unable to acquire lock, lock object " + lockProvider.getLock());
-      }
+    }
+    if (!acquired) {
+      throw new HoodieLockException("Unable to acquire lock, lock object " + lockProvider.getLock());
     }
   }
 
@@ -108,11 +106,9 @@ public class LockManager implements Serializable, AutoCloseable {
    * and tries to call unlock()
    */
   public void unlock() {
-    if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-      getLockProvider().unlock();
-      metrics.updateLockHeldTimerMetrics();
-      close();
-    }
+    getLockProvider().unlock();
+    metrics.updateLockHeldTimerMetrics();
+    close();
   }
 
   public synchronized LockProvider getLockProvider() {
