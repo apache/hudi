@@ -1,0 +1,303 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+.scribble:not(.position-relative) {
+  position: absolute;
+}
+
+.scribble svg {
+  background: none !important;
+}
+
+.scale-2 svg {
+  transform: scale(2);
+}
+
+.scale-3 svg {
+  transform: scale(3);
+}
+
+.scale-4 svg {
+  transform: scale(4);
+}
+
+.scale-5 svg {
+  transform: scale(5);
+}
+
+.scale-6 svg {
+  transform: scale(6);
+}
+
+.scale-7 svg {
+  transform: scale(7);
+}
+
+.text-secondary {
+  color: #1d253d !important;
+}
+
+.animated-gradient-text_background {
+  position: relative;
+  display: block;
+  user-select: none;
+}
+
+.animated-gradient-text_background-1::before {
+  animation: animated-gradient-text_fade-background-1 8s infinite;
+}
+
+.animated-gradient-text_foreground-1 {
+  animation: animated-gradient-text_fade-foreground-1 8s infinite;
+}
+
+.animated-gradient-text_background-2::before {
+  animation: animated-gradient-text_fade-background-2 8s infinite;
+}
+
+.animated-gradient-text_foreground-2 {
+  animation: animated-gradient-text_fade-foreground-2 8s infinite;
+}
+
+.animated-gradient-text_foreground {
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  background-image: linear-gradient(90deg, var(--start-color), var(--end-color));
+  position: relative;
+  z-index: 1;
+}
+
+.animated-gradient-text_background::before {
+  content: var(--content);
+  position: absolute;
+  display: block;
+  width: 100%;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+@keyframes animated-gradient-text_fade-foreground-1 {
+
+  0%,
+  16.667%,
+  to {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes animated-gradient-text_fade-background-1 {
+
+  0%,
+  16.667%,
+  to {
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes animated-gradient-text_fade-foreground-2 {
+
+  0%,
+  to {
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  16.667%,
+  66.667% {
+    opacity: 0;
+  }
+}
+
+@keyframes animated-gradient-text_fade-background-2 {
+
+  0%,
+  to {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+
+  25%,
+  58.333% {
+    opacity: 1;
+  }
+}
+
+@media only screen and (min-width: 576px) and (max-width: 767px) {
+  .system_info {
+    padding-top: 40px;
+    margin-bottom: 0;
+  }
+}
+
+@media only screen and (max-width: 575px) {
+  .system_info {
+    padding-top: 30px;
+    margin-bottom: 0;
+  }
+}
+
+.system_info .project_title {
+  font-size: 3.5875rem;
+  margin-bottom: 15px;
+  font-weight: bolder;
+  line-height: 6rem;
+}
+
+.system_info h5 {
+  font-weight: 500;
+  font-size: 1.1rem;
+  line-height: 2;
+  color: #333;
+}
+
+.text-bg {
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  background-image: linear-gradient(90deg, #007cf0, #00dfd8);
+}
+
+.streampark-btn {
+  color: #fff;
+  position: relative;
+  z-index: 1;
+  border: 2px solid transparent;
+  display: inline-block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 1rem 1.5rem;
+  border-radius: 6px;
+  line-height: 1;
+  text-transform: uppercase;
+
+  &::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: inline-block;
+    transform: scaleX(0);
+    transform-origin: 51%;
+    transition-property: transform;
+    transition-duration: 0.3s;
+    border-radius: 6px;
+    border: none;
+  }
+
+  &.btn {
+    background-color: #0db1f9; //
+    color: #fff;
+    border: solid #0db1f9 2px;
+    max-width: 250px;
+    height: 50px;
+    position: relative;
+    &:hover,
+    &:focus {
+      background: #fff2f0;
+      border: solid #0db1f9 2px;
+      color: #0db1f9;
+    }
+  }
+}
+
+.streampark-btn.btn-green:hover::before,
+.streampark-btn.btn:hover::before {
+  transform: scaleX(1);
+}
+
+.streampark-btn.btn-green {
+  background-color: #24a35a;
+}
+
+.streampark-btn.btn-green::before {
+  background: green;
+}
+
+.streampark-btn.btn-green:hover,
+.streampark-btn.btn-green:focus {
+  background-color: green;
+  border: 0;
+  color: #fff;
+}
+
+.streampark-btn.btn-purple::before {
+  background: #5e2ced;
+}
+
+.streampark-btn.btn-purple:hover,
+.streampark-btn.btn-purple:focus {
+  background: linear-gradient(-45deg, #5e2ced, #a485fd);
+  border: none;
+  color: #fff;
+}
+
+.shields img {
+  margin-right: 5px;
+}
+
+.badge {
+  border-radius: 30px 30px 30px 0;
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.25em 0.4em;
+  text-align: center;
+  vertical-align: initial;
+}
+
+.bg-secondary-home {
+  background-color: #1d253d !important;
+}
+
+.translate-top-1 {
+  transform: translate(0, -1rem);
+}
+
+.translate-bottom-1 {
+  transform: translate(0, 1rem);
+}
+
+.translate-top-2 {
+  transform: translate(0, -2rem);
+}
+
+.translate-bottom-2 {
+  transform: translate(0, 2rem);
+}

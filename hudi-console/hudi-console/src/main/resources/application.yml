@@ -1,0 +1,79 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+server:
+  port: 9091
+  undertow:
+    buffer-size: 1024
+    direct-buffers: true
+    threads:
+      io: 4
+      worker: 20
+
+logging:
+  level:
+    root: debug
+
+swagger:
+  enable: true
+
+knife4j:
+  enable: true
+  basic:
+    # basic authentication, used to access swagger-ui and doc
+    enable: false
+    username: admin
+    password: hudi
+
+spring:
+  profiles.active: h2 #[h2,pgsql,mysql]
+  application.name: hudi
+  devtools.restart.enabled: false
+  mvc.pathmatch.matching-strategy: ant_path_matcher
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 500MB
+      max-request-size: 500MB
+  aop.proxy-target-class: true
+  messages.encoding: utf-8
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+  main:
+    allow-circular-references: true
+    banner-mode: off
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: [ 'health', 'httptrace', 'metrics' ]
+  endpoint:
+    health:
+      enabled: true
+      show-details: always
+      probes:
+        enabled: true
+
+hudi:
+  shiro:
+    # token timeout, unit second
+    jwtTimeOut: 86400
+    # backend authentication-free resources url
+    anonUrl: >

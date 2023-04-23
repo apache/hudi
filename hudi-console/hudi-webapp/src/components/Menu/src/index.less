@@ -1,0 +1,90 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+@basic-menu-prefix-cls: ~'@{namespace}-basic-menu';
+
+.app-top-menu-popup {
+  min-width: 150px;
+}
+
+.@{basic-menu-prefix-cls} {
+  width: 100%;
+
+  .ant-menu-item {
+    transition: unset;
+  }
+
+  &__sidebar-hor {
+    &.ant-menu-horizontal {
+      display: flex;
+      align-items: center;
+
+      &.ant-menu-dark {
+        background-color: transparent;
+
+        .ant-menu-submenu:hover,
+        .ant-menu-item-open,
+        .ant-menu-submenu-open,
+        .ant-menu-item-selected,
+        .ant-menu-submenu-selected,
+        .ant-menu-item:hover,
+        .ant-menu-item-active,
+        .ant-menu:not(.ant-menu-inline) .ant-menu-submenu-open,
+        .ant-menu-submenu-active,
+        .ant-menu-submenu-title:hover {
+          color: #fff;
+          background-color: @top-menu-active-bg-color !important;
+        }
+
+        .ant-menu-item:hover,
+        .ant-menu-item-active,
+        .ant-menu:not(.ant-menu-inline) .ant-menu-submenu-open,
+        .ant-menu-submenu-active,
+        .ant-menu-submenu-title:hover {
+          background-color: @top-menu-active-bg-color;
+        }
+
+        .@{basic-menu-prefix-cls}-item__level1 {
+          background-color: transparent;
+
+          &.ant-menu-item-selected,
+          &.ant-menu-submenu-selected {
+            background-color: @top-menu-active-bg-color !important;
+          }
+        }
+
+        .ant-menu-item,
+        .ant-menu-submenu {
+          &.@{basic-menu-prefix-cls}-item__level1,
+          .ant-menu-submenu-title {
+            height: @header-height;
+            line-height: @header-height;
+          }
+        }
+      }
+    }
+  }
+
+  .ant-menu-submenu,
+  .ant-menu-submenu-inline {
+    transition: unset;
+  }
+
+  .ant-menu-inline.ant-menu-sub {
+    box-shadow: unset !important;
+    transition: unset;
+  }
+}
