@@ -32,10 +32,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.log.HoodieFileSliceCompactedReader;
-import org.apache.hudi.common.table.log.HoodieFileSliceReader;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -44,11 +40,10 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -59,18 +54,15 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.common.table.log.HoodieFileSliceReader.getFileSliceReader;
 
 /**
  * Hoodie Index Utilities.
@@ -116,15 +108,6 @@ public class HoodieIndexUtils {
               .collect(toList());
     }
     return Collections.emptyList();
-  }
-
-  public static Option<FileSlice> getLatestFileSliceForPartitionAndFileId(String partition, String fileId, HoodieTable hoodieTable) {
-    Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
-        .filterCompletedInstants().lastInstant();
-    if (latestCommitTime.isPresent()) {
-      return hoodieTable.getHoodieView().getLatestFileSlice(partition, fileId);
-    }
-    return Option.empty();
   }
 
   /**
@@ -253,66 +236,22 @@ public class HoodieIndexUtils {
         .union(undeduped);
   }
 
-  public static <R> HoodieData<HoodieRecord<R>> getTaggedRecordsFromPartitionLocations(HoodieData<Pair<String, HoodieRecordLocation>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable, Option<String> instantTime) {
+  public static <R> HoodieData<HoodieRecord<R>> getTaggedRecordsFromPartitionLocations(
+      HoodieData<Pair<String, HoodieRecordLocation>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
+    final Option<String> instantTime = hoodieTable
+        .getMetaClient()
+        .getCommitsTimeline()
+        .filterCompletedInstants()
+        .lastInstant()
+        .map(HoodieInstant::getTimestamp);
     return partitionLocations.flatMap(p -> {
-      Option<FileSlice> fileSliceOpt = getLatestFileSliceForPartitionAndFileId(p.getLeft(), p.getRight().getFileId(), hoodieTable);
-      if (fileSliceOpt.isPresent() && instantTime.isPresent()) {
-        return HoodieIndexUtils.<R>getRecordsFromFileSlice(fileSliceOpt.get(), config, hoodieTable, instantTime.get()).iterator();
+      if (instantTime.isPresent()) {
+        HoodieMergedReadHandle mergedReadHandle = new HoodieMergedReadHandle(config, instantTime.get(), hoodieTable, Pair.of(p.getLeft(), p.getRight().getFileId()));
+        return mergedReadHandle.getMergedRecords().iterator();
       } else {
         return Collections.emptyIterator();
       }
     });
-  }
-
-  public static <R> List<HoodieRecord<R>> getRecordsFromFileSlice(FileSlice fileSlice, HoodieWriteConfig config, HoodieTable hoodieTable, String instantTime) {
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(hoodieTable.getTaskContextSupplier(), config);
-    List<String> logFilePaths = fileSlice.getLogFiles().map(l -> l.getPath().toString()).collect(toList());
-    Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(hoodieTable.getMetaClient().getFs())
-        .withBasePath(hoodieTable.getMetaClient().getBasePath())
-        .withLogFilePaths(logFilePaths)
-        .withReaderSchema(readerSchema)
-        .withLatestInstantTime(instantTime)
-        .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-        .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
-        .withReverseReader(config.getCompactionReverseLogReadEnabled())
-        .withBufferSize(config.getMaxDFSStreamBufferSize())
-        .withSpillableMapBasePath(config.getSpillableMapBasePath())
-        .withPartition(fileSlice.getPartitionPath())
-        .withOptimizedLogBlocksScan(config.enableOptimizedLogBlocksScan())
-        .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
-        .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-        .withRecordMerger(config.getRecordMerger())
-        .build();
-
-    HoodieRecordLocation currentLocation = new HoodieRecordLocation(instantTime, fileSlice.getFileId());
-    Option<HoodieFileReader> baseFileReader = Option.empty();
-    List<HoodieRecord<R>> records = new ArrayList<>();
-    try {
-      if (fileSlice.getBaseFile().isPresent()) {
-        HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
-        baseFileReader = Option.of(HoodieFileReaderFactory
-            .getReaderFactory(config.getRecordMerger().getRecordType()).getFileReader(hoodieTable.getHadoopConf(), baseFile.getHadoopPath()));
-      }
-      new HoodieFileSliceCompactedReader<R>(baseFileReader, scanner, config).getCompactedRecords().forEach(r -> {
-        r.unseal();
-        r.setCurrentLocation(currentLocation);
-        r.seal();
-        records.add(r);
-      });
-    } catch (IOException e) {
-      throw new HoodieIndexException("Error reading input data for " + fileSlice.getBaseFile()
-          + " and " + logFilePaths, e);
-    } finally {
-      if (scanner != null) {
-        scanner.close();
-      }
-      if (baseFileReader.isPresent()) {
-        baseFileReader.get().close();
-      }
-    }
-    return records;
   }
 
   public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdates(
@@ -320,16 +259,15 @@ public class HoodieIndexUtils {
     // completely new records
     HoodieData<HoodieRecord<R>> newRecords = taggedHoodieRecords.filter(p -> !p.getRight().isPresent()).map(Pair::getLeft);
     // the records tagged to existing base files
-    HoodieData<HoodieRecord<R>> updatingRecords = taggedHoodieRecords.filter(p -> p.getRight().isPresent()).map(Pair::getLeft).distinctWithKey(HoodieRecord::getRecordKey, config.getGlobalIndexDedupParallelism());
+    HoodieData<HoodieRecord<R>> updatingRecords = taggedHoodieRecords.filter(p -> p.getRight().isPresent()).map(Pair::getLeft)
+        .distinctWithKey(HoodieRecord::getRecordKey, config.getGlobalIndexDedupParallelism());
     // the tagging partitions and locations
     HoodieData<Pair<String, HoodieRecordLocation>> partitionLocations = taggedHoodieRecords
         .filter(p -> p.getRight().isPresent())
         .map(p -> p.getRight().get())
         .distinct(config.getGlobalIndexDedupParallelism());
     // merged existing records with current locations being set
-    HoodieData<HoodieRecord<R>> existingRecords = getTaggedRecordsFromPartitionLocations(partitionLocations, config, hoodieTable,
-        hoodieTable.getMetaClient().getCommitsTimeline()
-            .filterCompletedInstants().lastInstant().map(HoodieInstant::getTimestamp));
+    HoodieData<HoodieRecord<R>> existingRecords = getTaggedRecordsFromPartitionLocations(partitionLocations, config, hoodieTable);
 
     TypedProperties updatedProps = HoodieAvroRecordMerger.Config.withLegacyOperatingModePreCombining(config.getProps());
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = updatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)).leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
