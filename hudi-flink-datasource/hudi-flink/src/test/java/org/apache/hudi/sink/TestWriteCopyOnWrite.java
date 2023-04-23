@@ -414,7 +414,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
-
   protected Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     // the last 2 lines are merged

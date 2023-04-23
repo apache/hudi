@@ -618,7 +618,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("write.allow.commit.on.empty.batch")
       .booleanType()
       .defaultValue(false)
-      .withDescription("Weather to commit the instant when there is no data in current batch");
+      .withDescription("Whether to commit the instant even when there is no data in current batch");
 
 
   // ------------------------------------------------------------------------
