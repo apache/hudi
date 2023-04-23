@@ -59,9 +59,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.6.0")
       .withValidValues(METADATA_ONLY.name(), FULL_RECORD.name())
-      .withDocumentation("Bootstrap mode to apply for partition paths, that match regex above. "
-          + "METADATA_ONLY will generate just skeleton base files with keys/footers, avoiding full cost of rewriting the dataset. "
-          + "FULL_RECORD will perform a full copy/rewrite of the data as a Hudi table.");
+      .withDocumentation(BootstrapMode.class);
 
   public static final ConfigProperty<String> MODE_SELECTOR_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.mode.selector")
@@ -89,7 +87,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .markAdvanced()
       .sinceVersion("0.9.0")
-      .withDocumentation("Type of build-in key generator, currently support SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE");
+      .withDocumentation(KeyGeneratorType.class);
 
   public static final ConfigProperty<String> PARTITION_PATH_TRANSLATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.partitionpath.translator.class")

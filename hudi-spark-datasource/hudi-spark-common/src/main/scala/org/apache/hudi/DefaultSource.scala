@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.model.{HoodieRecord, WriteConcurrencyMode}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
@@ -170,7 +171,7 @@ class DefaultSource extends RelationProvider
   }
 
   def validateMultiWriterConfigs(options: Map[String, String]) : Unit = {
-    if (WriteConcurrencyMode.valueOf(options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
+    if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
       WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL) {
       // ensure some valid value is set for identifier
       checkState(options.contains(STREAMING_CHECKPOINT_IDENTIFIER.key()), "For multi-writer scenarios, please set "

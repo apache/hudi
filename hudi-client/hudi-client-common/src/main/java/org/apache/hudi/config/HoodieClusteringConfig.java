@@ -21,6 +21,8 @@ package org.apache.hudi.config;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
@@ -164,14 +166,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .defaultValue(ClusteringPlanPartitionFilterMode.NONE)
       .markAdvanced()
       .sinceVersion("0.11.0")
-      .withDocumentation("Partition filter mode used in the creation of clustering plan. Available values are - "
-          + "NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate."
-          + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
-          + PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
-          + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
-          + PARTITION_FILTER_END_PARTITION.key() + "']."
-          + "DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, "
-          + "which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour.");
+      .withDocumentation(ClusteringPlanPartitionFilterMode.class);
 
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
@@ -290,12 +285,10 @@ public class HoodieClusteringConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "curve.build.method")
-      .defaultValue("direct")
+      .defaultValue(SpatialCurveCompositionStrategyType.DIRECT.name())
       .markAdvanced()
       .sinceVersion("0.10.0")
-      .withDocumentation("Controls how data is sampled to build the space-filling curves. "
-          + "Two methods: \"direct\", \"sample\". The direct method is faster than the sampling, "
-          + "however sample method would produce a better data layout.");
+      .withDocumentation(SpatialCurveCompositionStrategyType.class);
 
   /**
    * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD} value
@@ -689,27 +682,29 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /**
    * Type of a strategy for building Z-order/Hilbert space-filling curves.
    */
+  @EnumDescription("This configuration only has effect if `hoodie.layout.optimize.strategy` is "
+      + "set to either \"z-order\" or \"hilbert\" (i.e. leveraging space-filling curves). This "
+      + "configuration controls the type of a strategy to use for building the space-filling "
+      + "curves, tackling specifically how the Strings are ordered based on the curve. "
+      + "Since we truncate the String to 8 bytes for ordering, there are two issues: (1) it "
+      + "can lead to poor aggregation effect, (2) the truncation of String longer than 8 bytes "
+      + "loses the precision, if the Strings are different but the 8-byte prefix is the same. "
+      + "The boundary-based interleaved index method (\"SAMPLE\") has better generalization, "
+      + "solving the two problems above, but is slower than direct method (\"DIRECT\"). "
+      + "User should benchmark the write and query performance before tweaking this in "
+      + "production, if this is actually a problem. Please refer to RFC-28 for more details.")
   public enum SpatialCurveCompositionStrategyType {
-    DIRECT("direct"),
-    SAMPLE("sample");
 
-    private static final Map<String, SpatialCurveCompositionStrategyType> VALUE_TO_ENUM_MAP =
-        TypeUtils.getValueToEnumMap(SpatialCurveCompositionStrategyType.class, e -> e.value);
+    @EnumFieldDescription("This strategy builds the spatial curve in full, filling in all of "
+        + "the individual points corresponding to each individual record, which requires less "
+        + "compute.")
+    DIRECT,
 
-    private final String value;
-
-    SpatialCurveCompositionStrategyType(String value) {
-      this.value = value;
-    }
-
-    public static SpatialCurveCompositionStrategyType fromValue(String value) {
-      SpatialCurveCompositionStrategyType enumValue = VALUE_TO_ENUM_MAP.get(value);
-      if (enumValue == null) {
-        throw new HoodieException(String.format("Invalid value (%s)", value));
-      }
-
-      return enumValue;
-    }
+    @EnumFieldDescription("This strategy leverages boundary-base interleaved index method "
+        + "(described in more details in Amazon DynamoDB blog "
+        + "https://aws.amazon.com/cn/blogs/database/tag/z-order/) and produces a better layout "
+        + "compared to DIRECT strategy.  It requires more compute and is slower.")
+    SAMPLE
   }
 
   /**

@@ -71,7 +71,7 @@ public class TestOptionsInference {
 
   private Configuration getConf() {
     Configuration conf = new Configuration();
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.PATH, tempFile.getAbsolutePath());
     return conf;
   }
