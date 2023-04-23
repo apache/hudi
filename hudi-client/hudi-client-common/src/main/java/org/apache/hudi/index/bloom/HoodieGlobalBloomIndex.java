@@ -23,7 +23,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
@@ -38,13 +37,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.index.HoodieIndexUtils.dedupForPartitionUpdates;
 import static org.apache.hudi.index.HoodieIndexUtils.mergeForPartitionUpdates;
 
 /**
@@ -116,25 +112,27 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
 
     // Pair of a tagged record and if the record needs dedup
     // Here as the records might have more data than rowKeys (some rowKeys' fileId is null), so we do left outer join.
-    HoodieData<Pair<HoodieRecord<R>, Option<Pair<String, HoodieRecordLocation>>>> taggedHoodieRecords = incomingRowKeyRecordPairs.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().map(record -> {
-      final HoodieRecord<R> hoodieRecord = record.getLeft();
-      final Option<Pair<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record.getRight();
-      if (recordLocationHoodieKeyPair.isPresent()) {
-        // Record key matched to file
-        if (config.getBloomIndexUpdatePartitionPath()) {
-          Pair<HoodieRecordLocation, HoodieKey> hoodieRecordLocationHoodieKeyPair = recordLocationHoodieKeyPair.get();
-          return Pair.of(hoodieRecord, Option.of(Pair.of(hoodieRecordLocationHoodieKeyPair.getRight().getPartitionPath(), hoodieRecordLocationHoodieKeyPair.getLeft())));
-        } else {
-          // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
-          // When it differs, the record will still be updated at its old partition.
-          return Pair.of(
-              (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(new HoodieAvroRecord(recordLocationHoodieKeyPair.get().getRight(), (HoodieRecordPayload) hoodieRecord.getData()),
-                  Option.ofNullable(recordLocationHoodieKeyPair.get().getLeft())), Option.empty());
-        }
-      } else {
-        return Pair.of(HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty()), Option.empty());
-      }
-    });
+    HoodieData<Pair<HoodieRecord<R>, Option<Pair<String, HoodieRecordLocation>>>> taggedHoodieRecords = incomingRowKeyRecordPairs
+        .leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap)
+        .values().map(record -> {
+          final HoodieRecord<R> hoodieRecord = record.getLeft();
+          final Option<Pair<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record.getRight();
+          if (recordLocationHoodieKeyPair.isPresent()) {
+            // Record key matched to file
+            if (config.getBloomIndexUpdatePartitionPath()) {
+              Pair<HoodieRecordLocation, HoodieKey> hoodieRecordLocationHoodieKeyPair = recordLocationHoodieKeyPair.get();
+              return Pair.of(hoodieRecord, Option.of(Pair.of(hoodieRecordLocationHoodieKeyPair.getRight().getPartitionPath(), hoodieRecordLocationHoodieKeyPair.getLeft())));
+            } else {
+              // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
+              // When it differs, the record will still be updated at its old partition.
+              return Pair.of(
+                  (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(new HoodieAvroRecord(recordLocationHoodieKeyPair.get().getRight(), (HoodieRecordPayload) hoodieRecord.getData()),
+                      Option.ofNullable(recordLocationHoodieKeyPair.get().getLeft())), Option.empty());
+            }
+          } else {
+            return Pair.of(HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty()), Option.empty());
+          }
+        });
 
     return mergeForPartitionUpdates(taggedHoodieRecords, config, hoodieTable);
   }
