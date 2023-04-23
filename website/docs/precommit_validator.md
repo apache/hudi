@@ -3,8 +3,9 @@ title: Data Quality
 keywords: [ hudi, quality, expectations, pre-commit validator]
 ---
 
-Apache Hudi has what are called **Pre-Commit Validators** that allow you to validate that your data meets certain data quality
-expectations as you are writing with DeltaStreamer or Spark Datasource writers.
+Data quality refers to the overall accuracy, completeness, consistency, and validity of data. Ensuring data quality is vital for accurate analysis and reporting, as well as for compliance with regulations and maintaining trust in your organization's data infrastructure.
+
+Hudi offers **Pre-Commit Validators** that allow you to ensure that your data meets certain data quality expectations as you are writing with DeltaStreamer or Spark Datasource writers.
 
 To configure pre-commit validators, use this setting `hoodie.precommit.validators=<comma separated list of validator class names>`.
 
@@ -17,13 +18,18 @@ spark.write.format("hudi")
 Today you can use any of these validators and even have the flexibility to extend your own:
 
 ## SQL Query Single Result
-Can be used to validate that a query on the table results in a specific value.
-- [org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQuerySingleResultPreCommitValidator.java)
+[org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQuerySingleResultPreCommitValidator.java)
 
-Multiple queries separated by ';' delimiter are supported.Expected result is included as part of query separated by '#'. Example query: `query1#result1;query2#result2`
+The SQL Query Single Result validator can be used to validate that a query on the table results in a specific value. This validator allows you to run a SQL command and abort the commit if it does not match the expected output.
 
-Example, "expect exactly 0 null rows":
+Multiple queries can be separated by `;` delimiter. Include the expected result as part of the query separated by `#`.
+
+Syntax: `query1#result1;query2#result2`
+
+Example:
 ```scala
+// In this example, we set up a validator that expects exactly 0 rows
+
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 
 df.write.format("hudi").mode(Overwrite).
@@ -34,11 +40,19 @@ df.write.format("hudi").mode(Overwrite).
 ```
 
 ## SQL Query Equality
-Can be used to validate for equality of rows before and after the commit.
-- [org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQueryEqualityPreCommitValidator.java)
+[org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQueryEqualityPreCommitValidator.java)
 
-Example, "expect no change of null rows with this commit":
+The SQL Query Equality validator runs a query before ingesting the data, then runs the same query after ingesting the data and confirms that both outputs match. This allows you to validate for equality of rows before and after the commit.
+
+This validator is useful when you want to verify that your query does not change a specific subset of the data. Some examples:
+- Validate that the number of null fields is the same before and after your query
+- Validate that there are no duplicate records after your query runs
+- Validate that you are only updating the data, and no inserts slip through
+
+Example:
 ```scala
+// In this example, we set up a validator that expects no change of null rows with the new commit
+
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 
 df.write.format("hudi").mode(Overwrite).
@@ -49,11 +63,14 @@ df.write.format("hudi").mode(Overwrite).
 ```
 
 ## SQL Query Inequality
-Can be used to validate for inequality of rows before and after the commit.
-- [org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQueryInequalityPreCommitValidator.java)
+[org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQueryInequalityPreCommitValidator.java)
 
-Example, "expect there must be a change of null rows with this commit":
+The SQL Query Inquality validator runs a query before ingesting the data, then runs the same query after ingesting the data and confirms that both outputs DO NOT match. This allows you to validate for differences of rows before and after the commit.
+
+Example:
 ```scala
+// In this example, we set up a validator that expects a change of null rows with the new commit
+
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 
 df.write.format("hudi").mode(Overwrite).
@@ -72,3 +89,8 @@ void validateRecordsBeforeAndAfter(Dataset<Row> before,
                                    Dataset<Row> after, 
                                    Set<String> partitionsAffected)
 ```
+
+## Additional Monitoring with Notifications
+Hudi offers a [commit notification service](https://hudi.apache.org/docs/next/writing_data/#commit-notifications) that can be configured to trigger notifications about write commits.
+
+The commit notification service can be combined with pre-commit validators to send a notification when a commit fails a validation. This is possible by passing details about the validation as a custom value to the HTTP endpoint.
