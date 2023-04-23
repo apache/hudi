@@ -25,7 +25,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
-import org.apache.hudi.util.FlinkClientUtil;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -109,10 +108,13 @@ public class TestUtils {
     return new StreamReadMonitoringFunction(conf, new Path(basePath), TestConfigurations.ROW_TYPE, 1024 * 1024L, null);
   }
 
-  public static int getCompletedInstantCount(String basePath) {
+  public static int getCompletedInstantCount(String basePath, String action) {
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(FlinkClientUtil.getHadoopConf()).setBasePath(basePath).build();
-    return metaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
+        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+    return metaClient.getActiveTimeline()
+        .filterCompletedInstants()
+        .filter(instant -> action.equals(instant.getAction()))
+        .countInstants();
   }
 
 }

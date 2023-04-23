@@ -518,7 +518,8 @@ public class TestWriteBase {
     }
 
     public TestHarness checkCompletedInstantCount(int count) {
-      assertEquals(TestUtils.getCompletedInstantCount(basePath), count);
+      boolean isMor = OptionsResolver.isMorTable(conf);
+      assertEquals(count, TestUtils.getCompletedInstantCount(basePath, isMor ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION));
       return this;
     }
   }
