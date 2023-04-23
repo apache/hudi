@@ -378,6 +378,43 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
+  @Test
+  public void testCommitOnEmptyBatch() throws Exception {
+    // reset the config option
+    conf.setBoolean(FlinkOptions.WRITE_ALLOW_COMMIT_ON_EMPTY_BATCH, true);
+
+    preparePipeline()
+        .consume(TestData.DATA_SET_INSERT)
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkCompletedInstantCount(1)
+        // Do checkpoint without data consumption
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        // The instant is committed successfully
+        .checkCompletedInstantCount(2)
+        // Continue to consume data
+        .consume(TestData.DATA_SET_UPDATE_INSERT)
+        .checkWrittenData(EXPECTED1)
+        .checkpoint(3)
+        .assertNextEvent()
+        .checkpointComplete(3)
+        .checkCompletedInstantCount(3)
+        // Commit the data and check after an empty batch
+        .checkWrittenData(EXPECTED2)
+        // Do checkpoint without data consumption
+        .checkpoint(4)
+        .assertNextEvent()
+        .checkpointComplete(4)
+        .checkCompletedInstantCount(4)
+        .checkWrittenData(EXPECTED2)
+        .end();
+  }
+
+
   protected Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     // the last 2 lines are merged

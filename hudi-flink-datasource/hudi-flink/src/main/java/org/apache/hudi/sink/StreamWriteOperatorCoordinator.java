@@ -522,7 +522,10 @@ public class StreamWriteOperatorCoordinator
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
 
-    if (writeResults.size() == 0) {
+    // Control whether we can commit on empty batch to start a new instant after each checkpoint
+    boolean allowCommitOnEmptyBatch = conf.get(FlinkOptions.WRITE_ALLOW_COMMIT_ON_EMPTY_BATCH);
+
+    if (writeResults.size() == 0 && !allowCommitOnEmptyBatch) {
       // No data has written, reset the buffer and returns early
       reset();
       // Send commit ack event to the write function to unblock the flushing

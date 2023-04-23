@@ -614,6 +614,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(ClientIds.INIT_CLIENT_ID)
       .withDescription("Unique identifier used to distinguish different writer pipelines for concurrent mode");
 
+  public static final ConfigOption<Boolean> WRITE_ALLOW_COMMIT_ON_EMPTY_BATCH = ConfigOptions
+      .key("write.allow.commit.on.empty.batch")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Weather to commit the instant when there is no data in current batch");
+
+
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------

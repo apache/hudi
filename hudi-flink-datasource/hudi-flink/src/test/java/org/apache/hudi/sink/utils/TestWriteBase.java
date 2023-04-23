@@ -516,5 +516,10 @@ public class TestWriteBase {
           ? TestUtils.getLastDeltaCompleteInstant(basePath)
           : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);
     }
+
+    public TestHarness checkCompletedInstantCount(int count) {
+      assertEquals(TestUtils.getCompletedInstantCount(basePath), count);
+      return this;
+    }
   }
 }
