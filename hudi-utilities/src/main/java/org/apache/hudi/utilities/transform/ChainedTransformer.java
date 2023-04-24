@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.transform;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -56,22 +57,22 @@ public class ChainedTransformer implements Transformer {
     this.transformerToPropKeySuffix = new HashMap<>(configuredTransformers.size());
     this.transformers = new ArrayList<>(configuredTransformers.size());
 
-    Map<String, String> transformerClassNamesToSuffixMap = new HashMap<>(configuredTransformers.size());
+    List<Pair<String, String>> transformerClassNamesToSuffixList = new ArrayList<>(configuredTransformers.size());
     for (String configuredTransformer : configuredTransformers) {
       if (!configuredTransformer.contains(":")) {
-        transformerClassNamesToSuffixMap.put(configuredTransformer, "");
+        transformerClassNamesToSuffixList.add(Pair.of(configuredTransformer, ""));
       } else {
         String[] splits = configuredTransformer.split(":");
         if (splits.length > 2) {
           throw new IllegalArgumentException("There should only be one colon in a configured transformer");
         }
-        transformerClassNamesToSuffixMap.put(splits[1], splits[0]);
+        transformerClassNamesToSuffixList.add(Pair.of(splits[1], splits[0]));
       }
     }
 
-    for (Map.Entry<String, String> entry : transformerClassNamesToSuffixMap.entrySet()) {
-      Transformer transformer = ReflectionUtils.loadClass(entry.getKey());
-      transformerToPropKeySuffix.put(transformer, entry.getValue());
+    for (Pair<String, String> pair : transformerClassNamesToSuffixList) {
+      Transformer transformer = ReflectionUtils.loadClass(pair.getKey());
+      transformerToPropKeySuffix.put(transformer, pair.getValue());
       transformers.add(transformer);
     }
   }
@@ -87,12 +88,15 @@ public class ChainedTransformer implements Transformer {
       String suffix = transformerToPropKeySuffix.get(t);
       TypedProperties transformerProps = properties;
       if (StringUtils.nonEmpty(suffix)) {
-        transformerProps = new TypedProperties();
+        transformerProps = new TypedProperties(properties);
+        Map<String, Object> overrideKeysMap = new HashMap<>();
         for (Map.Entry<Object, Object> entry : properties.entrySet()) {
           String key = (String) entry.getKey();
-          key = key.endsWith("." + suffix) ? key.substring(0, key.length() - (suffix.length() + 1)) : key;
-          transformerProps.put(key, entry.getValue());
+          if (key.endsWith("." + suffix)) {
+            overrideKeysMap.put(key.substring(0, key.length() - (suffix.length() + 1)), entry.getValue());
+          }
         }
+        transformerProps.putAll(overrideKeysMap);
       }
       dataset = t.apply(jsc, sparkSession, dataset, transformerProps);
     }

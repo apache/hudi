@@ -1803,6 +1803,44 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testNum++;
   }
 
+  @Test
+  public void testMultipleTransformers() throws Exception {
+    // Configure 3 transformers of same type. 2nd transformer has no suffix
+    String[] arr = new String [] {"1:" + TimestampTransformer.class.getName(),
+        TimestampTransformer.class.getName(), "3:" + TimestampTransformer.class.getName()};
+    List<String> transformerClassNames = Arrays.asList(arr);
+
+    // Create source using TRIP_SCHEMA
+    boolean useSchemaProvider = true;
+    PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
+    int parquetRecordsCount = 10;
+    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSSource(useSchemaProvider, true, "source.avsc", "source.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", "");
+    String tableBasePath = basePath + "/test_parquet_table" + testNum;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+            transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
+            useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
+
+    // Set properties for multi transformer
+    // timestamp.transformer.increment is a common config and varies between the transformers
+    // timestamp.transformer.multiplier is also a common config but doesn't change between transformers
+    Properties properties = deltaStreamer.getDeltaSyncService().getProps();
+    // timestamp value initially is set to 0
+    // timestamp = 0 * 2 + 10; (transformation 1)
+    // timestamp = 10 * 2 + 20 = 40 (transformation 2)
+    // timestamp = 40 * 2 + 30 = 110 (transformation 3)
+    properties.setProperty("timestamp.transformer.increment.1", "10");
+    properties.setProperty("timestamp.transformer.increment.3", "30");
+    properties.setProperty("timestamp.transformer.increment", "20");
+    properties.setProperty("timestamp.transformer.multiplier", "2");
+    deltaStreamer.sync();
+
+    TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    assertEquals(0, sqlContext.read().format("org.apache.hudi").load(tableBasePath).where("timestamp != 110").count());
+  }
+
   private void assertValidSchemaInCommitMetadata(HoodieInstant instant, HoodieTableMetaClient metaClient) {
     try {
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
@@ -2697,6 +2735,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       rowDataset.sqlContext().udf().register("distance_udf", new DistanceUDF(), DataTypes.DoubleType);
       return rowDataset.withColumn("haversine_distance", functions.callUDF("distance_udf", functions.col("begin_lat"),
           functions.col("end_lat"), functions.col("begin_lon"), functions.col("end_lat")));
+    }
+  }
+
+  /**
+   * Performs transformation on `timestamp` field.
+   */
+  public static class TimestampTransformer implements Transformer {
+
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+                              TypedProperties properties) {
+      int multiplier = Integer.parseInt((String) properties.get("timestamp.transformer.multiplier"));
+      int increment = Integer.parseInt((String) properties.get("timestamp.transformer.increment"));
+      return rowDataset.withColumn("timestamp", functions.col("timestamp").multiply(multiplier).plus(increment));
     }
   }
 
