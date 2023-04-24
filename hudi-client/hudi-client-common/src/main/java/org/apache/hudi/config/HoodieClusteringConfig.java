@@ -269,11 +269,10 @@ public class HoodieClusteringConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
-      .defaultValue("linear")
+      .defaultValue(LayoutOptimizationStrategy.LINEAR.name())
       .markAdvanced()
       .sinceVersion("0.10.0")
-      .withDocumentation("Determines ordering strategy used in records layout optimization. "
-          + "Currently supported strategies are \"linear\", \"z-order\" and \"hilbert\" values are supported.");
+      .withDocumentation(LayoutOptimizationStrategy.class);
 
   /**
    * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_STRATEGY} value is set to
@@ -693,7 +692,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   }
 
   /**
-   * Type of a strategy for building Z-order/Hilbert space-filling curves.
+   * Type of strategy for building Z-order/Hilbert space-filling curves.
    */
   @EnumDescription("This configuration only has effect if `hoodie.layout.optimize.strategy` is "
       + "set to either \"z-order\" or \"hilbert\" (i.e. leveraging space-filling curves). This "
@@ -723,32 +722,22 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /**
    * Layout optimization strategies such as Z-order/Hilbert space-curves, etc
    */
+  @EnumDescription("Determines ordering strategy for records layout optimization.")
   public enum LayoutOptimizationStrategy {
-    LINEAR("linear"),
-    ZORDER("z-order"),
-    HILBERT("hilbert");
+    @EnumFieldDescription("Orders records lexicographically")
+    LINEAR,
 
-    private static final Map<String, LayoutOptimizationStrategy> VALUE_TO_ENUM_MAP =
-        TypeUtils.getValueToEnumMap(LayoutOptimizationStrategy.class, e -> e.value);
+    @EnumFieldDescription("Orders records along Z-order spatial-curve.")
+    ZORDER,
 
-    private final String value;
+    @EnumFieldDescription("Orders records along Hilbert's spatial-curve.")
+    HILBERT
+  }
 
-    LayoutOptimizationStrategy(String value) {
-      this.value = value;
+  public static LayoutOptimizationStrategy resolveLayoutOptimizationStrategy(String cfgVal) {
+    if (cfgVal.equalsIgnoreCase("z-order")) {
+      return LayoutOptimizationStrategy.ZORDER;
     }
-
-    @Nonnull
-    public static LayoutOptimizationStrategy fromValue(String value) {
-      LayoutOptimizationStrategy enumValue = VALUE_TO_ENUM_MAP.get(value);
-      if (enumValue == null) {
-        throw new HoodieException(String.format("Invalid value (%s)", value));
-      }
-
-      return enumValue;
-    }
-
-    public String getValue() {
-      return value;
-    }
+    return LayoutOptimizationStrategy.valueOf(cfgVal.toUpperCase());
   }
 }
