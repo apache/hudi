@@ -279,7 +279,9 @@ public class HoodieDeltaStreamer implements Serializable {
             + "Pass a comma-separated list of subclass names to chain the transformations. Transformer can also include "
             + "a suffix. This suffix can be appended with the property keys to identify properties related to the transformer. "
             + "E:g - tr1:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer can be used along with property key "
-            + "hoodie.deltastreamer.transformer.sql.tr1. Here tr1 is a suffix used to identify the keys specific to this transformer.")
+            + "hoodie.deltastreamer.transformer.sql.tr1. Here tr1 is a suffix used to identify the keys specific to this transformer. "
+            + "This suffix is removed from the configuration keys when the transformer is used. This is useful when there are two or more "
+            + "transformers using the same config keys and expect different values for those keys.")
     public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "

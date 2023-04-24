@@ -53,6 +53,17 @@ public class ChainedTransformer implements Transformer {
     }
   }
 
+  /**
+   * Creates a chained transformer using the input transformer class names. The name can also include
+   * a suffix. This suffix can be appended with the property keys to identify properties related to the transformer.
+   * E:g - tr1:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer can be used along with property key
+   * hoodie.deltastreamer.transformer.sql.tr1. Here tr1 is a suffix used to identify the keys specific to this transformer.
+   * This suffix is removed from the configuration keys when the transformer is used. This is useful when there are two or more
+   * transformers using the same config keys and expect different values for those keys.
+   *
+   * @param configuredTransformers List of configured transformer class names.
+   * @param ignore Added for avoiding two methods with same erasure. Ignored.
+   */
   public ChainedTransformer(List<String> configuredTransformers, int... ignore) {
     this.transformerToPropKeySuffix = new HashMap<>(configuredTransformers.size());
     this.transformers = new ArrayList<>(configuredTransformers.size());
