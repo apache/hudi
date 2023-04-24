@@ -49,7 +49,7 @@ hoodie.write.lock.provider=<lock-provider-classname>
 
 There are 4 different lock providers that require different configurations to be set.
 
-**`FileSystem`** based lock provider
+**FileSystem** based lock provider
 
 FileSystem based lock provider supports multiple writers cross different jobs/applications based on atomic create/delete operations of the underlying filesystem.
 
@@ -67,7 +67,7 @@ When using the FileSystem based lock provider, by default, the lock file will st
 
 In case the lock cannot release during job crash, you can set `hoodie.write.lock.filesystem.expire` (lock will never expire by default). You may also delete lock file manually in such situation.
 
-**`Zookeeper`** based lock provider
+**Zookeeper** based lock provider
 
 ```
 hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
@@ -77,17 +77,30 @@ hoodie.write.lock.zookeeper.lock_key
 hoodie.write.lock.zookeeper.base_path
 ```
 
-**`HiveMetastore`** based lock provider
+**Hive Metastore** based lock provider
 
+`HiveMetastoreBasedLockProvider` uses the underlying Hive locks to support concurrency control. Note that the default 
+Hive [lock manager](https://github.com/apache/hive/blob/954bb49da611b13e689a6922538f54306004c676/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java#L2935) use Zookeeper
+and in order to use that, a ZooKeeper instance must be up and running.
 ```
 hoodie.write.lock.provider=org.apache.hudi.hive.transaction.lock.HiveMetastoreBasedLockProvider
-hoodie.write.lock.hivemetastore.database
-hoodie.write.lock.hivemetastore.table
+hoodie.write.lock.hivemetastore.database=test_db
+hoodie.write.lock.hivemetastore.table=test_table
+## Zookeeper configs ##
+hoodie.write.lock.zookeeper.url=zookeeper-url
+hoodie.write.lock.zookeeper.port=2181
 ```
 
-`The HiveMetastore URI's are picked up from the hadoop configuration file loaded during runtime.`
+HiveMetastore URIs, if not explicitly provided, are picked up from the hadoop configuration file loaded during runtime.
+:::note
+While using `HiveMetastoreBasedLockProvider`, if the pipeline crashed while the lock was acquired, Hive does not 
+automatically remove the lock entry from the table. In this case, Hudi writer will simply abort due to transaction timeout. 
+One can follow the [debugging tips](https://cwiki.apache.org/confluence/display/hive/locking#Locking-Debugging) provided 
+by Hive to show currently acquired locks and remove tne entry from the `HIVE_LOCKS` table in the underlying RDBMS of 
+Hive metastore.
+:::
 
-**`Amazon DynamoDB`** based lock provider
+**Amazon DynamoDB** based lock provider
 
 Amazon DynamoDB based lock provides a simple way to support multi writing across different clusters.  You can refer to the
 [DynamoDB based Locks Configurations](https://hudi.apache.org/docs/configurations#DynamoDB-based-Locks-Configurations)
