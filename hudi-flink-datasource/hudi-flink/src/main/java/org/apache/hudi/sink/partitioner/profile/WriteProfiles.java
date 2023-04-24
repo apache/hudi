@@ -43,6 +43,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Factory for {@link WriteProfile}.
@@ -114,7 +116,7 @@ public class WriteProfiles {
         }
       }
     }
-    return uniqueIdToFileStatus.values().toArray(new FileStatus[0]);
+    return uniqueIdToFileStatus.values().stream().filter(StreamerUtil::isValidFile).toArray(FileStatus[]::new);
   }
 
   private static Map<String, FileStatus> getFilesToRead(
