@@ -535,9 +535,9 @@ public class SparkMain {
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key(), sourcePath);
 
     if (!StringUtils.isNullOrEmpty(keyGenerator) && KeyGeneratorType.getNames().contains(keyGenerator.toUpperCase(Locale.ROOT))) {
-      properties.setProperty(HoodieBootstrapConfig.KEYGEN_TYPE.key(), keyGenerator.toUpperCase(Locale.ROOT));
+      properties.setProperty(DataSourceWriteOptions.KEYGENERATOR_TYPE().key(), keyGenerator.toUpperCase(Locale.ROOT));
     } else {
-      properties.setProperty(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key(), keyGenerator);
+      properties.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), keyGenerator);
     }
 
     properties.setProperty(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.key(), fullBootstrapInputProvider);

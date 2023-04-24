@@ -52,8 +52,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.table.action.bootstrap.BootstrapUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
@@ -191,8 +189,6 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     }
 
     int totalRecords = 100;
-    String keyGeneratorClass = partitioned ? SimpleKeyGenerator.class.getCanonicalName()
-        : NonpartitionedKeyGenerator.class.getCanonicalName();
     final String bootstrapModeSelectorClass;
     final String bootstrapCommitInstantTs;
     final boolean checkNumRawFiles;
@@ -229,7 +225,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     List<String> partitions = Arrays.asList("2020/04/01", "2020/04/02", "2020/04/03");
     long timestamp = Instant.now().toEpochMilli();
     Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, bootstrapBasePath);
-    HoodieWriteConfig config = getConfigBuilder(schema.toString())
+    HoodieWriteConfig config = getConfigBuilder(schema.toString(), partitioned)
         .withAutoCommit(true)
         .withSchema(schema.toString())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -237,7 +233,6 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
             .build())
         .withBootstrapConfig(HoodieBootstrapConfig.newBuilder()
             .withBootstrapBasePath(bootstrapBasePath)
-            .withBootstrapKeyGenClass(keyGeneratorClass)
             .withFullBootstrapInputProvider(TestFullBootstrapDataProvider.class.getName())
             .withBootstrapParallelism(3)
             .withBootstrapModeSelector(bootstrapModeSelectorClass).build())
@@ -462,11 +457,16 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
+    return getConfigBuilder(schemaStr, true);
+  }
+
+  public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, boolean partitioned) {
     HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, IndexType.BLOOM)
         .withExternalSchemaTrasformation(true);
     TypedProperties properties = new TypedProperties();
     properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "datestr");
+    properties.setProperty(
+        DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitioned ? "datestr" : "");
     builder = builder.withProps(properties);
     return builder;
   }

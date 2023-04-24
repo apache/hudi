@@ -18,18 +18,18 @@
 
 package org.apache.hudi.examples.spark;
 
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
-import org.apache.hudi.DataSourceWriteOptions;
+
 import org.apache.spark.SparkConf;
+import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.Dataset;
 
 public class HoodieSparkBootstrapExample {
 
@@ -64,7 +64,6 @@ public class HoodieSparkBootstrapExample {
             .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), preCombineField)
             .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.ORC.name())
             .option(HoodieBootstrapConfig.BASE_PATH.key(), basePath)
-            .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getCanonicalName())
             .mode(SaveMode.Overwrite).save("/hudi/" + tableName);
 
     df.count();
