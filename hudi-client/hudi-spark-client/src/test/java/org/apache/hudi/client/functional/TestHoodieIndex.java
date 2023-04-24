@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
@@ -488,6 +489,10 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   public void testSimpleGlobalIndexTagLocationWhenShouldUpdatePartitionPath() throws Exception {
     setUp(IndexType.GLOBAL_SIMPLE, true, true);
     config = getConfigBuilder()
+        .withSchema("{\"type\":\"record\",\"name\":\"triprec\",\"fields\":[{\"name\":\"number\",\"type\":[\"null\",\"int\"],\"default\":null},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"time\",\"type\":\"string\"}]}")
+        .withPayloadConfig(HoodiePayloadConfig.newBuilder()
+            .withPayloadClass(RawTripTestPayload.class.getName())
+            .withPayloadOrderingField("number").build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
             .withGlobalSimpleIndexUpdatePartitionPath(true)
             .withBloomIndexUpdatePartitionPath(true)

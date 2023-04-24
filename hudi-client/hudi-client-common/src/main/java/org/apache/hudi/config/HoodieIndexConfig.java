@@ -257,9 +257,10 @@ public class HoodieIndexConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE + ", but for simple index.");
 
-  public static final ConfigProperty<String> GLOBAL_INDEX_DEDUP_PARALLELISM = ConfigProperty
-      .key("hoodie.global.index.dedup.parallelism")
+  public static final ConfigProperty<String> GLOBAL_INDEX_RECONCILE_PARALLELISM = ConfigProperty
+      .key("hoodie.global.index.reconcile.parallelism")
       .defaultValue("60")
+      .markAdvanced()
       .withDocumentation("Only applies if index type is GLOBAL_BLOOM or GLOBAL_SIMPLE. "
           + "This controls the parallelism for deduplication during indexing where more than 1 record could be tagged due to partition update.");
 
@@ -662,8 +663,8 @@ public class HoodieIndexConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withGlobalIndexDedupParallelism(int parallelism) {
-      hoodieIndexConfig.setValue(GLOBAL_INDEX_DEDUP_PARALLELISM, String.valueOf(parallelism));
+    public Builder withGlobalIndexReconcileParallelism(int parallelism) {
+      hoodieIndexConfig.setValue(GLOBAL_INDEX_RECONCILE_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 

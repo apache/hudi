@@ -28,7 +28,16 @@ import org.apache.hudi.common.util.Option;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.io.Encoder;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.io.JsonEncoder;
+import org.apache.avro.specific.SpecificDatumWriter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -78,6 +87,27 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.rowKey = jsonRecordMap.get("_row_key").toString();
     this.partitionPath = jsonRecordMap.get("time").toString().split("T")[0].replace("-", "/");
     this.isDeleted = false;
+    this.orderingVal = Integer.valueOf(jsonRecordMap.get("number").toString());
+  }
+
+  public RawTripTestPayload(GenericRecord record, Comparable orderingVal) {
+    this.orderingVal = orderingVal;
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      JsonEncoder jsonEncoder = EncoderFactory.get().jsonEncoder(record.getSchema(), out);
+      GenericDatumWriter w = new GenericDatumWriter<>(record.getSchema());
+      w.write(record, jsonEncoder);
+      jsonEncoder.flush();
+      out.flush();
+      String jsonData = out.toString();
+      this.jsonDataCompressed = compressData(jsonData);
+      this.dataSize = jsonData.length();
+      Map<String, Object> jsonRecordMap = OBJECT_MAPPER.readValue(jsonData, Map.class);
+      this.rowKey = jsonRecordMap.get("_row_key").toString();
+      this.partitionPath = jsonRecordMap.get("time").toString().split("T")[0].replace("-", "/");
+      this.isDeleted = false;
+    } catch (IOException e) {
+      throw new IllegalStateException("Fail to instantiate.", e);
+    }
   }
 
   /**

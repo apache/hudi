@@ -21,7 +21,6 @@ package org.apache.hudi.index;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -38,11 +37,8 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
-import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -191,51 +187,6 @@ public class HoodieIndexUtils {
     return !commitTimeline.empty() && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
   }
 
-  /**
-   * Used by {@link HoodieGlobalSimpleIndex} and {@link HoodieGlobalBloomIndex}
-   * exclusively to dedup the tagged records due to partition updates.
-   *
-   * @param taggedHoodieRecords records tagged by the index by making incoming records left-outer-join existing records.
-   * @param dedupParallelism    parallelism for dedup.
-   * @see HoodieGlobalSimpleIndex
-   * @see HoodieGlobalBloomIndex
-   * @see HoodieIndexConfig#GLOBAL_INDEX_DEDUP_PARALLELISM
-   */
-  public static <R> HoodieData<HoodieRecord<R>> dedupForPartitionUpdates(HoodieData<Pair<HoodieRecord<R>, Boolean>> taggedHoodieRecords, int dedupParallelism) {
-    /*
-     * If a record is updated from p1 to p2 and then to p3, 2 existing records
-     * will be tagged for this record to insert to p3. So we dedup them here. (Set A)
-     */
-    HoodiePairData<String, HoodieRecord<R>> deduped = taggedHoodieRecords.filter(Pair::getRight)
-        .map(Pair::getLeft)
-        .distinctWithKey(HoodieRecord::getKey, dedupParallelism)
-        .mapToPair(r -> Pair.of(r.getRecordKey(), r));
-
-    /*
-     * This includes
-     *  - tagged existing records whose partition paths are not to be updated (Set B)
-     *  - completely new records (Set C)
-     */
-    HoodieData<HoodieRecord<R>> undeduped = taggedHoodieRecords.filter(p -> !p.getRight()).map(Pair::getLeft);
-
-    /*
-     * There can be intersection between Set A and Set B mentioned above.
-     *
-     * Example: record X is updated from p1 to p2 and then back to p1.
-     * Set A will contain an insert to p1 and Set B will contain an update to p1.
-     *
-     * As the insert to p1 is tagged in the context of partition update (p2 to p1), the record's
-     * location will be empty (Index sees it as a new record to p1) and it will result in creating
-     * a new file group in p1. We need to do "A left-anti join B" to drop the insert from Set A
-     * and keep the update in Set B.
-     */
-    return deduped.leftOuterJoin(undeduped
-            .filter(r -> !(r.getData() instanceof EmptyHoodieRecordPayload))
-            .mapToPair(r -> Pair.of(r.getRecordKey(), r)))
-        .values().filter(p -> !p.getRight().isPresent()).map(Pair::getLeft)
-        .union(undeduped);
-  }
-
   public static <R> HoodieData<HoodieRecord<R>> getTaggedRecordsFromPartitionLocations(
       HoodieData<Pair<String, HoodieRecordLocation>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
     final Option<String> instantTime = hoodieTable
@@ -245,12 +196,10 @@ public class HoodieIndexUtils {
         .lastInstant()
         .map(HoodieInstant::getTimestamp);
     return partitionLocations.flatMap(p -> {
-      if (instantTime.isPresent()) {
-        HoodieMergedReadHandle mergedReadHandle = new HoodieMergedReadHandle(config, instantTime.get(), hoodieTable, Pair.of(p.getLeft(), p.getRight().getFileId()));
-        return mergedReadHandle.getMergedRecords().iterator();
-      } else {
-        return Collections.emptyIterator();
-      }
+      String partitionPath = p.getLeft();
+      String fileId = p.getRight().getFileId();
+      return new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(partitionPath, fileId))
+          .getMergedRecords().iterator();
     });
   }
 
@@ -260,17 +209,18 @@ public class HoodieIndexUtils {
     HoodieData<HoodieRecord<R>> newRecords = taggedHoodieRecords.filter(p -> !p.getRight().isPresent()).map(Pair::getLeft);
     // the records tagged to existing base files
     HoodieData<HoodieRecord<R>> updatingRecords = taggedHoodieRecords.filter(p -> p.getRight().isPresent()).map(Pair::getLeft)
-        .distinctWithKey(HoodieRecord::getRecordKey, config.getGlobalIndexDedupParallelism());
+        .distinctWithKey(HoodieRecord::getRecordKey, config.getGlobalIndexReconcileParallelism());
     // the tagging partitions and locations
     HoodieData<Pair<String, HoodieRecordLocation>> partitionLocations = taggedHoodieRecords
         .filter(p -> p.getRight().isPresent())
         .map(p -> p.getRight().get())
-        .distinct(config.getGlobalIndexDedupParallelism());
+        .distinct(config.getGlobalIndexReconcileParallelism());
     // merged existing records with current locations being set
     HoodieData<HoodieRecord<R>> existingRecords = getTaggedRecordsFromPartitionLocations(partitionLocations, config, hoodieTable);
 
     TypedProperties updatedProps = HoodieAvroRecordMerger.Config.withLegacyOperatingModePreCombining(config.getProps());
-    HoodieData<HoodieRecord<R>> taggedUpdatingRecords = updatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)).leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
+    HoodieData<HoodieRecord<R>> taggedUpdatingRecords = updatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
+        .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
         .values().flatMap(entry -> {
           HoodieRecord<R> incoming = entry.getLeft();
           Option<HoodieRecord<R>> existingOpt = entry.getRight();
@@ -279,9 +229,8 @@ public class HoodieIndexUtils {
             return Collections.singletonList(getTaggedRecord(incoming, Option.empty())).iterator();
           }
           HoodieRecord<R> existing = existingOpt.get();
+          Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
           Schema writeSchema = new Schema.Parser().parse(config.getWriteSchema());
-          Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
-          Schema existingSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
           Option<Pair<HoodieRecord, Schema>> mergeResult = config.getRecordMerger().merge(existing, existingSchema, incoming, writeSchema, updatedProps);
           if (!mergeResult.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition

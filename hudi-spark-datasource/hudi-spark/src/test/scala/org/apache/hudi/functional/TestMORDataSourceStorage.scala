@@ -152,7 +152,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       HoodieMetadataConfig.ENABLE.key -> isMetadataEnabled.toString,
       HoodieIndexConfig.INDEX_TYPE.key -> indexType,
       HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true",
-      HoodieIndexConfig.GLOBAL_INDEX_DEDUP_PARALLELISM.key -> parallelism.toString,
+      HoodieIndexConfig.GLOBAL_INDEX_RECONCILE_PARALLELISM.key -> parallelism.toString,
       HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> parallelism.toString,
       HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> parallelism.toString,
       HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key -> parallelism.toString,

@@ -46,13 +46,19 @@ import java.util.Map;
 import java.util.Set;
 
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
+
+  protected final Schema readerSchema;
+
   public HoodieMergedReadHandle(HoodieWriteConfig config,
-      String instantTime,
-      HoodieTable<T, I, K, O> hoodieTable,
-      Pair<String, String> partitionPathFileIDPair) {
-    super(config, Option.of(instantTime), hoodieTable, partitionPathFileIDPair);
+                                Option<String> instantTime,
+                                HoodieTable<T, I, K, O> hoodieTable,
+                                Pair<String, String> partitionPathFileIDPair) {
+    super(config, instantTime, hoodieTable, partitionPathFileIDPair);
+    readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
   }
 
   public List<HoodieRecord<T>> getMergedRecords() {
@@ -60,20 +66,22 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
     if (!fileSliceOpt.isPresent()) {
       return Collections.emptyList();
     }
-    FileSlice fileSlice = fileSliceOpt.get();
+    checkState(nonEmpty(instantTime), String.format("Expected a valid instant time but got `%s`", instantTime));
+    final FileSlice fileSlice = fileSliceOpt.get();
+    final HoodieRecordLocation currentLocation = new HoodieRecordLocation(instantTime, fileSlice.getFileId());
     Option<HoodieFileReader> baseFileReader = Option.empty();
     HoodieMergedLogRecordScanner logRecordScanner = null;
-    List<HoodieRecord<T>> records = new ArrayList<>();
     try {
       baseFileReader = getBaseFileReader(fileSlice);
       logRecordScanner = getLogRecordScanner(fileSlice);
-      HoodieRecordLocation currentLocation = new HoodieRecordLocation(instantTime, fileSlice.getFileId());
+      List<HoodieRecord<T>> mergedRecords = new ArrayList<>();
       doMergedRead(baseFileReader, logRecordScanner).forEach(r -> {
         r.unseal();
         r.setCurrentLocation(currentLocation);
         r.seal();
-        records.add(r);
+        mergedRecords.add(r);
       });
+      return mergedRecords;
     } catch (IOException e) {
       throw new HoodieIndexException("Error in reading " + fileSlice, e);
     } finally {
@@ -84,13 +92,11 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
         logRecordScanner.close();
       }
     }
-    return records;
   }
 
   private Option<FileSlice> getLatestFileSlice() {
-    Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
-        .filterCompletedInstants().lastInstant();
-    if (latestCommitTime.isPresent()) {
+    if (nonEmpty(instantTime)
+        && hoodieTable.getMetaClient().getCommitsTimeline().filterCompletedInstants().lastInstant().isPresent()) {
       return Option.fromJavaOptional(hoodieTable
           .getHoodieView()
           .getLatestMergedFileSlicesBeforeOrOn(partitionPathFileIDPair.getLeft(), instantTime)
@@ -108,16 +114,14 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
   }
 
   private HoodieMergedLogRecordScanner getLogRecordScanner(FileSlice fileSlice) {
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(hoodieTable.getTaskContextSupplier(), config);
     List<String> logFilePaths = fileSlice.getLogFiles().map(l -> l.getPath().toString()).collect(toList());
-    Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
     return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(hoodieTable.getMetaClient().getFs())
-        .withBasePath(hoodieTable.getMetaClient().getBasePath())
+        .withBasePath(hoodieTable.getMetaClient().getBasePathV2().toString())
         .withLogFilePaths(logFilePaths)
         .withReaderSchema(readerSchema)
         .withLatestInstantTime(instantTime)
-        .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+        .withMaxMemorySizeInBytes(IOUtils.getMaxMemoryPerCompaction(hoodieTable.getTaskContextSupplier(), config))
         .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
         .withReverseReader(config.getCompactionReverseLogReadEnabled())
         .withBufferSize(config.getMaxDFSStreamBufferSize())
@@ -130,29 +134,26 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
         .build();
   }
 
-  private List<HoodieRecord<T>> doMergedRead(Option<HoodieFileReader> baseFileReaderOpt, HoodieMergedLogRecordScanner scanner) throws IOException {
+  private List<HoodieRecord<T>> doMergedRead(Option<HoodieFileReader> baseFileReaderOpt, HoodieMergedLogRecordScanner logRecordScanner) throws IOException {
     List<HoodieRecord<T>> mergedRecords = new ArrayList<>();
-    Map<String, HoodieRecord> deltaRecordMap = scanner.getRecords();
+    Map<String, HoodieRecord> deltaRecordMap = logRecordScanner.getRecords();
     Set<String> deltaRecordKeys = new HashSet<>(deltaRecordMap.keySet());
 
     if (baseFileReaderOpt.isPresent()) {
       HoodieFileReader baseFileReader = baseFileReaderOpt.get();
       HoodieRecordMerger recordMerger = config.getRecordMerger();
-      Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-      Schema writeSchema = new Schema.Parser().parse(config.getWriteSchema());
-      Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
-
       ClosableIterator<HoodieRecord<T>> baseFileItr = baseFileReader.getRecordIterator(readerSchema);
       HoodieTableConfig tableConfig = hoodieTable.getMetaClient().getTableConfig();
       Option<Pair<String, String>> simpleKeyGenFieldsOpt =
           tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
       while (baseFileItr.hasNext()) {
         HoodieRecord<T> record = baseFileItr.next().wrapIntoHoodieRecordPayloadWithParams(readerSchema,
-            tableConfig.getProps(), simpleKeyGenFieldsOpt, scanner.isWithOperationField(), scanner.getPartitionNameOverride(), false);
+            config.getProps(), simpleKeyGenFieldsOpt, logRecordScanner.isWithOperationField(), logRecordScanner.getPartitionNameOverride(), false);
         String key = record.getRecordKey();
         if (deltaRecordMap.containsKey(key)) {
           deltaRecordKeys.remove(key);
-          Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(record.copy(), writeSchemaWithMetaFields, deltaRecordMap.get(key), writeSchemaWithMetaFields, config.getProps());
+          Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger
+              .merge(record, readerSchema, deltaRecordMap.get(key), readerSchema, config.getPayloadConfig().getProps());
           if (!mergeResult.isPresent()) {
             continue;
           }
