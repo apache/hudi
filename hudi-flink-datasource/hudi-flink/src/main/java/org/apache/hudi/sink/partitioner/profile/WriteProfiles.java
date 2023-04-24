@@ -107,7 +107,7 @@ public class WriteProfiles {
     // from the latest commit, so here we traverse in reverse order
     for (int i = metadataList.size() - 1; i >= 0; i--) {
       for (Map.Entry<String, FileStatus> entry : getFilesToRead(hadoopConf, metadataList.get(i), basePath.toString(), tableType).entrySet()) {
-        if (!uniqueIdToFileStatus.containsKey(entry.getKey())) {
+        if (StreamerUtil.isValidFile(entry.getValue()) && !uniqueIdToFileStatus.containsKey(entry.getKey())) {
           if (StreamerUtil.fileExists(fs, entry.getValue().getPath())) {
             uniqueIdToFileStatus.put(entry.getKey(), entry.getValue());
           } else if (!tolerateNonExist){
@@ -116,7 +116,7 @@ public class WriteProfiles {
         }
       }
     }
-    return uniqueIdToFileStatus.values().stream().filter(StreamerUtil::isValidFile).toArray(FileStatus[]::new);
+    return uniqueIdToFileStatus.values().toArray(new FileStatus[0]);
   }
 
   private static Map<String, FileStatus> getFilesToRead(
