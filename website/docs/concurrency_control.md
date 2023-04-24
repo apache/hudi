@@ -79,19 +79,20 @@ hoodie.write.lock.zookeeper.base_path
 
 **Hive Metastore** based lock provider
 
-`HiveMetastoreBasedLockProvider` uses the underlying Hive locks to support concurrency control. Note that the default 
-Hive [lock manager](https://github.com/apache/hive/blob/954bb49da611b13e689a6922538f54306004c676/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java#L2935) use Zookeeper
-and in order to use that, a ZooKeeper instance must be up and running.
+`HiveMetastoreBasedLockProvider` uses the underlying Hive locks to support concurrency control. 
 ```
 hoodie.write.lock.provider=org.apache.hudi.hive.transaction.lock.HiveMetastoreBasedLockProvider
 hoodie.write.lock.hivemetastore.database=test_db
 hoodie.write.lock.hivemetastore.table=test_table
-## Zookeeper configs ##
-hoodie.write.lock.zookeeper.url=zookeeper-url
-hoodie.write.lock.zookeeper.port=2181
 ```
 
-HiveMetastore URIs, if not explicitly provided, are picked up from the hadoop configuration file loaded during runtime.
+HiveMetastore URIs, if not explicitly provided, are picked up from the hadoop configuration file (`hive-site.xml`)
+loaded during runtime. Note that if Zookeeper is being used as the
+Hive [lock manager](https://github.com/apache/hive/blob/954bb49da611b13e689a6922538f54306004c676/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java#L2935)
+, then `hoodie.write.lock.zookeeper.url` and `hoodie.write.lock.zookeeper.port` should also be configured to point to
+the Zookeeper instance. If it is already configured in your Hadoop configuration (`hdfs-site.xml`), then additional
+configuration is not required.
+
 :::note
 While using `HiveMetastoreBasedLockProvider`, if the pipeline crashed while the lock was acquired, Hive does not 
 automatically remove the lock entry from the table. In this case, Hudi writer will simply abort due to transaction timeout. 
