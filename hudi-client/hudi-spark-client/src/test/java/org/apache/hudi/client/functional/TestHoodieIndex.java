@@ -489,7 +489,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   public void testSimpleGlobalIndexTagLocationWhenShouldUpdatePartitionPath() throws Exception {
     setUp(IndexType.GLOBAL_SIMPLE, true, true);
     config = getConfigBuilder()
-        .withSchema("{\"type\":\"record\",\"name\":\"triprec\",\"fields\":[{\"name\":\"number\",\"type\":[\"null\",\"int\"],\"default\":null},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"time\",\"type\":\"string\"}]}")
+        .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(RawTripTestPayload.class.getName())
             .withPayloadOrderingField("number").build())

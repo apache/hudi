@@ -28,16 +28,11 @@ import org.apache.hudi.common.util.Option;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.io.DatumWriter;
-import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonEncoder;
-import org.apache.avro.specific.SpecificDatumWriter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -55,6 +50,9 @@ import java.util.zip.InflaterInputStream;
  * src/test/resources/schema1.
  */
 public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayload> {
+
+  public static final String JSON_DATA_SCHEMA = "{\"type\":\"record\",\"name\":\"triprec\",\"fields\":[{\"name\":\"number\",\"type\":[\"null\",\"int\"],\"default\":null},"
+      + "{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"time\",\"type\":\"string\"}]}";
 
   private static final transient ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private String partitionPath;
