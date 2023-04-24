@@ -533,7 +533,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         org.apache.hadoop.hive.ql.metadata.Table.getEmptyTable(
             tablePath.getDatabaseName(), tablePath.getObjectName());
 
-    hiveTable.setOwner(UserGroupInformation.getCurrentUser().getUserName());
+    hiveTable.setOwner(UserGroupInformation.getCurrentUser().getShortUserName());
     hiveTable.setCreateTime((int) (System.currentTimeMillis() / 1000));
 
     Map<String, String> properties = new HashMap<>(table.getOptions());
