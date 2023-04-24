@@ -215,7 +215,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
           .key("hoodie.clustering.generate.file.group.advance")
           .defaultValue(true)
           .sinceVersion("0.14.0")
-          .withDocumentation("When rewriting data, ");
+          .withDocumentation("When rewriting data, generate file group id advance");
 
   /**
    * @deprecated this setting has no effect. Please refer to clustering configuration, as well as

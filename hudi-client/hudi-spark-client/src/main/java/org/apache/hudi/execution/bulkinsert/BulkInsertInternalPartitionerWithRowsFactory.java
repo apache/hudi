@@ -35,19 +35,19 @@ public abstract class BulkInsertInternalPartitionerWithRowsFactory {
     return get(sortMode, isTablePartitioned, false, targetFileGroupId);
   }
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(
+  public static TargetGroupAssignedBulkInsertPartitioner<Dataset<Row>> get(
       BulkInsertSortMode sortMode, boolean isTablePartitioned, boolean enforceNumOutputPartitions, String targetFileGroupId) {
     switch (sortMode) {
       case NONE:
-        return new NonSortPartitionerWithRows(enforceNumOutputPartitions);
+        return new NonSortPartitionerWithRows(enforceNumOutputPartitions, targetFileGroupId);
       case GLOBAL_SORT:
-        return new GlobalSortPartitionerWithRows();
+        return new GlobalSortPartitionerWithRows(targetFileGroupId);
       case PARTITION_SORT:
-        return new PartitionSortPartitionerWithRows();
+        return new PartitionSortPartitionerWithRows(targetFileGroupId);
       case PARTITION_PATH_REPARTITION:
-        return new PartitionPathRepartitionPartitionerWithRows(isTablePartitioned);
+        return new PartitionPathRepartitionPartitionerWithRows(isTablePartitioned, targetFileGroupId);
       case PARTITION_PATH_REPARTITION_AND_SORT:
-        return new PartitionPathRepartitionAndSortPartitionerWithRows(isTablePartitioned);
+        return new PartitionPathRepartitionAndSortPartitionerWithRows(isTablePartitioned, targetFileGroupId);
       default:
         throw new UnsupportedOperationException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
     }

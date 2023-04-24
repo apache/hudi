@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
+import org.apache.hudi.table.action.compact.WaitUtil;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -109,6 +110,8 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
         .build();
 
     generateNewFileGroupIdWhenNeeded(clusteringGroups);
+    // Get pending deltaCommits to use when do cluster plan to fix data loss problem
+    List<String> missingInstants = WaitUtil.getMissingInstants(metaClient);
 
     return Option.of(HoodieClusteringPlan.newBuilder()
         .setStrategy(strategy)
@@ -116,6 +119,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
         .setExtraMetadata(getExtraMetadata())
         .setVersion(getPlanVersion())
         .setPreserveHoodieMetadata(getWriteConfig().isPreserveHoodieCommitMetadataForClustering())
+        .setMissingInstants(missingInstants)
         .build());
   }
 

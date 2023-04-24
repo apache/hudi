@@ -59,8 +59,8 @@ public class ClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
     LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
 
-    if (this.config.isGenerateFileGroupAdvance() &&
-          table.getActiveTimeline().filterPendingReplaceTimeline().countInstants() > 0) {
+    if (this.config.isGenerateFileGroupAdvance()
+          && table.getActiveTimeline().filterPendingReplaceTimeline().countInstants() > 0) {
       LOG.info("There exists pending cluster plan exists in timeline, skip this cluster plan generate circle");
       return Option.empty();
     }

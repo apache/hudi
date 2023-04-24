@@ -19,7 +19,6 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -27,7 +26,11 @@ import org.apache.spark.sql.Row;
 /**
  * A built-in partitioner that does local sorting for each spark partitions after coalesce for bulk insert operation, corresponding to the {@code BulkInsertSortMode.PARTITION_SORT} mode.
  */
-public class PartitionSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class PartitionSortPartitionerWithRows extends TargetGroupAssignedBulkInsertPartitioner<Dataset<Row>> {
+
+  public PartitionSortPartitionerWithRows(String targetFileGroupId) {
+    super(targetFileGroupId);
+  }
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {

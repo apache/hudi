@@ -42,7 +42,7 @@ public abstract class BulkInsertInternalPartitionerFactory {
     return get(sortMode, isTablePartitioned, false, null);
   }
 
-  public static BulkInsertPartitioner get(BulkInsertSortMode sortMode,
+  public static TargetGroupAssignedBulkInsertPartitioner get(BulkInsertSortMode sortMode,
                                           boolean isTablePartitioned,
                                           boolean enforceNumOutputPartitions,
                                           String targetFileGroupId) {
@@ -54,9 +54,9 @@ public abstract class BulkInsertInternalPartitionerFactory {
       case PARTITION_SORT:
         return new RDDPartitionSortPartitioner(targetFileGroupId);
       case PARTITION_PATH_REPARTITION:
-        return new PartitionPathRepartitionPartitioner(isTablePartitioned);
+        return new PartitionPathRepartitionPartitioner(isTablePartitioned, targetFileGroupId);
       case PARTITION_PATH_REPARTITION_AND_SORT:
-        return new PartitionPathRepartitionAndSortPartitioner(isTablePartitioned);
+        return new PartitionPathRepartitionAndSortPartitioner(isTablePartitioned, targetFileGroupId);
       default:
         throw new HoodieException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
     }

@@ -21,7 +21,6 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
 
@@ -42,11 +41,12 @@ import scala.Tuple2;
  * @param <T> HoodieRecordPayload type
  */
 public class PartitionPathRepartitionAndSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+      extends TargetGroupAssignedBulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final boolean isTablePartitioned;
 
-  public PartitionPathRepartitionAndSortPartitioner(boolean isTablePartitioned) {
+  public PartitionPathRepartitionAndSortPartitioner(boolean isTablePartitioned, String targetFileGroupId) {
+    super(targetFileGroupId);
     this.isTablePartitioned = isTablePartitioned;
   }
 

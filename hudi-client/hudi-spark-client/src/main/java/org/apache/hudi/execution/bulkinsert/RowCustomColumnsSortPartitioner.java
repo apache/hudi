@@ -20,7 +20,6 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -29,20 +28,18 @@ import java.util.Arrays;
 /**
  * A partitioner that does sorting based on specified column values for each spark partitions.
  */
-public class RowCustomColumnsSortPartitioner implements BulkInsertPartitioner<Dataset<Row>> {
+public class RowCustomColumnsSortPartitioner extends TargetGroupAssignedBulkInsertPartitioner<Dataset<Row>> {
 
   private final String[] sortColumnNames;
 
-  private final String targetFileGroupId;
-
   public RowCustomColumnsSortPartitioner(HoodieWriteConfig config, String targetFileGroupId) {
+    super(targetFileGroupId);
     this.sortColumnNames = getSortColumnName(config);
-    this.targetFileGroupId = targetFileGroupId;
   }
 
   public RowCustomColumnsSortPartitioner(String[] columnNames, String targetFileGroupId) {
+    super(targetFileGroupId);
     this.sortColumnNames = columnNames;
-    this.targetFileGroupId = targetFileGroupId;
   }
 
   @Override

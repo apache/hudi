@@ -29,7 +29,6 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -49,8 +48,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
@@ -145,67 +142,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O>
     // regenerate CompactionOperations
     List<String> missingInstants = compactionPlan.getMissingInstants();
     LOG.info("Compactor pendingInstants: " + missingInstants);
-    HashMap<HoodieFileGroupId, HashSet<String>> fileGroupTofilePaths = new HashMap<>();
-    missingInstants.forEach(
-        instantTime -> {
-          // check if the instant has been rollback
-          HoodieInstant hoodieInstantRequest =
-              new HoodieInstant(
-                  HoodieInstant.State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime);
-          HoodieInstant hoodieInstantInflight =
-              new HoodieInstant(
-                  HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime);
-          HoodieInstant hoodieInstant =
-              new HoodieInstant(
-                  HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime);
-
-          Integer i = 0;
-          while (!table.getMetaClient().getCommitsTimeline().containsInstant(hoodieInstant)) {
-            if (i == 12) {
-              LOG.info("Compactor has already waited 120s for instant " + instantTime + " to complete, now exit");
-              throw new HoodieException("Compactor has already waited 120s for instant " + instantTime + " to complete, now exit");
-            }
-
-            try {
-              LOG.info("CommitsTimeline instantssss: " + table.getMetaClient().getCommitsTimeline().getInstants().collect(toList()));
-              if (!table.getMetaClient().getCommitsTimeline().containsInstant(hoodieInstantRequest)
-                  && !table.getMetaClient().getCommitsTimeline().containsInstant(hoodieInstantInflight)) {
-                LOG.info("instant: " + instantTime + " has been rollback");
-                return;
-              }
-              LOG.info("instant: " + instantTime + " has not completed, wait 10s...");
-              Thread.sleep(10000);
-              table.getMetaClient().reloadActiveTimeline();
-              i++;
-            } catch (InterruptedException e) {
-              // ignore InterruptedException here.
-            }
-          }
-          LOG.info("instant: " + instantTime + " has completed");
-          try {
-            HoodieCommitMetadata commitMetadata =
-                HoodieCommitMetadata.fromBytes(
-                    table
-                        .getMetaClient()
-                        .getCommitsTimeline()
-                        .getInstantDetails(hoodieInstant)
-                        .get(),
-                    HoodieCommitMetadata.class);
-            commitMetadata
-                .getFileGroupIdAndRelativePaths()
-                .forEach(
-                    (k, v) -> {
-                      HashSet<String> filePaths =
-                          fileGroupTofilePaths.computeIfAbsent(k, key -> new HashSet<>());
-                      filePaths.add(v);
-                    });
-          } catch (IOException e) {
-            throw new HoodieIOException(
-                String.format(
-                    "Failed to fetch HoodieCommitMetadata for instant (%s)", hoodieInstant),
-                e);
-          }
-        });
+    HashMap<HoodieFileGroupId, HashSet<String>> fileGroupTofilePaths = WaitUtil.waitCompleteGroup(table, missingInstants);
 
     operations.forEach(
         operation -> {
@@ -479,16 +416,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O>
             .map(CompactionUtils::buildHoodieCompactionOperation)
             .collect(toList());
     // Get pending deltaCommits to use when do compaction to fix data loss problem
-    List<String> missingInstants =
-        metaClient
-            .getActiveTimeline()
-            .filterPendingExcludingCompaction()
-            .getInstants()
-            .filter(
-                HoodieInstant ->
-                    HoodieInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
-            .map(HoodieInstant::getTimestamp)
-            .collect(toList());
+    List<String> missingInstants = WaitUtil.getMissingInstants(metaClient);
 
     LOG.info("Pending deltaCommits when schedule compaction plan: " + missingInstants);
     LOG.info("Total of " + operations.size() + " compactions are retrieved");
