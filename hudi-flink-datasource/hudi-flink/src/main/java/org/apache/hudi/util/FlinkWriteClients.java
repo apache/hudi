@@ -224,7 +224,7 @@ public class FlinkWriteClients {
             .withProps(flinkConf2TypedProperties(conf))
             .withSchema(getSourceSchema(conf).toString());
 
-    if (OptionsResolver.needsGuardByLock(conf) && !conf.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
+    if (OptionsResolver.isLockRequired(conf) && !conf.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
       // configure the fs lock provider by default
       builder.withLockConfig(HoodieLockConfig.newBuilder()
           .withConflictResolutionStrategy(OptionsResolver.getConflictResolutionStrategy(conf))

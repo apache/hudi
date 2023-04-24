@@ -241,7 +241,7 @@ class HoodieCDCRDD(
 
     /**
      * Keep the after-image data. Only one case will use this:
-     * the cdc infer case is [[AS_IS]] and [[cdcSupplementalLoggingMode]] is [[op_key_only]] or [[data_before]].
+     * the cdc infer case is [[AS_IS]] and [[cdcSupplementalLoggingMode]] is [[OP_KEY_ONLY]] or [[DATA_BEFORE]].
      */
     private var afterImageRecords: mutable.Map[String, InternalRow] = mutable.Map.empty
 
@@ -303,13 +303,13 @@ class HoodieCDCRDD(
         case AS_IS =>
           val record = cdcLogRecordIterator.next().asInstanceOf[GenericRecord]
           cdcSupplementalLoggingMode match {
-            case `data_before_after` =>
+            case `DATA_BEFORE_AFTER` =>
               recordToLoad.update(0, convertToUTF8String(String.valueOf(record.get(0))))
               val before = record.get(2).asInstanceOf[GenericRecord]
               recordToLoad.update(2, recordToJsonAsUTF8String(before))
               val after = record.get(3).asInstanceOf[GenericRecord]
               recordToLoad.update(3, recordToJsonAsUTF8String(after))
-            case `data_before` =>
+            case `DATA_BEFORE` =>
               val row = cdcRecordDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
               val op = row.getString(0)
               val recordKey = row.getString(1)

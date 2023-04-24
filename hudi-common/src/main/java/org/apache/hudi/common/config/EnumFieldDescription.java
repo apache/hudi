@@ -16,21 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.bloom;
+package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.config.EnumDescription;
-import org.apache.hudi.common.config.EnumFieldDescription;
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
- * Bloom filter type codes.
- * Please do not change the order of the entries.
+ * For any enum field that is going to be used as a config value,
+ * add this annotation by adding @EnumFieldDescription("Your description here.")
+ * directly above the enum field declaration.
+ * Then in your config property add .withDocumentation(YourEnum.class)
+ * see EnumDescription.java
  */
-@EnumDescription("Filter type used by Bloom filter.")
-public enum BloomFilterTypeCode {
-
-  @EnumFieldDescription("Bloom filter that is based on the configured size.")
-  SIMPLE,
-
-  @EnumFieldDescription("Bloom filter that is auto sized based on number of keys.")
-  DYNAMIC_V0
+@Documented
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+public @interface EnumFieldDescription {
+  String value();
 }

@@ -21,6 +21,7 @@ package org.apache.hudi.sink;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -363,7 +364,7 @@ public class TestStreamWriteOperatorCoordinator {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
 
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), "optimistic_concurrency_control");
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setInteger("hoodie.write.lock.client.num_retries", 1);
 
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);

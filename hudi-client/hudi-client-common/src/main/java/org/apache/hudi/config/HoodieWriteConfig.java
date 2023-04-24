@@ -49,6 +49,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -100,7 +101,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
-import static org.apache.hudi.common.util.queue.ExecutorType.SIMPLE;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
@@ -173,25 +173,19 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> WRITE_EXECUTOR_TYPE = ConfigProperty
       .key("hoodie.write.executor.type")
-      .defaultValue(SIMPLE.name())
+      .defaultValue(ExecutorType.SIMPLE.name())
       .withValidValues(Arrays.stream(ExecutorType.values()).map(Enum::name).toArray(String[]::new))
       .markAdvanced()
       .sinceVersion("0.13.0")
-      .withDocumentation("Set executor which orchestrates concurrent producers and consumers communicating through a message queue."
-          + "BOUNDED_IN_MEMORY: Use LinkedBlockingQueue as a bounded in-memory queue, this queue will use extra lock to balance producers and consumer"
-          + "DISRUPTOR: Use disruptor which a lock free message queue as inner message, this queue may gain better writing performance if lock was the bottleneck. "
-          + "SIMPLE(default): Executor with no inner message queue and no inner lock. Consuming and writing records from iterator directly. Compared with BIM and DISRUPTOR, "
-          + "this queue has no need for additional memory and cpu resources due to lock or multithreading, but also lost some benefits such as speed limit. "
-          + "Although DISRUPTOR is still experimental.");
+      .withDocumentation(ExecutorType.class);
 
   public static final ConfigProperty<String> KEYGENERATOR_TYPE = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.type")
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .markAdvanced()
-      .withDocumentation("Easily configure one the built-in key generators, instead of specifying the key generator class."
-          + "Currently supports SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE. "
-          + "**Note** This is being actively worked on. Please use "
-          + "`hoodie.datasource.write.keygenerator.class` instead.");
+      .withDocumentation(KeyGeneratorType.class,
+          "**Note** This is being actively worked on. Please use "
+              + "`hoodie.datasource.write.keygenerator.class` instead.");
 
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty
       .key("hoodie.rollback.using.markers")
@@ -202,7 +196,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> TIMELINE_LAYOUT_VERSION_NUM = ConfigProperty
       .key("hoodie.timeline.layout.version")
-      .defaultValue(Integer.toString(TimelineLayoutVersion.VERSION_1))
+      .defaultValue(Integer.toString(TimelineLayoutVersion.CURR_VERSION))
+      .withValidValues(Integer.toString(TimelineLayoutVersion.VERSION_0), Integer.toString(TimelineLayoutVersion.VERSION_1))
       .markAdvanced()
       .sinceVersion("0.5.1")
       .withDocumentation("Controls the layout of the timeline. Version 0 relied on renames, Version 1 (default) models "
@@ -211,9 +206,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
       .key("hoodie.table.base.file.format")
       .defaultValue(HoodieFileFormat.PARQUET)
+      .withValidValues(HoodieFileFormat.PARQUET.name(), HoodieFileFormat.ORC.name(), HoodieFileFormat.HFILE.name())
       .withAlternatives("hoodie.table.ro.file.format")
       .markAdvanced()
-      .withDocumentation("Base file format to store all the base file data.");
+      .withDocumentation(HoodieFileFormat.class, "File format to store all the base file data.");
 
   public static final ConfigProperty<String> BASE_PATH = ConfigProperty
       .key("hoodie.base.path")
@@ -360,10 +356,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(DisruptorWaitStrategyType.BLOCKING_WAIT.name())
       .markAdvanced()
       .sinceVersion("0.13.0")
-      .withDocumentation("Strategy employed for making Disruptor Executor wait on a cursor. Other options are "
-          + "SLEEPING_WAIT, it attempts to be conservative with CPU usage by using a simple busy wait loop"
-          + "YIELDING_WAIT, it is designed for cases where there is the option to burn CPU cycles with the goal of improving latency"
-          + "BUSY_SPIN_WAIT, it can be used in low-latency systems, but puts the highest constraints on the deployment environment");
+      .withDocumentation(DisruptorWaitStrategyType.class);
 
   public static final ConfigProperty<String> COMBINE_BEFORE_INSERT = ConfigProperty
       .key("hoodie.combine.before.insert")
@@ -418,18 +411,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MARKERS_TYPE = ConfigProperty
       .key("hoodie.write.markers.type")
-      .defaultValue(MarkerType.TIMELINE_SERVER_BASED.toString())
+      .defaultValue(MarkerType.TIMELINE_SERVER_BASED.name())
       .markAdvanced()
       .sinceVersion("0.9.0")
-      .withDocumentation("Marker type to use.  Two modes are supported: "
-          + "- DIRECT: individual marker file corresponding to each data file is directly "
-          + "created by the writer. "
-          + "- TIMELINE_SERVER_BASED: marker operations are all handled at the timeline service "
-          + "which serves as a proxy.  New marker entries are batch processed and stored "
-          + "in a limited number of underlying files for efficiency.  If HDFS is used or "
-          + "timeline server is disabled, DIRECT markers are used as fallback even if this "
-          + "is configure.  For Spark structured streaming, this configuration does not "
-          + "take effect, i.e., DIRECT markers are always used for Spark structured streaming.");
+      .withDocumentation(MarkerType.class);
 
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.num_threads")
@@ -455,25 +440,9 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BULK_INSERT_SORT_MODE = ConfigProperty
       .key("hoodie.bulkinsert.sort.mode")
-      .defaultValue(BulkInsertSortMode.NONE.toString())
+      .defaultValue(BulkInsertSortMode.NONE.name())
       .markAdvanced()
-      .withDocumentation("Sorting modes to use for sorting records for bulk insert. This is use when user "
-          + BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME.key() + "is not configured. Available values are - "
-          + "GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. "
-          + "PARTITION_SORT: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing "
-          + "lowest and best effort file sizing. "
-          + "PARTITION_PATH_REPARTITION: this ensures that the data for a single physical partition in the table is written "
-          + "by the same Spark executor, best for input data evenly distributed across different partition paths. "
-          + "This can cause imbalance among Spark executors if the input data is skewed, i.e., most records are intended for "
-          + "a handful of partition paths among all. "
-          + "PARTITION_PATH_REPARTITION_AND_SORT: this ensures that the data for a single physical partition in the table is written "
-          + "by the same Spark executor, best for input data evenly distributed across different partition paths. "
-          + "Compared to PARTITION_PATH_REPARTITION, this sort mode does an additional step of sorting the records "
-          + "based on the partition path within a single Spark partition, given that data for multiple physical partitions "
-          + "can be sent to the same Spark partition and executor. "
-          + "This can cause imbalance among Spark executors if the input data is skewed, i.e., most records are intended for "
-          + "a handful of partition paths among all. "
-          + "NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads");
+      .withDocumentation(BulkInsertSortMode.class);
 
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_ENABLE = ConfigProperty
       .key("hoodie.embed.timeline.server")
@@ -585,10 +554,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> WRITE_CONCURRENCY_MODE = ConfigProperty
       .key("hoodie.write.concurrency.mode")
       .defaultValue(WriteConcurrencyMode.SINGLE_WRITER.name())
-      .withDocumentation("Enable different concurrency modes. Options are "
-          + "SINGLE_WRITER: Only one active writer to the table. Maximizes throughput"
-          + "OPTIMISTIC_CONCURRENCY_CONTROL: Multiple writers can operate on the table and exactly one of them succeed "
-          + "if a conflict (writes affect the same file group) is detected.");
+      .withDocumentation(WriteConcurrencyMode.class);
 
   public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
       .key("hoodie.write.schema")
@@ -1722,12 +1688,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public HoodieClusteringConfig.LayoutOptimizationStrategy getLayoutOptimizationStrategy() {
     return HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(
-        getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY)
-    );
+        getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY));
   }
 
   public HoodieClusteringConfig.SpatialCurveCompositionStrategyType getLayoutOptimizationCurveBuildMethod() {
-    return HoodieClusteringConfig.SpatialCurveCompositionStrategyType.fromValue(
+    return ConfigUtils.resolveEnum(HoodieClusteringConfig.SpatialCurveCompositionStrategyType.class,
         getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD));
   }
 
@@ -2344,7 +2309,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * File listing metadata configs.
    */
   public boolean isMetadataTableEnabled() {
-    return metadataConfig.enabled();
+    return getBooleanOrDefault(HoodieMetadataConfig.ENABLE);
   }
 
   public int getMetadataInsertParallelism() {
@@ -2357,14 +2322,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isMetadataAsyncIndex() {
     return getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE);
-  }
-
-  public int getMetadataMaxCommitsToKeep() {
-    return getInt(HoodieMetadataConfig.MAX_COMMITS_TO_KEEP);
-  }
-
-  public int getMetadataMinCommitsToKeep() {
-    return getInt(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP);
   }
 
   /**
@@ -2405,7 +2362,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public WriteConcurrencyMode getWriteConcurrencyMode() {
-    return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
+    return WriteConcurrencyMode.valueOf(getStringOrDefault(WRITE_CONCURRENCY_MODE).toUpperCase());
   }
 
   public boolean isEarlyConflictDetectionEnable() {
@@ -2491,8 +2448,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * Returns whether the explicit guard of lock is required.
    */
-  public boolean needsLockGuard() {
-    return isMetadataTableEnabled() || getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+  public boolean isLockRequired() {
+    return !isDefaultLockProvider() || getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+  }
+
+  /**
+   * Returns whether the lock provider is default.
+   */
+  private boolean isDefaultLockProvider() {
+    return HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue().equals(getLockProviderClass());
   }
 
   /**
@@ -2514,7 +2478,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode() {
     return HoodieCDCSupplementalLoggingMode.valueOf(
-        getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE));
+        getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE).toUpperCase());
   }
 
   /**
@@ -2922,7 +2886,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withWriteConcurrencyMode(WriteConcurrencyMode concurrencyMode) {
-      writeConfig.setValue(WRITE_CONCURRENCY_MODE, concurrencyMode.value());
+      writeConfig.setValue(WRITE_CONCURRENCY_MODE, concurrencyMode.name());
       return this;
     }
 
@@ -3043,36 +3007,33 @@ public class HoodieWriteConfig extends HoodieConfig {
       autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
     }
 
-    private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
-      if (writeConfig.isAutoAdjustLockConfigs()) {
-        // auto adjustment is required only for deltastreamer and spark streaming where async table services can be executed in the same JVM.
-        boolean isMetadataTableEnabled = writeConfig.getBoolean(HoodieMetadataConfig.ENABLE);
+    private boolean isLockRequiredForSingleWriter() {
+      // When metadata table is enabled, lock provider must be used for
+      // single writer with async table services.
+      // Async table services can update the metadata table and a lock provider is
+      // needed to guard against any concurrent table write operations. If user has
+      // not configured any lock provider, let's use the InProcess lock provider.
+      return writeConfig.isMetadataTableEnabled() && writeConfig.areAnyTableServicesAsync()
+          && !writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+    }
 
-        if (isMetadataTableEnabled) {
-          // When metadata table is enabled, optimistic concurrency control must be used for
-          // single writer with async table services.
-          // Async table services can update the metadata table and a lock provider is
-          // needed to guard against any concurrent table write operations. If user has
-          // not configured any lock provider, let's use the InProcess lock provider.
-          boolean areTableServicesEnabled = writeConfig.areTableServicesEnabled();
-          boolean areAsyncTableServicesEnabled = writeConfig.areAnyTableServicesAsync();
-          if (!isLockProviderPropertySet && areTableServicesEnabled && areAsyncTableServicesEnabled) {
-            // This is targeted at Single writer with async table services
-            // If user does not set the lock provider, likely that the concurrency mode is not set either
-            // Override the configs for metadata table
-            writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
-                InProcessLockProvider.class.getName());
-            LOG.info(String.format("Automatically set %s=%s since user has not set the "
-                    + "lock provider for single writer with async table services",
-                HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
-          }
-        }
+    private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
+      if (!isLockProviderPropertySet && writeConfig.isAutoAdjustLockConfigs() && isLockRequiredForSingleWriter()) {
+        // auto adjustment is required only for deltastreamer and spark streaming where async table services can be executed in the same JVM.
+        // This is targeted at Single writer with async table services
+        // If user does not set the lock provider, likely that the concurrency mode is not set either
+        // Override the configs for metadata table
+        writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
+            InProcessLockProvider.class.getName());
+        LOG.info(String.format("Automatically set %s=%s since user has not set the "
+                + "lock provider for single writer with async table services",
+            HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
       }
 
       // We check if "hoodie.cleaner.policy.failed.writes"
       // is properly set to LAZY for optimistic concurrency control
       String writeConcurrencyMode = writeConfig.getString(WRITE_CONCURRENCY_MODE);
-      if (WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value()
+      if (WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()
           .equalsIgnoreCase(writeConcurrencyMode)) {
         // In this case, we assume that the user takes care of setting the lock provider used
         writeConfig.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
@@ -3090,11 +3051,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       Objects.requireNonNull(writeConfig.getString(BASE_PATH));
       if (writeConfig.isEarlyConflictDetectionEnable()) {
         checkArgument(writeConfig.getString(WRITE_CONCURRENCY_MODE)
-                .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value()),
+                .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()),
             "To use early conflict detection, set hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL");
       }
       if (writeConfig.getString(WRITE_CONCURRENCY_MODE)
-          .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value())) {
+          .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
         checkArgument(!writeConfig.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)
             .equals(HoodieFailedWritesCleaningPolicy.EAGER.name()), "To enable optimistic concurrency control, set hoodie.cleaner.policy.failed.writes=LAZY");
       }
