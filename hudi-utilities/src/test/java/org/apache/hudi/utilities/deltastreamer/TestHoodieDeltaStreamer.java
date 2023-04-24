@@ -1826,7 +1826,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Set properties for multi transformer
     // timestamp.transformer.increment is a common config and varies between the transformers
     // timestamp.transformer.multiplier is also a common config but doesn't change between transformers
-    Properties properties = deltaStreamer.getDeltaSyncService().getProps();
+    Properties properties = ((HoodieDeltaStreamer.DeltaSyncService) deltaStreamer.getIngestionService()).getProps();
     // timestamp value initially is set to 0
     // timestamp = 0 * 2 + 10; (transformation 1)
     // timestamp = 10 * 2 + 20 = 40 (transformation 2)
