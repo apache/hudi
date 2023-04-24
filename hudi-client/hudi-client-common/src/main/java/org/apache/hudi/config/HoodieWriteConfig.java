@@ -19,7 +19,9 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.WriteStatusType;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
+import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelectorType;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.ConfigClassProperty;
@@ -40,8 +42,10 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordMergerType;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -72,6 +76,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
+import org.apache.hudi.table.FileIdPrefixProviderType;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
@@ -148,6 +153,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. "
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
 
+  public static final ConfigProperty<String> WRITE_PAYLOAD_TYPE = ConfigProperty
+      .key("hoodie.datasource.write.payload.type")
+      .defaultValue(RecordPayloadType.CUSTOM.name())
+      .markAdvanced()
+      .withDocumentation(RecordPayloadType.class);
+
   public static final ConfigProperty<String> RECORD_MERGER_IMPLS = ConfigProperty
       .key("hoodie.datasource.write.record.merger.impls")
       .defaultValue(HoodieAvroRecordMerger.class.getName())
@@ -155,6 +166,15 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
           + "These merger impls will filter by hoodie.datasource.write.record.merger.strategy "
+          + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
+
+  public static final ConfigProperty<String> RECORD_MERGER_TYPES = ConfigProperty
+      .key("hoodie.datasource.write.record.merger.types")
+      .defaultValue(HoodieRecordMergerType.CUSTOM.name())
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation(HoodieRecordMergerType.class, "Comma separated list of HoodieMerger implementations constituting Hudi's merging strategy"
+          + " -- based on the engine used. These merger types will filter by `hoodie.datasource.write.record.merger.strategy` "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
 
   public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
@@ -401,6 +421,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Subclass of " + WriteStatus.class.getName() + " to be used to collect information about a write. Can be "
           + "overridden to collection additional metrics/statistics about the data if needed.");
 
+  public static final ConfigProperty<String> WRITE_STATUS_TYPE = ConfigProperty
+      .key("hoodie.writestatus.type")
+      .defaultValue(WriteStatusType.CUSTOM.name())
+      .markAdvanced()
+      .withDocumentation(WriteStatusType.class);
+
   public static final ConfigProperty<String> FINALIZE_WRITE_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.finalize.write.parallelism")
       .defaultValue("200")
@@ -612,6 +638,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`");
+
+  public static final ConfigProperty<String> FILEID_PREFIX_PROVIDER_TYPE = ConfigProperty
+      .key("hoodie.hoodie.fileid.prefix.provider.type")
+      .defaultValue(FileIdPrefixProviderType.CUSTOM.name())
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation(FileIdPrefixProviderType.class);
 
   public static final ConfigProperty<Boolean> TABLE_SERVICES_ENABLED = ConfigProperty
       .key("hoodie.table.services.enabled")
@@ -1119,7 +1152,18 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieRecordMerger getRecordMerger() {
-    List<String> mergers = StringUtils.split(getStringOrDefault(RECORD_MERGER_IMPLS), ",").stream()
+    String mergerString = StringUtils.split(getStringOrDefault(RECORD_MERGER_TYPES), ",")
+        .stream()
+        .map(String::trim)
+        .distinct()
+        .map(m -> {
+          if (m.equalsIgnoreCase(HoodieRecordMergerType.CUSTOM.name())) {
+            return getStringOrDefault(RECORD_MERGER_IMPLS);
+          }
+          return HoodieRecordMergerType.valueOf(m.toUpperCase()).classPath;
+        }).collect(Collectors.joining(","));
+
+    List<String> mergers = StringUtils.split(mergerString, ",").stream()
         .map(String::trim)
         .distinct()
         .collect(Collectors.toList());
@@ -1202,7 +1246,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getWritePayloadClass() {
-    return getString(WRITE_PAYLOAD_CLASS_NAME);
+    RecordPayloadType payloadType = RecordPayloadType.valueOf(getString(WRITE_PAYLOAD_TYPE));
+    if (payloadType.equals(RecordPayloadType.CUSTOM)) {
+      return getString(WRITE_PAYLOAD_CLASS_NAME);
+    }
+    return payloadType.classPath;
   }
 
   public String getKeyGeneratorClass() {
@@ -1303,7 +1351,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getWriteStatusClassName() {
-    return getString(WRITE_STATUS_CLASS_NAME);
+    WriteStatusType writeStatusType = WriteStatusType.valueOf(getStringOrDefault(WRITE_STATUS_TYPE).toUpperCase());
+    if (writeStatusType.equals(WriteStatusType.CUSTOM)) {
+      return getString(WRITE_STATUS_CLASS_NAME);
+    }
+    return writeStatusType.classPath;
   }
 
   public int getFinalizeWriteParallelism() {
@@ -2262,7 +2314,12 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getBootstrapModeSelectorClass() {
-    return getString(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME);
+    BootstrapModeSelectorType selector = BootstrapModeSelectorType
+        .valueOf(getString(HoodieBootstrapConfig.MODE_SELECTOR_TYPE));
+    if (selector.equals(BootstrapModeSelectorType.CUSTOM)) {
+      return getString(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME);
+    }
+    return selector.classPath;
   }
 
   public String getFullBootstrapInputProvider() {
@@ -2434,7 +2491,13 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getFileIdPrefixProviderClassName() {
-    return getString(FILEID_PREFIX_PROVIDER_CLASS);
+    FileIdPrefixProviderType fileIdPrefixProviderType = FileIdPrefixProviderType
+        .valueOf(getStringOrDefault(FILEID_PREFIX_PROVIDER_TYPE));
+
+    if (fileIdPrefixProviderType.equals(FileIdPrefixProviderType.CUSTOM)) {
+      return getString(FILEID_PREFIX_PROVIDER_CLASS);
+    }
+    return fileIdPrefixProviderType.classPath;
   }
 
   public boolean areTableServicesEnabled() {
@@ -2584,8 +2647,18 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withWritePayloadType(String payloadType) {
+      writeConfig.setValue(WRITE_PAYLOAD_TYPE, payloadType);
+      return this;
+    }
+
     public Builder withRecordMergerImpls(String recordMergerImpls) {
       writeConfig.setValue(RECORD_MERGER_IMPLS, recordMergerImpls);
+      return this;
+    }
+
+    public Builder withRecordMergerTypes(String recordMergerTypes) {
+      writeConfig.setValue(RECORD_MERGER_TYPES, recordMergerTypes);
       return this;
     }
 

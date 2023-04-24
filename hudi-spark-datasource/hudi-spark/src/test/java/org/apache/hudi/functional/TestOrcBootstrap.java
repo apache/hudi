@@ -25,6 +25,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
+import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelectorType;
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -194,6 +195,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     String keyGeneratorClass = partitioned ? SimpleKeyGenerator.class.getCanonicalName()
         : NonpartitionedKeyGenerator.class.getCanonicalName();
     final String bootstrapModeSelectorClass;
+    final String bootstrapModeSelectorType;
     final String bootstrapCommitInstantTs;
     final boolean checkNumRawFiles;
     final boolean isBootstrapIndexCreated;
@@ -201,7 +203,13 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     final List<String> bootstrapInstants;
     switch (mode) {
       case FULL_BOOTSTRAP_MODE:
-        bootstrapModeSelectorClass = FullRecordBootstrapModeSelector.class.getCanonicalName();
+        if (new Random().nextBoolean()) {
+          bootstrapModeSelectorClass = FullRecordBootstrapModeSelector.class.getCanonicalName();
+          bootstrapModeSelectorType = BootstrapModeSelectorType.CUSTOM.name();
+        } else {
+          bootstrapModeSelectorClass = "";
+          bootstrapModeSelectorType = BootstrapModeSelectorType.FULL_RECORD.name();
+        }
         bootstrapCommitInstantTs = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
         checkNumRawFiles = false;
         isBootstrapIndexCreated = false;
@@ -209,7 +217,13 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
         bootstrapInstants = Arrays.asList(bootstrapCommitInstantTs);
         break;
       case METADATA_BOOTSTRAP_MODE:
-        bootstrapModeSelectorClass = MetadataOnlyBootstrapModeSelector.class.getCanonicalName();
+        if (new Random().nextBoolean()) {
+          bootstrapModeSelectorClass = MetadataOnlyBootstrapModeSelector.class.getCanonicalName();
+          bootstrapModeSelectorType = BootstrapModeSelectorType.CUSTOM.name();
+        } else {
+          bootstrapModeSelectorClass = "";
+          bootstrapModeSelectorType = BootstrapModeSelectorType.METADATA_ONLY.name();
+        }
         bootstrapCommitInstantTs = HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS;
         checkNumRawFiles = true;
         isBootstrapIndexCreated = true;
@@ -218,6 +232,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
         break;
       default:
         bootstrapModeSelectorClass = TestRandomBootstrapModeSelector.class.getName();
+        bootstrapModeSelectorType = BootstrapModeSelectorType.CUSTOM.name();
         bootstrapCommitInstantTs = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
         checkNumRawFiles = false;
         isBootstrapIndexCreated = true;
@@ -240,7 +255,9 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
             .withBootstrapKeyGenClass(keyGeneratorClass)
             .withFullBootstrapInputProvider(TestFullBootstrapDataProvider.class.getName())
             .withBootstrapParallelism(3)
-            .withBootstrapModeSelector(bootstrapModeSelectorClass).build())
+            .withBootstrapModeSelector(bootstrapModeSelectorClass)
+            .withBootstrapModeSelectorType(bootstrapModeSelectorType)
+            .build())
         .build();
 
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
