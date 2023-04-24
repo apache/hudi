@@ -374,6 +374,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.CLUSTERING_DELTA_COMMITS,2)
         .option(FlinkOptions.CLUSTERING_TASKS, 1)
         .option(FlinkOptions.CLEAN_RETAIN_COMMITS, 1)
+        .option(FlinkOptions.METADATA_ENABLED, false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
