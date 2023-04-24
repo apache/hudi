@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.timeline.dto;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.Option;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,8 +55,8 @@ public class DTOUtils {
     }
 
     // Timeline exists only in the first file group DTO. Optimisation to reduce payload size.
-    HoodieTimeline timeline = FileGroupDTO.toFileGroup(dtos.get(0), metaClient).getTimeline();
-    checkState(timeline != null, "Timeline is expected to be set for FileGroupDTO : " + dtos.get(0).toString());
-    return dtos.stream().map(dto -> FileGroupDTO.toFileGroup(dto, metaClient, Option.of(timeline)));
+    checkState(dtos.get(0).timeline != null, "Timeline is expected to be set for the first FileGroupDTO");
+    HoodieTimeline timeline = TimelineDTO.toTimeline(dtos.get(0).timeline, metaClient);
+    return dtos.stream().map(dto -> FileGroupDTO.toFileGroup(dto, timeline));
   }
 }
