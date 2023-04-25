@@ -190,11 +190,11 @@ public class UtilHelpers {
 
   }
 
-  public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
+  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt) throws IOException {
     try {
-      return classNames.isEmpty() ? Option.empty() : Option.of(new ChainedTransformer(classNames));
+      return classNamesOpt.map(classNames -> classNames.isEmpty() ? null : new ChainedTransformer(classNames));
     } catch (Throwable e) {
-      throw new IOException("Could not load transformer class(es) " + classNames, e);
+      throw new IOException("Could not load transformer class(es) " + classNamesOpt, e);
     }
   }
 
