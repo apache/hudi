@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.client.PreCommitValidatorTypes;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.WriteStatusType;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
@@ -2467,7 +2468,16 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getPreCommitValidators() {
-    return getString(HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES);
+    return StringUtils.split(getStringOrDefault(HoodiePreCommitValidatorConfig.VALIDATOR_TYPES), ",")
+        .stream()
+        .map(String::trim)
+        .distinct()
+        .map(v -> {
+          if (v.equalsIgnoreCase(PreCommitValidatorTypes.CUSTOM.name())) {
+            return getString(HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES);
+          }
+          return PreCommitValidatorTypes.valueOf(v.toUpperCase()).classPath;
+        }).collect(Collectors.joining(","));
   }
 
   public String getPreCommitValidatorEqualitySqlQueries() {
