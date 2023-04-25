@@ -591,8 +591,7 @@ class TestHoodieSparkSqlWriter {
         HoodieBootstrapConfig.PARALLELISM_VALUE.key -> "4",
         DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL,
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-        HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "")
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
       initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true, initBasePath = false)
 
