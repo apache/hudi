@@ -95,7 +95,7 @@ public class WriteProfiles {
    * @return the file status array
    */
   @Nullable
-  public static FileStatus[] getExistFileFromMetadata(
+  public static FileStatus[] getFilesFromMetadata(
       Path basePath,
       Configuration hadoopConf,
       List<HoodieCommitMetadata> metadataList,
