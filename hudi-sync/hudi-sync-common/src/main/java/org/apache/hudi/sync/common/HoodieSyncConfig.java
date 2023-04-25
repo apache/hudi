@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.sync.common.model.PartitionValueExtractorType;
 import org.apache.hudi.sync.common.util.ConfigUtils;
 
 import com.beust.jcommander.Parameter;
@@ -141,6 +142,12 @@ public class HoodieSyncConfig extends HoodieConfig {
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
           + "default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.");
 
+  public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_TYPE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.partition_extractor_type")
+      .defaultValue(PartitionValueExtractorType.CUSTOM.name())
+      .markAdvanced()
+      .withDocumentation(PartitionValueExtractorType.class);
+
   public static final ConfigProperty<String> META_SYNC_ASSUME_DATE_PARTITION = ConfigProperty
       .key("hoodie.datasource.hive_sync.assume_date_partitioning")
       .defaultValue(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING.defaultValue())
@@ -226,6 +233,9 @@ public class HoodieSyncConfig extends HoodieConfig {
     @Parameter(names = "--partition-value-extractor", description = "Class which implements PartitionValueExtractor "
         + "to extract the partition values from HDFS path")
     public String partitionValueExtractorClass;
+
+    @Parameter(names = "--partition-value-extractor-type", description = "Shorthand names for --partition-value-extractor")
+    public String partitionValueExtractorType;
     @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
         + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
     public Boolean assumeDatePartitioning;
@@ -252,7 +262,12 @@ public class HoodieSyncConfig extends HoodieConfig {
       props.setPropertyIfNonNull(META_SYNC_TABLE_NAME.key(), tableName);
       props.setPropertyIfNonNull(META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
       props.setPropertyIfNonNull(META_SYNC_PARTITION_FIELDS.key(), StringUtils.join(",", partitionFields));
-      props.setPropertyIfNonNull(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), partitionValueExtractorClass);
+      if (StringUtils.isNullOrEmpty(partitionValueExtractorType) || partitionValueExtractorType.equalsIgnoreCase(PartitionValueExtractorType.CUSTOM.name())) {
+        props.setPropertyIfNonNull(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), partitionValueExtractorClass);
+      } else {
+        props.setPropertyIfNonNull(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+            PartitionValueExtractorType.valueOf(partitionValueExtractorType.toUpperCase()));
+      }
       props.setPropertyIfNonNull(META_SYNC_ASSUME_DATE_PARTITION.key(), assumeDatePartitioning);
       props.setPropertyIfNonNull(META_SYNC_DECODE_PARTITION.key(), decodePartition);
       props.setPropertyIfNonNull(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), useFileListingFromMetadata);
