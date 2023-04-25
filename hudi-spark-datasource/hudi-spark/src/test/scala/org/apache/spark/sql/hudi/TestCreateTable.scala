@@ -1080,6 +1080,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     val exception = intercept[IllegalArgumentException] {
       spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
     }
-    assert(exception.getMessage.contains(s"""$tableName is not a Hudi table"""))
+    assertTrue(exception.getMessage.contains(s"""$tableName is not a Hudi table"""))
   }
 }
