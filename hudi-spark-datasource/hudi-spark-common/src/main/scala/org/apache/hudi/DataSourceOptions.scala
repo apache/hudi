@@ -284,8 +284,8 @@ object DataSourceWriteOptions {
       WriteOperationType.COMPACT.value,
       WriteOperationType.ALTER_SCHEMA.value
     )
-    .withDocumentation("Whether to do upsert, insert or bulkinsert for the write operation. " +
-      "Use bulkinsert to load new data into a table, and there on use upsert/insert. " +
+    .withDocumentation("Whether to do upsert, insert or bulk_insert for the write operation. " +
+      "Use bulk_insert to load new data into a table, and there on use upsert/insert. " +
       "bulk insert uses a disk based write path to scale to load large inputs without need to cache it.")
 
 
