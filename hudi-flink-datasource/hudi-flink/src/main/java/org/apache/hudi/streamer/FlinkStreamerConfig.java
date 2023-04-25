@@ -298,6 +298,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--sort-columns"}, description = "Columns to sort the data by when clustering.")
   public String sortColumns = "";
 
+  @Parameter(names = {"--sort-memory"}, description = "Sort memory in MB, default 128MB.")
+  public Integer sortMemory = 128;
+
   @Parameter(names = {"--max-num-groups"}, description = "Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism. default 30")
   public Integer maxNumGroups = 30;
 
@@ -480,6 +483,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_REGEX_PATTERN, config.partitionRegexPattern);
     conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_SELECTED, config.partitionSelected);
     conf.setString(FlinkOptions.CLUSTERING_SORT_COLUMNS, config.sortColumns);
+    conf.setInteger(FlinkOptions.WRITE_SORT_MEMORY, config.sortMemory);
     conf.setInteger(FlinkOptions.CLUSTERING_MAX_NUM_GROUPS, config.maxNumGroups);
     conf.setInteger(FlinkOptions.CLUSTERING_TARGET_PARTITIONS, config.targetPartitions);
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnabled);
