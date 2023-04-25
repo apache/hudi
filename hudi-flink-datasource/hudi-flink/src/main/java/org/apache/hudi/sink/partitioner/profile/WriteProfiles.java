@@ -83,14 +83,14 @@ public class WriteProfiles {
   }
 
   /**
-   * Returns all exist incremental write file statuses from the given commit metadata list.
+   * Returns all the incremental write file statuses with the given commits metadata.
    *
-   * @param basePath         Table base path
-   * @param hadoopConf       The hadoop conf
-   * @param metadataList     The commit metadata list (should in ascending order)
-   * @param tableType        The table type
-   * @param tolerateNonExist Whether to tolerate non-exist file, when is false and have non-exist file return null
-   * @return the file status array
+   * @param basePath           Table base path
+   * @param hadoopConf         The hadoop conf
+   * @param metadataList       The commit metadata list (should in ascending order)
+   * @param tableType          The table type
+   * @param ignoreMissingFiles Whether to ignore the missing files from filesystem
+   * @return the file status array or null if any file is missing if ignoreMissingFiles is false
    */
   @Nullable
   public static FileStatus[] getFilesFromMetadata(
@@ -98,7 +98,7 @@ public class WriteProfiles {
       Configuration hadoopConf,
       List<HoodieCommitMetadata> metadataList,
       HoodieTableType tableType,
-      boolean tolerateNonExist) {
+      boolean ignoreMissingFiles) {
     FileSystem fs = FSUtils.getFs(basePath.toString(), hadoopConf);
     Map<String, FileStatus> uniqueIdToFileStatus = new HashMap<>();
     // If a file has been touched multiple times in the given commits, the return value should keep the one
@@ -108,7 +108,7 @@ public class WriteProfiles {
         if (StreamerUtil.isValidFile(entry.getValue()) && !uniqueIdToFileStatus.containsKey(entry.getKey())) {
           if (StreamerUtil.fileExists(fs, entry.getValue().getPath())) {
             uniqueIdToFileStatus.put(entry.getKey(), entry.getValue());
-          } else if (!tolerateNonExist){
+          } else if (!ignoreMissingFiles){
             return null;
           }
         }
