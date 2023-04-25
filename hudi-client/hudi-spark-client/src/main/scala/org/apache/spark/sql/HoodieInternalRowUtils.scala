@@ -188,7 +188,10 @@ object HoodieInternalRowUtils {
           null
         }
 
-        fieldWriters(pos)(fieldUpdater, pos, prevValue)
+        if(prevValue == null)
+          fieldUpdater.setNullAt(pos)
+        else
+          fieldWriters(pos)(fieldUpdater, pos, prevValue)
         pos += 1
       }
     }
