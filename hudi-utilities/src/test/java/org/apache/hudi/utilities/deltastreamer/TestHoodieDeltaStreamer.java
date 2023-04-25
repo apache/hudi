@@ -2547,7 +2547,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "def");
 
-    // add a replace commit which does not have CEHCKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
+    // add a replace commit which does not have CHECKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
     addReplaceCommitToTimeline(metaClient, Collections.emptyMap());
     metaClient.reloadActiveTimeline();
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
@@ -2621,7 +2621,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     /**
      * Returns some random number as distance between the points.
      *
-     * @param lat1 Latitiude of source
+     * @param lat1 Latitude of source
      * @param lat2 Latitude of destination
      * @param lon1 Longitude of source
      * @param lon2 Longitude of destination

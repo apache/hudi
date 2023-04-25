@@ -38,7 +38,7 @@ import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKP
 /**
  * This is used as an extraPreCommitFunc in BaseHoodieWriteClient
  * It adds the checkpoint to deltacommit metadata. It must be implemented this way
- * because it needs the lock to ensure that it does not overwrite another deltastreamers
+ * because it needs the lock to ensure that it does not overwrite another deltastreamer's
  * latest checkpoint with an older one.
  */
 public class DeltastreamerMultiWriterCkptUpdateFunc implements BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata> {
