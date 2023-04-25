@@ -1216,7 +1216,7 @@ class TestHoodieSparkSqlWriter {
    * related to HUDI-5978
    */
   @Test
-  def testInsertDatasetWIthTimelineTimezoneUTC(): Unit = {
+  def testInsertDatasetWithTimelineTimezoneUTC(): Unit = {
     val defaultTimezone = TimeZone.getDefault
     try {
       val fooTableModifier = commonTableModifier.updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
