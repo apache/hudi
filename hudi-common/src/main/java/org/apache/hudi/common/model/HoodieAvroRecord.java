@@ -157,10 +157,10 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
-    if (this.data instanceof BaseAvroPayload) {
-      return ((BaseAvroPayload) this.data).isDeleted(recordSchema, props);
-    } else {
+    if (this.data instanceof AWSDmsAvroPayload || !(this.data instanceof BaseAvroPayload)) {
       return !this.data.getInsertValue(recordSchema, props).isPresent();
+    } else {
+      return ((BaseAvroPayload) this.data).isDeleted(recordSchema, props);
     }
   }
 
