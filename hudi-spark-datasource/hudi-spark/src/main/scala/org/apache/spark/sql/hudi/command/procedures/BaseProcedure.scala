@@ -18,9 +18,6 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.HoodieIndex.IndexType
@@ -36,11 +33,6 @@ abstract class BaseProcedure extends Procedure {
   val jsc = new JavaSparkContext(spark.sparkContext)
 
   protected def sparkSession: SparkSession = spark
-
-  protected def createHoodieClient(jsc: JavaSparkContext, basePath: String): SparkRDDWriteClient[_ <: HoodieRecordPayload[_ <: AnyRef]] = {
-    val config = getWriteConfig(basePath)
-    new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config)
-  }
 
   protected def getWriteConfig(basePath: String): HoodieWriteConfig = {
     HoodieWriteConfig.newBuilder

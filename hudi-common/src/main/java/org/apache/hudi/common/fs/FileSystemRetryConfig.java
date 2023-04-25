@@ -39,32 +39,37 @@ public class FileSystemRetryConfig  extends HoodieConfig {
   public static final ConfigProperty<String> FILESYSTEM_RETRY_ENABLE = ConfigProperty
       .key("hoodie.filesystem.operation.retry.enable")
       .defaultValue("false")
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Enabled to handle list/get/delete etc file system performance issue.");
 
   public static final ConfigProperty<Long> INITIAL_RETRY_INTERVAL_MS = ConfigProperty
       .key("hoodie.filesystem.operation.retry.initial_interval_ms")
       .defaultValue(100L)
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Amount of time (in ms) to wait, before retry to do operations on storage.");
 
   public static final ConfigProperty<Long> MAX_RETRY_INTERVAL_MS = ConfigProperty
       .key("hoodie.filesystem.operation.retry.max_interval_ms")
       .defaultValue(2000L)
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Maximum amount of time (in ms), to wait for next retry.");
 
   public static final ConfigProperty<Integer> MAX_RETRY_NUMBERS = ConfigProperty
       .key("hoodie.filesystem.operation.retry.max_numbers")
       .defaultValue(4)
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Maximum number of retry actions to perform, with exponential backoff.");
 
   public static final ConfigProperty<String> RETRY_EXCEPTIONS = ConfigProperty
       .key("hoodie.filesystem.operation.retry.exceptions")
       .defaultValue("")
+      .markAdvanced()
       .sinceVersion("0.11.0")
-      .withDocumentation("The class name of the Exception that needs to be re-tryed, separated by commas. "
+      .withDocumentation("The class name of the Exception that needs to be retried, separated by commas. "
           + "Default is empty which means retry all the IOException and RuntimeException from FileSystem");
 
   private FileSystemRetryConfig() {

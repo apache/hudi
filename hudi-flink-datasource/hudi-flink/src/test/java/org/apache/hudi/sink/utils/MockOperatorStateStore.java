@@ -121,6 +121,10 @@ public class MockOperatorStateStore implements KeyedStateStore, OperatorStateSto
     lastSuccessStateMap = historyStateMap.get(checkpointId);
   }
 
+  public boolean isRestored() {
+    return !this.currentStateMap.isEmpty();
+  }
+
   public void rollBackToLastSuccessCheckpoint() {
     this.currentStateMap = copyStates(lastSuccessStateMap);
   }

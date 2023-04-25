@@ -133,6 +133,44 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call rollback_to_instant Procedure with refreshTable") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+
+      // 3 commits are left before rollback
+      var commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
+      assertResult(3){commits.length}
+
+      spark.table(s"$tableName").select("id").cache()
+      assertCached(spark.table(s"$tableName").select("id"), 1)
+
+      // Call rollback_to_instant Procedure with Named Arguments
+      var instant_time = commits(0).get(0).toString
+      checkAnswer(s"""call rollback_to_instant(table => '$tableName', instant_time => '$instant_time')""")(Seq(true))
+      // Check cache whether invalidate
+      assertCached(spark.table(s"$tableName").select("id"), 0)
+    }
+  }
+
   test("Test Call delete_marker Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName

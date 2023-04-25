@@ -16,13 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.cli
+package org.apache.hudi.common.config;
 
-object DeDupeType extends Enumeration {
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-  type dedupeType = Value
-
-  val INSERT_TYPE = Value("insert_type")
-  val UPDATE_TYPE = Value("update_type")
-  val UPSERT_TYPE = Value("upsert_type")
+/**
+ * For any enum that is going to be used as a config value,
+ * add this annotation by adding @EnumDescription("Your description here.")
+ * directly above the enum class declaration.
+ * Then in your config property add .withDocumentation(YourEnum.class)
+ * see EnumFieldDescription.java
+ */
+@Documented
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+public @interface EnumDescription {
+  String value();
 }

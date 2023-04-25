@@ -27,7 +27,7 @@ import java.io.IOException;
 
 /**
  * Hoodie's internal dynamic Bloom Filter. This is largely based of {@link org.apache.hadoop.util.bloom.DynamicBloomFilter}
- * with bounds on maximum number of entries. Once the max entries is reached, false positive gaurantees are not
+ * with bounds on maximum number of entries. Once the max entries is reached, false positive guarantees are not
  * honored.
  */
 class InternalDynamicBloomFilter extends InternalFilter {

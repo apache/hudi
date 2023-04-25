@@ -84,7 +84,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
     this.bucketNum = config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
-    this.indexKeyFields = config.getString(FlinkOptions.INDEX_KEY_FIELD);
+    this.indexKeyFields = OptionsResolver.getIndexKeyField(config);
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     this.bucketIndex = new HashMap<>();

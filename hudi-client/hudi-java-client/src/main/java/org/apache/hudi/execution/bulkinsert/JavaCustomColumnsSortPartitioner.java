@@ -22,6 +22,7 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
@@ -51,9 +52,13 @@ public class JavaCustomColumnsSortPartitioner<T>
   public List<HoodieRecord<T>> repartitionRecords(
       List<HoodieRecord<T>> records, int outputPartitions) {
     return records.stream().sorted((o1, o2) -> {
-      Object values1 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)o1, sortColumnNames, schema, consistentLogicalTimestampEnabled);
-      Object values2 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)o2, sortColumnNames, schema, consistentLogicalTimestampEnabled);
-      return values1.toString().compareTo(values2.toString());
+      FlatLists.ComparableList<Comparable> values1 = FlatLists.ofComparableArray(
+          HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord) o1, sortColumnNames, schema, consistentLogicalTimestampEnabled)
+      );
+      FlatLists.ComparableList<Comparable> values2 = FlatLists.ofComparableArray(
+          HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord) o2, sortColumnNames, schema, consistentLogicalTimestampEnabled)
+      );
+      return values1.compareTo(values2);
     }).collect(Collectors.toList());
   }
 

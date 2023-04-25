@@ -30,11 +30,11 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
@@ -80,7 +80,6 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness implement
   private WriteStatus prepareFirstRecordCommit(List<String> recordsStrs) throws IOException {
     // Create a bunch of records with an old version of schema
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.avsc");
-    config.setValue(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA, "false");
     final HoodieSparkTable table = HoodieSparkTable.create(config, context);
     final List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       List<HoodieRecord> insertRecords = new ArrayList<>();
@@ -91,9 +90,11 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness implement
       }
       Map<String, HoodieRecord> insertRecordMap = insertRecords.stream()
           .collect(Collectors.toMap(r -> r.getRecordKey(), Function.identity()));
-      HoodieCreateHandle<?,?,?,?> createHandle =
-          new HoodieCreateHandle(config, "100", table, insertRecords.get(0).getPartitionPath(), "f1-0", insertRecordMap, supplier);
-      createHandle.write();
+      HoodieWriteHandle<?,?,?,?> createHandle = new CreateHandleFactory<>(false)
+          .create(config, "100", table, insertRecords.get(0).getPartitionPath(), "f1-0", supplier);
+      for (HoodieRecord record : insertRecordMap.values()) {
+        createHandle.write(record, createHandle.getWriterSchemaWithMetaFields(), createHandle.getConfig().getProps());
+      }
       return createHandle.close().get(0);
     }).collect();
 

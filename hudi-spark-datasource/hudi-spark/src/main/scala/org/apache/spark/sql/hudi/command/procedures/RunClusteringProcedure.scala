@@ -93,17 +93,20 @@ class RunClusteringProcedure extends BaseProcedure
     val selectedPartitions: String = (parts, predicate) match {
       case (_, Some(p)) => prunePartition(metaClient, p.asInstanceOf[String])
       case (Some(o), _) => o.asInstanceOf[String]
-      case _ => ""
+      case _ => null
     }
 
-    if (selectedPartitions.nonEmpty) {
+    if (selectedPartitions == null) {
+      logInfo("No partition selected")
+    } else if (selectedPartitions.isEmpty) {
+      logInfo("No partition matched")
+      return Seq()
+    } else {
       conf = conf ++ Map(
         HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key() -> "SELECTED_PARTITIONS",
         HoodieClusteringConfig.PARTITION_SELECTED.key() -> selectedPartitions
       )
       logInfo(s"Partition selected: $selectedPartitions")
-    } else {
-      logInfo("No partition selected")
     }
 
     // Construct sort column info
@@ -171,7 +174,8 @@ class RunClusteringProcedure extends BaseProcedure
 
     var client: SparkRDDWriteClient[_] = null
     try {
-      client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, conf)
+      client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, conf,
+        tableName.asInstanceOf[Option[String]])
       if (operator.isSchedule) {
         val instantTime = HoodieActiveTimeline.createNewInstantTime
         if (client.scheduleClusteringAtInstant(instantTime, HOption.empty())) {

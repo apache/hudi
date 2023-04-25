@@ -33,6 +33,7 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
+import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
@@ -45,7 +46,11 @@ import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructTy
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
+import java.time.ZoneId
+import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 import scala.collection.JavaConverters.mapAsScalaMapConverter
+import scala.collection.convert.Wrappers.JConcurrentMapWrapper
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -63,6 +68,9 @@ class Spark2Adapter extends SparkAdapter {
     // NOTE: Since [[METADATA_COL_ATTR_KEY]] flag is not available in Spark 2.x,
     //       we simply produce an empty [[Metadata]] instance
     new MetadataBuilder().build()
+
+  private val cache = JConcurrentMapWrapper(
+    new ConcurrentHashMap[ZoneId, DateFormatter](1))
 
   override def getCatalogUtils: HoodieCatalogUtils = {
     throw new UnsupportedOperationException("Catalog utilities are not supported in Spark 2.x");
@@ -89,6 +97,10 @@ class Spark2Adapter extends SparkAdapter {
     new HoodieSpark2ExtendedSqlParser(spark, delegate)
 
   override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark2ParsePartitionUtil
+
+  override def getDateFormatter(tz: TimeZone): DateFormatter = {
+    cache.getOrElseUpdate(tz.toZoneId, DateFormatter())
+  }
 
   /**
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.

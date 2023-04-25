@@ -49,38 +49,45 @@ public class HoodieIncrSourceConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> NUM_INSTANTS_PER_FETCH = ConfigProperty
       .key("hoodie.deltastreamer.source.hoodieincr.num_instants")
       .defaultValue(5)
+      .markAdvanced()
       .withDocumentation("Max number of instants whose changes can be incrementally fetched");
 
   @Deprecated
   public static final ConfigProperty<Boolean> READ_LATEST_INSTANT_ON_MISSING_CKPT = ConfigProperty
       .key("hoodie.deltastreamer.source.hoodieincr.read_latest_on_missing_ckpt")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("If true, allows delta-streamer to incrementally fetch from latest committed instant when checkpoint is not provided. "
           + "This config is deprecated. Please refer to hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy");
 
   public static final ConfigProperty<String> MISSING_CHECKPOINT_STRATEGY = ConfigProperty
       .key("hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Allows delta-streamer to decide the instant to consume from when checkpoint is not set.\n"
           + " Possible values: " + Arrays.toString(IncrSourceHelper.MissingCheckpointStrategy.values()));
 
   public static final ConfigProperty<String> SOURCE_FILE_FORMAT = ConfigProperty
       .key("hoodie.deltastreamer.source.hoodieincr.file.format")
       .defaultValue("parquet")
+      .markAdvanced()
       .withDocumentation("This config is passed to the reader while loading dataset. Default value is parquet.");
 
   public static final ConfigProperty<Boolean> HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE = ConfigProperty
       .key("hoodie.deltastreamer.source.hoodieincr.drop.all.meta.fields.from.source")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Drops all meta fields from the source hudi table while ingesting into sink hudi table.");
 
   public static final ConfigProperty<String> HOODIE_SRC_PARTITION_FIELDS = ConfigProperty
       .key("hoodie.deltastreamer.source.hoodieincr.partition.fields")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Specifies partition fields that needs to be added to source table after parsing _hoodie_partition_path.");
 
   public static final ConfigProperty<String> HOODIE_SRC_PARTITION_EXTRACTORCLASS = ConfigProperty
       .key("hoodie.deltastreamer.source.hoodieincr.partition.extractor.class")
       .noDefaultValue(SlashEncodedDayPartitionValueExtractor.class.getCanonicalName())
+      .markAdvanced()
       .withDocumentation("PartitionValueExtractor class to extract partition fields from _hoodie_partition_path");
 }

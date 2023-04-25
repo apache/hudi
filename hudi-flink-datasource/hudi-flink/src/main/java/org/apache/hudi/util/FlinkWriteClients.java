@@ -27,7 +27,6 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -225,11 +224,7 @@ public class FlinkWriteClients {
             .withProps(flinkConf2TypedProperties(conf))
             .withSchema(getSourceSchema(conf).toString());
 
-    if (conf.getBoolean(FlinkOptions.METADATA_ENABLED)) {
-      builder.withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
-    }
-
-    if (!conf.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()) && OptionsResolver.needsGuardByLock(conf)) {
+    if (OptionsResolver.isLockRequired(conf) && !conf.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
       // configure the fs lock provider by default
       builder.withLockConfig(HoodieLockConfig.newBuilder()
           .withConflictResolutionStrategy(OptionsResolver.getConflictResolutionStrategy(conf))

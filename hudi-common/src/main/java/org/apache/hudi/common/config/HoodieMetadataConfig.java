@@ -66,6 +66,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> METRICS_ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".metrics.enable")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Enable publishing of metrics around metadata table.");
 
@@ -73,6 +74,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> INSERT_PARALLELISM_VALUE = ConfigProperty
       .key(METADATA_PREFIX + ".insert.parallelism")
       .defaultValue(1)
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Parallelism to use when inserting to the metadata table");
 
@@ -80,6 +82,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> ASYNC_INDEX_ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".index.async")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Enable asynchronous indexing of metadata table.");
 
@@ -87,36 +90,22 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key(METADATA_PREFIX + ".compact.max.delta.commits")
       .defaultValue(10)
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Controls how often the metadata table is compacted.");
-
-  // Archival settings
-  public static final ConfigProperty<Integer> MIN_COMMITS_TO_KEEP = ConfigProperty
-      .key(METADATA_PREFIX + ".keep.min.commits")
-      .defaultValue(20)
-      .sinceVersion("0.7.0")
-      .withDocumentation("Archiving service moves older entries from metadata table’s timeline "
-          + "into an archived log after each write, to keep the overhead constant, even as the "
-          + "metadata table size grows.  This config controls the minimum number of instants "
-          + "to retain in the active timeline.");
-
-  public static final ConfigProperty<Integer> MAX_COMMITS_TO_KEEP = ConfigProperty
-      .key(METADATA_PREFIX + ".keep.max.commits")
-      .defaultValue(30)
-      .sinceVersion("0.7.0")
-      .withDocumentation("Similar to " + MIN_COMMITS_TO_KEEP.key() + ", this config controls "
-          + "the maximum number of instants to retain in the active timeline.");
 
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
       .key(METADATA_PREFIX + ".dir.filter.regex")
       .defaultValue("")
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Directories matching this regex, will be filtered out when initializing metadata table from lake storage for the first time.");
 
   public static final ConfigProperty<String> ASSUME_DATE_PARTITIONING = ConfigProperty
       .key("hoodie.assume.date.partitioning")
       .defaultValue("false")
+      .markAdvanced()
       .sinceVersion("0.3.0")
       .withDocumentation("Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path. "
           + "This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually");
@@ -124,6 +113,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> FILE_LISTING_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.file.listing.parallelism")
       .defaultValue(200)
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Parallelism to use, when listing the table on lake storage.");
 
@@ -138,6 +128,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.file.group.count")
       .defaultValue(4)
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Metadata bloom filter index partition file group count. This controls the size of the base and "
           + "log files and read parallelism in the bloom filter index partition. The recommendation is to size the "
@@ -146,6 +137,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> BLOOM_FILTER_INDEX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.parallelism")
       .defaultValue(200)
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Parallelism to use for generating bloom filter index in metadata table.");
 
@@ -160,20 +152,23 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.file.group.count")
       .defaultValue(2)
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Metadata column stats partition file group count. This controls the size of the base and "
           + "log files and read parallelism in the column stats index partition. The recommendation is to size the "
           + "file group count such that the base files are under 1GB.");
 
   public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_PARALLELISM = ConfigProperty
-          .key(METADATA_PREFIX + ".index.column.stats.parallelism")
-          .defaultValue(10)
-          .sinceVersion("0.11.0")
-          .withDocumentation("Parallelism to use, when generating column stats index.");
+      .key(METADATA_PREFIX + ".index.column.stats.parallelism")
+      .defaultValue(10)
+      .markAdvanced()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Parallelism to use, when generating column stats index.");
 
   public static final ConfigProperty<String> COLUMN_STATS_INDEX_FOR_COLUMNS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.column.list")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
 
@@ -184,6 +179,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".index.column.stats.processing.mode.override")
       .noDefaultValue()
       .withValidValues(COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY, COLUMN_STATS_INDEX_PROCESSING_MODE_ENGINE)
+      .markAdvanced()
       .sinceVersion("0.12.0")
       .withDocumentation("By default Column Stats Index is automatically determining whether it should be read and processed either"
           + "'in-memory' (w/in executing process) or using Spark (on a cluster), based on some factors like the size of the Index "
@@ -192,6 +188,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_IN_MEMORY_PROJECTION_THRESHOLD = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.inMemory.projection.threshold")
       .defaultValue(100000)
+      .markAdvanced()
       .sinceVersion("0.12.0")
       .withDocumentation("When reading Column Stats Index, if the size of the expected resulting projection is below the in-memory"
           + " threshold (counted by the # of rows), it will be attempted to be loaded \"in-memory\" (ie not using the execution engine"
@@ -200,12 +197,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<String> BLOOM_FILTER_INDEX_FOR_COLUMNS = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.column.list")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of columns for which bloom filter index will be built. If not set, only record key will be indexed.");
 
   public static final ConfigProperty<Integer> METADATA_INDEX_CHECK_TIMEOUT_SECONDS = ConfigProperty
       .key(METADATA_PREFIX + ".index.check.timeout.seconds")
       .defaultValue(900)
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("After the async indexer has finished indexing upto the base instant, it will ensure that all inflight writers "
           + "reliably write index updates as well. If this timeout expires, then the indexer will abort itself safely.");
@@ -213,6 +212,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> IGNORE_SPURIOUS_DELETES = ConfigProperty
       .key("_" + METADATA_PREFIX + ".ignore.spurious.deletes")
       .defaultValue(true)
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("There are cases when extra files are requested to be deleted from "
           + "metadata table which are never added before. This config determines how to handle "
@@ -221,8 +221,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
       .key(METADATA_PREFIX + OPTIMIZED_LOG_BLOCKS_SCAN)
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.13.0")
-      .withDocumentation("Optimized log blocks scanner that addresses all the multiwriter use-cases while appending to log files. "
+      .withDocumentation("Optimized log blocks scanner that addresses all the multi-writer use-cases while appending to log files. "
           + "It also differentiates original blocks written by ingestion writers and compacted blocks written by log compaction.");
 
   private HoodieMetadataConfig() {
@@ -395,12 +396,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder archiveCommitsWith(int minToKeep, int maxToKeep) {
-      metadataConfig.setValue(MIN_COMMITS_TO_KEEP, String.valueOf(minToKeep));
-      metadataConfig.setValue(MAX_COMMITS_TO_KEEP, String.valueOf(maxToKeep));
-      return this;
-    }
-
     public Builder withFileListingParallelism(int parallelism) {
       metadataConfig.setValue(FILE_LISTING_PARALLELISM_VALUE, String.valueOf(parallelism));
       return this;
@@ -499,26 +494,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   @Deprecated
   public static final int DEFAULT_METADATA_COMPACT_NUM_DELTA_COMMITS = COMPACT_NUM_DELTA_COMMITS.defaultValue();
 
-  /**
-   * @deprecated Use {@link #MIN_COMMITS_TO_KEEP} and its methods.
-   */
-  @Deprecated
-  public static final String MIN_COMMITS_TO_KEEP_PROP = MIN_COMMITS_TO_KEEP.key();
-  /**
-   * @deprecated Use {@link #MIN_COMMITS_TO_KEEP} and its methods.
-   */
-  @Deprecated
-  public static final int DEFAULT_MIN_COMMITS_TO_KEEP = MIN_COMMITS_TO_KEEP.defaultValue();
-  /**
-   * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods.
-   */
-  @Deprecated
-  public static final String MAX_COMMITS_TO_KEEP_PROP = MAX_COMMITS_TO_KEEP.key();
-  /**
-   * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods.
-   */
-  @Deprecated
-  public static final int DEFAULT_MAX_COMMITS_TO_KEEP = MAX_COMMITS_TO_KEEP.defaultValue();
   /**
    * @deprecated No longer takes any effect.
    */
