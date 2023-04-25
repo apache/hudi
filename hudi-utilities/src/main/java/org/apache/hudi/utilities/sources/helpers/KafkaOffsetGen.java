@@ -134,7 +134,7 @@ public class KafkaOffsetGen {
       long actualNumEvents = Math.min(totalEvents, numEvents);
 
       // keep going until we have events to allocate and partitions still not exhausted.
-      while (allocedEvents < actualNumEvents && exhaustedPartitions.size() < toOffsetMap.size()) {
+      while (allocedEvents < numEvents && exhaustedPartitions.size() < toOffsetMap.size()) {
         // Allocate the remaining events to non-exhausted partitions, in round robin fashion
         Set<Integer> allocatedPartitionsThisLoop = new HashSet<>(exhaustedPartitions);
         for (int i = 0; i < ranges.length; i++) {
@@ -162,10 +162,7 @@ public class KafkaOffsetGen {
             toOffset = Math.min(range.untilOffset(), toOffset + offsetsToAdd);
           }
           OffsetRange thisRange = OffsetRange.create(range.topicPartition(), range.fromOffset(), toOffset);
-          // filter out the empty ranges
-          if (thisRange.count() > 0) {
-            finalRanges.add(thisRange);
-          }
+          finalRanges.add(thisRange);
           ranges[i] = OffsetRange.create(range.topicPartition(), range.fromOffset() + thisRange.count(), range.untilOffset());
           allocatedPartitionsThisLoop.add(range.partition());
         }

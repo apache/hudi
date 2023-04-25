@@ -185,22 +185,31 @@ public class TestCheckpointUtils {
     assertEquals(67, ranges[2].fromOffset());
     assertEquals(100, ranges[2].untilOffset());
 
-    // ignore empty ranges
+    // do not ignore empty ranges
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}),
         makeOffsetMap(new int[] {0, 1}, new long[] {100, 600}), 600, 3);
     assertEquals(3, ranges.length);
-    assertEquals(0, ranges[0].fromOffset());
-    assertEquals(200, ranges[0].untilOffset());
-    assertEquals(200, ranges[1].fromOffset());
-    assertEquals(400, ranges[1].untilOffset());
-    assertEquals(400, ranges[2].fromOffset());
+    assertEquals(0, ranges[0].partition());
+    assertEquals(100, ranges[0].fromOffset());
+    assertEquals(100, ranges[0].untilOffset());
+    assertEquals(1, ranges[1].partition());
+    assertEquals(0, ranges[1].fromOffset());
+    assertEquals(300, ranges[1].untilOffset());
+    assertEquals(1, ranges[2].partition());
+    assertEquals(300, ranges[2].fromOffset());
     assertEquals(600, ranges[2].untilOffset());
 
-    // all empty ranges
+    // all empty ranges, do not ignore empty ranges
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}),
         makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}), 600, 3);
     assertEquals(0, CheckpointUtils.totalNewMessages(ranges));
-    assertEquals(0, ranges.length);
+    assertEquals(2, ranges.length);
+    assertEquals(0, ranges[0].partition());
+    assertEquals(100, ranges[0].fromOffset());
+    assertEquals(100, ranges[0].untilOffset());
+    assertEquals(1, ranges[1].partition());
+    assertEquals(0, ranges[1].fromOffset());
+    assertEquals(0, ranges[1].untilOffset());
 
     // minPartitions more than maxEvents
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
