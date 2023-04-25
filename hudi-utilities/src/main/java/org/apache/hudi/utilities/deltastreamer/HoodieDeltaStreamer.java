@@ -289,6 +289,11 @@ public class HoodieDeltaStreamer implements Serializable {
     )
     public List<String> transformerClassNames = null;
 
+    @Parameter(names = {"--enable-transformer-schema-validation"},
+        description = "If enabled, schema is validated for the transformed data against expected schema. "
+            + "Expected schema is provided by the transformer.")
+    public Boolean enableTransformerSchemaValidation = false;
+
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
         + "Default: No limit, e.g: DFS-Source => max bytes to read, Kafka-Source => max events to read")
     public long sourceLimit = Long.MAX_VALUE;
