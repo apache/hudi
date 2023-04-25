@@ -19,6 +19,28 @@
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Global vs Non-global index in Apache Hudi]]></title>
+        <id>/2023/04/02/global-vs-non-global-index-in-apache-hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/04/02/global-vs-non-global-index-in-apache-hudi"/>
+        <updated>2023-04-02T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@simpsons/global-vs-non-global-index-in-apache-hudi-ac880b031cbc">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sivabalan Narayanan</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Spark ETL Chapter 8 with Lakehouse | Apache HUDI]]></title>
+        <id>/2023/03/23/Spark-ETL-Chapter-8-with-Lakehouse-Apache-HUDI</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/03/23/Spark-ETL-Chapter-8-with-Lakehouse-Apache-HUDI"/>
+        <updated>2023-03-23T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/plumbersofdatascience/spark-etl-chapter-8-with-lakehouse-apache-hudi-d4794b8a79e6">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Kalpan Shah</name>
+        </author>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Introducing native support for Apache Hudi, Delta Lake, and Apache Iceberg on AWS Glue for Apache Spark, Part 2: AWS Glue Studio Visual Editor]]></title>
         <id>/2023/03/20/Introducing-native-support-for-Apache Hudi-Delta-Lake-and-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark-Part-2-AWS-Glue-Studio-Visual-Editor</id>
         <link href="https://hudi.apache.org/cn/blog/2023/03/20/Introducing-native-support-for-Apache Hudi-Delta-Lake-and-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark-Part-2-AWS-Glue-Studio-Visual-Editor"/>
