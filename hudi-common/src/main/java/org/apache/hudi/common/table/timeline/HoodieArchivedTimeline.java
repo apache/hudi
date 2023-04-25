@@ -179,8 +179,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private HoodieInstant readCommit(GenericRecord record, boolean loadDetails) {
     final String instantTime = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
-    final String stateTransitionTime = Option.ofNullable(record.get(STATE_TRANSITION_TIME))
-        .map(Object::toString).orElse(null);
+    final String stateTransitionTime = (String) record.get(STATE_TRANSITION_TIME);
     if (loadDetails) {
       getMetadataKey(action).map(key -> {
         Object actionData = record.get(key);

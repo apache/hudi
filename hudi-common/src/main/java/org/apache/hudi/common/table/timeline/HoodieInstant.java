@@ -62,6 +62,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       Comparator.comparing(HoodieInstant::getStateTransitionTime)
           .thenComparing(COMPARATOR);
 
+  public static final String EMPTY_FILE_EXTENSION = "";
+
   public static String getComparableAction(String action) {
     return COMPARABLE_ACTIONS.getOrDefault(action, action);
   }
@@ -85,7 +87,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       return fileName.substring(matcher.group(1).length());
     }
 
-    return StringUtils.EMPTY_STRING;
+    return EMPTY_FILE_EXTENSION;
   }
 
   /**
