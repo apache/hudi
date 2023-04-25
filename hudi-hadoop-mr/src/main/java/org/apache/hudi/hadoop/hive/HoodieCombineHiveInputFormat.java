@@ -703,7 +703,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     }
 
     /**
-     * Prints this obejct as a string.
+     * Prints this object as a string.
      */
     @Override
     public String toString() {

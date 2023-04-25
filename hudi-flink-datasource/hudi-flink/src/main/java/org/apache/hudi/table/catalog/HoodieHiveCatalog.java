@@ -565,7 +565,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     // the metadata fields should be included to keep sync with the hive sync tool,
     // because since Hive 3.x, there is validation when altering table,
     // when the metadata fields are synced through the hive sync tool,
-    // a compatability issue would be reported.
+    // a compatibility issue would be reported.
     boolean withOperationField = Boolean.parseBoolean(table.getOptions().getOrDefault(FlinkOptions.CHANGELOG_ENABLED.key(), "false"));
     List<FieldSchema> allColumns = HiveSchemaUtils.toHiveFieldSchema(table.getSchema(), withOperationField);
 
