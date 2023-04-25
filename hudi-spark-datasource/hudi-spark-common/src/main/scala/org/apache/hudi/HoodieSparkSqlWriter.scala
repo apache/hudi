@@ -25,6 +25,7 @@ import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAv
 import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
+import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -221,176 +222,185 @@ object HoodieSparkSqlWriter {
           .setCommitTimezone(timelineTimeZone)
           .initTable(sparkContext.hadoopConfiguration, path)
       }
-      val instantTime = HoodieActiveTimeline.createNewInstantTime()
-      tableConfig = tableMetaClient.getTableConfig
+      if (optParams.containsKey(HoodieWriteConfig.WRITE_BATCH_IDENTIFIER.key()) &&
+        HoodieWriterUtils.canSkipBatch(optParams.get(HoodieWriteConfig.WRITE_BATCH_IDENTIFIER.key()).get.toLong,
+          optParams.getOrDefault(OPERATION.key, UPSERT_OPERATION_OPT_VAL), tableMetaClient,
+          optParams.getOrElse(HoodieWriteConfig.WRITER_IDENTIFIER.key(), HoodieWriteConfig.WRITER_IDENTIFIER.defaultValue()),
+          HoodieWriteConfig.WRITES_CHECKPOINT_KEY)) {
+        log.warn("Skipping batch " + optParams.get(HoodieWriteConfig.WRITE_BATCH_IDENTIFIER) + " since its already been ingested to hudi")
+        (true, common.util.Option.empty(), common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
+      } else {
+        val instantTime = HoodieActiveTimeline.createNewInstantTime()
+        tableConfig = tableMetaClient.getTableConfig
 
-      val commitActionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
+        val commitActionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
 
-      // Register Avro classes ([[Schema]], [[GenericData]]) w/ Kryo
-      sparkContext.getConf.registerKryoClasses(
-        Array(classOf[GenericData],
-          classOf[Schema]))
+        // Register Avro classes ([[Schema]], [[GenericData]]) w/ Kryo
+        sparkContext.getConf.registerKryoClasses(
+          Array(classOf[GenericData],
+            classOf[Schema]))
 
-      val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
-      val latestTableSchemaOpt = getLatestTableSchema(spark, tableIdentifier, tableMetaClient)
-      // NOTE: We need to make sure that upon conversion of the schemas b/w Catalyst's [[StructType]] and
-      //       Avro's [[Schema]] we're preserving corresponding "record-name" and "record-namespace" that
-      //       play crucial role in establishing compatibility b/w schemas
-      val (avroRecordName, avroRecordNamespace) = latestTableSchemaOpt.map(s => (s.getName, s.getNamespace))
-        .getOrElse(getAvroRecordNameAndNamespace(tblName))
+        val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
+        val latestTableSchemaOpt = getLatestTableSchema(spark, tableIdentifier, tableMetaClient)
+        // NOTE: We need to make sure that upon conversion of the schemas b/w Catalyst's [[StructType]] and
+        //       Avro's [[Schema]] we're preserving corresponding "record-name" and "record-namespace" that
+        //       play crucial role in establishing compatibility b/w schemas
+        val (avroRecordName, avroRecordNamespace) = latestTableSchemaOpt.map(s => (s.getName, s.getNamespace))
+          .getOrElse(getAvroRecordNameAndNamespace(tblName))
 
-      val sourceSchema = convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
-      val internalSchemaOpt = getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
-        // In case we need to reconcile the schema and schema evolution is enabled,
-        // we will force-apply schema evolution to the writer's schema
-        if (shouldReconcileSchema && hoodieConfig.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
-          val allowOperationMetaDataField = parameters.getOrElse(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false").toBoolean
-          Some(AvroInternalSchemaConverter.convert(HoodieAvroUtils.addMetadataFields(latestTableSchemaOpt.getOrElse(sourceSchema), allowOperationMetaDataField)))
-        } else {
-          None
+        val sourceSchema = convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
+        val internalSchemaOpt = getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
+          // In case we need to reconcile the schema and schema evolution is enabled,
+          // we will force-apply schema evolution to the writer's schema
+          if (shouldReconcileSchema && hoodieConfig.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
+            val allowOperationMetaDataField = parameters.getOrElse(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false").toBoolean
+            Some(AvroInternalSchemaConverter.convert(HoodieAvroUtils.addMetadataFields(latestTableSchemaOpt.getOrElse(sourceSchema), allowOperationMetaDataField)))
+          } else {
+            None
+          }
         }
-      }
 
-      val (writeResult, writeClient: SparkRDDWriteClient[_]) =
-        operation match {
-          case WriteOperationType.DELETE =>
-            val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
-            // Convert to RDD[HoodieKey]
-            val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
-
-            if (!tableExists) {
-              throw new HoodieException(s"hoodie table at $basePath does not exist")
-            }
-
-            // Create a HoodieWriteClient & issue the delete.
-            val internalSchemaOpt = getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
-            val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
-              null, path, tblName,
-              mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
-              .asInstanceOf[SparkRDDWriteClient[_]]
-
-            if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
-              asyncCompactionTriggerFn.get.apply(client)
-            }
-            if (isAsyncClusteringEnabled(client, parameters)) {
-              asyncClusteringTriggerFn.get.apply(client)
-            }
-
-            // Issue deletes
-            client.startCommitWithTime(instantTime, commitActionType)
-            val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, instantTime)
-            (writeStatuses, client)
-
-          case WriteOperationType.DELETE_PARTITION =>
-            if (!tableExists) {
-              throw new HoodieException(s"hoodie table at $basePath does not exist")
-            }
-
-            // Get list of partitions to delete
-            val partitionsToDelete = if (parameters.containsKey(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
-              val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
-              java.util.Arrays.asList(resolvePartitionWildcards(java.util.Arrays.asList(partitionColsToDelete: _*).toList, jsc,
-                hoodieConfig, basePath.toString): _*)
-            } else {
+        val (writeResult, writeClient: SparkRDDWriteClient[_]) =
+          operation match {
+            case WriteOperationType.DELETE =>
               val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
-              genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
-            }
+              // Convert to RDD[HoodieKey]
+              val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
 
-            // Create a HoodieWriteClient & issue the delete.
-            val tableMetaClient = HoodieTableMetaClient.builder
-              .setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()
-            val schemaStr = new TableSchemaResolver(tableMetaClient).getTableAvroSchema.toString
-            val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
-              schemaStr, path, tblName,
-              mapAsJavaMap(parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
-              .asInstanceOf[SparkRDDWriteClient[_]]
-            // Issue delete partitions
-            client.startCommitWithTime(instantTime, commitActionType)
-            val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
-            (writeStatuses, client)
-
-          // Here all other (than DELETE, DELETE_PARTITION) write operations are handled
-          case _ =>
-            // NOTE: Target writer's schema is deduced based on
-            //         - Source's schema
-            //         - Existing table's schema (including its Hudi's [[InternalSchema]] representation)
-            val writerSchema = deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, parameters)
-
-            validateSchemaForHoodieIsDeleted(writerSchema)
-
-            // Short-circuit if bulk_insert via row is enabled.
-            // scalastyle:off
-            if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
-              val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, hoodieConfig, df, tblName,
-                basePath, path, instantTime, writerSchema, tableConfig.isTablePartitioned)
-              return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
-            }
-            // scalastyle:on
-
-            // Check whether partition columns should be persisted w/in the data-files, or should
-            // be instead omitted from them and simply encoded into the partition path (which is Spark's
-            // behavior by default)
-            // TODO move partition columns handling down into the handlers
-            val shouldDropPartitionColumns = hoodieConfig.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
-            val dataFileSchema = if (shouldDropPartitionColumns) {
-              val truncatedSchema = generateSchemaWithoutPartitionColumns(partitionColumns, writerSchema)
-              // NOTE: We have to register this schema w/ Kryo to make sure it's able to apply an optimization
-              //       allowing it to avoid the need to ser/de the whole schema along _every_ Avro record
-              registerAvroSchemasWithKryo(sparkContext, truncatedSchema)
-              truncatedSchema
-            } else {
-              writerSchema
-            }
-
-            // Create a HoodieWriteClient & issue the write.
-            val client = hoodieWriteClient.getOrElse {
-              val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema)) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key
-              // TODO(HUDI-4772) proper writer-schema has to be specified here
-              DataSourceUtils.createHoodieClient(jsc, dataFileSchema.toString, path, tblName, mapAsJavaMap(finalOpts))
-            }
-            val writeConfig = client.getConfig
-            if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == HoodieTableType.MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
-              throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
-            }
-            // Convert to RDD[HoodieRecord]
-            val hoodieRecords =
-              createHoodieRecordRdd(df, writeConfig, parameters, avroRecordName, avroRecordNamespace, writerSchema,
-                dataFileSchema, operation)
-
-            if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
-              asyncCompactionTriggerFn.get.apply(client)
-            }
-
-            if (isAsyncClusteringEnabled(client, parameters)) {
-              asyncClusteringTriggerFn.get.apply(client)
-            }
-
-            val dedupedHoodieRecords =
-              if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
-                DataSourceUtils.dropDuplicates(jsc, hoodieRecords, mapAsJavaMap(parameters))
-              } else {
-                hoodieRecords
+              if (!tableExists) {
+                throw new HoodieException(s"hoodie table at $basePath does not exist")
               }
-            client.startCommitWithTime(instantTime, commitActionType)
-            val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation)
-            (writeResult, client)
-        }
 
-      // Check for errors and commit the write.
-      try {
-        val (writeSuccessful, compactionInstant, clusteringInstant) =
-          commitAndPerformPostOperations(sqlContext.sparkSession, df.schema,
-            writeResult, parameters, writeClient, tableConfig, jsc,
-            TableInstantInfo(basePath, instantTime, commitActionType, operation), extraPreCommitFn)
+              // Create a HoodieWriteClient & issue the delete.
+              val internalSchemaOpt = getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
+              val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
+                null, path, tblName,
+                mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
+                .asInstanceOf[SparkRDDWriteClient[_]]
 
-        (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
-      } finally {
-        // close the write client in all cases
-        val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
-        val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
-        if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
-          log.info("Closing write client")
-          writeClient.close()
+              if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
+                asyncCompactionTriggerFn.get.apply(client)
+              }
+              if (isAsyncClusteringEnabled(client, parameters)) {
+                asyncClusteringTriggerFn.get.apply(client)
+              }
+
+              // Issue deletes
+              client.startCommitWithTime(instantTime, commitActionType)
+              val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, instantTime)
+              (writeStatuses, client)
+
+            case WriteOperationType.DELETE_PARTITION =>
+              if (!tableExists) {
+                throw new HoodieException(s"hoodie table at $basePath does not exist")
+              }
+
+              // Get list of partitions to delete
+              val partitionsToDelete = if (parameters.containsKey(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
+                val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
+                java.util.Arrays.asList(resolvePartitionWildcards(java.util.Arrays.asList(partitionColsToDelete: _*).toList, jsc,
+                  hoodieConfig, basePath.toString): _*)
+              } else {
+                val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
+                genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
+              }
+
+              // Create a HoodieWriteClient & issue the delete.
+              val tableMetaClient = HoodieTableMetaClient.builder
+                .setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()
+              val schemaStr = new TableSchemaResolver(tableMetaClient).getTableAvroSchema.toString
+              val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
+                schemaStr, path, tblName,
+                mapAsJavaMap(parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
+                .asInstanceOf[SparkRDDWriteClient[_]]
+              // Issue delete partitions
+              client.startCommitWithTime(instantTime, commitActionType)
+              val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
+              (writeStatuses, client)
+
+            // Here all other (than DELETE, DELETE_PARTITION) write operations are handled
+            case _ =>
+              // NOTE: Target writer's schema is deduced based on
+              //         - Source's schema
+              //         - Existing table's schema (including its Hudi's [[InternalSchema]] representation)
+              val writerSchema = deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, parameters)
+
+              validateSchemaForHoodieIsDeleted(writerSchema)
+
+              // Short-circuit if bulk_insert via row is enabled.
+              // scalastyle:off
+              if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
+                val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, hoodieConfig, df, tblName,
+                  basePath, path, instantTime, writerSchema, tableConfig.isTablePartitioned)
+                return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
+              }
+              // scalastyle:on
+
+              // Check whether partition columns should be persisted w/in the data-files, or should
+              // be instead omitted from them and simply encoded into the partition path (which is Spark's
+              // behavior by default)
+              // TODO move partition columns handling down into the handlers
+              val shouldDropPartitionColumns = hoodieConfig.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
+              val dataFileSchema = if (shouldDropPartitionColumns) {
+                val truncatedSchema = generateSchemaWithoutPartitionColumns(partitionColumns, writerSchema)
+                // NOTE: We have to register this schema w/ Kryo to make sure it's able to apply an optimization
+                //       allowing it to avoid the need to ser/de the whole schema along _every_ Avro record
+                registerAvroSchemasWithKryo(sparkContext, truncatedSchema)
+                truncatedSchema
+              } else {
+                writerSchema
+              }
+
+              // Create a HoodieWriteClient & issue the write.
+              val client = hoodieWriteClient.getOrElse {
+                val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema)) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key
+                // TODO(HUDI-4772) proper writer-schema has to be specified here
+                DataSourceUtils.createHoodieClient(jsc, dataFileSchema.toString, path, tblName, mapAsJavaMap(finalOpts))
+              }
+              val writeConfig = client.getConfig
+              if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == HoodieTableType.MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
+                throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
+              }
+              // Convert to RDD[HoodieRecord]
+              val hoodieRecords =
+                createHoodieRecordRdd(df, writeConfig, parameters, avroRecordName, avroRecordNamespace, writerSchema,
+                  dataFileSchema, operation)
+
+              if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
+                asyncCompactionTriggerFn.get.apply(client)
+              }
+
+              if (isAsyncClusteringEnabled(client, parameters)) {
+                asyncClusteringTriggerFn.get.apply(client)
+              }
+
+              val dedupedHoodieRecords =
+                if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
+                  DataSourceUtils.dropDuplicates(jsc, hoodieRecords, mapAsJavaMap(parameters))
+                } else {
+                  hoodieRecords
+                }
+              client.startCommitWithTime(instantTime, commitActionType)
+              val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation)
+              (writeResult, client)
+          }
+
+        // Check for errors and commit the write.
+        try {
+          val (writeSuccessful, compactionInstant, clusteringInstant) =
+            commitAndPerformPostOperations(sqlContext.sparkSession, df.schema,
+              writeResult, parameters, writeClient, tableConfig, jsc,
+              TableInstantInfo(basePath, instantTime, commitActionType, operation), extraPreCommitFn)
+
+          (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
+        } finally {
+          // close the write client in all cases
+          val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
+          val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
+          if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
+            log.info("Closing write client")
+            writeClient.close()
+          }
         }
       }
     }

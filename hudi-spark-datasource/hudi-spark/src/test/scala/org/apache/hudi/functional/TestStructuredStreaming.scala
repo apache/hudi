@@ -18,7 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hudi.DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER
+import org.apache.hudi.DataSourceWriteOptions.STREAMING_WRITER_IDENTIFIER
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
@@ -279,7 +279,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .format("org.apache.hudi")
       .options(opts)
       .outputMode(OutputMode.Append)
-      .option(STREAMING_CHECKPOINT_IDENTIFIER.key(), "streaming_identifier1")
+      .option(STREAMING_WRITER_IDENTIFIER.key(), "streaming_identifier1")
       .option("checkpointLocation", s"$basePath/checkpoint1")
       .start(destPath)
 
@@ -302,7 +302,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .format("org.apache.hudi")
       .options(opts)
       .outputMode(OutputMode.Append)
-      .option(STREAMING_CHECKPOINT_IDENTIFIER.key(), "streaming_identifier2")
+      .option(STREAMING_WRITER_IDENTIFIER.key(), "streaming_identifier2")
       .option("checkpointLocation", s"$basePath/checkpoint2")
       .start(destPath)
     query2.processAllAvailable()
@@ -324,7 +324,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .format("org.apache.hudi")
       .options(commonOpts)
       .outputMode(OutputMode.Append)
-      .option(STREAMING_CHECKPOINT_IDENTIFIER.key(), "streaming_identifier1")
+      .option(STREAMING_WRITER_IDENTIFIER.key(), "streaming_identifier1")
       .option("checkpointLocation", s"${basePath}/checkpoint1")
       .start(destPath)
 
@@ -368,7 +368,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     val metaClient = HoodieTableMetaClient.builder
       .setConf(fs.getConf).setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
 
-    assertLatestCheckpointInfoMatched(metaClient, STREAMING_CHECKPOINT_IDENTIFIER.defaultValue(), "0")
+    assertLatestCheckpointInfoMatched(metaClient, STREAMING_WRITER_IDENTIFIER.defaultValue(), "0")
     query1.stop()
   }
 

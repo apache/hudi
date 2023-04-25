@@ -145,8 +145,8 @@ public class DataSourceUtils {
     }
     if (properties.containsKey(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID())) {
       extraMetadataMap.put(HoodieStreamingSink.SINK_CHECKPOINT_KEY(),
-          getCheckpointValueAsString(properties.getOrDefault(DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER().key(),
-                  DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER().defaultValue()),
+          getCheckpointValueAsString(properties.getOrDefault(DataSourceWriteOptions.STREAMING_WRITER_IDENTIFIER().key(),
+                  DataSourceWriteOptions.STREAMING_WRITER_IDENTIFIER().defaultValue()),
               properties.get(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID())));
     }
     return extraMetadataMap;

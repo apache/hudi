@@ -48,7 +48,6 @@ class HoodieStreamingSink(sqlContext: SQLContext,
                           outputMode: OutputMode)
   extends Sink
     with Serializable {
-  @volatile private var latestCommittedBatchId = -1L
 
   private val log = LoggerFactory.getLogger(classOf[HoodieStreamingSink])
 
@@ -101,11 +100,11 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
     val queryId = sqlContext.sparkContext.getLocalProperty(StreamExecution.QUERY_ID_KEY)
     checkArgument(queryId != null, "queryId is null")
-    if (metaClient.isDefined && canSkipBatch(batchId, options.getOrDefault(OPERATION.key, UPSERT_OPERATION_OPT_VAL))) {
+    if (metaClient.isDefined && HoodieWriterUtils.canSkipBatch(batchId, options.getOrDefault(OPERATION.key, UPSERT_OPERATION_OPT_VAL),
+      metaClient.get, options.getOrElse(STREAMING_WRITER_IDENTIFIER.key(), STREAMING_WRITER_IDENTIFIER.defaultValue()), SINK_CHECKPOINT_KEY)) {
       log.warn(s"Skipping already completed batch $batchId in query $queryId")
       return
     }
-
 
     // Override to use direct markers. In Structured streaming, timeline server is closed after
     // first micro-batch and subsequent micro-batches do not have timeline server running.
@@ -121,7 +120,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
           sqlContext, mode, updatedOptions, data, hoodieTableConfig, writeClient, Some(triggerAsyncCompactor), Some(triggerAsyncClustering),
           extraPreCommitFn = Some(new BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata] {
             override def accept(metaClient: HoodieTableMetaClient, newCommitMetadata: HoodieCommitMetadata): Unit = {
-              val identifier = options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue())
+              val identifier = options.getOrElse(STREAMING_WRITER_IDENTIFIER.key(), STREAMING_WRITER_IDENTIFIER.defaultValue())
               newCommitMetadata.addMetadata(SINK_CHECKPOINT_KEY, CommitUtils.getCheckpointValueAsString(identifier, String.valueOf(batchId)))
             }
           }))
@@ -133,8 +132,6 @@ class HoodieStreamingSink(sqlContext: SQLContext,
             case true => s" for commit=${commitOps.get()}"
             case _ => s" with no new commits"
           }))
-          log.info(s"Current value of latestCommittedBatchId: $latestCommittedBatchId. Setting latestCommittedBatchId to batchId $batchId.")
-          latestCommittedBatchId = batchId
           writeClient = Some(client)
           hoodieTableConfig = Some(tableConfig)
           if (client != null) {
@@ -209,10 +206,10 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
       WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.SINGLE_WRITER) {
       // for single writer model, we will fetch default if not set.
-      Some(options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue()))
+      Some(options.getOrElse(STREAMING_WRITER_IDENTIFIER.key(), STREAMING_WRITER_IDENTIFIER.defaultValue()))
     } else {
       // incase of multi-writer scenarios, there is not default.
-      options.get(STREAMING_CHECKPOINT_IDENTIFIER.key())
+      options.get(STREAMING_WRITER_IDENTIFIER.key())
     }
   }
 
@@ -305,21 +302,6 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
-  private def canSkipBatch(incomingBatchId: Long, operationType: String): Boolean = {
-    if (!DELETE_OPERATION_OPT_VAL.equals(operationType)) {
-      val identifier = options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue())
-      // get the latest checkpoint from the commit metadata to check if the microbatch has already been processed or not
-      val lastCheckpoint = CommitUtils.getValidCheckpointForCurrentWriter(
-        metaClient.get.getActiveTimeline.getWriteTimeline, SINK_CHECKPOINT_KEY, identifier)
-      if (lastCheckpoint.isPresent) {
-        latestCommittedBatchId = lastCheckpoint.get().toLong
-      }
-      latestCommittedBatchId >= incomingBatchId
-    } else {
-      // In case of DELETE_OPERATION_OPT_VAL the incoming batch id is sentinel value (-1)
-      false
-    }
-  }
 }
 
 object HoodieStreamingSink {
