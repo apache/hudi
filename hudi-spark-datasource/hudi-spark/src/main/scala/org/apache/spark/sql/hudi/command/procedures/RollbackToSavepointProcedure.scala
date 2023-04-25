@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.exception.{HoodieException, HoodieSavepointException}
@@ -59,7 +60,8 @@ class RollbackToSavepointProcedure extends BaseProcedure with ProcedureBuilder w
       throw new HoodieException("Commit " + instantTime + " not found in Commits " + completedInstants)
     }
 
-    val client = createHoodieClient(jsc, basePath)
+    val client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, Map.empty,
+      tableName.asInstanceOf[Option[String]])
     var result = false
 
     try {

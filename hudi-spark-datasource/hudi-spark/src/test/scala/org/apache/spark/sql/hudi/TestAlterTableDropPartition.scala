@@ -511,7 +511,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
       spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-      val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
+      val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
       // Generate the first clustering plan
       val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
@@ -555,7 +555,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
       spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
       spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
-      val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
+      val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
       // Generate the first compaction plan
       val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
@@ -600,7 +600,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
       spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
       spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000)")
-      val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
+      val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
       // Generate the first log_compaction plan
       val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
