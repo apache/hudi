@@ -37,6 +37,8 @@ import java.util.Map;
 
 /**
  * Upgrade handle to assist in upgrading hoodie table from version 5 to 6.
+ * Since we do not write/read compaction plan from .aux folder anyone, the
+ * upgrade handler will delete compaction files from .aux folder.
  */
 public class FiveToSixUpgradeHandler implements UpgradeHandler {
 

@@ -33,6 +33,8 @@ import java.util.Map;
 
 /**
  * Downgrade handle to assist in downgrading hoodie table from version 6 to 5.
+ * To ensure compatibility, we need recreate the compaction requested file to
+ * .aux folder.
  */
 public class SixToFiveDowngradeHandler implements DowngradeHandler {
 
