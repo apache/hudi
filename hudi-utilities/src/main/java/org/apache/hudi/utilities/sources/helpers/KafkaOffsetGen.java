@@ -130,15 +130,15 @@ public class KafkaOffsetGen {
       long allocedEvents = 0;
       Set<Integer> exhaustedPartitions = new HashSet<>();
       List<OffsetRange> finalRanges = new ArrayList<>();
-      // choose the numEvents with min(totalEvents, numEvents)
-      numEvents = Math.min(totalEvents, numEvents);
+      // choose the actualNumEvents with min(totalEvents, numEvents)
+      long actualNumEvents = Math.min(totalEvents, numEvents);
 
       // keep going until we have events to allocate and partitions still not exhausted.
-      while (allocedEvents < numEvents && exhaustedPartitions.size() < toOffsetMap.size()) {
+      while (allocedEvents < actualNumEvents && exhaustedPartitions.size() < toOffsetMap.size()) {
         // Allocate the remaining events to non-exhausted partitions, in round robin fashion
         Set<Integer> allocatedPartitionsThisLoop = new HashSet<>(exhaustedPartitions);
         for (int i = 0; i < ranges.length; i++) {
-          long remainingEvents = numEvents - allocedEvents;
+          long remainingEvents = actualNumEvents - allocedEvents;
           long remainingPartitions = toOffsetMap.size() - allocatedPartitionsThisLoop.size();
           // if need tp split into minPartitions, recalculate the remainingPartitions
           if (needSplitToMinPartitions) {
@@ -156,9 +156,9 @@ public class KafkaOffsetGen {
             exhaustedPartitions.add(range.partition());
           }
           allocedEvents += toOffset - range.fromOffset();
-          // We need recompute toOffset if allocedEvents larger than numEvents.
-          if (allocedEvents > numEvents) {
-            long offsetsToAdd = Math.min(eventsPerPartition, (numEvents - allocedEvents));
+          // We need recompute toOffset if allocedEvents larger than actualNumEvents.
+          if (allocedEvents > actualNumEvents) {
+            long offsetsToAdd = Math.min(eventsPerPartition, (actualNumEvents - allocedEvents));
             toOffset = Math.min(range.untilOffset(), toOffset + offsetsToAdd);
           }
           OffsetRange thisRange = OffsetRange.create(range.topicPartition(), range.fromOffset(), toOffset);
@@ -178,35 +178,6 @@ public class KafkaOffsetGen {
       finalRanges.sort(SORT_BY_PARTITION);
       LOG.debug("final ranges {}", Arrays.toString(finalRanges.toArray(new OffsetRange[0])));
       return finalRanges.toArray(new OffsetRange[0]);
-    }
-
-    // the number of the result ranges can be less or more than minPartitions due to rounding
-    public static OffsetRange[] splitRangesToMinPartitions(OffsetRange[] oldRanges, long minPartitions) {
-      if (minPartitions <= 0 || minPartitions <= oldRanges.length) {
-        return oldRanges;
-      }
-
-      List<OffsetRange> newRanges = new ArrayList<>();
-      // split offset ranges to smaller ones.
-      long totalSize = totalNewMessages(oldRanges);
-      for (OffsetRange range : oldRanges) {
-        TopicPartition tp = range.topicPartition();
-        long size = range.count();
-        long parts = Math.max(1, Math.round(1.0 * size / totalSize * minPartitions));
-        long remaining = size;
-        long startOffset = range.fromOffset();
-        for (int part = 0; part < parts; part++) {
-          long thisPartition = remaining / (parts - part);
-          remaining -= thisPartition;
-          long endOffset = Math.min(startOffset + thisPartition, range.untilOffset());
-          OffsetRange offsetRange = OffsetRange.create(tp, startOffset, endOffset);
-          if (offsetRange.count() > 0) {
-            newRanges.add(offsetRange);
-          }
-          startOffset = endOffset;
-        }
-      }
-      return newRanges.toArray(new OffsetRange[0]);
     }
 
     /**
