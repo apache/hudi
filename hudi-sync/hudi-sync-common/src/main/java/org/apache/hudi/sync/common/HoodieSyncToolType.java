@@ -16,25 +16,39 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table;
+package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
-@EnumDescription("???")
-public enum FileIdPrefixProviderType {
-
-  @EnumFieldDescription("Randomly creates file prefixes.")
-  RANDOM("org.apache.hudi.table.RandomFileIdPrefixProvider"),
+@EnumDescription("Sync Hudi with catalogs.")
+public enum HoodieSyncToolType {
 
   @EnumFieldDescription("???")
-  KAFKA_CONNECT("org.apache.hudi.connect.KafkaConnectFileIdPrefixProvider"),
+  HIVE_GLOBAL("org.apache.hudi.hive.replication.GlobalHiveSyncTool"),
 
-  @EnumFieldDescription("Uses the File Id Prefix Provider set in `hoodie.fileid.prefix.provider.class`")
+  @EnumFieldDescription("Sync a Hudi HDFS table with hive metastore.")
+  HIVE("org.apache.hudi.hive.HiveSyncTool"),
+
+  @EnumFieldDescription("Sync a Hudi table with a big query table.")
+  GCP_BIG_QUERY("org.apache.hudi.gcp.bigquery.BigQuerySyncTool"),
+
+  @EnumFieldDescription("Sync to a DataHub dataset.")
+  DATAHUB("org.apache.hudi.sync.datahub.DataHubSyncTool"),
+
+  @EnumFieldDescription("Currently Experimental. Implements syncing a Hudi Table with the AWS Glue Data Catalog.")
+  AWS_GLUE("org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool"),
+
+  @EnumFieldDescription("Mainly used to sync hoodie tables to Alibaba Cloud AnalyticDB.")
+  ADB("org.apache.hudi.sync.adb.AdbSyncTool"),
+
+
+  @EnumFieldDescription("Uses the metastore sync tool set in `hoodie.meta.sync.client.tool.class`")
   CUSTOM("");
+
   public final String classPath;
 
-  FileIdPrefixProviderType(String classPath) {
+  HoodieSyncToolType(String classPath) {
     this.classPath = classPath;
   }
 }

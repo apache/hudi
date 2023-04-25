@@ -31,7 +31,7 @@ import org.apache.hudi.keygen.KeyGenUtils.inferKeyGeneratorType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGeneratorClassNameFromType, inferKeyGeneratorTypeFromWriteConfig}
 import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
-import org.apache.hudi.sync.common.HoodieSyncConfig
+import org.apache.hudi.sync.common.{HoodieSyncConfig, HoodieSyncToolType}
 import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
@@ -488,6 +488,12 @@ object DataSourceWriteOptions {
     .defaultValue(classOf[HiveSyncTool].getName)
     .markAdvanced()
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
+
+  val META_SYNC_CLIENT_TOOL_TYPE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.meta.sync.client.tool.type")
+    .defaultValue(HoodieSyncToolType.CUSTOM.name())
+    .markAdvanced()
+    .withDocumentation(classOf[HoodieSyncToolType])
 
   val RECONCILE_SCHEMA: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
 

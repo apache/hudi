@@ -61,6 +61,7 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(STREAMING_RETRY_INTERVAL_MS)
     hoodieConfig.setDefaultValue(STREAMING_IGNORE_FAILED_BATCH)
     hoodieConfig.setDefaultValue(META_SYNC_CLIENT_TOOL_CLASS_NAME)
+    hoodieConfig.setDefaultValue(META_SYNC_CLIENT_TOOL_TYPE)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_SYNC_ENABLED)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_ENABLED)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME)

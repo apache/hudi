@@ -242,7 +242,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       bootstrapConfig.setValue(MODE_SELECTOR_TYPE, selectorType);
       return this;
     }
-    
+
     public Builder withFullBootstrapInputProvider(String partitionSelectorClass) {
       bootstrapConfig.setValue(FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME, partitionSelectorClass);
       return this;
