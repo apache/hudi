@@ -18,8 +18,9 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.common.util.StringUtils;
+
+import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
 import java.util.Comparator;
