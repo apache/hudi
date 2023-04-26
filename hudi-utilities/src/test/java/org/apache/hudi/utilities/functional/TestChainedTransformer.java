@@ -79,6 +79,7 @@ public class TestChainedTransformer extends SparkClientFunctionalTestHarness {
       "T1:org.apache.hudi.utilities.transform.FlatteningTransformer,T1:org.apache.hudi.utilities.transform.FlatteningTransformer",
       // Two colons in transformer config
       "T1::org.apache.hudi.utilities.transform.FlatteningTransformer",
+      // either all transformers have identifier or none have
       "org.apache.hudi.utilities.transform.FlatteningTransformer,T1:org.apache.hudi.utilities.transform.FlatteningTransformer"
   })
   public void testChainedTransformerValidationFails(String transformerName) {
