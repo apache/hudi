@@ -808,7 +808,6 @@ class TestHoodieSparkSqlWriter {
         .mode(SaveMode.Append).save(tempBasePath)
 
       val currentCommits = spark.read.format("hudi")
-        .option(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key, "false")
         .load(tempBasePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
       val incrementalKeyIdNum = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
@@ -829,7 +828,6 @@ class TestHoodieSparkSqlWriter {
         .option(DataSourceWriteOptions.OPERATION.key, "insert_overwrite_table")
         .option("hoodie.insert.shuffle.parallelism", "4").mode(SaveMode.Append).save(tempBasePath)
       val currentCommitsBootstrap = spark.read.format("hudi")
-        .option(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key, "false")
         .load(tempBasePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
       val incrementalKeyIdNumBootstrap = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
