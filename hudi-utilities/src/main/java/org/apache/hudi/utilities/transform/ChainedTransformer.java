@@ -80,6 +80,10 @@ public class ChainedTransformer implements Transformer {
         transformers.add(new TransformerInfo(transformer, id));
       }
     }
+
+    ValidationUtils.checkArgument(transformers.stream().allMatch(TransformerInfo::hasIdentifier)
+            || transformers.stream().noneMatch(TransformerInfo::hasIdentifier),
+        "Either all transformers should have identifier or none should");
   }
 
   public List<String> getTransformersNames() {
@@ -121,6 +125,10 @@ public class ChainedTransformer implements Transformer {
 
     private Transformer getTransformer() {
       return transformer;
+    }
+
+    private boolean hasIdentifier() {
+      return idOpt.isPresent();
     }
 
     private TypedProperties getProperties(TypedProperties properties) {
