@@ -43,8 +43,6 @@ analytical datasets on DFS (Cloud stores, HDFS or any Hadoop FileSystem compatib
 ## 🔨 How to Build
 
 ```shell
-git clone git@github.com:apache/hudi.git
-cd hudi/hudi-console
 mvn -Pdist -DskipTests clean package
 ```
 
