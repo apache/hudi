@@ -68,8 +68,8 @@ public class MetadataMessage {
     if (isOverwriteOfExistingFile()) {
       return new MessageValidity(DO_SKIP,
       "eventType: " + getEventType()
-              + ". Overwrite of existing objectId: " + getObjectId()
-              + " with generation numner: " + getOverwroteGeneration()
+          + ". Overwrite of existing objectId: " + getObjectId()
+          + " with generation number: " + getOverwroteGeneration()
       );
     }
 

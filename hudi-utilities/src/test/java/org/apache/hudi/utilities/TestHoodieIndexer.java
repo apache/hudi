@@ -403,7 +403,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     metaClient = reload(metaClient);
   }
 
-  private void indexMetadataPartitionsAndAssert(MetadataPartitionType partitionTypeToIndex, List<MetadataPartitionType> alreadyCompletedPartitions, List<MetadataPartitionType> nonExistantPartitions,
+  private void indexMetadataPartitionsAndAssert(MetadataPartitionType partitionTypeToIndex, List<MetadataPartitionType> alreadyCompletedPartitions, List<MetadataPartitionType> nonExistentPartitions,
                                                 String tableName) {
     scheduleAndExecuteIndexing(partitionTypeToIndex, tableName);
 
@@ -411,7 +411,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     Set<String> completedPartitions = metaClient.getTableConfig().getMetadataPartitions();
     assertTrue(completedPartitions.contains(partitionTypeToIndex.getPartitionPath()));
     alreadyCompletedPartitions.forEach(entry -> assertTrue(completedPartitions.contains(entry.getPartitionPath())));
-    nonExistantPartitions.forEach(entry -> assertFalse(completedPartitions.contains(entry.getPartitionPath())));
+    nonExistentPartitions.forEach(entry -> assertFalse(completedPartitions.contains(entry.getPartitionPath())));
 
     // validate metadata partitions actually exist
     assertTrue(metadataPartitionExists(basePath(), context(), partitionTypeToIndex));

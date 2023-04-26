@@ -24,7 +24,7 @@ import org.apache.hudi.metaserver.store.RelationalDBBasedStorage;
 import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 
 /**
- *  Metaserver storage Initialization that create tables defined in the DDLMappper.
+ * Metaserver storage Initialization that create tables defined in the DDLMapper.
  */
 public class HoodieMetaserverPreparations {
 

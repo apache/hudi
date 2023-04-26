@@ -95,7 +95,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
  * table. Does not maintain any state, queries at runtime to see how far behind the target table is from the source
- * table. This can be overriden to force sync from a timestamp.
+ * table. This can be overridden to force sync from a timestamp.
  * <p>
  * In continuous mode, DeltaStreamer runs in loop-mode going through the below operations (a) pull-from-source (b)
  * write-to-sink (c) Schedule Compactions if needed (d) Conditionally Sync to Hive each cycle. For MOR table with
@@ -386,7 +386,7 @@ public class HoodieDeltaStreamer implements Serializable {
     public Integer maxRetryCount = 3;
 
     @Parameter(names = {"--allow-commit-on-no-checkpoint-change"}, description = "allow commits even if checkpoint has not changed before and after fetch data"
-        + "from souce. This might be useful in sources like SqlSource where there is not checkpoint. And is not recommended to enable in continuous mode.")
+        + "from source. This might be useful in sources like SqlSource where there is not checkpoint. And is not recommended to enable in continuous mode.")
     public Boolean allowCommitOnNoCheckpointChange = false;
 
     @Parameter(names = {"--help", "-h"}, help = true)

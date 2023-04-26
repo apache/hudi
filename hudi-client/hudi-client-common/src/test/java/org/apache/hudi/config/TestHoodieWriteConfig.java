@@ -390,7 +390,7 @@ public class TestHoodieWriteConfig {
             put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
         }), false, false, false,
-        WriteConcurrencyMode.fromValue(WRITE_CONCURRENCY_MODE.defaultValue()),
+        WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
         HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
 
@@ -401,7 +401,7 @@ public class TestHoodieWriteConfig {
             put(HoodieTableConfig.TYPE.key(), tableType.name());
             put(TABLE_SERVICES_ENABLED.key(), "false");
             put(WRITE_CONCURRENCY_MODE.key(),
-                WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+                WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
             put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
                 FileSystemBasedLockProviderTestClass.class.getName());
             put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
@@ -428,7 +428,7 @@ public class TestHoodieWriteConfig {
             put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
         }), true, true, true,
-        WriteConcurrencyMode.fromValue(WRITE_CONCURRENCY_MODE.defaultValue()),
+        WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
         HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
 
@@ -441,7 +441,7 @@ public class TestHoodieWriteConfig {
             put(AUTO_CLEAN.key(), "true");
             put(ASYNC_CLEAN.key(), "false");
             put(WRITE_CONCURRENCY_MODE.key(),
-                WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+                WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
             put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
                 FileSystemBasedLockProviderTestClass.class.getName());
             put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");

@@ -210,12 +210,12 @@ public class HoodiePipeline {
         .append(") NOT ENFORCED\n")
         .append(")\n");
     if (!partitionField.isEmpty()) {
-      String partitons = partitionField
+      String partitions = partitionField
           .stream()
           .map(partitionName -> "`" + partitionName + "`")
           .collect(Collectors.joining(","));
       builder.append("PARTITIONED BY (")
-          .append(partitons)
+          .append(partitions)
           .append(")\n");
     }
     builder.append("with ('connector' = 'hudi'");

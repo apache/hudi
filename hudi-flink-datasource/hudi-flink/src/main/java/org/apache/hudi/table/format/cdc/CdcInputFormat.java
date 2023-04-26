@@ -173,11 +173,11 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         Schema dataSchema = HoodieAvroUtils.removeMetadataFields(new Schema.Parser().parse(tableState.getAvroSchema()));
         Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(mode, dataSchema);
         switch (mode) {
-          case data_before_after:
+          case DATA_BEFORE_AFTER:
             return new BeforeAfterImageIterator(tablePath, tableState, hadoopConf, cdcSchema, fileSplit);
-          case data_before:
+          case DATA_BEFORE:
             return new BeforeImageIterator(conf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
-          case op_key_only:
+          case OP_KEY_ONLY:
             return new RecordKeyImageIterator(conf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
           default:
             throw new AssertionError("Unexpected mode" + mode);

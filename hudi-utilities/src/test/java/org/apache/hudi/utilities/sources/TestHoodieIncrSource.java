@@ -96,7 +96,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     this.tableType = tableType;
     metaClient = getHoodieMetaClient(hadoopConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(true).withMaxNumDeltaCommitsBeforeCompaction(3).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
@@ -138,7 +138,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     this.tableType = tableType;
     metaClient = getHoodieMetaClient(hadoopConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(3, 4).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(2).build())
         .withCompactionConfig(
             HoodieCompactionConfig.newBuilder()

@@ -31,7 +31,8 @@ import org.apache.curator.test.TestingServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,11 +46,8 @@ public class TestLockManager extends HoodieCommonTestHarness {
   private static final Logger LOG = LoggerFactory.getLogger(TestLockManager.class);
 
   private static TestingServer server;
-  private static String zk_basePath = "/hudi/test/lock";
-  private static String key = "table1";
-
-  HoodieWriteConfig writeConfig;
-  LockManager lockManager;
+  private static final String ZK_BASE_PATH = "/hudi/test/lock";
+  private static final String KEY = "table1";
 
   @BeforeAll
   public static void setup() {
@@ -70,32 +68,17 @@ public class TestLockManager extends HoodieCommonTestHarness {
     }
   }
 
-  private HoodieWriteConfig getWriteConfig() {
-    return HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-            .build())
-        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
-        .withLockConfig(HoodieLockConfig.newBuilder()
-            .withLockProvider(ZookeeperBasedLockProvider.class)
-            .withZkBasePath(zk_basePath)
-            .withZkLockKey(key)
-            .withZkQuorum(server.getConnectString())
-            .build())
-        .build();
-  }
-
   @BeforeEach
-  private void init() throws IOException {
+  void init() throws IOException {
     initPath();
     initMetaClient();
-    this.writeConfig = getWriteConfig();
-    this.lockManager = new LockManager(this.writeConfig, this.metaClient.getFs());
   }
 
-  @Test
-  public void testLockAndUnlock() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testLockAndUnlock(boolean multiWriter) {
+    HoodieWriteConfig writeConfig = multiWriter ? getMultiWriterWriteConfig() : getSingleWriterWriteConfig();
+    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getFs());
     LockManager mockLockManager = Mockito.spy(lockManager);
 
     assertDoesNotThrow(() -> {
@@ -107,5 +90,33 @@ public class TestLockManager extends HoodieCommonTestHarness {
     });
 
     Mockito.verify(mockLockManager).close();
+  }
+
+  private HoodieWriteConfig getMultiWriterWriteConfig() {
+    return HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(ZookeeperBasedLockProvider.class)
+            .withZkBasePath(ZK_BASE_PATH)
+            .withZkLockKey(KEY)
+            .withZkQuorum(server.getConnectString())
+            .build())
+        .build();
+  }
+
+  private HoodieWriteConfig getSingleWriterWriteConfig() {
+    return HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(ZookeeperBasedLockProvider.class)
+            .withZkBasePath(ZK_BASE_PATH)
+            .withZkLockKey(KEY)
+            .withZkQuorum(server.getConnectString())
+            .build())
+        .build();
   }
 }

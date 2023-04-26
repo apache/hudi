@@ -25,10 +25,12 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
@@ -61,11 +63,13 @@ public class HoodieInMemoryHashIndex
       HoodieTable hoodieTable) {
     return records.mapPartitions(hoodieRecordIterator -> {
       List<HoodieRecord<R>> taggedRecords = new ArrayList<>();
+      HoodieTimeline commitsTimeline = hoodieTable.getMetaClient().getCommitsTimeline().filterCompletedInstants();
       while (hoodieRecordIterator.hasNext()) {
         HoodieRecord<R> record = hoodieRecordIterator.next();
-        if (recordLocationMap.containsKey(record.getKey())) {
+        HoodieRecordLocation location = recordLocationMap.get(record.getKey());
+        if ((location != null) && HoodieIndexUtils.checkIfValidCommit(commitsTimeline, location.getInstantTime())) {
           record.unseal();
-          record.setCurrentLocation(recordLocationMap.get(record.getKey()));
+          record.setCurrentLocation(location);
           record.seal();
         }
         taggedRecords.add(record);
