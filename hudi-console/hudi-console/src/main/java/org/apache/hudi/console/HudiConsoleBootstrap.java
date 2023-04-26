@@ -27,6 +27,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class HudiConsoleBootstrap {
   public static void main(String[] args) {
-      new SpringApplication(HudiConsoleBootstrap.class).run(args);
+    new SpringApplication(HudiConsoleBootstrap.class).run(args);
   }
 }

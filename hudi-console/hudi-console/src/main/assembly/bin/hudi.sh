@@ -368,6 +368,7 @@ start() {
     org.apache.hudi.console.HudiConsoleBootstrap >> "$APP_OUT" 2>&1 "&"
 
     local PID=$!
+    local IS_NUMBER="^[0-9]+$"
 
     # Add to pid file if successful start
     if [[ ${PID} =~ ${IS_NUMBER} ]] && kill -0 $PID > /dev/null 2>&1 ; then
