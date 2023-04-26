@@ -5,206 +5,215 @@ toc: true
 last_modified_at:
 ---
 
-## Background
+In data lakes/warehouses one of the key trade-offs is between write speeds (data freshness) and query performance. Data writes are faster with small files since data is processed as soon as it’s available, avoiding an intermediate aggregation step to combine smaller files into larger ones. However, query performance degrades poorly with a lot of small files. In particular, small files cost more disk seeks and slow down compute in downstream distributed computing applications. Please refer to the [file size](https://hudi.apache.org/docs/file_sizing) documentation about the small file problem. Hudi provides the clustering table service to:
 
-Apache Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing. In a data lake/warehouse, one of the key trade-offs is between ingestion speed and query performance. Data ingestion typically prefers small files to improve parallelism and make data available to queries as soon as possible. However, query performance degrades poorly with a lot of small files. Also, during ingestion, data is typically co-located based on arrival time. However, the query engines perform better when the data frequently queried is co-located together. In most architectures each of these systems tend to add optimizations independently to improve performance which hits limitations due to un-optimized data layouts. This doc introduces a new kind of table service called clustering [[RFC-19]](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+19+Clustering+data+for+freshness+and+query+performance) to reorganize data for improved query performance without compromising on ingestion speed.
-<!--truncate-->
+- decouple file sizing from ingestion into a separate table service where smaller files are combined to larger files without impacting write speeds and data freshness
+- improve query performance by reorganizing the data layout via techniques such as sorting data on different columns
 
-## How is compaction different from clustering?
+## Data ingestion and file sizing trade-offs
 
-Hudi is modeled like a log-structured storage engine with multiple versions of the data.
-Particularly, [Merge-On-Read](/docs/table_types#merge-on-read-table)
-tables in Hudi store data using a combination of base file in columnar format and row-based delta logs that contain
-updates. Compaction is a way to merge the delta logs with base files to produce the latest file slices with the most
-recent snapshot of data. Compaction helps to keep the query performance in check (larger delta log files would incur
-longer merge times on query side). On the other hand, clustering is a data layout optimization technique. One can stitch
-together small files into larger files using clustering. Additionally, data can be clustered by sort key so that queries
-can take advantage of data locality.
+When writing data to a Hudi table, there are different write modes one can choose that will impact the tradeoff between write speed and file sizes. For example, BULK_INSERT without any additional configurations will have very fast ingestion, but this mode may create a lot of small files. You can optionally set the sorting mode for BULK_INSERT to fix the file sizing at the time of ingestion, but it comes with the cost of having a higher write latency.
 
-## Clustering Architecture
+Another example is how to manage faster inserts and better file sizing. Hudi has a configuration called `hoodie.parquet.small.file.limit` to specify the maximum file size for a small Parquet file. This configuration helps Hudi determine where inserts will get written to. Small file groups with size under this limit are considered for accepting new inserts than larger file groups. By setting an appropriate limit, you can control how Hudi handles small files to improve query performance and storage efficiency while maintaining a balance with write speed. For example, if you set the `hoodie.parquet.small.file.limit` to a value such as 50MB, Hudi will consider any Parquet file with a size less than 50MB as a small file. These small files will then be targeted for merging new records into file groups to create larger files. 
 
-At a high level, Hudi provides different operations such as insert/upsert/bulk_insert through it’s write client API to be able to write data to a Hudi table. To be able to choose a trade-off between file size and ingestion speed, Hudi provides a knob `hoodie.parquet.small.file.limit` to be able to configure the smallest allowable file size. Users are able to configure the small file [soft limit](https://hudi.apache.org/docs/configurations/#hoodieparquetsmallfilelimit) to `0` to force new data to go into a new set of filegroups or set it to a higher value to ensure new data gets “padded” to existing files until it meets that limit that adds to ingestion latencies.
+Please refer to the [write operations](https://hudi.apache.org/docs/write_operations) documentation for more details about the different write operations and their configurations.
+
+## Clustering allows fast ingestion without compromising query performance 
+
+The previous section discussed trade-offs to consider when maintaining appropriate file sizes and balancing the write speeds. With the clustering service, you can optimize the Hudi data lake file layout by rewriting data by combining smaller files to new larger files  while maintaining write speeds. The clustering service has different processes to help schedule, plan, and execute a clustering strategy. Once the plan is executed, it can be deployed either inline with your data pipeline (along with the writes) or in a separate job where it runs asynchronously along with the writes. When clustering is performed, a `REPLACECOMMIT` action will appear in the Hudi [timeline](https://hudi.apache.org/docs/timeline). 
+
+![Batching small files](/assets/images/clustering_small_files.gif)
+
+## The difference between compaction and clustering
+
+Hudi is modeled like a log-structured storage engine with multiple versions of the data. Particularly, [Merge-On-Read tables](https://hudi.apache.org/docs/table_types#merge-on-read-table) in Hudi store data using a combination of base file in columnar format and row-based delta logs that contain updates. [Compaction](https://hudi.apache.org/docs/next/compaction) is a way to merge the delta logs with base files to produce the latest file slices with the most recent snapshot of data. Compaction helps to keep the query performance in check (larger delta log files would incur longer merge times on query side). On the other hand, clustering is a data layout optimization technique. One can stitch together small files into larger files using clustering. Additionally, data can be clustered by sort key so that queries can take advantage of data locality.
+
+By default, the clustering service is not enabled. The following section will cover how to enable, manage and deploy the clustering service in more detail.
+
+## Schedule, plan, execute and deploy a clustering service
+
+The clustering service is composed of a scheduling and an execution process. The schedule process allows you to set a clustering schedule so the clustering process can commence and generate a clustering plan base on the configurations provided. The execution process reads the clustering plan and helps rewrite the data. These processes can be broken down into 3 parts that you’ll need to consider for your application: 
+
+1. **Schedule the clustering interval**: You’ll set a clustering schedule so the clustering process commences. When a threshold is reached, the clustering plan is triggered. 
+2. **Create a clustering plan**: Based on the clustering configuration for file groups, layout and/or file sizing, the clustering service generates a clustering plan to be execution.
+3. **Execute the clustering plan**: Hudi reads the clustering plan and executes appropriately to rewrite the data.
+
+For the clustering service to be enabled in an application, you first need to configure what deployment model you want. This is how the clustering plan will be executed. There are three ways to configure this:
+
+- **Inline**: Use this deployment model if you want to schedule, plan and execute the clustering service inline with the the data pipeline. To use this mode, configure `hoodie.clustering.inline = true`. 
+- **Schedule inline and execute asynchronous**: Use this deployment model if you want to schedule and plan the clustering service inline with the data pipeline. Separately, the execution part of the clustering plan will be run in another job outside of the data pipeline. To use this mode, configure `hoodie.clustering.schedule.inline=true` and `hoodie.clustering.inline=false`.
+- **Asynchronous**: Use this deployment model if you want to schedule, plan and execute the clustering plan in a separate job from the data pipeline. To use this mode, configure `hoodie.clustering.async.enabled=true`.
+
+The rest of this document will cover the different parts in detail. 
+
+### Schedule the clustering interval 
+
+The clustering schedule is triggered by the number of regular completed commits in the Hudi timeline. Here’s how to schedule the clustering service base on the deployment model configured: 
+
+- **Inline**: You can schedule clustering for this deployment model with this configuration: `hoodie.clustering.inline.max.commits`. 
+- **Schedule inline and execute asynchronously**: You can schedule clustering for this deployment model with this configuration: `hoodie.clustering.async.max.commits`.
+- **Asynchronous**: You can schedule clustering for this deployment model with this configuration: `hoodie.clustering.async.max.commits`. 
+
+#### Configuration details to schedule the clustering interval:
+`hoodie.clustering.inline.max.commits`​: This configuration controls how frequently the clustering plan is triggered. Use this configuration to plan on an inline deployment model. The default value is 4. 
+
+`hoodie.clustering.async.max.commits`​: This configuration controls how frequently the clustering plan is triggered. Use this configuration to plan on an async deployment model. The default value is 4. 
+
+### Create a clustering plan
+Hudi applies the clustering plan to help decide what file groups should be clustered. Before diving in further, here are important concepts to understand:
+
+- **A cluster group**: A group of file groups. 
+- **Parallelism**: The number of spark tasks or threads to run for the clustering service.
+
+The most important parts of the clustering plan are:
+
+1. **Identifying files eligible for clustering**: Depending on the chosen clustering strategy, the scheduling logic will identify the files eligible for clustering.
+2. **Grouping files eligible for clustering based on specific criteria**: One or multiple data files are designated to a clustering group. Each clustering group writes to one or more data files based on the data file size configured. The maximum size of each clustering group is determined by the `hoodie.clustering.plan.strategy.max.bytes.per.group` configuration. Grouping is done as part of the strategy defined in the plan. Smaller clustering group in size improves parallelism and avoids shuffling large amounts of data because each Spark task executes each group. However, if sorting is important,  it’s best to have all the data within a partition be in 1 large cluster group. You can sort the data by setting `hoodie.clustering.plan.strategy.sort.columns`. More details about sorting are described below. 
 
 
+### Clustering plan strategy
+Hudi applies the planning strategy through the [hoodie.clustering.plan.strategy.class](https://hudi.apache.org/docs/configurations#hoodieclusteringplanstrategyclass). First, let's look at different plan strategies that are available with this configuration. 
 
-To be able to support an architecture that allows for fast ingestion without compromising query performance, we have introduced a ‘clustering’ service to rewrite the data to optimize Hudi data lake file layout.
+All the following strategies select file slices based on the [small file limit](https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysmallfilelimit), determined by `hoodie.clustering.plan.strategy.small.file.limit`, of base files and create clustering groups up to the max file size allowed per group. The max size can be specified using the `hoodie.clustering.plan.strategy.max.bytes.per.group`. This strategy is useful for stitching together medium-sized files into larger ones to reduce the number of files.
 
-Clustering table service can run asynchronously or synchronously adding a new action type called “REPLACE”, that will mark the clustering action in the Hudi metadata timeline.
+1. `SparkSizeBasedClusteringPlanStrategy`: This is the default strategy.  It plans the clustering for all partitions. There’s no extra configuration needed for this strategy. 
 
+2. `SparkRecentDaysClusteringPlanStrategy`: This strategy applies clustering to recent partitions in a table partitioned by dates. It looks at the partitions of previous 'N' days only and creates a plan to cluster the 'small' file slices within them. To optimize compute resources, it could be helpful to limit the clustering service to recent data only. If this strategy is chosen, you’ll need to see these additional configurations. 
+   - `hoodie.clustering.plan.strategy.daybased.lookback.partitions`​: This is the number (N) of partitions that will be considered for constructing a clustering plan.
+   - `hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions`​: This is the number of partitions to skip (SKIP) or not be clustered from (N).
 
+   - **Example**: If you have partitions: 2023-04-01, 2023-04-02, 2023-04-03, 2023-04-04, 2023-04-05, 2023-04-06 and N=5, SKIP=2:
+      - 2023-04-05 and 2023-04-06 **ARE NOT** clustered
+      - 2023-04-02, 2023-04-03, 2023-04-04 **ARE** clustered
 
-### Overall, there are 2 steps to clustering
+3. `SparkSelectedPartitionsClusteringPlanStrategy`: This strategy is useful to cluster only specific partitions within a range, no matter how old or new those partitions are. To use this strategy, set additionally two configs (both begin and end partitions are inclusive):
+   - `hoodie.clustering.plan.strategy.cluster.begin.partition`
+   - `hoodie.clustering.plan.strategy.cluster.end.partition`
 
-1.  Scheduling clustering: Create a clustering plan using a pluggable clustering strategy.
-2.  Execute clustering: Process the plan using an execution strategy to create new files and replace old files.
+### Other configuration details to create the clustering plan
+These configurations are optional for the clustering plan, but it could be useful for fine-tuning the clustering behavior: 
 
+- `hoodie.clustering.plan.strategy.max.num.groups`: This configuration determines the maximum number of cluster groups a clustering plan will have. Increasing the number of file groups increases the parallelism or the number of Spark tasks or threads Hudi can run. By setting an appropriate value for this property, you can control the number of groups created during the clustering process. The default value is 30. 
+   - For example, if you set `hoodie.clustering.plan.strategy.max.num.groups` to 100, Hudi will create no more than 100 groups of small files to be merged together during the clustering process. 
+- `hoodie.clustering.plan.strategy.max.bytes.per.group`: This configuration sets the maximum total size for a cluster group consisting of small files targeted for clustering. The default value is 2147483648 (2GB) 
+    - For example, if you set `hoodie.clustering.plan.strategy.max.bytes.per.group` to 500MB, Hudi will group small files together for clustering so that the total size of the group does not exceed 500MB. 
 
-### Schedule clustering
+- `hoodie.clustering.plan.strategy.target.file.max.bytes`: This configuration property sets the target maximum file size for the output files created during the clustering process. This configuration helps Hudi determine the optimal size for the new and larger files generated as a result of clustering smaller files together. By setting an appropriate value for this property, you can control the size of the output files created by the clustering operation, ensuring they are neither too small (which would lead to the small file problem) nor too large (which could impact the parallelism of reading files and degrade query performance). The default value is 1073741824 (1GB). 
+   - For example, if you set `hoodie.clustering.plan.strategy.target.file.max.bytes` to 128MB, Hudi will aim to create output files that are approximately 128MB in size during the clustering process. This helps achieve a balance between query performance and storage efficiency while minimizing the impact of the small file problem.
 
-Following steps are followed to schedule clustering.
+#### Example walkthrough of the planning phase:
+Let’s explore an example to understand how the planning phase operates in Hudi clustering:
 
-1.  Identify files that are eligible for clustering: Depending on the clustering strategy chosen, the scheduling logic will identify the files eligible for clustering.
-2.  Group files that are eligible for clustering based on specific criteria. Each group is expected to have data size in multiples of ‘targetFileSize’. Grouping is done as part of ‘strategy’ defined in the plan. Additionally, there is an option to put a cap on group size to improve parallelism and avoid shuffling large amounts of data.
-3.  Finally, the clustering plan is saved to the timeline in an avro [metadata format](https://github.com/apache/hudi/blob/master/hudi-common/src/main/avro/HoodieClusteringPlan.avsc).
+Imagine the application has a Hudi table with 100 file groups, each being 100MB in size. The configuration for this table includes the following settings:
 
+```
+// omitted other configs 
 
-### Execute clustering
+hoodie.clustering.plan.strategy.max.num.groups = 10
+hoodie.clustering.plan.strategy.max.bytes.per.group = 524288000
+hoodie.clustering.plan.strategy.target.file.max.bytes = 262144000
+```
+ 
+Implicitly, Hudi will apply the `SparkSizeBasedClusteringPlanStrategy`. Hudi will form a cluster group consisting of 5 file groups (500MB/100MB = 5 file groups). This process repeats until 10 cluster groups are created, as specified by the `hoodie.clustering.plan.strategy.max.num.groups` configuration. Each cluster group’s execution is parallelized using Spark.
 
-1.  Read the clustering plan and get the ‘clusteringGroups’ that mark the file groups that need to be clustered.
-2.  For each group, we instantiate appropriate strategy class with strategyParams (example: sortColumns) and apply that strategy to rewrite the data.
-3.  Create a “REPLACE” commit and update the metadata in [HoodieReplaceCommitMetadata](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieReplaceCommitMetadata.java).
+After clustering is complete, Hudi generates 2 output file groups per cluster group (500MB/250MB = 2). The total amount of data processed in a clustering operation is determined by these two properties: `clustering.plan.strategy.max.bytes.per.group` * `hoodie.clustering.plan.strategy.max.num.groups`. Once all planning configurations are set, Hudi stores the clustering plan in the timeline using Avro metadata format, creating a **REPLACECOMMIT.requested** instant in the timeline.
 
+These are not all the planning configurations!  Here are a few other configurations to consider.
 
-Clustering Service builds on Hudi’s MVCC based design to allow for writers to continue to insert new data while clustering action runs in the background to reformat data layout, ensuring snapshot isolation between concurrent readers and writers.
+- `hoodie.clustering.schedule.inline`: This configuration determines whether the clustering scheduling should be performed inline (synchronously) during writes.  This is often used to schedule clustering inline only, without executing the clustering plan in the same job. 
 
-NOTE: Clustering can only be scheduled for tables / partitions not receiving any concurrent updates. In the future, concurrent updates use-case will be supported as well.
+   - If you set both `hoodie.clustering.inline` and `hoodie.clustering.schedule.inline` to false, both scheduling and execution will be performed asynchronously. Therefore, you need to set `hoodie.clustering.async.enabled` to true. 
+
+   - If `hoodie.clustering.inline` is set to false, and `hoodie.clustering.schedule.inline` is set to true, writers will schedule clustering inline, but the application should trigger an  asynchronous job for the execution. 
+
+- `hoodie.clustering.plan.strategy.sort.columns`: This configuration specifies the columns used to sort the data during the clustering process. Sorting data based on these columns can improve query performance, especially for range or predicate-based queries, by ensuring that related data records are stored together in the same or nearby data files. When defining the sort columns, consider the columns that are frequently used in the application’s queries’ filter conditions or join operations. This helps with data skipping because the query engine can ignore scanning a lot of unnecessary data. There is no default value, meaning that there is no sorting.
+   - Set the configuration for multiple columns or just 1 column: 
+     - `hoodie.clustering.plan.strategy.sort.columns = “column1, column2, column3” ` 
+     - `hoodie.clustering.plan.strategy.sort.columns = “column1” `
+  - If you specify a column, the default layout strategy will be linear, unless otherwise specified. Please see `hoodie.layout.optimize.strategy` for more details. 
+With clustering, you can re-write your data by sorting based on query predicates and so, 
+ 
+ ![Batching small files](/assets/images/clustering_sort.gif)
+ 
+- `hoodie.layout.optimize.strategy`: This configuration is used when `hoodie.clustering.plan.strategy.sort.columns` is specified. The layout strategy optimizes the data layout on disk by reorganizing the data according to the chosen ordering strategy based on specific columns and can help improve query performance. There are three values to set for this strategy: `linear`, `z-order` and `hilbert`. The default value is linear. 
+
+- `hoodie.clustering.plan.strategy.small.file.limit`: This configuration determines the threshold of what constitutes a small file. During the clustering process, a data file whose size is less than this specified threshold is considered a small file and is included as part of the clustering operation where they are merged into larger files. The default value is  314572800 (300MB). 
+
+## Execute the clustering​ plan
+
+After building the clustering groups in the planning phase, Hudi applies an execution strategy for each group, primarily based on file groups or partitions sort columns and size. How the execution plan is executed is determined by the deployment model that’ll be described in a later section. When the file groups have been rewritten, a **REPLACECOMMIT.commit** file is created on the Hudi timeline. At a high level, here’s how Hudi executes the clustering service:
+1. Hudi reads the clustering plan and gathers the clustering groups. The clustering groups mark which file groups need to be clustered. 
+2. For each cluster group, Hudi instantiates an appropriate execution strategy class with the parameters that are necessary for executing the clustering, i.e., the sorting columns via hoodie.clustering.plan.strategy.sort.columns, and applies that strategy to rewrite the data.
+3. Hudi creates a **REPLACECOMMIT.commit** in the .hoodie folder and updates the metadata in HoodieReplaceCommitMetadata.
+
+Clustering Service builds on Hudi’s MVCC-based design to allow the writers to continue to insert new data while clustering action runs in the background to reformat the data layout, ensuring snapshot isolation between concurrent readers and writers.
+
+:::note
+If there is a pending clustering, i.e., REPLACECOMMIT.requested instant is created in the Hudi timeline, Hudi can’t apply new updates to those file groups. In the future, concurrent updates use-case will be supported as well.
+:::
+
+### Clustering execution strategy 
+The execution strategy described earlier can be specified using this configuration: hoodie.clustering.execution.strategy.class. Below describes the different strategies you can set for this:
+
+- `SparkSortAndSizeExecutionStrategy`: This is the default strategy. The strategy uses bulk insert to write data into new files. From there, Hudi implicitly uses a partitioner that can optionally sort data based on the specified columns. This changes the data layout in a way that not only improves query performance but also balances rewrite overhead automatically. This strategy can be executed either as a single Spark job or multiple Spark jobs depending on the number of clustering groups created in the planning phase. By default, Hudi will submit multiple Spark tasks and union the write stats to write metadata. To force Hudi to use a single Spark task, set hoodie.clustering.execution.strategy.class to SingleSparkJobExecutionStrategy.
+You can specify the columns to sort the data by using the hoodie.clustering.plan.strategy.sort.columns. 
+
+- `SparkConsistentBucketClusteringExecutionStrategy`: This is used for a clustering execution strategy specifically for the consistent hashing index.
+
+- `JavaSortAndSizeExecutionStrategy`: This is used for a clustering execution strategy specifically for a Java engine only. Please do not use this strategy for any other writers, i.e., DeltaStreamer, Spark Datasource and etc.
+
 
 ![Clustering example](/assets/images/blog/clustering/example_perf_improvement.png)
 _Figure: Illustrating query performance improvements by clustering_
 
-## Clustering Usecases
+#### Other configurations to consider
+- `hoodie.clustering.updates.strategy`: This configuration determines how to handle updates and deletes to file groups that are under clustering. The default strategy is SparkRejectUpdateStrategy which rejects the updates for file groups that are part of an ongoing clustering operation. This is to prevent data inconsistencies that could occur when updates and clustering operations are performed simultaneously on the same file groups. You can create a custom update strategy class by extending the `org.apache.hudi.client.clustering.update.UpdateStrategy` interface. 
 
-### Batching small files
 
-As mentioned in the intro, streaming ingestion generally results in smaller files in your data lake. But having a lot of
-such small files could lead to higher query latency. From our experience supporting community users, there are quite a
-few users who are using Hudi just for small file handling capabilities. So, you could employ clustering to batch a lot
-of such small files into larger ones.
+## Clustering Deployment Models 
+Once the clustering strategy is configured for the application, it can be deployed in several ways:
 
-![Batching small files](/assets/images/clustering_small_files.gif)
+### Inline Clustering​
+Inline clustering refers to the process of executing a clustering process as part of the data ingestion pipeline, rather than running them asynchronously as a separate job. With inline clustering, Hudi will schedule, plan clustering operations after each commit is completed and execute the clustering plans after it’s created. This is the simplest deployment model to run because it’s easier to manage than running different asynchronous Spark jobs (see below). This mode is supported on Spark Datasource, Flink, Spark-SQL and DeltaStreamer in sync-once mode. In the next section, we’ll go over code snippets you can use to get started with inline clustering.
 
-### Cluster by sort key
+For this deployment mode, please enable and set: `hoodie.clustering.inline` and `hoodie.clustering.inline.max.commits`. 
 
-Another classic problem in data lake is the arrival time vs event time problem. Generally you write data based on
-arrival time, while query predicates do not sit well with it. With clustering, you can re-write your data by sorting
-based on query predicates and so, your data skipping will be very efficient and your query can ignore scanning a lot of
-unnecessary data.
+### Asynchronous Clustering​
+There are three ways to execute an asynchronous clustering process:
 
-![Batching small files](/assets/images/clustering_sort.gif)
+- **Asynchronous execution within the same process**: In this deployment mode, Hudi will schedule and plan the clustering operations after each commit is completed as part of the ingestion pipeline. Separately, Hudi spins up another thread within the same job and executes the clustering table service. This is supported by Spark Streaming, Flink and DeltaStreamer in continuous mode. For this deployment mode, please enable `hoodie.clustering.async.enabled` and`hoodie.clustering.async.max.commits​`. 
 
-## Clustering Strategies
 
-On a high level, clustering creates a plan based on a configurable strategy, groups eligible files based on specific
-criteria and then executes the plan. As mentioned before, clustering plan as well as execution depends on configurable
-strategy. These strategies can be broadly classified into three types: clustering plan strategy, execution strategy and
-update strategy.
+- **Asynchronous scheduling and execution by a separate process**: In this deployment mode, the application will write data to a Hudi table as part of the ingestion pipeline. A separate clustering job will schedule, plan and execute the clustering operation. By running a different job for the clustering operation, it rebalances how Hudi uses compute resources: fewer compute resources are needed for the ingestion, which makes ingestion latency stable, and an indepedent set of compute resources are reserved for the clustering process. Please configure the lock providers for the concurrency control among all jobs (both writer and table service jobs). In general, configure lock providers when there are two different jobs or two different processes occurring. All writers support this deployment model.
+For this deployment mode, no clustering configs should be set for the ingestion writer. 
 
-### Plan Strategy
+- **Scheduling inline and executing async**: In this deployment mode, the application ingests data and schedules the clustering in one job; in another, the application executes the clustering plan. The supported writers (see below) won’t be blocked from ingesting data. If the metadata table is enabled, a lock provider is not needed. However, if the metadata table is enabled, please ensure all jobs have the lock providers configured for concurrency control. All writers support this deployment option. 
+For this deployment mode, please enable,`hoodie.clustering.schedule.inline` and `hoodie.clustering.async.enabled`.
 
-This strategy comes into play while creating clustering plan. It helps to decide what file groups should be clustered
-and how many output file groups should the clustering produce. Note that these strategies are easily pluggable using the
-config [hoodie.clustering.plan.strategy.class](/docs/configurations#hoodieclusteringplanstrategyclass).
+### HoodieClusteringJob​
 
-Different plan strategies are as follows:
+This helps to schedule and execute clustering operations as a separate, standalone job. This class is designed to be used with Hudi’s Spark integration, allowing Hudi to run clustering jobs on the datasets outside of the data ingestion pipeline asynchronously.
 
-#### Size-based clustering strategies
+You can leverage the HoodieClusteringJob to set up a 2-step asynchronous clustering job. The appropriate mode can be specified using -mode or -m option. There are three modes:
+1. **“schedule”**: Make a clustering plan. This gives an instant that can be passed in execute mode.
+2. **“execute”**: Execute a clustering plan at a particular instant. If no instant time is specified, HoodieClusteringJob will execute for the earliest instant on the Hudi timeline.
+3. **“scheduleAndExecute”**: Both the planning and execution can be achieved in the same step. First, the clustering plan is made. Then, the plan is executed immediately.
 
-This strategy creates clustering groups based on max size allowed per group. Also, it excludes files that are greater
-than the small file limit from the clustering plan. Available strategies depending on write client
-are: `SparkSizeBasedClusteringPlanStrategy`, `FlinkSizeBasedClusteringPlanStrategy`
-and `JavaSizeBasedClusteringPlanStrategy`. Furthermore, Hudi provides flexibility to include or exclude partitions for
-clustering, tune the file size limits, maximum number of output groups, as we will see below.
+To run this job while during ingestion, please configure concurrency control:
+hoodie.write.concurrency.mode=optimistic_concurrency_control
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
 
-`hoodie.clustering.plan.strategy.partition.selected`: Comma separated list of partitions to be considered for
-clustering.
 
-`hoodie.clustering.plan.strategy.partition.regex.pattern`: Filters clustering partitions that matched regex pattern.
+## Limitations and considerations with the clustering service
+​​There are some limitations within the clustering service that’s worth mentioning:  
+- Clustering doesn't work with the incremental timeline. Be default, please keep this setting to false: `hoodie.filesystem.view.incr.timeline.sync.enable: false`
+- The clustering process can increase storage usage: When larger files are created as the result of the clustering process, the storage use will increase because the old small files still exist until the cleaning operation is completed.
 
-`hoodie.clustering.plan.partition.filter.mode`: In addition to previous filtering, we have few additional filtering as
-well. Different values for this mode are `NONE`, `RECENT_DAYS` and `SELECTED_PARTITIONS`.
+## Code Examples
+### Inline clustering example
+This is a code example for inline clustering. The example below shows how inline clustering can be configured easily using Spark Dataframe options. 
 
-- `NONE`: do not filter table partition and thus the clustering plan will include all partitions that have clustering
-  candidate.
-- `RECENT_DAYS`: keep a continuous range of partitions, works together with the below configs:
-   - `hoodie.clustering.plan.strategy.daybased.lookback.partitions`: Number of partitions to list to create
-     ClusteringPlan.
-   - `hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions`: Number of partitions to skip from latest when
-     choosing partitions to create ClusteringPlan. As the name implies, applicable only if partitioning is day based.
-- `SELECTED_PARTITIONS`: keep partitions that are in the specified range based on below configs:
-   - `hoodie.clustering.plan.strategy.cluster.begin.partition`: Begin partition used to filter partition (inclusive).
-   - `hoodie.clustering.plan.strategy.cluster.end.partition`: End partition used to filter partition (inclusive).
-- `DAY_ROLLING`: cluster partitions on a rolling basis by the hour to avoid clustering all partitions each time.
-
-**Small file limit**
-
-`hoodie.clustering.plan.strategy.small.file.limit`: Files smaller than the size in bytes specified here are candidates
-for clustering. Larges file groups will be ignored.
-
-**Max number of groups**
-
-`hoodie.clustering.plan.strategy.max.num.groups`: Maximum number of groups to create as part of ClusteringPlan.
-Increasing groups will increase parallelism. This does not imply the number of output file groups as such. This refers
-to clustering groups (parallel tasks/threads that will work towards producing output file groups). Total output file
-groups is also determined by based on target file size which we will discuss shortly.
-
-**Max bytes per group**
-
-`hoodie.clustering.plan.strategy.max.bytes.per.group`: Each clustering operation can create multiple output file groups.
-Total amount of data processed by clustering operation is defined by below two properties (Max bytes per group * Max num
-groups. Thus, this config will assist in capping the max amount of data to be included in one group.
-
-**Target file size max**
-
-`hoodie.clustering.plan.strategy.target.file.max.bytes`: Each group can produce ’N’ (max group size /target file size)
-output file groups.
-
-#### SparkSingleFileSortPlanStrategy
-
-In this strategy, clustering group for each partition is built in the same way as `SparkSizeBasedClusteringPlanStrategy`
-. The difference is that the output group is 1 and file group id remains the same,
-while `SparkSizeBasedClusteringPlanStrategy` can create multiple file groups with newer fileIds.
-
-#### SparkConsistentBucketClusteringPlanStrategy
-
-This strategy is specifically used for consistent bucket index. This will be leveraged to expand your bucket index (from
-static partitioning to dynamic). Typically, users don’t need to use this strategy. Hudi internally uses this for
-dynamically expanding the buckets for bucket index datasets.
-
-:::note The latter two strategies are applicable only for the Spark engine.
-:::
-
-### Execution Strategy
-
-After building the clustering groups in the planning phase, Hudi applies execution strategy, for each group, primarily
-based on sort columns and size. The strategy can be specified using the
-config [hoodie.clustering.execution.strategy.class](/docs/configurations/#hoodieclusteringexecutionstrategyclass). By
-default, Hudi sorts the file groups in the plan by the specified columns, while meeting the configured target file
-sizes.
-
-The available strategies are as follows:
-
-1. `SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY`: Uses bulk_insert to re-write data from input file groups.
-   1. Set `hoodie.clustering.execution.strategy.class`
-      to `org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy`.
-   2. `hoodie.clustering.plan.strategy.sort.columns`: Columns to sort the data while clustering. This goes in
-      conjunction with layout optimization strategies depending on your query predicates. One can set comma separated
-      list of columns that needs to be sorted in this config.
-2. `JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY`: Similar to `SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY`, for the Java and Flink
-   engines. Set `hoodie.clustering.execution.strategy.class`
-   to `org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy`.
-3. `SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY`: As the name implies, this is applicable to dynamically expand
-   consistent bucket index and only applicable to the Spark engine. Set `hoodie.clustering.execution.strategy.class`
-   to `org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy`.
-
-### Update Strategy
-
-Currently, clustering can only be scheduled for tables/partitions not receiving any concurrent updates. By default,
-the [config for update strategy](/docs/configurations/#hoodieclusteringupdatesstrategy) is set to ***
-SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and throw an
-exception. However, in some use-cases updates are very sparse and do not touch most file groups. The default strategy to
-simply reject updates does not seem fair. In such use-cases, users can set the config to ***SparkAllowUpdateStrategy***.
-
-We discussed the critical strategy configurations. All other configurations related to clustering are
-listed [here](/docs/configurations/#Clustering-Configs). Out of this list, a few configurations that will be very useful
-for inline or async clustering are shown below with code samples.
-
-## Inline clustering
-
-Inline clustering happens synchronously with the regular ingestion writer, which means the next round of ingestion
-cannot proceed until the clustering is complete. Inline clustering can be setup easily using spark dataframe options.
-See sample below
-
-```scala
+```
 import org.apache.hudi.QuickstartUtils._
 import scala.collection.JavaConversions._
 import org.apache.spark.sql.SaveMode._
@@ -212,89 +221,50 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig._
 
-
 val df =  //generate data frame
 df.write.format("org.apache.hudi").
-        options(getQuickstartWriteConfigs).
-        option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-        option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-        option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-        option(TABLE_NAME, "tableName").
-        option("hoodie.parquet.small.file.limit", "0").
-        option("hoodie.clustering.inline", "true").
-        option("hoodie.clustering.inline.max.commits", "4").
-        option("hoodie.clustering.plan.strategy.target.file.max.bytes", "1073741824").
-        option("hoodie.clustering.plan.strategy.small.file.limit", "629145600").
-        option("hoodie.clustering.plan.strategy.sort.columns", "column1,column2"). //optional, if sorting is needed as part of rewriting data
-        mode(Append).
-        save("dfs://location");
+       options(getQuickstartWriteConfigs).
+       option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+       option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+       option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+       option(TABLE_NAME, "tableName").
+       option("hoodie.clustering.inline", "true").
+
+       mode(Append).
+       save("dfs://location");
 ```
 
-## Async Clustering
+### Async clustering example
+This is a code example for async clustering. The example below shows how async clustering can be deployed easily using a Spark job. You need to set the `hoodie.clustering.async.enable`d` configuration to true and specify other clustering configuration in the properties file whose location can be placed as —props when starting DeltaStreamer (just like in the case of HoodieClusteringJob).
 
-Async clustering runs the clustering table service in the background without blocking the regular ingestions writers.
-Hudi supports [multi-writers](https://hudi.apache.org/docs/concurrency_control#enabling-multi-writing) which provides
-snapshot isolation between multiple table services, thus allowing writers to continue with ingestion while clustering
-runs in the background.
-
-|  Config key  | Remarks | Default |
-|  -----------  | -------  | ------- |
-| `hoodie.clustering.async.enabled` | Enable running of clustering service, asynchronously as writes happen on the table. | False |
-| `hoodie.clustering.async.max.commits` | Control frequency of async clustering by specifying after how many commits clustering should be triggered. | 4 |
-| `hoodie.clustering.preserve.commit.metadata` | When rewriting data, preserves existing _hoodie_commit_time. This means users can run incremental queries on clustered data without any side-effects. | False |
-
-## Setup Asynchronous Clustering
-Users can leverage [HoodieClusteringJob](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+19+Clustering+data+for+freshness+and+query+performance#RFC19Clusteringdataforfreshnessandqueryperformance-SetupforAsyncclusteringJob)
-to setup 2-step asynchronous clustering.
-
-### HoodieClusteringJob
-By specifying the `scheduleAndExecute` mode both schedule as well as clustering can be achieved in the same step. 
-The appropriate mode can be specified using `-mode` or `-m` option. There are three modes:
-
-1. `schedule`: Make a clustering plan. This gives an instant which can be passed in execute mode.
-2. `execute`: Execute a clustering plan at a particular instant. If no instant-time is specified, HoodieClusteringJob will execute for the earliest instant on the Hudi timeline.
-3. `scheduleAndExecute`: Make a clustering plan first and execute that plan immediately.
-
-Note that to run this job while the original writer is still running, please enable multi-writing:
-```
-hoodie.write.concurrency.mode=optimistic_concurrency_control
-hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
-```
 
 A sample spark-submit command to setup HoodieClusteringJob is as below:
 
-```bash
+```
 spark-submit \
 --class org.apache.hudi.utilities.HoodieClusteringJob \
-/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-0.9.0-SNAPSHOT.jar \
+/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-0.13.0.jar \
 --props /path/to/config/clusteringjob.properties \
 --mode scheduleAndExecute \
 --base-path /path/to/hudi_table/basePath \
 --table-name hudi_table_schedule_clustering \
 --spark-memory 1g
-```
-A sample `clusteringjob.properties` file:
-```
-hoodie.clustering.async.enabled=true
+
+A sample clusteringjob.properties file:
 hoodie.clustering.async.max.commits=4
 hoodie.clustering.plan.strategy.target.file.max.bytes=1073741824
 hoodie.clustering.plan.strategy.small.file.limit=629145600
-hoodie.clustering.execution.strategy.class=org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy
+
 hoodie.clustering.plan.strategy.sort.columns=column1,column2
 ```
 
-### HoodieDeltaStreamer
+### HoodieDeltaStreamer​
+You can deploy an asynchronous clustering with DeltaStreamer. Below, is an example of a spark-submit command to setup HoodieDeltaStreamer is as below:
 
-This brings us to our users' favorite utility in Hudi. Now, we can trigger asynchronous clustering with DeltaStreamer.
-Just set the `hoodie.clustering.async.enabled` config to true and specify other clustering config in properties file
-whose location can be pased as `—props` when starting the deltastreamer (just like in the case of HoodieClusteringJob).
-
-A sample spark-submit command to setup HoodieDeltaStreamer is as below:
-
-```bash
+```
 spark-submit \
 --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
-/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-0.9.0-SNAPSHOT.jar \
+/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-0.13.0.jar \
 --props /path/to/config/clustering_kafka.properties \
 --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
 --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
@@ -307,48 +277,47 @@ spark-submit \
 --continuous
 ```
 
-### Spark Structured Streaming
+### Spark Structured Streaming​
+You can also enable asynchronous clustering with Spark Structured Streaming sink as shown below.
 
-We can also enable asynchronous clustering with Spark structured streaming sink as shown below.
-```scala
+```python
 val commonOpts = Map(
-   "hoodie.insert.shuffle.parallelism" -> "4",
-   "hoodie.upsert.shuffle.parallelism" -> "4",
-   DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-   DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-   DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-   HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+
+  DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+  DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+  DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+  HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
 )
 
-def getAsyncClusteringOpts(isAsyncClustering: String, 
-                           clusteringNumCommit: String, 
-                           executionStrategy: String):Map[String, String] = {
-   commonOpts + (DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE.key -> isAsyncClustering,
-           HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key -> clusteringNumCommit,
-           HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME.key -> executionStrategy
-   )
+def getAsyncClusteringOpts(isAsyncClustering: String,
+                          clusteringNumCommit: String,
+                          executionStrategy: String):Map[String, String] = {
+  commonOpts + (DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE.key -> isAsyncClustering,
+          HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key -> clusteringNumCommit,
+          HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME.key -> executionStrategy
+  )
 }
 
 def initStreamingWriteFuture(hudiOptions: Map[String, String]): Future[Unit] = {
-   val streamingInput = // define the source of streaming
-   Future {
-      println("streaming starting")
-      streamingInput
-              .writeStream
-              .format("org.apache.hudi")
-              .options(hudiOptions)
-              .option("checkpointLocation", basePath + "/checkpoint")
-              .mode(Append)
-              .start()
-              .awaitTermination(10000)
-      println("streaming ends")
-   }
+  val streamingInput = // define the source of streaming
+  Future {
+     println("streaming starting")
+     streamingInput
+             .writeStream
+             .format("org.apache.hudi")
+             .options(hudiOptions)
+             .option("checkpointLocation", basePath + "/checkpoint")
+             .mode(Append)
+             .start()
+             .awaitTermination(10000)
+     println("streaming ends")
+  }
 }
 
 def structuredStreamingWithClustering(): Unit = {
-   val df = //generate data frame
-   val hudiOptions = getClusteringOpts("true", "1", "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy")
-   val f1 = initStreamingWriteFuture(hudiOptions)
-   Await.result(f1, Duration.Inf)
+  val df = //generate data frame
+  val hudiOptions = getClusteringOpts("true", "1", "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy")
+  val f1 = initStreamingWriteFuture(hudiOptions)
+  Await.result(f1, Duration.Inf)
 }
 ```
