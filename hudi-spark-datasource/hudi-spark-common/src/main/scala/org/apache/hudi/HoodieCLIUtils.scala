@@ -27,21 +27,29 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.withSparkConf
 
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
 
-object HoodieCLIUtils extends ProvidesHoodieConfig{
+object HoodieCLIUtils {
 
-  def createHoodieClientFromPath(sparkSession: SparkSession,
-                                 basePath: String,
-                                 conf: Map[String, String]): SparkRDDWriteClient[_] = {
+  def createHoodieWriteClient(sparkSession: SparkSession,
+                              basePath: String,
+                              conf: Map[String, String],
+                              tableName: Option[String]): SparkRDDWriteClient[_] = {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
       .setConf(sparkSession.sessionState.newHadoopConf()).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
     val schemaStr = schemaUtil.getTableAvroSchema(false).toString
+    // If tableName is provided, we need to add catalog props
+    val catalogProps = tableName match {
+      case Some(value) => getHoodieCatalogTable(sparkSession, value).catalogProperties
+      case None => Map.empty
+    }
     val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
-      buildHoodieConfig(getHoodieCatalogTable(sparkSession, metaClient.getTableConfig.getTableName)) ++ conf)
+      withSparkConf(sparkSession, Map.empty)(
+        catalogProps ++ conf + (DataSourceWriteOptions.TABLE_TYPE.key() -> metaClient.getTableType.name()))
+    )
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     DataSourceUtils.createHoodieClient(jsc, schemaStr, basePath,
@@ -66,6 +74,18 @@ object HoodieCLIUtils extends ProvidesHoodieConfig{
         HoodieCatalogTable(sparkSession, TableIdentifier(tableName))
       case Seq(database, tableName) =>
         HoodieCatalogTable(sparkSession, TableIdentifier(tableName, Some(database)))
+      case _ =>
+        throw new SparkException(s"Unsupported identifier $table")
+    }
+  }
+
+  def getTableIdentifier(table: String): (String, Option[String]) = {
+    val arrayStr: Array[String] = table.split('.')
+    arrayStr.toSeq match {
+      case Seq(tableName) =>
+        (tableName, None)
+      case Seq(database, tableName) =>
+        (tableName, Some(database))
       case _ =>
         throw new SparkException(s"Unsupported identifier $table")
     }

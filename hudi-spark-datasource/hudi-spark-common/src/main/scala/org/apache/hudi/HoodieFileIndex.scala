@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieBaseFile
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.{CollectionUtils, StringUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
@@ -40,6 +40,7 @@ import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.text.SimpleDateFormat
+import java.util
 import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -325,8 +326,7 @@ object HoodieFileIndex extends Logging {
 
   def getConfigProperties(spark: SparkSession, options: Map[String, String]) = {
     val sqlConf: SQLConf = spark.sessionState.conf
-    val properties = new TypedProperties()
-    properties.putAll(options.filter(p => p._2 != null).asJava)
+    val properties = TypedProperties.fromMap(options.filter(p => p._2 != null).asJava)
 
     // TODO(HUDI-5361) clean up properties carry-over
 

@@ -19,28 +19,28 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.log4j.LogManager
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{AnalysisException, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.function.Executable
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions.asScalaBuffer
 
 class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = null
-  private val log = LogManager.getLogger(classOf[TestIncrementalReadWithFullTableScan])
+  private val log = LoggerFactory.getLogger(classOf[TestIncrementalReadWithFullTableScan])
 
   private val perBatchSize = 100
 

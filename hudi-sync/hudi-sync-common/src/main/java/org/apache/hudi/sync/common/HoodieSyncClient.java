@@ -32,9 +32,9 @@ import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,7 +50,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_USE_FILE_LI
 
 public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, AutoCloseable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieSyncClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSyncClient.class);
 
   protected final HoodieSyncConfig config;
   protected final PartitionValueExtractor partitionValueExtractor;

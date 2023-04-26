@@ -70,11 +70,11 @@ import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -95,7 +95,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
  * table. Does not maintain any state, queries at runtime to see how far behind the target table is from the source
- * table. This can be overriden to force sync from a timestamp.
+ * table. This can be overridden to force sync from a timestamp.
  * <p>
  * In continuous mode, DeltaStreamer runs in loop-mode going through the below operations (a) pull-from-source (b)
  * write-to-sink (c) Schedule Compactions if needed (d) Conditionally Sync to Hive each cycle. For MOR table with
@@ -104,13 +104,23 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 public class HoodieDeltaStreamer implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieDeltaStreamer.class);
   private static final List<String> DEFAULT_SENSITIVE_CONFIG_KEYS = Arrays.asList(
       HoodieWriteConfig.SENSITIVE_CONFIG_KEYS_FILTER.defaultValue().split(","));
   private static final String SENSITIVE_VALUES_MASKED = "SENSITIVE_INFO_MASKED";
 
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
+
+  /**
+   * Config prop to force to skip saving checkpoint in the commit metadata.
+   *
+   * Typically used in one-time backfill scenarios, where checkpoints are not to be persisted.
+   *
+   * TODO: consolidate all checkpointing configs into HoodieCheckpointStrategy (HUDI-5906)
+   */
+  public static final String CHECKPOINT_FORCE_SKIP_PROP = "hoodie.deltastreamer.checkpoint.force.skip";
+  public static final Boolean DEFAULT_CHECKPOINT_FORCE_SKIP_PROP = false;
 
   protected final transient Config cfg;
 
@@ -376,7 +386,7 @@ public class HoodieDeltaStreamer implements Serializable {
     public Integer maxRetryCount = 3;
 
     @Parameter(names = {"--allow-commit-on-no-checkpoint-change"}, description = "allow commits even if checkpoint has not changed before and after fetch data"
-        + "from souce. This might be useful in sources like SqlSource where there is not checkpoint. And is not recommended to enable in continuous mode.")
+        + "from source. This might be useful in sources like SqlSource where there is not checkpoint. And is not recommended to enable in continuous mode.")
     public Boolean allowCommitOnNoCheckpointChange = false;
 
     @Parameter(names = {"--help", "-h"}, help = true)
@@ -731,10 +741,13 @@ public class HoodieDeltaStreamer implements Serializable {
               Option<HoodieData<WriteStatus>> lastWriteStatuses = Option.ofNullable(
                   scheduledCompactionInstantAndRDD.isPresent() ? HoodieJavaRDD.of(scheduledCompactionInstantAndRDD.get().getRight()) : null);
               if (requestShutdownIfNeeded(lastWriteStatuses)) {
+                LOG.warn("Closing and shutting down ingestion service");
                 error = true;
-                shutdown(false);
+                onIngestionCompletes(false);
+                shutdown(true);
+              } else {
+                sleepBeforeNextIngestion(start);
               }
-              sleepBeforeNextIngestion(start);
             } catch (HoodieUpsertException ue) {
               handleUpsertException(ue);
             } catch (Exception e) {

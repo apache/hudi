@@ -29,9 +29,9 @@ import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,7 +52,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
  */
 public abstract class QueryBasedDDLExecutor implements DDLExecutor {
 
-  private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(QueryBasedDDLExecutor.class);
 
   protected final HiveSyncConfig config;
   protected final String databaseName;

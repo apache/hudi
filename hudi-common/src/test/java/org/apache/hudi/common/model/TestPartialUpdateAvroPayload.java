@@ -18,11 +18,13 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.util.Option;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.Option;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +36,8 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 /**
  * Unit tests {@link TestPartialUpdateAvroPayload}.
@@ -147,24 +151,38 @@ public class TestPartialUpdateAvroPayload {
     GenericRecord record2 = new GenericData.Record(schema);
     record2.put("id", "1");
     record2.put("partition", "partition0");
-    record2.put("ts", 0L);
-    record2.put("_hoodie_is_deleted", true);
+    record2.put("ts", 2L);
+    record2.put("_hoodie_is_deleted", false);
     record2.put("city", "NY0");
     record2.put("child", Collections.emptyList());
 
     PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L);
-    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(delRecord1, 1L);
+    PartialUpdateAvroPayload delPayload = new PartialUpdateAvroPayload(delRecord1, 1L);
+    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 2L);
 
-    assertArrayEquals(payload1.preCombine(payload2).recordBytes, payload2.recordBytes);
-    assertArrayEquals(payload2.preCombine(payload1).recordBytes, payload2.recordBytes);
+    PartialUpdateAvroPayload mergedPayload = payload1.preCombine(delPayload, schema, new Properties());
+    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.recordBytes, schema).get("_hoodie_is_deleted").equals(true));
+    assertArrayEquals(mergedPayload.recordBytes, delPayload.recordBytes);
+
+    mergedPayload = delPayload.preCombine(payload1, schema, new Properties());
+    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.recordBytes, schema).get("_hoodie_is_deleted").equals(true));
+    assertArrayEquals(mergedPayload.recordBytes, delPayload.recordBytes);
+
+    mergedPayload = payload2.preCombine(delPayload, schema, new Properties());
+    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.recordBytes, schema).get("_hoodie_is_deleted").equals(false));
+    assertArrayEquals(mergedPayload.recordBytes, payload2.recordBytes);
+
+    mergedPayload = delPayload.preCombine(payload2, schema, new Properties());
+    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.recordBytes, schema).get("_hoodie_is_deleted").equals(false));
+    assertArrayEquals(mergedPayload.recordBytes, payload2.recordBytes);
 
     assertEquals(record1, payload1.getInsertValue(schema).get());
-    assertFalse(payload2.getInsertValue(schema).isPresent());
+    assertFalse(delPayload.getInsertValue(schema).isPresent());
 
     Properties properties = new Properties();
     properties.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema, properties), Option.empty());
-    assertFalse(payload2.combineAndGetUpdateValue(record1, schema, properties).isPresent());
+    assertFalse(delPayload.combineAndGetUpdateValue(record1, schema, properties).isPresent());
   }
 
   @Test

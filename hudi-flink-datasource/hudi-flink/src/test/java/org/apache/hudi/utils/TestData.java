@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.sink.utils.BucketStreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.InsertFunctionWrapper;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestFunctionWrapper;
@@ -48,6 +49,7 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
@@ -69,6 +71,7 @@ import org.apache.parquet.hadoop.ParquetReader;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -358,6 +361,15 @@ public class TestData {
           TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
   );
 
+  // data types handled specifically for Hoodie Key
+  public static List<RowData> DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE = new ArrayList<>();
+
+  static {
+    IntStream.range(1, 9).forEach(i -> DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE.add(
+        insertRow(TestConfigurations.ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE,
+            TimestampData.fromEpochMillis(i), i, DecimalData.fromBigDecimal(new BigDecimal(String.format("%d.%d%d", i, i, i)), 3, 2))));
+  }
+
   public static List<RowData> dataSetInsert(int... ids) {
     List<RowData> inserts = new ArrayList<>();
     Arrays.stream(ids).forEach(i -> inserts.add(
@@ -430,10 +442,7 @@ public class TestData {
   public static void writeData(
       List<RowData> dataBuffer,
       Configuration conf) throws Exception {
-    TestFunctionWrapper<RowData> funcWrapper =
-        OptionsResolver.isInsertOperation(conf)
-            ? new InsertFunctionWrapper<>(conf.getString(FlinkOptions.PATH), conf)
-            : new StreamWriteFunctionWrapper<>(conf.getString(FlinkOptions.PATH), conf);
+    final TestFunctionWrapper<RowData> funcWrapper = getWritePipeline(conf.getString(FlinkOptions.PATH), conf);
     funcWrapper.openFunction();
 
     for (RowData rowData : dataBuffer) {
@@ -463,9 +472,7 @@ public class TestData {
   public static void writeDataAsBatch(
       List<RowData> dataBuffer,
       Configuration conf) throws Exception {
-    StreamWriteFunctionWrapper<RowData> funcWrapper = new StreamWriteFunctionWrapper<>(
-        conf.getString(FlinkOptions.PATH),
-        conf);
+    TestFunctionWrapper<RowData> funcWrapper = getWritePipeline(conf.getString(FlinkOptions.PATH), conf);
     funcWrapper.openFunction();
 
     for (RowData rowData : dataBuffer) {
@@ -479,6 +486,19 @@ public class TestData {
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
 
     funcWrapper.close();
+  }
+
+  /**
+   * Initializes a writing pipeline with given configuration.
+   */
+  public static TestFunctionWrapper<RowData> getWritePipeline(String basePath, Configuration conf) throws Exception {
+    if (OptionsResolver.isAppendMode(conf)) {
+      return new InsertFunctionWrapper<>(basePath, conf);
+    } else if (OptionsResolver.isBucketIndexType(conf)) {
+      return new BucketStreamWriteFunctionWrapper<>(basePath, conf);
+    } else {
+      return new StreamWriteFunctionWrapper<>(basePath, conf);
+    }
   }
 
   private static String toStringSafely(Object obj) {

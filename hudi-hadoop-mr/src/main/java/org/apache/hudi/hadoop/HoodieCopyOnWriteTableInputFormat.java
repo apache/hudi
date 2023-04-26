@@ -45,8 +45,8 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -76,7 +76,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCopyOnWriteTableInputFormat.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCopyOnWriteTableInputFormat.class);
 
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {

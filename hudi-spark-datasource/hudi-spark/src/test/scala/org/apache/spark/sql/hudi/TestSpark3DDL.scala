@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, HoodieSparkUtils}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
@@ -67,7 +68,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
          |""".stripMargin)
   }
 
-  test("Test multi change data type") {
+  test("Test alter column types") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -138,7 +139,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     })
   }
 
-  test("Test multi change data type2") {
+  test("Test alter column types 2") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -227,7 +228,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Partition Table alter ") {
+  test("Test alter table properties and add rename drop column") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -380,7 +381,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
 
-  test("Test Alter Table") {
+  test("Test alter column by add rename and drop") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -441,7 +442,36 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     })
   }
 
-  test("Test Alter Table multiple times") {
+  test("Test alter column nullability") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string not null,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+             """.stripMargin)
+          spark.sql(s"alter table $tableName alter column name drop not null")
+          spark.sql(s"insert into $tableName values(1, null, 1000)")
+          checkAnswer(s"select id, name, ts from $tableName")(Seq(1, null, 1000))
+        }
+      }
+    }
+  }
+
+  test("Test alter column multiple times") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -479,7 +509,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Alter Table complex") {
+  test("Test alter column with complex schema") {
     withRecordType()(withTempDir { tmp =>
       Seq("mor").foreach { tableType =>
         val tableName = generateTableName
@@ -730,6 +760,221 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           val checkKey = dfAgain.select("fare").collectAsList().map(_.getString(0)).get(0)
           checkAnswer(spark.sql(s"select fare, addColumn from  hudi_trips_snapshot1 where fare = ${checkKey}").collect())(
             Seq(checkKey, null)
+          )
+        }
+      }
+    }
+  }
+
+  test("Test DATE to STRING conversions when vectorized reading is not enabled") {
+    withTempDir { tmp =>
+      Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          // adding a struct column to force reads to use non-vectorized readers
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  struct_col struct<f0: int, f1: string>,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+               | partitioned by (ts)
+             """.stripMargin)
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1', 10, struct(1, 'f_1'), 1000)
+              """.stripMargin)
+          spark.sql(s"select * from $tableName")
+
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql(s"alter table $tableName add columns(date_to_string_col date)")
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (2, 'a2', 20, struct(2, 'f_2'), date '2023-03-22', 1001)
+              """.stripMargin)
+          spark.sql(s"alter table $tableName alter column date_to_string_col type string")
+
+          // struct and string (converted from date) column must be read to ensure that non-vectorized reader is used
+          // not checking results as we just need to ensure that the table can be read without any errors thrown
+          spark.sql(s"select * from $tableName")
+        }
+      }
+    }
+  }
+
+  test("Test FLOAT to DECIMAL schema evolution (lost in scale)") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        // Using INMEMORY index for mor table so that log files will be created instead of parquet
+        val tableName = generateTableName
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price float,
+               |  ts long
+               |) using hudi
+               | location '${tmp.getCanonicalPath}'
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
+               | )
+           """.stripMargin)
+
+          spark.sql(s"insert into $tableName values (1, 'a1', 10.024, 1000)")
+
+          assertResult(tableType.equals("mor"))(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
+
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql(s"alter table $tableName alter column price type decimal(4, 2)")
+
+          // Not checking answer as this is an unsafe casting operation, just need to make sure that error is not thrown
+          spark.sql(s"select id, name, cast(price as string), ts from $tableName")
+        }
+      }
+    }
+  }
+
+  test("Test DOUBLE to DECIMAL schema evolution (lost in scale)") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        // Using INMEMORY index for mor table so that log files will be created instead of parquet
+        val tableName = generateTableName
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | location '${tmp.getCanonicalPath}'
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
+               | )
+           """.stripMargin)
+
+          spark.sql(s"insert into $tableName values " +
+            // testing the rounding behaviour to ensure that HALF_UP is used for positive values
+            "(1, 'a1', 10.024, 1000)," +
+            "(2, 'a2', 10.025, 1000)," +
+            "(3, 'a3', 10.026, 1000)," +
+            // testing the rounding behaviour to ensure that HALF_UP is used for negative values
+            "(4, 'a4', -10.024, 1000)," +
+            "(5, 'a5', -10.025, 1000)," +
+            "(6, 'a6', -10.026, 1000)," +
+            // testing the GENERAL rounding behaviour (HALF_UP and HALF_EVEN will retain the same result)
+            "(7, 'a7', 10.034, 1000)," +
+            "(8, 'a8', 10.035, 1000)," +
+            "(9, 'a9', 10.036, 1000)," +
+            // testing the GENERAL rounding behaviour (HALF_UP and HALF_EVEN will retain the same result)
+            "(10, 'a10', -10.034, 1000)," +
+            "(11, 'a11', -10.035, 1000)," +
+            "(12, 'a12', -10.036, 1000)")
+
+          assertResult(tableType.equals("mor"))(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
+
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql(s"alter table $tableName alter column price type decimal(4, 2)")
+
+          checkAnswer(s"select id, name, cast(price as string), ts from $tableName order by id")(
+            Seq(1, "a1", "10.02", 1000),
+            Seq(2, "a2", "10.03", 1000),
+            Seq(3, "a3", "10.03", 1000),
+            Seq(4, "a4", "-10.02", 1000),
+            Seq(5, "a5", "-10.03", 1000),
+            Seq(6, "a6", "-10.03", 1000),
+            Seq(7, "a7", "10.03", 1000),
+            Seq(8, "a8", "10.04", 1000),
+            Seq(9, "a9", "10.04", 1000),
+            Seq(10, "a10", "-10.03", 1000),
+            Seq(11, "a11", "-10.04", 1000),
+            Seq(12, "a12", "-10.04", 1000)
+          )
+        }
+      }
+    }
+  }
+
+  test("Test STRING to DECIMAL schema evolution (lost in scale)") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        // Using INMEMORY index for mor table so that log files will be created instead of parquet
+        val tableName = generateTableName
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price string,
+               |  ts long
+               |) using hudi
+               | location '${tmp.getCanonicalPath}'
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
+               | )
+           """.stripMargin)
+
+          spark.sql(s"insert into $tableName values " +
+            // testing the rounding behaviour to ensure that HALF_UP is used for positive values
+            "(1, 'a1', '10.024', 1000)," +
+            "(2, 'a2', '10.025', 1000)," +
+            "(3, 'a3', '10.026', 1000)," +
+            // testing the rounding behaviour to ensure that HALF_UP is used for negative values
+            "(4, 'a4', '-10.024', 1000)," +
+            "(5, 'a5', '-10.025', 1000)," +
+            "(6, 'a6', '-10.026', 1000)," +
+            // testing the GENERAL rounding behaviour (HALF_UP and HALF_EVEN will retain the same result)
+            "(7, 'a7', '10.034', 1000)," +
+            "(8, 'a8', '10.035', 1000)," +
+            "(9, 'a9', '10.036', 1000)," +
+            // testing the GENERAL rounding behaviour (HALF_UP and HALF_EVEN will retain the same result)
+            "(10, 'a10', '-10.034', 1000)," +
+            "(11, 'a11', '-10.035', 1000)," +
+            "(12, 'a12', '-10.036', 1000)")
+
+          assertResult(tableType.equals("mor"))(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
+
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql(s"alter table $tableName alter column price type decimal(4, 2)")
+
+          checkAnswer(s"select id, name, cast(price as string), ts from $tableName order by id")(
+            Seq(1, "a1", "10.02", 1000),
+            Seq(2, "a2", "10.03", 1000),
+            Seq(3, "a3", "10.03", 1000),
+            Seq(4, "a4", "-10.02", 1000),
+            Seq(5, "a5", "-10.03", 1000),
+            Seq(6, "a6", "-10.03", 1000),
+            Seq(7, "a7", "10.03", 1000),
+            Seq(8, "a8", "10.04", 1000),
+            Seq(9, "a9", "10.04", 1000),
+            Seq(10, "a10", "-10.03", 1000),
+            Seq(11, "a11", "-10.04", 1000),
+            Seq(12, "a12", "-10.04", 1000)
           )
         }
       }

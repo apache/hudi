@@ -31,8 +31,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -45,7 +45,7 @@ import java.util.List;
  */
 public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieRollbackPlan>> {
 
-  private static final Logger LOG = LogManager.getLogger(BaseRollbackPlanActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackPlanActionExecutor.class);
 
   protected final HoodieInstant instantToRollback;
   private final boolean skipTimelinePublish;

@@ -37,8 +37,8 @@ import org.apache.hudi.metaserver.thrift.Table;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -51,7 +51,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  * HoodieTableMetaClient implementation for hoodie table whose metadata is stored in the hoodie metaserver.
  */
 public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
-  private static final Logger LOG = LogManager.getLogger(HoodieTableMetaserverClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableMetaserverClient.class);
 
   private final String databaseName;
   private final String tableName;

@@ -28,8 +28,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -43,7 +43,7 @@ import java.util.Set;
  */
 public abstract class WriteMarkers implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(WriteMarkers.class);
+  private static final Logger LOG = LoggerFactory.getLogger(WriteMarkers.class);
 
   protected final String basePath;
   protected final transient Path markerDirPath;

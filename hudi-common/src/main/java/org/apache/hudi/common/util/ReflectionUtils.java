@@ -20,8 +20,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -43,18 +43,20 @@ import java.util.stream.Stream;
  */
 public class ReflectionUtils {
 
-  private static final Logger LOG = LogManager.getLogger(ReflectionUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ReflectionUtils.class);
 
   private static final Map<String, Class<?>> CLAZZ_CACHE = new HashMap<>();
 
   public static Class<?> getClass(String clazzName) {
-    synchronized (CLAZZ_CACHE) {
-      if (!CLAZZ_CACHE.containsKey(clazzName)) {
-        try {
-          Class<?> clazz = Class.forName(clazzName);
-          CLAZZ_CACHE.put(clazzName, clazz);
-        } catch (ClassNotFoundException e) {
-          throw new HoodieException("Unable to load class", e);
+    if (!CLAZZ_CACHE.containsKey(clazzName)) {
+      synchronized (CLAZZ_CACHE) {
+        if (!CLAZZ_CACHE.containsKey(clazzName)) {
+          try {
+            Class<?> clazz = Class.forName(clazzName);
+            CLAZZ_CACHE.put(clazzName, clazz);
+          } catch (ClassNotFoundException e) {
+            throw new HoodieException("Unable to load class", e);
+          }
         }
       }
     }
@@ -186,7 +188,7 @@ public class ReflectionUtils {
     } catch (NoSuchMethodException e) {
       throw new HoodieException(String.format("Unable to find the method %s of the class %s ",  methodName, clazz), e);
     } catch (InvocationTargetException | IllegalAccessException e) {
-      throw new HoodieException(String.format("Unable to invoke the methond %s of the class %s ",  methodName, clazz), e);
+      throw new HoodieException(String.format("Unable to invoke the method %s of the class %s ", methodName, clazz), e);
     }
   }
 

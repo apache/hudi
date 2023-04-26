@@ -68,4 +68,3 @@ object ShowSavepointsProcedure {
     override def get(): ShowSavepointsProcedure = new ShowSavepointsProcedure()
   }
 }
-

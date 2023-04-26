@@ -41,8 +41,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
 
 public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRollbackMetadata> {
 
-  private static final Logger LOG = LogManager.getLogger(BaseRollbackActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackActionExecutor.class);
 
   protected final HoodieInstant instantToRollback;
   protected final boolean deleteInstants;

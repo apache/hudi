@@ -41,7 +41,7 @@ public class CompactNode extends DagNode<JavaRDD<WriteStatus>> {
    * if it has one.
    *
    * @param executionContext Execution context to run this compaction
-   * @param curItrCount      cur interation count.
+   * @param curItrCount      cur iteration count.
    * @throws Exception will be thrown if any error occurred.
    */
   @Override

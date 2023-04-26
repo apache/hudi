@@ -30,6 +30,7 @@ import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -69,15 +70,20 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.text.ParseException;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,6 +92,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
@@ -95,7 +102,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimest
  */
 public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieTimelineArchiver.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieTimelineArchiver.class);
 
   private final Path archiveFilePath;
   private final HoodieWriteConfig config;
@@ -203,6 +210,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
    * 2. Do merge.
    * 3. Delete all the candidates.
    * 4. Delete the merge plan.
+   *
    * @param context HoodieEngineContext
    * @throws IOException
    */
@@ -241,8 +249,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
    * Find the latest 'huge archive file' index as a break point and only check/merge newer archive files.
    * Because we need to keep the original order of archive files which is important when loading archived instants with time filter.
    * {@link HoodieArchivedTimeline} loadInstants(TimeRangeFilter filter, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter)
+   *
    * @param smallFileLimitBytes small File Limit Bytes
-   * @param fsStatuses Sort by version suffix in reverse
+   * @param fsStatuses          Sort by version suffix in reverse
    * @return merge candidates
    */
   private List<FileStatus> getMergeCandidates(long smallFileLimitBytes, FileStatus[] fsStatuses) {
@@ -266,6 +275,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
   /**
    * Check/Solve if there is any failed and unfinished merge small archive files operation
+   *
    * @param context HoodieEngineContext used for parallelize to delete small archive files if necessary.
    * @throws IOException
    */
@@ -475,7 +485,24 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
                       HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
                   .orElse(true)
           );
-      return instantToArchiveStream.limit(commitTimeline.countInstants() - minInstantsToKeep);
+      List<HoodieInstant> instantsToArchive = instantToArchiveStream.limit(commitTimeline.countInstants() - minInstantsToKeep).collect(Collectors.toList());
+      // If cleaner is based on hours, lets ensure hudi does not archive commits yet to cleaned by the cleaner.
+      if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS && !instantsToArchive.isEmpty()) {
+        String latestCommitToArchive = instantsToArchive.get(instantsToArchive.size() - 1).getTimestamp();
+        try {
+          Instant latestCommitInstant = HoodieActiveTimeline.parseDateFromInstantTime(commitTimeline.lastInstant().get().getTimestamp()).toInstant();
+          ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(latestCommitInstant, ZoneId.systemDefault());
+          String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(config.getCleanerHoursRetained()).toInstant()));
+          if (HoodieTimeline.compareTimestamps(latestCommitToArchive, GREATER_THAN_OR_EQUALS, earliestTimeToRetain)) {
+            throw new HoodieIOException("Please align your archival configs based on cleaner configs. 'hoodie.keep.min.commits' : "
+                + config.getMinCommitsToKeep() + " + should be greater than "
+                + " 'hoodie.cleaner.hours.retained' : " + config.getCleanerHoursRetained());
+          }
+        } catch (ParseException e) {
+          throw new HoodieIOException("Failed to parse latest commit instant time " + commitTimeline.lastInstant().get().getTimestamp() + e.getMessage());
+        }
+      }
+      return instantsToArchive.stream();
     } else {
       return Stream.empty();
     }
@@ -543,7 +570,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
     return instants.flatMap(hoodieInstant -> {
       List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
-                HoodieInstant.getComparableAction(hoodieInstant.getAction())));
+          HoodieInstant.getComparableAction(hoodieInstant.getAction())));
       if (instantsToStream != null) {
         return instantsToStream.stream();
       } else {

@@ -52,8 +52,11 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.DiscardingSink;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.TableResult;
+import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
@@ -68,8 +71,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -102,7 +108,6 @@ public class ITTestHoodieFlinkClustering {
 
     // use append mode
     options.put(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value());
-    options.put(FlinkOptions.INSERT_CLUSTER.key(), "false");
 
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
@@ -116,7 +121,9 @@ public class ITTestHoodieFlinkClustering {
     FlinkClusteringConfig cfg = new FlinkClusteringConfig();
     cfg.path = tempFile.getAbsolutePath();
     cfg.targetPartitions = 4;
+    cfg.sortMemory = 256;
     Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
+    assertEquals(256, conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY));
 
     // create metaClient
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
@@ -201,7 +208,6 @@ public class ITTestHoodieFlinkClustering {
 
     // use append mode
     options.put(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value());
-    options.put(FlinkOptions.INSERT_CLUSTER.key(), "false");
 
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
@@ -238,7 +244,6 @@ public class ITTestHoodieFlinkClustering {
 
     // use append mode
     options.put(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value());
-    options.put(FlinkOptions.INSERT_CLUSTER.key(), "false");
 
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
@@ -307,7 +312,6 @@ public class ITTestHoodieFlinkClustering {
 
     // use append mode
     options.put(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value());
-    options.put(FlinkOptions.INSERT_CLUSTER.key(), "false");
 
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
@@ -422,5 +426,180 @@ public class ITTestHoodieFlinkClustering {
     assertFalse(inputFileGroups
         .stream().anyMatch(fg -> fg.getSlices()
             .stream().anyMatch(s -> s.getDataFilePath().contains(firstClusteringInstant))));
+  }
+
+  /**
+   * Test to ensure that creating a table with a column of TIMESTAMP(9) will throw errors
+   * @throws Exception
+   */
+  @Test
+  public void testHoodieFlinkClusteringWithTimestampNanos() {
+    // create hoodie table and insert into data
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
+    tableEnv.getConfig().getConfiguration()
+        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+
+    // use append mode
+    options.put(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value());
+    options.put(FlinkOptions.INSERT_CLUSTER.key(), "false");
+
+    // row schema
+    final DataType dataType = DataTypes.ROW(
+            DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
+            DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+            DataTypes.FIELD("age", DataTypes.INT()),
+            DataTypes.FIELD("ts", DataTypes.TIMESTAMP(9)), // precombine field
+            DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+        .notNull();
+
+    final RowType rowType = (RowType) dataType.getLogicalType();
+    final List<String> fields = rowType.getFields().stream()
+        .map(RowType.RowField::asSummaryString).collect(Collectors.toList());
+
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL(
+        "t1", fields, options, true, "uuid", "partition");
+    TableResult tableResult = tableEnv.executeSql(hoodieTableDDL);
+
+    // insert rows with timestamp of microseconds precision; timestamp(6)
+    final String insertSql = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01.100001001','par1'),\n"
+        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02.100001001','par1'),\n"
+        + "('id3','Julian',53,TIMESTAMP '1970-01-01 00:00:03.100001001','par2'),\n"
+        + "('id4','Fabian',31,TIMESTAMP '1970-01-01 00:00:04.100001001','par2'),\n"
+        + "('id5','Sophia',18,TIMESTAMP '1970-01-01 00:00:05.100001001','par3'),\n"
+        + "('id6','Emma',20,TIMESTAMP '1970-01-01 00:00:06.100001001','par3'),\n"
+        + "('id7','Bob',44,TIMESTAMP '1970-01-01 00:00:07.100001001','par4'),\n"
+        + "('id8','Han',56,TIMESTAMP '1970-01-01 00:00:08.100001001','par4')";
+
+    assertThrows(ValidationException.class, () -> tableEnv.executeSql(insertSql),
+        "Avro does not support TIMESTAMP type with precision: 9, it only support precisions <= 6.");
+  }
+
+  @Test
+  public void testHoodieFlinkClusteringWithTimestampMicros() throws Exception {
+    // create hoodie table and insert into data
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
+    tableEnv.getConfig().getConfiguration()
+        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+
+    // use append mode
+    options.put(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value());
+
+    // row schema
+    final DataType dataType = DataTypes.ROW(
+            DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
+            DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+            DataTypes.FIELD("age", DataTypes.INT()),
+            DataTypes.FIELD("ts", DataTypes.TIMESTAMP(6)), // precombine field
+            DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+        .notNull();
+    final RowType rowType = (RowType) dataType.getLogicalType();
+    final List<String> fields = rowType.getFields().stream()
+        .map(RowType.RowField::asSummaryString).collect(Collectors.toList());
+
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL(
+        "t1", fields, options, true, "uuid", "partition");
+    tableEnv.executeSql(hoodieTableDDL);
+
+    // insert rows with timestamp of microseconds precision; timestamp(6)
+    final String insertSql = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01.100001','par1'),\n"
+        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02.100001','par1'),\n"
+        + "('id3','Julian',53,TIMESTAMP '1970-01-01 00:00:03.100001','par2'),\n"
+        + "('id4','Fabian',31,TIMESTAMP '1970-01-01 00:00:04.100001','par2'),\n"
+        + "('id5','Sophia',18,TIMESTAMP '1970-01-01 00:00:05.100001','par3'),\n"
+        + "('id6','Emma',20,TIMESTAMP '1970-01-01 00:00:06.100001','par3'),\n"
+        + "('id7','Bob',44,TIMESTAMP '1970-01-01 00:00:07.100001','par4'),\n"
+        + "('id8','Han',56,TIMESTAMP '1970-01-01 00:00:08.100001','par4')";
+    tableEnv.executeSql(insertSql).await();
+
+    // wait for the asynchronous commit to finish
+    TimeUnit.SECONDS.sleep(3);
+
+    // make configuration and setAvroSchema.
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+    FlinkClusteringConfig cfg = new FlinkClusteringConfig();
+    cfg.path = tempFile.getAbsolutePath();
+    cfg.targetPartitions = 4;
+    Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
+
+    // create metaClient
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+
+    // set the table name
+    conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+
+    // set record key field
+    conf.setString(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
+    // set partition field
+    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, metaClient.getTableConfig().getPartitionFieldProp());
+
+    long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+
+    // set table schema
+    CompactionUtil.setAvroSchema(conf, metaClient);
+
+    // judge whether have operation
+    // To compute the clustering instant time and do clustering.
+    String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
+
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
+    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+
+    boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
+
+    assertTrue(scheduled, "The clustering plan should be scheduled");
+
+    // fetch the instant based on the configured execution sequence
+    table.getMetaClient().reloadActiveTimeline();
+    HoodieTimeline timeline = table.getActiveTimeline().filterPendingReplaceTimeline()
+        .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
+
+    // generate clustering plan
+    // should support configurable commit metadata
+    Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlanOption = ClusteringUtils.getClusteringPlan(
+        table.getMetaClient(), timeline.lastInstant().get());
+
+    HoodieClusteringPlan clusteringPlan = clusteringPlanOption.get().getRight();
+
+    // Mark instant as clustering inflight
+    HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInstantTime);
+    table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
+
+    DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime, clusteringPlan))
+        .name("clustering_source")
+        .uid("uid_clustering_source")
+        .rebalance()
+        .transform("clustering_task",
+            TypeInformation.of(ClusteringCommitEvent.class),
+            new ClusteringOperator(conf, rowType))
+        .setParallelism(clusteringPlan.getInputGroups().size());
+
+    ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+        conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
+
+    dataStream
+        .addSink(new ClusteringCommitSink(conf))
+        .name("clustering_commit")
+        .uid("uid_clustering_commit")
+        .setParallelism(1);
+
+    env.execute("flink_hudi_clustering");
+
+    // test output
+    final Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1100001,par1, id2,par1,id2,Stephen,33,2100001,par1]");
+    expected.put("par2", "[id3,par2,id3,Julian,53,3100001,par2, id4,par2,id4,Fabian,31,4100001,par2]");
+    expected.put("par3", "[id5,par3,id5,Sophia,18,5100001,par3, id6,par3,id6,Emma,20,6100001,par3]");
+    expected.put("par4", "[id7,par4,id7,Bob,44,7100001,par4, id8,par4,id8,Han,56,8100001,par4]");
+    TestData.checkWrittenData(tempFile, expected, 4);
   }
 }

@@ -32,8 +32,6 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, Tim
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.io.File
 import java.util
@@ -236,5 +234,3 @@ object ExportInstantsProcedure {
     override def get() = new ExportInstantsProcedure()
   }
 }
-
-

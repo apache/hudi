@@ -23,8 +23,8 @@ import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats
-import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaRDD
+import org.slf4j.LoggerFactory
 
 /**
  * Spark datasource based upsert node
@@ -33,7 +33,7 @@ import org.apache.spark.api.java.JavaRDD
  */
 class SparkUpsertNode(dagNodeConfig: Config) extends SparkInsertNode(dagNodeConfig) {
 
-  private val log = LogManager.getLogger(getClass)
+  private val log = LoggerFactory.getLogger(getClass)
 
   override def getOperation(): String = {
     DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL

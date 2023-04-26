@@ -28,7 +28,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
-import org.apache.log4j.LogManager
 import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
@@ -36,6 +35,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
 
@@ -43,7 +43,7 @@ import scala.collection.JavaConversions._
 @Tag("functional")
 class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
 
-  private val log = LogManager.getLogger(classOf[TestMORDataSourceStorage])
+  private val log = LoggerFactory.getLogger(classOf[TestMORDataSourceStorage])
 
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",

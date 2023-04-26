@@ -38,8 +38,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.AbstractMap;
@@ -55,7 +55,7 @@ import java.util.stream.Stream;
  */
 public class ClusteringUtils {
 
-  private static final Logger LOG = LogManager.getLogger(ClusteringUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ClusteringUtils.class);
 
   public static final String TOTAL_IO_READ_MB = "TOTAL_IO_READ_MB";
   public static final String TOTAL_LOG_FILE_SIZE = "TOTAL_LOG_FILES_SIZE";
@@ -132,7 +132,7 @@ public class ClusteringUtils {
     } catch (Exception e) {
       if (e instanceof IllegalStateException && e.getMessage().contains("Duplicate key")) {
         throw new HoodieException("Found duplicate file groups pending clustering. If you're running deltastreamer in continuous mode, consider adding delay using --min-sync-interval-seconds. "
-            + "Or consider setting write concurrency mode to optimistic_concurrency_control.", e);
+            + "Or consider setting write concurrency mode to OPTIMISTIC_CONCURRENCY_CONTROL.", e);
       }
       throw new HoodieException("Error getting all file groups in pending clustering", e);
     }
@@ -181,6 +181,7 @@ public class ClusteringUtils {
         .setInputGroups(clusteringGroups)
         .setExtraMetadata(extraMetadata)
         .setStrategy(strategy)
+        .setPreserveHoodieMetadata(true)
         .build();
   }
 

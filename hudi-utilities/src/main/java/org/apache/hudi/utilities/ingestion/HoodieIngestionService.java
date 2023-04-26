@@ -26,8 +26,8 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -41,7 +41,7 @@ import static org.apache.hudi.utilities.ingestion.HoodieIngestionService.HoodieI
  */
 public abstract class HoodieIngestionService extends HoodieAsyncService {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieIngestionService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieIngestionService.class);
 
   protected HoodieIngestionConfig ingestionConfig;
 
@@ -151,11 +151,13 @@ public abstract class HoodieIngestionService extends HoodieAsyncService {
     public static final ConfigProperty<Boolean> INGESTION_IS_CONTINUOUS = ConfigProperty
         .key("hoodie.utilities.ingestion.is.continuous")
         .defaultValue(false)
+        .markAdvanced()
         .withDocumentation("Indicate if the ingestion runs in a continuous loop.");
 
     public static final ConfigProperty<Integer> INGESTION_MIN_SYNC_INTERNAL_SECONDS = ConfigProperty
         .key("hoodie.utilities.ingestion.min.sync.internal.seconds")
         .defaultValue(0)
+        .markAdvanced()
         .withDocumentation("the minimum sync interval of each ingestion in continuous mode");
 
     public static Builder newBuilder() {
