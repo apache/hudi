@@ -394,7 +394,7 @@ public class TestStreamWriteOperatorCoordinator {
   @Test
   public void testCommitOnEmptyBatch() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setBoolean(FlinkOptions.WRITE_ALLOW_COMMIT_ON_EMPTY_BATCH, true);
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
     MockOperatorCoordinatorContext context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
     NonThrownExecutor executor = new MockCoordinatorExecutor(context);
     try (StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, context)) {

@@ -381,7 +381,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testCommitOnEmptyBatch() throws Exception {
     // reset the config option
-    conf.setBoolean(FlinkOptions.WRITE_ALLOW_COMMIT_ON_EMPTY_BATCH, true);
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
 
     preparePipeline()
         .consume(TestData.DATA_SET_INSERT)
