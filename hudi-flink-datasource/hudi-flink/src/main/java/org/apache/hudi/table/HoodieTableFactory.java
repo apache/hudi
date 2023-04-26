@@ -21,7 +21,10 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -35,6 +38,9 @@ import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
+import org.apache.avro.Schema.Type;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.ValidationException;
@@ -77,6 +83,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    validateSourceSchema(conf);
     return new HoodieTableSource(
         schema,
         path,
@@ -400,5 +407,36 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       String inferredSchema = AvroSchemaConverter.convertToSchema(rowType).toString();
       conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, inferredSchema);
     }
+  }
+
+  /**
+   *
+   * @param conf The configuration
+   */
+  private static void validateSourceSchema(Configuration conf) {
+    final HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(conf, HadoopConfigurations.getHadoopConf(conf));
+    final TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+    final Schema requiredSchema = StreamerUtil.getSourceSchema(conf);
+    final Schema srcSchema;
+
+    try {
+      srcSchema = schemaResolver.getTableAvroSchema();
+    } catch (Exception e) {
+      LOG.warn("Skipping validation for requiredSchema as table avro schema could not be fetched", e);
+      return;
+    }
+
+    final List<String> srcSchemaFieldNames = srcSchema.getFields().stream().map(Field::name).collect(Collectors.toList());
+    requiredSchema.getFields().forEach(f -> {
+      // ensure that required field can be found
+      Field requiredField = srcSchema.getField(f.name());
+      ValidationUtils.checkState(requiredField != null, "Unable to find [" + f.name() + "] in " + srcSchemaFieldNames);
+
+      // ensure that required field has the same type as src field
+      Type requiredType = requiredField.schema().getType();
+      Type srcType = f.schema().getType();
+      ValidationUtils.checkState(
+          requiredType.equals(srcType), "Expected " + srcType.getName() + " for [" + f.name() + "], but got " + requiredType.getName());
+    });
   }
 }

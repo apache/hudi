@@ -28,9 +28,11 @@ import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.SchemaBuilder;
 import org.apache.hudi.utils.TestConfigurations;
+import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
@@ -83,6 +85,62 @@ public class TestHoodieTableFactory {
     this.conf.setString(FlinkOptions.PATH, tempFile.getAbsolutePath());
     this.conf.setString(FlinkOptions.TABLE_NAME, "t1");
     StreamerUtil.initTableIfNotExists(this.conf);
+  }
+
+  @Test
+  void testValidateSchema() throws IOException {
+    ResolvedSchema tableSchema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20).notNull())
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("partition", DataTypes.STRING().notNull())
+        .build();
+    org.apache.avro.Schema tableAvroSchema = AvroSchemaConverter.convertToSchema(tableSchema.toPhysicalRowDataType().getLogicalType());
+
+    String tablePath = new File(tempFile.getAbsolutePath(), "dummy_table").getAbsolutePath();
+    // add pk and pre-combine key to table config
+    Configuration tableConf = new Configuration();
+    tableConf.setString(FlinkOptions.PATH, tablePath);
+    tableConf.setString(FlinkOptions.TABLE_NAME, "t2");
+    // Adding this so that the hoodie.properties will be initialised hoodie.table.create.schema
+    tableConf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, tableAvroSchema.toString());
+    StreamerUtil.initTableIfNotExists(tableConf);
+    // Removing this so that createDynamicTableSource will infer SOURCE_AVRO_SCHEMA from DDL's ResolvedSchema
+    tableConf.removeConfig(FlinkOptions.SOURCE_AVRO_SCHEMA);
+
+    // Test required schema with a field that has a wrong NAME
+    ResolvedSchema schemaWithWrongFieldName = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1_with_typo", DataTypes.VARCHAR(20).notNull())
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("partition", DataTypes.STRING().notNull())
+        .build();
+    final MockContext sourceContext1 = MockContext.getInstance(tableConf, schemaWithWrongFieldName, "partition");
+    assertThrows(IllegalStateException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext1));
+
+    // Test required schema with a field that has a wrong TYPE
+    ResolvedSchema schemaWithWrongFieldType = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.BIGINT().notNull())
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("partition", DataTypes.STRING().notNull())
+        .build();
+
+    final MockContext sourceContext2 = MockContext.getInstance(tableConf, schemaWithWrongFieldType, "partition");
+    assertThrows(IllegalStateException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext2));
+
+    // Test with correct schema
+    final MockContext sourceContext3 = MockContext.getInstance(tableConf, tableSchema, "partition");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext3));
+
+    // Test with correct type (but only a subset of fields are required)
+    ResolvedSchema subsetSchema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("partition", DataTypes.STRING().notNull())
+        .build();
+    final MockContext sourceContext4 = MockContext.getInstance(tableConf, subsetSchema, "partition");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext4));
   }
 
   @Test
