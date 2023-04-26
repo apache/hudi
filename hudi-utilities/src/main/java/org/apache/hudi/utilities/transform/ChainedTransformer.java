@@ -19,9 +19,11 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -30,8 +32,10 @@ import org.apache.spark.sql.SparkSession;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -40,51 +44,41 @@ import java.util.stream.Collectors;
 public class ChainedTransformer implements Transformer {
 
   // Delimiter used to separate class name and the property key suffix. The suffix comes first.
-  private static final String TRANSFORMER_CLASS_NAME_KEY_SUFFIX_DELIMITER = ":";
+  private static final String TRANSFORMER_CLASS_NAME_ID_DELIMITER = ":";
 
-  private final List<Transformer> transformers;
-  private final Map<Transformer, String> transformerToPropKeySuffix;
+  private final List<TransformerInfo> transformers;
 
-  public ChainedTransformer(List<Transformer> transformers) {
-    this.transformers = transformers;
-    this.transformerToPropKeySuffix = new HashMap<>(transformers.size());
-    for (Transformer transformer : this.transformers) {
-      transformerToPropKeySuffix.put(transformer, "");
+  public ChainedTransformer(List<Transformer> transformersList) {
+    this.transformers = new ArrayList<>(transformersList.size());
+    for (Transformer transformer : transformersList) {
+      this.transformers.add(new TransformerInfo(transformer));
     }
   }
 
   /**
-   * Creates a chained transformer using the input transformer class names. The name can also include
-   * a suffix. This suffix can be appended with the property keys to identify properties related to the transformer.
-   * E:g - tr1:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer can be used along with property key
-   * hoodie.deltastreamer.transformer.sql.tr1. Here tr1 is a suffix used to identify the keys specific to this transformer.
-   * This suffix is removed from the configuration keys when the transformer is used. This is useful when there are two or more
-   * transformers using the same config keys and expect different values for those keys.
+   * Creates a chained transformer using the input transformer class names. Refer {@link HoodieDeltaStreamer.Config#transformerClassNames}
+   * for more information on how the transformers can be configured.
    *
    * @param configuredTransformers List of configured transformer class names.
    * @param ignore Added for avoiding two methods with same erasure. Ignored.
    */
   public ChainedTransformer(List<String> configuredTransformers, int... ignore) {
-    this.transformerToPropKeySuffix = new HashMap<>(configuredTransformers.size());
     this.transformers = new ArrayList<>(configuredTransformers.size());
 
-    List<Pair<String, String>> transformerClassNamesToSuffixList = new ArrayList<>(configuredTransformers.size());
+    Set<String> identifiers = new HashSet<>();
     for (String configuredTransformer : configuredTransformers) {
-      if (!configuredTransformer.contains(":")) {
-        transformerClassNamesToSuffixList.add(Pair.of(configuredTransformer, ""));
+      if (!configuredTransformer.contains(TRANSFORMER_CLASS_NAME_ID_DELIMITER)) {
+        transformers.add(new TransformerInfo(ReflectionUtils.loadClass(configuredTransformer)));
       } else {
-        String[] splits = configuredTransformer.split(":");
+        String[] splits = configuredTransformer.split(TRANSFORMER_CLASS_NAME_ID_DELIMITER);
         if (splits.length > 2) {
           throw new IllegalArgumentException("There should only be one colon in a configured transformer");
         }
-        transformerClassNamesToSuffixList.add(Pair.of(splits[1], splits[0]));
+        String id = splits[0];
+        validateIdentifier(id, identifiers, configuredTransformer);
+        Transformer transformer = ReflectionUtils.loadClass(splits[1]);
+        transformers.add(new TransformerInfo(transformer, id));
       }
-    }
-
-    for (Pair<String, String> pair : transformerClassNamesToSuffixList) {
-      Transformer transformer = ReflectionUtils.loadClass(pair.getKey());
-      transformerToPropKeySuffix.put(transformer, pair.getValue());
-      transformers.add(transformer);
     }
   }
 
@@ -95,22 +89,59 @@ public class ChainedTransformer implements Transformer {
   @Override
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties) {
     Dataset<Row> dataset = rowDataset;
-    for (Transformer t : transformers) {
-      String suffix = transformerToPropKeySuffix.get(t);
+    for (TransformerInfo transformerInfo : transformers) {
+      Transformer transformer = transformerInfo.getTransformer();
+      dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties));
+    }
+    return dataset;
+  }
+
+  private void validateIdentifier(String id, Set<String> identifiers, String configuredTransformer) {
+    ValidationUtils.checkArgument(StringUtils.nonEmpty(id), String.format("Transformer identifier is empty for %s", configuredTransformer));
+    if (identifiers.contains(id)) {
+      throw new IllegalArgumentException(String.format("Duplicate identifier %s found for transformer %s", id, configuredTransformer));
+    } else {
+      identifiers.add(id);
+    }
+  }
+
+  private static class TransformerInfo {
+    private final Transformer transformer;
+    private final Option<String> idOpt;
+
+    private TransformerInfo(Transformer transformer, String idOpt) {
+      this.transformer = transformer;
+      this.idOpt = Option.of(idOpt);
+    }
+
+    private TransformerInfo(Transformer transformer) {
+      this.transformer = transformer;
+      this.idOpt = Option.empty();
+    }
+
+    private Transformer getTransformer() {
+      return transformer;
+    }
+
+    private TypedProperties getProperties(TypedProperties properties) {
       TypedProperties transformerProps = properties;
-      if (StringUtils.nonEmpty(suffix)) {
+      if (idOpt.isPresent()) {
+        // Transformer specific property keys end with the id associated with the transformer.
+        // Ex. For id tr1, key `hoodie.deltastreamer.transformer.sql.tr1` would be converted to
+        // `hoodie.deltastreamer.transformer.sql` and then passed to the transformer.
+        String id = idOpt.get();
         transformerProps = new TypedProperties(properties);
         Map<String, Object> overrideKeysMap = new HashMap<>();
         for (Map.Entry<Object, Object> entry : properties.entrySet()) {
           String key = (String) entry.getKey();
-          if (key.endsWith("." + suffix)) {
-            overrideKeysMap.put(key.substring(0, key.length() - (suffix.length() + 1)), entry.getValue());
+          if (key.endsWith("." + id)) {
+            overrideKeysMap.put(key.substring(0, key.length() - (id.length() + 1)), entry.getValue());
           }
         }
         transformerProps.putAll(overrideKeysMap);
       }
-      dataset = t.apply(jsc, sparkSession, dataset, transformerProps);
+
+      return transformerProps;
     }
-    return dataset;
   }
 }
