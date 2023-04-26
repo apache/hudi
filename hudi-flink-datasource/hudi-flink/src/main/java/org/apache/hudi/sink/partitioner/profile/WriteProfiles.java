@@ -90,7 +90,7 @@ public class WriteProfiles {
    * @param metadataList       The commit metadata list (should in ascending order)
    * @param tableType          The table type
    * @param ignoreMissingFiles Whether to ignore the missing files from filesystem
-   * @return the file status array or null if any file is missing if ignoreMissingFiles is false
+   * @return the file status array or null if any file is missing with ignoreMissingFiles as false
    */
   @Nullable
   public static FileStatus[] getFilesFromMetadata(
@@ -108,7 +108,7 @@ public class WriteProfiles {
         if (StreamerUtil.isValidFile(entry.getValue()) && !uniqueIdToFileStatus.containsKey(entry.getKey())) {
           if (StreamerUtil.fileExists(fs, entry.getValue().getPath())) {
             uniqueIdToFileStatus.put(entry.getKey(), entry.getValue());
-          } else if (!ignoreMissingFiles){
+          } else if (!ignoreMissingFiles) {
             return null;
           }
         }
