@@ -1410,25 +1410,65 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("SPARK"))
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testMapTypeSchemaEvolution(recordType: HoodieRecordType): Unit = {
     val (writeOpts, _) = getWriterReaderOpts(recordType, getQuickstartWriteConfigs.asScala.toMap)
 
-    val schema1 = StructType(StructField("_row_key", StringType, nullable = true) :: StructField("name", MapType(StringType, StringType), nullable = true) ::
-      StructField("timestamp", IntegerType, nullable = true) :: StructField("age", StringType, nullable = true) :: StructField("partition", IntegerType, nullable = true) :: Nil)
-    val records = Array("{\"_row_key\":\"1\",\"name\": {\"lisi\", \"bar\"},\"timestamp\":1,\"partition\":1}",
-      "{\"_row_key\":\"1\",\"name\":\"lisi\",\"timestamp\":1,\"partition\":1}")
-    val inputDF = spark.read.schema(schema1.toDDL).json(spark.sparkContext.parallelize(records, 2))
+    val schema1 = StructType(
+      StructField("_row_key", StringType, nullable = false) ::
+        StructField("name", MapType(StringType, StringType), nullable = true) ::
+        StructField("timestamp", IntegerType, nullable = true) ::
+        StructField("age", StringType, nullable = true) ::
+        StructField("partition", IntegerType, nullable = true) :: Nil)
+    val records = Array("{\"_row_key\":\"1\",\"name\": {\"f_name\":\"lisi\", \"l_name\":\"bar\"},\"timestamp\":1,\"partition\":1}",
+      "{\"_row_key\":\"2\",\"timestamp\":1,\"partition\":1}")
+    val inputDF = spark.read.schema(schema1).json(spark.sparkContext.parallelize(records, 2))
     inputDF.write.format("org.apache.hudi")
       .options(commonOpts ++ writeOpts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val schema2 = StructType(StructField("_row_key", StringType, nullable = true) :: StructField("name", MapType(StringType, StringType), nullable = false) ::
-      StructField("timestamp", IntegerType, nullable = true) :: StructField("age", StringType, nullable = true) :: StructField("partition", IntegerType, nullable = true) :: Nil)
-    val records2 = Array("{\"_row_key\":\"1\",\"name\": {\"lisi\", \"bar\"},\"timestamp\":2,\"partition\":1}",
-      "{\"_row_key\":\"1\",\"name\":\"lisi\",\"timestamp\":1,\"partition\":1}")
-    val inputDF2 = spark.read.schema(schema2.toDDL).json(spark.sparkContext.parallelize(records2, 2))
+    val schema2 = StructType(StructField("_row_key", StringType, nullable = false) ::
+      StructField("name", MapType(StringType, StringType), nullable = false) ::
+      StructField("timestamp", IntegerType, nullable = true) ::
+      StructField("age", StringType, nullable = true) ::
+      StructField("partition", IntegerType, nullable = true) :: Nil)
+    val records2 = Array("{\"_row_key\":\"1\",\"name\": {\"f_name\":\"lisi\", \"l_name\":\"bar\"},\"timestamp\":2,\"partition\":1}",
+      "{\"_row_key\":\"2\",\"name\": {\"f_name\":\"danny\", \"l_name\":\"chan\"},\"timestamp\":1,\"partition\":1}")
+    val inputDF2 = spark.read.schema(schema2).json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(commonOpts ++ writeOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testArrayTypeSchemaEvolution(recordType: HoodieRecordType): Unit = {
+    val (writeOpts, _) = getWriterReaderOpts(recordType, getQuickstartWriteConfigs.asScala.toMap)
+
+    val schema1 = StructType(
+      StructField("_row_key", StringType, nullable = false) ::
+        StructField("name", ArrayType(StringType), nullable = true) ::
+        StructField("timestamp", IntegerType, nullable = true) ::
+        StructField("age", StringType, nullable = true) ::
+        StructField("partition", IntegerType, nullable = true) :: Nil)
+    val records = Array("{\"_row_key\":\"1\",\"name\": [\"lisi\", \"bar\"],\"timestamp\":1,\"partition\":1}",
+      "{\"_row_key\":\"2\",\"timestamp\":1,\"partition\":1}")
+    val inputDF = spark.read.schema(schema1).json(spark.sparkContext.parallelize(records, 2))
+    inputDF.write.format("org.apache.hudi")
+      .options(commonOpts ++ writeOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val schema2 = StructType(StructField("_row_key", StringType, nullable = false) ::
+      StructField("name", ArrayType(StringType), nullable = false) ::
+      StructField("timestamp", IntegerType, nullable = true) ::
+      StructField("age", StringType, nullable = true) ::
+      StructField("partition", IntegerType, nullable = true) :: Nil)
+    val records2 = Array("{\"_row_key\":\"1\",\"name\": [\"lisi\", \"bar\"],\"timestamp\":2,\"partition\":1}",
+      "{\"_row_key\":\"2\",\"name\": [\"danny\", \"chan\"],\"timestamp\":1,\"partition\":1}")
+    val inputDF2 = spark.read.schema(schema2).json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts ++ writeOpts)
       .mode(SaveMode.Append)
