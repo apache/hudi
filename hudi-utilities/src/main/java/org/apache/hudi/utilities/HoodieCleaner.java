@@ -108,7 +108,23 @@ public class HoodieCleaner {
 
     String dirName = new Path(cfg.basePath).getName();
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-cleaner-" + dirName, cfg.sparkMaster);
-    new HoodieCleaner(cfg, jssc).run();
+    boolean success = false;
+
+    try {
+      new HoodieCleaner(cfg, jssc).run();
+      success = true;
+    } catch (Throwable throwable) {
+      LOG.error("Fail to run cleaning for " + cfg.basePath, throwable);
+    } finally {
+      jssc.stop();
+    }
+
+    if (!success) {
+      // Exit with a non-zero exit code to signify to the caller/resource manager that the job has actually failed
+      // This allows us to gracefully stop the spark context while properly notifying the RM
+      System.exit(1);
+    }
+
     LOG.info("Cleaner ran successfully");
   }
 }
