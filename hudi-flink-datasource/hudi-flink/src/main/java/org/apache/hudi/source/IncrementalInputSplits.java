@@ -18,7 +18,6 @@
 
 package org.apache.hudi.source;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -42,14 +41,12 @@ import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.ClusteringUtil;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,7 +54,6 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -213,9 +209,8 @@ public class IncrementalInputSplits implements Serializable {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
-      FileStatus[] files = WriteProfiles.getRawWritePathsOfInstants(path, hadoopConf, metadataList, metaClient.getTableType());
-      FileSystem fs = FSUtils.getFs(path.toString(), hadoopConf);
-      if (Arrays.stream(files).anyMatch(fileStatus -> !StreamerUtil.fileExists(fs, fileStatus.getPath()))) {
+      FileStatus[] files = WriteProfiles.getFilesFromMetadata(path, hadoopConf, metadataList, metaClient.getTableType(), false);
+      if (files == null) {
         LOG.warn("Found deleted files in metadata, fall back to full table scan.");
         // fallback to full table scan
         // reading from the earliest, scans the partitions and files directly.
@@ -329,7 +324,7 @@ public class IncrementalInputSplits implements Serializable {
         LOG.warn("No partitions found for reading under path: " + path);
         return Result.EMPTY;
       }
-      fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList, metaClient.getTableType());
+      fileStatuses = WriteProfiles.getFilesFromMetadata(path, hadoopConf, metadataList, metaClient.getTableType(), true);
 
       if (fileStatuses.length == 0) {
         LOG.warn("No files found for reading under path: " + path);
@@ -515,11 +510,7 @@ public class IncrementalInputSplits implements Serializable {
 
     if (OptionsResolver.hasNoSpecificReadCommits(this.conf)) {
       // by default read from the latest commit
-      List<HoodieInstant> instants = completedTimeline.getInstants();
-      if (instants.size() > 1) {
-        return Collections.singletonList(instants.get(instants.size() - 1));
-      }
-      return instants;
+      return completedTimeline.lastInstant().map(Collections::singletonList).orElseGet(Collections::emptyList);
     }
 
     if (OptionsResolver.isSpecificStartCommit(this.conf)) {
