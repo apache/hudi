@@ -61,8 +61,6 @@ import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.BASE_FILE_
 import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.BASE_FILE_INSERT;
 import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.LOG_FILE;
 import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.REPLACE_COMMIT;
-import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before_after;
-import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.op_key_only;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -282,7 +280,7 @@ public class HoodieCDCExtractor {
       }
     } else {
       // this is a cdc log
-      if (supplementalLoggingMode == data_before_after) {
+      if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER) {
         cdcFileSplit = new HoodieCDCFileSplit(instantTs, AS_IS, writeStat.getCdcStats().keySet());
       } else {
         try {
@@ -294,7 +292,7 @@ public class HoodieCDCExtractor {
           FileSlice beforeFileSlice = null;
           FileSlice currentFileSlice = new FileSlice(fileGroupId, instant.getTimestamp(),
               new HoodieBaseFile(fs.getFileStatus(new Path(basePath, writeStat.getPath()))), new ArrayList<>());
-          if (supplementalLoggingMode == op_key_only) {
+          if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY) {
             beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
           }
           cdcFileSplit = new HoodieCDCFileSplit(instantTs, AS_IS, writeStat.getCdcStats().keySet(),

@@ -22,7 +22,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 
-import java.util.Properties
 import scala.collection.JavaConverters._
 
 object SparkKeyGenUtils {
@@ -31,8 +30,7 @@ object SparkKeyGenUtils {
    * @param properties config properties
    * @return partition columns
    */
-  def getPartitionColumns(properties: Properties): String = {
-    val props = new TypedProperties(properties)
+  def getPartitionColumns(props: TypedProperties): String = {
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
     getPartitionColumns(keyGenerator, props)
   }

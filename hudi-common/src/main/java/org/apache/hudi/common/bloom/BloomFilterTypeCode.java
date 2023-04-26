@@ -18,11 +18,19 @@
 
 package org.apache.hudi.common.bloom;
 
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
+
 /**
  * Bloom filter type codes.
  * Please do not change the order of the entries.
  */
+@EnumDescription("Filter type used by Bloom filter.")
 public enum BloomFilterTypeCode {
+
+  @EnumFieldDescription("Bloom filter that is based on the configured size.")
   SIMPLE,
+
+  @EnumFieldDescription("Bloom filter that is auto sized based on number of keys.")
   DYNAMIC_V0
 }

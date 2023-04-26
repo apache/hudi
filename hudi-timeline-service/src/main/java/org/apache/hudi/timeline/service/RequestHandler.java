@@ -160,7 +160,7 @@ public class RequestHandler {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
           + "], localTimeline=" + localTimeline.getInstants());
-    }
+    } 
 
     if ((!localTimeline.getInstantsAsStream().findAny().isPresent())
         && HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)) {

@@ -25,6 +25,8 @@
 #    - <dataset name>/data/<data files>
 #################################################################################################
 
+JAVA_RUNTIME_VERSION=$1
+DEFAULT_JAVA_HOME=${JAVA_HOME}
 WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
 # link the jar names to easier to use names
@@ -36,6 +38,26 @@ ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
 ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
 
+##
+# Function to change Java runtime version by changing JAVA_HOME
+##
+change_java_runtime_version () {
+  if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk11' ]]; then
+    echo "Change JAVA_HOME to /usr/lib/jvm/java-11-openjdk"
+    export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
+  elif [[ ${JAVA_RUNTIME_VERSION} == 'openjdk17' ]]; then
+    echo "Change JAVA_HOME to /usr/lib/jvm/java-17-openjdk"
+    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+  fi
+}
+
+##
+# Function to change Java runtime version to default Java 8
+##
+use_default_java_runtime () {
+  echo "Use default java runtime under ${DEFAULT_JAVA_HOME}"
+  export JAVA_HOME=${DEFAULT_JAVA_HOME}
+}
 
 ##
 # Function to test the spark & hadoop-mr bundles with hive sync.
@@ -52,6 +74,7 @@ test_spark_hadoop_mr_bundles () {
     local DERBY_PID=$!
     $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
     local HIVE_PID=$!
+    change_java_runtime_version
     echo "::warning::validate.sh Writing sample data via Spark DataSource and run Hive Sync..."
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/write.scala
 
@@ -65,6 +88,7 @@ test_spark_hadoop_mr_bundles () {
         exit 1
     fi
     echo "::warning::validate.sh Query and validate the results using HiveQL"
+    use_default_java_runtime
     # save HiveQL query results
     hiveqlresultsdir=/tmp/hadoop-mr-bundle/hiveql/trips/results
     mkdir -p $hiveqlresultsdir
@@ -101,6 +125,7 @@ test_utilities_bundle () {
     fi
     OUTPUT_DIR=/tmp/hudi-utilities-test/
     rm -r $OUTPUT_DIR
+    change_java_runtime_version
     echo "::warning::validate.sh running deltastreamer"
     $SPARK_HOME/bin/spark-submit \
     --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
@@ -128,6 +153,7 @@ test_utilities_bundle () {
     echo "::debug::this is the shell command: $SHELL_COMMAND"
     LOGFILE="$WORKDIR/${FUNCNAME[0]}.log"
     $SHELL_COMMAND >> $LOGFILE
+    use_default_java_runtime
     if [ "$?" -ne 0 ]; then
         SHELL_RESULT=$(cat $LOGFILE | grep "Counts don't match")
         echo "::error::validate.sh $SHELL_RESULT"
@@ -146,6 +172,7 @@ test_utilities_bundle () {
 ##
 test_flink_bundle() {
     export HADOOP_CLASSPATH=$($HADOOP_HOME/bin/hadoop classpath)
+    change_java_runtime_version
     $FLINK_HOME/bin/start-cluster.sh
     $FLINK_HOME/bin/sql-client.sh -j $JARS_DIR/flink.jar -f $WORKDIR/flink/insert.sql
     sleep 10 # for test stability
@@ -153,6 +180,7 @@ test_flink_bundle() {
     local EXIT_CODE=$?
     $FLINK_HOME/bin/stop-cluster.sh
     unset HADOOP_CLASSPATH
+    use_default_java_runtime
     if [ "$EXIT_CODE" -ne 0 ]; then
         echo "::error::validate.sh Flink bundle validation failed."
         exit 1
@@ -173,6 +201,7 @@ test_flink_bundle() {
 #   KAFKA_CONNECT_PLUGIN_PATH_LIB_PATH: path to install hudi-kafka-connect-bundle.jar
 ##
 test_kafka_connect_bundle() {
+    change_java_runtime_version
     KAFKA_CONNECT_JAR=$1
     cp $KAFKA_CONNECT_JAR $KAFKA_CONNECT_PLUGIN_PATH_LIB_PATH
     $CONFLUENT_HOME/bin/zookeeper-server-start $CONFLUENT_HOME/etc/kafka/zookeeper.properties &
@@ -188,6 +217,7 @@ test_kafka_connect_bundle() {
     $WORKDIR/kafka/consume.sh
     local EXIT_CODE=$?
     kill $ZOOKEEPER_PID $KAFKA_SERVER_PID $SCHEMA_REG_PID
+    use_default_java_runtime
     if [ "$EXIT_CODE" -ne 0 ]; then
         echo "::error::validate.sh Kafka Connect bundle validation failed."
         exit 1
@@ -214,6 +244,7 @@ test_metaserver_bundle () {
     $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
     local HIVE_PID=$!
 
+    change_java_runtime_version
     echo "::warning::validate.sh Writing sample data via Spark DataSource."
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/service/write.scala
     ls /tmp/hudi-bundles/tests/trips
@@ -223,6 +254,7 @@ test_metaserver_bundle () {
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar  < $WORKDIR/service/read.scala
     numRecords=$(cat /tmp/metaserver-bundle/sparkdatasource/trips/results/*.csv | wc -l)
     echo $numRecords
+    use_default_java_runtime
     if [ "$numRecords" -ne 10 ]; then
         echo "::error::validate.sh Metaserver bundle validation failed."
         exit 1
@@ -263,12 +295,14 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
 
-echo "::warning::validate.sh validating flink bundle"
-test_flink_bundle
-if [ "$?" -ne 0 ]; then
-    exit 1
+if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' ]]; then
+  echo "::warning::validate.sh validating flink bundle"
+  test_flink_bundle
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  echo "::warning::validate.sh done validating flink bundle"
 fi
-echo "::warning::validate.sh done validating flink bundle"
 
 echo "::warning::validate.sh validating kafka connect bundle"
 test_kafka_connect_bundle $JARS_DIR/kafka-connect.jar

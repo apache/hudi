@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import java.io.Serializable;
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -119,11 +120,15 @@ public class ConfigProperty<T> implements Serializable {
   }
 
   public void checkValues(String value) {
-    if (validValues != null && !validValues.isEmpty() && !validValues.contains(value)) {
+    if (!isValid(value)) {
       throw new IllegalArgumentException(
           "The value of " + key + " should be one of "
               + String.join(",", validValues) + ", but was " + value);
     }
+  }
+
+  private boolean isValid(String value) {
+    return validValues == null || validValues.isEmpty() || validValues.contains(value.toUpperCase());
   }
 
   public List<String> getAlternatives() {
@@ -137,6 +142,49 @@ public class ConfigProperty<T> implements Serializable {
   public ConfigProperty<T> withDocumentation(String doc) {
     Objects.requireNonNull(doc);
     return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, alternatives);
+  }
+
+  public <U extends Enum<U>> ConfigProperty<T> withDocumentation(Class<U> e) {
+    return withDocumentation(e, "");
+  }
+
+  private <U extends Enum<U>> boolean isDefaultField(Class<U> e, Field f) {
+    if (!hasDefaultValue()) {
+      return false;
+    }
+    if (defaultValue() instanceof String) {
+      return f.getName().equals(((String) defaultValue()).toUpperCase());
+    }
+    return Enum.valueOf(e, f.getName()).equals(defaultValue());
+  }
+
+  public <U extends Enum<U>> ConfigProperty<T> withDocumentation(Class<U> e, String doc) {
+    Objects.requireNonNull(e);
+    StringBuilder sb = new StringBuilder();
+    if (StringUtils.nonEmpty(doc)) {
+      sb.append(doc);
+      sb.append('\n');
+    }
+    sb.append(e.getName());
+    sb.append(": ");
+    EnumDescription description =  e.getAnnotation(EnumDescription.class);
+    Objects.requireNonNull(description);
+    sb.append(description.value());
+    for (Field f: e.getFields()) {
+      if (isValid(f.getName())) {
+        EnumFieldDescription fieldDescription = f.getAnnotation(EnumFieldDescription.class);
+        Objects.requireNonNull(fieldDescription);
+        sb.append("\n    ");
+        sb.append(f.getName());
+        if (isDefaultField(e, f)) {
+          sb.append("(default)");
+        }
+        sb.append(": ");
+        sb.append(fieldDescription.value());
+      }
+    }
+
+    return new ConfigProperty<>(key, defaultValue, docOnDefaultValue, sb.toString(), sinceVersion, deprecatedVersion, inferFunction, validValues, advanced, alternatives);
   }
 
   public ConfigProperty<T> withValidValues(String... validValues) {

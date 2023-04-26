@@ -1088,12 +1088,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     assertFalse(replacedFilePaths.isEmpty());
 
-    // Step 4 : Insert 1 record and trigger sync/async cleaner and archive.
+    // Step 4 : Add commits with insert of 1 record and trigger sync/async cleaner and archive.
     List<String> configs = getAsyncServicesConfigs(1, "true", "true", "6", "", "");
     configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_POLICY.key(), "KEEP_LATEST_COMMITS"));
     configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1"));
-    configs.add(String.format("%s=%s", HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2"));
-    configs.add(String.format("%s=%s", HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3"));
+    configs.add(String.format("%s=%s", HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "4"));
+    configs.add(String.format("%s=%s", HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "5"));
     configs.add(String.format("%s=%s", HoodieCleanConfig.ASYNC_CLEAN.key(), asyncClean));
     configs.add(String.format("%s=%s", HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key(), "1"));
     configs.add(String.format("%s=%s", HoodieWriteConfig.MARKERS_TYPE.key(), "DIRECT"));
@@ -1108,8 +1108,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.addRecordMerger(recordType, configs);
     cfg.configs = configs;
     cfg.continuousMode = false;
-    ds = new HoodieDeltaStreamer(cfg, jsc);
-    ds.sync();
+
+    for (int i = 0; i < 2; i++) {
+      ds = new HoodieDeltaStreamer(cfg, jsc);
+      ds.sync();
+    }
 
     // Step 5 : Make sure that firstReplaceHoodieInstant is archived.
     long count = meta.reloadActiveTimeline().getCompletedReplaceTimeline().getInstantsAsStream().filter(instant -> firstReplaceHoodieInstant.get().equals(instant)).count();
@@ -2544,7 +2547,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "def");
 
-    // add a replace commit which does not have CEHCKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
+    // add a replace commit which does not have CHECKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
     addReplaceCommitToTimeline(metaClient, Collections.emptyMap());
     metaClient.reloadActiveTimeline();
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
@@ -2618,7 +2621,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     /**
      * Returns some random number as distance between the points.
      *
-     * @param lat1 Latitiude of source
+     * @param lat1 Latitude of source
      * @param lat2 Latitude of destination
      * @param lon1 Longitude of source
      * @param lon2 Longitude of destination

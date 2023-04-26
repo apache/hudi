@@ -190,7 +190,7 @@ public class TestRowDataKeyGen {
   }
 
   @Test
-  void testRecoredKeyContainsTimestamp() {
+  void testRecordKeyContainsTimestamp() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
     conf.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid,ts");
     conf.setString(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
