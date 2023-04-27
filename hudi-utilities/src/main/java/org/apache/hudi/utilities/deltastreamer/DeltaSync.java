@@ -76,6 +76,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
@@ -420,8 +421,17 @@ public class DeltaSync implements Serializable, Closeable {
         }
       }
 
-      // complete the pending clustering before writing to sink
-      if (cfg.retryLastPendingInlineClusteringJob && getHoodieClientConfig(this.schemaProvider).inlineClusteringEnabled()) {
+      // complete the pending compaction before writing to sink
+      if (cfg.retryLastPendingInlineCompactionJob && getHoodieClientConfig(this.schemaProvider).inlineCompactionEnabled()) {
+        Option<String> pendingCompactionInstant = getLastPendingCompactionInstant(allCommitsTimelineOpt);
+        if (pendingCompactionInstant.isPresent()) {
+          HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
+          writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata.getCommitMetadata().get(), Option.empty());
+          //refreshTimeline();
+          reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema());
+        }
+      } else if (cfg.retryLastPendingInlineClusteringJob && getHoodieClientConfig(this.schemaProvider).inlineClusteringEnabled()) {
+        // complete the pending clustering before writing to sink
         Option<String> pendingClusteringInstant = getLastPendingClusteringInstant(allCommitsTimelineOpt);
         if (pendingClusteringInstant.isPresent()) {
           writeClient.cluster(pendingClusteringInstant.get());
@@ -440,6 +450,14 @@ public class DeltaSync implements Serializable, Closeable {
     if (commitTimelineOpt.isPresent()) {
       Option<HoodieInstant> pendingClusteringInstant = commitTimelineOpt.get().filterPendingReplaceTimeline().lastInstant();
       return pendingClusteringInstant.isPresent() ? Option.of(pendingClusteringInstant.get().getTimestamp()) : Option.empty();
+    }
+    return Option.empty();
+  }
+
+  private Option<String> getLastPendingCompactionInstant(Option<HoodieTimeline> commitTimelineOpt) {
+    if (commitTimelineOpt.isPresent()) {
+      Option<HoodieInstant> pendingCompactionInstant = commitTimelineOpt.get().filterPendingCompactionTimeline().lastInstant();
+      return pendingCompactionInstant.isPresent() ? Option.of(pendingCompactionInstant.get().getTimestamp()) : Option.empty();
     }
     return Option.empty();
   }
