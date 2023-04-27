@@ -36,7 +36,6 @@ import org.apache.orc.CompressionKind;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.schema.MessageType;
-import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 
@@ -108,7 +107,6 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     return new HoodieAvroOrcWriter(instantTime, path, orcConfig, schema, taskContextSupplier);
   }
 
-  @NotNull
   private HoodieAvroWriteSupport getHoodieAvroWriteSupport(Configuration conf, Schema schema,
                                                            HoodieConfig config, boolean enableBloomFilter) {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
