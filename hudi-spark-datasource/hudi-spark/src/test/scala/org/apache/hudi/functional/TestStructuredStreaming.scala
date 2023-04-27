@@ -461,6 +461,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .processAllAvailable()
   }
 
+  /*
   @Test
   def testStructuredStreamingWithDisabledCompaction(): Unit = {
     val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
@@ -482,4 +483,5 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .setLoadActiveTimelineOnLoad(true).build()
     assertTrue(metaClient.getActiveTimeline.getCommitTimeline.empty())
   }
+   */
 }

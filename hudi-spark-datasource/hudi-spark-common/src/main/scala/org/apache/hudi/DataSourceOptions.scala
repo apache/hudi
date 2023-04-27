@@ -486,7 +486,7 @@ object DataSourceWriteOptions {
   val STREAMING_DISABLE_COMPACTION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.streaming.disable.compaction")
     .defaultValue("false")
-    .sinceVersion("0.13.0")
+    .sinceVersion("0.14.0")
     .withDocumentation("By default for MOR table, async compaction is enabled with spark streaming sink. "
       + "By setting this config to true, we can disable it and the expectation is that, users will schedule and execute "
       + "compaction in a different process/job altogether. Some users may wish to run it separately to manage resources "
