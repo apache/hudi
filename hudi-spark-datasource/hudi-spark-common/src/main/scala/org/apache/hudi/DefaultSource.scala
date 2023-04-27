@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
@@ -101,7 +102,8 @@ class DefaultSource extends RelationProvider
       )
     } else {
       Map()
-    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams ++
+      (DATA_QUERIES_ONLY -> sqlContext.getConf(DATA_QUERIES_ONLY.key(), DATA_QUERIES_ONLY.defaultValue())))
 
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
@@ -261,11 +263,8 @@ object DefaultSource {
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
 
-        case (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, true) =>
-          new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
-
         case (_, _, true) =>
-          resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters, queryType)
+          resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
 
         case (_, _, _) =>
           throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
@@ -278,15 +277,14 @@ object DefaultSource {
                                              globPaths: Seq[Path],
                                              userSchema: Option[StructType],
                                              metaClient: HoodieTableMetaClient,
-                                             parameters: Map[String, String],
-                                             queryType: String): BaseRelation = {
+                                             parameters: Map[String, String]): BaseRelation = {
     val enableFileIndex = HoodieSparkConfUtils.getConfigValue(parameters, sqlContext.sparkSession.sessionState.conf,
       ENABLE_HOODIE_FILE_INDEX.key, ENABLE_HOODIE_FILE_INDEX.defaultValue.toString).toBoolean
     val isSchemaEvolutionEnabledOnRead = HoodieSparkConfUtils.getConfigValue(parameters,
       sqlContext.sparkSession.sessionState.conf, DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
       DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
     if (!enableFileIndex || isSchemaEvolutionEnabledOnRead
-      || globPaths.nonEmpty || !queryType.equals(QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)) {
+      || globPaths.nonEmpty || !parameters.getOrElse(DATA_QUERIES_ONLY.key, DATA_QUERIES_ONLY.defaultValue).toBoolean) {
       HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
     } else {
       HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters +

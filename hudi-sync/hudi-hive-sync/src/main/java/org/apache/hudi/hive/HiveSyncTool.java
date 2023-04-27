@@ -133,9 +133,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       switch (syncClient.getTableType()) {
         case COPY_ON_WRITE:
           this.snapshotTableName = tableName;
-          if (syncClient.isBootstrap()) {
-            this.roTableName = Option.of(tableName + SUFFIX_READ_OPTIMIZED_TABLE);
-          }
+          this.roTableName = Option.empty();
           break;
         case MERGE_ON_READ:
           this.hiveSyncTableStrategy = config.getStringOrDefault(HIVE_SYNC_TABLE_STRATEGY).toUpperCase();
@@ -174,9 +172,6 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     switch (syncClient.getTableType()) {
       case COPY_ON_WRITE:
         syncHoodieTable(snapshotTableName, false, false);
-        if (syncClient.isBootstrap()) {
-          syncHoodieTable(roTableName.get(), false, true);
-        }
         break;
       case MERGE_ON_READ:
         switch (HoodieSyncTableStrategy.valueOf(hiveSyncTableStrategy)) {

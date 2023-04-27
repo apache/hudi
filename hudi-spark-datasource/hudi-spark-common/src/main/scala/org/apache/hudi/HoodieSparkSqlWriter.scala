@@ -317,7 +317,7 @@ object HoodieSparkSqlWriter {
             // scalastyle:off
             if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
               val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, hoodieConfig, df, tblName,
-                basePath, path, instantTime, writerSchema, tableConfig.isTablePartitioned, tableConfig.getBootstrapBasePath.isPresent)
+                basePath, path, instantTime, writerSchema, tableConfig.isTablePartitioned)
               return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
             }
             // scalastyle:on
@@ -759,7 +759,7 @@ object HoodieSparkSqlWriter {
       } finally {
         writeClient.close()
       }
-      val metaSyncSuccess = metaSync(sqlContext.sparkSession, hoodieConfig, basePath, df.schema, isBootstrapTable = true)
+      val metaSyncSuccess = metaSync(sqlContext.sparkSession, hoodieConfig, basePath, df.schema)
       metaSyncSuccess
     }
   }
@@ -780,8 +780,7 @@ object HoodieSparkSqlWriter {
                       path: String,
                       instantTime: String,
                       writerSchema: Schema,
-                      isTablePartitioned: Boolean,
-                      isBootstrapTable: Boolean): (Boolean, common.util.Option[String]) = {
+                      isTablePartitioned: Boolean): (Boolean, common.util.Option[String]) = {
     if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
       throw new HoodieException("Dropping duplicates with bulk_insert in row writer path is not supported yet")
     }
@@ -831,7 +830,7 @@ object HoodieSparkSqlWriter {
       .mode(SaveMode.Append)
       .save()
 
-    val syncHiveSuccess = metaSync(sqlContext.sparkSession, writeConfig, basePath, df.schema, isBootstrapTable)
+    val syncHiveSuccess = metaSync(sqlContext.sparkSession, writeConfig, basePath, df.schema)
     (syncHiveSuccess, common.util.Option.ofNullable(instantTime))
   }
 
@@ -869,7 +868,7 @@ object HoodieSparkSqlWriter {
   }
 
   private def metaSync(spark: SparkSession, hoodieConfig: HoodieConfig, basePath: Path,
-                       schema: StructType, isBootstrapTable: Boolean): Boolean = {
+                       schema: StructType): Boolean = {
     val hiveSyncEnabled = hoodieConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_SYNC_ENABLED).toBoolean
     var metaSyncEnabled = hoodieConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_ENABLED).toBoolean
     var syncClientToolClassSet = scala.collection.mutable.Set[String]()
@@ -908,7 +907,7 @@ object HoodieSparkSqlWriter {
     // Since Hive tables are now synced as Spark data source tables which are cached after Spark SQL queries
     // we must invalidate this table in the cache so writes are reflected in later queries
     if (metaSyncEnabled) {
-      getHiveTableNames(hoodieConfig, isBootstrapTable).foreach(name => {
+      getHiveTableNames(hoodieConfig).foreach(name => {
         val qualifiedTableName = String.join(".", hoodieConfig.getStringOrDefault(HIVE_DATABASE), name)
         if (spark.catalog.tableExists(qualifiedTableName)) {
           spark.catalog.refreshTable(qualifiedTableName)
@@ -918,16 +917,12 @@ object HoodieSparkSqlWriter {
     true
   }
 
-  private def getHiveTableNames(hoodieConfig: HoodieConfig, isBootstrapTable: Boolean): List[String] = {
+  private def getHiveTableNames(hoodieConfig: HoodieConfig): List[String] = {
     val tableName = hoodieConfig.getStringOrDefault(HIVE_TABLE)
     val tableType = hoodieConfig.getStringOrDefault(TABLE_TYPE)
 
     if (tableType.equals(COW_TABLE_TYPE_OPT_VAL)) {
-      if (isBootstrapTable) {
-        List(tableName, tableName + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE)
-      } else {
-        List(tableName)
-      }
+      List(tableName)
     } else {
       val roSuffix = if (hoodieConfig.getBooleanOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)) {
         ""
@@ -993,7 +988,7 @@ object HoodieSparkSqlWriter {
       log.info(s"Clustering Scheduled is $clusteringInstant")
 
       val metaSyncSuccess = metaSync(spark, HoodieWriterUtils.convertMapToHoodieConfig(parameters),
-        tableInstantInfo.basePath, schema, tableConfig.getBootstrapBasePath.isPresent)
+        tableInstantInfo.basePath, schema)
 
       log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
       (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
