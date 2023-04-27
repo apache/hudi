@@ -19,6 +19,7 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -35,17 +36,19 @@ import java.util.Map;
 /**
  * Wrap AvroWriterSupport for plugging in the bloom filter.
  */
-public class HoodieAvroWriteSupport extends AvroWriteSupport {
+public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
 
   private final Option<HoodieBloomFilterWriteSupport<String>> bloomFilterWriteSupportOpt;
   private final Map<String, String> footerMetadata = new HashMap<>();
+  protected final HoodieConfig config;
 
   public static final String OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "com.uber.hoodie.bloomfilter";
   public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "org.apache.hudi.bloomfilter";
 
-  public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt) {
+  public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt, Option<HoodieConfig> config) {
     super(schema, avroSchema, ConvertingGenericData.INSTANCE);
     this.bloomFilterWriteSupportOpt = bloomFilterOpt.map(HoodieBloomFilterAvroWriteSupport::new);
+    this.config = config.isPresent() ? config.get() : null;
   }
 
   @Override

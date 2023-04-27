@@ -698,6 +698,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "will not print any configuration which contains the configured filter. For example with "
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
 
+
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
 

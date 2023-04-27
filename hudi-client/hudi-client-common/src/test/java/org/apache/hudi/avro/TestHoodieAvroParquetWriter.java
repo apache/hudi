@@ -63,7 +63,7 @@ public class TestHoodieAvroParquetWriter {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000,
         BloomFilterTypeCode.DYNAMIC_V0.name());
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema),
-        schema, Option.of(filter));
+        schema, Option.of(filter), Option.empty());
 
     HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig =
         new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP, ParquetWriter.DEFAULT_BLOCK_SIZE,

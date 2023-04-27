@@ -83,7 +83,7 @@ public class TestHoodieBaseParquetWriter {
 
     Schema schema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema),
-        schema, Option.of(filter));
+        schema, Option.of(filter), Option.empty());
 
     long maxFileSize = 2 * 1024 * 1024;
     HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig =
