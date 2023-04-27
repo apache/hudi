@@ -73,10 +73,10 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS;
 
 /**
- * Common thread-safe implementation for multiple TableFileSystemView Implementations. Provides uniform handling of (a)
- * Loading file-system views from underlying file-system (b) Pending compaction operations and changing file-system
- * views based on that (c) Thread-safety in loading and managing file system views for this table. (d) resetting
- * file-system views The actual mechanism of fetching file slices from different view storages is delegated to
+ * Common thread-safe implementation for multiple TableFileSystemView Implementations. <br>Provides uniform handling of: <br>(a)
+ * Loading file-system views from underlying file-system <br>(b) Pending compaction operations and changing file-system
+ * views based on that <br>(c) Thread-safety in loading and managing file system views for this table. <br>(d) resetting
+ * file-system views <br>The actual mechanism of fetching file slices from different view storages is delegated to
  * sub-classes.
  */
 public abstract class AbstractTableFileSystemView implements SyncableFileSystemView, Serializable {
