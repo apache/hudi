@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -334,6 +335,42 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpointComplete(2)
         // Same the original base file content.
         .checkWrittenData(expected, 1)
+        .end();
+  }
+
+  @Test
+  public void testCommitOnEmptyBatch() throws Exception {
+    // reset the config option
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
+
+    preparePipeline()
+        .consume(TestData.DATA_SET_INSERT)
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkCompletedInstantCount(1)
+        // Do checkpoint without data consumption
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        // The instant is committed successfully
+        .checkCompletedInstantCount(2)
+        // Continue to consume data
+        .consume(TestData.DATA_SET_UPDATE_INSERT)
+        .checkWrittenData(EXPECTED1)
+        .checkpoint(3)
+        .assertNextEvent()
+        .checkpointComplete(3)
+        .checkCompletedInstantCount(3)
+        // Commit the data and check after an empty batch
+        .checkWrittenData(EXPECTED2)
+        // Do checkpoint without data consumption
+        .checkpoint(4)
+        .assertNextEvent()
+        .checkpointComplete(4)
+        .checkCompletedInstantCount(4)
+        .checkWrittenData(EXPECTED2)
         .end();
   }
 

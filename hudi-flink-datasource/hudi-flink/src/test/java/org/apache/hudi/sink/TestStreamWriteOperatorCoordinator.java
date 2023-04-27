@@ -389,6 +389,42 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
   }
 
+  @Test
+  public void testCommitOnEmptyBatch() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
+    MockOperatorCoordinatorContext context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
+    NonThrownExecutor executor = new MockCoordinatorExecutor(context);
+    try (StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, context)) {
+      coordinator.start();
+      coordinator.setExecutor(executor);
+      coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
+      coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+
+      // Coordinator start the instant
+      String instant = coordinator.getInstant();
+
+      OperatorEvent event1 = WriteMetadataEvent.builder()
+          .taskID(1)
+          .instantTime(instant)
+          .writeStatus(Collections.emptyList())
+          .build();
+      OperatorEvent event2 = WriteMetadataEvent.builder()
+          .taskID(1)
+          .instantTime(instant)
+          .writeStatus(Collections.emptyList())
+          .build();
+      coordinator.handleEventFromOperator(0, event1);
+      coordinator.handleEventFromOperator(0, event2);
+
+      assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1),
+          "Commit the instant");
+      String lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
+      assertThat("Commits the instant with empty batch anyway", lastCompleted, is(instant));
+      assertNull(coordinator.getEventBuffer()[0]);
+    }
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

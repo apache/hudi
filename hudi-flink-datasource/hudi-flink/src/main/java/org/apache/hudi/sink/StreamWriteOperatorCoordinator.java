@@ -504,7 +504,7 @@ public class StreamWriteOperatorCoordinator
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
 
-    if (writeResults.size() == 0) {
+    if (writeResults.size() == 0 && !OptionsResolver.allowCommitOnEmptyBatch(conf)) {
       // No data has written, reset the buffer and returns early
       reset();
       // Send commit ack event to the write function to unblock the flushing

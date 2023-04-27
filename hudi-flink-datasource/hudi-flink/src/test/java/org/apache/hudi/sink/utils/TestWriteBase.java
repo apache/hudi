@@ -413,5 +413,11 @@ public class TestWriteBase {
           ? TestUtils.getLastDeltaCompleteInstant(basePath)
           : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);
     }
+
+    public TestHarness checkCompletedInstantCount(int count) {
+      boolean isMor = OptionsResolver.isMorTable(conf);
+      assertEquals(count, TestUtils.getCompletedInstantCount(basePath, isMor ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION));
+      return this;
+    }
   }
 }
