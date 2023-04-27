@@ -29,8 +29,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -174,5 +176,13 @@ public class HoodieIndexUtils {
     // Check if the last commit ts for this row is 1) present in the timeline or
     // 2) is less than the first commit ts in the timeline
     return !commitTimeline.empty() && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
+  }
+
+  public static HoodieIndex createUserDefinedIndex(HoodieWriteConfig config) {
+    Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
+    if (!(instance instanceof HoodieIndex)) {
+      throw new HoodieIndexException(config.getIndexClass() + " is not a subclass of HoodieIndex");
+    }
+    return (HoodieIndex) instance;
   }
 }
