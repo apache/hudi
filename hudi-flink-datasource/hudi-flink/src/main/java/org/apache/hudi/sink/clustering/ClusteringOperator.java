@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.clustering;
 
 import org.apache.hudi.adapter.MaskingOutputAdapter;
+import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -352,8 +353,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     RecordComparator comparator = createSortCodeGenerator().generateRecordComparator("SortComparator").newInstance(cl);
 
     MemoryManager memManager = getContainingTask().getEnvironment().getMemoryManager();
-    BinaryExternalSorter sorter =
-        new BinaryExternalSorter(
+    BinaryExternalSorter sorter = Utils.getBinaryExternalSorter(
             this.getContainingTask(),
             memManager,
             computeMemorySize(),
@@ -362,7 +362,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             binarySerializer,
             computer,
             comparator,
-            getContainingTask().getJobConfiguration());
+            this.conf);
     sorter.startThreads();
 
     // register the metrics.

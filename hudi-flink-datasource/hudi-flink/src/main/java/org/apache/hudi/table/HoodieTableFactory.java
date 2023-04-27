@@ -37,6 +37,7 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.constraints.UniqueConstraint;
 import org.apache.flink.table.catalog.CatalogTable;
@@ -59,6 +60,10 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.table.api.config.ExecutionConfigOptions.TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES;
+import static org.apache.flink.table.api.config.ExecutionConfigOptions.TABLE_EXEC_SPILL_COMPRESSION_ENABLED;
+import static org.apache.flink.table.api.config.ExecutionConfigOptions.TABLE_EXEC_SPILL_COMPRESSION_BLOCK_SIZE;
+import static org.apache.flink.table.api.config.ExecutionConfigOptions.TABLE_EXEC_SORT_ASYNC_MERGE_ENABLED;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
@@ -94,6 +99,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    setupSortOptions(conf, context.getConfiguration());
     return new HoodieTableSink(conf, schema);
   }
 
@@ -383,6 +389,28 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.OPERATION)
         && OptionsResolver.isCowTable(conf)) {
       conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+    }
+  }
+
+  /**
+   * Sets up the table exec sort options.
+   */
+  private void setupSortOptions(Configuration conf, ReadableConfig contextConfig) {
+    if (contextConfig.getOptional(TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES).isPresent()) {
+      conf.set(TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES,
+          contextConfig.get(TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES));
+    }
+    if (contextConfig.getOptional(TABLE_EXEC_SPILL_COMPRESSION_ENABLED).isPresent()) {
+      conf.set(TABLE_EXEC_SPILL_COMPRESSION_ENABLED,
+          contextConfig.get(TABLE_EXEC_SPILL_COMPRESSION_ENABLED));
+    }
+    if (contextConfig.getOptional(TABLE_EXEC_SPILL_COMPRESSION_BLOCK_SIZE).isPresent()) {
+      conf.set(TABLE_EXEC_SPILL_COMPRESSION_BLOCK_SIZE,
+          contextConfig.get(TABLE_EXEC_SPILL_COMPRESSION_BLOCK_SIZE));
+    }
+    if (contextConfig.getOptional(TABLE_EXEC_SORT_ASYNC_MERGE_ENABLED).isPresent()) {
+      conf.set(TABLE_EXEC_SORT_ASYNC_MERGE_ENABLED,
+          contextConfig.get(TABLE_EXEC_SORT_ASYNC_MERGE_ENABLED));
     }
   }
 
