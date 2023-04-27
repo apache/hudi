@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.sync.common.HiveBucketingSpec;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.Partition;
 
@@ -276,7 +277,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       String outputFormatClass,
       String serdeClass,
       Map<String, String> serdeProperties,
-      Map<String, String> tableProperties) {
+      Map<String, String> tableProperties,
+      Option<HiveBucketingSpec> hiveBucketingSpec) {
     if (tableExists(tableName)) {
       return;
     }
@@ -306,7 +308,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .withInputFormat(inputFormatClass)
           .withOutputFormat(outputFormatClass)
           .withColumns(schemaWithoutPartitionKeys);
-
+      hiveBucketingSpec.ifPresent(spec -> {
+        storageDescriptor.setBucketColumns(spec.getBucketColumns());
+        storageDescriptor.setNumberOfBuckets(spec.getBucketNumber());
+      });
       final Date now = new Date();
       TableInput tableInput = new TableInput()
           .withName(tableName)

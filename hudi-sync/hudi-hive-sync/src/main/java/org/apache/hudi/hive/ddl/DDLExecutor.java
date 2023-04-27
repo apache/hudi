@@ -18,7 +18,9 @@
 
 package org.apache.hudi.hive.ddl;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.sync.common.HiveBucketingSpec;
 
 import org.apache.parquet.schema.MessageType;
 
@@ -47,10 +49,11 @@ public interface DDLExecutor extends AutoCloseable {
    * @param serdeClass
    * @param serdeProperties
    * @param tableProperties
+   * @param hiveBucketingSpec
    */
   void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
                    String outputFormatClass, String serdeClass,
-                   Map<String, String> serdeProperties, Map<String, String> tableProperties);
+                   Map<String, String> serdeProperties, Map<String, String> tableProperties, Option<HiveBucketingSpec> hiveBucketingSpec);
 
   /**
    * Updates the table with the newSchema.

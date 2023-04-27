@@ -27,6 +27,7 @@ import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.hive.util.PartitionFilterGenerator;
+import org.apache.hudi.sync.common.HiveBucketingSpec;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.model.FieldSchema;
@@ -43,6 +44,7 @@ import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -51,12 +53,16 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD;
+import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS;
+import static org.apache.hudi.config.HoodieIndexConfig.INDEX_TYPE;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_OMIT_METADATA_FIELDS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD;
@@ -65,6 +71,8 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.METASTORE_URIS;
+import static org.apache.hudi.index.HoodieIndex.IndexType.BUCKET;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
@@ -308,11 +316,20 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       String outputFormatClassName = HoodieInputFormatUtils.getOutputFormatClassName(baseFileFormat);
       String serDeFormatClassName = HoodieInputFormatUtils.getSerDeClassName(baseFileFormat);
 
+      // Manage bucketing specs
+      Option<HiveBucketingSpec> hiveBucketingSpec;
+      if(config.getBooleanOrDefault(HIVE_SYNC_BUCKET_SYNC) && BUCKET.name().equals(config.getStringOrDefault(INDEX_TYPE))){
+        int numberBucket = config.getIntOrDefault(BUCKET_INDEX_NUM_BUCKETS);
+        String bucketColumns = config.getString(BUCKET_INDEX_HASH_FIELD) != null ?
+            config.getString(BUCKET_INDEX_HASH_FIELD): config.getStringOrDefault(RECORDKEY_FIELD_NAME);
+        hiveBucketingSpec = Option.of(new HiveBucketingSpec(numberBucket, Arrays.asList(bucketColumns.split(","))));
+      } else hiveBucketingSpec = Option.empty();
+
       // Custom serde will not work with ALTER TABLE REPLACE COLUMNS
       // https://github.com/apache/hive/blob/release-1.1.0/ql/src/java/org/apache/hadoop/hive
       // /ql/exec/DDLTask.java#L3488
       syncClient.createTable(tableName, schema, inputFormatClassName,
-          outputFormatClassName, serDeFormatClassName, serdeProperties, tableProperties);
+          outputFormatClassName, serDeFormatClassName, serdeProperties, tableProperties, hiveBucketingSpec);
       schemaChanged = true;
     } else {
       // Check if the table schema has evolved

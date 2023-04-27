@@ -32,6 +32,7 @@ import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.sync.common.HiveBucketingSpec;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -200,8 +201,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   @Override
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
                           String outputFormatClass, String serdeClass,
-                          Map<String, String> serdeProperties, Map<String, String> tableProperties) {
-    ddlExecutor.createTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
+                          Map<String, String> serdeProperties, Map<String, String> tableProperties, Option<HiveBucketingSpec> hiveBucketingSpec) {
+    ddlExecutor.createTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties, hiveBucketingSpec);
   }
 
   @Override
