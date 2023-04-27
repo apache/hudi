@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.functional;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
@@ -85,7 +86,7 @@ public class TestChainedTransformer extends SparkClientFunctionalTestHarness {
   })
   public void testChainedTransformerValidationFails(String transformerName) {
     try {
-      ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")));
+      ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), Option.empty(), false);
       fail();
     } catch (Exception e) {
       assertTrue(e instanceof HoodieTransformPlanException, e.getMessage());
@@ -100,7 +101,7 @@ public class TestChainedTransformer extends SparkClientFunctionalTestHarness {
       "org.apache.hudi.utilities.transform.FlatteningTransformer,org.apache.hudi.utilities.transform.FlatteningTransformer"
   })
   public void testChainedTransformerValidationPasses(String transformerName) {
-    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")));
+    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), Option.empty(), false);
     assertNotNull(transformer);
   }
 

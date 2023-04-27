@@ -24,9 +24,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
 
 import org.apache.avro.Schema;
@@ -69,16 +68,13 @@ public class ChainedTransformer implements Transformer {
    *
    * @param sourceSchemaOpt                   Source Schema
    * @param configuredTransformers            List of configured transformer class names.
-   * @param enableSchemaValidation if true, schema is validated for the transformed data against expected schema.
-   *                                          Expected schema is provided by {@link Transformer#schemaTransform}
+   * @param enableSchemaValidation            If true, schema is validated for the transformed data against expected schema.
+   *                                          Expected schema is provided by {@link Transformer#transformedSchema}
    */
   public ChainedTransformer(List<String> configuredTransformers, Option<Schema> sourceSchemaOpt, boolean enableSchemaValidation) {
     this.transformers = new ArrayList<>(configuredTransformers.size());
     this.enableSchemaValidation = enableSchemaValidation;
     this.sourceSchemaOpt = sourceSchemaOpt;
-    if (enableSchemaValidation) {
-      ValidationUtils.checkArgument(sourceSchemaOpt.isPresent(), "Source schema should not be null");
-    }
 
     Set<String> identifiers = new HashSet<>();
     for (String configuredTransformer : configuredTransformers) {
@@ -108,12 +104,12 @@ public class ChainedTransformer implements Transformer {
   @Override
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties) {
     Dataset<Row> dataset = rowDataset;
-    Schema incomingSchema = enableSchemaValidation ? sourceSchemaOpt.get() : null;
+    Option<Schema> incomingSchemaOpt = sourceSchemaOpt;
     for (TransformerInfo transformerInfo : transformers) {
       Transformer transformer = transformerInfo.getTransformer();
       dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
       if (enableSchemaValidation) {
-        incomingSchema = validateAndGetTransformedSchema(transformer, dataset, incomingSchema, jsc, sparkSession, properties);
+        incomingSchemaOpt = validateAndGetTransformedSchema(transformerInfo, dataset, incomingSchemaOpt, jsc, sparkSession, properties);
       }
     }
     return dataset;
@@ -128,6 +124,29 @@ public class ChainedTransformer implements Transformer {
     } else {
       identifiers.add(id);
     }
+  }
+
+  private Option<Schema> validateAndGetTransformedSchema(TransformerInfo transformerInfo, Dataset<Row> dataset, Option<Schema> incomingSchemaOpt,
+                                                         JavaSparkContext jsc, SparkSession sparkSession, TypedProperties properties) {
+    if (!incomingSchemaOpt.isPresent()) {
+      throw new HoodieSchemaException(String.format("Source schema not available for transformer %s", transformerInfo));
+    }
+    Schema incomingSchema = incomingSchemaOpt.get();
+
+    // Get expected target schema from transformer and actual target schema from struct
+    Schema targetSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataset.schema(), incomingSchema.getName(),
+        incomingSchema.getNamespace());
+    Option<Schema> expectedTargetSchemaOpt = transformerInfo.getTransformer().transformedSchema(jsc, sparkSession, incomingSchema, properties);
+    if (!expectedTargetSchemaOpt.isPresent()) {
+      throw new HoodieSchemaException(String.format("Expected target schema not provided for transformer %s", transformerInfo));
+    }
+
+    Schema expectedTargetSchema = expectedTargetSchemaOpt.get();
+    if (!AvroSchemaUtils.isSchemaCompatible(expectedTargetSchema, targetSchema, false, false)) {
+      throw new HoodieSchemaException(String.format("Transformer %s - Schema of transformed data does not match expected schema \nexpected=%s \nactual=%s",
+          transformerInfo, expectedTargetSchema, targetSchema));
+    }
+    return expectedTargetSchemaOpt;
   }
 
   protected static class TransformerInfo {
@@ -179,19 +198,10 @@ public class ChainedTransformer implements Transformer {
 
       return transformerProps;
     }
-  }
 
-  private Schema validateAndGetTransformedSchema(Transformer transformer, Dataset<Row> dataset, Schema incomingSchema,
-                                               JavaSparkContext jsc, SparkSession sparkSession, TypedProperties properties) {
-    Schema targetSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataset.schema(), incomingSchema.getName(),
-        incomingSchema.getNamespace());
-    Schema expectedTargetSchema = transformer.schemaTransform(jsc, sparkSession, incomingSchema, properties);
-    // TODO: Check the API arguments below
-    if (!AvroSchemaUtils.isSchemaCompatible(expectedTargetSchema, targetSchema, false, false)) {
-      throw new HoodieException(String.format("Transformer %s - Schema of transformed data does not match expected schema \nexpected=%s \nactual=%s",
-          transformer, expectedTargetSchema, targetSchema));
+    @Override
+    public String toString() {
+      return transformer + (idOpt.isPresent() ? idOpt.get() : "");
     }
-    // TODO: return expected or actual schema?
-    return expectedTargetSchema;
   }
 }

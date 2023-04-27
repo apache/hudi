@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.transform.Transformer;
+import org.apache.hudi.utilities.transform.FlatteningTransformer;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -98,5 +99,30 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
       int increment = Integer.parseInt((String) properties.get("timestamp.transformer.increment"));
       return rowDataset.withColumn("timestamp", functions.col("timestamp").multiply(multiplier).plus(increment));
     }
+  }
+
+  @Test
+  public void testTransformerSchemaValidation() throws Exception {
+    // Configure 3 transformers of same type. 2nd transformer has no suffix
+    String[] arr = new String [] {FlatteningTransformer.class.getName()};
+    List<String> transformerClassNames = Arrays.asList(arr);
+
+    // Create source using TRIP_EXAMPLE_SCHEMA
+    boolean useSchemaProvider = true;
+    PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
+    int parquetRecordsCount = 10;
+    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSSource(useSchemaProvider, true, "source.avsc", "target-flattened-transformer.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", "");
+    String tableBasePath = basePath + "/testTransformerSchemaValidation" + testNum;
+    HoodieDeltaStreamer.Config config = makeConfig(tableBasePath, WriteOperationType.INSERT,
+        ParquetDFSSource.class.getName(), transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false, useSchemaProvider,
+        100000, false, null, null, "timestamp", null);
+    config.enableTransformerSchemaValidation = true;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(config, jsc);
+
+    deltaStreamer.sync();
+    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    sqlContext.read().format("org.apache.hudi").load(tableBasePath).show();
   }
 }
