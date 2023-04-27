@@ -225,7 +225,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val shouldExtractPartitionValueFromPath =
       optParams.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
-    val shouldUseBootstrapFastRead = optParams.getOrElse(HoodieBootstrapRelation.USE_FAST_BOOTSTRAP_READ, "false") == "true"
+    val shouldUseBootstrapFastRead = optParams.getOrElse(HoodieBootstrapRelation.USE_FAST_BOOTSTRAP_READ, "false").toBoolean
 
     shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath || shouldUseBootstrapFastRead
   }
