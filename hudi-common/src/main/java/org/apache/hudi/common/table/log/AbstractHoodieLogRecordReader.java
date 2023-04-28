@@ -307,45 +307,43 @@ public abstract class AbstractHoodieLogRecordReader {
             // written per ingestion batch for a file but in reality we need to rollback (B1 & B2)
             // The following code ensures the same rollback block (R1) is used to rollback
             // both B1 & B2
-            LOG.info("Reading a command block from file " + logFile.getPath());
             // This is a command block - take appropriate action based on the command
             HoodieCommandBlock commandBlock = (HoodieCommandBlock) logBlock;
             String targetInstantForCommandBlock =
                 logBlock.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME);
+            LOG.info(String.format("Reading a command block %s with targetInstantTime %s from file %s", commandBlock.getType(), targetInstantForCommandBlock,
+                logFile.getPath()));
             switch (commandBlock.getType()) { // there can be different types of command blocks
               case ROLLBACK_BLOCK:
-                // Rollback the last read log block
-                // Get commit time from last record block, compare with targetCommitTime,
+                // Rollback older read log block(s)
+                // Get commit time from older record blocks, compare with targetCommitTime,
                 // rollback only if equal, this is required in scenarios of invalid/extra
                 // rollback blocks written due to failures during the rollback operation itself
                 // and ensures the same rollback block (R1) is used to rollback both B1 & B2 with
-                // same instant_time
-                int numBlocksRolledBack = 0;
-                totalRollbacks.incrementAndGet();
-                while (!currentInstantLogBlocks.isEmpty()) {
-                  HoodieLogBlock lastBlock = currentInstantLogBlocks.peek();
+                // same instant_time.
+                final int instantLogBlockSizeBeforeRollback = currentInstantLogBlocks.size();
+                currentInstantLogBlocks.removeIf(block -> {
                   // handle corrupt blocks separately since they may not have metadata
-                  if (lastBlock.getBlockType() == CORRUPT_BLOCK) {
+                  if (block.getBlockType() == CORRUPT_BLOCK) {
                     LOG.info("Rolling back the last corrupted log block read in " + logFile.getPath());
-                    currentInstantLogBlocks.pop();
-                    numBlocksRolledBack++;
-                  } else if (targetInstantForCommandBlock.contentEquals(lastBlock.getLogBlockHeader().get(INSTANT_TIME))) {
-                    // rollback last data block or delete block
-                    LOG.info("Rolling back the last log block read in " + logFile.getPath());
-                    currentInstantLogBlocks.pop();
-                    numBlocksRolledBack++;
-                  } else if (!targetInstantForCommandBlock
-                      .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME))) {
-                    // invalid or extra rollback block
-                    LOG.warn("TargetInstantTime " + targetInstantForCommandBlock
-                        + " invalid or extra rollback command block in " + logFile.getPath());
-                    break;
-                  } else {
-                    // this should not happen ideally
-                    LOG.warn("Unable to apply rollback command block in " + logFile.getPath());
+                    return true;
                   }
-                }
+                  if (targetInstantForCommandBlock.contentEquals(block.getLogBlockHeader().get(INSTANT_TIME))) {
+                    // rollback older data block or delete block
+                    LOG.info(String.format("Rolling back an older log block read from %s with instantTime %s",
+                        logFile.getPath(), targetInstantForCommandBlock));
+                    return true;
+                  }
+                  return false;
+                });
+
+                final int numBlocksRolledBack = instantLogBlockSizeBeforeRollback - currentInstantLogBlocks.size();
+                totalRollbacks.addAndGet(numBlocksRolledBack);
                 LOG.info("Number of applied rollback blocks " + numBlocksRolledBack);
+                if (numBlocksRolledBack == 0) {
+                  LOG.warn(String.format("TargetInstantTime %s invalid or extra rollback command block in %s",
+                      targetInstantForCommandBlock, logFile.getPath()));
+                }
                 break;
               default:
                 throw new UnsupportedOperationException("Command type not yet supported.");
