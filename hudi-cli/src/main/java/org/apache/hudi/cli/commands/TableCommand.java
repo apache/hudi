@@ -201,7 +201,9 @@ public class TableCommand {
     Map<String, String> oldProps = client.getTableConfig().propsMap();
 
     Properties updatedProps = new Properties();
-    updatedProps.load(new FileInputStream(updatePropsFilePath));
+    try(FileInputStream in = new FileInputStream(updatePropsFilePath)){
+      updatedProps.load(in);
+    }
     Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
     HoodieTableConfig.update(client.getFs(), metaPathDir, updatedProps);
 
