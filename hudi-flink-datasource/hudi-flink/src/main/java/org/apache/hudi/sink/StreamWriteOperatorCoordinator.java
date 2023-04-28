@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.flink.runtime.operators.coordination.RecreateOnResetOperatorCoordinator;
 import org.apache.hudi.adapter.OperatorCoordinatorAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -610,11 +611,12 @@ public class StreamWriteOperatorCoordinator
   /**
    * Provider for {@link StreamWriteOperatorCoordinator}.
    */
-  public static class Provider implements OperatorCoordinator.Provider {
+  public static class Provider extends RecreateOnResetOperatorCoordinator.Provider {
     private final OperatorID operatorId;
     private final Configuration conf;
 
     public Provider(OperatorID operatorId, Configuration conf) {
+      super(operatorId);
       this.operatorId = operatorId;
       this.conf = conf;
     }
@@ -625,7 +627,7 @@ public class StreamWriteOperatorCoordinator
     }
 
     @Override
-    public OperatorCoordinator create(Context context) {
+    protected OperatorCoordinator getCoordinator(Context context) throws Exception {
       return new StreamWriteOperatorCoordinator(this.conf, context);
     }
   }
