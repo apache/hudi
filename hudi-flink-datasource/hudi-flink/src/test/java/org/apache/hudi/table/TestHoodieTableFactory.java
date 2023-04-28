@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -28,6 +29,7 @@ import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.SchemaBuilder;
 import org.apache.hudi.utils.TestConfigurations;
@@ -64,7 +66,8 @@ public class TestHoodieTableFactory {
   private static final String AVRO_SCHEMA_FILE_PATH = Objects.requireNonNull(Thread.currentThread()
       .getContextClassLoader().getResource("test_read_schema.avsc")).toString();
   private static final String INFERRED_SCHEMA = "{\"type\":\"record\","
-      + "\"name\":\"record\","
+      + "\"name\":\"t1_record\","
+      + "\"namespace\":\"hoodie.t1\","
       + "\"fields\":["
       + "{\"name\":\"uuid\",\"type\":[\"null\",\"string\"],\"default\":null},"
       + "{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null},"
@@ -259,6 +262,21 @@ public class TestHoodieTableFactory {
         (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(MockContext.getInstance(this.conf));
     Configuration conf2 = tableSource2.getConf();
     assertNull(conf2.get(FlinkOptions.SOURCE_AVRO_SCHEMA), "expect schema string as null");
+
+    // infer special avro data types that needs namespace
+    this.conf.removeConfig(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH);
+    ResolvedSchema schema3 = SchemaBuilder.instance()
+        .field("f_decimal", DataTypes.DECIMAL(3, 2).notNull())
+        .field("f_map", DataTypes.MAP(DataTypes.VARCHAR(20), DataTypes.VARCHAR(10)))
+        .field("f_array", DataTypes.ARRAY(DataTypes.VARCHAR(10)))
+        .field("f_record", DataTypes.ROW(DataTypes.FIELD("r1", DataTypes.VARCHAR(10)), DataTypes.FIELD("r2", DataTypes.INT())))
+        .primaryKey("f_decimal")
+        .build();
+    final HoodieTableSink tableSink3 =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf, schema3, ""));
+    final Configuration conf3 = tableSink3.getConf();
+    final String expected = AvroSchemaConverter.convertToSchema(schema3.toSourceRowDataType().getLogicalType(), AvroSchemaUtils.getAvroRecordQualifiedName("t1")).toString();
+    assertThat(conf3.get(FlinkOptions.SOURCE_AVRO_SCHEMA), is(expected));
   }
 
   @Test
@@ -445,6 +463,21 @@ public class TestHoodieTableFactory {
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
     Configuration conf2 = tableSink2.getConf();
     assertNull(conf2.get(FlinkOptions.SOURCE_AVRO_SCHEMA), "expect schema string as null");
+
+    // infer special avro data types that needs namespace
+    this.conf.removeConfig(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH);
+    ResolvedSchema schema3 = SchemaBuilder.instance()
+        .field("f_decimal", DataTypes.DECIMAL(3, 2).notNull())
+        .field("f_map", DataTypes.MAP(DataTypes.VARCHAR(20), DataTypes.VARCHAR(10)))
+        .field("f_array", DataTypes.ARRAY(DataTypes.VARCHAR(10)))
+        .field("f_record", DataTypes.ROW(DataTypes.FIELD("r1", DataTypes.VARCHAR(10)), DataTypes.FIELD("r2", DataTypes.INT())))
+        .primaryKey("f_decimal")
+        .build();
+    final HoodieTableSink tableSink3 =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf, schema3, ""));
+    final Configuration conf3 = tableSink3.getConf();
+    final String expected = AvroSchemaConverter.convertToSchema(schema3.toSinkRowDataType().getLogicalType(), AvroSchemaUtils.getAvroRecordQualifiedName("t1")).toString();
+    assertThat(conf3.get(FlinkOptions.SOURCE_AVRO_SCHEMA), is(expected));
   }
 
   @Test
