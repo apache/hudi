@@ -19,25 +19,43 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.transform.Transformer;
 import org.apache.hudi.utilities.transform.FlatteningTransformer;
 
+import org.apache.avro.JsonProperties;
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
+import static org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer.TestHelpers.assertRecordCount;
+import static org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer.TestHelpers.makeConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestTransformer extends HoodieDeltaStreamerTestBase {
 
@@ -59,7 +77,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
         PARQUET_SOURCE_ROOT, false, "partition_path", "");
     String tableBasePath = basePath + "/testMultipleTransformersWithIdentifiers" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-        TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+        makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
             useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
 
@@ -78,8 +96,73 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     properties.setProperty("transformer.suffix", ".1,.2,.3");
     deltaStreamer.sync();
 
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
     assertEquals(0, sqlContext.read().format("org.apache.hudi").load(tableBasePath).where("timestamp != 110").count());
+  }
+
+  @Test
+  public void testTransformerSchemaValidation() throws Exception {
+    List<String> transformerClassNames = Arrays.asList(
+        FlatteningTransformerWithTransformedSchema.class.getName(),
+        TimestampTransformer.class.getName(),
+        AddColumnTransformerWithTransformedSchema.class.getName());
+    runDeltaStreamerWithTransformers(transformerClassNames);
+  }
+
+  @Test
+  public void testTransformerSchemaValidationFails() throws Exception {
+    String errorMsg = "Expected target schema not provided for transformer";
+    List<String> transformerClassNames = Arrays.asList(
+        FlatteningTransformer.class.getName(),
+        TimestampTransformer.class.getName(),
+        AddColumnTransformerWithTransformedSchema.class.getName());
+    testTransformerSchemaValidationFails(transformerClassNames, errorMsg);
+
+    transformerClassNames = Arrays.asList(
+        FlatteningTransformerWithTransformedSchema.class.getName(),
+        TimestampTransformer.class.getName(),
+        AddColumnTransformer.class.getName());
+    testTransformerSchemaValidationFails(transformerClassNames, errorMsg);
+
+    errorMsg = "Schema of transformed data does not match expected schema";
+    transformerClassNames = Arrays.asList(
+        FlatteningTransformerWithTransformedSchema.class.getName(),
+        TimestampTransformer.class.getName(),
+        AddColumnTransformerWithWrongTransformedSchema.class.getName());
+    testTransformerSchemaValidationFails(transformerClassNames, errorMsg);
+  }
+
+  private void testTransformerSchemaValidationFails(List<String> transformerClasses, String errorMsg) {
+    try {
+      runDeltaStreamerWithTransformers(transformerClasses);
+      fail();
+    } catch (Exception e) {
+      assertTrue(e.getMessage().contains(errorMsg), e.getMessage());
+    }
+  }
+
+  private void runDeltaStreamerWithTransformers(List<String> transformerClassNames) throws Exception {
+    // Create source using TRIP_EXAMPLE_SCHEMA
+    boolean useSchemaProvider = true;
+    PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
+    int parquetRecordsCount = 10;
+    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSSource(useSchemaProvider, true, "source.avsc", "target-flattened-addcolumn-transformer.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", "");
+    String tableBasePath = basePath + "/testTransformerSchemaValidation" + testNum;
+    HoodieDeltaStreamer.Config config = makeConfig(tableBasePath, WriteOperationType.INSERT,
+        ParquetDFSSource.class.getName(), transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false, useSchemaProvider,
+        100000, false, null, null, "timestamp", null);
+    config.enableTransformerSchemaValidation = true;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(config, jsc);
+    Properties properties = ((HoodieDeltaStreamer.DeltaSyncService) deltaStreamer.getIngestionService()).getProps();
+    properties.setProperty("timestamp.transformer.increment", "20");
+    properties.setProperty("timestamp.transformer.multiplier", "2");
+
+    deltaStreamer.sync();
+    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    sqlContext.read().format("org.apache.hudi").load(tableBasePath).show();
+    FileIOUtils.deleteDirectory(new File(tableBasePath));
   }
 
   /**
@@ -101,28 +184,87 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     }
   }
 
-  @Test
-  public void testTransformerSchemaValidation() throws Exception {
-    // Configure 3 transformers of same type. 2nd transformer has no suffix
-    String[] arr = new String [] {FlatteningTransformer.class.getName()};
-    List<String> transformerClassNames = Arrays.asList(arr);
+  /**
+   * Provides a transformedSchema implementation for FlatteningTransformer.
+   */
+  public static class FlatteningTransformerWithTransformedSchema extends FlatteningTransformer {
 
-    // Create source using TRIP_EXAMPLE_SCHEMA
-    boolean useSchemaProvider = true;
-    PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
-    int parquetRecordsCount = 10;
-    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
-    prepareParquetDFSSource(useSchemaProvider, true, "source.avsc", "target-flattened-transformer.avsc", PROPS_FILENAME_TEST_PARQUET,
-        PARQUET_SOURCE_ROOT, false, "partition_path", "");
-    String tableBasePath = basePath + "/testTransformerSchemaValidation" + testNum;
-    HoodieDeltaStreamer.Config config = makeConfig(tableBasePath, WriteOperationType.INSERT,
-        ParquetDFSSource.class.getName(), transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false, useSchemaProvider,
-        100000, false, null, null, "timestamp", null);
-    config.enableTransformerSchemaValidation = true;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(config, jsc);
+    @Override
+    public Option<Schema> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, Schema incomingSchema, TypedProperties properties) {
+      StructType incomingStruct = AvroConversionUtils.convertAvroSchemaToStructType(incomingSchema);
+      String flattenedSelect = flattenSchema(incomingStruct, null);
+      String[] cols = flattenedSelect.split(",");
+      List<Pair<String, String>> replacements = new LinkedList<>();
+      for (String col : cols) {
+        String[] names = col.split(" as ");
+        if (!names[0].equals(names[1])) {
+          replacements.add(Pair.of(names[0], names[1]));
+        }
+      }
 
-    deltaStreamer.sync();
-    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
-    sqlContext.read().format("org.apache.hudi").load(tableBasePath).show();
+      Schema newSchema = SerializableSchema.newCopy(incomingSchema);
+      List<Schema.Field> fields = new LinkedList<>();
+      Set<String> fieldsToRemove = new HashSet<>();
+      for (Pair<String, String> replacement : replacements) {
+        fieldsToRemove.add(replacement.getKey().replaceAll("\\..*", ""));
+        fields.add(new Schema.Field(
+            replacement.getValue(),
+            Schema.create(HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema(incomingSchema, replacement.getKey()).getType()),
+            "",
+            JsonProperties.NULL_VALUE));
+      }
+
+      newSchema = AvroSchemaUtils.appendFieldsToSchema(newSchema, fields);
+      newSchema = HoodieAvroUtils.removeFields(newSchema, fieldsToRemove);
+      return Option.of(newSchema);
+    }
+  }
+
+  /**
+   * Adds a new column named random in the dataset.
+   */
+  public static class AddColumnTransformer implements Transformer {
+
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+                              TypedProperties properties) {
+      return rowDataset.withColumn("random", functions.lit(5).multiply(functions.col("timestamp")));
+    }
+  }
+
+  /**
+   * Provides a transformedSchema implementation for AddColumnTransformer.
+   */
+  public static class AddColumnTransformerWithTransformedSchema extends AddColumnTransformer {
+
+    @Override
+    public Option<Schema> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, Schema incomingSchema, TypedProperties properties) {
+      List<Schema.Field> fields = new LinkedList<>();
+      fields.add(new Schema.Field(
+          "random",
+          Schema.create(Schema.Type.LONG),
+          "",
+          JsonProperties.NULL_VALUE));
+      Schema newSchema = AvroSchemaUtils.appendFieldsToSchema(incomingSchema, fields);
+      return Option.of(newSchema);
+    }
+  }
+
+  /**
+   * Provides a wrong implementation for transformedSchema of AddColumnTransformer.
+   */
+  public static class AddColumnTransformerWithWrongTransformedSchema extends AddColumnTransformer {
+
+    @Override
+    public Option<Schema> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, Schema incomingSchema, TypedProperties properties) {
+      List<Schema.Field> fields = new LinkedList<>();
+      fields.add(new Schema.Field(
+          "random1",
+          Schema.create(Schema.Type.LONG),
+          "",
+          JsonProperties.NULL_VALUE));
+      Schema newSchema = AvroSchemaUtils.appendFieldsToSchema(incomingSchema, fields);
+      return Option.of(newSchema);
+    }
   }
 }

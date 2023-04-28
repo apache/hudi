@@ -628,9 +628,10 @@ public class HoodieAvroUtils {
   public static Schema getNestedFieldSchemaFromWriteSchema(Schema writeSchema, String fieldName) {
     String[] parts = fieldName.split("\\.");
     int i = 0;
+    Schema schema = writeSchema;
     for (; i < parts.length; i++) {
       String part = parts[i];
-      Schema schema = writeSchema.getField(part).schema();
+      schema = schema.getField(part).schema();
 
       if (i == parts.length - 1) {
         return resolveNullableSchema(schema);

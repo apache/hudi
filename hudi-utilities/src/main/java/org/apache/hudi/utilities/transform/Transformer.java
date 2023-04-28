@@ -48,6 +48,7 @@ public interface Transformer {
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties);
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   default Option<Schema> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, Schema incomingSchema, TypedProperties properties) {
     return Option.empty();
   }

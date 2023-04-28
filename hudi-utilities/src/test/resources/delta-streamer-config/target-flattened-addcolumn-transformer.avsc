@@ -91,6 +91,9 @@
   }, {
     "name" : "fare_currency",
     "type" : "string"
+  }, {
+   "name" : "random",
+   "type" : "long"
   },
   {
     "name" : "tip_history",
