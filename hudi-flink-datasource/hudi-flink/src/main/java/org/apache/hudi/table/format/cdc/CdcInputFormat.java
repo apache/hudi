@@ -67,6 +67,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -173,11 +174,11 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         Schema dataSchema = HoodieAvroUtils.removeMetadataFields(new Schema.Parser().parse(tableState.getAvroSchema()));
         Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(mode, dataSchema);
         switch (mode) {
-          case data_before_after:
+          case DATA_BEFORE_AFTER:
             return new BeforeAfterImageIterator(tablePath, tableState, hadoopConf, cdcSchema, fileSplit);
-          case data_before:
+          case DATA_BEFORE:
             return new BeforeImageIterator(conf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
-          case op_key_only:
+          case OP_KEY_ONLY:
             return new RecordKeyImageIterator(conf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
           default:
             throw new AssertionError("Unexpected mode" + mode);
@@ -733,6 +734,6 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
     return new MergeOnReadInputSplit(0, basePath, logPaths,
         fileSlice.getBaseInstantTime(), tablePath, maxCompactionMemoryInBytes,
-        FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, fileSlice.getFileId(), null);
+        FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, fileSlice.getFileId(), Collections.emptyMap());
   }
 }

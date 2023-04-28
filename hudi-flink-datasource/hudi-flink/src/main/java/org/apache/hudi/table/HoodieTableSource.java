@@ -347,7 +347,7 @@ public class HoodieTableSource implements
                   .map(logFile -> logFile.getPath().toString())
                   .collect(Collectors.toList()));
               return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
-                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId(), null);
+                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId(), Collections.emptyMap());
             }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
         .collect(Collectors.toList());

@@ -73,6 +73,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -120,7 +121,9 @@ public class ITTestHoodieFlinkClustering {
     FlinkClusteringConfig cfg = new FlinkClusteringConfig();
     cfg.path = tempFile.getAbsolutePath();
     cfg.targetPartitions = 4;
+    cfg.sortMemory = 256;
     Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
+    assertEquals(256, conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY));
 
     // create metaClient
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);

@@ -105,7 +105,7 @@ public class TimelineService {
     @Parameter(names = {"--threads", "-t"}, description = "Number of threads to use for serving requests. The default number is 250")
     public int numThreads = DEFAULT_NUM_THREADS;
 
-    @Parameter(names = {"--async"}, description = "Use asyncronous request processing")
+    @Parameter(names = {"--async"}, description = "Use asynchronous request processing")
     public boolean async = false;
 
     @Parameter(names = {"--compress"}, description = "Compress output using gzip")

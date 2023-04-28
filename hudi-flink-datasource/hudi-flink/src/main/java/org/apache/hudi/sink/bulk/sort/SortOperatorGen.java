@@ -20,6 +20,7 @@ package org.apache.hudi.sink.bulk.sort;
 
 import org.apache.hudi.adapter.SortCodeGeneratorAdapter;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.data.RowData;
@@ -42,11 +43,12 @@ public class SortOperatorGen {
     this.rowType = rowType;
   }
 
-  public OneInputStreamOperator<RowData, RowData> createSortOperator() {
+  public OneInputStreamOperator<RowData, RowData> createSortOperator(Configuration conf) {
     SortCodeGenerator codeGen = createSortCodeGenerator();
     return new SortOperator(
         codeGen.generateNormalizedKeyComputer("SortComputer"),
-        codeGen.generateRecordComparator("SortComparator"));
+        codeGen.generateRecordComparator("SortComparator"),
+        conf);
   }
 
   public SortCodeGenerator createSortCodeGenerator() {

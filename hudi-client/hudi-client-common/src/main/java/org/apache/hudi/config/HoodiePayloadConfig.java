@@ -41,13 +41,6 @@ import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_F
         + "control merges based on specific business fields in the data.")
 public class HoodiePayloadConfig extends HoodieConfig {
 
-  public static final ConfigProperty<String> ORDERING_FIELD = ConfigProperty
-      .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
-      .defaultValue("ts")
-      .markAdvanced()
-      .withDocumentation("Table column/field name to order records that have the same key, before "
-          + "merging and writing to storage.");
-
   public static final ConfigProperty<String> EVENT_TIME_FIELD = ConfigProperty
       .key(PAYLOAD_EVENT_TIME_FIELD_PROP_KEY)
       .defaultValue("ts")
@@ -62,6 +55,15 @@ public class HoodiePayloadConfig extends HoodieConfig {
       .withDocumentation("This needs to be same as class used during insert/upserts. Just like writing, compaction also uses "
         + "the record payload class to merge records in the log against each other, merge again with the base file and "
         + "produce the final record to be written after compaction.");
+
+  /** @deprecated Use {@link HoodieWriteConfig#PRECOMBINE_FIELD_NAME} and its methods instead */
+  @Deprecated
+  public static final ConfigProperty<String> ORDERING_FIELD = ConfigProperty
+      .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
+      .defaultValue("ts")
+      .markAdvanced()
+      .withDocumentation("Table column/field name to order records that have the same key, before "
+          + "merging and writing to storage.");
 
   /** @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods instead */
   @Deprecated

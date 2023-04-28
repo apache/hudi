@@ -18,9 +18,9 @@
 
 package org.apache.hudi.integ.testsuite;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -318,7 +318,7 @@ public class HoodieTestSuiteJob {
     public Boolean useHudiToGenerateUpdates = false;
 
     @Parameter(names = {"--test-continuous-mode"}, description = "Tests continuous mode in deltastreamer.")
-    public Boolean testContinousMode = false;
+    public Boolean testContinuousMode = false;
 
     @Parameter(names = {"--enable-presto-validation"}, description = "Enables presto validation")
     public Boolean enablePrestoValidation = false;
@@ -348,7 +348,7 @@ public class HoodieTestSuiteJob {
     @Parameter(names = {"--index-type"}, description = "Index type to use for writes")
     public String indexType = "SIMPLE";
 
-    @Parameter(names = {"--enable-metadata-on-read"}, description = "Enable's metadata for queries")
+    @Parameter(names = {"--enable-metadata-on-read"}, description = "Enables metadata for queries")
     public Boolean enableMetadataOnRead = HoodieMetadataConfig.ENABLE.defaultValue();
   }
 }

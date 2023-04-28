@@ -64,6 +64,11 @@ class IncrementalRelation(val sqlContext: SQLContext,
     new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
     metaClient)
   private val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
+
+  private val useStateTransitionTime = optParams.get(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key)
+    .map(_.toBoolean)
+    .getOrElse(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.defaultValue)
+
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
   }
@@ -81,9 +86,17 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val lastInstant = commitTimeline.lastInstant().get()
 
-  private val commitsTimelineToReturn = commitTimeline.findInstantsInRange(
-    optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
-    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp))
+  private val commitsTimelineToReturn = {
+    if (useStateTransitionTime) {
+      commitTimeline.findInstantsInRangeByStateTransitionTs(
+        optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
+        optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getStateTransitionTime))
+    } else {
+      commitTimeline.findInstantsInRange(
+        optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
+        optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp))
+    }
+  }
   private val commitsToReturn = commitsTimelineToReturn.getInstantsAsStream.iterator().toList
 
   // use schema from a file produced in the end/latest instant
@@ -204,6 +217,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
 
       val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
+        if (useStateTransitionTime) {
+          throw new HoodieException("Cannot use stateTransitionTime while enables full table scan")
+        }
         log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived, endInstantArchived: $endInstantArchived")
         fullTableScanDataFrame(startInstantTime, endInstantTime)
       } else {
