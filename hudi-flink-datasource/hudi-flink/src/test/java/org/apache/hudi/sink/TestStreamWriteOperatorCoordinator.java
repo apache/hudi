@@ -405,17 +405,19 @@ public class TestStreamWriteOperatorCoordinator {
       String instant = coordinator.getInstant();
 
       OperatorEvent event1 = WriteMetadataEvent.builder()
-          .taskID(1)
+          .taskID(0)
           .instantTime(instant)
           .writeStatus(Collections.emptyList())
+          .lastBatch(true)
           .build();
       OperatorEvent event2 = WriteMetadataEvent.builder()
           .taskID(1)
           .instantTime(instant)
           .writeStatus(Collections.emptyList())
+          .lastBatch(true)
           .build();
       coordinator.handleEventFromOperator(0, event1);
-      coordinator.handleEventFromOperator(0, event2);
+      coordinator.handleEventFromOperator(1, event2);
 
       assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1),
           "Commit the instant");
