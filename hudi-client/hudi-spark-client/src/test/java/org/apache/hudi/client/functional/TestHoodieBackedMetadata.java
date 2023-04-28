@@ -2821,6 +2821,68 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
+  /**
+   * Test duplicate operation with same instant timestamp.
+   *
+   * This can happen if the commit on the MDT succeeds but fails on the dataset. For some table services like clean,
+   * compaction, replace commit, the operation will be retried with the same timestamp (taken from inflight). Hence,
+   * metadata table will see an additional commit with the same timestamp as a previously completed deltacommit.
+   */
+  @Test
+  public void testRepeatedActionWithSameInstantTime() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    Properties props = new Properties();
+    props.put(HoodieCleanConfig.ALLOW_MULTIPLE_CLEANS.key(), "false");
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false).withProps(props).build();
+
+    // Perform three writes so we can initiate a clean
+    int index = 0;
+    final String partition = "2015/03/16";
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      for (; index < 3; ++index) {
+        String newCommitTime = "00" + index;
+        List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 1, partition);
+        client.startCommitWithTime(newCommitTime);
+        client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
+      }
+    }
+    assertEquals(metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants(), 3);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      // Perform a clean
+      String cleanInstantTime = "00" + index++;
+      HoodieCleanMetadata cleanMetadata = client.clean(cleanInstantTime);
+      // 1 partition should be cleaned
+      assertEquals(cleanMetadata.getPartitionMetadata().size(), 1);
+      // 1 file cleaned
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 1);
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getFailedDeleteFiles().size(), 0);
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getDeletePathPatterns().size(), 1);
+
+      // To simulate failed clean on the main dataset, we will delete the completed clean instant
+      String cleanInstantFileName = HoodieTimeline.makeCleanerFileName(cleanInstantTime);
+      assertTrue(fs.delete(new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME,
+          cleanInstantFileName), false));
+      assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflights().countInstants(), 1);
+      assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants().countInstants(), 0);
+
+      // Initiate another clean. The previous leftover clean will be attempted and no other clean will be scheduled.
+      String newCleanInstantTime = "00" + index++;
+      cleanMetadata = client.clean(newCleanInstantTime);
+
+      // 1 partition should be cleaned
+      assertEquals(cleanMetadata.getPartitionMetadata().size(), 1);
+      // 1 file cleaned but was already deleted so will be a failed delete
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 0);
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getFailedDeleteFiles().size(), 1);
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getDeletePathPatterns().size(), 1);
+
+      validateMetadata(client);
+    }
+  }
+
   private void doPreBootstrapOperations(HoodieTestTable testTable) throws Exception {
     doPreBootstrapOperations(testTable, "0000001", "0000002");
   }
