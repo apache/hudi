@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.Dataset;
@@ -58,13 +59,13 @@ public class HoodieSparkBootstrapExample {
     Dataset df =  spark.emptyDataFrame();
 
     df.write().format("hudi").option(HoodieWriteConfig.TBL_NAME.key(), tableName)
-            .option(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL())
-            .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKey)
-            .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitionPath)
-            .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), preCombineField)
-            .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.ORC.name())
-            .option(HoodieBootstrapConfig.BASE_PATH.key(), basePath)
-            .mode(SaveMode.Overwrite).save("/hudi/" + tableName);
+        .option(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL())
+        .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKey)
+        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), preCombineField)
+        .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.ORC.name())
+        .option(HoodieBootstrapConfig.BASE_PATH.key(), basePath)
+        .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getCanonicalName())
+        .mode(SaveMode.Overwrite).save("/hudi/" + tableName);
 
     df.count();
   }
