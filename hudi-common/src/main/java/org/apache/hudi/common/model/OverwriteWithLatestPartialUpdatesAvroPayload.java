@@ -123,12 +123,14 @@ public class OverwriteWithLatestPartialUpdatesAvroPayload extends OverwriteWithL
       return this;
     }
 
-    if (oldValue.orderingVal.compareTo(orderingVal) > 0) {
-      throw new HoodieException("Records need to be sorted before precombine for OverwriteWithLatestPartialUpdatesAvroPayload");
-    }
-
     try {
       GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
+
+      if (oldValue.orderingVal.compareTo(orderingVal) > 0) {
+        LOG.error("Out of order record. Partial update could be missed for " + oldRecord);
+        return new OverwriteWithLatestPartialUpdatesAvroPayload(oldRecord, oldValue.orderingVal);
+      }
+
       Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, false, false);
       if (mergedRecord.isPresent()) {
         return new OverwriteWithLatestPartialUpdatesAvroPayload((GenericRecord) mergedRecord.get(), this.orderingVal);

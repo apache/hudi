@@ -359,4 +359,113 @@ class TestOverwriteWithLatestPartialUpdatesAvroPayload extends HoodieClientTestB
     assertEquals(readOptimizedDF2.select("fare").collectAsList().get(0).getDouble(0), inputDF.select("fare").collectAsList().get(0).getDouble(0))
     assertNull(readOptimizedDF2.select("_hoodie_change_columns").collectAsList().get(0).getString(0))
   }
+
+  @Test
+  def testOverwriteWithLatestPartialUpdatesAvroPayloadCompactionOOO(): Unit = {
+    val (tableName, tablePath) = ("hoodie_mor_test_table", s"${basePath}_mor_test_table")
+
+    val dataGenerator = new QuickstartUtils.DataGenerator()
+    val records = convertToStringList(dataGenerator.generateInserts(1))
+    val recordsRDD = spark.sparkContext.parallelize(records, 2)
+    val inputDF = spark.read.json(sparkSession.createDataset(recordsRDD)(Encoders.STRING)).withColumn("ts", lit(1L)).withColumn("_hoodie_change_columns", typedLit(null).cast(StringType))
+    inputDF.write.format("hudi")
+      .options(getQuickstartWriteConfigs)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name())
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "uuid")
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionpath")
+      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "org.apache.hudi.common.model.OverwriteWithLatestPartialUpdatesAvroPayload")
+      .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
+      .mode(SaveMode.Overwrite)
+      .save(tablePath)
+
+    val upsert1 = convertToStringList(dataGenerator.generateUniqueUpdates(1))
+    val upsert1DF = spark.read.json(sparkSession.createDataset(upsert1)(Encoders.STRING)).withColumn("ts", lit(4L)).withColumn("_hoodie_change_columns", lit("rider,driver,ts"))
+
+    val upsert2 = convertToStringList(dataGenerator.generateUniqueUpdates(1))
+    val upsert2DF = spark.read.json(sparkSession.createDataset(upsert2)(Encoders.STRING)).withColumn("ts", lit(6L)).withColumn("_hoodie_change_columns", lit("rider,ts"))
+
+    val upsert3 = convertToStringList(dataGenerator.generateUniqueUpdates(1))
+    val upsert3DF = spark.read.json(sparkSession.createDataset(upsert3)(Encoders.STRING)).withColumn("ts", lit(3L)).withColumn("_hoodie_change_columns", lit("driver,ts"))
+    
+    upsert1DF.write.format("hudi")
+      .options(getQuickstartWriteConfigs)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name())
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "uuid")
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionpath")
+      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
+      .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "org.apache.hudi.common.model.OverwriteWithLatestPartialUpdatesAvroPayload")
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    upsert2DF.write.format("hudi")
+      .options(getQuickstartWriteConfigs)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name())
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "uuid")
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionpath")
+      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
+      .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "org.apache.hudi.common.model.OverwriteWithLatestPartialUpdatesAvroPayload")
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    upsert3DF.write.format("hudi")
+      .options(getQuickstartWriteConfigs)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name())
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "uuid")
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionpath")
+      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
+      .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "org.apache.hudi.common.model.OverwriteWithLatestPartialUpdatesAvroPayload")
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    val compactionOptions = getQuickstartWriteConfigs ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key() -> HoodieTableType.MERGE_ON_READ.name(),
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "uuid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key ->"partitionpath",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      HoodieWriteConfig.TBL_NAME.key -> tableName,
+      HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> "org.apache.hudi.common.model.OverwriteWithLatestPartialUpdatesAvroPayload",
+      HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY.key -> CompactionTriggerStrategy.NUM_COMMITS.name,
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1",
+      DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key -> "false",
+      HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName
+    )
+    val client = DataSourceUtils.createHoodieClient(
+      spark.sparkContext, "", tablePath, tableName,
+      mapAsJavaMap(compactionOptions)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+    val compactionInstant = client.scheduleCompaction(org.apache.hudi.common.util.Option.empty()).get()
+
+    // NOTE: this executes the compaction to write the compacted base files, and leaves the
+    // compaction instant still inflight, emulating a compaction action that is in progress
+    client.commitCompaction(compactionInstant, client.compact(compactionInstant).getCommitMetadata.get(), org.apache.hudi.common.util.Option.empty())
+
+    val snapshotDF2 = spark.read.format("hudi").load(tablePath)
+    val readOptimizedDF2 = spark.read.format("hudi").option(DataSourceReadOptions.QUERY_TYPE.key,
+      DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL).load(tablePath)
+
+    snapshotDF2.show(false)
+    readOptimizedDF2.show(false)
+
+    assertEquals(snapshotDF2.select("driver").collectAsList().get(0).getString(0), upsert1DF.select("driver").collectAsList().get(0).getString(0))
+    assertEquals(snapshotDF2.select("rider").collectAsList().get(0).getString(0), upsert2DF.select("rider").collectAsList().get(0).getString(0))
+    assertEquals(snapshotDF2.select("fare").collectAsList().get(0).getDouble(0), inputDF.select("fare").collectAsList().get(0).getDouble(0))
+    assertNull(snapshotDF2.select("_hoodie_change_columns").collectAsList().get(0).getString(0))
+
+    assertEquals(readOptimizedDF2.select("driver").collectAsList().get(0).getString(0), upsert1DF.select("driver").collectAsList().get(0).getString(0))
+    assertEquals(readOptimizedDF2.select("rider").collectAsList().get(0).getString(0), upsert2DF.select("rider").collectAsList().get(0).getString(0))
+    assertEquals(readOptimizedDF2.select("fare").collectAsList().get(0).getDouble(0), inputDF.select("fare").collectAsList().get(0).getDouble(0))
+    assertNull(readOptimizedDF2.select("_hoodie_change_columns").collectAsList().get(0).getString(0))
+  }
 }
