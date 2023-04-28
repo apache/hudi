@@ -281,9 +281,9 @@ public class HoodieDeltaStreamer implements Serializable {
             + "can be used along with property key like `hoodie.deltastreamer.transformer.sql.tr1` to identify properties related "
             + "to the transformer. So effective value for `hoodie.deltastreamer.transformer.sql` is determined by key "
             + "`hoodie.deltastreamer.transformer.sql.tr1` for this transformer. This is useful when there are two or more "
-            + "transformers using the same config keys and expect different values for those keys. Further the order in which "
-            + "transformer is applied is determined by the occurrence of transformer irrespective of the identifier used for "
-            + "the transformer. For example: In the configured value below "
+            + "transformers using the same config keys and expect different values for those keys. If identifier is used, it should "
+            + "be specified for all the transformers. Further the order in which transformer is applied is determined by the occurrence "
+            + "of transformer irrespective of the identifier used for the transformer. For example: In the configured value below "
             + "tr2:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer,tr1:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer "
             + ", tr2 is applied before tr1 based on order of occurrence."
     )

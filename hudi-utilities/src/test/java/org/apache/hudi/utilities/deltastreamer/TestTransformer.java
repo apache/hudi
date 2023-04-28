@@ -1,8 +1,34 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
+import org.apache.hudi.utilities.transform.Transformer;
 
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -16,8 +42,10 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   @Test
   public void testMultipleTransformersWithIdentifiers() throws Exception {
     // Configure 3 transformers of same type. 2nd transformer has no suffix
-    String[] arr = new String [] {"1:" + TestHoodieDeltaStreamer.TimestampTransformer.class.getName(),
-        TestHoodieDeltaStreamer.TimestampTransformer.class.getName(), "3:" + TestHoodieDeltaStreamer.TimestampTransformer.class.getName()};
+    String[] arr = new String [] {
+        "1:" + TimestampTransformer.class.getName(),
+        "2:" + TimestampTransformer.class.getName(),
+        "3:" + TimestampTransformer.class.getName()};
     List<String> transformerClassNames = Arrays.asList(arr);
 
     // Create source using TRIP_SCHEMA
@@ -27,7 +55,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
     prepareParquetDFSSource(useSchemaProvider, true, "source.avsc", "source.avsc", PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false, "partition_path", "");
-    String tableBasePath = basePath + "/test_parquet_table" + testNum;
+    String tableBasePath = basePath + "/testMultipleTransformersWithIdentifiers" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
         TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
@@ -49,5 +77,19 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
 
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
     assertEquals(0, sqlContext.read().format("org.apache.hudi").load(tableBasePath).where("timestamp != 110").count());
+  }
+
+  /**
+   * Performs transformation on `timestamp` field.
+   */
+  public static class TimestampTransformer implements Transformer {
+
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+                              TypedProperties properties) {
+      int multiplier = Integer.parseInt((String) properties.get("timestamp.transformer.multiplier"));
+      int increment = Integer.parseInt((String) properties.get("timestamp.transformer.increment"));
+      return rowDataset.withColumn("timestamp", functions.col("timestamp").multiply(multiplier).plus(increment));
+    }
   }
 }

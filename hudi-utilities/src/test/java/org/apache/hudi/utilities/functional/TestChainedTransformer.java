@@ -95,7 +95,8 @@ public class TestChainedTransformer extends SparkClientFunctionalTestHarness {
   @ValueSource(strings = {
       "T1:org.apache.hudi.utilities.transform.FlatteningTransformer,T2:org.apache.hudi.utilities.transform.FlatteningTransformer",
       "T2:org.apache.hudi.utilities.transform.FlatteningTransformer,T1:org.apache.hudi.utilities.transform.FlatteningTransformer",
-      "abc:org.apache.hudi.utilities.transform.FlatteningTransformer,def:org.apache.hudi.utilities.transform.FlatteningTransformer"
+      "abc:org.apache.hudi.utilities.transform.FlatteningTransformer,def:org.apache.hudi.utilities.transform.FlatteningTransformer",
+      "org.apache.hudi.utilities.transform.FlatteningTransformer,org.apache.hudi.utilities.transform.FlatteningTransformer"
   })
   public void testChainedTransformerValidationPasses(String transformerName) {
     ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")));
