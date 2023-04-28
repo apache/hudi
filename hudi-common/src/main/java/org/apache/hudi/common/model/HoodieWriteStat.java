@@ -160,6 +160,8 @@ public class HoodieWriteStat implements Serializable {
   @Nullable
   private Long maxEventTime;
 
+  private long offset;
+
   @Nullable
   private RuntimeStats runtimeStats;
 
@@ -366,6 +368,14 @@ public class HoodieWriteStat implements Serializable {
    */
   public void setPath(Path basePath, Path path) {
     this.path = path.toString().replace(basePath + "/", "");
+  }
+
+  public void setLogOffset(long logOffset) {
+    this.offset = logOffset;
+  }
+
+  public long getLogOffset() {
+    return offset;
   }
 
   @Override

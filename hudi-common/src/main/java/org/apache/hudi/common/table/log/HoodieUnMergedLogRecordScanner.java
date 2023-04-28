@@ -29,6 +29,7 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -42,9 +43,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   private HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                          String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize,
                                          LogRecordScannerCallback callback, Option<InstantRange> instantRange, InternalSchema internalSchema,
-                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger) {
+                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger, Option<List<Long>> logFilePos) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange,
-        false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger);
+        false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger, logFilePos);
     this.callback = callback;
   }
 
@@ -107,6 +108,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     private LogRecordScannerCallback callback;
     private boolean enableOptimizedLogBlocksScan;
     private HoodieRecordMerger recordMerger;
+    private Option<List<Long>> logfilePos = Option.of(Collections.EMPTY_LIST);
 
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
@@ -173,6 +175,12 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     }
 
     @Override
+    public Builder withOptimizedLogFilePos(Option<List<Long>> logFilePos) {
+      this.logfilePos = logFilePos;
+      return this;
+    }
+
+    @Override
     public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
       this.recordMerger = recordMerger;
       return this;
@@ -184,7 +192,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
 
       return new HoodieUnMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange,
-          internalSchema, enableOptimizedLogBlocksScan, recordMerger);
+          internalSchema, enableOptimizedLogBlocksScan, recordMerger, logfilePos);
     }
   }
 }

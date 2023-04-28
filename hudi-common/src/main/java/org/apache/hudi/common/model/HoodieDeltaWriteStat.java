@@ -35,7 +35,6 @@ import java.util.Map;
 public class HoodieDeltaWriteStat extends HoodieWriteStat {
 
   private int logVersion;
-  private long logOffset;
   private String baseFile;
   private List<String> logFiles = new ArrayList<>();
   private Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> recordsStats = Option.empty();
@@ -46,14 +45,6 @@ public class HoodieDeltaWriteStat extends HoodieWriteStat {
 
   public int getLogVersion() {
     return logVersion;
-  }
-
-  public void setLogOffset(long logOffset) {
-    this.logOffset = logOffset;
-  }
-
-  public long getLogOffset() {
-    return logOffset;
   }
 
   public void setBaseFile(String baseFile) {

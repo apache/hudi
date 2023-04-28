@@ -103,19 +103,20 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader, boolean enableRecordLookups,
                              String keyField) throws IOException {
-    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, enableRecordLookups, keyField, InternalSchema.getEmptyInternalSchema());
+    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, enableRecordLookups,
+        keyField, InternalSchema.getEmptyInternalSchema(), 0);
   }
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader, boolean enableRecordLookups,
-                             String keyField, InternalSchema internalSchema) throws IOException {
+                             String keyField, InternalSchema internalSchema, long startPos) throws IOException {
     this.fs = fs;
     this.hadoopConf = fs.getConf();
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
     //       further
     this.logFile = new HoodieLogFile(FSUtils.makeQualified(fs, logFile.getPath()), logFile.getFileSize());
-    this.inputStream = getFSDataInputStream(fs, this.logFile, bufferSize);
+    this.inputStream = getFSDataInputStream(fs, this.logFile, bufferSize, startPos);
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;
     this.reverseReader = reverseReader;
@@ -493,8 +494,10 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
    */
   private static FSDataInputStream getFSDataInputStream(FileSystem fs,
                                                         HoodieLogFile logFile,
-                                                        int bufferSize) throws IOException {
+                                                        int bufferSize,
+                                                        long startPos) throws IOException {
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
+    fsDataInputStream.seek(startPos);
 
     if (FSUtils.isGCSFileSystem(fs)) {
       // in GCS FS, we might need to interceptor seek offsets as we might get EOF exception

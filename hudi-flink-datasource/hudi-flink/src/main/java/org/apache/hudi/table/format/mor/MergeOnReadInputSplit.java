@@ -25,7 +25,11 @@ import org.apache.flink.core.io.InputSplit;
 
 import javax.annotation.Nullable;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Represents an input split of source, actually a data bucket.
@@ -44,6 +48,7 @@ public class MergeOnReadInputSplit implements InputSplit {
   private final String mergeType;
   private final Option<InstantRange> instantRange;
   protected String fileId;
+  private Option<List<Long>> logPath2Pos;
 
   // for streaming reader to record the consumed offset,
   // which is the start of next round reading.
@@ -58,7 +63,8 @@ public class MergeOnReadInputSplit implements InputSplit {
       long maxCompactionMemoryInBytes,
       String mergeType,
       @Nullable InstantRange instantRange,
-      String fileId) {
+      String fileId,
+      Map<String, Long> fileToPos) {
     this.splitNum = splitNum;
     this.basePath = Option.ofNullable(basePath);
     this.logPaths = logPaths;
@@ -68,6 +74,7 @@ public class MergeOnReadInputSplit implements InputSplit {
     this.mergeType = mergeType;
     this.instantRange = Option.ofNullable(instantRange);
     this.fileId = fileId;
+    initLogStartPosIfNeed(fileToPos);
   }
 
   public String getFileId() {
@@ -121,6 +128,18 @@ public class MergeOnReadInputSplit implements InputSplit {
 
   public boolean isConsumed() {
     return this.consumed != NUM_NO_CONSUMPTION;
+  }
+
+  private void initLogStartPosIfNeed(Map<String, Long> fileToPos) {
+    if (logPaths.isPresent() && fileToPos.size() > 0) {
+      logPath2Pos = Option.of(logPaths.get().stream().map(path -> fileToPos.get(path)).collect(Collectors.toList()));
+    } else {
+      logPath2Pos = Option.of(Collections.EMPTY_LIST);
+    }
+  }
+
+  public Option<List<Long>> getLogPath2Pos() {
+    return this.logPath2Pos;
   }
 
   @Override

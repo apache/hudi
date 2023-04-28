@@ -118,11 +118,12 @@ public class WriteProfiles {
       Path basePath,
       Configuration hadoopConf,
       List<HoodieCommitMetadata> metadataList,
-      HoodieTableType tableType) {
+      HoodieTableType tableType,
+      Map<String, String> fileToPos) {
     FileSystem fs = FSUtils.getFs(basePath.toString(), hadoopConf);
     Map<String, FileStatus> uniqueIdToFileStatus = new HashMap<>();
     metadataList.forEach(metadata ->
-        uniqueIdToFileStatus.putAll(getFilesToReadOfInstant(basePath, metadata, fs, tableType)));
+        uniqueIdToFileStatus.putAll(getFilesToReadOfInstant(basePath, metadata, fs, tableType, fileToPos)));
     return uniqueIdToFileStatus.values().toArray(new FileStatus[0]);
   }
 
@@ -140,7 +141,7 @@ public class WriteProfiles {
       HoodieCommitMetadata metadata,
       Configuration hadoopConf,
       HoodieTableType tableType) {
-    return getFilesToRead(hadoopConf, metadata, basePath.toString(), tableType).entrySet().stream()
+    return getFilesToRead(hadoopConf, metadata, basePath.toString(), tableType, null).entrySet().stream()
         .filter(entry -> StreamerUtil.isValidFile(entry.getValue()))
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
@@ -158,8 +159,9 @@ public class WriteProfiles {
       Path basePath,
       HoodieCommitMetadata metadata,
       FileSystem fs,
-      HoodieTableType tableType) {
-    return getFilesToRead(fs.getConf(), metadata, basePath.toString(), tableType).entrySet().stream()
+      HoodieTableType tableType,
+      Map<String, String> fileToPos) {
+    return getFilesToRead(fs.getConf(), metadata, basePath.toString(), tableType, fileToPos).entrySet().stream()
         // filter out the file paths that does not exist, some files may be cleaned by
         // the cleaner.
         .filter(entry -> {
@@ -178,13 +180,14 @@ public class WriteProfiles {
       Configuration hadoopConf,
       HoodieCommitMetadata metadata,
       String basePath,
-      HoodieTableType tableType
+      HoodieTableType tableType,
+      Map<String, String> fileToPos
   ) {
     switch (tableType) {
       case COPY_ON_WRITE:
         return metadata.getFileIdToFileStatus(hadoopConf, basePath);
       case MERGE_ON_READ:
-        return metadata.getFullPathToFileStatus(hadoopConf, basePath);
+        return metadata.getFullPathToFileStatus(hadoopConf, basePath, fileToPos);
       default:
         throw new AssertionError();
     }

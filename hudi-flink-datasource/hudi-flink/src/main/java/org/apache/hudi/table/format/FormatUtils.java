@@ -210,7 +210,8 @@ public class FormatUtils {
               flinkConf.getInteger(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
                   HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
           .withInstantRange(split.getInstantRange())
-          .withRecordMerger(merger);
+          .withRecordMerger(merger)
+          .withOptimizedLogFilePos(split.getLogPath2Pos());
 
       this.executor = new BoundedInMemoryExecutor<>(
           StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf),

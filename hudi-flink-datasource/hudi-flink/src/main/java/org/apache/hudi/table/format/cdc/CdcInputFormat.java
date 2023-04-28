@@ -733,6 +733,6 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
     return new MergeOnReadInputSplit(0, basePath, logPaths,
         fileSlice.getBaseInstantTime(), tablePath, maxCompactionMemoryInBytes,
-        FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, fileSlice.getFileId());
+        FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, fileSlice.getFileId(), null);
   }
 }
