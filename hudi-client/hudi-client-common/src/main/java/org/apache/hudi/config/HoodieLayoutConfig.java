@@ -41,9 +41,9 @@ public class HoodieLayoutConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LAYOUT_TYPE = ConfigProperty
       .key("hoodie.storage.layout.type")
-      .defaultValue("DEFAULT")
+      .defaultValue(HoodieStorageLayout.LayoutType.DEFAULT.name())
       .markAdvanced()
-      .withDocumentation("Type of storage layout. Possible options are [DEFAULT | BUCKET]");
+      .withDocumentation(HoodieStorageLayout.LayoutType.class);
 
   public static final ConfigProperty<String> LAYOUT_PARTITIONER_CLASS_NAME = ConfigProperty
       .key("hoodie.storage.layout.partitioner.class")

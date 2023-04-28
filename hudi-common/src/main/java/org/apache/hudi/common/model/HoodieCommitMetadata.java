@@ -170,7 +170,6 @@ public class HoodieCommitMetadata implements Serializable {
    * been touched multiple times in the given commits, the return value will keep the one
    * from the latest commit.
    *
-   *
    * @param hadoopConf
    * @param basePath The base path
    * @return the file full path to file status mapping
@@ -201,7 +200,6 @@ public class HoodieCommitMetadata implements Serializable {
    * <p>Note: different with {@link #getFullPathToFileStatus(Configuration, String)},
    * only the latest commit file for a file group is returned,
    * this is an optimization for COPY_ON_WRITE table to eliminate legacy files for filesystem view.
-   *
    *
    * @param hadoopConf
    * @param basePath The base path

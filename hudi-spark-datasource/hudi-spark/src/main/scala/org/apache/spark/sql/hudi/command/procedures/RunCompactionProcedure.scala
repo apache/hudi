@@ -68,7 +68,8 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
 
     var client: SparkRDDWriteClient[_] = null
     try {
-      client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, Map.empty)
+      client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, Map.empty,
+        tableName.asInstanceOf[Option[String]])
       var willCompactionInstants: Seq[String] = Seq.empty
       operation match {
         case "schedule" =>

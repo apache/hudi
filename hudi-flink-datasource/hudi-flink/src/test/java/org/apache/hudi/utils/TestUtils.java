@@ -107,4 +107,14 @@ public class TestUtils {
     final String basePath = conf.getString(FlinkOptions.PATH);
     return new StreamReadMonitoringFunction(conf, new Path(basePath), TestConfigurations.ROW_TYPE, 1024 * 1024L, null);
   }
+
+  public static int getCompletedInstantCount(String basePath, String action) {
+    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+    return metaClient.getActiveTimeline()
+        .filterCompletedInstants()
+        .filter(instant -> action.equals(instant.getAction()))
+        .countInstants();
+  }
+
 }

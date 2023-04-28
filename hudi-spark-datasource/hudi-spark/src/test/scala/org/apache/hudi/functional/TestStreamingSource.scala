@@ -18,7 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceReadOptions.START_OFFSET
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -29,7 +29,7 @@ import org.apache.spark.sql.{Row, SaveMode}
 class TestStreamingSource extends StreamTest {
 
   import testImplicits._
-  private val commonOptions = Map(
+  protected val commonOptions: Map[String, String] = Map(
     RECORDKEY_FIELD.key -> "id",
     PRECOMBINE_FIELD.key -> "ts",
     INSERT_PARALLELISM_VALUE.key -> "4",
@@ -37,6 +37,8 @@ class TestStreamingSource extends StreamTest {
     DELETE_PARALLELISM_VALUE.key -> "4"
   )
   private val columns = Seq("id", "name", "price", "ts")
+
+  val useTransitionTime: Boolean = false
 
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
 
@@ -51,45 +53,46 @@ class TestStreamingSource extends StreamTest {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream"
       HoodieTableMetaClient.withPropertyBuilder()
-          .setTableType(COPY_ON_WRITE)
-          .setTableName(getTableName(tablePath))
-          .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
+        .setTableType(COPY_ON_WRITE)
+        .setTableName(getTableName(tablePath))
+        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
         .setPreCombineField("ts")
-          .initTable(spark.sessionState.newHadoopConf(), tablePath)
+        .initTable(spark.sessionState.newHadoopConf(), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
         .format("org.apache.hudi")
+        .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), useTransitionTime)
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
       testStream(df)(
-        AssertOnQuery {q => q.processAllAvailable(); true },
+        AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(Seq(Row("1", "a1", "10", "000")), lastOnly = true, isSorted = false),
         StopStream,
 
         addDataToQuery(tablePath, Seq(("1", "a1", "12", "000"))),
         StartStream(),
-        AssertOnQuery {q => q.processAllAvailable(); true },
+        AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(Seq(Row("1", "a1", "12", "000")), lastOnly = true, isSorted = false),
 
         addDataToQuery(tablePath,
           Seq(("2", "a2", "12", "000"),
-              ("3", "a3", "12", "000"),
-              ("4", "a4", "12", "000"))),
-        AssertOnQuery {q => q.processAllAvailable(); true },
+            ("3", "a3", "12", "000"),
+            ("4", "a4", "12", "000"))),
+        AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(
           Seq(Row("2", "a2", "12", "000"),
-             Row("3", "a3", "12", "000"),
-             Row("4", "a4", "12", "000")),
+            Row("3", "a3", "12", "000"),
+            Row("4", "a4", "12", "000")),
           lastOnly = true, isSorted = false),
-          StopStream,
+        StopStream,
 
         addDataToQuery(tablePath, Seq(("5", "a5", "12", "000"))),
         addDataToQuery(tablePath, Seq(("6", "a6", "12", "000"))),
         addDataToQuery(tablePath, Seq(("5", "a5", "15", "000"))),
         StartStream(),
-        AssertOnQuery {q => q.processAllAvailable(); true },
+        AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(
           Seq(Row("6", "a6", "12", "000"),
             Row("5", "a5", "15", "000")),
@@ -111,11 +114,12 @@ class TestStreamingSource extends StreamTest {
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
         .format("org.apache.hudi")
+        .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), useTransitionTime)
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
       testStream(df)(
-        AssertOnQuery {q => q.processAllAvailable(); true },
+        AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(Seq(Row("1", "a1", "10", "000")), lastOnly = true, isSorted = false),
         StopStream,
 
@@ -124,7 +128,7 @@ class TestStreamingSource extends StreamTest {
             ("3", "a3", "12", "000"),
             ("2", "a2", "10", "001"))),
         StartStream(),
-        AssertOnQuery {q => q.processAllAvailable(); true },
+        AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(
           Seq(Row("3", "a3", "12", "000"),
             Row("2", "a2", "10", "001")),
@@ -134,7 +138,7 @@ class TestStreamingSource extends StreamTest {
         addDataToQuery(tablePath, Seq(("5", "a5", "12", "000"))),
         addDataToQuery(tablePath, Seq(("6", "a6", "12", "000"))),
         StartStream(),
-        AssertOnQuery {q => q.processAllAvailable(); true },
+        AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(
           Seq(Row("5", "a5", "12", "000"),
             Row("6", "a6", "12", "000")),
@@ -157,18 +161,19 @@ class TestStreamingSource extends StreamTest {
       val df = spark.readStream
         .format("org.apache.hudi")
         .option(START_OFFSET.key(), "latest")
+        .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), useTransitionTime)
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
       testStream(df)(
-        AssertOnQuery {q => q.processAllAvailable(); true },
+        AssertOnQuery { q => q.processAllAvailable(); true },
         // Start from the latest, should contains no data
         CheckAnswerRows(Seq(), lastOnly = true, isSorted = false),
         StopStream,
 
         addDataToQuery(tablePath, Seq(("2", "a1", "12", "000"))),
         StartStream(),
-        AssertOnQuery {q => q.processAllAvailable(); true },
+        AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(Seq(Row("2", "a1", "12", "000")), lastOnly = false, isSorted = false)
       )
     }
@@ -188,16 +193,22 @@ class TestStreamingSource extends StreamTest {
       addData(tablePath, Seq(("2", "a1", "11", "001")))
       addData(tablePath, Seq(("3", "a1", "12", "002")))
 
-      val timestamp = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
-        .firstInstant().get().getTimestamp
+      val timestamp = if (useTransitionTime) {
+        metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
+          .firstInstant().get().getStateTransitionTime
+      } else {
+        metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
+          .firstInstant().get().getTimestamp
+      }
       val df = spark.readStream
         .format("org.apache.hudi")
         .option(START_OFFSET.key(), timestamp)
+        .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), useTransitionTime)
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
       testStream(df)(
-        AssertOnQuery {q => q.processAllAvailable(); true },
+        AssertOnQuery { q => q.processAllAvailable(); true },
         // Start after the first commit
         CheckAnswerRows(Seq(Row("2", "a1", "11", "001"), Row("3", "a1", "12", "002")), lastOnly = true, isSorted = false)
       )

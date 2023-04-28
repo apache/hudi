@@ -20,8 +20,8 @@ package org.apache.hudi.hadoop.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -98,7 +98,7 @@ public class InputFormatTestUtil {
         createSimpleData(schema, partitionPath, numberOfFiles, 100, commitNumber);
         return partitionPath.toFile();
       } catch (Exception e) {
-        throw new IOException("Excpetion thrown while writing data ", e);
+        throw new IOException("Exception thrown while writing data ", e);
       }
     } else {
       return simulateInserts(partitionPath.toFile(), baseFileFormat.getFileExtension(), "fileId1", numberOfFiles,
@@ -432,7 +432,7 @@ public class InputFormatTestUtil {
       Schema schema, String hiveColumnTypes) {
     List<Schema.Field> fields = schema.getFields();
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
-    String postions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
+    String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
     Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
 
     String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
@@ -442,14 +442,14 @@ public class InputFormatTestUtil {
     modifiedHiveColumnTypes = modifiedHiveColumnTypes + ",string";
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
-    // skip choose hoodie meta_columns, only choose one origin column to trigger HUID-1722
+    // skip choose hoodie meta_columns, only choose one origin column to trigger HUDI-1722
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names.split(",")[5]);
-    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions.split(",")[5]);
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, positions.split(",")[5]);
     jobConf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "datestr");
     conf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
-    // skip choose hoodie meta_columns, only choose one origin column to trigger HUID-1722
+    // skip choose hoodie meta_columns, only choose one origin column to trigger HUDI-1722
     conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names.split(",")[5]);
-    conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions.split(",")[5]);
+    conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, positions.split(",")[5]);
     conf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "datestr");
     conf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
     jobConf.addResource(conf);
@@ -459,7 +459,7 @@ public class InputFormatTestUtil {
       Schema schema, String hiveColumnTypes) {
     List<Schema.Field> fields = schema.getFields();
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
-    String postions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
+    String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
     Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
 
     String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
@@ -470,11 +470,11 @@ public class InputFormatTestUtil {
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
-    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, positions);
     jobConf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "datestr");
     conf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
     conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
-    conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
+    conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, positions);
     conf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "datestr");
     conf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
     jobConf.addResource(conf);

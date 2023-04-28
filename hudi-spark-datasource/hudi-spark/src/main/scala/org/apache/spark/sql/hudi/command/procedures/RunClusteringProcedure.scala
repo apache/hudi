@@ -174,7 +174,8 @@ class RunClusteringProcedure extends BaseProcedure
 
     var client: SparkRDDWriteClient[_] = null
     try {
-      client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, conf)
+      client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, conf,
+        tableName.asInstanceOf[Option[String]])
       if (operator.isSchedule) {
         val instantTime = HoodieActiveTimeline.createNewInstantTime
         if (client.scheduleClusteringAtInstant(instantTime, HOption.empty())) {

@@ -60,9 +60,6 @@ public class FlinkClusteringConfig extends Configuration {
   @Parameter(names = {"--clustering-tasks"}, description = "Parallelism of tasks that do actual clustering, default is -1")
   public Integer clusteringTasks = -1;
 
-  @Parameter(names = {"--compaction-max-memory"}, description = "Max memory in MB for compaction spillable map, default 100MB.")
-  public Integer compactionMaxMemory = 100;
-
   @Parameter(names = {"--clean-retain-commits"},
       description = "Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 10")
@@ -103,6 +100,9 @@ public class FlinkClusteringConfig extends Configuration {
 
   @Parameter(names = {"--sort-columns"}, description = "Columns to sort the data by when clustering.")
   public String sortColumns = "";
+
+  @Parameter(names = {"--sort-memory"}, description = "Sort memory in MB, default 128MB.")
+  public Integer sortMemory = 128;
 
   @Parameter(names = {"--max-num-groups"}, description = "Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism. default 30")
   public Integer maxNumGroups = 30;
@@ -177,7 +177,6 @@ public class FlinkClusteringConfig extends Configuration {
     conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, config.archiveMaxCommits);
     conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, config.archiveMinCommits);
     conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, config.cleanRetainCommits);
-    conf.setInteger(FlinkOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);
     conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, config.clusteringDeltaCommits);
     conf.setInteger(FlinkOptions.CLUSTERING_TASKS, config.clusteringTasks);
     conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS, config.planStrategyClass);
@@ -190,6 +189,7 @@ public class FlinkClusteringConfig extends Configuration {
     conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_REGEX_PATTERN, config.partitionRegexPattern);
     conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_SELECTED, config.partitionSelected);
     conf.setString(FlinkOptions.CLUSTERING_SORT_COLUMNS, config.sortColumns);
+    conf.setInteger(FlinkOptions.WRITE_SORT_MEMORY, config.sortMemory);
     conf.setInteger(FlinkOptions.CLUSTERING_MAX_NUM_GROUPS, config.maxNumGroups);
     conf.setInteger(FlinkOptions.CLUSTERING_TARGET_PARTITIONS, config.targetPartitions);
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);

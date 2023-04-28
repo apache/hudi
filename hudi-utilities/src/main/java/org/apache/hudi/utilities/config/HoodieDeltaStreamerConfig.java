@@ -76,7 +76,7 @@ public class HoodieDeltaStreamerConfig extends HoodieConfig {
       .key(DELTA_STREAMER_CONFIG_PREFIX + "multiwriter.source.checkpoint.id")
       .noDefaultValue()
       .markAdvanced()
-      .withDocumentation("Unique Id to be used for multiwriter deltastreamer scenario. This is the "
+      .withDocumentation("Unique Id to be used for multi-writer deltastreamer scenario. This is the "
           + "scenario when multiple deltastreamers are used to write to the same target table. If you are just using "
           + "a single deltastreamer for a table then you do not need to set this config.");
 

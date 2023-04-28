@@ -30,16 +30,15 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 import java.io.Serializable;
 
-import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
-import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
-import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
-
 import scala.util.Either;
 import scala.util.Left;
 import scala.util.Right;
 
 import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
 import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
 
 /**
  * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy fields to circumvent issues around
@@ -49,7 +48,7 @@ public class AvroConvertor implements Serializable {
 
   private static final long serialVersionUID = 1L;
   /**
-   * To be lazily inited on executors.
+   * To be lazily initialized on executors.
    */
   private transient Schema schema;
 
@@ -58,13 +57,13 @@ public class AvroConvertor implements Serializable {
   private final boolean shouldSanitize;
 
   /**
-   * To be lazily inited on executors.
+   * To be lazily initialized on executors.
    */
   private transient MercifulJsonConverter jsonConverter;
 
 
   /**
-   * To be lazily inited on executors.
+   * To be lazily initialized on executors.
    */
   private transient Injection<GenericRecord, byte[]> recordInjection;
 

@@ -37,9 +37,9 @@ public class CloudStoreIngestionConfig {
    * If batch size is too big, two possible issues can happen:
    * i) Acknowledgement takes too long (given that Hudi needs to commit first).
    * ii) In the case of Google Cloud Pubsub:
-   *   a) it will keep delivering the same message since it wasn't acked in time.
-   *   b) The size of the request that acks outstanding messages may exceed the limit,
-   *      which is 512KB as per Google's docs. See: https://cloud.google.com/pubsub/quotas#resource_limits
+   * a) it will keep delivering the same message since it wasn't acknowledged in time.
+   * b) The size of the request that acknowledges outstanding messages may exceed the limit,
+   * which is 512KB as per Google's docs. See: https://cloud.google.com/pubsub/quotas#resource_limits
    */
   @Deprecated
   public static final int DEFAULT_BATCH_SIZE = CloudSourceConfig.BATCH_SIZE_CONF.defaultValue();
