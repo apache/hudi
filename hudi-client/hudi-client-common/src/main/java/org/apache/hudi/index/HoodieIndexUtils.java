@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -181,10 +182,36 @@ public class HoodieIndexUtils {
     return foundRecordKeys;
   }
 
+  /**
+   * Check if the given commit timestamp is valid for the timeline.
+   *
+   * The commit timestamp is considered to be valid if:
+   *   1. the commit timestamp is present in the timeline, or
+   *   2. the commit timestamp is less than the first commit timestamp in the timeline
+   *
+   * @param commitTimeline  The timeline
+   * @param commitTs        The commit timestamp to check
+   * @return                true if the commit timestamp is valid for the timeline
+   */
   public static boolean checkIfValidCommit(HoodieTimeline commitTimeline, String commitTs) {
-    // Check if the last commit ts for this row is 1) present in the timeline or
-    // 2) is less than the first commit ts in the timeline
-    return !commitTimeline.empty() && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
+    if (commitTimeline.empty()) {
+      return false;
+    }
+
+    // Check for 0.8+ timestamps which have msec granularity
+    if (commitTimeline.containsOrBeforeTimelineStarts(commitTs)) {
+      return true;
+    }
+
+    // Check for older timestamp which have sec granularity and an extension of DEFAULT_MILLIS_EXT may have been added via Timeline operations
+    if (commitTs.length() == HoodieInstantTimeGenerator.MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH && commitTs.endsWith(HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT)) {
+      final String actualOlderFormatTs = commitTs.substring(0, commitTs.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
+      if (commitTimeline.containsOrBeforeTimelineStarts(actualOlderFormatTs)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   public static HoodieIndex createUserDefinedIndex(HoodieWriteConfig config) {

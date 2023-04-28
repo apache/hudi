@@ -30,6 +30,11 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -43,8 +48,10 @@ import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.keygen.RawTripTestPayloadKeyGenerator;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -582,6 +589,43 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertEquals("000", record.getRecordKey());
     assertEquals(p1, record.getPartitionPath());
     assertEquals(incomingPayloadSamePartition.getJsonDataAsMap(), ((RawTripTestPayload) record.getData()).getJsonDataAsMap());
+  }
+
+  @Test
+  public void testCheckIfValidCommit() throws Exception {
+    setUp(IndexType.BLOOM, true, false);
+
+    // When timeline is empty, all commits are invalid
+    HoodieTimeline timeline = new HoodieDefaultTimeline(Collections.EMPTY_LIST.stream(), metaClient.getActiveTimeline()::getInstantDetails);
+    assertTrue(timeline.empty());
+    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, "001"));
+    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, HoodieActiveTimeline.createNewInstantTime()));
+    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
+
+    // Valid when timeline contains the timestamp or the timestamp is before timeline start
+    final HoodieInstant instant1 = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "010");
+    String instantTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    final HoodieInstant instant2 = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieActiveTimeline.createNewInstantTime());
+    timeline = new HoodieDefaultTimeline(Arrays.asList(instant1, instant2).stream(), metaClient.getActiveTimeline()::getInstantDetails);
+    assertFalse(timeline.empty());
+    assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, instant1.getTimestamp()));
+    assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, instant2.getTimestamp()));
+    // no instant on timeline
+    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestamp));
+    // future timestamp
+    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, HoodieActiveTimeline.createNewInstantTime()));
+    // timestamp before timeline starts
+    assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, "001"));
+    assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
+
+    // Check for older timestamp which have sec granularity and an extension of DEFAULT_MILLIS_EXT may have been added via Timeline operations
+    instantTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    final String instanceTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
+    final HoodieInstant instant3 = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instanceTimestampSec);
+    timeline = new HoodieDefaultTimeline(Arrays.asList(instant1, instant3).stream(), metaClient.getActiveTimeline()::getInstantDetails);
+    assertFalse(timeline.empty());
+    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestamp));
+    assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, instanceTimestampSec));
   }
 
   private HoodieWriteConfig.Builder getConfigBuilder() {
