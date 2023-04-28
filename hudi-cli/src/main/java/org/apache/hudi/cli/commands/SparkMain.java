@@ -19,8 +19,8 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.cli.DeDupeType;
-import org.apache.hudi.cli.DedupeSparkJob;
+import org.apache.spark.sql.hudi.DeDupeType;
+import org.apache.spark.sql.hudi.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.SparkRDDWriteClient;

@@ -256,7 +256,7 @@ public class AvroSchemaConverter {
           throw new IllegalArgumentException(
               "Avro does not support TIMESTAMP type with precision: "
                   + precision
-                  + ", it only supports precision less than 6.");
+                  + ", it only support precisions <= 6.");
         }
         Schema timestamp = timestampLogicalType.addToSchema(SchemaBuilder.builder().longType());
         return nullable ? nullableSchema(timestamp) : timestamp;
@@ -273,7 +273,7 @@ public class AvroSchemaConverter {
           throw new IllegalArgumentException(
               "Avro does not support LOCAL TIMESTAMP type with precision: "
                   + precision
-                  + ", it only supports precision less than 6.");
+                  + ", it only support precisions <= 6.");
         }
         Schema localZonedTimestamp = localZonedTimestampLogicalType.addToSchema(SchemaBuilder.builder().longType());
         return nullable ? nullableSchema(localZonedTimestamp) : localZonedTimestamp;

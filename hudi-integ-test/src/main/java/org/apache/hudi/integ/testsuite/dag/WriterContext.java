@@ -21,7 +21,7 @@ package org.apache.hudi.integ.testsuite.dag;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.integ.testsuite.HoodieContinousTestSuiteWriter;
+import org.apache.hudi.integ.testsuite.HoodieContinuousTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.HoodieInlineTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
@@ -72,7 +72,7 @@ public class WriterContext {
     try {
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jsc);
       String schemaStr = schemaProvider.getSourceSchema().toString();
-      this.hoodieTestSuiteWriter = (cfg.testContinousMode && cfg.useDeltaStreamer) ? new HoodieContinousTestSuiteWriter(jsc, props, cfg, schemaStr)
+      this.hoodieTestSuiteWriter = (cfg.testContinuousMode && cfg.useDeltaStreamer) ? new HoodieContinuousTestSuiteWriter(jsc, props, cfg, schemaStr)
           : new HoodieInlineTestSuiteWriter(jsc, props, cfg, schemaStr);
       int inputParallelism = cfg.inputParallelism > 0 ? cfg.inputParallelism : jsc.defaultParallelism();
       this.deltaGenerator = new DeltaGenerator(
@@ -81,7 +81,7 @@ public class WriterContext {
               schemaStr, cfg.limitFileSize, inputParallelism, cfg.deleteOldInput, cfg.useHudiToGenerateUpdates),
           jsc, sparkSession, schemaStr, keyGenerator);
       log.info(String.format("Initialized writerContext with: %s", schemaStr));
-      if (cfg.testContinousMode) {
+      if (cfg.testContinuousMode) {
         executorService = Executors.newFixedThreadPool(1);
         executorService.execute(new TestSuiteWriterRunnable(hoodieTestSuiteWriter));
       }

@@ -141,13 +141,7 @@ public class TestWriteBase {
       this.baseFile = basePath;
       this.basePath = this.baseFile.getAbsolutePath();
       this.conf = conf;
-      if (OptionsResolver.isAppendMode(conf)) {
-        this.pipeline = new InsertFunctionWrapper<>(this.basePath, conf);
-      } else if (OptionsResolver.isBucketIndexType(conf)) {
-        this.pipeline = new BucketStreamWriteFunctionWrapper<>(this.basePath, conf);
-      } else {
-        this.pipeline = new StreamWriteFunctionWrapper<>(this.basePath, conf);
-      }
+      this.pipeline = TestData.getWritePipeline(this.basePath, conf);
       // open the function and ingest data
       this.pipeline.openFunction();
       this.ckpMetadata = CkpMetadata.getInstance(conf);
@@ -521,6 +515,12 @@ public class TestWriteBase {
       return OptionsResolver.isMorTable(conf)
           ? TestUtils.getLastDeltaCompleteInstant(basePath)
           : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);
+    }
+
+    public TestHarness checkCompletedInstantCount(int count) {
+      boolean isMor = OptionsResolver.isMorTable(conf);
+      assertEquals(count, TestUtils.getCompletedInstantCount(basePath, isMor ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION));
+      return this;
     }
   }
 }

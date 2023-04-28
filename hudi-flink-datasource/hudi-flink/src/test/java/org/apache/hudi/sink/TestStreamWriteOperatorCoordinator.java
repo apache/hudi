@@ -21,6 +21,7 @@ package org.apache.hudi.sink;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -363,7 +364,7 @@ public class TestStreamWriteOperatorCoordinator {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
 
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), "optimistic_concurrency_control");
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setInteger("hoodie.write.lock.client.num_retries", 1);
 
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
@@ -389,6 +390,42 @@ public class TestStreamWriteOperatorCoordinator {
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(2));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
+  }
+
+  @Test
+  public void testCommitOnEmptyBatch() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
+    MockOperatorCoordinatorContext context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
+    NonThrownExecutor executor = new MockCoordinatorExecutor(context);
+    try (StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, context)) {
+      coordinator.start();
+      coordinator.setExecutor(executor);
+      coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
+      coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+
+      // Coordinator start the instant
+      String instant = coordinator.getInstant();
+
+      OperatorEvent event1 = WriteMetadataEvent.builder()
+          .taskID(1)
+          .instantTime(instant)
+          .writeStatus(Collections.emptyList())
+          .build();
+      OperatorEvent event2 = WriteMetadataEvent.builder()
+          .taskID(1)
+          .instantTime(instant)
+          .writeStatus(Collections.emptyList())
+          .build();
+      coordinator.handleEventFromOperator(0, event1);
+      coordinator.handleEventFromOperator(0, event2);
+
+      assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1),
+          "Commit the instant");
+      String lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
+      assertThat("Commits the instant with empty batch anyway", lastCompleted, is(instant));
+      assertNull(coordinator.getEventBuffer()[0]);
+    }
   }
 
   // -------------------------------------------------------------------------

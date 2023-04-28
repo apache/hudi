@@ -77,11 +77,13 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   public static final ConfigProperty<Boolean> HIVE_SYNC_FILTER_PUSHDOWN_ENABLED = ConfigProperty
       .key("hoodie.datasource.hive_sync.filter_pushdown_enabled")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Whether to enable push down partitions by filter");
 
   public static final ConfigProperty<Integer> HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE = ConfigProperty
       .key("hoodie.datasource.hive_sync.filter_pushdown_max_size")
       .defaultValue(1000)
+      .markAdvanced()
       .withDocumentation("Max size limit to push down partition filters, if the estimate push down "
           + "filters exceed this size, will directly try to fetch all partitions");
 

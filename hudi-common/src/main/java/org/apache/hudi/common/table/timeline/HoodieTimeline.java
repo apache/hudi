@@ -140,7 +140,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Filter this timeline to just include the in-flights excluding major and minor compaction instants.
    *
-   * @return New instance of HoodieTimeline with just in-flights excluding majoe and minor compaction instants
+   * @return New instance of HoodieTimeline with just in-flights excluding major and minor compaction instants
    */
   HoodieTimeline filterPendingExcludingMajorAndMinorCompaction();
 
@@ -234,6 +234,12 @@ public interface HoodieTimeline extends Serializable {
    * Create a new Timeline with instants after startTs and before or on endTs.
    */
   HoodieTimeline findInstantsInRange(String startTs, String endTs);
+
+  /**`
+   * Create a new Timeline with instants after startTs and before or on endTs
+   * by state transition timestamp of actions.
+   */
+  HoodieTimeline findInstantsInRangeByStateTransitionTs(String startTs, String endTs);
 
   /**
    * Create a new Timeline with all the instants after startTs.
@@ -348,6 +354,11 @@ public interface HoodieTimeline extends Serializable {
    *         reverse the instants later on to use this method instead.
    */
   Stream<HoodieInstant> getReverseOrderedInstants();
+
+  /**
+   * Get the stream of instants in order by state transition timestamp of actions.
+   */
+  Stream<HoodieInstant> getInstantsOrderedByStateTransitionTs();
 
   /**
    * @return true if the passed in instant is before the first completed instant in the timeline
@@ -535,7 +546,7 @@ public interface HoodieTimeline extends Serializable {
     return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
   }
 
-  // Log comaction action
+  // Log compaction action
   static String makeInflightLogCompactionFileName(String instantTime) {
     return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_LOG_COMPACTION_EXTENSION);
   }

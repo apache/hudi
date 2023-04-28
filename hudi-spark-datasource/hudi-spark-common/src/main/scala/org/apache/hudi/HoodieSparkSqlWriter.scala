@@ -883,8 +883,7 @@ object HoodieSparkSqlWriter {
     if (metaSyncEnabled) {
       val fs = basePath.getFileSystem(spark.sessionState.newHadoopConf())
       val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT);
-      val properties = new TypedProperties()
-      properties.putAll(hoodieConfig.getProps)
+      val properties = TypedProperties.fromMap(hoodieConfig.getProps)
       properties.put(HiveSyncConfigHolder.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD.key, spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD).toString)
       properties.put(HoodieSyncConfig.META_SYNC_SPARK_VERSION.key, SPARK_VERSION)
       properties.put(HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA.key, hoodieConfig.getBoolean(HoodieMetadataConfig.ENABLE))
@@ -1015,18 +1014,16 @@ object HoodieSparkSqlWriter {
                                        tableConfig: HoodieTableConfig,
                                        parameters: Map[String, String], configuration: Configuration): Boolean = {
     log.info(s"Config.inlineCompactionEnabled ? ${client.getConfig.inlineCompactionEnabled}")
-    if (asyncCompactionTriggerFnDefined && !client.getConfig.inlineCompactionEnabled
-      && parameters.get(ASYNC_COMPACT_ENABLE.key).exists(r => r.toBoolean)) {
-      tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
-    } else {
-      false
-    }
+    (asyncCompactionTriggerFnDefined && !client.getConfig.inlineCompactionEnabled
+      && parameters.get(ASYNC_COMPACT_ENABLE.key).exists(r => r.toBoolean)
+      && tableConfig.getTableType == HoodieTableType.MERGE_ON_READ)
   }
 
   private def isAsyncClusteringEnabled(client: SparkRDDWriteClient[_],
                                        parameters: Map[String, String]): Boolean = {
     log.info(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
-    asyncClusteringTriggerFnDefined && client.getConfig.isAsyncClusteringEnabled
+    (asyncClusteringTriggerFnDefined && !client.getConfig.inlineClusteringEnabled
+      && client.getConfig.isAsyncClusteringEnabled)
   }
 
   /**

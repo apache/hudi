@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,13 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.cli
+package org.apache.hudi.adapter;
 
-object DeDupeType extends Enumeration {
+import org.apache.flink.api.common.operators.MailboxExecutor;
+import org.apache.flink.util.function.ThrowingRunnable;
 
-  type dedupeType = Value
+/**
+ * Adapter clazz for {@link MailboxExecutor}.
+ */
+public class MailboxExecutorAdapter {
+  private final MailboxExecutor executor;
 
-  val INSERT_TYPE = Value("insert_type")
-  val UPDATE_TYPE = Value("update_type")
-  val UPSERT_TYPE = Value("upsert_type")
+  public MailboxExecutorAdapter(MailboxExecutor executor) {
+    this.executor = executor;
+  }
+
+  public void execute(ThrowingRunnable<? extends Exception> command, String description) {
+    this.executor.execute(command, description);
+  }
 }

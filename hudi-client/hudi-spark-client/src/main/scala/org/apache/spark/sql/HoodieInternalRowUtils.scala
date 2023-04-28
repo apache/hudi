@@ -28,7 +28,7 @@ import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNested
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData, MapData}
 import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
-import org.apache.spark.sql.types.Decimal.ROUND_HALF_EVEN
+import org.apache.spark.sql.types.Decimal.ROUND_HALF_UP
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -289,7 +289,7 @@ object HoodieInternalRowUtils {
             (fieldUpdater, ordinal, value) =>
               val scale = newDecimal.scale
               // TODO this has to be revisited to avoid loss of precision (for fps)
-              fieldUpdater.setDecimal(ordinal, Decimal.fromDecimal(BigDecimal(value.toString).setScale(scale, ROUND_HALF_EVEN)))
+              fieldUpdater.setDecimal(ordinal, Decimal.fromDecimal(BigDecimal(value.toString).setScale(scale, ROUND_HALF_UP)))
 
           case _: DecimalType =>
             (fieldUpdater, ordinal, value) =>

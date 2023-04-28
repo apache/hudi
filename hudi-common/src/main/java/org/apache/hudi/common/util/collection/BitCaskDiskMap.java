@@ -58,10 +58,10 @@ import java.util.zip.InflaterInputStream;
 import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
 
 /**
- * This class provides a disk spillable only map implementation. All of the data is currenly written to one file,
+ * This class provides a disk spillable only map implementation. All of the data is currently written to one file,
  * without any rollover support. It uses the following : 1) An in-memory map that tracks the key-> latest ValueMetadata.
  * 2) Current position in the file NOTE : Only String.class type supported for Key
- *
+ * <p>
  * Inspired by https://github.com/basho/bitcask
  */
 public final class BitCaskDiskMap<T extends Serializable, R extends Serializable> extends DiskMap<T, R> {
@@ -110,8 +110,8 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   }
 
   /**
-   * RandomAcessFile is not thread-safe. This API opens a new file handle per thread and returns.
-   * 
+   * RandomAccessFile is not thread-safe. This API opens a new file handle per thread and returns.
+   *
    * @return
    */
   private BufferedRandomAccessFile getRandomAccessFile() {

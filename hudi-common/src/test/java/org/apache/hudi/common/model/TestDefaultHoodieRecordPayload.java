@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.testutils.PreCombineTestUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -27,6 +28,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -61,8 +63,10 @@ public class TestDefaultHoodieRecordPayload {
     props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "ts");
   }
 
-  @Test
-  public void testActiveRecords() throws IOException {
+  @ParameterizedTest
+  @MethodSource("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine")
+  public void testActiveRecords(String key) throws IOException {
+    PreCombineTestUtils.setPreCombineConfig(props, key, "ts");
     GenericRecord record1 = new GenericData.Record(schema);
     record1.put("id", "1");
     record1.put("partition", "partition0");
@@ -87,8 +91,10 @@ public class TestDefaultHoodieRecordPayload {
     assertEquals(payload2.combineAndGetUpdateValue(record1, schema, props).get(), record2);
   }
 
-  @Test
-  public void testDeletedRecord() throws IOException {
+  @ParameterizedTest
+  @MethodSource("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine")
+  public void testDeletedRecord(String key) throws IOException {
+    PreCombineTestUtils.setPreCombineConfig(props, key, "ts");
     GenericRecord record1 = new GenericData.Record(schema);
     record1.put("id", "1");
     record1.put("partition", "partition0");

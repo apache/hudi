@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.clustering;
 
 import org.apache.hudi.adapter.MaskingOutputAdapter;
+import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -138,9 +139,8 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
     // target size should larger than small file limit
     this.conf.setLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT.key(),
-        this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES) > this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT)
-          ? this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT)
-            : this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES));
+        Math.min(this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES) / 1024 / 1024,
+            this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT)));
   }
 
   @Override
@@ -353,8 +353,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     RecordComparator comparator = createSortCodeGenerator().generateRecordComparator("SortComparator").newInstance(cl);
 
     MemoryManager memManager = getContainingTask().getEnvironment().getMemoryManager();
-    BinaryExternalSorter sorter =
-        new BinaryExternalSorter(
+    BinaryExternalSorter sorter = Utils.getBinaryExternalSorter(
             this.getContainingTask(),
             memManager,
             computeMemorySize(),
@@ -363,7 +362,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             binarySerializer,
             computer,
             comparator,
-            getContainingTask().getJobConfiguration());
+            this.conf);
     sorter.startThreads();
 
     // register the metrics.
