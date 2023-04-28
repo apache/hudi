@@ -2175,7 +2175,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getMetricReporterMetricsNamePrefix() {
-    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
+    // Metrics prefixes should not have a dot as this is usually a separator
+    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX).replaceAll("\\.", "_");
   }
 
   public String getMetricReporterFileBasedConfigs() {
