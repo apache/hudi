@@ -143,4 +143,28 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     config = new HoodieTableConfig(fs, metaPath.toString(), null, null);
     assertEquals(6, config.getProps().size());
   }
+
+  @Test
+  public void testReadRetry() throws IOException {
+    // When both the hoodie.properties and hoodie.properties.backup do not exist then the read fails
+    fs.rename(cfgPath, new Path(cfgPath.toString() + ".bak"));
+    assertThrows(HoodieIOException.class, () -> new HoodieTableConfig(fs, metaPath.toString(), null, null));
+
+    // Should return the backup config if hoodie.properties is not present
+    fs.rename(new Path(cfgPath.toString() + ".bak"), backupCfgPath);
+    new HoodieTableConfig(fs, metaPath.toString(), null, null);
+
+    // Should return backup config if hoodie.properties is corrupted
+    Properties props = new Properties();
+    try (FSDataOutputStream out = fs.create(cfgPath)) {
+      props.store(out, "No checksum in file so is invalid");
+    }
+    new HoodieTableConfig(fs, metaPath.toString(), null, null);
+
+    // Should throw exception if both hoodie.properties and backup are corrupted
+    try (FSDataOutputStream out = fs.create(backupCfgPath)) {
+      props.store(out, "No checksum in file so is invalid");
+    }
+    assertThrows(IllegalArgumentException.class, () -> new HoodieTableConfig(fs, metaPath.toString(), null, null));
+  }
 }
