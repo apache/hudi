@@ -108,10 +108,10 @@ public class HoodieSimpleIndex
     }
 
     int inputParallelism = inputRecords.getNumPartitions();
-    int configuredSampleIndexParallelism = config.getSimpleIndexParallelism();
+    int configuredSimpleIndexParallelism = config.getSimpleIndexParallelism();
     // NOTE: Target parallelism could be overridden by the config
     int targetParallelism =
-        configuredSampleIndexParallelism > 0 ? configuredSampleIndexParallelism : inputParallelism;
+        configuredSimpleIndexParallelism > 0 ? configuredSimpleIndexParallelism : inputParallelism;
     HoodiePairData<HoodieKey, HoodieRecord<R>> keyedInputRecords =
         inputRecords.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
     HoodiePairData<HoodieKey, HoodieRecordLocation> existingLocationsOnTable =
