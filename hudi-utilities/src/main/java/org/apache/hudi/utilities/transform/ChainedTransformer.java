@@ -87,7 +87,7 @@ public class ChainedTransformer implements Transformer {
   }
 
   public List<String> getTransformersNames() {
-    return transformers.stream().map(t -> t.getClass().getName()).collect(Collectors.toList());
+    return transformers.stream().map(t -> t.getTransformer().getClass().getName()).collect(Collectors.toList());
   }
 
   @Override
