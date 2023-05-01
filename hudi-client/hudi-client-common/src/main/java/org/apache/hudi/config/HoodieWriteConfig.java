@@ -698,6 +698,29 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "will not print any configuration which contains the configured filter. For example with "
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
 
+  public static final ConfigProperty<String> WRITER_IDENTIFIER = ConfigProperty
+      .key("hoodie.datasource.write.writer.identifier")
+      .defaultValue("default_writer")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("An identifier to unqiuely identify a writer. This config needs to be used along with "
+          + "hoodie.datasource.write.batch.identifier and is used to ensure idempotency of writes. For a given writer (identified by "
+          + "the writer identifier), hudi will ensure idempotency if same batch of data(identified by batch identifier) is ingested again. "
+          + "Users should ensure to set monotonically increasing batch identifier for subsequent batches of ingest for a given writer."
+          + " If there are multiple writers, each writer is expected to set a unique value for this config. ");
+
+  public static final ConfigProperty<String> WRITE_BATCH_IDENTIFIER = ConfigProperty
+      .key("hoodie.datasource.write.batch.identifier")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("A identifier to uniquely identify a batch of data being ingested. This config needs to be set along with "
+          + "hoodie.datasource.write.writer.identifier. These two configs ensure idempotency is same batch of data is ingested again by the same"
+          + " writer to a given hudi table.");
+
+  // This constant serves as the checkpoint key for hudi writes to assist in ensuring idempotency
+  public static final String WRITES_CHECKPOINT_KEY = "_hudi_writes_checkpoint";
+
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
 
@@ -2380,6 +2403,14 @@ public class HoodieWriteConfig extends HoodieConfig {
   // misc configs
   public Boolean doSkipDefaultPartitionValidation() {
     return getBoolean(SKIP_DEFAULT_PARTITION_VALIDATION);
+  }
+
+  public String getWriterIndentifier() {
+    return getString(WRITER_IDENTIFIER);
+  }
+
+  public String getWriteBatchIndentifier() {
+    return getString(WRITE_BATCH_IDENTIFIER);
   }
 
   /**

@@ -221,6 +221,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config, hadoopConf);
+    extraMetadata.get().putAll(getCheckpointPropsForIdempotentWrites());
     HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
     HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, table.getMetaClient().getCommitActionType(), instantTime);
@@ -284,6 +285,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     writeTableMetadata(table, instantTime, commitActionType, metadata);
     activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+  }
+
+  public Map<String, String> getCheckpointPropsForIdempotentWrites() {
+    Map<String, String> extraMetadataMap = new HashMap<>();
+    if (this.config.getProps().containsKey(HoodieWriteConfig.WRITE_BATCH_IDENTIFIER.key())) {
+      extraMetadataMap.put(HoodieWriteConfig.WRITES_CHECKPOINT_KEY,
+          CommitUtils.getCheckpointValueAsString(this.config.getWriterIndentifier(), this.config.getWriteBatchIndentifier()));
+    }
+    return extraMetadataMap;
   }
 
   // Save internal schema

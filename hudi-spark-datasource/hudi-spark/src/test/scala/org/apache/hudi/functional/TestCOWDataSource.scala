@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.util
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.HoodieException
@@ -398,6 +398,93 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       writeToHudi(optsForBatch2, inputDF)
     }
     assertTrue(getRootCause(t).getMessage.contains("Config conflict"))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("insert", "bulk_insert","upsert"))
+  def testIdempotentWrites(operation: String) {
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key(), operation)
+      .option(HoodieWriteConfig.WRITE_BATCH_IDENTIFIER.key(),"1")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf)
+      .build()
+    val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath + "/*/*/*/*")
+    assertEquals(100, snapshotDF1.count())
+
+    inputDF1.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key(), operation)
+      .option(HoodieWriteConfig.WRITE_BATCH_IDENTIFIER.key(),"1")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // we should not have any more commits since the batch should have been skipped.
+    var commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    assertEquals(commit1Time, commit2Time)
+
+    // subsequent batch should get ingested
+    val records2 = recordsToStrings(dataGen.generateInserts("0001", 100)).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key(), operation)
+      .option(HoodieWriteConfig.WRITE_BATCH_IDENTIFIER.key(),"2")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // this should have a new commit.
+    commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    assertFalse(commit1Time.equals(commit2Time))
+  }
+
+  @Test
+  def testIdempotentWritesWithoutConfigs() {
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+
+    // Insert Operation
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf)
+      .build()
+    val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath + "/*/*/*/*")
+    assertEquals(100, snapshotDF1.count())
+
+    inputDF1.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key(), "insert")
+      .option(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(),"0")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    var commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    assertFalse(commit1Time.equals(commit2Time))
+    assertEquals(200, spark.read.format("org.apache.hudi")
+      .options(readOpts).load(basePath + "/*/*/*/*").count())
   }
 
   @ParameterizedTest

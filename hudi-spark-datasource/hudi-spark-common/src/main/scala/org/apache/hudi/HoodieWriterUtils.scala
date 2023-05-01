@@ -21,7 +21,8 @@ import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions.{RECORD_MERGER_IMPLS, _}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.util.CommitUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -240,5 +241,22 @@ object HoodieWriterUtils {
       }
     })
     includingTableConfigs.toMap
+  }
+
+  def canSkipBatch(incomingBatchId: Long, operationType: String, metaClient: HoodieTableMetaClient,
+                           writerIdentifier: String, checkpointKey: String): Boolean = {
+    if (!DELETE_OPERATION_OPT_VAL.equals(operationType)) {
+      // get the latest checkpoint from the commit metadata to check if the microbatch has already been processed or not
+      val lastCheckpoint = CommitUtils.getValidCheckpointForCurrentWriter(
+        metaClient.getActiveTimeline.getWriteTimeline, checkpointKey, writerIdentifier)
+      if (lastCheckpoint.isPresent) {
+        lastCheckpoint.get().toLong >= incomingBatchId
+      } else {
+        false
+      }
+    } else {
+      // In case of DELETE_OPERATION_OPT_VAL the incoming batch id is sentinel value (-1)
+      false
+    }
   }
 }

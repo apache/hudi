@@ -479,16 +479,15 @@ object DataSourceWriteOptions {
       + " within a streaming microbatch. Turning this on, could hide the write status errors while the spark checkpoint moves ahead." +
       "So, would recommend users to use this with caution.")
 
-  val STREAMING_CHECKPOINT_IDENTIFIER: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.write.streaming.checkpoint.identifier")
+  val STREAMING_WRITER_IDENTIFIER: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.write.streaming.writer.identifier")
     .defaultValue("default_single_writer")
     .markAdvanced()
     .sinceVersion("0.13.0")
-    .withDocumentation("A stream identifier used for HUDI to fetch the right checkpoint(`batch id` to be more specific) "
-      + "corresponding this writer. Please note that keep the identifier an unique value for different writer "
-      + "if under multi-writer scenario. If the value is not set, will only keep the checkpoint info in the memory. "
-      + "This could introduce the potential issue that the job is restart(`batch id` is lost) while spark checkpoint write fails, "
-      + "causing spark will retry and rewrite the data.")
+    .withAlternatives("hoodie.datasource.write.streaming.checkpoint.identifier")
+    .withDocumentation("A stream identifier used to unqiuely identify a writer. This will ensure writes are idempotent with hudi. " +
+      "Users need to set unique values for multiple streaming writers if they are writing to the same hudi table. If not set, on abnormal " +
+      "conditions, duplicates could be ingested to hudi.")
 
   val META_SYNC_CLIENT_TOOL_CLASS_NAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.meta.sync.client.tool.class")

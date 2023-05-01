@@ -16,10 +16,8 @@
  */
 package org.apache.hudi
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.HoodieSinkCheckpoint.SINK_CHECKPOINT_KEY
+import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -50,7 +48,6 @@ class HoodieStreamingSink(sqlContext: SQLContext,
                           outputMode: OutputMode)
   extends Sink
     with Serializable {
-  @volatile private var latestCommittedBatchId = -1L
 
   private val log = LoggerFactory.getLogger(classOf[HoodieStreamingSink])
 
@@ -103,7 +100,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
     val queryId = sqlContext.sparkContext.getLocalProperty(StreamExecution.QUERY_ID_KEY)
     checkArgument(queryId != null, "queryId is null")
-    if (metaClient.isDefined && canSkipBatch(batchId, options.getOrDefault(OPERATION.key, UPSERT_OPERATION_OPT_VAL))) {
+    if (metaClient.isDefined && HoodieWriterUtils.canSkipBatch(batchId, options.getOrDefault(OPERATION.key, UPSERT_OPERATION_OPT_VAL),
+      metaClient.get, options.getOrElse(STREAMING_WRITER_IDENTIFIER.key(), STREAMING_WRITER_IDENTIFIER.defaultValue()), SINK_CHECKPOINT_KEY)) {
       log.warn(s"Skipping already completed batch $batchId in query $queryId")
       return
     }
@@ -114,36 +112,16 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     var updatedOptions = options.updated(HoodieWriteConfig.MARKERS_TYPE.key(), MarkerType.DIRECT.name())
     // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
     updatedOptions = updatedOptions.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
+    updatedOptions = updatedOptions.updated(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID, batchId.toString)
 
     retry(retryCnt, retryIntervalMs)(
       Try(
         HoodieSparkSqlWriter.write(
           sqlContext, mode, updatedOptions, data, hoodieTableConfig, writeClient, Some(triggerAsyncCompactor), Some(triggerAsyncClustering),
           extraPreCommitFn = Some(new BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata] {
-
-            override def accept(metaClient: HoodieTableMetaClient,
-                                newCommitMetadata: HoodieCommitMetadata): Unit = {
-              getStreamIdentifier(options) match {
-                case Some(identifier) =>
-                  // Fetch the latestCommit with checkpoint Info again to avoid concurrency issue in multi-write scenario.
-                  val lastCheckpointCommitMetadata = CommitUtils.getLatestCommitMetadataWithValidCheckpointInfo(
-                    metaClient.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY)
-                  var checkpointString = ""
-                  if (lastCheckpointCommitMetadata.isPresent) {
-                    val lastCheckpoint = lastCheckpointCommitMetadata.get.getMetadata(SINK_CHECKPOINT_KEY)
-                    if (!StringUtils.isNullOrEmpty(lastCheckpoint)) {
-                      checkpointString = HoodieSinkCheckpoint.toJson(HoodieSinkCheckpoint.fromJson(lastCheckpoint) + (identifier -> batchId.toString))
-                    } else {
-                      checkpointString = HoodieSinkCheckpoint.toJson(Map(identifier -> batchId.toString))
-                    }
-                  } else {
-                    checkpointString = HoodieSinkCheckpoint.toJson(Map(identifier -> batchId.toString))
-                  }
-
-                  newCommitMetadata.addMetadata(SINK_CHECKPOINT_KEY, checkpointString)
-                case None =>
-                  // No op since keeping batch id in memory only.
-              }
+            override def accept(metaClient: HoodieTableMetaClient, newCommitMetadata: HoodieCommitMetadata): Unit = {
+              val identifier = options.getOrElse(STREAMING_WRITER_IDENTIFIER.key(), STREAMING_WRITER_IDENTIFIER.defaultValue())
+              newCommitMetadata.addMetadata(SINK_CHECKPOINT_KEY, CommitUtils.getCheckpointValueAsString(identifier, String.valueOf(batchId)))
             }
           }))
       )
@@ -154,8 +132,6 @@ class HoodieStreamingSink(sqlContext: SQLContext,
             case true => s" for commit=${commitOps.get()}"
             case _ => s" with no new commits"
           }))
-          log.info(s"Current value of latestCommittedBatchId: $latestCommittedBatchId. Setting latestCommittedBatchId to batchId $batchId.")
-          latestCommittedBatchId = batchId
           writeClient = Some(client)
           hoodieTableConfig = Some(tableConfig)
           if (client != null) {
@@ -230,10 +206,10 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
       WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.SINGLE_WRITER) {
       // for single writer model, we will fetch default if not set.
-      Some(options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue()))
+      Some(options.getOrElse(STREAMING_WRITER_IDENTIFIER.key(), STREAMING_WRITER_IDENTIFIER.defaultValue()))
     } else {
       // incase of multi-writer scenarios, there is not default.
-      options.get(STREAMING_CHECKPOINT_IDENTIFIER.key())
+      options.get(STREAMING_WRITER_IDENTIFIER.key())
     }
   }
 
@@ -326,50 +302,10 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
-  private def canSkipBatch(incomingBatchId: Long, operationType: String): Boolean = {
-    if (!DELETE_OPERATION_OPT_VAL.equals(operationType)) {
-      getStreamIdentifier(options) match {
-        case Some(identifier) =>
-          // get the latest checkpoint from the commit metadata to check if the microbatch has already been processed or not
-          val commitMetadata = CommitUtils.getLatestCommitMetadataWithValidCheckpointInfo(
-            metaClient.get.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY)
-          if (commitMetadata.isPresent) {
-            val lastCheckpoint = commitMetadata.get.getMetadata(SINK_CHECKPOINT_KEY)
-            if (!StringUtils.isNullOrEmpty(lastCheckpoint)) {
-              HoodieSinkCheckpoint.fromJson(lastCheckpoint).get(identifier).foreach(commitBatchId =>
-                latestCommittedBatchId = commitBatchId.toLong)
-            }
-          }
-        case None =>
-      }
-      latestCommittedBatchId >= incomingBatchId
-    } else {
-      // In case of DELETE_OPERATION_OPT_VAL the incoming batch id is sentinel value (-1)
-      false
-    }
-  }
 }
 
-/**
- * SINK_CHECKPOINT_KEY holds a map of batchId to writer context (composed of applicationId and queryId).
- * This is a util object to serialize/deserialize map to/from json.
- */
-object HoodieSinkCheckpoint {
-
-  lazy val mapper: ObjectMapper = {
-    val _mapper = JsonUtils.getObjectMapper
-    _mapper.registerModule(DefaultScalaModule)
-    _mapper
-  }
+object HoodieStreamingSink {
 
   // This constant serves as the checkpoint key for streaming sink so that each microbatch is processed exactly-once.
   val SINK_CHECKPOINT_KEY = "_hudi_streaming_sink_checkpoint"
-
-  def toJson(checkpoint: Map[String, String]): String = {
-    mapper.writeValueAsString(checkpoint)
-  }
-
-  def fromJson(json: String): Map[String, String] = {
-    mapper.readValue(json, classOf[Map[String, String]])
-  }
 }
