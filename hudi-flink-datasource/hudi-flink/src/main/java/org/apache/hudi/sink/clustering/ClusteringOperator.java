@@ -25,12 +25,12 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -173,18 +173,19 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
   @Override
   public void processElement(StreamRecord<ClusteringPlanEvent> element) throws Exception {
-    ClusteringPlanEvent event = element.getValue();
+    final ClusteringPlanEvent event = element.getValue();
     final String instantTime = event.getClusteringInstantTime();
+    final List<ClusteringOperation> clusteringOperations = event.getClusteringGroupInfo().getOperations();
     if (this.asyncClustering) {
       // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
       executor.execute(
-          () -> doClustering(instantTime, event),
-          (errMsg, t) -> collector.collect(new ClusteringCommitEvent(instantTime, taskID)),
+          () -> doClustering(instantTime, clusteringOperations),
+          (errMsg, t) -> collector.collect(new ClusteringCommitEvent(instantTime, getFileIds(clusteringOperations), taskID)),
           "Execute clustering for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the clustering task synchronously for batch mode.
       LOG.info("Execute clustering for instant {} from task {}", instantTime, taskID);
-      doClustering(instantTime, event);
+      doClustering(instantTime, clusteringOperations);
     }
   }
 
@@ -210,28 +211,22 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void doClustering(String instantTime, ClusteringPlanEvent event) throws Exception {
-    final ClusteringGroupInfo clusteringGroupInfo = event.getClusteringGroupInfo();
-
+  private void doClustering(String instantTime, List<ClusteringOperation> clusteringOperations) throws Exception {
     BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(this.conf, this.table, this.writeConfig,
         instantTime, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
         this.rowType, true);
 
-    List<ClusteringOperation> clusteringOps = clusteringGroupInfo.getOperations();
-    boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
-
     Iterator<RowData> iterator;
-    if (hasLogFiles) {
+    if (clusteringOperations.stream().anyMatch(operation -> CollectionUtils.nonEmpty(operation.getDeltaFilePaths()))) {
       // if there are log files, we read all records into memory for a file group and apply updates.
-      iterator = readRecordsForGroupWithLogs(clusteringOps, instantTime);
+      iterator = readRecordsForGroupWithLogs(clusteringOperations, instantTime);
     } else {
       // We want to optimize reading records for case there are no log files.
-      iterator = readRecordsForGroupBaseFiles(clusteringOps);
+      iterator = readRecordsForGroupBaseFiles(clusteringOperations);
     }
 
-    RowDataSerializer rowDataSerializer = new RowDataSerializer(rowType);
-
     if (this.sortClusteringEnabled) {
+      RowDataSerializer rowDataSerializer = new RowDataSerializer(rowType);
       BinaryExternalSorter sorter = initSorter();
       while (iterator.hasNext()) {
         RowData rowData = iterator.next();
@@ -251,7 +246,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     }
 
     List<WriteStatus> writeStatuses = writerHelper.getWriteStatuses(this.taskID);
-    collector.collect(new ClusteringCommitEvent(instantTime, writeStatuses, this.taskID));
+    collector.collect(new ClusteringCommitEvent(instantTime, getFileIds(clusteringOperations), writeStatuses, this.taskID));
     writerHelper.close();
   }
 
@@ -376,6 +371,10 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType,
         conf.getString(FlinkOptions.CLUSTERING_SORT_COLUMNS).split(","));
     return sortOperatorGen.createSortCodeGenerator();
+  }
+
+  private String getFileIds(List<ClusteringOperation> clusteringOperations) {
+    return clusteringOperations.stream().map(ClusteringOperation::getFileId).collect(Collectors.joining(","));
   }
 
   @VisibleForTesting
