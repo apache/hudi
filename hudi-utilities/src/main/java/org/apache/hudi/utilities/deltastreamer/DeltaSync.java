@@ -313,7 +313,7 @@ public class DeltaSync implements Serializable, Closeable {
         this.errorTableWriter, Option.of(props));
 
     this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames),
-        Option.ofNullable(schemaProvider.getSourceSchema()), cfg.enableTransformerSchemaValidation,
+        Option.ofNullable(schemaProvider).map(SchemaProvider::getSourceSchema), cfg.enableTransformerSchemaValidation,
         this.errorTableWriter.isPresent());
 
   }
