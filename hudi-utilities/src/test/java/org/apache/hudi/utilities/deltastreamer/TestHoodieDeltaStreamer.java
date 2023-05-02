@@ -1072,9 +1072,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     ds = new HoodieDeltaStreamer(cfg, jsc);
     ds.sync();
 
-    // Step 5 : Make sure that firstReplaceHoodieInstant is archived.
+    // Step 5 : FirstReplaceHoodieInstant is retained for clean.
     long count = meta.reloadActiveTimeline().getCompletedReplaceTimeline().getInstantsAsStream().filter(instant -> firstReplaceHoodieInstant.get().equals(instant)).count();
-    assertEquals(0, count);
+    assertEquals(1, count);
 
     // Step 6 : All the replaced files in firstReplaceHoodieInstant should be deleted through sync/async cleaner.
     for (String replacedFilePath : replacedFilePaths) {
