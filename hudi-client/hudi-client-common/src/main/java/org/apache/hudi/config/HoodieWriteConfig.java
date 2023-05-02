@@ -700,7 +700,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> SAMPLE_WRITES_SIZE = ConfigProperty
       .key("hoodie.write.sample.writes.size")
-      .defaultValue(2000)
+      .defaultValue(5000)
       .withDocumentation("Number of records to sample from the first write. To improve the estimation's accuracy, "
           + "for smaller or more compressable record size, set the sample size bigger. For bigger or less compressable record size, set smaller.");
 
