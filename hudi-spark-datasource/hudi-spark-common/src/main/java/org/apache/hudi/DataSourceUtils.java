@@ -57,6 +57,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.CommitUtils.getCheckpointValueAsString;
+
 /**
  * Utilities used throughout the data source.
  */
@@ -139,6 +141,12 @@ public class DataSourceUtils {
           extraMetadataMap.put(entry.getKey(), entry.getValue());
         }
       });
+    }
+    if (properties.containsKey(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID())) {
+      extraMetadataMap.put(HoodieStreamingSink.SINK_CHECKPOINT_KEY(),
+          getCheckpointValueAsString(properties.getOrDefault(DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER().key(),
+                  DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER().defaultValue()),
+              properties.get(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID())));
     }
     return extraMetadataMap;
   }

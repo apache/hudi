@@ -96,6 +96,11 @@ object HoodieSparkSqlWriter {
     ConfigProperty.key("hoodie.internal.sql.merge.into.writes")
       .defaultValue(false)
 
+  /**
+   * For spark streaming use-cases, holds the batch Id.
+   */
+  val SPARK_STREAMING_BATCH_ID = "hoodie.internal.spark.streaming.batch.id"
+
   private val log = LogManager.getLogger(getClass)
   private var tableExists: Boolean = false
   private var asyncCompactionTriggerFnDefined: Boolean = false

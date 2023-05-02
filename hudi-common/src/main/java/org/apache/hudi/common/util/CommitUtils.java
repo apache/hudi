@@ -29,11 +29,13 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +48,7 @@ public class CommitUtils {
 
   private static final Logger LOG = LogManager.getLogger(CommitUtils.class);
   private static final String NULL_SCHEMA_STR = Schema.create(Schema.Type.NULL).toString();
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**
    * Gets the commit action type for given write operation and table type.
@@ -145,19 +148,24 @@ public class CommitUtils {
   /**
    * Process previous commits metadata in the timeline to determine the checkpoint given a checkpoint key.
    * NOTE: This is very similar in intent to DeltaSync#getLatestCommitMetadataWithValidCheckpointInfo except that
-   *       different deployment models (deltastreamer or spark structured streaming) could have different checkpoint keys.
+   * different deployment models (deltastreamer or spark structured streaming) could have different checkpoint keys.
    *
-   * @param timeline completed commits in active timeline.
+   * @param timeline      completed commits in active timeline.
    * @param checkpointKey the checkpoint key in the extra metadata of the commit.
+   * @param keyToLookup   key of interest for which checkpoint is looked up for.
    * @return An optional commit metadata with latest checkpoint.
    */
-  public static Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline, String checkpointKey) {
-    return (Option<HoodieCommitMetadata>) timeline.filterCompletedInstants().getReverseOrderedInstants().map(instant -> {
+  public static Option<String> getValidCheckpointForCurrentWriter(HoodieTimeline timeline, String checkpointKey,
+                                                                  String keyToLookup) {
+    return (Option<String>) timeline.getWriteTimeline().getReverseOrderedInstants().map(instant -> {
       try {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-        if (StringUtils.nonEmpty(commitMetadata.getMetadata(checkpointKey))) {
-          return Option.of(commitMetadata);
+        // process commits only with checkpoint entries
+        String checkpointValue = commitMetadata.getMetadata(checkpointKey);
+        if (StringUtils.nonEmpty(checkpointValue)) {
+          // return if checkpoint for "keyForLookup" exists.
+          return readCheckpointValue(checkpointValue, keyToLookup);
         } else {
           return Option.empty();
         }
@@ -165,5 +173,28 @@ public class CommitUtils {
         throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
       }
     }).filter(Option::isPresent).findFirst().orElse(Option.empty());
+  }
+
+  public static Option<String> readCheckpointValue(String value, String id) {
+    try {
+      Map<String, String> checkpointMap = OBJECT_MAPPER.readValue(value, Map.class);
+      if (!checkpointMap.containsKey(id)) {
+        return Option.empty();
+      }
+      String checkpointVal = checkpointMap.get(id);
+      return Option.of(checkpointVal);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to parse checkpoint as map", e);
+    }
+  }
+
+  public static String getCheckpointValueAsString(String identifier, String batchId) {
+    try {
+      Map<String, String> checkpointMap = new HashMap<>();
+      checkpointMap.put(identifier, batchId);
+      return OBJECT_MAPPER.writeValueAsString(checkpointMap);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to parse checkpoint as map", e);
+    }
   }
 }
