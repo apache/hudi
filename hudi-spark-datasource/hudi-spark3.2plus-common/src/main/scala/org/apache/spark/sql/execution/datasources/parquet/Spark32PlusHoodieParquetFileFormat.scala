@@ -141,7 +141,7 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     (file: PartitionedFile) => {
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
 
-      val filePath = new Path(new URI(file.filePath))
+      val filePath = new Path(new URI(file.filePath).getRawPath)
       val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
       val sharedConf = broadcastedHadoopConf.value.value

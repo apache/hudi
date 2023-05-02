@@ -113,7 +113,7 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
 
       val fileSplit =
-        new FileSplit(new Path(new URI(file.filePath)), file.start, file.length, Array.empty)
+        new FileSplit(new Path(new URI(file.filePath).getRawPath), file.start, file.length, Array.empty)
       val filePath = fileSplit.getPath
 
       val split =

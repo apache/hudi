@@ -135,7 +135,7 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     (file: PartitionedFile) => {
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
 
-      val filePath = new Path(new URI(file.filePath))
+      val filePath = new Path(new URI(file.filePath).getRawPath)
       val split =
         new org.apache.parquet.hadoop.ParquetInputSplit(
           filePath,
