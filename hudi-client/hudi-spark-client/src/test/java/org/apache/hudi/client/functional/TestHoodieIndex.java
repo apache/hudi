@@ -171,19 +171,11 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":2}";
     String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":3}";
     String recordStr4 = "{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":4}";
-    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
-    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    HoodieRecord record3 =
-        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
-    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
-    HoodieRecord record4 =
-        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
-    return Arrays.asList(record1, record2, record3, record4);
+    return Arrays.asList(
+        new RawTripTestPayload(recordStr1).toHoodieRecord(),
+        new RawTripTestPayload(recordStr2).toHoodieRecord(),
+        new RawTripTestPayload(recordStr3).toHoodieRecord(),
+        new RawTripTestPayload(recordStr4).toHoodieRecord());
   }
 
   @ParameterizedTest
@@ -423,18 +415,10 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
     // place same row key under a different partition.
     String recordStr4 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
-    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
-    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    HoodieRecord record3 =
-        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
-    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
-    HoodieRecord record4 =
-        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+    HoodieRecord record1 = new RawTripTestPayload(recordStr1).toHoodieRecord();
+    HoodieRecord record2 = new RawTripTestPayload(recordStr2).toHoodieRecord();
+    HoodieRecord record3 = new RawTripTestPayload(recordStr3).toHoodieRecord();
+    HoodieRecord record4 = new RawTripTestPayload(recordStr4).toHoodieRecord();
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
     String newCommitTime = writeClient.startCommit();
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -534,9 +518,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // this record will be saved in table and will be tagged to an empty record
     RawTripTestPayload originalPayload =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
-    HoodieRecord originalRecord =
-        new HoodieAvroRecord(new HoodieKey(originalPayload.getRowKey(), originalPayload.getPartitionPath()),
-            originalPayload);
+    HoodieRecord originalRecord = originalPayload.toHoodieRecord();
 
     /*
     This record has the same record key as originalRecord but different time so different partition
@@ -547,9 +529,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     */
     RawTripTestPayload incomingPayload =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-02-28T03:16:41.415Z\",\"number\":12}");
-    HoodieRecord incomingRecord =
-        new HoodieAvroRecord(new HoodieKey(incomingPayload.getRowKey(), incomingPayload.getPartitionPath()),
-            incomingPayload);
+    HoodieRecord incomingRecord = incomingPayload.toHoodieRecord();
     /*
     This record has the same record key as originalRecord and the same partition
     Though GLOBAL_BLOOM_INDEX_SHOULD_UPDATE_PARTITION_PATH = true,
@@ -557,10 +537,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     */
     RawTripTestPayload incomingPayloadSamePartition =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T04:16:41.415Z\",\"number\":15}");
-    HoodieRecord incomingRecordSamePartition =
-        new HoodieAvroRecord(
-            new HoodieKey(incomingPayloadSamePartition.getRowKey(), incomingPayloadSamePartition.getPartitionPath()),
-            incomingPayloadSamePartition);
+    HoodieRecord incomingRecordSamePartition = incomingPayloadSamePartition.toHoodieRecord();
 
     final String file1P1C0 = UUID.randomUUID().toString();
     Map<String, List<Pair<String, Integer>>> c1PartitionToFilesNameLengthMap = new HashMap<>();

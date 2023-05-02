@@ -20,6 +20,7 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -86,7 +87,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.rowKey = jsonRecordMap.get("_row_key").toString();
     this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
     this.isDeleted = false;
-    this.orderingVal = Integer.valueOf(jsonRecordMap.get("number").toString());
+    this.orderingVal = Integer.valueOf(jsonRecordMap.getOrDefault("number", 0L).toString());
   }
 
   public RawTripTestPayload(GenericRecord record, Comparable orderingVal) {
@@ -223,6 +224,10 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     } catch (IOException e) {
       return null;
     }
+  }
+
+  public HoodieRecord toHoodieRecord() {
+    return new HoodieAvroRecord(new HoodieKey(getRowKey(), getPartitionPath()), this);
   }
 
   public static String extractPartitionFromTimeField(String timeField) {
