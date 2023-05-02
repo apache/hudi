@@ -51,10 +51,11 @@ import java.util.zip.InflaterInputStream;
  */
 public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayload> {
 
-  public static final String JSON_DATA_SCHEMA = "{\"type\":\"record\",\"name\":\"triprec\",\"fields\":[{\"name\":\"number\",\"type\":[\"null\",\"int\"],\"default\":null},"
+  public static final String JSON_DATA_SCHEMA_STR = "{\"type\":\"record\",\"name\":\"triprec\",\"fields\":[{\"name\":\"number\",\"type\":[\"null\",\"int\"],\"default\":null},"
       + "{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"time\",\"type\":\"string\"}]}";
+  public static final Schema JSON_DATA_SCHEMA = new Schema.Parser().parse(JSON_DATA_SCHEMA_STR);
 
-  private static final transient ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private String partitionPath;
   private String rowKey;
   private byte[] jsonDataCompressed;
@@ -83,7 +84,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.dataSize = jsonData.length();
     Map<String, Object> jsonRecordMap = OBJECT_MAPPER.readValue(jsonData, Map.class);
     this.rowKey = jsonRecordMap.get("_row_key").toString();
-    this.partitionPath = jsonRecordMap.get("time").toString().split("T")[0].replace("-", "/");
+    this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
     this.isDeleted = false;
     this.orderingVal = Integer.valueOf(jsonRecordMap.get("number").toString());
   }
@@ -101,7 +102,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
       this.dataSize = jsonData.length();
       Map<String, Object> jsonRecordMap = OBJECT_MAPPER.readValue(jsonData, Map.class);
       this.rowKey = jsonRecordMap.get("_row_key").toString();
-      this.partitionPath = jsonRecordMap.get("time").toString().split("T")[0].replace("-", "/");
+      this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
       this.isDeleted = false;
     } catch (IOException e) {
       throw new IllegalStateException("Fail to instantiate.", e);
@@ -224,4 +225,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     }
   }
 
+  public static String extractPartitionFromTimeField(String timeField) {
+    return timeField.split("T")[0].replace("-", "/");
+  }
 }

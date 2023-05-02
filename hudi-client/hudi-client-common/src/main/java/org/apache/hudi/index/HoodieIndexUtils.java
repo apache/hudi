@@ -229,6 +229,10 @@ public class HoodieIndexUtils {
             return Collections.singletonList(getTaggedRecord(incoming, Option.empty())).iterator();
           }
           HoodieRecord<R> existing = existingOpt.get();
+          if (incoming.getData() instanceof EmptyHoodieRecordPayload) {
+            // incoming is a delete: force tag the incoming to the old partition
+            return Collections.singletonList(getTaggedRecord(incoming, Option.of(existing.getCurrentLocation()))).iterator();
+          }
           Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
           Schema writeSchema = new Schema.Parser().parse(config.getWriteSchema());
           Option<Pair<HoodieRecord, Schema>> mergeResult = config.getRecordMerger().merge(existing, existingSchema, incoming, writeSchema, updatedProps);

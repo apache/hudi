@@ -350,7 +350,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
   public void testTagLocationWhenShouldUpdatePartitionPath() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA)
+        .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA_STR)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(RawTripTestPayload.class.getName())
             .withPayloadOrderingField("number").build())
