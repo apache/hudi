@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
@@ -258,6 +259,26 @@ public class ClusteringUtils {
           oldestInstantToRetain = replaceTimeline.filterCompletedInstants()
               .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestCommitToRetain))
               .firstInstant();
+        }
+      }
+      Option<HoodieInstant> lastCompletedCleanInstant = activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
+      if (lastCompletedCleanInstant.isPresent()) {
+        // TODO: Why previous call to CleanerUtils.getCleanerPlan checks requested state?
+        // TODO: What if there is no clean commit at all?
+        Option<HoodieActionInstant> earliestInstantToRetain = Option.ofNullable(
+            CleanerUtils.getCleanerPlan(metaClient, lastCompletedCleanInstant.get()).getEarliestInstantToRetain());
+        if (earliestInstantToRetain.isPresent()) {
+          if (oldestInstantToRetain.map(instant ->
+                  HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, earliestInstantToRetain.get().getTimestamp()))
+              .orElse(true)) {
+            oldestInstantToRetain = activeTimeline.findInstantsBeforeOrEquals(earliestInstantToRetain.get().getTimestamp()).lastInstant();
+          }
+        } else {
+          // If earliestInstantToRetain is not provided by clean planner, then assume last completed clean is the oldest to retain
+          // This is applicable when cleaning policy is set to HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS
+          if (oldestInstantToRetain.map(instant -> instant.compareTo(lastCompletedCleanInstant.get()) > 0).orElse(true)) {
+            oldestInstantToRetain = lastCompletedCleanInstant;
+          }
         }
       }
       Option<HoodieInstant> pendingInstantOpt = replaceTimeline.filterInflights().firstInstant();
