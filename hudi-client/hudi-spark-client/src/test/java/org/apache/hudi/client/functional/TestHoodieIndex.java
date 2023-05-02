@@ -72,7 +72,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -165,6 +164,26 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   @AfterEach
   public void tearDown() throws IOException {
     cleanupResources();
+  }
+
+  private static List<HoodieRecord> getInserts() throws IOException {
+    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}";
+    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":2}";
+    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":3}";
+    String recordStr4 = "{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":4}";
+    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
+    HoodieRecord record1 =
+        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
+    HoodieRecord record2 =
+        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
+    HoodieRecord record3 =
+        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
+    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
+    HoodieRecord record4 =
+        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+    return Arrays.asList(record1, record2, record3, record4);
   }
 
   @ParameterizedTest
@@ -388,26 +407,6 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         {IndexType.SIMPLE, true, false}
     };
     return Stream.of(data).map(Arguments::of);
-  }
-
-  private List<HoodieRecord> getInserts() throws IOException {
-    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}";
-    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":2}";
-    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":3}";
-    String recordStr4 = "{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":4}";
-    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
-    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    HoodieRecord record3 =
-        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
-    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
-    HoodieRecord record4 =
-        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
-    return Arrays.asList(record1, record2, record3, record4);
   }
 
   @ParameterizedTest
