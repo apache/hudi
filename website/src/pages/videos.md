@@ -227,3 +227,11 @@ last_modified_at: 2022-12-21T15:59:57-04:00
 92. [Efficient Data Ingestion with Glue Concurrency and Hudi Data Lake](https://www.youtube.com/watch?v=G_Xd1haycqE)- By Soumil Shah, April 12th 2023
 
 93. [Effortlessly Sync Your JDBC Source to Hudi Transactional Datalake: No DMS or Debezium Required!](https://www.youtube.com/watch?v=PTz2Td-tlRg)- By Soumil Shah, April 20th 2023
+
+94. [Joining Hudi Raw Tables for Powerful Data Analysis with Spark SQL](https://www.youtube.com/watch?v=7Ts2rbNyco4)- By Soumil Shah, April 25th 2023
+
+95. [From Raw Data to Insights: Building a Lake House with Hudi and Star Schema | Step by Step Guide](https://www.youtube.com/watch?v=5DTx8cIF2_c)- By Soumil Shah, April 26th 2023
+
+96. [Efficiently Managing Ride & Late Arriving Tips Data with Incremental ETL using Apache Hudi :Hands On](https://www.youtube.com/watch?v=vimesCse7zE)- By Soumil Shah, April 29th 2023
+
+97. [Building a Scalable and Resilient Streaming ETL Pipeline with Hudi's Incremental Processing #1](https://www.youtube.com/watch?v=eiOzdLrUrhg)- By Soumil Shah, May 1st 2023
