@@ -194,12 +194,6 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
 
   private void testBootstrapCommon(boolean partitioned, boolean deltaCommit, EffectiveMode mode) throws Exception {
 
-    if (deltaCommit) {
-      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, bootstrapBasePath, true);
-    } else {
-      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, bootstrapBasePath, true);
-    }
-
     int totalRecords = 100;
     String keyGeneratorClass = partitioned ? SimpleKeyGenerator.class.getCanonicalName()
         : NonpartitionedKeyGenerator.class.getCanonicalName();
@@ -253,6 +247,11 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
             .withBootstrapModeSelector(bootstrapModeSelectorClass).build())
         .build();
 
+    if (deltaCommit) {
+      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, bootstrapBasePath, true);
+    } else {
+      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, bootstrapBasePath, true);
+    }
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
     client.bootstrap(Option.empty());
     checkBootstrapResults(totalRecords, schema, bootstrapCommitInstantTs, checkNumRawFiles, numInstantsAfterBootstrap,
@@ -349,6 +348,14 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     assertEquals(instant, metaClient.getActiveTimeline()
         .getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
     verifyNoMarkerInTempFolder();
+    // Test fast bootstrap read
+    Dataset<Row> bootstrapRelationPath = sparkSession.read().format("hudi").option(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key(), "false").load(basePath);
+    assertEquals(100, bootstrapRelationPath.count());
+    Dataset<Row> fastBootstrapPath = sparkSession.read().format("hudi").option(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key(), "true").load(basePath);
+    assertEquals(100, fastBootstrapPath.count());
+    assertEquals(0,  bootstrapRelationPath
+        .drop("_hoodie_commit_time", "_hoodie_record_key", "_hoodie_file_name", "_hoodie_commit_seqno", "_hoodie_partition_path")
+        .except(fastBootstrapPath).count());
 
     Dataset<Row> bootstrapped = sqlContext.read().format("parquet").load(basePath);
     Dataset<Row> original = sqlContext.read().format("parquet").load(bootstrapBasePath);

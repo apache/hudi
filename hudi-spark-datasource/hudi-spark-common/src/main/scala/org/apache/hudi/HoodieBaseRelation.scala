@@ -225,10 +225,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val shouldExtractPartitionValueFromPath =
       optParams.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
-    val shouldUseBootstrapFastRead = optParams.getOrElse(HoodieBootstrapRelation.USE_FAST_BOOTSTRAP_READ, "false").toBoolean
-
-    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath || shouldUseBootstrapFastRead
+    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath
   }
+
+  protected val shouldUseBootstrapFastRead: Boolean = optParams.getOrElse(HoodieBootstrapRelation.USE_FAST_BOOTSTRAP_READ, "false").toBoolean
+
 
   /**
    * NOTE: This fields are accessed by [[NestedSchemaPruning]] component which is only enabled for
@@ -240,7 +241,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       case HoodieFileFormat.PARQUET =>
         // We're delegating to Spark to append partition values to every row only in cases
         // when these corresponding partition-values are not persisted w/in the data file itself
-        val parquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
+        val parquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, shouldUseBootstrapFastRead).get
         (parquetFileFormat, HoodieParquetFileFormat.FILE_FORMAT_ID)
     }
 
@@ -530,7 +531,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                      filters: Seq[Filter],
                                      options: Map[String, String],
                                      hadoopConf: Configuration,
-                                     shouldAppendPartitionValuesOverride: Option[Boolean] = None): BaseFileReader = {
+                                     shouldAppendPartitionValuesOverride: Option[Boolean] = None,
+                                     shouldDecodeFilePathOverride: Option[Boolean] = None): BaseFileReader = {
     val tableBaseFileFormat = tableConfig.getBaseFileFormat
 
     // NOTE: PLEASE READ CAREFULLY
@@ -551,7 +553,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
             hadoopConf = hadoopConf,
             // We're delegating to Spark to append partition values to every row only in cases
             // when these corresponding partition-values are not persisted w/in the data file itself
-            appendPartitionValues = shouldAppendPartitionValuesOverride.getOrElse(shouldExtractPartitionValuesFromPartitionPath)
+            appendPartitionValues = shouldAppendPartitionValuesOverride.getOrElse(shouldExtractPartitionValuesFromPartitionPath),
+            decodeFilePath = shouldDecodeFilePathOverride.getOrElse(shouldUseBootstrapFastRead)
           )
           // Since partition values by default are omitted, and not persisted w/in data-files by Spark,
           // data-file readers (such as [[ParquetFileFormat]]) have to inject partition values while reading

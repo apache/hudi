@@ -31,7 +31,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe
-import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{SimpleKeyGenerator, StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -119,7 +119,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
           .map(column => nameFieldMap.apply(column))
 
         if (partitionFields.size != partitionColumns.get().size) {
-          val isBootstrapTable = BootstrapIndex.getBootstrapIndex(metaClient).useIndex()
+          val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
           if (isBootstrapTable) {
             // For bootstrapped tables its possible the schema does not contain partition field when source table
             // is hive style partitioned. In this case we would like to treat the table as non-partitioned
