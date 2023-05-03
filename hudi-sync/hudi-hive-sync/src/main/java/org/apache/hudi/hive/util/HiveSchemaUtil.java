@@ -450,12 +450,6 @@ public class HiveSchemaUtil {
 
   /**
    * Generates the Column DDL string for creating a Hive table from the given schema.
-   *
-   * @param storageSchema The schema to generate the DDL for.
-   * @param colsToSkip a set of column names that should be excluded.
-   * @param supportTimestamp flag that indicates whether to use TIMESTAMP data type or not.
-   * @return The generated DDL string.
-   * @throws IOException failed or interrupted I/O operations.
    */
   public static String generateSchemaString(MessageType storageSchema, List<String> colsToSkip,
       boolean supportTimestamp) throws IOException {
@@ -484,19 +478,6 @@ public class HiveSchemaUtil {
 
   /**
    * Generate CreateTable SQL.
-   *
-   * @param pDataBaseName DataBaseName.
-   * @param config HiveSyncConfig.
-   * @param pTableName tableName.
-   * @param storageSchema parquet Schema.
-   * @param inputFormatClass inputFormatClass.
-   * @param outputFormatClass outputFormatClass.
-   * @param serdeClass serdeClass.
-   * @param serdeProperties serdeProperties.
-   * @param tableProperties tableProperties.
-   * @return createTable SQL.
-   *
-   * @throws IOException failed or interrupted I/O operations.
    */
   public static String generateCreateTableDDL(String pDataBaseName, String pTableName, MessageType storageSchema,
       HiveSyncConfig config, String inputFormatClass,
@@ -521,14 +502,14 @@ public class HiveSchemaUtil {
       sb.append(getPartitions(storageSchema, config));
     }
 
-    // Append serdeClass, inputFormatClass, outputFormatClass
-    sb.append(getRowFormat(config, serdeClass, serdeProperties,
-        inputFormatClass, outputFormatClass));
-
     // Append Buckets
     if (config.getString(HIVE_SYNC_BUCKET_SYNC_SPEC) != null) {
       sb.append("\n ").append(config.getBuckets());
     }
+
+    // Append serdeClass, inputFormatClass, outputFormatClass
+    sb.append(getRowFormat(config, serdeClass, serdeProperties,
+        inputFormatClass, outputFormatClass));
 
     // Append TBLPROPERTIES
     if (!tableProperties.isEmpty()) {
@@ -568,9 +549,6 @@ public class HiveSchemaUtil {
   /**
    * If the table is a EXTERNAL table, the EXTERNAL keyword will be added.
    * If it is not a EXTERNAL table, an empty string will be returned.
-   *
-   * @param config HiveSyncConfig
-   * @return EXTERNAL/Empty String
    */
   private static String getExternal(HiveSyncConfig config) {
     return config.getHiveCreateExternalTable() ? "EXTERNAL " : "";
@@ -578,29 +556,6 @@ public class HiveSchemaUtil {
 
   /**
    * Get the RowFormat information of the table.
-   *
-   * @param serdeClass name of the serialization/deserialization class.
-   * @param serdeParams parameters associated with the SerDe.
-   * @param inputFormatClass refers to the input format class
-   * used for reading data associated with a Hive table.
-   * @param outputFormatClass outputFormatClass refers to the output format class
-   * used for writing data associated with a Hive table.
-   *
-   * @return RowFormat information.
-   *
-   * Example:
-   * The function will return the following:
-   * ROW FORMAT SERDE
-   *   'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-   * WITH SERDEPROPERTIES (
-   *   'hoodie.query.as.ro.table'='true',
-   *   'path'='file:///var/folders/v2/1tfnwpyd40x0p9d1cfhjznmh0000gn/T/hivesynctest16825966889963857596788560678404/')
-   * STORED AS INPUTFORMAT
-   *   'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-   * OUTPUTFORMAT
-   *   'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-   * LOCATION
-   *   'hdfs://localhost:62870/foo/bar'
    */
   private static String getRowFormat(HiveSyncConfig config, String serdeClass,
       Map<String, String> serdeParams, String inputFormatClass, String outputFormatClass) {
@@ -620,15 +575,6 @@ public class HiveSchemaUtil {
 
   /**
    * Get parameters associated with the SerDe.
-   *
-   * @param builder stringBuilder.
-   * @param serdeParams parameters associated with the SerDe.
-   *
-   * Example:
-   * The function will return the following:
-   * WITH SERDEPROPERTIES (
-   *   'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-   *   'path'='file:///var/folders/v2/1tfnwpyd40x0p9d1cfhjznmh0000gn/T/hivesynctest16825966889963857596788560678404/')
    */
   public static void getSerdeParams(StringBuilder builder, Map<String, String> serdeParams) {
     SortedMap<String, String> sortedSerdeParams = new TreeMap<>(serdeParams);
@@ -643,17 +589,6 @@ public class HiveSchemaUtil {
 
   /**
    * Get the partition Information for creating a table.
-   *
-   * @param storageSchema parquet Schema.
-   * @param config hiveSyncConfig.
-   * @return Partitions Information.
-   *
-   * Example:
-   * The function will return the following:
-   * PARTITIONED BY (
-   *    `datestr` string)
-   *
-   * @throws IOException I/O exception occurred.
    */
   private static String getPartitions(MessageType storageSchema, HiveSyncConfig config)
       throws IOException {
@@ -671,18 +606,6 @@ public class HiveSchemaUtil {
 
   /**
    * Get the column Information for creating a table.
-   *
-   * @param storageSchema parquet Schema.
-   * @param config hiveSyncConfig.
-   * @return Columns Information.
-   *
-   * Example:
-   * The function will return the following:
-   * `name` string,
-   * `favorite_number` int,
-   * `favorite_color` string
-   *
-   * @throws IOException I/O exception occurred.
    */
   private static String getColumns(MessageType storageSchema, HiveSyncConfig config)
       throws IOException {
@@ -692,16 +615,6 @@ public class HiveSchemaUtil {
 
   /**
    * Get the location Information for creating a table.
-   *
-   * @param location
-   *  location refers to the physical location or storage path of a table.
-   *
-   * @return Location Information.
-   *
-   * Example:
-   * The function will return the following:
-   * LOCATION
-   *  'hdfs://localhost:62870/foo/bar'
    */
   private static String getLocationBlock(String location) {
     return "\n LOCATION\n " + "'" + location + "'";
