@@ -34,7 +34,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDat
 import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
-import org.junit.jupiter.api.Assertions.{assertAll, assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource

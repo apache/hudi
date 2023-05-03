@@ -248,11 +248,12 @@ public class HoodieIndexUtils {
           Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
           Schema writeSchema = new Schema.Parser().parse(config.getWriteSchema());
           Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
-          HoodieRecord incomingPrepended =
-              incoming.prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()),
-                      config.getProps());
-          HoodieRecord incomingWithMetaFields = incomingPrepended.wrapIntoHoodieRecordPayloadWithParams(writeSchema, config.getProps(), Option.empty(), config.allowOperationMetadataField(), Option.empty(), false);
-          Option<Pair<HoodieRecord, Schema>> mergeResult = config.getRecordMerger().merge(existing, existingSchema, incomingWithMetaFields, writeSchemaWithMetaFields, config.getProps());
+          HoodieRecord incomingPrepended = incoming
+              .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()), config.getProps());
+          HoodieRecord incomingWithMetaFields = incomingPrepended
+              .wrapIntoHoodieRecordPayloadWithParams(writeSchema, config.getProps(), Option.empty(), config.allowOperationMetadataField(), Option.empty(), false);
+          Option<Pair<HoodieRecord, Schema>> mergeResult = config.getRecordMerger()
+              .merge(existing, existingSchema, incomingWithMetaFields, writeSchemaWithMetaFields, config.getProps());
           if (!mergeResult.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition
             return Collections.singletonList(getTaggedRecord(incoming, Option.of(existing.getCurrentLocation()))).iterator();
