@@ -136,7 +136,15 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
           }
         });
 
-    return mergeForPartitionUpdates(taggedHoodieRecords, config, hoodieTable);
+    if (config.getBloomIndexUseCaching()) {
+      taggedRecordsAndLocationInfo.persist(new HoodieConfig(config.getProps())
+          .getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+    }
+    HoodieData<HoodieRecord<R>> finalTaggedRecords = mergeForPartitionUpdates(taggedRecordsAndLocationInfo, config, hoodieTable);
+    if (config.getBloomIndexUseCaching()) {
+      taggedRecordsAndLocationInfo.unpersist();
+    }
+    return finalTaggedRecords;
   }
 
   @Override

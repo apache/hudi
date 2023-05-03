@@ -146,7 +146,15 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
           }
         });
 
-    return mergeForPartitionUpdates(taggedHoodieRecords, config, hoodieTable);
+    if (config.getSimpleIndexUseCaching()) {
+      taggedRecordsAndLocationInfo.persist(new HoodieConfig(config.getProps())
+          .getString(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+    }
+    HoodieData<HoodieRecord<R>> finalTaggedRecords = mergeForPartitionUpdates(taggedRecordsAndLocationInfo, config, hoodieTable);
+    if (config.getSimpleIndexUseCaching()) {
+      taggedRecordsAndLocationInfo.unpersist();
+    }
+    return finalTaggedRecords;
   }
 
   @Override
