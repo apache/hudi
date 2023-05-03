@@ -150,7 +150,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     prepareParquetDFSSource(useSchemaProvider, true, "source.avsc", "target-flattened-addcolumn-transformer.avsc", PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false, "partition_path", "");
     String tableBasePath = basePath + "/testTransformerSchemaValidation" + testNum;
-    HoodieDeltaStreamer.Config config = makeConfig(tableBasePath, WriteOperationType.INSERT,
+    HoodieDeltaStreamer.Config config = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT,
         ParquetDFSSource.class.getName(), transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false, useSchemaProvider,
         100000, false, null, null, "timestamp", null);
     config.enableTransformerSchemaValidation = true;
@@ -160,7 +160,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     properties.setProperty("timestamp.transformer.multiplier", "2");
 
     deltaStreamer.sync();
-    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
     sqlContext.read().format("org.apache.hudi").load(tableBasePath).show();
     FileIOUtils.deleteDirectory(new File(tableBasePath));
   }
