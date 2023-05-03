@@ -20,6 +20,8 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.cli.HoodieCLI;
+import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
@@ -46,6 +48,7 @@ import org.springframework.shell.Shell;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -53,10 +56,21 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
+import static org.apache.hudi.common.table.HoodieTableConfig.NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_LAYOUT_VERSION;
+import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
+import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
+import static org.apache.hudi.common.table.HoodieTableConfig.validateChecksum;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -104,7 +118,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
 
     // Test connect with specified values
     Object result = shell.evaluate(() -> "connect --path " + tablePath + " --initialCheckIntervalMs 3000 "
-            + "--maxWaitIntervalMs 40000 --maxCheckIntervalMs 8");
+        + "--maxWaitIntervalMs 40000 --maxCheckIntervalMs 8");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // Check specified values
@@ -142,7 +156,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
   public void testCreateWithSpecifiedValues() {
     // Test create with specified values
     Object result = shell.evaluate(() -> "create --path " + tablePath + " --tableName " + tableName
-            + " --tableType MERGE_ON_READ --archiveLogFolder archive");
+        + " --tableType MERGE_ON_READ --archiveLogFolder archive");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
     assertEquals("Metadata for table " + tableName + " loaded", result.toString());
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
@@ -286,5 +300,34 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     fis.read(data);
     fis.close();
     return new String(data, StandardCharsets.UTF_8);
+  }
+
+  @Test
+  public void testUpdate() throws IOException {
+    HoodieCLI.conf = hadoopConf();
+
+    // Create table and connect
+    String tableName = tableName();
+    String tablePath = tablePath(tableName);
+
+    TableCommand command = new TableCommand();
+    command.createTable(tablePath, tableName, "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+    command.connect(tablePath, TimelineLayoutVersion.VERSION_1, false, 0, 0, 0);
+
+    HoodieTableConfig tableConfig = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig();
+    Map<String, String> result = tableConfig.propsMap();
+    // validate table checksum
+    assertTrue(result.containsKey(TABLE_CHECKSUM.key()));
+    assertTrue(validateChecksum(tableConfig.getProps()));
+    Map<String, String> oldProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
+    List<String> allPropsStr = Arrays.asList(NAME.key(), TYPE.key(), VERSION.key(), ARCHIVELOG_FOLDER.key(), TIMELINE_LAYOUT_VERSION.key(), TABLE_CHECKSUM.key(), DROP_PARTITION_COLUMNS.key());
+    String[][] rows = allPropsStr.stream().sorted().map(key -> new String[] {key, oldProps.getOrDefault(key, "null"), result.getOrDefault(key, "null")}).toArray(String[][]::new);
+    String expect = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY, HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);
+
+    URL url = this.getClass().getClassLoader().getResource("table-config.properties");
+    String cmdResult = command.updateTableConfig(url.getPath());
+    String got = removeNonWordAndStripSpace(cmdResult.toString());
+
+    assertNotEquals(expect, got);
   }
 }
