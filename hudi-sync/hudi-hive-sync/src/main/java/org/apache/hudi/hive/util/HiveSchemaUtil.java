@@ -523,7 +523,7 @@ public class HiveSchemaUtil {
 
     // Append serdeClass, inputFormatClass, outputFormatClass
     sb.append(getRowFormat(config, serdeClass, serdeProperties,
-       inputFormatClass, outputFormatClass));
+        inputFormatClass, outputFormatClass));
 
     // Append Buckets
     if (config.getString(HIVE_SYNC_BUCKET_SYNC_SPEC) != null) {
