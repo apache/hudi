@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 public class ChainedTransformer implements Transformer {
 
   // Delimiter used to separate class name and the property key suffix. The suffix comes first.
-  private static final String TRANSFORMER_CLASS_NAME_ID_DELIMITER = ":";
+  private static final String ID_TRANSFORMER_CLASS_NAME_DELIMITER = ":";
 
   private final List<TransformerInfo> transformers;
 
@@ -67,10 +67,10 @@ public class ChainedTransformer implements Transformer {
 
     Set<String> identifiers = new HashSet<>();
     for (String configuredTransformer : configuredTransformers) {
-      if (!configuredTransformer.contains(TRANSFORMER_CLASS_NAME_ID_DELIMITER)) {
+      if (!configuredTransformer.contains(ID_TRANSFORMER_CLASS_NAME_DELIMITER)) {
         transformers.add(new TransformerInfo(ReflectionUtils.loadClass(configuredTransformer)));
       } else {
-        String[] splits = configuredTransformer.split(TRANSFORMER_CLASS_NAME_ID_DELIMITER);
+        String[] splits = configuredTransformer.split(ID_TRANSFORMER_CLASS_NAME_DELIMITER);
         if (splits.length > 2) {
           throw new IllegalArgumentException("There should only be one colon in a configured transformer");
         }
@@ -113,9 +113,9 @@ public class ChainedTransformer implements Transformer {
     private final Transformer transformer;
     private final Option<String> idOpt;
 
-    private TransformerInfo(Transformer transformer, String idOpt) {
+    private TransformerInfo(Transformer transformer, String id) {
       this.transformer = transformer;
-      this.idOpt = Option.of(idOpt);
+      this.idOpt = Option.of(id);
     }
 
     private TransformerInfo(Transformer transformer) {

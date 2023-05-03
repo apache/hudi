@@ -194,7 +194,7 @@ public class UtilHelpers {
     try {
       return classNamesOpt.map(classNames -> classNames.isEmpty() ? null : new ChainedTransformer(classNames));
     } catch (Throwable e) {
-      throw new IOException("Could not load transformer class(es) " + classNamesOpt, e);
+      throw new IOException("Could not load transformer class(es) " + classNamesOpt.get(), e);
     }
   }
 
