@@ -25,12 +25,14 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -187,7 +189,14 @@ public class HoodieIndexUtils {
     return !commitTimeline.empty() && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
   }
 
-  public static <R> HoodieData<HoodieRecord<R>> getTaggedRecordsFromPartitionLocations(
+  /**
+   * Read existing records based on the given partition path and {@link HoodieRecordLocation} info.
+   * <p>
+   * This will perform merged read for MOR table, in case a FileGroup contains log files.
+   *
+   * @return {@link HoodieRecord}s that have the current location being set.
+   */
+  private static <R> HoodieData<HoodieRecord<R>> getExistingRecords(
       HoodieData<Pair<String, HoodieRecordLocation>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
     final Option<String> instantTime = hoodieTable
         .getMetaClient()
@@ -203,6 +212,9 @@ public class HoodieIndexUtils {
     });
   }
 
+  /**
+   * Merge tagged incoming records with existing records in case of partition path updated.
+   */
   public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdates(
       HoodieData<Pair<HoodieRecord<R>, Option<Pair<String, HoodieRecordLocation>>>> taggedHoodieRecords, HoodieWriteConfig config, HoodieTable hoodieTable) {
     // completely new records
@@ -216,7 +228,7 @@ public class HoodieIndexUtils {
         .map(p -> p.getRight().get())
         .distinct(config.getGlobalIndexReconcileParallelism());
     // merged existing records with current locations being set
-    HoodieData<HoodieRecord<R>> existingRecords = getTaggedRecordsFromPartitionLocations(partitionLocations, config, hoodieTable);
+    HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(partitionLocations, config, hoodieTable);
 
     TypedProperties updatedProps = HoodieAvroRecordMerger.Config.withLegacyOperatingModePreCombining(config.getProps());
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = updatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
@@ -235,15 +247,24 @@ public class HoodieIndexUtils {
           }
           Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
           Schema writeSchema = new Schema.Parser().parse(config.getWriteSchema());
-          Option<Pair<HoodieRecord, Schema>> mergeResult = config.getRecordMerger().merge(existing, existingSchema, incoming, writeSchema, updatedProps);
+          Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
+          HoodieRecord incomingPrepended =
+              incoming.prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()),
+                      config.getProps());
+          HoodieRecord incomingWithMetaFields = incomingPrepended.wrapIntoHoodieRecordPayloadWithParams(writeSchema, config.getProps(), Option.empty(), config.allowOperationMetadataField(), Option.empty(), false);
+          Option<Pair<HoodieRecord, Schema>> mergeResult = config.getRecordMerger().merge(existing, existingSchema, incomingWithMetaFields, writeSchemaWithMetaFields, config.getProps());
           if (!mergeResult.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition
             return Collections.singletonList(getTaggedRecord(incoming, Option.of(existing.getCurrentLocation()))).iterator();
           }
-          HoodieRecord<R> merged = (HoodieRecord<R>) mergeResult.get().getLeft();
+          HoodieRecord mergedRaw = mergeResult.get().getLeft();
+          HoodieRecord<R> merged = ((HoodieAvroIndexedRecord)mergedRaw).wrapIntoHoodieRecordPayloadWithoutMetaFields(
+              writeSchemaWithMetaFields,
+              writeSchema,
+              config.getProps(), Option.empty(), config.allowOperationMetadataField(), Option.empty(), false);
           if (Objects.equals(merged.getPartitionPath(), existing.getPartitionPath())) {
             // merged record has the same partition: route the incoming record to the current location as an update
-            return Collections.singletonList(getTaggedRecord(incoming, Option.of(existing.getCurrentLocation()))).iterator();
+            return Collections.singletonList(getTaggedRecord(merged, Option.of(existing.getCurrentLocation()))).iterator();
           } else {
             // merged record has a different partition: issue a delete to the old partition and insert the merged record to the new partition
             HoodieRecord<R> deleteRecord = new HoodieAvroRecord(existing.getKey(), new EmptyHoodieRecordPayload());

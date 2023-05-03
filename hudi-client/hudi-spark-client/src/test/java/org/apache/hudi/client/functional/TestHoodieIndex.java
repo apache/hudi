@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
+import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -132,7 +133,8 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
         .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA_STR)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
-            .withPayloadClass(RawTripTestPayload.class.getName()).build())
+            .withPayloadClass(RawTripTestPayload.class.getName())
+            .withPayloadOrderingField("number").build())
         .withRollbackUsingMarkers(rollbackUsingMarkers)
         .withIndexConfig(indexBuilder.build())
         .withAutoCommit(false)
@@ -564,7 +566,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
           break;
         case p2:
           assertEquals("000", record.getRecordKey());
-          assertEquals(incomingPayload.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
+          assertEquals(incomingPayload.getJsonDataAsMap(), ((RawTripTestPayload) record.getData()).getJsonDataAsMap());
           break;
         default:
           fail(String.format("Should not get partition path: %s", record.getPartitionPath()));
@@ -580,7 +582,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     HoodieRecord record = taggedRecordRDDSamePartition.first();
     assertEquals("000", record.getRecordKey());
     assertEquals(p1, record.getPartitionPath());
-    assertEquals(incomingPayloadSamePartition.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
+    assertEquals(incomingPayloadSamePartition.getJsonDataAsMap(), ((RawTripTestPayload) record.getData()).getJsonDataAsMap());
   }
 
   private HoodieWriteConfig.Builder getConfigBuilder() {

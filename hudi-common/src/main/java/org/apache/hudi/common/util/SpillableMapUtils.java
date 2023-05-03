@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
@@ -138,6 +139,31 @@ public class SpillableMapUtils {
         ? HoodieOperation.fromName(getNullableValAsString(record, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
         HoodieRecordUtils.loadPayload(payloadClazz, new Object[]{record, preCombineVal}, GenericRecord.class,
+            Comparable.class), operation);
+
+    return (HoodieRecord<R>) hoodieRecord;
+  }
+
+  public static <R> HoodieRecord<R> convertToHoodieRecordPayload2(GenericRecord record, String payloadClazz,
+      String preCombineField,
+      Pair<String, String> recordKeyPartitionPathFieldPair,
+      boolean withOperationField,
+      Option<String> partitionName,
+      Schema schemaWithoutMetaFields) {
+    final String recKey = record.get(recordKeyPartitionPathFieldPair.getKey()).toString();
+    final String partitionPath = (partitionName.isPresent() ? partitionName.get() :
+        record.get(recordKeyPartitionPathFieldPair.getRight()).toString());
+
+    Object preCombineVal = getPreCombineVal(record, preCombineField);
+    HoodieOperation operation = withOperationField
+        ? HoodieOperation.fromName(getNullableValAsString(record, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
+
+    GenericRecord recordWithoutMetaFields = new GenericData.Record(schemaWithoutMetaFields);
+    for (Schema.Field f : schemaWithoutMetaFields.getFields()) {
+      recordWithoutMetaFields.put(f.name(), record.get(f.name()));
+    }
+    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
+        HoodieRecordUtils.loadPayload(payloadClazz, new Object[]{recordWithoutMetaFields, preCombineVal}, GenericRecord.class,
             Comparable.class), operation);
 
     return (HoodieRecord<R>) hoodieRecord;

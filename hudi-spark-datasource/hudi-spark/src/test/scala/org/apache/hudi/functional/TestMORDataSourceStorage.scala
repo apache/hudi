@@ -21,7 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH, getCommitTimeAtUTC}
@@ -34,7 +34,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDat
 import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertAll, assertEquals, assertTrue}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
@@ -149,9 +149,11 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName,
       HoodieMetadataConfig.ENABLE.key -> isMetadataEnabled.toString,
       HoodieIndexConfig.INDEX_TYPE.key -> indexType,
       HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true",
+      HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true",
       HoodieIndexConfig.GLOBAL_INDEX_RECONCILE_PARALLELISM.key -> parallelism.toString,
       HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> parallelism.toString,
       HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> parallelism.toString,
@@ -160,7 +162,10 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     )
     val dataGen = new HoodieTestDataGenerator(0xDEEF)
 
-    def upsertAndValidate(records: java.util.List[HoodieRecord[_]], partition: String): Unit = {
+    def upsertAndValidate(records: java.util.List[HoodieRecord[_]],
+                          commitTime: String,
+                          timestamp: Long,
+                          partition: String): Unit = {
       // upsert records
       spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records), parallelism))
         .write.format("hudi")
@@ -173,28 +178,43 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
         .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
         .load(basePath)
+      snapshotDF.cache()
       assertEquals(totalRecords, snapshotDF.count)
       assertEquals(totalRecords, snapshotDF.filter(s"partition_path = '$partition'").count)
+      assertTrue(snapshotDF.select("rider", "timestamp").collect().forall(r => {
+        r.getString(0).equals(s"rider-$commitTime") && r.getLong(1).equals(timestamp)
+      }), "for each record, `rider` and `timestamp` fields should match.")
+      snapshotDF.unpersist()
     }
 
     // insert all records to partition 1
-    val inserts1 = dataGen.generateInsertsForPartition(
-      getCommitTimeAtUTC(1), totalRecords, DEFAULT_FIRST_PARTITION_PATH)
-    upsertAndValidate(inserts1, DEFAULT_FIRST_PARTITION_PATH)
+    val t0 = 0L
+    val commitTime0 = getCommitTimeAtUTC(t0)
+    val inserts0 = dataGen.generateInsertsForPartition(commitTime0, totalRecords, DEFAULT_FIRST_PARTITION_PATH)
+    upsertAndValidate(inserts0, commitTime0, t0, DEFAULT_FIRST_PARTITION_PATH)
 
     // update all records to partition 2
-    val updates2 = dataGen.generateUpdatesForDifferentPartition(
-      getCommitTimeAtUTC(2), inserts1, DEFAULT_SECOND_PARTITION_PATH)
-    upsertAndValidate(updates2, DEFAULT_SECOND_PARTITION_PATH)
+    val t2 = 2L
+    val commitTime2 = getCommitTimeAtUTC(t2)
+    val updates2 = dataGen.generateUpdatesForDifferentPartition(commitTime2, inserts0, t2, DEFAULT_SECOND_PARTITION_PATH)
+    upsertAndValidate(updates2, commitTime2, t2, DEFAULT_SECOND_PARTITION_PATH)
 
     // update all records to partition 3
-    val updates3 = dataGen.generateUpdatesForDifferentPartition(
-      getCommitTimeAtUTC(3), updates2, DEFAULT_THIRD_PARTITION_PATH)
-    upsertAndValidate(updates3, DEFAULT_THIRD_PARTITION_PATH)
+    val t3 = 3L
+    val commitTime3 = getCommitTimeAtUTC(t3)
+    val updates3 = dataGen.generateUpdatesForDifferentPartition(commitTime3, updates2, t3, DEFAULT_THIRD_PARTITION_PATH)
+    upsertAndValidate(updates3, commitTime3, t3, DEFAULT_THIRD_PARTITION_PATH)
 
     // update all records back to partition 1
-    val updates4 = dataGen.generateUpdatesForDifferentPartition(
-      getCommitTimeAtUTC(4), updates3, DEFAULT_FIRST_PARTITION_PATH)
-    upsertAndValidate(updates4, DEFAULT_FIRST_PARTITION_PATH)
+    val t4 = 4L
+    val commitTime4 = getCommitTimeAtUTC(t4)
+    val updates4 = dataGen.generateUpdatesForDifferentPartition(commitTime4, updates3, t4, DEFAULT_FIRST_PARTITION_PATH)
+    upsertAndValidate(updates4, commitTime4, t4, DEFAULT_FIRST_PARTITION_PATH)
+
+    // write late updates for all records to partition 2, which should be discarded
+    val t1 = 1L
+    val commitTime1 = getCommitTimeAtUTC(t1)
+    val updates1 = dataGen.generateUpdatesForDifferentPartition(commitTime1, inserts0, t1, DEFAULT_SECOND_PARTITION_PATH)
+    upsertAndValidate(updates1, commitTime4, t4, DEFAULT_FIRST_PARTITION_PATH)
   }
 }

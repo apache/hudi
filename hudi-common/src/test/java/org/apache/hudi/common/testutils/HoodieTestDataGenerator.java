@@ -299,9 +299,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   private RawTripTestPayload generateRandomValue(
-      HoodieKey key, String instantTime, boolean isFlattened, int ts) throws IOException {
+      HoodieKey key, String instantTime, boolean isFlattened, long timestamp) throws IOException {
     GenericRecord rec = generateGenericRecord(
-        key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, ts,
+        key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, timestamp,
         false, isFlattened);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
@@ -752,6 +752,10 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return new HoodieAvroRecord(key, generateRandomValue(key, instantTime));
   }
 
+  public HoodieRecord generateUpdateRecordWithTimestamp(HoodieKey key, String instantTime, long timestamp) throws IOException {
+    return new HoodieAvroRecord(key, generateRandomValue(key, instantTime, false, timestamp));
+  }
+
   public List<HoodieRecord> generateUpdates(String instantTime, List<HoodieRecord> baseRecords) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
@@ -761,24 +765,22 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return updates;
   }
 
-  public List<HoodieRecord> generateUpdatesWithTS(String instantTime, List<HoodieRecord> baseRecords, int ts) throws IOException {
+  public List<HoodieRecord> generateUpdatesWithTimestamp(String instantTime, List<HoodieRecord> baseRecords, long timestamp) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
-      HoodieRecord record = new HoodieAvroRecord(baseRecord.getKey(),
-          generateRandomValue(baseRecord.getKey(), instantTime, false, ts));
-      updates.add(record);
+      updates.add(generateUpdateRecordWithTimestamp(baseRecord.getKey(), instantTime, timestamp));
     }
     return updates;
   }
 
-  public List<HoodieRecord> generateUpdatesForDifferentPartition(String instantTime, List<HoodieRecord> baseRecords, String newPartition)
+  public List<HoodieRecord> generateUpdatesForDifferentPartition(String instantTime, List<HoodieRecord> baseRecords, long timestamp, String newPartition)
       throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
       String partition = baseRecord.getPartitionPath();
       checkState(!partition.equals(newPartition), "newPartition should be different from any given record's current partition.");
       HoodieKey key = new HoodieKey(baseRecord.getRecordKey(), newPartition);
-      HoodieRecord record = generateUpdateRecord(key, instantTime);
+      HoodieRecord record = generateUpdateRecordWithTimestamp(key, instantTime, timestamp);
       updates.add(record);
     }
     return updates;

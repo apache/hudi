@@ -19,6 +19,7 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -33,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
@@ -110,9 +112,9 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
         keyLocationPairs.mapToPair(p -> new ImmutablePair<>(
             p.getKey().getRecordKey(), new ImmutablePair<>(p.getValue(), p.getKey())));
 
-    // Pair of a tagged record and if the record needs dedup
+    // Pair of a tagged record and the partition+location if tagged
     // Here as the records might have more data than rowKeys (some rowKeys' fileId is null), so we do left outer join.
-    HoodieData<Pair<HoodieRecord<R>, Option<Pair<String, HoodieRecordLocation>>>> taggedHoodieRecords = incomingRowKeyRecordPairs
+    HoodieData<Pair<HoodieRecord<R>, Option<Pair<String, HoodieRecordLocation>>>> taggedRecordsAndLocationInfo = incomingRowKeyRecordPairs
         .leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap)
         .values().map(record -> {
           final HoodieRecord<R> hoodieRecord = record.getLeft();

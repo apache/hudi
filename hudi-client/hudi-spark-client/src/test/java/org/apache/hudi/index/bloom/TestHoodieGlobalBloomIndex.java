@@ -424,7 +424,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
           break;
         case p2:
           assertEquals("000", record.getRecordKey());
-          assertEquals(incomingPayload.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
+          assertEquals(incomingPayload.getJsonDataAsMap(), ((RawTripTestPayload) record.getData()).getJsonDataAsMap());
           break;
         default:
           fail(String.format("Should not get partition path: %s", record.getPartitionPath()));
@@ -440,7 +440,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     HoodieRecord record = taggedRecordRDDSamePartition.first();
     assertEquals("000", record.getRecordKey());
     assertEquals(p1, record.getPartitionPath());
-    assertEquals(incomingPayloadSamePartition.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
+    assertEquals(incomingPayloadSamePartition.getJsonDataAsMap(), ((RawTripTestPayload) record.getData()).getJsonDataAsMap());
   }
 
   // convert list to map to avoid sorting order dependencies

@@ -19,6 +19,7 @@
 
 package org.apache.hudi.index.simple;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -34,6 +35,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -122,8 +124,8 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
             entry -> new ImmutablePair<>(entry.getLeft().getRecordKey(),
                 Pair.of(entry.getLeft().getPartitionPath(), entry.getRight())));
 
-    // Pair of a tagged record and the tagging partition+location
-    HoodieData<Pair<HoodieRecord<R>, Option<Pair<String, HoodieRecordLocation>>>> taggedHoodieRecords = incomingRecords.leftOuterJoin(existingRecordByRecordKey).values()
+    // Pair of a tagged record and the partition+location if tagged
+    HoodieData<Pair<HoodieRecord<R>, Option<Pair<String, HoodieRecordLocation>>>> taggedRecordsAndLocationInfo = incomingRecords.leftOuterJoin(existingRecordByRecordKey).values()
         .map(entry -> {
           HoodieRecord<R> inputRecord = entry.getLeft();
           Option<Pair<String, HoodieRecordLocation>> partitionPathLocationPair = Option.ofNullable(entry.getRight().orElse(null));
