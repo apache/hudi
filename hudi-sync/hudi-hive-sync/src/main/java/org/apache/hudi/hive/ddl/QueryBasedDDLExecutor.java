@@ -79,8 +79,6 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
 
   /**
    * Create a database with the given name.
-   *
-   * @param databaseName name of database to be created.
    */
   @Override
   public void createDatabase(String databaseName) {
@@ -91,14 +89,6 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
 
   /**
    * Create a table with the given params.
-   *
-   * @param tableName tableName.
-   * @param storageSchema parquet Schema.
-   * @param inputFormatClass inputFormatClass.
-   * @param outputFormatClass outputFormatClass.
-   * @param serdeClass serdeClass.
-   * @param serdeProperties serdeProperties.
-   * @param tableProperties tableProperties.
    */
   @Override
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
@@ -117,9 +107,6 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
 
   /**
    * Create a table with the given params.
-   *
-   * @param tableName tableName.
-   * @param newSchema parquet Schema.
    */
   @Override
   public void updateTableDefinition(String tableName, MessageType newSchema) {
@@ -141,9 +128,6 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
 
   /**
    * Create a table with the given params.
-   *
-   * @param tableName tableName.
-   * @param partitionsToAdd The partitions to add.
    */
   @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
