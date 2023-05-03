@@ -46,6 +46,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DECODE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
  * This class adds functionality for all query based DDLExecutors. The classes extending it only have to provide runSQL(sql) functions.
@@ -76,25 +77,50 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
    */
   public abstract void runSQL(String sql);
 
+  /**
+   * Create a database with the given name.
+   *
+   * @param databaseName name of database to be created.
+   */
   @Override
   public void createDatabase(String databaseName) {
-    runSQL("create database if not exists " + databaseName);
+    String createSQLQuery = HiveSchemaUtil.generateCreateDataBaseDDL(databaseName);
+    LOG.info("Creating database with {}.", createSQLQuery);
+    runSQL(createSQLQuery);
   }
 
+  /**
+   * Create a table with the given params.
+   *
+   * @param tableName tableName.
+   * @param storageSchema parquet Schema.
+   * @param inputFormatClass inputFormatClass.
+   * @param outputFormatClass outputFormatClass.
+   * @param serdeClass serdeClass.
+   * @param serdeProperties serdeProperties.
+   * @param tableProperties tableProperties.
+   */
   @Override
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
-                          Map<String, String> tableProperties) {
+  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
+      String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
+      Map<String, String> tableProperties) {
     try {
       String createSQLQuery =
-          HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, config, inputFormatClass,
+          HiveSchemaUtil.generateCreateTableDDL(databaseName, tableName, storageSchema, config, inputFormatClass,
               outputFormatClass, serdeClass, serdeProperties, tableProperties);
-      LOG.info("Creating table with " + createSQLQuery);
+      LOG.info("Creating table with {}.", createSQLQuery);
       runSQL(createSQLQuery);
     } catch (IOException e) {
-      throw new HoodieHiveSyncException("Failed to create table " + tableName, e);
+      throw new HoodieHiveSyncException("Failed to create table " + tableId(databaseName, tableName), e);
     }
   }
 
+  /**
+   * Create a table with the given params.
+   *
+   * @param tableName tableName.
+   * @param newSchema parquet Schema.
+   */
   @Override
   public void updateTableDefinition(String tableName, MessageType newSchema) {
     try {
@@ -113,6 +139,12 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     }
   }
 
+  /**
+   * Create a table with the given params.
+   *
+   * @param tableName tableName.
+   * @param partitionsToAdd The partitions to add.
+   */
   @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
     if (partitionsToAdd.isEmpty()) {
