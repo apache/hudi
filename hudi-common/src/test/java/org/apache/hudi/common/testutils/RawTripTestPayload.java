@@ -102,8 +102,9 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
       String jsonData = out.toString("UTF-8");
       Map<String, Object> jsonRecordMap = OBJECT_MAPPER.readValue(jsonData, Map.class);
       for (Schema.Field f : record.getSchema().getFields()) {
-        if (f.schema().isUnion() && jsonRecordMap.get(f.name()) instanceof Map) {
-          Object unionValue = ((Map<?, ?>) jsonRecordMap.get(f.name())).values().iterator().next();
+        Object fieldValue = jsonRecordMap.get(f.name());
+        if (fieldValue instanceof Map) {
+          Object unionValue = ((Map<?, ?>) fieldValue).values().iterator().next();
           jsonRecordMap.put(f.name(), unionValue);
         }
       }
