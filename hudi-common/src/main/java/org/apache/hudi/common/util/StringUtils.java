@@ -158,4 +158,8 @@ public class StringUtils {
     }
     return input.substring(0, i);
   }
+
+  public static int countMatches(String source, String val) {
+    return (source.length() - source.replace(val, "").length()) / (val.length());
+  }
 }

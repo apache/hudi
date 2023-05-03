@@ -225,11 +225,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val shouldExtractPartitionValueFromPath =
       optParams.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
-    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath
+    val shouldUseBootstrapFastRead: Boolean = optParams.getOrElse(HoodieBootstrapRelation.USE_FAST_BOOTSTRAP_READ, "false").toBoolean
+    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath || shouldUseBootstrapFastRead
   }
-
-  protected val shouldUseBootstrapFastRead: Boolean = optParams.getOrElse(HoodieBootstrapRelation.USE_FAST_BOOTSTRAP_READ, "false").toBoolean
-
 
   /**
    * NOTE: This fields are accessed by [[NestedSchemaPruning]] component which is only enabled for
@@ -241,7 +239,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       case HoodieFileFormat.PARQUET =>
         // We're delegating to Spark to append partition values to every row only in cases
         // when these corresponding partition-values are not persisted w/in the data file itself
-        val parquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, shouldUseBootstrapFastRead).get
+        val parquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, decodeFilePath = true).get
         (parquetFileFormat, HoodieParquetFileFormat.FILE_FORMAT_ID)
     }
 
@@ -486,9 +484,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       if (extractPartitionValuesFromPartitionPath) {
         val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(metaClient.getBasePathV2)
         val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath.getParent)
-        val relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
+        var relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
         val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
         if (hiveStylePartitioningEnabled) {
+          if (StringUtils.countMatches(relativePath, "=") == 1 && StringUtils.countMatches(relativePath, "/") > 0) {
+            relativePath = relativePath.replace("/", "%2F")
+          }
           val partitionSpec = PartitioningUtils.parsePathFragment(relativePath)
           InternalRow.fromSeq(partitionColumns.map(partitionSpec(_)).map(UTF8String.fromString))
         } else {
@@ -554,7 +555,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
             // We're delegating to Spark to append partition values to every row only in cases
             // when these corresponding partition-values are not persisted w/in the data file itself
             appendPartitionValues = shouldAppendPartitionValuesOverride.getOrElse(shouldExtractPartitionValuesFromPartitionPath),
-            decodeFilePath = shouldDecodeFilePathOverride.getOrElse(shouldUseBootstrapFastRead)
+            decodeFilePath = shouldDecodeFilePathOverride.getOrElse(true)
           )
           // Since partition values by default are omitted, and not persisted w/in data-files by Spark,
           // data-file readers (such as [[ParquetFileFormat]]) have to inject partition values while reading
