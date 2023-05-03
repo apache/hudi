@@ -389,7 +389,7 @@ class TestOverwriteWithLatestPartialUpdatesAvroPayload extends HoodieClientTestB
 
     val upsert3 = convertToStringList(dataGenerator.generateUniqueUpdates(1))
     val upsert3DF = spark.read.json(sparkSession.createDataset(upsert3)(Encoders.STRING)).withColumn("ts", lit(3L)).withColumn("_hoodie_change_columns", lit("driver,ts"))
-    
+
     upsert1DF.write.format("hudi")
       .options(getQuickstartWriteConfigs)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName)
