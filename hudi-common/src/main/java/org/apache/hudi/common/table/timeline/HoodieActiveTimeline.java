@@ -334,18 +334,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Check if there exists a completed commit file of the inflight instant.
-   */
-  public boolean isCompletedCommitFileExists(HoodieInstant inflightInstant) {
-    HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(inflightInstant);
-    try {
-      return metaClient.getFs().exists(getInstantFileNamePath(completedInstant.getFileName()));
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not check existence of instant " + completedInstant, e);
-    }
-  }
-
-  /**
    * Returns stream of {@link HoodieCommitMetadata} in order reverse to chronological (ie most
    * recent metadata being the first element)
    */
