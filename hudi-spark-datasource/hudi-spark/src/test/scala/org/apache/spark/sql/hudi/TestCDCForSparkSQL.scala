@@ -56,7 +56,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
       Seq(OP_KEY_ONLY, DATA_BEFORE, DATA_BEFORE_AFTER).foreach { loggingMode =>
         withTempDir { tmp =>
           val tableName = generateTableName
-          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          val basePath = s"${tmp.getCanonicalPath}/$tableName".replaceAll("\\\\", "\\/")
           val otherTableProperties = if (tableType == "mor") {
             "'hoodie.compact.inline'='true', 'hoodie.compact.inline.max.delta.commits'='2',"
           } else {
@@ -184,7 +184,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
       Seq(OP_KEY_ONLY, DATA_BEFORE).foreach { loggingMode =>
         withTempDir { tmp =>
           val tableName = generateTableName
-          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          val basePath = s"${tmp.getCanonicalPath}/$tableName".replaceAll("\\\\", "\\/")
           spark.sql(
             s"""
                | create table $tableName (
