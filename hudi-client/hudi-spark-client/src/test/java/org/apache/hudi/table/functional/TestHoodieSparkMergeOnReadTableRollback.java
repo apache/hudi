@@ -79,8 +79,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS;
-import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -912,62 +910,6 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     // lazy rollback should have added the rollback block to previous file slice and not the latest. And so the latest slice's log file count should
     // remain the same.
     assertEquals(numLogFilesAfterRollback, numLogFilesAfterCompaction);
-  }
-
-  @Test
-  public void testGetInstantToRollbackForLazyCleanPolicy() throws Exception {
-    Properties properties = new Properties();
-    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
-
-    HoodieWriteConfig cfg = getWriteConfig(true, false);
-    HoodieWriteConfig autoCommitFalseCfg = getWriteConfig(false, false);
-    autoCommitFalseCfg.setValue(CLIENT_HEARTBEAT_INTERVAL_IN_MS.key(), "2000");
-    autoCommitFalseCfg.setValue(CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES.key(), "2");
-    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
-
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    // Commit 1
-    insertRecords(client, dataGen, "001");
-
-    // Trigger an inflight commit 2
-    SparkRDDWriteClient autoCommitFalseClient = getHoodieWriteClient(autoCommitFalseCfg);
-    String commitTime2 = "002";
-    autoCommitFalseClient.startCommitWithTime(commitTime2);
-    List<HoodieRecord> records = dataGen.generateInserts(commitTime2, 20);
-    JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
-    JavaRDD<WriteStatus> statuses = autoCommitFalseClient.upsert(writeRecords, commitTime2);
-
-    // Stop updating heartbeat
-    autoCommitFalseClient.getHeartbeatClient().getHeartbeat(commitTime2).getTimer().cancel();
-    // Sleep to make the heartbeat expired. In production env, heartbeat is expired because of commit
-    Thread.sleep(4000);
-
-    // Get inflight instant stream before commit
-    HoodieTimeline inflightInstants = autoCommitFalseClient
-            .getTableServiceClient()
-            .getInflightTimelineExcludeCompactionAndClustering(metaClient);
-
-    // Instant with commit time 002 will be add to instantsToRollback result
-    List<String> instantsToRollback = autoCommitFalseClient
-            .getTableServiceClient()
-            .getInstantsToRollbackForLazyCleanPolicy(metaClient, inflightInstants.getReverseOrderedInstants());
-    // The inflight instant will be rollback
-    assertEquals(instantsToRollback.get(0), commitTime2);
-
-    // Update the heartbeat manually
-    Long now = System.currentTimeMillis();
-    autoCommitFalseClient.getHeartbeatClient().getHeartbeat(commitTime2).setLastHeartbeatTime(now);
-
-    // Commit instant 002
-    autoCommitFalseClient.commit(commitTime2, statuses);
-
-    // If we pass inflight instants get before commit to the function, still no instant will be rollback because we do a double check
-    instantsToRollback = autoCommitFalseClient
-            .getTableServiceClient()
-            .getInstantsToRollbackForLazyCleanPolicy(metaClient, inflightInstants.getInstantsAsStream());
-    // no instant will be rollback
-    assertEquals(instantsToRollback.size(), 0);
   }
 
   private List<HoodieRecord> insertRecords(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, String commitTime) {

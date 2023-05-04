@@ -769,24 +769,27 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     }
   }
 
-  @VisibleForTesting
-  public List<String> getInstantsToRollbackForLazyCleanPolicy(HoodieTableMetaClient metaClient,
+  protected List<String> getInstantsToRollbackForLazyCleanPolicy(HoodieTableMetaClient metaClient,
                                                               Stream<HoodieInstant> inflightInstantsStream) {
     // Get expired instants, must store them into list before double-checking
-    List<HoodieInstant> expiredInstants = inflightInstantsStream.filter(instant -> {
+    List<String> expiredInstants = inflightInstantsStream.filter(instant -> {
       try {
         // An instant transformed from inflight to completed have no heartbeat file and will be detected as expired instant here
         return heartbeatClient.isHeartbeatExpired(instant.getTimestamp());
       } catch (IOException io) {
         throw new HoodieException("Failed to check heartbeat for instant " + instant, io);
       }
-    }).collect(Collectors.toList());
+    }).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
-    // Only return instants that haven't been completed by other writers
-    return expiredInstants.stream()
-        .filter(instant -> !metaClient.getActiveTimeline().isCompletedCommitFileExists(instant))
-        .map(HoodieInstant::getTimestamp)
-        .collect(Collectors.toList());
+    if (!expiredInstants.isEmpty()) {
+      LOG.info("Found expired instants to rollback for lazy clean: " + String.join(",", expiredInstants));
+      // Only return instants that haven't been completed by other writers
+      metaClient.reloadActiveTimeline();
+      HoodieTimeline latestInflightTimeline = getInflightTimelineExcludeCompactionAndClustering(metaClient);
+      return expiredInstants.stream().filter(latestInflightTimeline::containsInstant).collect(Collectors.toList());
+    } else {
+      return Collections.emptyList();
+    }
   }
 
   /**
