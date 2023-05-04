@@ -76,10 +76,10 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.METADATA_BOOT
  * Common thread-safe implementation for multiple TableFileSystemView Implementations.
  * Provides uniform handling of:
  * <ul>
- *   <li>Loading file-system views from underlying file-system</li>
- *   <li>Pending compaction operations and changing file-system views based on that</li>
- *   <li>Thread-safety in loading and managing file system views for this table</li>
- *   <li>resetting file-system views</li>
+ *   <li>Loading file-system views from underlying file-system;</li>
+ *   <li>Pending compaction operations and changing file-system views based on that;</li>
+ *   <li>Thread-safety in loading and managing file system views for this table;</li>
+ *   <li>resetting file-system views.</li>
  * </ul>
  * The actual mechanism of fetching file slices from different view storages is delegated to sub-classes.
  */
