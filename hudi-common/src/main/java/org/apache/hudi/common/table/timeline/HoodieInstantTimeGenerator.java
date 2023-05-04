@@ -144,4 +144,8 @@ public class HoodieInstantTimeGenerator {
       return false;
     }
   }
+
+  public static HoodieTimelineTimeZone getTimelineTimeZone() {
+    return commitTimeZone;
+  }
 }
