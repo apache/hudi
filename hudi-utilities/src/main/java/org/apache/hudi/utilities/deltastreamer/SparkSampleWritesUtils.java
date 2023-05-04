@@ -17,12 +17,13 @@
  * under the License.
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -43,64 +44,70 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.SAMPLE_WRITES_FOLDER_PATH;
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.getInstantFromTemporalAccessor;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
-import static org.apache.hudi.config.HoodieWriteConfig.SAMPLE_WRITES_ENABLED;
-import static org.apache.hudi.config.HoodieWriteConfig.SAMPLE_WRITES_SIZE;
+import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SAMPLE_WRITES_ENABLED;
+import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SAMPLE_WRITES_SIZE;
 
 /**
  * The utilities class is dedicated to estimating average record size by writing sample incoming records
  * to `.hoodie/.aux/.sample_writes/<instant time>/<epoch millis>` and reading the commit metadata.
- *
+ * <p>
  * TODO handle sample_writes sub-path clean-up w.r.t. rollback and insert overwrite. (HUDI-6044)
  */
 public class SparkSampleWritesUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkSampleWritesUtils.class);
 
-  public static void overwriteRecordSizeEstimateIfNeeded(JavaSparkContext jsc, JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig, String instantTime) {
+  public static Option<HoodieWriteConfig> getWriteConfigWithRecordSizeEstimate(JavaSparkContext jsc, JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig) {
     if (!writeConfig.getBoolean(SAMPLE_WRITES_ENABLED)) {
       LOG.debug("Skip overwriting record size estimate as it's disabled.");
-      return;
+      return Option.empty();
     }
     HoodieTableMetaClient metaClient = getMetaClient(jsc, writeConfig.getBasePath());
     if (metaClient.isTimelineNonEmpty()) {
       LOG.info("Skip overwriting record size estimate due to timeline is non-empty.");
-      return;
+      return Option.empty();
     }
     try {
+      String instantTime = getInstantFromTemporalAccessor(Instant.now().atZone(ZoneId.systemDefault()));
       Pair<Boolean, String> result = doSampleWrites(jsc, records, writeConfig, instantTime);
       if (result.getLeft()) {
         long avgSize = getAvgSizeFromSampleWrites(jsc, result.getRight());
         LOG.info("Overwriting record size estimate to " + avgSize);
-        writeConfig.setValue(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE, String.valueOf(avgSize));
+        TypedProperties props = writeConfig.getProps();
+        props.put(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(avgSize));
+        return Option.of(HoodieWriteConfig.newBuilder().withProperties(props).build());
       }
     } catch (IOException e) {
       LOG.error(String.format("Not overwriting record size estimate for table %s due to error when doing sample writes.", writeConfig.getTableName()), e);
     }
+    return Option.empty();
   }
 
-  private static Pair<Boolean, String> doSampleWrites(JavaSparkContext jsc, JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig, String instantTime) throws IOException {
-    long now = Instant.now().toEpochMilli();
-    Path basePath = new CachingPath(writeConfig.getBasePath(), SAMPLE_WRITES_FOLDER_PATH + Path.SEPARATOR + instantTime + Path.SEPARATOR + now);
-    final String sampleWritesBasePath = basePath.toString();
+  private static Pair<Boolean, String> doSampleWrites(JavaSparkContext jsc, JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig, String instantTime)
+      throws IOException {
+    final String sampleWritesBasePath = getSampleWritesBasePath(jsc, writeConfig, instantTime);
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
-        .setTableName(String.format("%s_samples_%s_%s", writeConfig.getTableName(), instantTime, now))
+        .setTableName(String.format("%s_samples_%s", writeConfig.getTableName(), instantTime))
         .setCDCEnabled(false)
         .initTable(jsc.hadoopConfiguration(), sampleWritesBasePath);
-    HoodieWriteConfig sampleWriteConfig = HoodieWriteConfig.newBuilder()
-        .withProps(writeConfig.getProps())
-        .withPath(sampleWritesBasePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
-        .withSampleWritesEnabled(false)
+    TypedProperties props = writeConfig.getProps();
+    props.put(SAMPLE_WRITES_ENABLED.key(), "false");
+    final HoodieWriteConfig sampleWriteConfig = HoodieWriteConfig.newBuilder()
+        .withProps(props)
         .withTableServicesEnabled(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withSchemaEvolutionEnable(false)
         .withBulkInsertParallelism(1)
         .withAutoCommit(true)
+        .withPath(sampleWritesBasePath)
         .build();
     try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty())) {
       int size = writeConfig.getIntOrDefault(SAMPLE_WRITES_SIZE);
@@ -122,6 +129,15 @@ public class SparkSampleWritesUtils {
         return Pair.of(true, sampleWritesBasePath);
       }
     }
+  }
+
+  private static String getSampleWritesBasePath(JavaSparkContext jsc, HoodieWriteConfig writeConfig, String instantTime) throws IOException {
+    Path basePath = new CachingPath(writeConfig.getBasePath(), SAMPLE_WRITES_FOLDER_PATH + Path.SEPARATOR + instantTime);
+    FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
+    if (fs.exists(basePath)) {
+      fs.delete(basePath, true);
+    }
+    return basePath.toString();
   }
 
   private static long getAvgSizeFromSampleWrites(JavaSparkContext jsc, String sampleWritesBasePath) throws IOException {

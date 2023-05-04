@@ -17,16 +17,19 @@
  * under the License.
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -36,6 +39,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness {
 
@@ -66,30 +71,36 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
     String commitTime = HoodieTestTable.makeNewCommitTime();
     HoodieTestTable.of(metaClient).addCommit(commitTime);
     int originalRecordSize = 100;
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+    TypedProperties props = new TypedProperties();
+    props.put(HoodieDeltaStreamerConfig.SAMPLE_WRITES_ENABLED.key(), "true");
+    props.put(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(originalRecordSize));
+    HoodieWriteConfig originalWriteConfig = HoodieWriteConfig.newBuilder()
+        .withProperties(props)
         .withPath(basePath())
-        .withSampleWritesEnabled(true)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().approxRecordSize(originalRecordSize).build())
         .build();
     JavaRDD<HoodieRecord> records = jsc().parallelize(dataGen.generateInserts(commitTime, 1), 1);
-    SparkSampleWritesUtils.overwriteRecordSizeEstimateIfNeeded(jsc(), records, writeConfig, commitTime);
-    assertEquals(originalRecordSize, writeConfig.getCopyOnWriteRecordSizeEstimate(), "Original record size estimate should not be changed.");
+    Option<HoodieWriteConfig> writeConfigOpt = SparkSampleWritesUtils.getWriteConfigWithRecordSizeEstimate(jsc(), records, originalWriteConfig);
+    assertFalse(writeConfigOpt.isPresent());
+    assertEquals(originalRecordSize, originalWriteConfig.getCopyOnWriteRecordSizeEstimate(), "Original record size estimate should not be changed.");
   }
 
   @Test
   public void overwriteRecordSizeEstimateForEmptyTable() {
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+    int originalRecordSize = 100;
+    TypedProperties props = new TypedProperties();
+    props.put(HoodieDeltaStreamerConfig.SAMPLE_WRITES_ENABLED.key(), "true");
+    props.put(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(originalRecordSize));
+    HoodieWriteConfig originalWriteConfig = HoodieWriteConfig.newBuilder()
+        .withProperties(props)
         .forTable("foo")
         .withPath(basePath())
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .withSampleWritesEnabled(true)
-        .withSampleWritesSize(2000)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().approxRecordSize(100).build())
         .build();
 
     String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(1);
     JavaRDD<HoodieRecord> records = jsc().parallelize(dataGen.generateInserts(commitTime, 2000), 2);
-    SparkSampleWritesUtils.overwriteRecordSizeEstimateIfNeeded(jsc(), records, writeConfig, commitTime);
-    assertEquals(779, writeConfig.getCopyOnWriteRecordSizeEstimate());
+    Option<HoodieWriteConfig> writeConfigOpt = SparkSampleWritesUtils.getWriteConfigWithRecordSizeEstimate(jsc(), records, originalWriteConfig);
+    assertTrue(writeConfigOpt.isPresent());
+    assertEquals(779.0, writeConfigOpt.get().getCopyOnWriteRecordSizeEstimate(), 10.0);
   }
 }

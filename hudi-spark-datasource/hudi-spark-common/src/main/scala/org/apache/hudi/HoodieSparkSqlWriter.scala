@@ -30,7 +30,6 @@ import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionO
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.client.utils.SparkSampleWritesUtils
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config._
 import org.apache.hudi.common.engine.HoodieEngineContext
@@ -373,7 +372,6 @@ object HoodieSparkSqlWriter {
                 hoodieRecords
               }
             client.startCommitWithTime(instantTime, commitActionType)
-            SparkSampleWritesUtils.overwriteRecordSizeEstimateIfNeeded(jsc, hoodieRecords, client.getConfig, instantTime)
             val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation)
             (writeResult, client)
         }
