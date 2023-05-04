@@ -67,7 +67,6 @@ public class FileIndex {
   private final boolean tableExists;
   private final HoodieMetadataConfig metadataConfig;
   private final org.apache.hadoop.conf.Configuration hadoopConf;
-  private final HoodieFlinkEngineContext hoodieFlinkEngineContext;
   private final PartitionPruners.PartitionPruner partitionPruner; // for partition pruning
   private final DataPruner dataPruner;                            // for data skipping
   private final int dataBucket;                                   // for bucket pruning
@@ -78,7 +77,6 @@ public class FileIndex {
     this.rowType = rowType;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.tableExists = StreamerUtil.tableExists(path.toString(), hadoopConf);
-    this.hoodieFlinkEngineContext = new HoodieFlinkEngineContext(hadoopConf);
     this.metadataConfig = metadataConfig(conf);
     this.dataPruner = isDataSkippingFeasible(conf.getBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? dataPruner : null;
     this.partitionPruner = partitionPruner;
@@ -149,7 +147,8 @@ public class FileIndex {
       return new FileStatus[0];
     }
     String[] partitions = getOrBuildPartitionPaths().stream().map(p -> fullPartitionPath(path, p)).toArray(String[]::new);
-    FileStatus[] allFiles = FSUtils.getFilesInPartitions(hoodieFlinkEngineContext, metadataConfig, path.toString(), partitions)
+    FileStatus[] allFiles = FSUtils.getFilesInPartitions(
+            new HoodieFlinkEngineContext(hadoopConf), metadataConfig, path.toString(), partitions)
         .values().stream()
         .flatMap(Arrays::stream)
         .toArray(FileStatus[]::new);
@@ -275,7 +274,7 @@ public class FileIndex {
       return this.partitionPaths;
     }
     List<String> allPartitionPaths = this.tableExists
-        ? FSUtils.getAllPartitionPaths(hoodieFlinkEngineContext, metadataConfig, path.toString())
+        ? FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), metadataConfig, path.toString())
         : Collections.emptyList();
     if (this.partitionPruner == null) {
       this.partitionPaths = allPartitionPaths;
