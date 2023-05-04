@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCExtractor;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
@@ -56,6 +57,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -209,7 +211,7 @@ public class IncrementalInputSplits implements Serializable {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
-      FileStatus[] files = WriteProfiles.getFilesFromMetadata(path, hadoopConf, metadataList, metaClient.getTableType(), false);
+      FileStatus[] files = WriteProfiles.getFilesFromMetadata(path, hadoopConf, metadataList, metaClient.getTableType(), false, new HashMap<>());
       if (files == null) {
         LOG.warn("Found deleted files in metadata, fall back to full table scan.");
         // fallback to full table scan
@@ -232,7 +234,7 @@ public class IncrementalInputSplits implements Serializable {
     }
 
     List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-        fileStatuses, readPartitions, endInstant, instantRange, false);
+        fileStatuses, readPartitions, endInstant, instantRange, false, null);
 
     return Result.instance(inputSplits, endInstant);
   }
@@ -291,7 +293,7 @@ public class IncrementalInputSplits implements Serializable {
 
       final String endInstant = instantToIssue.getTimestamp();
       List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-          fileStatuses, readPartitions, endInstant, null, false);
+          fileStatuses, readPartitions, endInstant, null, false, Collections.EMPTY_MAP);
 
       return Result.instance(inputSplits, endInstant);
     } else {
@@ -324,8 +326,10 @@ public class IncrementalInputSplits implements Serializable {
         LOG.warn("No partitions found for reading under path: " + path);
         return Result.EMPTY;
       }
-      fileStatuses = WriteProfiles.getFilesFromMetadata(path, hadoopConf, metadataList, metaClient.getTableType(), true);
-
+      Map<String, Long> fileToStartPos = new HashMap<>();
+      Map<String, String> relativePathToFullPath = new HashMap<>();
+      fileStatuses = WriteProfiles.getFilesFromMetadata(path, hadoopConf, metadataList, metaClient.getTableType(), true, relativePathToFullPath);
+      initFileToStartPos(metadataList, fileToStartPos, relativePathToFullPath);
       if (fileStatuses.length == 0) {
         LOG.warn("No files found for reading under path: " + path);
         return Result.EMPTY;
@@ -333,7 +337,7 @@ public class IncrementalInputSplits implements Serializable {
 
       final String endInstant = instantToIssue.getTimestamp();
       List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-          fileStatuses, readPartitions, endInstant, instantRange, skipCompaction);
+          fileStatuses, readPartitions, endInstant, instantRange, skipCompaction, fileToStartPos);
 
       return Result.instance(inputSplits, endInstant);
     }
@@ -367,7 +371,8 @@ public class IncrementalInputSplits implements Serializable {
       Set<String> readPartitions,
       String endInstant,
       InstantRange instantRange,
-      boolean skipBaseFiles) {
+      boolean skipBaseFiles,
+      Map<String, Long> logFileToStartPos) {
     final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
     final AtomicInteger cnt = new AtomicInteger(0);
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
@@ -380,9 +385,9 @@ public class IncrementalInputSplits implements Serializable {
                   .filter(logPath -> !logPath.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
                   .collect(Collectors.toList()));
               String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-              return new MergeOnReadInputSplit(cnt.getAndAdd(1),
-                  basePath, logPaths, endInstant,
-                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
+              return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths,
+                  endInstant, metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType,
+                  instantRange, fileSlice.getFileId(), logFileToStartPos);
             }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
@@ -584,6 +589,25 @@ public class IncrementalInputSplits implements Serializable {
     public static Result instance(List<MergeOnReadInputSplit> inputSplits, String endInstant) {
       return new Result(inputSplits, endInstant);
     }
+  }
+
+  private void initFileToStartPos(List<HoodieCommitMetadata> metadataList, Map<String, Long> fileToStartPos,
+                                  Map<String, String> relativePathToFullPath) {
+    if (relativePathToFullPath.size() == 0) {
+      return;
+    }
+    metadataList.stream().map(HoodieCommitMetadata::getWriteStats).
+        flatMap(Collection::stream).
+        collect(Collectors.toList()).
+        stream().forEach(writeStat -> {
+          String fullPath = relativePathToFullPath.get(writeStat.getPath());
+          Long aLong = fileToStartPos.get(fullPath);
+          if (aLong != null) {
+            fileToStartPos.put(fullPath, Math.min(aLong, writeStat.getLogOffset()));
+          } else {
+            fileToStartPos.put(fullPath, writeStat.getLogOffset());
+          }
+        });
   }
 
   /**

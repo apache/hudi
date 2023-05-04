@@ -67,6 +67,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -733,6 +734,6 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
     return new MergeOnReadInputSplit(0, basePath, logPaths,
         fileSlice.getBaseInstantTime(), tablePath, maxCompactionMemoryInBytes,
-        FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, fileSlice.getFileId());
+        FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, fileSlice.getFileId(), Collections.emptyMap());
   }
 }

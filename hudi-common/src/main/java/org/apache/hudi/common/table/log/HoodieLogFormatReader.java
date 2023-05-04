@@ -49,12 +49,13 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final String recordKeyField;
   private final boolean enableInlineReading;
   private int bufferSize;
+  private final List<Long> logFileStartPos;
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatReader.class);
 
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
                         boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
-                        String recordKeyField, InternalSchema internalSchema) throws IOException {
+                        String recordKeyField, InternalSchema internalSchema, List<Long> logFileStartPos) throws IOException {
     this.logFiles = logFiles;
     this.fs = fs;
     this.readerSchema = readerSchema;
@@ -65,10 +66,12 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.recordKeyField = recordKeyField;
     this.enableInlineReading = enableRecordLookups;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+    this.logFileStartPos = logFileStartPos;
     if (logFiles.size() > 0) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
+      Long startPos = logFileStartPos.size() == 0 ? 0L : logFileStartPos.remove(0);
       this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
-          enableRecordLookups, recordKeyField, internalSchema);
+          enableRecordLookups, recordKeyField, internalSchema, startPos);
     }
   }
 
@@ -101,6 +104,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     } else if (logFiles.size() > 0) {
       try {
         HoodieLogFile nextLogFile = logFiles.remove(0);
+        Long pos = logFileStartPos.size() == 0 ? 0L : logFileStartPos.get(0);
         // First close previous reader only if readBlockLazily is true
         if (!readBlocksLazily) {
           this.currentReader.close();
@@ -108,7 +112,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
           this.prevReadersInOpenState.add(currentReader);
         }
         this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
-            enableInlineReading, recordKeyField, internalSchema);
+            enableInlineReading, recordKeyField, internalSchema, pos);
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }

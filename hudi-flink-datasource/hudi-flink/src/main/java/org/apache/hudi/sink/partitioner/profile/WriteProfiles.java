@@ -98,13 +98,14 @@ public class WriteProfiles {
       Configuration hadoopConf,
       List<HoodieCommitMetadata> metadataList,
       HoodieTableType tableType,
-      boolean ignoreMissingFiles) {
+      boolean ignoreMissingFiles,
+      Map<String, String> fileToPos) {
     FileSystem fs = FSUtils.getFs(basePath.toString(), hadoopConf);
     Map<String, FileStatus> uniqueIdToFileStatus = new HashMap<>();
     // If a file has been touched multiple times in the given commits, the return value should keep the one
     // from the latest commit, so here we traverse in reverse order
     for (int i = metadataList.size() - 1; i >= 0; i--) {
-      for (Map.Entry<String, FileStatus> entry : getFilesToRead(hadoopConf, metadataList.get(i), basePath.toString(), tableType).entrySet()) {
+      for (Map.Entry<String, FileStatus> entry : getFilesToRead(hadoopConf, metadataList.get(i), basePath.toString(), tableType, fileToPos).entrySet()) {
         if (StreamerUtil.isValidFile(entry.getValue()) && !uniqueIdToFileStatus.containsKey(entry.getKey())) {
           if (StreamerUtil.fileExists(fs, entry.getValue().getPath())) {
             uniqueIdToFileStatus.put(entry.getKey(), entry.getValue());
@@ -121,13 +122,14 @@ public class WriteProfiles {
       Configuration hadoopConf,
       HoodieCommitMetadata metadata,
       String basePath,
-      HoodieTableType tableType
+      HoodieTableType tableType,
+      Map<String, String> fileToPos
   ) {
     switch (tableType) {
       case COPY_ON_WRITE:
         return metadata.getFileIdToFileStatus(hadoopConf, basePath);
       case MERGE_ON_READ:
-        return metadata.getFullPathToFileStatus(hadoopConf, basePath);
+        return metadata.getFullPathToFileStatus(hadoopConf, basePath, fileToPos);
       default:
         throw new AssertionError();
     }

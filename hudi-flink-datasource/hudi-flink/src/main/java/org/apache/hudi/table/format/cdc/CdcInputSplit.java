@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
 import java.util.Arrays;
+import java.util.Collections;
 
 /**
  * Represents an input split of source, actually a data bucket.
@@ -39,7 +40,7 @@ public class CdcInputSplit extends MergeOnReadInputSplit {
       String fileId,
       HoodieCDCFileSplit[] changes) {
     super(splitNum, null, Option.empty(), "", tablePath,
-        maxCompactionMemoryInBytes, "", null, fileId);
+        maxCompactionMemoryInBytes, "", null, fileId, Collections.emptyMap());
     this.changes = changes;
   }
 

@@ -48,6 +48,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -98,9 +99,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                        Option<String> partitionName,
                                        InternalSchema internalSchema,
                                        Option<String> keyFieldOverride,
-                                       boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger) {
+                                       boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
+                                       Option<List<Long>> logFileStartPos) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger);
+        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride,
+        enableOptimizedLogBlocksScan, recordMerger, logFileStartPos);
     try {
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
@@ -335,6 +338,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     // Use scanV2 method.
     private boolean enableOptimizedLogBlocksScan = false;
     private HoodieRecordMerger recordMerger;
+    private Option<List<Long>> logfilePos = Option.of(Collections.EMPTY_LIST);
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -418,6 +422,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    @Override
+    public Builder withOptimizedLogFilePos(Option<List<Long>> logFilePos) {
+      this.logfilePos = logFilePos;
+      return this;
+    }
+
     public Builder withOperationField(boolean withOperationField) {
       this.withOperationField = withOperationField;
       return this;
@@ -462,7 +472,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
-          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger);
+          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride),
+          enableOptimizedLogBlocksScan, recordMerger, logfilePos);
     }
   }
 }

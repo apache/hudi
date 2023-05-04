@@ -174,7 +174,8 @@ public class HoodieCommitMetadata implements Serializable {
    * @param basePath The base path
    * @return the file full path to file status mapping
    */
-  public Map<String, FileStatus> getFullPathToFileStatus(Configuration hadoopConf, String basePath) {
+  public Map<String, FileStatus> getFullPathToFileStatus(Configuration hadoopConf, String basePath,
+                                                         Map<String, String> fileToPos) {
     Map<String, FileStatus> fullPathToFileStatus = new HashMap<>();
     for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
       // Iterate through all the written files.
@@ -187,6 +188,7 @@ public class HoodieCommitMetadata implements Serializable {
               0, fullPath);
           fullPathToFileStatus.put(fullPath.getName(), fileStatus);
         }
+        fileToPos.put(relativeFilePath, fullPath.getName());
       }
     }
     return fullPathToFileStatus;
@@ -197,7 +199,7 @@ public class HoodieCommitMetadata implements Serializable {
    * been touched multiple times in the given commits, the return value will keep the one
    * from the latest commit by file group ID.
    *
-   * <p>Note: different with {@link #getFullPathToFileStatus(Configuration, String)},
+   * <p>Note: different with {@link #getFullPathToFileStatus(Configuration, String, Map)},
    * only the latest commit file for a file group is returned,
    * this is an optimization for COPY_ON_WRITE table to eliminate legacy files for filesystem view.
    *

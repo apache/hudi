@@ -481,7 +481,7 @@ public class HoodieInputFormatUtils {
     HashMap<String, FileStatus> fullPathToFileStatus = new HashMap<>();
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata: metadataList) {
-      fullPathToFileStatus.putAll(metadata.getFullPathToFileStatus(hadoopConf, basePath.toString()));
+      fullPathToFileStatus.putAll(metadata.getFullPathToFileStatus(hadoopConf, basePath.toString(), new HashMap<>()));
     }
     return fullPathToFileStatus.values().toArray(new FileStatus[0]);
   }
