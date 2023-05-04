@@ -48,5 +48,5 @@ HADOOP_JARS=${HADOOP_HOME}/share/hadoop/common/*:${HADOOP_HOME}/share/hadoop/map
 HADOOP_JARS=${HADOOP_COMMON_JARS}:${HADOOP_COMMON_LIB_JARS}:${HADOOP_HDFS_JARS}:${HADOOP_HDFS_LIB_JARS}
 
 SERVLET_JAR=${DIR}/javax.servlet-api-3.1.0.jar
-echo "Running command : java -cp ${SERVLET_JAR}:${HADOOP_JARS}:${HADOOP_CONF_DIR}:$HOODIE_JAR org.apache.hudi.timeline.service.TimelineService $@"
-java -Xmx4G -cp ${SERVLET_JAR}:${HADOOP_JARS}:${HADOOP_CONF_DIR}:$HOODIE_JAR org.apache.hudi.timeline.service.TimelineService "$@"
+echo "Running command : java -cp ${SERVLET_JAR}:${HADOOP_JARS}:${HOODIE_JAR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.timeline.service.TimelineService $@"
+java -Xmx4G -cp ${SERVLET_JAR}:${HADOOP_JARS}:${HOODIE_JAR} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.timeline.service.TimelineService "$@"

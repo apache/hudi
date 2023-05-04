@@ -51,5 +51,5 @@ HIVE_JARS=$HIVE_METASTORE:$HIVE_SERVICE:$HIVE_EXEC:$HIVE_JDBC:$HIVE_JACKSON
 
 HADOOP_HIVE_JARS=${HIVE_JARS}:${HADOOP_HOME}/share/hadoop/common/*:${HADOOP_HOME}/share/hadoop/mapreduce/*:${HADOOP_HOME}/share/hadoop/hdfs/*:${HADOOP_HOME}/share/hadoop/common/lib/*:${HADOOP_HOME}/share/hadoop/hdfs/lib/*
 
-echo "Running Command : java -cp ${HADOOP_HIVE_JARS}:${HADOOP_CONF_DIR}:$HUDI_HIVE_UBER_JAR org.apache.hudi.hive.HiveSyncTool $@"
-java -cp $HUDI_HIVE_UBER_JAR:${HADOOP_HIVE_JARS}:${HADOOP_CONF_DIR} org.apache.hudi.hive.HiveSyncTool "$@"
+echo "Running Command : java -cp ${HUDI_HIVE_UBER_JAR}:${HADOOP_HIVE_JARS} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.hive.HiveSyncTool $@"
+java -cp ${HUDI_HIVE_UBER_JAR}:${HADOOP_HIVE_JARS} -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.hive.HiveSyncTool "$@"

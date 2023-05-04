@@ -65,5 +65,5 @@ if ! [ -z "$HIVE_CONF_DIR" ]; then
   error_exit "Don't set HIVE_CONF_DIR; use config xml file"
 fi
 
-echo "Running Command : java -cp $HUDI_HIVE_UBER_JAR:${HADOOP_HIVE_JARS}:${HADOOP_CONF_DIR}:${HIVE_HOME}lib/* org.apache.hudi.hive.replication.HiveSyncGlobalCommitTool $@"
-java -cp $HUDI_HIVE_UBER_JAR:${HADOOP_HIVE_JARS}:${HADOOP_CONF_DIR}:${HIVE_HOME}lib/* org.apache.hudi.hive.replication.HiveSyncGlobalCommitTool "$@"
+echo "Running Command : java -cp ${HUDI_HIVE_UBER_JAR}:${HADOOP_HIVE_JARS}:${HIVE_HOME}lib/* -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.hive.replication.HiveSyncGlobalCommitTool $@"
+java -cp ${HUDI_HIVE_UBER_JAR}:${HADOOP_HIVE_JARS}:${HIVE_HOME}lib/* -DHADOOP_CONF_DIR=${HADOOP_CONF_DIR} org.apache.hudi.hive.replication.HiveSyncGlobalCommitTool "$@"
