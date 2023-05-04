@@ -148,10 +148,10 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
 import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
-import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
-import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.DEFAULT_CHECKPOINT_FORCE_SKIP_PROP;
-import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_FORCE_SKIP_PROP;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.DEFAULT_CHECKPOINT_FORCE_SKIP_PROP;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
@@ -398,13 +398,14 @@ public class DeltaSync implements Serializable, Closeable {
 
     Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(commitsTimelineOpt);
 
-    if (null != srcRecordsWithCkpt) {
+    if (srcRecordsWithCkpt != null) {
+      final JavaRDD<HoodieRecord> recordsFromSource = srcRecordsWithCkpt.getRight().getRight();
       // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
       // compactor
-      if (null == writeClient) {
+      if (writeClient == null) {
         this.schemaProvider = srcRecordsWithCkpt.getKey();
         // Setup HoodieWriteClient and compaction now that we decided on schema
-        setupWriteClient();
+        setupWriteClient(recordsFromSource);
       } else {
         Schema newSourceSchema = srcRecordsWithCkpt.getKey().getSourceSchema();
         Schema newTargetSchema = srcRecordsWithCkpt.getKey().getTargetSchema();
@@ -413,7 +414,7 @@ public class DeltaSync implements Serializable, Closeable {
           LOG.info("Seeing new schema. Source :" + newSourceSchema.toString(true)
               + ", Target :" + newTargetSchema.toString(true));
           // We need to recreate write client with new schema and register them.
-          reInitWriteClient(newSourceSchema, newTargetSchema);
+          reInitWriteClient(newSourceSchema, newTargetSchema, recordsFromSource);
           processedSchema.addSchema(newSourceSchema);
           processedSchema.addSchema(newTargetSchema);
         }
@@ -427,7 +428,7 @@ public class DeltaSync implements Serializable, Closeable {
         }
       }
 
-      result = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
+      result = writeToSink(recordsFromSource,
           srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
     }
 
@@ -944,34 +945,38 @@ public class DeltaSync implements Serializable, Closeable {
    * SchemaProvider creation is a precursor to HoodieWriteClient and AsyncCompactor creation. This method takes care of
    * this constraint.
    */
-  public void setupWriteClient() throws IOException {
+  private void setupWriteClient(JavaRDD<HoodieRecord> records) throws IOException {
     if ((null != schemaProvider)) {
       Schema sourceSchema = schemaProvider.getSourceSchema();
       Schema targetSchema = schemaProvider.getTargetSchema();
-      reInitWriteClient(sourceSchema, targetSchema);
+      reInitWriteClient(sourceSchema, targetSchema, records);
     }
   }
 
-  private void reInitWriteClient(Schema sourceSchema, Schema targetSchema) throws IOException {
+  private void reInitWriteClient(Schema sourceSchema, Schema targetSchema, JavaRDD<HoodieRecord> records) throws IOException {
     LOG.info("Setting up new Hoodie Write Client");
     if (isDropPartitionColumns()) {
       targetSchema = HoodieAvroUtils.removeFields(targetSchema, getPartitionColumns(keyGenerator, props));
     }
     registerAvroSchemas(sourceSchema, targetSchema);
-    HoodieWriteConfig hoodieCfg = getHoodieClientConfig(targetSchema);
-    if (hoodieCfg.isEmbeddedTimelineServerEnabled()) {
+    final HoodieWriteConfig initialWriteConfig = getHoodieClientConfig(targetSchema);
+    final HoodieWriteConfig writeConfig = SparkSampleWritesUtils
+        .getWriteConfigWithRecordSizeEstimate(jssc, records, initialWriteConfig)
+        .orElse(initialWriteConfig);
+
+    if (writeConfig.isEmbeddedTimelineServerEnabled()) {
       if (!embeddedTimelineService.isPresent()) {
-        embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(new HoodieSparkEngineContext(jssc), hoodieCfg);
+        embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(new HoodieSparkEngineContext(jssc), writeConfig);
       } else {
-        EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), hoodieCfg);
+        EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), writeConfig);
       }
     }
 
-    if (null != writeClient) {
+    if (writeClient != null) {
       // Close Write client.
       writeClient.close();
     }
-    writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), hoodieCfg, embeddedTimelineService);
+    writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineService);
     onInitializingHoodieWriteClient.apply(writeClient);
   }
 
