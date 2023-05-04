@@ -21,7 +21,6 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -153,29 +152,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
       Option<String> partitionNameOp,
-      Boolean populateMetaFields) {
+      Boolean populateMetaFields,
+      Option<Schema> schemaWithoutMetaFields) {
     String payloadClass = ConfigUtils.getPayloadClass(props);
     String preCombineField = ConfigUtils.getOrderingField(props);
-    return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields);
-  }
-
-  public HoodieRecord wrapIntoHoodieRecordPayloadWithoutMetaFields(
-      Schema recordSchema,
-      Schema schemaWithoutMetaFields,
-      Properties props,
-      Option<Pair<String, String>> simpleKeyGenFieldsOpt,
-      Boolean withOperation,
-      Option<String> partitionNameOp,
-      Boolean populateMetaFields) {
-    String payloadClass = ConfigUtils.getPayloadClass(props);
-    String preCombineField = ConfigUtils.getOrderingField(props);
-    return SpillableMapUtils.convertToHoodieRecordPayload2((GenericRecord) data,
-        payloadClass,
-        preCombineField,
-        simpleKeyGenFieldsOpt.orElse(Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD)),
-        withOperation,
-        partitionNameOp,
-        schemaWithoutMetaFields);
+    return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }
 
   @Override
