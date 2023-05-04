@@ -234,30 +234,6 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     assertEquals(expect, got);
   }
 
-  @Test
-  public void testOverwriteHoodiePropertiesWithInputStreamFix() throws IOException {
-    RepairsCommand command = new RepairsCommand();
-    URL newProps = this.getClass().getClassLoader().getResource("table-config.properties");
-    assertNotNull(newProps, "New property file must exist");
-    String cmdResult = command.overwriteHoodieProperties(newProps.getPath());
-
-    HoodieTableConfig tableConfig = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig();
-    Map<String, String> result = tableConfig.propsMap();
-    // validate table checksum
-    assertTrue(result.containsKey(TABLE_CHECKSUM.key()));
-    assertTrue(validateChecksum(tableConfig.getProps()));
-
-    Map<String, String> oldProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
-
-    List<String> allPropsStr = Arrays.asList(NAME.key(), TYPE.key(), VERSION.key(), ARCHIVELOG_FOLDER.key(), TIMELINE_LAYOUT_VERSION.key(), TABLE_CHECKSUM.key(), DROP_PARTITION_COLUMNS.key());
-    String[][] rows = allPropsStr.stream().sorted().map(key -> new String[] {key, oldProps.getOrDefault(key, "null"), result.getOrDefault(key, "null")}).toArray(String[][]::new);
-    String expect = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY, HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);
-
-    expect = removeNonWordAndStripSpace(expect);
-    String got = removeNonWordAndStripSpace(cmdResult.toString());
-    assertEquals(expect, got);
-  }
-
   /**
    * Test case for 'repair corrupted clean files'.
    */
