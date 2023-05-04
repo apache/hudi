@@ -428,7 +428,7 @@ public class DeltaSync implements Serializable, Closeable {
           HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
           writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata.getCommitMetadata().get(), Option.empty());
           refreshTimeline();
-          reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema());
+          reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null);
         }
       } else if (cfg.retryLastPendingInlineClusteringJob && getHoodieClientConfig(this.schemaProvider).inlineClusteringEnabled()) {
         // complete the pending clustering before writing to sink
