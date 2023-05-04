@@ -2,11 +2,22 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2023-04-07T00:00:00.000Z</updated>
+    <updated>2023-04-26T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Delta, Hudi, and Iceberg: The Data Lakehouse Trifecta]]></title>
+        <id>/2023/04/26/the-lakehouse-trifecta</id>
+        <link href="https://hudi.apache.org/blog/2023/04/26/the-lakehouse-trifecta"/>
+        <updated>2023-04-26T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://dzone.com/articles/delta-hudi-and-iceberg-the-data-lakehouse-trifecta">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Andrey Gusarov</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Speed up your write latencies using Bucket Index in Apache Hudi]]></title>
         <id>/2023/04/07/Speed-up-your-write-latencies-using-Bucket-Index-in-Apache-Hudi</id>
@@ -92,6 +103,17 @@
         </author>
         <author>
             <name>Ketan Karalkar</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Introducing native support for Apache Hudi, Delta Lake, and Apache Iceberg on AWS Glue for Apache Spark, Part 1: Getting Started]]></title>
+        <id>/2023/01/27/Introducing-native-support-for-Apache-Hudi-Delta-Lake-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark</id>
+        <link href="https://hudi.apache.org/blog/2023/01/27/Introducing-native-support-for-Apache-Hudi-Delta-Lake-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark"/>
+        <updated>2023-01-27T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/part-1-getting-started-introducing-native-support-for-apache-hudi-delta-lake-and-apache-iceberg-on-aws-glue-for-apache-spark/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Akira Ajisaka, Noritaka Sekiyama and Savio Dsouza</name>
         </author>
     </entry>
     <entry>
