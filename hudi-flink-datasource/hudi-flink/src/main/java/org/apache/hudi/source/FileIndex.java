@@ -66,6 +66,7 @@ public class FileIndex {
   private final RowType rowType;
   private final boolean tableExists;
   private final HoodieMetadataConfig metadataConfig;
+  private final org.apache.hadoop.conf.Configuration hadoopConf;
   private final HoodieFlinkEngineContext hoodieFlinkEngineContext;
   private final PartitionPruners.PartitionPruner partitionPruner; // for partition pruning
   private final DataPruner dataPruner;                            // for data skipping
@@ -73,10 +74,9 @@ public class FileIndex {
   private List<String> partitionPaths;                            // cache of partition paths
 
   private FileIndex(Path path, Configuration conf, RowType rowType, DataPruner dataPruner, PartitionPruners.PartitionPruner partitionPruner, int dataBucket) {
-    org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-
     this.path = path;
     this.rowType = rowType;
+    this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.tableExists = StreamerUtil.tableExists(path.toString(), hadoopConf);
     this.hoodieFlinkEngineContext = new HoodieFlinkEngineContext(hadoopConf);
     this.metadataConfig = metadataConfig(conf);
