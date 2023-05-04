@@ -184,7 +184,7 @@ public class CloudObjectsSelectorCommon {
     // add partition column from source path if configured
     if (props.containsKey(PATH_BASED_PARTITION_FIELDS)) {
       String[] partitionKeysToAdd = props.getString(PATH_BASED_PARTITION_FIELDS).split(",");
-      // Add partition column for all path-based partition keys
+      // Add partition column for all path-based partition keys. If key is not present in path, the value will be null.
       for (String partitionKey : partitionKeysToAdd) {
         String partitionPathPattern = String.format("%s=", partitionKey);
         LOG.info(String.format("Adding column %s to dataset", partitionKey));
