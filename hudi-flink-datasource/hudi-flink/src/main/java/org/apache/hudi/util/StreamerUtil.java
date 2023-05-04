@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -446,6 +447,19 @@ public class StreamerUtil {
     } catch (IOException e) {
       throw new HoodieException("Exception while checking file " + path + " existence", e);
     }
+  }
+
+  /**
+   * Returns whether the given instant is a data writing commit.
+   *
+   * @param tableType The table type
+   * @param instant   The instant
+   * @param timeline  The timeline
+   */
+  public static boolean isWriteCommit(HoodieTableType tableType, HoodieInstant instant, HoodieTimeline timeline) {
+    return tableType == HoodieTableType.MERGE_ON_READ
+        ? !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) // not a compaction
+        : !ClusteringUtil.isClusteringInstant(instant, timeline);   // not a clustering
   }
 
   /**
