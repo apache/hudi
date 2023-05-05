@@ -72,7 +72,6 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
-import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
@@ -150,6 +149,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
+import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
 import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_FORCE_SKIP_PROP;
@@ -193,10 +193,7 @@ public class DeltaSync implements Serializable, Closeable {
    */
   private transient Option<Transformer> transformer;
 
-  /**
-   * Extract the key for the target table.
-   */
-  private KeyGenerator keyGenerator;
+  private String keyGenClassName;
 
   /**
    * Filesystem used.
@@ -286,7 +283,7 @@ public class DeltaSync implements Serializable, Closeable {
     this.userProvidedSchemaProvider = schemaProvider;
     this.processedSchema = new SchemaSet();
     this.autoGenerateRecordKeys = !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
-    this.keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+    this.keyGenClassName = getKeyGeneratorClassName(new TypedProperties(props));
     refreshTimeline();
     // Register User Provided schema first
     registerAvroSchemas(schemaProvider);
@@ -378,8 +375,7 @@ public class DeltaSync implements Serializable, Closeable {
         .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
         .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
             HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
-        .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-            keyGenerator.getClass().getName()))
+        .setKeyGeneratorClassProp(keyGenClassName)
         .setPreCombineField(cfg.sourceOrderingField)
         .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
             HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
@@ -477,8 +473,7 @@ public class DeltaSync implements Serializable, Closeable {
           .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
           .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
               HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
-          .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-              keyGenerator.getClass().getName()))
+          .setKeyGeneratorClassProp(keyGenClassName)
           .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
               HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
           .setShouldDropPartitionColumns(isDropPartitionColumns())

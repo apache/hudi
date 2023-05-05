@@ -29,7 +29,6 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A wrapper key generator to intercept getRecordKey calls for auto record key generator.
@@ -51,28 +50,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class AutoRecordGenWrapperKeyGenerator extends BuiltinKeyGenerator {
 
   private final BuiltinKeyGenerator builtinKeyGenerator;
-  private final AtomicBoolean initializeAutoKeyGenProps = new AtomicBoolean(false);
-  private int partitionId;
-  private String instantTime;
+  private final int partitionId;
+  private final String instantTime;
   private int rowId;
 
   public AutoRecordGenWrapperKeyGenerator(TypedProperties config, BuiltinKeyGenerator builtinKeyGenerator) {
     super(config);
     this.builtinKeyGenerator = builtinKeyGenerator;
+    this.rowId = 0;
+    this.partitionId = config.getInteger(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG);
+    this.instantTime = config.getString(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG);
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    initializeAutoKeyGenProps();
     return HoodieRecord.generateSequenceId(instantTime, partitionId, rowId++);
-  }
-
-  private void initializeAutoKeyGenProps() {
-    if (!initializeAutoKeyGenProps.getAndSet(true)) {
-      this.rowId = 0;
-      this.partitionId = config.getInteger(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG);
-      this.instantTime = config.getString(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG);
-    }
   }
 
   @Override
@@ -82,13 +74,11 @@ public class AutoRecordGenWrapperKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    initializeAutoKeyGenProps();
     return HoodieRecord.generateSequenceId(instantTime, partitionId, rowId++);
   }
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
-    initializeAutoKeyGenProps();
     return UTF8String.fromString(HoodieRecord.generateSequenceId(instantTime, partitionId, rowId++));
   }
 

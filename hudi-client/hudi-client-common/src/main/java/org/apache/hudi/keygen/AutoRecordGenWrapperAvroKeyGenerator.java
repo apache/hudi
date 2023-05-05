@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.avro.generic.GenericRecord;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A wrapper key generator to intercept getRecordKey calls for auto record key generator.
@@ -47,28 +46,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class AutoRecordGenWrapperAvroKeyGenerator extends BaseKeyGenerator {
 
   private final BaseKeyGenerator keyGenerator;
-  private final AtomicBoolean initializeAutoKeyGenProps = new AtomicBoolean(false);
-  private int partitionId;
-  private String instantTime;
+  private final int partitionId;
+  private final String instantTime;
   private int rowId;
 
   public AutoRecordGenWrapperAvroKeyGenerator(TypedProperties config, BaseKeyGenerator keyGenerator) {
     super(config);
     this.keyGenerator = keyGenerator;
+    this.rowId = 0;
+    this.partitionId = config.getInteger(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG);
+    this.instantTime = config.getString(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG);
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    initializeAutoKeyGenProps();
     return HoodieRecord.generateSequenceId(instantTime, partitionId, rowId++);
-  }
-
-  private void initializeAutoKeyGenProps() {
-    if (!initializeAutoKeyGenProps.getAndSet(true)) {
-      this.rowId = 0;
-      this.partitionId = config.getInteger(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG);
-      this.instantTime = config.getString(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG);
-    }
   }
 
   @Override
