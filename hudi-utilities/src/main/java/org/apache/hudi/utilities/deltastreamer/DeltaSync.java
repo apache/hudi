@@ -367,7 +367,7 @@ public class DeltaSync implements Serializable, Closeable {
   private void initializeEmptyTable() throws IOException {
     this.commitsTimelineOpt = Option.empty();
     this.allCommitsTimelineOpt = Option.empty();
-    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
+    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
@@ -466,7 +466,7 @@ public class DeltaSync implements Serializable, Closeable {
       resumeCheckpointStr = getCheckpointToResume(commitsTimelineOpt);
     } else {
       // initialize the table for the first time.
-      String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
+      String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
@@ -609,39 +609,34 @@ public class DeltaSync implements Serializable, Closeable {
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
-    Set<String> partitionColumns = getPartitionColumns(keyGenerator, props);
+    Set<String> partitionColumns = getPartitionColumns(props);
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
 
     JavaRDD<HoodieRecord> records;
     SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
     SerializableSchema processedAvroSchema = new SerializableSchema(isDropPartitionColumns() ? HoodieAvroUtils.removeMetadataFields(avroSchema.get()) : avroSchema.get());
     if (recordType == HoodieRecordType.AVRO) {
-      JavaRDD<Tuple2<GenericRecord, HoodieKey>> recordHoodieKeyPairRdd = avroRDD.mapPartitions(
-          (FlatMapFunction<Iterator<GenericRecord>, Tuple2<GenericRecord, HoodieKey>>) genericRecordIterator -> {
+      records = avroRDD.mapPartitions(
+          (FlatMapFunction<Iterator<GenericRecord>, HoodieRecord>) genericRecordIterator -> {
             if (autoGenerateRecordKeys) {
               props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()));
               props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
             }
             BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-            List<Tuple2<GenericRecord, HoodieKey>> recordWithRecordKeyOverride = new ArrayList<>();
+            List<HoodieRecord> avroRecords = new ArrayList<>();
             while (genericRecordIterator.hasNext()) {
               GenericRecord genRec = genericRecordIterator.next();
-              recordWithRecordKeyOverride.add(new Tuple2(genRec, new HoodieKey(builtinKeyGenerator.getRecordKey(genRec),
-                  builtinKeyGenerator.getPartitionPath(genRec))));
+              HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));
+              GenericRecord gr = isDropPartitionColumns() ? HoodieAvroUtils.removeFields(genRec, partitionColumns) : genRec;
+              HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
+                  (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, props.getBoolean(
+                      KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+                      Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))))
+                  : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
+              avroRecords.add(new HoodieAvroRecord<>(hoodieKey, payload));
             }
-            return recordWithRecordKeyOverride.iterator();
+            return avroRecords.iterator();
           });
-
-      records = recordHoodieKeyPairRdd.map(recordHoodieKeyPair -> {
-        GenericRecord gr = isDropPartitionColumns() ? HoodieAvroUtils.removeFields(recordHoodieKeyPair._1, partitionColumns) : recordHoodieKeyPair._1;
-        HoodieKey hoodieKey = recordHoodieKeyPair._2;
-        HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-            (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, props.getBoolean(
-                KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-                Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))))
-            : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
-        return new HoodieAvroRecord<>(hoodieKey, payload);
-      });
     } else if (recordType == HoodieRecordType.SPARK) {
       // TODO we should remove it if we can read InternalRow from source.
       records = avroRDD.mapPartitions(itr -> {
@@ -986,7 +981,7 @@ public class DeltaSync implements Serializable, Closeable {
   private void reInitWriteClient(Schema sourceSchema, Schema targetSchema, JavaRDD<HoodieRecord> records) throws IOException {
     LOG.info("Setting up new Hoodie Write Client");
     if (isDropPartitionColumns()) {
-      targetSchema = HoodieAvroUtils.removeFields(targetSchema, getPartitionColumns(keyGenerator, props));
+      targetSchema = HoodieAvroUtils.removeFields(targetSchema, getPartitionColumns(props));
     }
     registerAvroSchemas(sourceSchema, targetSchema);
     final HoodieWriteConfig initialWriteConfig = getHoodieClientConfig(targetSchema);
@@ -1217,12 +1212,11 @@ public class DeltaSync implements Serializable, Closeable {
   /**
    * Get the partition columns as a set of strings.
    *
-   * @param keyGenerator KeyGenerator
    * @param props TypedProperties
    * @return Set of partition columns.
    */
-  private Set<String> getPartitionColumns(KeyGenerator keyGenerator, TypedProperties props) {
-    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
+  private Set<String> getPartitionColumns(TypedProperties props) {
+    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
     return Arrays.stream(partitionColumns.split(",")).collect(Collectors.toSet());
   }
 

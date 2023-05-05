@@ -19,8 +19,9 @@ package org.apache.hudi.util
 
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
-import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
+import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName
 
 import scala.collection.JavaConverters._
 
@@ -31,28 +32,23 @@ object SparkKeyGenUtils {
    * @return partition columns
    */
   def getPartitionColumns(props: TypedProperties): String = {
-    val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
-    getPartitionColumns(keyGenerator, props)
+    val keyGeneratorClass = getKeyGeneratorClassName(props)
+    getPartitionColumns(keyGeneratorClass, props)
   }
 
   /**
-   * @param keyGen key generator
+   * @param keyGen key generator class name
    * @return partition columns
    */
-  def getPartitionColumns(keyGen: KeyGenerator, typedProperties: TypedProperties): String = {
-    keyGen match {
-      // For CustomKeyGenerator and CustomAvroKeyGenerator, the partition path filed format
-      // is: "field_name: field_type", we extract the field_name from the partition path field.
-      case c: BaseKeyGenerator
-        if c.isInstanceOf[CustomKeyGenerator] || c.isInstanceOf[CustomAvroKeyGenerator] =>
-        c.getPartitionPathFields.asScala.map(pathField =>
-          pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
-            .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
-          .mkString(",")
+  def getPartitionColumns(keyGenClass: String, typedProperties: TypedProperties): String = {
 
-      case b: BaseKeyGenerator => b.getPartitionPathFields.asScala.mkString(",")
-      case _ => typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
+    if (keyGenClass.equals(classOf[CustomKeyGenerator].getCanonicalName) || keyGenClass.equals(classOf[CustomAvroKeyGenerator])) {
+      typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
+        .split(",").map(pathField => {
+        pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
+          .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${keyGenClass}")}).mkString(",")
+    } else {
+      typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
     }
   }
-
 }
