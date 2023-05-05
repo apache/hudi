@@ -49,7 +49,7 @@ public class PartialBindVisitor extends BindVisitor {
 
   /**
    * If an expression is null after accept method, which means it cannot be bounded from
-   * schema, we'll directly return {@link Predicates.True}.
+   * schema, we'll directly return {@link Predicates.TrueExpression}.
    */
   @Override
   public Expression visitPredicate(Predicate predicate) {
@@ -71,10 +71,10 @@ public class PartialBindVisitor extends BindVisitor {
 
     if (predicate instanceof Predicates.Not) {
       Expression expr = ((Predicates.Not) predicate).child.accept(this);
-      if (expr instanceof Predicates.True) {
+      if (expr instanceof Predicates.TrueExpression) {
         return alwaysFalse();
       }
-      if (expr instanceof Predicates.False) {
+      if (expr instanceof Predicates.FalseExpression) {
         return alwaysTrue();
       }
 

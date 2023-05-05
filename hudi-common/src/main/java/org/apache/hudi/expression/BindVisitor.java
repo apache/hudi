@@ -35,38 +35,38 @@ public class BindVisitor implements ExpressionVisitor<Expression>  {
 
   @Override
   public Expression alwaysTrue() {
-    return Predicates.True.get();
+    return Predicates.TrueExpression.get();
   }
 
   @Override
   public Expression alwaysFalse() {
-    return Predicates.False.get();
+    return Predicates.FalseExpression.get();
   }
 
   @Override
   public Expression visitAnd(Predicates.And and) {
-    if (and.getLeft() instanceof Predicates.False
-        || and.getRight() instanceof Predicates.False) {
+    if (and.getLeft() instanceof Predicates.FalseExpression
+        || and.getRight() instanceof Predicates.FalseExpression) {
       return alwaysFalse();
     }
 
     Expression left = and.getLeft().accept(this);
     Expression right = and.getRight().accept(this);
-    if (left instanceof Predicates.False
-        || right instanceof Predicates.False) {
+    if (left instanceof Predicates.FalseExpression
+        || right instanceof Predicates.FalseExpression) {
       return alwaysFalse();
     }
 
-    if (left instanceof Predicates.True
-        && right instanceof Predicates.True) {
+    if (left instanceof Predicates.TrueExpression
+        && right instanceof Predicates.TrueExpression) {
       return alwaysTrue();
     }
 
-    if (left instanceof Predicates.True) {
+    if (left instanceof Predicates.TrueExpression) {
       return right;
     }
 
-    if (right instanceof Predicates.True) {
+    if (right instanceof Predicates.TrueExpression) {
       return left;
     }
 
@@ -75,28 +75,28 @@ public class BindVisitor implements ExpressionVisitor<Expression>  {
 
   @Override
   public Expression visitOr(Predicates.Or or) {
-    if (or.getLeft() instanceof Predicates.True
-        || or.getRight() instanceof Predicates.True) {
+    if (or.getLeft() instanceof Predicates.TrueExpression
+        || or.getRight() instanceof Predicates.TrueExpression) {
       return alwaysTrue();
     }
 
     Expression left = or.getLeft().accept(this);
     Expression right = or.getRight().accept(this);
-    if (left instanceof Predicates.True
-        || right instanceof Predicates.True) {
+    if (left instanceof Predicates.TrueExpression
+        || right instanceof Predicates.TrueExpression) {
       return alwaysTrue();
     }
 
-    if (left instanceof Predicates.False
-        && right instanceof Predicates.False) {
+    if (left instanceof Predicates.FalseExpression
+        && right instanceof Predicates.FalseExpression) {
       return alwaysFalse();
     }
 
-    if (left instanceof Predicates.False) {
+    if (left instanceof Predicates.FalseExpression) {
       return right;
     }
 
-    if (right instanceof Predicates.False) {
+    if (right instanceof Predicates.FalseExpression) {
       return left;
     }
 
@@ -130,10 +130,10 @@ public class BindVisitor implements ExpressionVisitor<Expression>  {
   public Expression visitPredicate(Predicate predicate) {
     if (predicate instanceof Predicates.Not) {
       Expression expr = ((Predicates.Not) predicate).child.accept(this);
-      if (expr instanceof Predicates.True) {
+      if (expr instanceof Predicates.TrueExpression) {
         return alwaysFalse();
       }
-      if (expr instanceof Predicates.False) {
+      if (expr instanceof Predicates.FalseExpression) {
         return alwaysTrue();
       }
 

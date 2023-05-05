@@ -29,12 +29,12 @@ import java.util.stream.Collectors;
 
 public class Predicates {
 
-  public static True alwaysTrue() {
-    return True.get();
+  public static TrueExpression alwaysTrue() {
+    return TrueExpression.get();
   }
 
-  public static False alwaysFalse() {
-    return False.get();
+  public static FalseExpression alwaysFalse() {
+    return FalseExpression.get();
   }
 
   public static And and(Expression left, Expression right) {
@@ -89,11 +89,11 @@ public class Predicates {
     return new Not(expr);
   }
 
-  public static class True extends LeafExpression implements Predicate {
+  public static class TrueExpression extends LeafExpression implements Predicate {
 
-    private static final True INSTANCE = new True();
+    private static final TrueExpression INSTANCE = new TrueExpression();
 
-    public static True get() {
+    public static TrueExpression get() {
       return INSTANCE;
     }
 
@@ -118,11 +118,11 @@ public class Predicates {
     }
   }
 
-  public static class False extends LeafExpression implements Predicate {
+  public static class FalseExpression extends LeafExpression implements Predicate {
 
-    private static final False INSTANCE = new False();
+    private static final FalseExpression INSTANCE = new FalseExpression();
 
-    public static False get() {
+    public static FalseExpression get() {
       return INSTANCE;
     }
 
@@ -155,7 +155,7 @@ public class Predicates {
 
     @Override
     public Boolean eval(StructLike data) {
-      if (getLeft() instanceof False || getRight() instanceof False) {
+      if (getLeft() instanceof FalseExpression || getRight() instanceof FalseExpression) {
         return false;
       }
       Object left = getLeft().eval(data);
@@ -194,7 +194,7 @@ public class Predicates {
 
     @Override
     public Boolean eval(StructLike data) {
-      if (getLeft() instanceof True || getRight() instanceof True) {
+      if (getLeft() instanceof TrueExpression || getRight() instanceof TrueExpression) {
         return true;
       }
 
