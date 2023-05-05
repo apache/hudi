@@ -34,8 +34,9 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat
-import org.apache.spark.sql.sources.{BaseRelation, TableScan}
+import org.apache.spark.sql.sources.{BaseRelation, Filter, TableScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.slf4j.LoggerFactory
@@ -50,10 +51,13 @@ import scala.collection.mutable
  * TODO: rebase w/ HoodieBaseRelation HUDI-5362
  *
  */
-class IncrementalRelation(val sqlContext: SQLContext,
-                          val optParams: Map[String, String],
-                          val userSchema: Option[StructType],
-                          val metaClient: HoodieTableMetaClient) extends BaseRelation with TableScan {
+case class IncrementalRelation(override val sqlContext: SQLContext,
+                          override val optParams: Map[String, String],
+                          private val userSchema: Option[StructType],
+                          override val metaClient: HoodieTableMetaClient,
+                          private val prunedDataSchema: Option[StructType] = None)
+  extends BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, Seq(), prunedDataSchema)
+    with HoodieIncrementalRelationTrait {
 
   private val log = LoggerFactory.getLogger(classOf[IncrementalRelation])
 
@@ -132,8 +136,29 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
   }
 
-  private val filters = optParams.getOrElse(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS.key,
+  // https://github.com/apache/hudi/pull/485
+  private val extraFilters = optParams.getOrElse(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS.key,
     DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS.defaultValue).split(",").filter(!_.isEmpty)
+
+  override protected def timeline: HoodieTimeline = {
+    if (fullTableScan) {
+      metaClient.getCommitsAndCompactionTimeline
+    } else if (useStateTransitionTime) {
+      metaClient.getCommitsAndCompactionTimeline.findInstantsInRangeByStateTransitionTs(startTimestamp, endTimestamp)
+    } else {
+      metaClient.getCommitsAndCompactionTimeline.findInstantsInRange(startTimestamp, endTimestamp)
+    }
+  }
+
+  protected override def composeRDD(fileSplits: Seq[HoodieBaseFileSplit],
+                                    tableSchema: HoodieTableSchema,
+                                    requiredSchema: HoodieTableSchema,
+                                    requestedColumns: Array[String],
+                                    filters: Array[Filter]): RDD[InternalRow] = {
+    val results = extraFilters.map(sparkSession.sessionState.sqlParser.parseExpression)
+    super.composeRDD(fileSplits, tableSchema, requiredSchema, requestedColumns, filters)
+      .filter(row => results.map(_.re))
+  }
 
   override def schema: StructType = usedSchema
 
@@ -226,7 +251,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
         if (filteredRegularFullPaths.isEmpty && filteredMetaBootstrapFullPaths.isEmpty) {
           sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
         } else {
-          log.info("Additional Filters to be applied to incremental source are :" + filters.mkString("Array(", ", ", ")"))
+          log.info("Additional Filters to be applied to incremental source are :" + extraFilters.mkString("Array(", ", ", ")"))
 
           var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
 
@@ -276,7 +301,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
         }
       }
 
-      filters.foldLeft(scanDf)((e, f) => e.filter(f)).rdd
+      extraFilters.foldLeft(scanDf)((e, f) => e.filter(f)).rdd
     }
   }
 
