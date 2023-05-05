@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -31,7 +32,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
@@ -61,10 +61,10 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static org.apache.flink.table.api.config.ExecutionConfigOptions.TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES;
-import static org.apache.flink.table.api.config.ExecutionConfigOptions.TABLE_EXEC_SPILL_COMPRESSION_ENABLED;
-import static org.apache.flink.table.api.config.ExecutionConfigOptions.TABLE_EXEC_SPILL_COMPRESSION_BLOCK_SIZE;
 import static org.apache.flink.table.api.config.ExecutionConfigOptions.TABLE_EXEC_SORT_ASYNC_MERGE_ENABLED;
+import static org.apache.flink.table.api.config.ExecutionConfigOptions.TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES;
+import static org.apache.flink.table.api.config.ExecutionConfigOptions.TABLE_EXEC_SPILL_COMPRESSION_BLOCK_SIZE;
+import static org.apache.flink.table.api.config.ExecutionConfigOptions.TABLE_EXEC_SPILL_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
@@ -324,26 +324,26 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       int precision = DataTypeUtils.precision(fieldType.getLogicalType());
       if (precision == 0) {
         // seconds
-        conf.setString(KeyGeneratorOptions.Config.TIMESTAMP_TYPE_FIELD_PROP,
+        conf.setString(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key(),
             TimestampBasedAvroKeyGenerator.TimestampType.UNIX_TIMESTAMP.name());
       } else if (precision == 3) {
         // milliseconds
-        conf.setString(KeyGeneratorOptions.Config.TIMESTAMP_TYPE_FIELD_PROP,
+        conf.setString(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key(),
             TimestampBasedAvroKeyGenerator.TimestampType.EPOCHMILLISECONDS.name());
       }
       String outputPartitionFormat = conf.getOptional(FlinkOptions.PARTITION_FORMAT).orElse(FlinkOptions.PARTITION_FORMAT_HOUR);
-      conf.setString(KeyGeneratorOptions.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, outputPartitionFormat);
+      conf.setString(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key(), outputPartitionFormat);
     } else {
-      conf.setString(KeyGeneratorOptions.Config.TIMESTAMP_TYPE_FIELD_PROP,
+      conf.setString(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key(),
           TimestampBasedAvroKeyGenerator.TimestampType.SCALAR.name());
-      conf.setString(KeyGeneratorOptions.Config.INPUT_TIME_UNIT, TimeUnit.DAYS.toString());
+      conf.setString(TimestampKeyGeneratorConfig.INPUT_TIME_UNIT.key(), TimeUnit.DAYS.toString());
 
       String outputPartitionFormat = conf.getOptional(FlinkOptions.PARTITION_FORMAT).orElse(FlinkOptions.PARTITION_FORMAT_DAY);
-      conf.setString(KeyGeneratorOptions.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, outputPartitionFormat);
+      conf.setString(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key(), outputPartitionFormat);
       // the option is actually useless, it only works for validation
-      conf.setString(KeyGeneratorOptions.Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, FlinkOptions.PARTITION_FORMAT_DAY);
+      conf.setString(TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key(), FlinkOptions.PARTITION_FORMAT_DAY);
     }
-    conf.setString(KeyGeneratorOptions.Config.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP, "UTC");
+    conf.setString(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), "UTC");
   }
 
   /**

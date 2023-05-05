@@ -22,16 +22,16 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig;
 
 /**
  * Key generator configs.
  */
 @ConfigClassProperty(name = "Key Generator Options",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Hudi maintains keys (record key + partition path) "
-        + "for uniquely identifying a particular record. "
-        + "This config allows developers to setup the Key generator class that "
-        + "will extract these out of incoming records.")
+    subGroupName = ConfigGroups.SubGroupNames.KEY_GENERATOR,
+    areCommonConfigs = true,
+    description = "")
 public class KeyGeneratorOptions extends HoodieConfig {
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = ConfigProperty
@@ -105,24 +105,31 @@ public class KeyGeneratorOptions extends HoodieConfig {
   /**
    * Supported configs.
    */
+  @Deprecated
   public static class Config {
 
     // One value from TimestampType above
-    public static final String TIMESTAMP_TYPE_FIELD_PROP = "hoodie.deltastreamer.keygen.timebased.timestamp.type";
-    public static final String INPUT_TIME_UNIT =
-        "hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit";
+    @Deprecated
+    public static final String TIMESTAMP_TYPE_FIELD_PROP = TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key();
+    @Deprecated
+    public static final String INPUT_TIME_UNIT = TimestampKeyGeneratorConfig.INPUT_TIME_UNIT.key();
     //This prop can now accept list of input date formats.
-    public static final String TIMESTAMP_INPUT_DATE_FORMAT_PROP =
-        "hoodie.deltastreamer.keygen.timebased.input.dateformat";
-    public static final String TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP = "hoodie.deltastreamer.keygen.timebased.input.dateformat.list.delimiter.regex";
-    public static final String TIMESTAMP_INPUT_TIMEZONE_FORMAT_PROP = "hoodie.deltastreamer.keygen.timebased.input.timezone";
-    public static final String TIMESTAMP_OUTPUT_DATE_FORMAT_PROP =
-        "hoodie.deltastreamer.keygen.timebased.output.dateformat";
+    @Deprecated
+    public static final String TIMESTAMP_INPUT_DATE_FORMAT_PROP = TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key();
+    @Deprecated
+    public static final String TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP =
+        TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX.key();
+    @Deprecated
+    public static final String TIMESTAMP_INPUT_TIMEZONE_FORMAT_PROP = TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_TIMEZONE_FORMAT.key();
+    @Deprecated
+    public static final String TIMESTAMP_OUTPUT_DATE_FORMAT_PROP = TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key();
     //still keeping this prop for backward compatibility so that functionality for existing users does not break.
-    public static final String TIMESTAMP_TIMEZONE_FORMAT_PROP =
-        "hoodie.deltastreamer.keygen.timebased.timezone";
-    public static final String TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP = "hoodie.deltastreamer.keygen.timebased.output.timezone";
-    public static final String DATE_TIME_PARSER_PROP = "hoodie.deltastreamer.keygen.datetime.parser.class";
+    @Deprecated
+    public static final String TIMESTAMP_TIMEZONE_FORMAT_PROP = TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT.key();
+    @Deprecated
+    public static final String TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP = TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key();
+    @Deprecated
+    public static final String DATE_TIME_PARSER_PROP = TimestampKeyGeneratorConfig.DATE_TIME_PARSER.key();
   }
 }
 

@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TimestampKeyGeneratorConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -40,7 +40,6 @@ import org.apache.hudi.functional.CommonOptionUtils._
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
@@ -52,7 +51,8 @@ import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertTrue, fail}
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
@@ -61,8 +61,6 @@ import java.sql.{Date, Timestamp}
 import java.util.function.Consumer
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import org.junit.jupiter.api.Assertions.assertDoesNotThrow
-import org.junit.jupiter.api.function.Executable
 
 
 /**
@@ -424,10 +422,10 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       "hoodie.compact.inline" -> "false",
       DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
-      Config.TIMESTAMP_TYPE_FIELD_PROP -> "DATE_STRING",
-      Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP -> "yyyy/MM/dd",
-      Config.TIMESTAMP_TIMEZONE_FORMAT_PROP -> "GMT+8:00",
-      Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP -> "yyyy-MM-dd"
+      TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key -> "DATE_STRING",
+      TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key -> "yyyy/MM/dd",
+      TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT.key -> "GMT+8:00",
+      TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key -> "yyyy-MM-dd"
     ) ++ writeOpts
 
     val dataGen1 = new HoodieTestDataGenerator(Array("2022-01-01"))
@@ -905,8 +903,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // Specify fieldType as TIMESTAMP
     writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, writeOpts)
     writer.partitionBy("current_ts:TIMESTAMP")
-      .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
-      .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key, "EPOCHMILLISECONDS")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyyMMdd")
       .mode(SaveMode.Overwrite)
       .save(basePath)
     recordsReadDF = spark.read.format("org.apache.hudi")
@@ -919,8 +917,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // Mixed fieldType
     writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, writeOpts)
     writer.partitionBy("driver", "rider:SIMPLE", "current_ts:TIMESTAMP")
-      .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
-      .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key, "EPOCHMILLISECONDS")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyyMMdd")
       .mode(SaveMode.Overwrite)
       .save(basePath)
     recordsReadDF = spark.read.format("org.apache.hudi")
@@ -932,8 +930,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // Test invalid partitionKeyType
     writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, writeOpts)
     writer = writer.partitionBy("current_ts:DUMMY")
-      .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
-      .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key, "EPOCHMILLISECONDS")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyyMMdd")
     try {
       writer.save(basePath)
       fail("should fail when invalid PartitionKeyType is provided!")
@@ -998,8 +996,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val writer = getDataFrameWriter(classOf[TimestampBasedKeyGenerator].getName, writeOpts)
     writer.partitionBy("current_ts")
-      .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
-      .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key, "EPOCHMILLISECONDS")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyyMMdd")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -1254,10 +1252,10 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "data_date")
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.TimestampBasedKeyGenerator")
-      .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "DATE_STRING")
-      .option(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "yyyy-MM-dd")
-      .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyy/MM/dd")
-      .option(Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, "GMT+8:00")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key, "DATE_STRING")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key, "yyyy-MM-dd")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyy/MM/dd")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT.key, "GMT+8:00")
       .mode(org.apache.spark.sql.SaveMode.Append)
       .save(basePath)
 

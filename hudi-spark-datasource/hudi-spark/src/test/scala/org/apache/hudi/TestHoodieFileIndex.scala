@@ -25,7 +25,7 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.HoodieJavaWriteClient
 import org.apache.hudi.client.common.HoodieJavaEngineContext
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TimestampKeyGeneratorConfig}
 import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
@@ -39,7 +39,6 @@ import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
@@ -123,9 +122,9 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val writer: DataFrameWriter[Row] = inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(Config.TIMESTAMP_TYPE_FIELD_PROP, TimestampType.DATE_STRING.name())
-      .option(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "yyyy/MM/dd")
-      .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyy-MM-dd")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key, TimestampType.DATE_STRING.name())
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key, "yyyy/MM/dd")
+      .option(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyy-MM-dd")
       .mode(SaveMode.Overwrite)
 
     if (isNullOrEmpty(keyGenerator)) {

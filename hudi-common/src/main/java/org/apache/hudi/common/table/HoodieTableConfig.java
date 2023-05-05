@@ -23,6 +23,7 @@ import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -40,7 +41,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -217,11 +217,14 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
   public static final List<String> PERSISTED_CONFIG_LIST = Arrays.asList(
-      Config.DATE_TIME_PARSER_PROP,
-      Config.INPUT_TIME_UNIT, Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP,
-      Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, Config.TIMESTAMP_INPUT_TIMEZONE_FORMAT_PROP,
-      Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, Config.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP,
-      Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, Config.DATE_TIME_PARSER_PROP
+      TimestampKeyGeneratorConfig.INPUT_TIME_UNIT.key(),
+      TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX.key(),
+      TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key(),
+      TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_TIMEZONE_FORMAT.key(),
+      TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key(),
+      TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(),
+      TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT.key(),
+      TimestampKeyGeneratorConfig.DATE_TIME_PARSER.key()
   );
 
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
