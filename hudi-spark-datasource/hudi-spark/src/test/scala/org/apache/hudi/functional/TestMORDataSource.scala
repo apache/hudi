@@ -515,7 +515,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     verifyShow(hudiIncDF2)
     verifyShow(hudiIncDF1Skipmerge)
 
-    val record3 = dataGen.generateUpdatesWithTS("003", hoodieRecords1, -1)
+    val record3 = dataGen.generateUpdatesWithTimestamp("003", hoodieRecords1, -1)
     val inputDF3 = toDataset(spark, record3)
     inputDF3.write.format("org.apache.hudi").options(opts)
       .mode(SaveMode.Append).save(basePath)
