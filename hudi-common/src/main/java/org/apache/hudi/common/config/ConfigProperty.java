@@ -171,7 +171,7 @@ public class ConfigProperty<T> implements Serializable {
     Objects.requireNonNull(description);
     sb.append(description.value());
     for (Field f: e.getFields()) {
-      if (isValid(f.getName())) {
+      if (f.isEnumConstant() && isValid(f.getName())) {
         EnumFieldDescription fieldDescription = f.getAnnotation(EnumFieldDescription.class);
         Objects.requireNonNull(fieldDescription);
         sb.append("\n    ");
