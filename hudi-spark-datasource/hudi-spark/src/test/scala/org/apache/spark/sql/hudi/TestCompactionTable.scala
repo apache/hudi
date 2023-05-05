@@ -30,7 +30,7 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
            |  price double,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'mor',
@@ -81,7 +81,7 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
            |  price double,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'mor',
@@ -94,35 +94,35 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
       spark.sql(s"update $tableName set price = 11 where id = 1")
 
-      spark.sql(s"run compaction on '${tmp.getCanonicalPath}'")
+      spark.sql(s"run compaction on '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'")
       checkAnswer(s"select id, name, price, ts from $tableName order by id")(
         Seq(1, "a1", 11.0, 1000),
         Seq(2, "a2", 10.0, 1000),
         Seq(3, "a3", 10.0, 1000)
       )
-      assertResult(0)(spark.sql(s"show compaction on '${tmp.getCanonicalPath}'").collect().length)
+      assertResult(0)(spark.sql(s"show compaction on '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'").collect().length)
       // schedule compaction first
       spark.sql(s"update $tableName set price = 12 where id = 1")
-      spark.sql(s"schedule compaction on '${tmp.getCanonicalPath}'")
+      spark.sql(s"schedule compaction on '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'")
 
       // schedule compaction second
       spark.sql(s"update $tableName set price = 12 where id = 2")
-      spark.sql(s"schedule compaction on '${tmp.getCanonicalPath}'")
+      spark.sql(s"schedule compaction on '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'")
 
       // show compaction
-      assertResult(2)(spark.sql(s"show compaction on '${tmp.getCanonicalPath}'").collect().length)
+      assertResult(2)(spark.sql(s"show compaction on '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'").collect().length)
       // run compaction for all the scheduled compaction
-      spark.sql(s"run compaction on '${tmp.getCanonicalPath}'")
+      spark.sql(s"run compaction on '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'")
 
       checkAnswer(s"select id, name, price, ts from $tableName order by id")(
         Seq(1, "a1", 12.0, 1000),
         Seq(2, "a2", 12.0, 1000),
         Seq(3, "a3", 10.0, 1000)
       )
-      assertResult(2)(spark.sql(s"show compaction on '${tmp.getCanonicalPath}'").collect().length)
+      assertResult(2)(spark.sql(s"show compaction on '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'").collect().length)
 
-      checkException(s"run compaction on '${tmp.getCanonicalPath}' at 12345")(
-        s"Compaction instant: 12345 is not found in ${tmp.getCanonicalPath}, Available pending compaction instants are:  "
+      checkException(s"run compaction on '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}' at 12345")(
+        s"Compaction instant: 12345 is not found in ${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}, Available pending compaction instants are:  "
       )
     })
   }

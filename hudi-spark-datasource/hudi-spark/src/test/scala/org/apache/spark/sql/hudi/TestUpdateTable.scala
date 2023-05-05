@@ -34,7 +34,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
              |  price double,
              |  ts long
              |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
@@ -77,7 +77,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
              |  price double,
              |  ts long
              |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
@@ -116,7 +116,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
              |  ts long,
              |  pt string
              |) using hudi
-             | location '${tmp.getCanonicalPath}/$ptTableName'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$ptTableName'
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
@@ -177,7 +177,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
              |  PRICE double,
              |  TS long
              |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
              | options (
              |  type = '$tableType',
              |  primaryKey = 'ID',
@@ -218,7 +218,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
            |  ts long,
            |  ff decimal(38, 10)
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',

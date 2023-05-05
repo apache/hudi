@@ -39,7 +39,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                |  primaryKey = 'id',
                |  preCombineField = 'ts'
                |)
-               |location '${tmp.getCanonicalPath}/$tableName'
+               |location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
                |""".stripMargin
           )
 

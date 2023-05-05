@@ -30,7 +30,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName".replaceAll("\\\\", "\\/")
         // Create table
         spark.sql(
           s"""

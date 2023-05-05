@@ -31,7 +31,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
     Seq("true", "false").foreach { hiveStylePartitionEnable =>
       withTempDir { tmp =>
         val tableName = generateTableName
-        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        val basePath = s"${tmp.getCanonicalPath}/$tableName".replaceAll("\\\\", "\\/")
         spark.sql(
           s"""
              | create table $tableName (

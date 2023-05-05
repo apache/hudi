@@ -38,7 +38,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
              |  primaryKey = 'id',
              |  preCombineField = 'ts'
              | )
-             | location '${tmp.getCanonicalPath}/$tableName1'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName1'
        """.stripMargin)
 
         spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
@@ -84,7 +84,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
              |  primaryKey = 'id',
              |  preCombineField = 'ts'
              | )
-             | location '${tmp.getCanonicalPath}/$tableName1'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName1'
        """.stripMargin)
 
         spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
@@ -111,7 +111,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
              |) using hudi
              | tblproperties (primaryKey = 'id')
              | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}/$tableName2'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName2'
        """.stripMargin)
 
         // Insert into dynamic partition
@@ -268,7 +268,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
              |  primaryKey = 'id',
              |  preCombineField = 'ts'
              | )
-             | location '${tmp.getCanonicalPath}/$tableName'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
        """.stripMargin)
 
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
@@ -312,7 +312,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
              |  primaryKey = 'id',
              |  preCombineField = 'ts'
              | )
-             | location '${tmp.getCanonicalPath}/$tableName'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
        """.stripMargin)
 
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")

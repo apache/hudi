@@ -21,7 +21,7 @@ class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
   test("Test Query Merge_On_Read Read_Optimized table") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName".replaceAll("\\\\", "\\/")
       // create table
       spark.sql(
         s"""

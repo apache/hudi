@@ -43,7 +43,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  preCombineField = 'ts'
            | )
            | partitioned by(dt)
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
          """.stripMargin)
       // Insert data which matched insert-condition.
       spark.sql(
@@ -149,7 +149,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            |create table $tableName using hudi
            |tblproperties(primaryKey = 'id')
-           |location '${tmp.getCanonicalPath}'
+           |location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
            |as
            |select 1 as id, 'a1' as name
            |""".stripMargin
@@ -196,7 +196,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  primaryKey = 'id',
            |  preCombineField = 'ts'
            | )
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
          """.stripMargin)
 
       spark.sql(
@@ -255,7 +255,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  ts long,
            |  dt string
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  primaryKey ='id',
            |  preCombineField = 'ts'
@@ -342,7 +342,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  price double,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  primaryKey ='id',
            |  preCombineField = 'ts'
@@ -386,7 +386,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  price double,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  primaryKey ='id',
            |  preCombineField = 'ts'
@@ -454,7 +454,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  TS long,
            |  DT string
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | options (
            |  primaryKey ='ID',
            |  preCombineField = 'TS'
@@ -532,7 +532,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  preCombineField = 'TS'
            | )
            | partitioned by(dt)
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
          """.stripMargin)
 
       // Test ignoring case when column name matches
@@ -567,7 +567,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  ts long,
            |  dt string
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  primaryKey ='id',
            |  preCombineField = 'ts'
@@ -614,7 +614,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  ts long,
            |  dt string
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  primaryKey ='id1,id2',
            |  preCombineField = 'ts'
@@ -665,7 +665,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  preCombineField = 'ts'
            | )
            | partitioned by(dt)
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
          """.stripMargin)
       // Insert data which matched insert-condition.
       spark.sql(
@@ -703,7 +703,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  preCombineField = 'ts'
            | )
            | partitioned by(dt)
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
          """.stripMargin)
       // Insert data
       spark.sql(s"insert into $tableName select 1, 'a1', cast(10.0 as double), 999, '2021-03-21'")
@@ -741,7 +741,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  primaryKey = 'id',
            |  preCombineField = 'ts',
            |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload'
-           | ) location '${tmp.getCanonicalPath}'
+           | ) location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
          """.stripMargin)
       // Insert data
       spark.sql(s"insert into $tableName select 1, 'a1', 999")
@@ -783,7 +783,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                |  preCombineField = 'ts'
                | )
                | partitioned by(dt)
-               | location '${tmp.getCanonicalPath}'
+               | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
          """.stripMargin)
           // Insert data without match condition
           spark.sql(
@@ -846,7 +846,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                |  primaryKey = 'id'
                | )
                | partitioned by(dt)
-               | location '${tmp.getCanonicalPath}'
+               | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
          """.stripMargin)
           // append records to small file is use update bucket, set this conf use concat handler
           spark.sql("set hoodie.merge.allow.duplicate.on.inserts = true")

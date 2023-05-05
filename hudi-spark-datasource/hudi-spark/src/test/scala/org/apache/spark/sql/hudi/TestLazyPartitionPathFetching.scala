@@ -31,7 +31,7 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
            |  ts long,
            |  date_par date
            |) using hudi
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'cow',
@@ -68,7 +68,7 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
            |  country string,
            |  date_par date
            |) using hudi
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'cow',

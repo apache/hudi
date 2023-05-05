@@ -33,7 +33,7 @@ class TestMergeIntoLogOnlyTable extends HoodieSparkSqlTestBase {
            |  price double,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'mor',

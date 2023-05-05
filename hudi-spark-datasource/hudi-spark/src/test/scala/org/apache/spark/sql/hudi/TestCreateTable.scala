@@ -165,7 +165,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            |  primaryKey = 'id,name',
            |  type = 'cow'
            | )
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
        """.stripMargin)
       val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
 
@@ -199,7 +199,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            |  primaryKey = 'id',
            |  type = 'mor'
            | )
-           | location '${tmp.getCanonicalPath}/h0'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/h0'
        """.stripMargin)
       val table2 = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
       assertResult(table2.properties("type"))("mor")
@@ -247,7 +247,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |  primaryKey = 'id1',
              |  type = 'cow'
              | )
-             | location '${tmp.getCanonicalPath}'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
        """.stripMargin)
       }
 
@@ -265,7 +265,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |  preCombineField = 'ts1',
              |  type = 'cow'
              | )
-             | location '${tmp.getCanonicalPath}'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
        """.stripMargin)
       }
 
@@ -283,7 +283,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |  preCombineField = 'ts',
              |  type = 'cow1'
              | )
-             | location '${tmp.getCanonicalPath}'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
        """.stripMargin)
       }
     }
@@ -301,13 +301,13 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |    primaryKey = 'id',
              |    type = '$tableType'
              | )
-             | location '${tmp.getCanonicalPath}/$tableName1'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName1'
              | AS
              | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
        """.stripMargin)
 
         assertResult(WriteOperationType.BULK_INSERT) {
-          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName1").getOperationType
+          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName1").getOperationType
         }
         checkAnswer(s"select id, name, price, ts from $tableName1")(
           Seq(1, "a1", 10.0, 1000)
@@ -323,14 +323,14 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |    primaryKey = 'id',
              |    type = '$tableType'
              | )
-             | location '${tmp.getCanonicalPath}/$tableName2'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName2'
              | AS
              | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt
          """.stripMargin
         )
 
         assertResult(WriteOperationType.BULK_INSERT) {
-          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName2").getOperationType
+          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName2").getOperationType
         }
         checkAnswer(s"select id, name, price, dt from $tableName2")(
           Seq(1, "a1", 10, "2021-04-01")
@@ -348,7 +348,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
                |    primaryKey = 'id',
                |    type = '$tableType'
                | )
-               | location '${tmp.getCanonicalPath}/$tableName3'
+               | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName3'
                | AS
                | select null as id, 'a1' as name, 10 as price, '2021-05-07' as dt
                |
@@ -364,7 +364,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |    primaryKey = 'id',
              |    type = '$tableType'
              | )
-             | location '${tmp.getCanonicalPath}/$tableName3'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName3'
              | AS
              | select cast('2021-05-06 00:00:00' as timestamp) as dt, 1 as id, 'a1' as name, 10 as
              | price
@@ -372,7 +372,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         )
 
         assertResult(WriteOperationType.BULK_INSERT) {
-          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName3").getOperationType
+          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName3").getOperationType
         }
         checkAnswer(s"select id, name, price, cast(dt as string) from $tableName3")(
           Seq(1, "a1", 10, "2021-05-06 00:00:00")
@@ -388,7 +388,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |    primaryKey = 'id',
              |    type = '$tableType'
              | )
-             | location '${tmp.getCanonicalPath}/$tableName4'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName4'
              | AS
              | select cast('2021-05-06' as date) as dt, 1 as id, 'a1' as name, 10 as
              | price
@@ -396,7 +396,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         )
 
         assertResult(WriteOperationType.BULK_INSERT) {
-          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName4").getOperationType
+          getLastCommitMetadata(spark, s"${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName4").getOperationType
         }
         checkAnswer(s"select id, name, price, cast(dt as string) from $tableName4")(
           Seq(1, "a1", 10, "2021-05-06")
@@ -407,7 +407,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
   test("Test Create ro/rt Table In The Right Way") {
     withTempDir { tmp =>
-      val parentPath = tmp.getCanonicalPath
+      val parentPath = tmp.getCanonicalPath.replaceAll("\\\\", "\\/")
       val tableName1 = generateTableName
       spark.sql(
         s"""
@@ -471,7 +471,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
   test("Test Create ro/rt Table In The Wrong Way") {
     withTempDir { tmp =>
-      val parentPath = tmp.getCanonicalPath
+      val parentPath = tmp.getCanonicalPath.replaceAll("\\\\", "\\/")
 
       // test the case that create rt/rt table on cow table
       val tableName1 = generateTableName
@@ -650,7 +650,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
       Seq("2021-08-02", "2021/08/02").foreach { partitionValue =>
         val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        val tablePath = s"${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName"
         import spark.implicits._
         val df = Seq((1, "a1", 10, 1000, partitionValue)).toDF("id", "name", "value", "ts", "dt")
         // Write a table by spark dataframe.
@@ -732,7 +732,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       Seq("2021-08-02", "2021/08/02").foreach { day =>
         val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        val tablePath = s"${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName"
         import spark.implicits._
         val df = Seq((1, "a1", 10, 1000, day, 12)).toDF("id", "name", "value", "ts", "day", "hh")
         // Write a table by spark dataframe.

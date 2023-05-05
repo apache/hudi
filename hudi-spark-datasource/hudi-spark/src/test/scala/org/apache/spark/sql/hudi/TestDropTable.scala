@@ -38,7 +38,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
              |  price double,
              |  ts long
              |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
@@ -75,7 +75,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
              |  price double,
              |  ts long
              |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
@@ -99,7 +99,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            |  name string,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
@@ -110,7 +110,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |create table ${tableName}_ro using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
@@ -123,7 +123,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |create table ${tableName}_rt using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
@@ -148,7 +148,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            |  name string,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
@@ -172,7 +172,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |create table ${tableName}_rt using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
@@ -204,7 +204,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            |  name string,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
@@ -215,7 +215,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |create table ${tableName}_ro using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
@@ -228,7 +228,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |create table ${tableName}_rt using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
@@ -246,7 +246,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
   test("Drop an EXTERNAL table which path is lost.") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      val tablePath = s"${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName"
       val filesystem = FSUtils.getFs(tablePath, spark.sparkContext.hadoopConfiguration);
       spark.sql(
         s"""
@@ -273,7 +273,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
   test("Drop an MOR table and related RT & RO when path is lost.") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      val tablePath = s"${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName"
       val filesystem = FSUtils.getFs(tablePath, spark.sparkContext.hadoopConfiguration);
       spark.sql(
         s"""
@@ -294,7 +294,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |create table ${tableName}_ro using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
@@ -307,7 +307,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |create table ${tableName}_rt using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',

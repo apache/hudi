@@ -36,7 +36,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  price double,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
            | tblproperties (
            |  primaryKey ='id',
            |  preCombineField = 'ts'
@@ -132,7 +132,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  preCombineField = 'ts'
            | )
            |partitioned by (country)
-           |location '${tmp.getCanonicalPath}/$targetTable'
+           |location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$targetTable'
            |""".stripMargin)
       spark.sql(
         s"""
@@ -182,7 +182,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  price double,
            |  ts long
            | ) using parquet
-           | location '${tmp.getCanonicalPath}/$sourceTable'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$sourceTable'
          """.stripMargin)
       // Create target table
       spark.sql(
@@ -193,7 +193,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  price double,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$targetTable'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$targetTable'
            | tblproperties (
            |  primaryKey ='id',
            |  preCombineField = 'ts'
@@ -267,7 +267,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  preCombineField = 'ts'
            | )
            | partitioned by(dt)
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
          """.stripMargin)
       // Insert data
       spark.sql(
@@ -397,7 +397,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  primaryKey = 'id'
            | )
            | partitioned by(dt)
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
          """.stripMargin)
 
       spark.sql(s"insert into $tableName select 1, 'a1', 10, '2021-03-21'")
@@ -456,7 +456,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  hoodie.compaction.payload.class = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload'
              | )
              | partitioned by(dt)
-             | location '${tmp.getCanonicalPath}/$tableName1'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName1'
          """.stripMargin)
         // Insert data
         spark.sql(
@@ -528,7 +528,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  preCombineField = 'v'
              | )
              | partitioned by(dt)
-             | location '${tmp.getCanonicalPath}/$tableName1'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName1'
          """.stripMargin)
         // Insert data
         spark.sql(s"""insert into $tableName1 values(1, 'a1', 10, 1000, '2021-03-21')""")
@@ -609,7 +609,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  preCombineField = 'v'
            | )
            | partitioned by(dt)
-           | location '${tmp.getCanonicalPath}/$tableName1'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName1'
          """.stripMargin)
       // Insert data
       spark.sql(s"""insert into $tableName1 values(3, 'a3', 30, 3000, '2021-03-21')""")
@@ -705,7 +705,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  ts long,
            |  dt string
            | ) using parquet
-           | location '${tmp.getCanonicalPath}/$sourceTable'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$sourceTable'
          """.stripMargin)
       spark.sql(s"insert into $sourceTable values(8, 's8', 80, 2008, '2021-03-21')")
       spark.sql(s"insert into $sourceTable values(9, 's9', 90, 2009, '2021-03-21')")
@@ -772,7 +772,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | primaryKey = 'id',
              | preCombineField = '_ts'
              |)
-             |location '${tmp.getCanonicalPath}/$sourceTable'
+             |location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$sourceTable'
           """.stripMargin)
 
         val targetTable = generateTableName
@@ -881,7 +881,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  price double,
              |  c $dataType
              |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
              | tblproperties (
              |  primaryKey ='id',
              |  preCombineField = 'c'
@@ -932,7 +932,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  price double,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'mor',
@@ -994,7 +994,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  value $dataType,
              |  ts long
              |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
              | tblproperties (
              |  primaryKey ='id',
              |  preCombineField = 'ts'
@@ -1041,7 +1041,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  value $dataType,
              |  ts long
              |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
+             | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
              | tblproperties (
              |  primaryKey ='id',
              |  preCombineField = 'ts'
@@ -1075,7 +1075,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  value int,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  primaryKey ='id',
            |  preCombineField = 'ts'
@@ -1110,7 +1110,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  value int,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
            | tblproperties (
            |  primaryKey ='id',
            |  preCombineField = 'ts'

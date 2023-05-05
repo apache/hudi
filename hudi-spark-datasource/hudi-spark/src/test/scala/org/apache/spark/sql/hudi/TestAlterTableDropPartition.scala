@@ -93,7 +93,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     test(s"Drop single-partition table' partitions, urlencode: $urlencode") {
       withTempDir { tmp =>
         val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName".replaceAll("\\\\", "\\/")
 
         import spark.implicits._
         val df = Seq((1, "z3", "v1", "2021/10/01"), (2, "l4", "v1", "2021/10/02"))

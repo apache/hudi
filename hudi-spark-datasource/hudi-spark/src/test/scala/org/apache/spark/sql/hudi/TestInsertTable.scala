@@ -48,7 +48,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |) using hudi
            | tblproperties (primaryKey = 'id')
            | partitioned by (dt)
-           | location '${tmp.getCanonicalPath}'
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}'
        """.stripMargin)
 
       // Note: Do not write the field alias, the partition field must be placed last.

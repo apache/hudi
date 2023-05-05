@@ -46,7 +46,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
       if (HoodieSparkUtils.gteqSpark3_1) {
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
-          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          val tablePath = s"${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName"
 
           createTableWithNestedStructSchema(tableType, tableName, tablePath)
 
@@ -112,7 +112,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
         // TODO add cow
         Seq("mor").foreach { tableType =>
           val tableName = generateTableName
-          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          val tablePath = s"${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName"
 
           // NOTE: Set of opts that will make [[NestedSchemaPruning]] ineffective
           val (writeOpts, readOpts): (Map[String, String], Map[String, String]) =

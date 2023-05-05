@@ -60,7 +60,7 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
     test(s"Test Truncate single-partition table' partitions, urlencode: $urlencode") {
       withTempDir { tmp =>
         val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        val tablePath = s"${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName"
 
         import spark.implicits._
         val df = Seq((1, "z3", "v1", "2021/10/01"), (2, "l4", "v1", "2021/10/02"))
@@ -101,7 +101,7 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
     test(s"Test Truncate multi-level partitioned table's partitions, isHiveStylePartitioning: $hiveStyle") {
       withTempDir { tmp =>
         val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        val tablePath = s"${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName"
 
         import spark.implicits._
         val df = Seq((1, "z3", "v1", "2021", "10", "01"), (2, "l4", "v1", "2021", "10","02"))

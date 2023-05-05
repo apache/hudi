@@ -39,7 +39,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
              | primaryKey = 'id',
              | preCombineField = '_ts'
              |)
-             |location '${tmp.getCanonicalPath}/$tableName'
+             |location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName'
           """.stripMargin)
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
 
@@ -66,7 +66,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
              | type ='$tableType',
              | primaryKey = 'id'
              |)
-             |location '${tmp.getCanonicalPath}/$tableName2'
+             |location '${tmp.getCanonicalPath.replaceAll("\\\\", "\\/")}/$tableName2'
           """.stripMargin)
         spark.sql(s"insert into $tableName2 values(1, 'a1', 10)")
 

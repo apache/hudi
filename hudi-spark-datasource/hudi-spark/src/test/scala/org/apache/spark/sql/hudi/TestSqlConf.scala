@@ -41,7 +41,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
   test("Test Hudi Conf") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
+      val tablePath = tmp.getCanonicalPath.replaceAll("\\\\", "\\/")
       val partitionVal = "2021"
       // Create table
       spark.sql(
