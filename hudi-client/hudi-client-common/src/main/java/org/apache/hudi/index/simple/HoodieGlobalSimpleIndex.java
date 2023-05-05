@@ -19,7 +19,6 @@
 
 package org.apache.hudi.index.simple;
 
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -35,7 +34,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -146,15 +144,9 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
           }
         });
 
-    if (config.getSimpleIndexUseCaching()) {
-      taggedRecordsAndLocationInfo.persist(new HoodieConfig(config.getProps())
-          .getString(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE));
-    }
-    HoodieData<HoodieRecord<R>> finalTaggedRecords = mergeForPartitionUpdates(taggedRecordsAndLocationInfo, config, hoodieTable);
-    if (config.getSimpleIndexUseCaching()) {
-      taggedRecordsAndLocationInfo.unpersist();
-    }
-    return finalTaggedRecords;
+    return config.getGlobalSimpleIndexUpdatePartitionPath()
+        ? mergeForPartitionUpdates(taggedRecordsAndLocationInfo, config, hoodieTable)
+        : taggedRecordsAndLocationInfo.map(Pair::getLeft);
   }
 
   @Override

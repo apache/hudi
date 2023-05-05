@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -113,7 +114,8 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
   }
 
   private HoodieMergedLogRecordScanner getLogRecordScanner(FileSlice fileSlice) {
-    List<String> logFilePaths = fileSlice.getLogFiles().map(l -> l.getPath().toString()).collect(toList());
+    List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+        .map(l -> l.getPath().toString()).collect(toList());
     return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(hoodieTable.getMetaClient().getFs())
         .withBasePath(hoodieTable.getMetaClient().getBasePathV2().toString())

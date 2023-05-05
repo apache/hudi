@@ -187,6 +187,11 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     }
   }
 
+  @Override
+  public Comparable<?> getOrderingValue() {
+    return orderingVal;
+  }
+
   public IndexedRecord getRecordToInsert(Schema schema) throws IOException {
     MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
     return jsonConverter.convert(getJsonData(), schema);
