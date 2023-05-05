@@ -27,23 +27,26 @@ import com.esotericsoftware.kryo.io.Output;
 
 import java.io.Serializable;
 
+/**
+ * A Record Index managed by Hoodie.
+ */
 public class IndexItem implements Serializable, KryoSerializable {
 
 
   /**
    * Identifies the record across the table.
    */
-  protected HoodieKey key;
+  private HoodieKey key;
 
   /**
    * Current location of record on storage. Filled in by looking up index
    */
-  protected HoodieRecordLocation currentLocation;
+  private HoodieRecordLocation currentLocation;
 
   /**
    * New location of record on storage, after written.
    */
-  protected HoodieRecordLocation newLocation;
+  private HoodieRecordLocation newLocation;
 
   public String getRecordKey() {
     assert key != null;
@@ -83,7 +86,7 @@ public class IndexItem implements Serializable, KryoSerializable {
   }
 
   @Override
-  public void read(Kryo kryo, Input input) {
+  public final void read(Kryo kryo, Input input) {
     this.key = kryo.readObjectOrNull(input, HoodieKey.class);
     this.currentLocation = (HoodieRecordLocation) kryo.readClassAndObject(input);
     this.newLocation = (HoodieRecordLocation) kryo.readClassAndObject(input);
