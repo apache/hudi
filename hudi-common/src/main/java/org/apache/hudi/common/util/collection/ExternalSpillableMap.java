@@ -201,28 +201,20 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
 
   @Override
   public R put(T key, R value) {
-    if (this.currentInMemoryMapSize >= maxInMemorySizeInBytes || inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
-      long tmpEstimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9
-          + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
-      if (this.estimatedPayloadSize != tmpEstimatedPayloadSize) {
-        LOG.info("Update Estimated Payload size to => " + this.estimatedPayloadSize);
-      }
-      this.estimatedPayloadSize = tmpEstimatedPayloadSize;
+    if (this.estimatedPayloadSize == 0) {
+      // At first, use the sizeEstimate of a record being inserted into the spillable map.
+      // Note, the converter may over-estimate the size of a record in the JVM
+      this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
+    } else if (this.inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
+      this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
       this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
     }
 
-    if (this.currentInMemoryMapSize < maxInMemorySizeInBytes || inMemoryMap.containsKey(key)) {
-      if (estimatedPayloadSize == 0) {
-        // At first, use the sizeEstimate of a record being inserted into the spillable map.
-        // Note, the converter may over estimate the size of a record in the JVM
-        this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
-        LOG.info("Estimated Payload size => " + estimatedPayloadSize);
-      }
-      if (!inMemoryMap.containsKey(key)) {
-        // TODO : Add support for adjusting payloadSize for updates to the same key
-        currentInMemoryMapSize += this.estimatedPayloadSize;
-      }
-      inMemoryMap.put(key, value);
+    if (this.inMemoryMap.containsKey(key)) {
+      this.inMemoryMap.put(key, value);
+    } else if (this.currentInMemoryMapSize < this.maxInMemorySizeInBytes) {
+      this.currentInMemoryMapSize += this.estimatedPayloadSize;
+      this.inMemoryMap.put(key, value);
     } else {
       getDiskBasedMap().put(key, value);
     }
