@@ -167,7 +167,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
 
       // Test tagLocation without any entries in index
       JavaRDD<HoodieRecord> records1 = tagLocation(index, writeRecords, hoodieTable);
-      assertEquals(0, records1.filter(record -> record.isCurrentLocationKnown()).count());
+      assertEquals(0, records1.filter(HoodieRecord::isCurrentLocationKnown).count());
 
       // Insert 200 records
       writeClient.startCommitWithTime(newCommitTime);
@@ -176,7 +176,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
 
       // Now tagLocation for these records, hbaseIndex should not tag them since commit never occurred
       JavaRDD<HoodieRecord> records2 = tagLocation(index, writeRecords, hoodieTable);
-      assertEquals(0, records2.filter(record -> record.isCurrentLocationKnown()).count());
+      assertEquals(0, records2.filter(HoodieRecord::isCurrentLocationKnown).count());
 
       // Now commit this & update location of records inserted and validate no errors
       writeClient.commit(newCommitTime, writeStatues);
@@ -184,7 +184,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       hoodieTable = HoodieSparkTable.create(config, context, metaClient);
       List<HoodieRecord> records3 = tagLocation(index, writeRecords, hoodieTable).collect();
-      assertEquals(numRecords, records3.stream().filter(record -> record.isCurrentLocationKnown()).count());
+      assertEquals(numRecords, records3.stream().filter(HoodieRecord::isCurrentLocationKnown).count());
       assertEquals(numRecords, records3.stream().map(record -> record.getKey().getRecordKey()).distinct().count());
       assertEquals(numRecords, records3.stream().filter(record -> (record.getCurrentLocation() != null
           && record.getCurrentLocation().getInstantTime().equals(newCommitTime))).distinct().count());

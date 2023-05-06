@@ -29,9 +29,13 @@ import java.io.Serializable;
 
 /**
  * A Record Index managed by Hoodie.
+ * IndexItem consists of
+ * <p>
+ * - key : identifies the record.
+ * - currentLocation : current location of record on storage.
+ * - newLocation : new location of record on storage, after written.
  */
 public class IndexItem implements Serializable, KryoSerializable {
-
 
   /**
    * Identifies the record across the table.
