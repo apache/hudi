@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -481,7 +482,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
   private void initTableIfNotExists(ObjectPath tablePath, CatalogTable catalogTable) {
     Configuration flinkConf = Configuration.fromMap(catalogTable.getOptions());
-    final String avroSchema = AvroSchemaConverter.convertToSchema(catalogTable.getSchema().toPersistedRowDataType().getLogicalType()).toString();
+    final String avroSchema = AvroSchemaConverter.convertToSchema(
+        catalogTable.getSchema().toPersistedRowDataType().getLogicalType(),
+        AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
     flinkConf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, avroSchema);
 
     // stores two copies of options:

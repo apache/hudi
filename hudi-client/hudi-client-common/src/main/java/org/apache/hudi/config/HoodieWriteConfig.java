@@ -102,6 +102,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
+import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
 /**
@@ -1453,7 +1454,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public int getCopyOnWriteRecordSizeEstimate() {
-    return getInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
+    return getInt(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
   }
 
   public boolean allowMultipleCleans() {
@@ -1914,6 +1915,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean getGlobalSimpleIndexUpdatePartitionPath() {
     return getBoolean(HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE);
+  }
+
+  public int getGlobalIndexReconcileParallelism() {
+    return getInt(HoodieIndexConfig.GLOBAL_INDEX_RECONCILE_PARALLELISM);
   }
 
   public int getBucketIndexNumBuckets() {
