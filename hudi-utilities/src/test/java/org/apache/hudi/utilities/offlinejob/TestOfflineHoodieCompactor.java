@@ -47,9 +47,9 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAM
 public class TestOfflineHoodieCompactor extends HoodieOfflineJobTestBase {
 
   protected HoodieCompactor initialHoodieCompactorClean(String tableBasePath, Boolean runSchedule, String scheduleAndExecute,
-                     Boolean isAutoClean, Boolean isSyncClean) {
+                     Boolean isAutoClean) {
     HoodieCompactor.Config compactionConfig = buildHoodieCompactionUtilConfig(tableBasePath,
-              runSchedule, scheduleAndExecute, isSyncClean);
+              runSchedule, scheduleAndExecute);
     List<String> configs = new ArrayList<>();
     configs.add(String.format("%s=%s", HoodieCleanConfig.AUTO_CLEAN.key(), isAutoClean));
     configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), 1));
@@ -60,13 +60,12 @@ public class TestOfflineHoodieCompactor extends HoodieOfflineJobTestBase {
 
   private HoodieCompactor.Config  buildHoodieCompactionUtilConfig(String basePath,
                                                                   Boolean runSchedule,
-                                                                  String runningMode,
-                                                                  Boolean isSyncClean) {
+                                                                  String runningMode) {
     HoodieCompactor.Config config = new HoodieCompactor.Config();
     config.basePath = basePath;
     config.runSchedule = runSchedule;
     config.runningMode = runningMode;
-    config.asyncSerivceEanble = isSyncClean;
+    config.configs.add("hoodie.metadata.enable=false");
     return config;
   }
 
@@ -108,7 +107,7 @@ public class TestOfflineHoodieCompactor extends HoodieOfflineJobTestBase {
 
     // offline compaction schedule
     HoodieCompactor hoodieCompactorSchedule =
-        initialHoodieCompactorClean(tableBasePath, true, "SCHEDULE", false, false);
+        initialHoodieCompactorClean(tableBasePath, true, "SCHEDULE", false);
     hoodieCompactorSchedule.compact(0);
     TestHelpers.assertNCompletedCommits(2, tableBasePath, fs);
     TestHelpers.assertNCleanCommits(0, tableBasePath, fs);
@@ -118,24 +117,10 @@ public class TestOfflineHoodieCompactor extends HoodieOfflineJobTestBase {
 
     // offline compaction execute with sync clean
     HoodieCompactor hoodieCompactorExecute =
-        initialHoodieCompactorClean(tableBasePath, false, "EXECUTE", true, false);
+        initialHoodieCompactorClean(tableBasePath, false, "EXECUTE", true);
     hoodieCompactorExecute.compact(0);
     TestHelpers.assertNCompletedCommits(5, tableBasePath, fs);
     TestHelpers.assertNCleanCommits(1, tableBasePath, fs);
-
-    // offline compaction schedule&&execute without clean
-    hoodieCompactorSchedule =
-        initialHoodieCompactorClean(tableBasePath, true, "scheduleAndExecute", false, false);
-    hoodieCompactorSchedule.compact(0);
-    writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
-    writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
-
-    // offline compaction schedule&&execute with async clean
-    hoodieCompactorExecute =
-        initialHoodieCompactorClean(tableBasePath, false, "scheduleAndExecute", true, true);
-    hoodieCompactorExecute.compact(0);
-    TestHelpers.assertNCompletedCommits(9, tableBasePath, fs);
-    TestHelpers.assertNCleanCommits(2, tableBasePath, fs);
   }
 
 }

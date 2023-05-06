@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.table.HoodieSparkTable;
 
@@ -62,6 +63,8 @@ public class HoodieClusteringJob {
     this.props = StringUtils.isNullOrEmpty(cfg.propsFilePath)
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
+    // Disable async-cleaning in offline compaction, we will always use sync-cleaning here.
+    this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
   }
 
@@ -101,9 +104,6 @@ public class HoodieClusteringJob {
         + "Set \"scheduleAndExecute\" means make a cluster plan first and execute that plan immediately")
     public String runningMode = null;
 
-    @Parameter(names = {"--async-service-enable", "-async"}, description = "Whether to execute cleanup and archive in asynchronous mode, disabled by default", required = false)
-    public Boolean asyncSerivceEanble = false;
-
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
@@ -133,7 +133,6 @@ public class HoodieClusteringJob {
           + "   --schedule " + runSchedule + ", \n"
           + "   --retry-last-failed-clustering-job " + retryLastFailedClusteringJob + ", \n"
           + "   --modee " + runningMode + ", \n"
-          + "   --async-service-enable " + asyncSerivceEanble + ", \n"
           + "   --job-max-processing-time-ms " + maxProcessingTimeMs + ", \n"
           + "   --props " + propsFilePath + ", \n"
           + "   --hoodie-conf " + configs + ", \n"
@@ -205,7 +204,7 @@ public class HoodieClusteringJob {
   private int doCluster(JavaSparkContext jsc) throws Exception {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
-    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props, cfg.asyncSerivceEanble)) {
+    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       if (StringUtils.isNullOrEmpty(cfg.clusteringInstantTime)) {
         // Instant time is not specified
         // Find the earliest scheduled clustering instant for execution
@@ -234,7 +233,7 @@ public class HoodieClusteringJob {
   private Option<String> doSchedule(JavaSparkContext jsc) throws Exception {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
-    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props, cfg.asyncSerivceEanble)) {
+    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       return doSchedule(client);
     }
   }
@@ -251,7 +250,7 @@ public class HoodieClusteringJob {
     LOG.info("Step 1: Do schedule");
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
-    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props, cfg.asyncSerivceEanble)) {
+    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       Option<String> instantTime = Option.empty();
 
       if (cfg.retryLastFailedClusteringJob) {
@@ -285,8 +284,7 @@ public class HoodieClusteringJob {
   }
 
   private void cleanAfterCluster(SparkRDDWriteClient client) {
-    client.waitForAsyncServiceCompletion();
-    if (client.getConfig().isAutoClean() && !client.getConfig().isAsyncClean()) {
+    if (client.getConfig().isAutoClean()) {
       LOG.info("Start to clean synchronously.");
       client.clean();
     }

@@ -38,8 +38,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieArchivalConfig;
-import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -359,25 +357,6 @@ public class UtilHelpers {
             .withDeleteParallelism(parallelism)
             .withSchema(schemaStr).combineInput(true, true).withCompactionConfig(compactionConfig)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-            .withProps(properties).build();
-    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), config);
-  }
-
-  public static SparkRDDWriteClient<HoodieRecordPayload> createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties, Boolean enableAsyncSerivce) {
-    HoodieCompactionConfig compactionConfig = compactionStrategyClass
-        .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
-            .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
-        .orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
-    HoodieWriteConfig config =
-        HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withParallelism(parallelism, parallelism)
-            .withBulkInsertParallelism(parallelism)
-            .withDeleteParallelism(parallelism)
-            .withSchema(schemaStr).combineInput(true, true).withCompactionConfig(compactionConfig)
-            .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-            .withCleanConfig(HoodieCleanConfig.newBuilder().withAsyncClean(enableAsyncSerivce).build())
-            .withArchivalConfig(HoodieArchivalConfig.newBuilder().withAsyncArchive(enableAsyncSerivce).build())
             .withProps(properties).build();
     return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), config);
   }
