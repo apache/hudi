@@ -68,7 +68,8 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.junit.platform.commons.JUnitException;
-import org.mortbay.log.Log;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -105,6 +106,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 @SuppressWarnings("SameParameterValue")
 public class HiveTestUtil {
+  private static final Logger LOG = LoggerFactory.getLogger(HiveTestUtil.class);
 
   public static final String DB_NAME = "testdb";
   public static final String TABLE_NAME = "test1";
@@ -237,7 +239,7 @@ public class HiveTestUtil {
           fileSystem.delete(path, false);
         }
       } catch (IOException e) {
-        Log.warn("Error deleting file: ", e);
+        LOG.warn("Error deleting file: ", e);
       }
     });
   }
