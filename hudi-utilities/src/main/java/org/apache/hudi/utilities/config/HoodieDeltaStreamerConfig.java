@@ -34,7 +34,8 @@ import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD
 @Immutable
 @ConfigClassProperty(name = "DeltaStreamer Configs",
     groupName = ConfigGroups.Names.DELTA_STREAMER,
-    description = "Configurations that control DeltaStreamer.")
+    areCommonConfigs = true,
+    description = "")
 public class HoodieDeltaStreamerConfig extends HoodieConfig {
 
   public static final String DELTA_STREAMER_CONFIG_PREFIX = "hoodie.deltastreamer.";
