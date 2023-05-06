@@ -41,14 +41,31 @@ object SparkKeyGenUtils {
    * @return partition columns
    */
   def getPartitionColumns(keyGenClass: String, typedProperties: TypedProperties): String = {
-
-    if (keyGenClass.equals(classOf[CustomKeyGenerator].getCanonicalName) || keyGenClass.equals(classOf[CustomAvroKeyGenerator])) {
+    // For CustomKeyGenerator and CustomAvroKeyGenerator, the partition path filed format
+    // is: "field_name: field_type", we extract the field_name from the partition path field.
+    if (keyGenClass.equals(classOf[CustomKeyGenerator].getCanonicalName) || keyGenClass.equals(classOf[CustomAvroKeyGenerator].getCanonicalName)) {
       typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
         .split(",").map(pathField => {
         pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
           .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${keyGenClass}")}).mkString(",")
     } else {
-      typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
+      typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "")
+    }
+  }
+
+  def getPartitionColumns(keyGen: KeyGenerator, typedProperties: TypedProperties): String = {
+    keyGen match {
+      // For CustomKeyGenerator and CustomAvroKeyGenerator, the partition path filed format
+      // is: "field_name: field_type", we extract the field_name from the partition path field.
+      case c: BaseKeyGenerator
+        if c.isInstanceOf[CustomKeyGenerator] || c.isInstanceOf[CustomAvroKeyGenerator] =>
+        c.getPartitionPathFields.asScala.map(pathField =>
+          pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
+            .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
+          .mkString(",")
+
+      case b: BaseKeyGenerator => b.getPartitionPathFields.asScala.mkString(",")
+      case _ => typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
     }
   }
 }

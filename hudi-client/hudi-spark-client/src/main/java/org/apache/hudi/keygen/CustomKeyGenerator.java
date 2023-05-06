@@ -71,8 +71,6 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
         ? Collections.emptyList()
         : Arrays.stream(partitionPathFields.split(",")).map(String::trim).collect(Collectors.toList());
     this.customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
-
-    validateRecordKeyFields();
   }
 
   @Override
@@ -155,12 +153,6 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     }
     partitionPath.deleteCharAt(partitionPath.length() - 1);
     return partitionPath.toString();
-  }
-
-  private void validateRecordKeyFields() {
-    if (getRecordKeyFieldNames() == null || getRecordKeyFieldNames().isEmpty()) {
-      throw new HoodieKeyException("Unable to find field names for record key in cfg");
-    }
   }
 
   private static TypedProperties stripPartitionPathConfig(TypedProperties props) {

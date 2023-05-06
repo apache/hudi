@@ -100,6 +100,7 @@ import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.AnalysisException;
@@ -601,7 +602,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testPropsWithInvalidKeyGenerator() throws Exception {
-    Exception e = assertThrows(IOException.class, () -> {
+    Exception e = assertThrows(SparkException.class, () -> {
       String tableBasePath = basePath + "/test_table_invalid_key_gen";
       HoodieDeltaStreamer deltaStreamer =
           new HoodieDeltaStreamer(TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
@@ -610,7 +611,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }, "Should error out when setting the key generator class property to an invalid value");
     // expected
     LOG.debug("Expected error during getting the key generator", e);
-    assertTrue(e.getMessage().contains("Could not load key generator class"));
+    assertTrue(e.getMessage().contains("Could not load key generator class invalid"));
   }
 
   private static Stream<Arguments> provideInferKeyGenArgs() {
