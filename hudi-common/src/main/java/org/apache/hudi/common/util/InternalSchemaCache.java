@@ -183,18 +183,13 @@ public class InternalSchemaCache {
   public static InternalSchema getInternalSchemaByVersionId(long versionId, String tablePath, Configuration hadoopConf, String validCommits) {
     String avroSchema = "";
     Set<String> commitSet = Arrays.stream(validCommits.split(",")).collect(Collectors.toSet());
-    List<String> validateCommitList = commitSet.stream().map(fileName -> {
-      String fileExtension = HoodieInstant.getTimelineFileExtension(fileName);
-      return fileName.replace(fileExtension, "");
-    }).collect(Collectors.toList());
+    List<String> validateCommitList = commitSet.stream().map(HoodieInstant::extractTimestamp).collect(Collectors.toList());
 
     FileSystem fs = FSUtils.getFs(tablePath, hadoopConf);
     Path hoodieMetaPath = new Path(tablePath, HoodieTableMetaClient.METAFOLDER_NAME);
     //step1:
-    Path candidateCommitFile = commitSet.stream().filter(fileName -> {
-      String fileExtension = HoodieInstant.getTimelineFileExtension(fileName);
-      return fileName.replace(fileExtension, "").equals(versionId + "");
-    }).findFirst().map(f -> new Path(hoodieMetaPath, f)).orElse(null);
+    Path candidateCommitFile = commitSet.stream().filter(fileName -> HoodieInstant.extractTimestamp(fileName).equals(versionId + ""))
+        .findFirst().map(f -> new Path(hoodieMetaPath, f)).orElse(null);
     if (candidateCommitFile != null) {
       try {
         byte[] data;

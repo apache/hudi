@@ -21,8 +21,10 @@ package org.apache.hudi.table.catalog;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -233,6 +235,14 @@ public class TestHoodieCatalog {
 
     // test table exist
     assertTrue(catalog.tableExists(tablePath));
+
+    // validate the full name of table create schema
+    HoodieTableConfig tableConfig = StreamerUtil.getTableConfig(
+        catalog.getTable(tablePath).getOptions().get(FlinkOptions.PATH.key()),
+        HadoopConfigurations.getHadoopConf(new Configuration())).get();
+    Option<org.apache.avro.Schema> tableCreateSchema = tableConfig.getTableCreateSchema();
+    assertTrue(tableCreateSchema.isPresent(), "Table should have been created");
+    assertThat(tableCreateSchema.get().getFullName(), is("hoodie.tb1.tb1_record"));
 
     // test create exist table
     assertThrows(TableAlreadyExistException.class,

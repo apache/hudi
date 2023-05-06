@@ -34,6 +34,10 @@ public class ClusteringCommitEvent implements Serializable {
    */
   private String instant;
   /**
+   * The file IDs.
+   */
+  private String fileIds;
+  /**
    * The write statuses.
    */
   private List<WriteStatus> writeStatuses;
@@ -45,14 +49,15 @@ public class ClusteringCommitEvent implements Serializable {
   public ClusteringCommitEvent() {
   }
 
-  public ClusteringCommitEvent(String instant, List<WriteStatus> writeStatuses, int taskID) {
-    this.instant = instant;
-    this.writeStatuses = writeStatuses;
-    this.taskID = taskID;
+  public ClusteringCommitEvent(String instant, String fileIds, int taskID) {
+    this(instant, fileIds, null, taskID);
   }
 
-  public ClusteringCommitEvent(String instant, int taskID) {
-    this(instant, null, taskID);
+  public ClusteringCommitEvent(String instant, String filedIds, List<WriteStatus> writeStatuses, int taskID) {
+    this.instant = instant;
+    this.fileIds = filedIds;
+    this.writeStatuses = writeStatuses;
+    this.taskID = taskID;
   }
 
   public void setInstant(String instant) {
@@ -69,6 +74,10 @@ public class ClusteringCommitEvent implements Serializable {
 
   public String getInstant() {
     return instant;
+  }
+
+  public String getFileIds() {
+    return fileIds;
   }
 
   public List<WriteStatus> getWriteStatuses() {

@@ -19,7 +19,6 @@ package org.apache.spark.sql.catalyst.catalog
 
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
@@ -37,7 +36,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
-import java.util.{Locale, Properties}
+import java.util.Locale
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -51,7 +50,7 @@ import scala.collection.mutable
  */
 class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) extends Logging {
 
-  assert(table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi", "It's not a Hudi table")
+  checkArgument(table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi", s" ${table.qualifiedName} is not a Hudi table")
 
   private val hadoopConf = spark.sessionState.newHadoopConf
 
@@ -185,7 +184,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     val catalogDatabaseName = formatName(spark,
       table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
     if (hoodieTableExists) {
-      assert(StringUtils.isNullOrEmpty(databaseName) || databaseName == catalogDatabaseName,
+      checkArgument(StringUtils.isNullOrEmpty(databaseName) || databaseName == catalogDatabaseName,
         "The database names from this hoodie path and this catalog table is not same.")
       // just persist hoodie.table.create.schema
       HoodieTableMetaClient.withPropertyBuilder()

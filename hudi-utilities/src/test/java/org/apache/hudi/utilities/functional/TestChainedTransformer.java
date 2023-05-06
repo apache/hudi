@@ -31,6 +31,8 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.List;
@@ -40,6 +42,9 @@ import static org.apache.spark.sql.types.DataTypes.StringType;
 import static org.apache.spark.sql.types.DataTypes.createStructField;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("functional")
 public class TestChainedTransformer extends SparkClientFunctionalTestHarness {
@@ -64,6 +69,38 @@ public class TestChainedTransformer extends SparkClientFunctionalTestHarness {
     List<Row> rows = transformed.collectAsList();
     assertEquals(100, rows.get(0).getInt(0));
     assertEquals(200, rows.get(1).getInt(0));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      // empty identifier
+      ":org.apache.hudi.utilities.transform.FlatteningTransformer,T2:org.apache.hudi.utilities.transform.FlatteningTransformer",
+      // same identifier
+      "T1:org.apache.hudi.utilities.transform.FlatteningTransformer,T1:org.apache.hudi.utilities.transform.FlatteningTransformer",
+      // Two colons in transformer config
+      "T1::org.apache.hudi.utilities.transform.FlatteningTransformer",
+      // either all transformers have identifier or none have
+      "org.apache.hudi.utilities.transform.FlatteningTransformer,T1:org.apache.hudi.utilities.transform.FlatteningTransformer"
+  })
+  public void testChainedTransformerValidationFails(String transformerName) {
+    try {
+      ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")));
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof IllegalArgumentException, e.getMessage());
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "T1:org.apache.hudi.utilities.transform.FlatteningTransformer,T2:org.apache.hudi.utilities.transform.FlatteningTransformer",
+      "T2:org.apache.hudi.utilities.transform.FlatteningTransformer,T1:org.apache.hudi.utilities.transform.FlatteningTransformer",
+      "abc:org.apache.hudi.utilities.transform.FlatteningTransformer,def:org.apache.hudi.utilities.transform.FlatteningTransformer",
+      "org.apache.hudi.utilities.transform.FlatteningTransformer,org.apache.hudi.utilities.transform.FlatteningTransformer"
+  })
+  public void testChainedTransformerValidationPasses(String transformerName) {
+    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")));
+    assertNotNull(transformer);
   }
 
 }
