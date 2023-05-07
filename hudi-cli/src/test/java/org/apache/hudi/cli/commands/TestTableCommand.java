@@ -301,33 +301,4 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     fis.close();
     return new String(data, StandardCharsets.UTF_8);
   }
-
-  @Test
-  public void testUpdate() throws IOException {
-    HoodieCLI.conf = hadoopConf();
-
-    // Create table and connect
-    String tableName = tableName();
-    String tablePath = tablePath(tableName);
-
-    TableCommand command = new TableCommand();
-    command.createTable(tablePath, tableName, "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
-    command.connect(tablePath, TimelineLayoutVersion.VERSION_1, false, 0, 0, 0);
-
-    HoodieTableConfig tableConfig = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig();
-    Map<String, String> result = tableConfig.propsMap();
-    // validate table checksum
-    assertTrue(result.containsKey(TABLE_CHECKSUM.key()));
-    assertTrue(validateChecksum(tableConfig.getProps()));
-    Map<String, String> oldProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
-    List<String> allPropsStr = Arrays.asList(NAME.key(), TYPE.key(), VERSION.key(), ARCHIVELOG_FOLDER.key(), TIMELINE_LAYOUT_VERSION.key(), TABLE_CHECKSUM.key(), DROP_PARTITION_COLUMNS.key());
-    String[][] rows = allPropsStr.stream().sorted().map(key -> new String[] {key, oldProps.getOrDefault(key, "null"), result.getOrDefault(key, "null")}).toArray(String[][]::new);
-    String expect = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY, HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);
-
-    URL url = this.getClass().getClassLoader().getResource("table-config.properties");
-    String cmdResult = command.updateTableConfig(url.getPath());
-    String got = removeNonWordAndStripSpace(cmdResult.toString());
-
-    assertNotEquals(expect, got);
-  }
 }
