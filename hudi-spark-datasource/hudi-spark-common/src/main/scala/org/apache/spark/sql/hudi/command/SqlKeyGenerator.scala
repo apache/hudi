@@ -50,12 +50,16 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
     }
   }
 
-  private lazy val complexKeyGen = new ComplexKeyGenerator(props)
+  private lazy val autoRecordKeyGen = !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
+  private lazy val complexKeyGen = if (autoRecordKeyGen) {
+    new AutoRecordGenWrapperKeyGenerator(props, new ComplexKeyGenerator(props))
+  } else {
+    new ComplexKeyGenerator(props)
+  }
   private lazy val originalKeyGen =
     Option(props.getString(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, null))
       .map { originalKeyGenClassName =>
         checkArgument(originalKeyGenClassName.nonEmpty)
-        val autoRecordKeyGen = !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
 
         val convertedKeyGenClassName = HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(originalKeyGenClassName)
 
