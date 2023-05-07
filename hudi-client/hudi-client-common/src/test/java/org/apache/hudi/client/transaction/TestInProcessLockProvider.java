@@ -159,9 +159,7 @@ public class TestInProcessLockProvider {
 
     try {
       writer2.join();
-      LOG.info("writer 2 finishes");
       writer3.join();
-      LOG.info("writer 3 finishes");
     } catch (InterruptedException e) {
       // Ignore any exception
     }
