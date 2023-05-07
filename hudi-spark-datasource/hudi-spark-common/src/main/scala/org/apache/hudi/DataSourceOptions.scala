@@ -28,7 +28,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.keygen.KeyGenUtils.inferKeyGeneratorType
-import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGeneratorClassNameFromType, inferKeyGeneratorTypeFromWriteConfig}
 import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -410,11 +410,6 @@ object DataSourceWriteOptions {
     .withInferFunction(keyGeneratorInferFunc)
     .markAdvanced()
     .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`")
-
-  val KEYGENERATOR_TYPE: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.write.keygenerator.type")
-    .defaultValue(KeyGeneratorType.SIMPLE.name)
-    .withDocumentation("Key generator type.")
 
   val KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED: ConfigProperty[String] = KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED
 
