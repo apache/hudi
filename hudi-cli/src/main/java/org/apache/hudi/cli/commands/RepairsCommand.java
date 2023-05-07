@@ -19,6 +19,7 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.spark.sql.hudi.DeDupeType;
+
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -71,10 +72,8 @@ public class RepairsCommand {
   @ShellMethod(key = "repair deduplicate",
       value = "De-duplicate a partition path contains duplicates & produce repaired files to replace with")
   public String deduplicate(
-      @ShellOption(value = {"--duplicatedPartitionPath"}, defaultValue = "", help = "Partition Path containing the duplicates")
-      final String duplicatedPartitionPath,
-      @ShellOption(value = {"--repairedOutputPath"}, help = "Location to place the repaired files")
-      final String repairedOutputPath,
+      @ShellOption(value = {"--duplicatedPartitionPath"}, defaultValue = "", help = "Partition Path containing the duplicates") final String duplicatedPartitionPath,
+      @ShellOption(value = {"--repairedOutputPath"}, help = "Location to place the repaired files") final String repairedOutputPath,
       @ShellOption(value = {"--sparkProperties"}, help = "Spark Properties File Path",
           defaultValue = "") String sparkPropertiesPath,
       @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master") String master,
@@ -151,15 +150,14 @@ public class RepairsCommand {
   }
 
   @ShellMethod(key = "repair overwrite-hoodie-props",
-          value = "Overwrite hoodie.properties with provided file. Risky operation. Proceed with caution!")
+      value = "Overwrite hoodie.properties with provided file. Risky operation. Proceed with caution!")
   public String overwriteHoodieProperties(
       @ShellOption(value = {"--new-props-file"},
-              help = "Path to a properties file on local filesystem to overwrite the table's hoodie.properties with")
-      final String overwriteFilePath) throws IOException {
+          help = "Path to a properties file on local filesystem to overwrite the table's hoodie.properties with") final String overwriteFilePath) throws IOException {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Properties newProps = new Properties();
-    try(FileInputStream in = new FileInputStream(overwriteFilePath)){
+    try (FileInputStream in = new FileInputStream(overwriteFilePath)) {
       newProps.load(in);
     }
     Map<String, String> oldProps = client.getTableConfig().propsMap();
@@ -212,15 +210,14 @@ public class RepairsCommand {
   @ShellMethod(key = "repair show empty commit metadata", value = "show failed commits")
   public void showFailedCommits() {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
-    HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     activeTimeline.filterCompletedInstants().getInstantsAsStream().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> LOG.warn("Empty Commit: " + hoodieInstant.toString()));
   }
 
   @ShellMethod(key = "repair migrate-partition-meta", value = "Migrate all partition meta file currently stored in text format "
       + "to be stored in base file format. See HoodieTableConfig#PARTITION_METAFILE_USE_DATA_FORMAT.")
   public String migratePartitionMeta(
-      @ShellOption(value = {"--dryrun"}, help = "dry run without modifying anything.", defaultValue = "true")
-      final boolean dryRun)
+      @ShellOption(value = {"--dryrun"}, help = "dry run without modifying anything.", defaultValue = "true") final boolean dryRun)
       throws IOException {
 
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(HoodieCLI.conf);
