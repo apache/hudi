@@ -535,7 +535,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected void mayBeCleanAndArchive(HoodieTable table) {
     autoCleanOnCommit();
-    autoArchiveOnCommit(table);
+    // reload table to that timeline reflects the clean commit
+    autoArchiveOnCommit(createTable(config, hadoopConf));
   }
 
   protected void runTableServicesInline(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
