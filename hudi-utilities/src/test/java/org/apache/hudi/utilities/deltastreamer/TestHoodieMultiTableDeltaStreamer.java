@@ -79,7 +79,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
 
   @Test
   public void testEmptyTransformerProps() throws IOException {
-//    HUDI-4630: If there is no transformer props passed through, don't populate the transformerClassNames
+    // HUDI-4630: If there is no transformer props passed through, don't populate the transformerClassNames
     HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, basePath + "/config", TestDataSource.class.getName(), false, false, null);
     HoodieDeltaStreamer.Config dsConfig = new HoodieDeltaStreamer.Config();
     TypedProperties tblProperties = new TypedProperties();
