@@ -62,9 +62,6 @@ import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before;
-import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.data_before_after;
-import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.op_key_only;
 
 /**
  * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are loaded from hoodie.properties, these properties are usually set during
@@ -130,15 +127,9 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> CDC_SUPPLEMENTAL_LOGGING_MODE = ConfigProperty
       .key("hoodie.table.cdc.supplemental.logging.mode")
-      .defaultValue(data_before_after.name())
-      .withValidValues(
-          op_key_only.name(),
-          data_before.name(),
-          data_before_after.name())
-      .sinceVersion("0.13.0")
-      .withDocumentation("Setting 'op_key_only' persists the 'op' and the record key only, "
-          + "setting 'data_before' persists the additional 'before' image, "
-          + "and setting 'data_before_after' persists the additional 'before' and 'after' images.");
+      .defaultValue(HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER.name())
+      .withDocumentation(HoodieCDCSupplementalLoggingMode.class)
+      .sinceVersion("0.13.0");
 
   public static final ConfigProperty<String> CREATE_SCHEMA = ConfigProperty
       .key("hoodie.table.create.schema")
@@ -653,7 +644,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public HoodieCDCSupplementalLoggingMode cdcSupplementalLoggingMode() {
-    return HoodieCDCSupplementalLoggingMode.valueOf(getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE));
+    return HoodieCDCSupplementalLoggingMode.valueOf(getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE).toUpperCase());
   }
 
   public String getKeyGeneratorClassName() {

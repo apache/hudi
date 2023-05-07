@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -214,7 +215,7 @@ public class OptionsResolver {
    * Returns the supplemental logging mode.
    */
   public static HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode(Configuration conf) {
-    String mode = conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE);
+    String mode = conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE).toUpperCase();
     return HoodieCDCSupplementalLoggingMode.valueOf(mode);
   }
 
@@ -243,10 +244,12 @@ public class OptionsResolver {
   /**
    * Returns whether the writer txn should be guarded by lock.
    */
-  public static boolean needsGuardByLock(Configuration conf) {
+  public static boolean isLockRequired(Configuration conf) {
     return conf.getBoolean(FlinkOptions.METADATA_ENABLED)
-        || conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
-            .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+        || ConfigUtils.resolveEnum(WriteConcurrencyMode.class, conf.getString(
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()))
+        == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
   }
 
   /**
@@ -254,7 +257,18 @@ public class OptionsResolver {
    */
   public static boolean isOptimisticConcurrencyControl(Configuration conf) {
     return conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
-        .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+        .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+  }
+
+  /**
+   * Returns whether to read the instants using completion time.
+   *
+   * <p>A Hudi instant contains both the txn start time and completion time, for incremental subscription
+   * of the source reader, using completion time to filter the candidate instants can avoid data loss
+   * in scenarios like multiple writers.
+   */
+  public static boolean isReadByTxnCompletionTime(Configuration conf) {
+    return conf.getBoolean(HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key(), HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.defaultValue());
   }
 
   /**
@@ -285,6 +299,13 @@ public class OptionsResolver {
     return isBucketIndexType(conf)
         ? new BucketIndexConcurrentFileWritesConflictResolutionStrategy()
         : new SimpleConcurrentFileWritesConflictResolutionStrategy();
+  }
+
+  /**
+   * Returns whether to commit even when current batch has no data, for flink defaults false
+   */
+  public static boolean allowCommitOnEmptyBatch(Configuration conf) {
+    return conf.getBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false);
   }
 
   // -------------------------------------------------------------------------

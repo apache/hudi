@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.model;
 
-import java.io.IOException;
-import java.util.Properties;
-import org.apache.avro.Schema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+
+import org.apache.avro.Schema;
+
+import java.io.IOException;
+import java.util.Properties;
 
 public interface HoodieRecordCompatibilityInterface {
 
@@ -36,7 +38,8 @@ public interface HoodieRecordCompatibilityInterface {
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
       Option<String> partitionNameOp,
-      Boolean populateMetaFieldsOp) throws IOException;
+      Boolean populateMetaFieldsOp,
+      Option<Schema> schemaWithoutMetaFields) throws IOException;
 
   /**
    * This method used to extract HoodieKey through keyGenerator. This method used in ClusteringExecutionStrategy.

@@ -381,7 +381,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return SpillableMapUtils.convertToHoodieRecordPayload(avroRecord,
         metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(),
         Pair.of(metadataTableConfig.getRecordKeyFieldProp(), metadataTableConfig.getPartitionFieldProp()),
-        false, Option.of(partitionName));
+        false, Option.of(partitionName), Option.empty());
   }
 
   /**

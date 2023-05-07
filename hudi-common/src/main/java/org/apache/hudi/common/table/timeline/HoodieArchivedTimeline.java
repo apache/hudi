@@ -84,6 +84,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
   private static final String ACTION_TYPE_KEY = "actionType";
   private static final String ACTION_STATE = "actionState";
+  private static final String STATE_TRANSITION_TIME = "stateTransitionTime";
   private HoodieTableMetaClient metaClient;
   private final Map<String, byte[]> readCommits = new HashMap<>();
 
@@ -178,6 +179,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private HoodieInstant readCommit(GenericRecord record, boolean loadDetails) {
     final String instantTime = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
+    final String stateTransitionTime = (String) record.get(STATE_TRANSITION_TIME);
     if (loadDetails) {
       getMetadataKey(action).map(key -> {
         Object actionData = record.get(key);
@@ -191,7 +193,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
         return null;
       });
     }
-    return new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action, instantTime);
+    return new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
+        instantTime, stateTransitionTime);
   }
 
   @Nonnull

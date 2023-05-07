@@ -75,11 +75,8 @@ public class HoodieIndexConfig extends HoodieConfig {
       .noDefaultValue()
       .withValidValues(HBASE.name(), INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(),
           SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name(), FLINK_STATE.name())
-      .withDocumentation("Type of index to use. Default is SIMPLE on Spark engine, "
-          + "and INMEMORY on Flink and Java engines. "
-          + "Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. "
-          + "Bloom filters removes the dependency on a external system "
-          + "and is stored in the footer of the Parquet Data Files");
+      .withDocumentation(HoodieIndex.IndexType.class);
+
 
   public static final ConfigProperty<String> INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.index.class")
@@ -173,9 +170,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .defaultValue(BloomFilterTypeCode.DYNAMIC_V0.name())
       .withValidValues(BloomFilterTypeCode.SIMPLE.name(), BloomFilterTypeCode.DYNAMIC_V0.name())
       .markAdvanced()
-      .withDocumentation("Filter type used. Default is BloomFilterTypeCode.DYNAMIC_V0. "
-          + "Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. "
-          + "Dynamic bloom filters auto size themselves based on number of keys.");
+      .withDocumentation(BloomFilterTypeCode.class);
 
   public static final ConfigProperty<String> BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = ConfigProperty
       .key("hoodie.bloom.index.filter.dynamic.max.entries")
@@ -194,14 +189,14 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.simple.index.parallelism")
-      .defaultValue("100")
+      .defaultValue("0")
       .markAdvanced()
       .withDocumentation("Only applies if index type is SIMPLE. "
           + "This limits the parallelism of fetching records from the base files of affected "
-          + "partitions. The index picks the configured parallelism if the number of base "
-          + "files is larger than this configured value; otherwise, the number of base files "
-          + "is used as the parallelism. If the indexing stage is slow due to the limited "
-          + "parallelism, you can increase this to tune the performance.");
+          + "partitions. By default, this is auto computed based on input workload characteristics. "
+          + "If the parallelism is explicitly configured by the user, the user-configured "
+          + "value is used in defining the actual parallelism. If the indexing stage is slow "
+          + "due to the limited parallelism, you can increase this to tune the performance.");
 
   public static final ConfigProperty<String> GLOBAL_SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.global.simple.index.parallelism")
@@ -262,6 +257,13 @@ public class HoodieIndexConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE + ", but for simple index.");
 
+  public static final ConfigProperty<String> GLOBAL_INDEX_RECONCILE_PARALLELISM = ConfigProperty
+      .key("hoodie.global.index.reconcile.parallelism")
+      .defaultValue("60")
+      .markAdvanced()
+      .withDocumentation("Only applies if index type is GLOBAL_BLOOM or GLOBAL_SIMPLE. "
+          + "This controls the parallelism for deduplication during indexing where more than 1 record could be tagged due to partition update.");
+
   /**
    * ***** Bucket Index Configs *****
    * Bucket Index is targeted to locate the record fast by hash in big data scenarios.
@@ -282,13 +284,10 @@ public class HoodieIndexConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> BUCKET_INDEX_ENGINE_TYPE = ConfigProperty
       .key("hoodie.index.bucket.engine")
-      .defaultValue("SIMPLE")
+      .defaultValue(HoodieIndex.BucketIndexEngineType.SIMPLE.name())
       .markAdvanced()
       .sinceVersion("0.11.0")
-      .withDocumentation("Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket."
-          + "Possible options are [SIMPLE | CONSISTENT_HASHING]."
-          + "Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size "
-          + "issues of the SIMPLE hashing engine. Consistent hashing only works with MOR tables, only use simple hashing on COW tables.");
+      .withDocumentation(HoodieIndex.BucketIndexEngineType.class);
 
   /**
    * Bucket num equals file groups num in each partition.
@@ -661,6 +660,11 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withGlobalSimpleIndexUpdatePartitionPath(boolean updatePartitionPath) {
       hoodieIndexConfig.setValue(SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE, String.valueOf(updatePartitionPath));
+      return this;
+    }
+
+    public Builder withGlobalIndexReconcileParallelism(int parallelism) {
+      hoodieIndexConfig.setValue(GLOBAL_INDEX_RECONCILE_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 

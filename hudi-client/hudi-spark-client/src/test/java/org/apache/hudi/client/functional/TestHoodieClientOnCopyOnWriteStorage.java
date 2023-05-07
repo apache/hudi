@@ -87,6 +87,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -1088,112 +1089,63 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   private void testUpsertsUpdatePartitionPath(IndexType indexType, HoodieWriteConfig config,
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn)
       throws Exception {
-    // instantiate client
-
+    HoodieTableMetaClient.withPropertyBuilder()
+        .fromMetaClient(metaClient)
+        .setTimelineLayoutVersion(VERSION_0)
+        .initTable(metaClient.getHadoopConf(), metaClient.getBasePathV2().toString());
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
         .withProps(config.getProps())
+        .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA_STR)
+        .withPayloadConfig(HoodiePayloadConfig.newBuilder()
+            .withPayloadClass(RawTripTestPayload.class.getName()).build())
         .withCompactionConfig(
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(10000).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().withAutoClean(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
             .build()).withTimelineLayoutVersion(VERSION_0).build();
-
-    HoodieTableMetaClient.withPropertyBuilder()
-      .fromMetaClient(metaClient)
-      .setTimelineLayoutVersion(VERSION_0)
-      .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
-    // Set rollback to LAZY so no inflights are deleted
-    hoodieWriteConfig.getProps().put(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
-        HoodieFailedWritesCleaningPolicy.LAZY.name());
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
     // Write 1
-    String newCommitTime = "001";
-    int numRecords = 10;
-    client.startCommitWithTime(newCommitTime);
-
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
-    Set<Pair<String, String>> expectedPartitionPathRecKeyPairs = new HashSet<>();
-    // populate expected partition path and record keys
-    for (HoodieRecord rec : records) {
-      expectedPartitionPathRecKeyPairs.add(Pair.of(rec.getPartitionPath(), rec.getRecordKey()));
-    }
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    JavaRDD<WriteStatus> result = writeFn.apply(client, writeRecords, newCommitTime);
-    result.collect();
-
-    // Check the entire dataset has all records
-    String[] fullPartitionPaths = getFullPartitionPaths();
-    assertPartitionPathRecordKeys(expectedPartitionPathRecKeyPairs, fullPartitionPaths);
-
-    // verify one basefile per partition
-    String[] fullExpectedPartitionPaths = getFullPartitionPaths(expectedPartitionPathRecKeyPairs.stream().map(Pair::getLeft).toArray(String[]::new));
-    Map<String, Long> baseFileCounts = getBaseFileCountsForPaths(basePath, fs, fullExpectedPartitionPaths);
-    for (Map.Entry<String, Long> entry : baseFileCounts.entrySet()) {
-      assertEquals(1, entry.getValue());
-    }
-    assertTrue(baseFileCounts.entrySet().stream().allMatch(entry -> entry.getValue() == 1));
+    RawTripTestPayload payload1 = new RawTripTestPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}");
+    RawTripTestPayload payload2 = new RawTripTestPayload("{\"_row_key\":\"002\",\"time\":\"2017-01-31T00:00:01.000Z\",\"number\":1}");
+    JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(Arrays.asList(payload1.toHoodieRecord(), payload2.toHoodieRecord()), 1);
+    client.startCommitWithTime("001");
+    writeFn.apply(client, writeRecords1, "001").collect();
 
     // Write 2
-    newCommitTime = "002";
-    numRecords = 20; // so that a new file id is created
-    client.startCommitWithTime(newCommitTime);
+    RawTripTestPayload payload3 = new RawTripTestPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}");
+    RawTripTestPayload payload4 = new RawTripTestPayload("{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:01.000Z\",\"number\":1}");
+    JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(Arrays.asList(payload3.toHoodieRecord(), payload4.toHoodieRecord()), 1);
+    client.startCommitWithTime("002");
+    writeFn.apply(client, writeRecords2, "002").collect();
 
-    List<HoodieRecord> recordsSecondBatch = dataGen.generateInserts(newCommitTime, numRecords);
-    // populate expected partition path and record keys
-    for (HoodieRecord rec : recordsSecondBatch) {
-      expectedPartitionPathRecKeyPairs.add(Pair.of(rec.getPartitionPath(), rec.getRecordKey()));
-    }
-    writeRecords = jsc.parallelize(recordsSecondBatch, 1);
-    result = writeFn.apply(client, writeRecords, newCommitTime);
-    result.collect();
+    // Write 3
+    // update record 001 from partition 2016/01/31 to 2017/01/31
+    // update record 004 from partition 2017/01/31 to 2018/01/31
+    RawTripTestPayload payload1Updated = new RawTripTestPayload("{\"_row_key\":\"001\",\"time\":\"2017-01-31T00:00:01.000Z\",\"number\":2}");
+    RawTripTestPayload payload3Updated = new RawTripTestPayload("{\"_row_key\":\"004\",\"time\":\"2018-01-31T00:00:01.000Z\",\"number\":2}");
+    JavaRDD<HoodieRecord> writeRecords3 = jsc.parallelize(Arrays.asList(payload1Updated.toHoodieRecord(), payload3Updated.toHoodieRecord()), 1);
+    client.startCommitWithTime("003");
+    writeFn.apply(client, writeRecords3, "003").collect();
 
-    // Check the entire dataset has all records
-    fullPartitionPaths = getFullPartitionPaths();
-    assertPartitionPathRecordKeys(expectedPartitionPathRecKeyPairs, fullPartitionPaths);
-
-    // verify that there are more than 1 basefiles per partition
-    // we can't guarantee randomness in partitions where records are distributed. So, verify atleast one partition has more than 1 basefile.
-    baseFileCounts = getBaseFileCountsForPaths(basePath, fs, fullPartitionPaths);
-    assertTrue(baseFileCounts.entrySet().stream().filter(entry -> entry.getValue() > 1).count() >= 1,
-        "At least one partition should have more than 1 base file after 2nd batch of writes");
-
-    // Write 3 (upserts to records from batch 1 with diff partition path)
-    newCommitTime = "003";
-
-    // update to diff partition paths
-    List<HoodieRecord> recordsToUpsert = new ArrayList<>();
-    for (HoodieRecord rec : records) {
-      // remove older entry from expected partition path record key pairs
-      expectedPartitionPathRecKeyPairs
-          .remove(Pair.of(rec.getPartitionPath(), rec.getRecordKey()));
-      String partitionPath = rec.getPartitionPath();
-      String newPartitionPath = null;
-      if (partitionPath.equalsIgnoreCase(DEFAULT_FIRST_PARTITION_PATH)) {
-        newPartitionPath = DEFAULT_SECOND_PARTITION_PATH;
-      } else if (partitionPath.equalsIgnoreCase(DEFAULT_SECOND_PARTITION_PATH)) {
-        newPartitionPath = DEFAULT_THIRD_PARTITION_PATH;
-      } else if (partitionPath.equalsIgnoreCase(DEFAULT_THIRD_PARTITION_PATH)) {
-        newPartitionPath = DEFAULT_FIRST_PARTITION_PATH;
-      } else {
-        throw new IllegalStateException("Unknown partition path " + rec.getPartitionPath());
-      }
-      recordsToUpsert.add(
-          new HoodieAvroRecord(new HoodieKey(rec.getRecordKey(), newPartitionPath),
-              (HoodieRecordPayload) rec.getData()));
-      // populate expected partition path and record keys
-      expectedPartitionPathRecKeyPairs.add(Pair.of(newPartitionPath, rec.getRecordKey()));
-    }
-
-    writeRecords = jsc.parallelize(recordsToUpsert, 1);
-    result = writeFn.apply(client, writeRecords, newCommitTime);
-    result.collect();
+    client.close();
 
     // Check the entire dataset has all records
-    fullPartitionPaths = getFullPartitionPaths();
-    assertPartitionPathRecordKeys(expectedPartitionPathRecKeyPairs, fullPartitionPaths);
+    assertPartitionPathRecordKeys(Arrays.asList(
+            Pair.of("2016/01/31", "003"),
+            Pair.of("2017/01/31", "001"),
+            Pair.of("2017/01/31", "002"),
+            Pair.of("2018/01/31", "004")),
+        getFullPartitionPaths("2016/01/31", "2017/01/31", "2018/01/31"));
+
+    // verify base file counts
+    Map<String, Long> baseFileCounts = getBaseFileCountsForPaths(basePath, fs, getFullPartitionPaths("2016/01/31", "2017/01/31", "2018/01/31"));
+    assertEquals(2, baseFileCounts.get(getFullPartitionPath("2016/01/31")));
+    assertEquals(3, baseFileCounts.get(getFullPartitionPath("2017/01/31")));
+    assertEquals(1, baseFileCounts.get(getFullPartitionPath("2018/01/31")));
   }
 
-  private void assertPartitionPathRecordKeys(Set<Pair<String, String>> expectedPartitionPathRecKeyPairs, String[] fullPartitionPaths) {
+  private void assertPartitionPathRecordKeys(List<Pair<String, String>> expectedPartitionPathRecKeyPairs, String[] fullPartitionPaths) {
     Dataset<Row> rows = getAllRows(fullPartitionPaths);
     List<Pair<String, String>> actualPartitionPathRecKeyPairs = getActualPartitionPathAndRecordKeys(rows);
     // verify all partitionpath, record key matches
@@ -1214,11 +1166,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .read(jsc, basePath, sqlContext, fs, fullPartitionPaths);
   }
 
-  private String[] getFullPartitionPaths() {
-    return getFullPartitionPaths(dataGen.getPartitionPaths());
+  private String getFullPartitionPath(String relativePartitionPath) {
+    return getFullPartitionPaths(relativePartitionPath)[0];
   }
 
-  private String[] getFullPartitionPaths(String[] relativePartitionPaths) {
+  private String[] getFullPartitionPaths(String... relativePartitionPaths) {
     String[] fullPartitionPaths = new String[relativePartitionPaths.length];
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, relativePartitionPaths[i]);
@@ -1226,7 +1178,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     return fullPartitionPaths;
   }
 
-  private void assertActualAndExpectedPartitionPathRecordKeyMatches(Set<Pair<String, String>> expectedPartitionPathRecKeyPairs,
+  private void assertActualAndExpectedPartitionPathRecordKeyMatches(List<Pair<String, String>> expectedPartitionPathRecKeyPairs,
       List<Pair<String, String>> actualPartitionPathRecKeyPairs) {
     // verify all partitionpath, record key matches
     assertEquals(expectedPartitionPathRecKeyPairs.size(), actualPartitionPathRecKeyPairs.size());

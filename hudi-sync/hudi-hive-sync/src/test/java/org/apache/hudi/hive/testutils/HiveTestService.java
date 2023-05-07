@@ -273,7 +273,7 @@ public class HiveTestService {
   private TServer startMetaStore(HiveConf conf) throws IOException {
     try {
       // Server will create new threads up to max as necessary. After an idle
-      // period, it will destory threads to keep the number of threads in the
+      // period, it will destroy threads to keep the number of threads in the
       // pool to min.
       String host = conf.getVar(ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST);
       int port = conf.getIntVar(ConfVars.METASTORE_SERVER_PORT);
