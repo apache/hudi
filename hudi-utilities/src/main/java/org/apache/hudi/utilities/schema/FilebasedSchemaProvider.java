@@ -87,4 +87,10 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     }
     return SanitizationUtils.parseAvroSchema(schemaStr, sanitizeSchema, invalidCharMask);
   }
+
+  // Per write batch, refresh the schema from the file
+  @Override
+  public void refresh() {
+    this.sourceSchema = readAvroSchemaFromFile(sourceFile, this.fs, shouldSanitize, invalidCharMask);
+  }
 }
