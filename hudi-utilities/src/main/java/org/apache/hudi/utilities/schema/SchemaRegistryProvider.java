@@ -73,6 +73,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
     public static final String SSL_KEY_PASSWORD_PROP = "schema.registry.ssl.key.password";
   }
 
+  protected Schema cachedSchema;
+
   @FunctionalInterface
   public interface SchemaConverter {
     /**
@@ -194,5 +196,12 @@ public class SchemaRegistryProvider extends SchemaProvider {
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading target schema from registry :" + registryUrl, ioe);
     }
+  }
+  // Per SyncOnce call, the cachedschema for the provider is dropped and SourceSchema re-attained
+  // Subsequent calls to getSourceSchema within the write batch should be cached.
+  @Override
+  public void refresh() {
+    cachedSchema = null;
+    getSourceSchema();
   }
 }

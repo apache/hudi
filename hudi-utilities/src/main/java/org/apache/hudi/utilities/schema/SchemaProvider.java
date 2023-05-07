@@ -59,7 +59,8 @@ public abstract class SchemaProvider implements Serializable {
     return getSourceSchema();
   }
 
-  public void clearCaches() {
-    cachedSchema = null;
+  //every schema provider has the ability to refresh itself, which will mean something different per provider.
+  public void refresh() {
+
   }
 }
