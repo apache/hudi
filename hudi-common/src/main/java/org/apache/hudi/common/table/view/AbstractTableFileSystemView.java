@@ -1305,6 +1305,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Returns the file slice with all the file slice log files merged.
+   * <p> CAUTION: the method requires that all the file slices must only contain log files.
    *
    * @param fileGroup File Group for which the file slice belongs to
    * @param maxInstantTime The max instant time
