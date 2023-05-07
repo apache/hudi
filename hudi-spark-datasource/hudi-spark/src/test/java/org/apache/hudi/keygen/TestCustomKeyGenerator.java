@@ -241,6 +241,52 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
+  public void testNoRecordKeyFieldPropWithKeyGeneratorClass() {
+    testNoRecordKeyFieldProp(true);
+  }
+
+  @Test
+  public void testNoRecordKeyFieldPropWithKeyGeneratorType() {
+    testNoRecordKeyFieldProp(false);
+  }
+
+  public void testNoRecordKeyFieldProp(boolean useKeyGeneratorClassName) {
+    TypedProperties propsWithoutRecordKeyFieldProps = getPropsWithoutRecordKeyFieldProps(useKeyGeneratorClassName);
+    try {
+      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(propsWithoutRecordKeyFieldProps);
+
+      keyGenerator.getKey(getRecord());
+      Assertions.fail("should fail when record key field is not provided!");
+    } catch (Exception e) {
+      if (useKeyGeneratorClassName) {
+        // "Property hoodie.datasource.write.recordkey.field not found" exception cause CustomKeyGenerator init fail
+        Assertions.assertTrue(e.getMessage()
+            .contains("Unable to find field names for record key in cfg"));
+      } else {
+        Assertions.assertTrue(stackTraceToString(e).contains("Unable to find field names for record key in cfg"));
+      }
+
+    }
+
+    try {
+      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(propsWithoutRecordKeyFieldProps);
+
+      GenericRecord record = getRecord();
+      Row row = KeyGeneratorTestUtilities.getRow(record);
+      keyGenerator.getRecordKey(row);
+      Assertions.fail("should fail when record key field is not provided!");
+    } catch (Exception e) {
+      if (useKeyGeneratorClassName) {
+        // "Property hoodie.datasource.write.recordkey.field not found" exception cause CustomKeyGenerator init fail
+        Assertions.assertTrue(e.getMessage()
+            .contains("All of the values for ([]) were either null or empty"));
+      } else {
+        Assertions.assertTrue(stackTraceToString(e).contains("All of the values for ([]) were either null or empty"));
+      }
+    }
+  }
+
+  @Test
   public void testPartitionFieldsInImproperFormatWithKeyGeneratorClass() {
     testPartitionFieldsInImproperFormat(getImproperPartitionFieldFormatProp(true));
   }

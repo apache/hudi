@@ -50,6 +50,12 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
     return getCommonProps();
   }
 
+  private TypedProperties getPropertiesWithoutRecordKeyProp() {
+    TypedProperties properties = new TypedProperties();
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
+    return properties;
+  }
+
   private TypedProperties getWrongRecordKeyFieldProps() {
     TypedProperties properties = new TypedProperties();
     properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
@@ -86,6 +92,15 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
   @Test
   public void testNullPartitionPathFields() {
     assertThrows(IllegalArgumentException.class, () -> new SimpleKeyGenerator(getPropertiesWithoutPartitionPathProp()));
+  }
+
+  @Test
+  public void testNullRecordKeyFields() {
+    GenericRecord record = getRecord();
+    Assertions.assertThrows(IndexOutOfBoundsException.class, () ->  {
+      BaseKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropertiesWithoutRecordKeyProp());
+      keyGenerator.getRecordKey(record);
+    });
   }
 
   @Test

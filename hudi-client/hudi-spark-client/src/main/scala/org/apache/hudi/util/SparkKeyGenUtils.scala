@@ -19,6 +19,7 @@ package org.apache.hudi.util
 
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, GlobalAvroDeleteKeyGenerator, GlobalDeleteKeyGenerator, KeyGenerator, NonpartitionedAvroKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
@@ -55,7 +56,8 @@ object SparkKeyGenUtils {
       || keyGenClass.equals(classOf[GlobalAvroDeleteKeyGenerator].getCanonicalName)) {
       StringUtils.EMPTY_STRING
     } else {
-      typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "")
+      checkArgument(typedProperties.containsKey(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()), "Partition path needs to be set")
+      typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
     }
   }
 
