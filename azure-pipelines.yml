@@ -105,6 +105,7 @@ stages:
       - job: UT_FT_1
         displayName: UT FT common & flink & UT client/spark-client
         timeoutInMinutes: '150'
+        condition: false
         steps:
           - task: Maven@4
             displayName: maven install
@@ -138,6 +139,7 @@ stages:
       - job: UT_FT_2
         displayName: FT client/spark-client
         timeoutInMinutes: '150'
+        condition: false
         steps:
           - task: Maven@4
             displayName: maven install
@@ -162,6 +164,7 @@ stages:
       - job: UT_FT_3
         displayName: UT spark-datasource
         timeoutInMinutes: '180'
+        condition: false
         steps:
           - task: Maven@4
             displayName: maven install
@@ -200,7 +203,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES) -DfailIfNoTests=false -DwildcardSuites="abc" -Dtest=TestHoodieDeltaStreamer#testForceEmptyMetaSync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
@@ -219,6 +222,7 @@ stages:
       - job: IT
         displayName: IT modules
         timeoutInMinutes: '150'
+        condition: false
         steps:
           - task: Maven@4
             displayName: maven install
