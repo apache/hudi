@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
 
+import junit.framework.AssertionFailedError;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -65,9 +66,11 @@ public class TestInProcessLockProvider {
     List<InProcessLockProvider> lockProviderList = new ArrayList<>();
     InProcessLockProvider lockProvider1 = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
     lockProviderList.add(lockProvider1);
-    AtomicBoolean writer2Locked = new AtomicBoolean(false);
     AtomicBoolean writer1Completed = new AtomicBoolean(false);
+    AtomicBoolean writer2TryLock = new AtomicBoolean(false);
+    AtomicBoolean writer2Locked = new AtomicBoolean(false);
     AtomicBoolean writer2Completed = new AtomicBoolean(false);
+    AtomicBoolean writer3TryLock = new AtomicBoolean(false);
     AtomicBoolean writer3Completed = new AtomicBoolean(false);
 
     // Writer 1
@@ -83,15 +86,20 @@ public class TestInProcessLockProvider {
       lockProviderList.add(lockProvider2);
       assertDoesNotThrow(() -> {
         LOG.info("Writer 2 tries to acquire the lock.");
+        writer2TryLock.set(true);
         lockProvider2.lock();
         LOG.info("Writer 2 acquires the lock.");
       });
       writer2Locked.set(true);
-      try {
-        Thread.sleep(1000);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
+
+      while (!writer3TryLock.get()) {
+        try {
+          Thread.sleep(100);
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
       }
+
       assertDoesNotThrow(() -> {
         lockProvider2.unlock();
         LOG.info("Writer 2 releases the lock.");
@@ -109,19 +117,22 @@ public class TestInProcessLockProvider {
           e.printStackTrace();
         }
       }
-
+      // Lock instance of Writer 3 should be held by Writer 2
       InProcessLockProvider lockProvider3 = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
       lockProviderList.add(lockProvider3);
+      boolean isLocked = lockProvider3.getLock().isWriteLocked();
+      if (!isLocked) {
+        writer3TryLock.set(true);
+        throw new AssertionFailedError("The lock instance in Writer 3 should be held by Writer 2: "
+            + lockProvider3.getLock());
+      }
       assertDoesNotThrow(() -> {
         LOG.info("Writer 3 tries to acquire the lock.");
+        writer3TryLock.set(true);
         lockProvider3.lock();
         LOG.info("Writer 3 acquires the lock.");
       });
-      try {
-        Thread.sleep(1000);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
-      }
+
       assertDoesNotThrow(() -> {
         lockProvider3.unlock();
         LOG.info("Writer 3 releases the lock.");
@@ -134,7 +145,10 @@ public class TestInProcessLockProvider {
     writer2.start();
     writer3.start();
 
-    Thread.sleep(1000);
+    while (!writer2TryLock.get()) {
+      Thread.sleep(100);
+    }
+
     assertDoesNotThrow(() -> {
       lockProvider1.unlock();
       LOG.info("Writer 1 releases the lock.");
@@ -145,7 +159,9 @@ public class TestInProcessLockProvider {
 
     try {
       writer2.join();
+      LOG.info("writer 2 finishes");
       writer3.join();
+      LOG.info("writer 3 finishes");
     } catch (InterruptedException e) {
       // Ignore any exception
     }
