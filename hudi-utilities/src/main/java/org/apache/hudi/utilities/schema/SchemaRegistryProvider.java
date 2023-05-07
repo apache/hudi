@@ -82,6 +82,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
     public static final String SSL_KEY_PASSWORD_PROP = "schema.registry.ssl.key.password";
   }
 
+  protected Schema cachedSchema;
+
   @FunctionalInterface
   public interface SchemaConverter {
     /**
@@ -219,5 +221,12 @@ public class SchemaRegistryProvider extends SchemaProvider {
           Config.TARGET_SCHEMA_REGISTRY_URL_PROP,
           StringUtils.truncate(targetRegistryUrl, 10, 10)), e);
     }
+  }
+  // Per SyncOnce call, the cachedschema for the provider is dropped and SourceSchema re-attained
+  // Subsequent calls to getSourceSchema within the write batch should be cached.
+  @Override
+  public void refresh() {
+    cachedSchema = null;
+    getSourceSchema();
   }
 }
