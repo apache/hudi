@@ -61,7 +61,7 @@ public class HoodieInstantTimeGenerator {
 
   /**
    * Returns next instant time that adds N milliseconds to the current time.
-   * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
+   * Ensures each instant time is at least 1 second apart since we create instant times at second granularity
    *
    * @param milliseconds Milliseconds to add to current time while generating the new instant time
    */
@@ -94,7 +94,7 @@ public class HoodieInstantTimeGenerator {
       }
 
       LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
-      return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
+      return Date.from(dt.atZone(getZoneId()).toInstant());
     } catch (DateTimeParseException e) {
       throw new ParseException(e.getMessage(), e.getErrorIndex());
     }
@@ -129,7 +129,7 @@ public class HoodieInstantTimeGenerator {
   }
 
   private static TemporalAccessor convertDateToTemporalAccessor(Date d) {
-    return d.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+    return d.toInstant().atZone(getZoneId()).toLocalDateTime();
   }
 
   public static void setCommitTimeZone(HoodieTimelineTimeZone commitTimeZone) {
@@ -143,5 +143,11 @@ public class HoodieInstantTimeGenerator {
     } catch (NumberFormatException e) {
       return false;
     }
+  }
+
+  private static ZoneId getZoneId() {
+    return commitTimeZone.equals(HoodieTimelineTimeZone.LOCAL)
+        ? ZoneId.systemDefault()
+        : ZoneId.of(commitTimeZone.getTimeZone().toUpperCase());
   }
 }

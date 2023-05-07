@@ -52,8 +52,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.time.Instant;
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -83,9 +81,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private final HoodieTimeline commitTimeline;
   private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingCompactionOperations;
   private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingLogCompactionOperations;
-  private HoodieTable<T, I, K, O> hoodieTable;
-  private HoodieWriteConfig config;
-  private transient HoodieEngineContext context;
+  private final HoodieTable<T, I, K, O> hoodieTable;
+  private final HoodieWriteConfig config;
+  private final transient HoodieEngineContext context;
 
   public CleanPlanner(HoodieEngineContext context, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config) {
     this.context = context;
@@ -509,8 +507,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
             - commitsRetained); //15 instants total, 10 commits to retain, this gives 6th instant in the list
       }
     } else if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
-      Instant instant = Instant.now();
-      ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
+      ZonedDateTime currentDateTime = ZonedDateTime.now();
       String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(hoursRetained).toInstant()));
       earliestCommitToRetain = Option.fromJavaOptional(commitTimeline.getInstantsAsStream().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
               HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
