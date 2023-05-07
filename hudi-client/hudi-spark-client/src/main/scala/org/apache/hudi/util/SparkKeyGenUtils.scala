@@ -18,8 +18,9 @@
 package org.apache.hudi.util
 
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
-import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, GlobalAvroDeleteKeyGenerator, GlobalDeleteKeyGenerator, KeyGenerator, NonpartitionedAvroKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName
 
@@ -48,6 +49,11 @@ object SparkKeyGenUtils {
         .split(",").map(pathField => {
         pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
           .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${keyGenClass}")}).mkString(",")
+    } else if (keyGenClass.equals(classOf[NonpartitionedKeyGenerator].getCanonicalName)
+      || keyGenClass.equals(classOf[NonpartitionedAvroKeyGenerator].getCanonicalName)
+      || keyGenClass.equals(classOf[GlobalDeleteKeyGenerator].getCanonicalName)
+      || keyGenClass.equals(classOf[GlobalAvroDeleteKeyGenerator].getCanonicalName)) {
+      StringUtils.EMPTY_STRING
     } else {
       typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "")
     }
