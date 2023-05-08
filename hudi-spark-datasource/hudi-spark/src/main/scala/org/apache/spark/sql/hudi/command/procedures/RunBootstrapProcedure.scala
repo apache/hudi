@@ -18,14 +18,14 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.hudi.cli.BootstrapExecutorUtils
 import org.apache.hudi.cli.HDFSParquetImporterUtils.{buildProperties, readConfig}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.HoodieBootstrapConfig
+import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.constant.KeyGeneratorType
+import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -33,7 +33,6 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.Locale
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -94,10 +93,10 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key, bootstrapPath)
 
     if (!StringUtils.isNullOrEmpty(keyGeneratorClass) && KeyGeneratorType.getNames.contains(keyGeneratorClass.toUpperCase(Locale.ROOT))) {
-      properties.setProperty(HoodieBootstrapConfig.KEYGEN_TYPE.key, keyGeneratorClass.toUpperCase(Locale.ROOT))
+      properties.setProperty(HoodieWriteConfig.KEYGENERATOR_TYPE.key, keyGeneratorClass.toUpperCase(Locale.ROOT))
     }
     else {
-      properties.setProperty(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, keyGeneratorClass)
+      properties.setProperty(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, keyGeneratorClass)
     }
 
     properties.setProperty(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.key, fullBootstrapInputProvider)
