@@ -137,7 +137,7 @@ call rollback_to_instant(table => 'test_hudi_table', instant_time => '2022010922
 | :---------------|
 |    true         |
 
-### create_savepoints
+### create_savepoint
 
 Create a savepoint to hudi's table.
 
@@ -160,14 +160,14 @@ Create a savepoint to hudi's table.
 
 Roll back test_hudi_table to one instant
 ```
-call create_savepoints(table => 'test_hudi_table', instant_time => '20220109225319449');
+call create_savepoint(table => 'test_hudi_table', instant_time => '20220109225319449');
 ```
 
 | create_savepoint_result |
 |:------------------------|
 | true                    |
 
-### delete_savepoints
+### delete_savepoint
 
 Delete a savepoint to hudi's table.
 
@@ -188,14 +188,14 @@ Delete a savepoint to hudi's table.
 
 Delete a savepoint to test_hudi_table
 ```
-call delete_savepoints(table => 'test_hudi_table', instant_time => '20220109225319449');
+call delete_savepoint(table => 'test_hudi_table', instant_time => '20220109225319449');
 ```
 
 | delete_savepoint_result |
 |:------------------------|
 | true                    |
 
-### rollback_savepoints
+### rollback_savepoint
 
 Rollback a table to the commit that was current at some time.
 
@@ -216,7 +216,7 @@ Rollback a table to the commit that was current at some time.
 
 Rollback test_hudi_table to one savepoint
 ```
-call rollback_savepoints(table => 'test_hudi_table', instant_time => '20220109225319449');
+call rollback_savepoint(table => 'test_hudi_table', instant_time => '20220109225319449');
 ```
 
 | rollback_savepoint_result |
