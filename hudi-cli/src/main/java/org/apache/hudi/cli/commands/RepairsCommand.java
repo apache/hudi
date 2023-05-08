@@ -159,9 +159,7 @@ public class RepairsCommand {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Properties newProps = new Properties();
-    try(FileInputStream in = new FileInputStream(overwriteFilePath)){
-      newProps.load(in);
-    }
+    newProps.load(new FileInputStream(overwriteFilePath));
     Map<String, String> oldProps = client.getTableConfig().propsMap();
     Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
     HoodieTableConfig.create(client.getFs(), metaPathDir, newProps);
