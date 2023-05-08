@@ -66,9 +66,10 @@ import java.util.stream.Collectors;
 /**
  * Calculate and output file size stats of data files that were modified in the half-open interval [start date (--start-date parameter),
  * end date (--end-date parameter)). --num-days parameter can be used to select data files over last --num-days. If --start-date is
- * specified, --num-days will be ignored. If none of the date parameters are set, stats will be computed over all data files of all partitions
- * in the table. By default, only table level file size stats are printed. If --partition-status option is used, partition level file size stats
- * also get printed.
+ * specified, --num-days will be ignored. If none of the date parameters are set, stats will be computed over all data files of all
+ * partitions in the table. Note that date filtering is carried out only if the partition name has the format '[column name=]yyyy-M-d',
+ * '[column name=]yyyy/M/d'. By default, only table level file size stats are printed. If --partition-status option is used, partition
+ * level file size stats also get printed.
  * <br><br>
  * The following stats and calculated:
  * Number of files.
@@ -327,10 +328,17 @@ public class TableSizeStats implements Serializable {
     allPartitions.forEach(partition -> {
       // Partition name should conform to date format if startDate and/or endDate are specified. Otherwise, we don't
       // need to parse partition name as date.
+      String dateString = partition;
+      if (partition.contains("=")) {
+        // Partition name may be in the form of "<column>=<date>". Try parsing out date.
+        String[] parts = partition.split("=");
+        dateString = parts[1].trim();
+      }
+
       LocalDate partitionDate = null;
       try {
         if (startDate != null || endDate != null) {
-          partitionDate = LocalDate.parse(partition, DATE_FORMATTER);
+          partitionDate = LocalDate.parse(dateString, DATE_FORMATTER);
         }
         LOG.info("Parsed " + partition);
       } catch (DateTimeParseException dtpe) {
@@ -367,13 +375,13 @@ public class TableSizeStats implements Serializable {
 
         // Display file size distribution stats for partition
         if (partitionHistogram != null) {
-          printStats("Partition stats [" + partition + "]", partitionHistogram);
+          printStats("Partition stats [name: " + partition + (partitionDate != null ? ", has date: yes" : "") + "]", partitionHistogram);
         }
       }
     });
 
     // Display file size distribution stats for entire table.
-    printStats("Table stats [" + basePath + "]", tableHistogram);
+    printStats("Table stats [path: " + basePath + "]", tableHistogram);
   }
 
   private static String getFormattedSize(double size) {
