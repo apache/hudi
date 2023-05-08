@@ -18,7 +18,11 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.bootstrap.PartitionUtils;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -43,6 +47,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
@@ -58,6 +63,8 @@ import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil;
+import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -366,7 +373,18 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      HoodieMergeHelper.newInstance().runMerge(table, upsertHandle);
+
+      Option<String[]> partitionFields = Option.empty();
+      Object[] partitionValues = new Object[0];
+      if (upsertHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
+        partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
+        partitionValues = PartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
+            table.getMetaClient().getTableConfig().getBootstrapBasePath().orElse(null),
+            upsertHandle.getWriterSchema(), table.getHadoopConf());
+      }
+
+
+      HoodieMergeHelper.newInstance().runMerge(table, upsertHandle, partitionFields , partitionValues);
     }
 
     // TODO(vc): This needs to be revisited

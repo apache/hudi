@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.table.HoodieTable;
@@ -36,7 +37,7 @@ public abstract class BaseMergeHelper {
    * @param upsertHandle Merge Handle
    * @throws IOException in case of error
    */
-  public abstract void runMerge(HoodieTable<?, ?, ?, ?> table, HoodieMergeHandle<?, ?, ?, ?> upsertHandle) throws IOException;
+  public abstract void runMerge(HoodieTable<?, ?, ?, ?> table, HoodieMergeHandle<?, ?, ?, ?> upsertHandle,  Option<String[]> partitionFields, Object[] partitionValues) throws IOException;
 
   /**
    * Consumer that dequeues records from queue and sends to Merge Handle.

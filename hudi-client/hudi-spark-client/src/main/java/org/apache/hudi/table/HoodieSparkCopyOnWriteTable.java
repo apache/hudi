@@ -30,6 +30,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.bootstrap.PartitionUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -222,7 +223,15 @@ public class HoodieSparkCopyOnWriteTable<T>
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
+      Option<String[]> partitionFields = Option.empty();
+      Object[] partitionValues = new Object[0];
+      if (upsertHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
+        partitionFields = getMetaClient().getTableConfig().getPartitionFields();
+        partitionValues = PartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
+            getMetaClient().getTableConfig().getBootstrapBasePath().orElse(null),
+            upsertHandle.getWriterSchema(), getHadoopConf());
+      }
+      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle, partitionFields, partitionValues);
     }
 
     // TODO(vc): This needs to be revisited

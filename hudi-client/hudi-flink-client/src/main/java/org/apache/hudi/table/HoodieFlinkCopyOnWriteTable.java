@@ -371,7 +371,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
+      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle, Option.empty(), new Object[0]);
     }
 
     // TODO(vc): This needs to be revisited
