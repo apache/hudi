@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions.HIVE_DATABASE
 import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.hudi.cli.BootstrapExecutorUtils
 import org.apache.hudi.cli.HDFSParquetImporterUtils.{buildProperties, readConfig}
@@ -27,6 +26,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieBootstrapConfig
 import org.apache.hudi.keygen.constant.KeyGeneratorType
+import org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -111,7 +111,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
 
     val cfg = new BootstrapExecutorUtils.Config()
     cfg.setTableName(tableName)
-    cfg.setDatabase(database.getOrElse(HIVE_DATABASE.defaultValue()))
+    cfg.setDatabase(database.getOrElse(META_SYNC_DATABASE_NAME.defaultValue()))
     cfg.setTableType(tableType)
     cfg.setBasePath(basePath)
     cfg.setBaseFileFormat(baseFileFormat)
