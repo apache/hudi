@@ -84,6 +84,24 @@ public class WriteProfiles {
 
   /**
    * Returns all the incremental write file statuses with the given commits metadata.
+   * Only existing files are included.
+   *
+   * @param basePath           Table base path
+   * @param hadoopConf         The hadoop conf
+   * @param metadataList       The commit metadata list (should in ascending order)
+   * @param tableType          The table type
+   * @return the file status array
+   */
+  public static FileStatus[] getFilesFromMetadata(
+      Path basePath,
+      Configuration hadoopConf,
+      List<HoodieCommitMetadata> metadataList,
+      HoodieTableType tableType) {
+    return getFilesFromMetadata(basePath, hadoopConf, metadataList, tableType, true);
+  }
+
+  /**
+   * Returns all the incremental write file statuses with the given commits metadata.
    *
    * @param basePath           Table base path
    * @param hadoopConf         The hadoop conf
