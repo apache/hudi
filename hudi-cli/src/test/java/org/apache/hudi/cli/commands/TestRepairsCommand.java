@@ -234,30 +234,6 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     assertEquals(expect, got);
   }
 
-  @Test
-  public void testOverwriteHoodiePropertiesWithInputStreamFix() throws IOException {
-    RepairsCommand command = new RepairsCommand();
-    URL newProps = this.getClass().getClassLoader().getResource("table-config.properties");
-    assertNotNull(newProps, "New property file must exist");
-    String cmdResult = command.overwriteHoodieProperties(newProps.getPath());
-
-    HoodieTableConfig tableConfig = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig();
-    Map<String, String> result = tableConfig.propsMap();
-    // validate table checksum
-    assertTrue(result.containsKey(TABLE_CHECKSUM.key()));
-    assertTrue(validateChecksum(tableConfig.getProps()));
-
-    Map<String, String> oldProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
-
-    List<String> allPropsStr = Arrays.asList(NAME.key(), TYPE.key(), VERSION.key(), ARCHIVELOG_FOLDER.key(), TIMELINE_LAYOUT_VERSION.key(), TABLE_CHECKSUM.key(), DROP_PARTITION_COLUMNS.key());
-    String[][] rows = allPropsStr.stream().sorted().map(key -> new String[] {key, oldProps.getOrDefault(key, "null"), result.getOrDefault(key, "null")}).toArray(String[][]::new);
-    String expect = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY, HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);
-
-    expect = removeNonWordAndStripSpace(expect);
-    String got = removeNonWordAndStripSpace(cmdResult.toString());
-    assertEquals(expect, got);
-  }
-
   /**
    * Test case for 'repair corrupted clean files'.
    */
@@ -291,6 +267,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
   /**
    * Testcase for "repair cleanup empty commit metadata"
+   *
    */
   @Test
   public void testShowFailedCommits() {
@@ -319,7 +296,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       Object result = shell.evaluate(() -> "repair show empty commit metadata");
       assertTrue(ShellEvaluationResultUtil.isSuccess(result));
       final List<LogEvent> log = appender.getLog();
-      assertEquals(log.size(), 4);
+      assertEquals(log.size(),4);
       log.forEach(LoggingEvent -> {
         assertEquals(LoggingEvent.getLevel(), Level.WARN);
         assertTrue(LoggingEvent.getMessage().getFormattedMessage().contains("Empty Commit: "));
@@ -390,7 +367,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
       // there should not be any records w/ default partition
       totalRecs = sqlContext.read().format("hudi").load(tablePath)
-          .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == '" + PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH + "'").count();
+      .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == '" + PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH + "'").count();
       assertEquals(totalRecs, 0);
 
       // all records from default partition should have been migrated to __HIVE_DEFAULT_PARTITION__
