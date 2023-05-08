@@ -411,7 +411,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
       .stringType()
-      .defaultValue("uuid")
+      .defaultValue("")
       .withDescription("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
           + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using "
           + "the dot notation eg: `a.b.c`");
