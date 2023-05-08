@@ -21,8 +21,10 @@ package org.apache.hudi.timeline.service.handlers;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
+import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
+import org.apache.hudi.common.table.timeline.dto.DTOUtils;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
@@ -95,23 +97,27 @@ public class FileSliceHandler extends Handler {
   }
 
   public List<FileGroupDTO> getAllFileGroups(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath).map(FileGroupDTO::fromFileGroup)
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath)
         .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
 
   public List<FileGroupDTO> getReplacedFileGroupsBeforeOrOn(String basePath, String maxCommitTime, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getReplacedFileGroupsBeforeOrOn(maxCommitTime, partitionPath).map(FileGroupDTO::fromFileGroup)
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getReplacedFileGroupsBeforeOrOn(maxCommitTime, partitionPath)
         .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
 
   public List<FileGroupDTO> getReplacedFileGroupsBefore(String basePath, String maxCommitTime, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getReplacedFileGroupsBefore(maxCommitTime, partitionPath).map(FileGroupDTO::fromFileGroup)
+    List<HoodieFileGroup> fileGroups = viewManager.getFileSystemView(basePath).getReplacedFileGroupsBefore(maxCommitTime, partitionPath)
         .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
   
   public List<FileGroupDTO> getAllReplacedFileGroups(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getAllReplacedFileGroups(partitionPath).map(FileGroupDTO::fromFileGroup)
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllReplacedFileGroups(partitionPath)
         .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
 
   public List<ClusteringOpDTO> getFileGroupsInPendingClustering(String basePath) {

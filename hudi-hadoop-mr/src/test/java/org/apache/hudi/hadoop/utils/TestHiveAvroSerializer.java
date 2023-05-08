@@ -57,7 +57,7 @@ public class TestHiveAvroSerializer {
       + "{\"name\":\"col8\",\"type\":[\"null\",\"boolean\"],\"default\":null},"
       + "{\"name\":\"col9\",\"type\":[\"null\",\"bytes\"],\"default\":null},"
       + "{\"name\":\"par\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}";
-  private static final String NESTED_CHEMA = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
+  private static final String NESTED_SCHEMA = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
       + "{\"name\":\"firstname\",\"type\":\"string\"},"
       + "{\"name\":\"lastname\",\"type\":\"string\"},"
       + "{\"name\":\"student\",\"type\":{\"name\":\"student\",\"type\":\"record\",\"fields\":["
@@ -104,7 +104,7 @@ public class TestHiveAvroSerializer {
 
   @Test
   public void testNestedValueSerialize() {
-    Schema nestedSchema = new Schema.Parser().parse(NESTED_CHEMA);
+    Schema nestedSchema = new Schema.Parser().parse(NESTED_SCHEMA);
     GenericRecord avroRecord = new GenericData.Record(nestedSchema);
     avroRecord.put("firstname", "person1");
     avroRecord.put("lastname", "person2");

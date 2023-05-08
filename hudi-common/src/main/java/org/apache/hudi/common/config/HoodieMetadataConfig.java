@@ -160,7 +160,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.parallelism")
-      .defaultValue(10)
+      .defaultValue(200)
       .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Parallelism to use, when generating column stats index.");

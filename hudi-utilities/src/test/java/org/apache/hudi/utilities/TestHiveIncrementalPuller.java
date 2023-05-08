@@ -75,7 +75,7 @@ public class TestHiveIncrementalPuller {
   public void testInitHiveIncrementalPuller() {
     assertDoesNotThrow(() -> {
       new HiveIncrementalPuller(config);
-    }, "Unexpected exception while initing HiveIncrementalPuller.");
+    }, "Unexpected exception while initializing HiveIncrementalPuller.");
   }
 
   private HiveIncrementalPuller.Config getHivePullerConfig(String incrementalSql) throws IOException {

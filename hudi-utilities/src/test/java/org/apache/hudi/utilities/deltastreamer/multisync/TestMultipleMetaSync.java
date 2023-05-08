@@ -56,7 +56,7 @@ public class TestMultipleMetaSync extends HoodieDeltaStreamerTestBase {
 
   @ParameterizedTest
   @MethodSource("withOneException")
-  void testeWithException(String syncClassNames) {
+  void testWithException(String syncClassNames) {
     String tableBasePath = basePath + "/test_multiple_metastore_exception";
     MockSyncTool1.syncSuccess = false;
     MockSyncTool2.syncSuccess = false;

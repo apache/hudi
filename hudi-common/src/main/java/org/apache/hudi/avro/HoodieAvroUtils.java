@@ -1086,7 +1086,8 @@ public class HoodieAvroUtils {
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
       Option<String> partitionNameOp,
-      Boolean populateMetaFields) {
+      Boolean populateMetaFields,
+      Option<Schema> schemaWithoutMetaFields) {
     if (populateMetaFields) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
           payloadClass, preCombineField, withOperation);
@@ -1094,10 +1095,10 @@ public class HoodieAvroUtils {
     } else if (simpleKeyGenFieldsOpt.isPresent()) {
       // TODO in HoodieFileSliceReader may partitionName=option#empty
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp);
+          payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields);
     } else {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, withOperation, partitionNameOp);
+          payloadClass, preCombineField, withOperation, partitionNameOp, schemaWithoutMetaFields);
     }
   }
 

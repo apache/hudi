@@ -163,7 +163,7 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
   }
 
   @Test
-  public void shouldGcsEventsSourceDoesNotDedupeInterally() {
+  public void shouldGcsEventsSourceDoesNotDedupeInternally() {
     ReceivedMessage dupe1 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
     ReceivedMessage dupe2 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
 

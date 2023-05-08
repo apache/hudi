@@ -97,7 +97,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
@@ -191,15 +190,11 @@ public class UtilHelpers {
 
   }
 
-  public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
+  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt) throws IOException {
     try {
-      List<Transformer> transformers = new ArrayList<>();
-      for (String className : Option.ofNullable(classNames).orElse(Collections.emptyList())) {
-        transformers.add(ReflectionUtils.loadClass(className));
-      }
-      return transformers.isEmpty() ? Option.empty() : Option.of(new ChainedTransformer(transformers));
+      return classNamesOpt.map(classNames -> classNames.isEmpty() ? null : new ChainedTransformer(classNames));
     } catch (Throwable e) {
-      throw new IOException("Could not load transformer class(es) " + classNames, e);
+      throw new IOException("Could not load transformer class(es) " + classNamesOpt.get(), e);
     }
   }
 

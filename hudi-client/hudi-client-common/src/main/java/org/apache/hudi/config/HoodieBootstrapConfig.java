@@ -27,7 +27,6 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import java.io.File;
 import java.io.FileReader;
@@ -59,9 +58,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.6.0")
       .withValidValues(METADATA_ONLY.name(), FULL_RECORD.name())
-      .withDocumentation("Bootstrap mode to apply for partition paths, that match regex above. "
-          + "METADATA_ONLY will generate just skeleton base files with keys/footers, avoiding full cost of rewriting the dataset. "
-          + "FULL_RECORD will perform a full copy/rewrite of the data as a Hudi table.");
+      .withDocumentation(BootstrapMode.class);
 
   public static final ConfigProperty<String> MODE_SELECTOR_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.mode.selector")
@@ -76,20 +73,6 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Class to use for reading the bootstrap dataset partitions/files, for Bootstrap mode FULL_RECORD");
-
-  public static final ConfigProperty<String> KEYGEN_CLASS_NAME = ConfigProperty
-      .key("hoodie.bootstrap.keygen.class")
-      .noDefaultValue()
-      .markAdvanced()
-      .sinceVersion("0.6.0")
-      .withDocumentation("Key generator implementation to be used for generating keys from the bootstrapped dataset");
-
-  public static final ConfigProperty<String> KEYGEN_TYPE = ConfigProperty
-      .key("hoodie.bootstrap.keygen.type")
-      .defaultValue(KeyGeneratorType.SIMPLE.name())
-      .markAdvanced()
-      .sinceVersion("0.9.0")
-      .withDocumentation("Type of build-in key generator, currently support SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE");
 
   public static final ConfigProperty<String> PARTITION_PATH_TRANSLATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.partitionpath.translator.class")
@@ -157,11 +140,6 @@ public class HoodieBootstrapConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_FULL_BOOTSTRAP_INPUT_PROVIDER = FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.defaultValue();
-  /**
-   * @deprecated Use {@link #KEYGEN_CLASS_NAME} and its methods instead
-   */
-  @Deprecated
-  public static final String BOOTSTRAP_KEYGEN_CLASS = KEYGEN_CLASS_NAME.key();
   /**
    * @deprecated Use {@link #PARTITION_PATH_TRANSLATOR_CLASS_NAME} and its methods instead
    */
@@ -234,16 +212,6 @@ public class HoodieBootstrapConfig extends HoodieConfig {
 
     public Builder withFullBootstrapInputProvider(String partitionSelectorClass) {
       bootstrapConfig.setValue(FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME, partitionSelectorClass);
-      return this;
-    }
-
-    public Builder withBootstrapKeyGenClass(String keyGenClass) {
-      bootstrapConfig.setValue(KEYGEN_CLASS_NAME, keyGenClass);
-      return this;
-    }
-
-    public Builder withBootstrapKeyGenType(String keyGenType) {
-      bootstrapConfig.setValue(KEYGEN_TYPE, keyGenType);
       return this;
     }
 

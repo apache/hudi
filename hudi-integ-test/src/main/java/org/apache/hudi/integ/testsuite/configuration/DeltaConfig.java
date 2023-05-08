@@ -234,7 +234,7 @@ public class DeltaConfig implements Serializable {
       return Integer.valueOf(configsMap.getOrDefault(VALIDATE_ONCE_EVERY_ITR, 1).toString());
     }
 
-    public String inputPartitonsToSkipWithValidate() {
+    public String inputPartitionsToSkipWithValidate() {
       return configsMap.getOrDefault(INPUT_PARTITIONS_TO_SKIP_VALIDATE, "").toString();
     }
 

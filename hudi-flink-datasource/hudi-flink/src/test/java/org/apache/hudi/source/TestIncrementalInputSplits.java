@@ -62,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
 
   @BeforeEach
-  private void init() throws IOException {
+  void init() throws IOException {
     initPath();
     initMetaClient();
   }
@@ -92,7 +92,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     assertEquals(2, instantRange2.size());
     assertIterableEquals(Arrays.asList(commit2, commit3), instantRange2);
 
-    // simulate first iteration cycle with read from LATEST commit
+    // simulate first iteration cycle with read from the LATEST commit
     List<HoodieInstant> instantRange1 = iis.filterInstantsWithRange(timeline, null);
     assertEquals(1, instantRange1.size());
     assertIterableEquals(Collections.singletonList(commit3), instantRange1);
@@ -161,7 +161,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
         .path(new Path(basePath))
         .rowType(TestConfigurations.ROW_TYPE)
         .build();
-    IncrementalInputSplits.Result result = iis.inputSplits(metaClient, metaClient.getHadoopConf(), null, false);
+    IncrementalInputSplits.Result result = iis.inputSplits(metaClient, null, null, false);
     List<String> partitions = getFilteredPartitions(result);
     assertEquals(Arrays.asList("par1", "par2", "par3", "par4", "par5", "par6"), partitions);
   }
@@ -186,10 +186,14 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
         .rowType(TestConfigurations.ROW_TYPE)
         .partitionPruner(partitionPruner)
         .build();
-    IncrementalInputSplits.Result result = iis.inputSplits(metaClient, metaClient.getHadoopConf(), null, false);
+    IncrementalInputSplits.Result result = iis.inputSplits(metaClient, null, null, false);
     List<String> partitions = getFilteredPartitions(result);
     assertEquals(expectedPartitions, partitions);
   }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
 
   private static Stream<Arguments> partitionEvaluators() {
     FieldReferenceExpression partitionFieldRef = new FieldReferenceExpression("partition", DataTypes.STRING(), 0, 0);

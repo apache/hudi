@@ -181,7 +181,7 @@ public class HoodieSnapshotCopier implements Serializable {
     // Take input configs
     final Config cfg = new Config();
     new JCommander(cfg, null, args);
-    LOG.info(String.format("Snapshot hoodie table from %s targetBasePath to %stargetBasePath", cfg.basePath,
+    LOG.info(String.format("Snapshot hoodie table from %s (source) to %s (target)", cfg.basePath,
         cfg.outputPath));
 
     // Create a spark job to do the snapshot copy
