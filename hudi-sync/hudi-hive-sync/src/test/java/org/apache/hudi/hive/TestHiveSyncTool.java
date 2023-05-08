@@ -295,12 +295,22 @@ public class TestHiveSyncTool {
     assertEquals(PartitionEventType.UPDATE, partitionEvents.iterator().next().eventType,
         "The one partition event must of type UPDATE");
 
+    // Add a partition that does not belong to the table, i.e., not in the same base path
+    // This should not happen in production.  However, if this happens, when doing fallback
+    // to list all partitions in the metastore and we find such a partition, we simply ignore
+    // it without dropping it from the metastore and notify the user with an error message,
+    // so the user may manually fix it.
+
+    String dummyBasePath = new Path(basePath).getParent().toString() + "/dummy_basepath";
+    ddlExecutor.runSQL("ALTER TABLE `" + HiveTestUtil.TABLE_NAME
+        + "` ADD PARTITION (`datestr`='xyz') LOCATION '" + dummyBasePath + "/xyz'");
+
     // Lets do the sync
     reSyncHiveTable();
 
     // Sync should update the changed partition to correct path
     List<Partition> tablePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    assertEquals(7, tablePartitions.size(), "The one partition we wrote should be added to hive");
+    assertEquals(8, tablePartitions.size(), "The two partitions we wrote should be added to hive");
     assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be 100");
 
@@ -335,7 +345,7 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
     tablePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     assertEquals(Option.of("200"), hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME));
-    assertEquals(6, tablePartitions.size());
+    assertEquals(7, tablePartitions.size());
 
     // Trigger the fallback of listing all partitions again.  There is no partition change.
     HiveTestUtil.commitToTable("300", 1, useSchemaFromCommitMetadata);
@@ -344,7 +354,7 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
     tablePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     assertEquals(Option.of("300"), hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME));
-    assertEquals(6, tablePartitions.size());
+    assertEquals(7, tablePartitions.size());
   }
 
   @ParameterizedTest

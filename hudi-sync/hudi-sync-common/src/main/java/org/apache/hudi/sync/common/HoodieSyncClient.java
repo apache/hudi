@@ -177,10 +177,17 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       }
     }
 
-    partitionsToDrop.forEach(storageValue ->
-        events.add(PartitionEvent.newPartitionDropEvent(
-            FSUtils.getRelativePartitionPath(
-                metaClient.getBasePathV2(), new CachingPath(paths.get(storageValue))))));
+    partitionsToDrop.forEach(storageValue -> {
+      String storagePath = paths.get(storageValue);
+      try {
+        String relativePath = FSUtils.getRelativePartitionPath(
+            metaClient.getBasePathV2(), new CachingPath(storagePath));
+        events.add(PartitionEvent.newPartitionDropEvent(relativePath));
+      } catch (IllegalArgumentException e) {
+        LOG.error("Cannot parse the path stored in the metastore, ignoring it for "
+            + "generating DROP partition event: \"" + storagePath + "\".", e);
+      }
+    });
     return events;
   }
 
