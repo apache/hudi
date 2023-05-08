@@ -52,6 +52,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.table.action.bootstrap.BootstrapUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
@@ -467,6 +468,11 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     properties.setProperty(
         DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitioned ? "datestr" : "");
+    if (!partitioned) {
+      properties.setProperty(
+          HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(),
+          NonpartitionedKeyGenerator.class.getCanonicalName());
+    }
     builder = builder.withProps(properties);
     return builder;
   }
