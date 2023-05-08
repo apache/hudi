@@ -71,7 +71,7 @@ import java.util.stream.Collectors;
  * '[column name=]yyyy/M/d'. By default, only table level file size stats are printed. If --partition-status option is used, partition
  * level file size stats also get printed.
  * <br><br>
- * The following stats and calculated:
+ * The following stats are calculated:
  * Number of files.
  * Total table size.
  * Minimum file size
