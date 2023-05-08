@@ -94,6 +94,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
@@ -726,17 +727,19 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount) throws IOException {
-    final HashMap<HeaderMetadataType, String> blockHeader = new HashMap<>();
-    blockHeader.put(HeaderMetadataType.INSTANT_TIME, instantTime);
-    // Archival of data table has a dependency on compaction(base files) in metadata table.
-    // It is assumed that as of time Tx of base instant (/compaction time) in metadata table,
-    // all commits in data table is in sync with metadata table. So, we always start with log file for any fileGroup.
-    final HoodieDeleteBlock block = new HoodieDeleteBlock(new DeleteRecord[0], blockHeader);
+    final List<Integer> list = IntStream.range(0, fileGroupCount).boxed().collect(Collectors.toList());
+    engineContext.setJobStatus(this.getClass().getSimpleName(), "Initializing metadata table file groups: " + metadataPartition);
+    engineContext.parallelize(list, fileGroupCount).map(x -> {
+      final HashMap<HeaderMetadataType, String> blockHeader = new HashMap<>();
+      blockHeader.put(HeaderMetadataType.INSTANT_TIME, instantTime);
+      // Archival of data table has a dependency on compaction(base files) in metadata table.
+      // It is assumed that as of time Tx of base instant (/compaction time) in metadata table,
+      // all commits in data table is in sync with metadata table. So, we always start with log file for any fileGroup.
+      final HoodieDeleteBlock block = new HoodieDeleteBlock(new DeleteRecord[0], blockHeader);
 
-    LOG.info(String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
-        fileGroupCount, metadataPartition.getPartitionPath(), metadataPartition.getFileIdPrefix(), instantTime));
-    for (int i = 0; i < fileGroupCount; ++i) {
-      final String fileGroupFileId = String.format("%s%04d", metadataPartition.getFileIdPrefix(), i);
+      LOG.info(String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
+            fileGroupCount, metadataPartition.getPartitionPath(), metadataPartition.getFileIdPrefix(), instantTime));
+      final String fileGroupFileId = String.format("%s%04d", metadataPartition.getFileIdPrefix(), x);
       try {
         HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
             .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
@@ -753,7 +756,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       } catch (InterruptedException e) {
         throw new HoodieException("Failed to created fileGroup " + fileGroupFileId + " for partition " + metadataPartition.getPartitionPath(), e);
       }
-    }
+      return x;
+    }).count();
   }
 
   public void dropMetadataPartitions(List<MetadataPartitionType> metadataPartitions) throws IOException {
