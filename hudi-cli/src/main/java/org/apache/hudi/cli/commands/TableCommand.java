@@ -66,14 +66,23 @@ public class TableCommand {
   }
 
   @ShellMethod(key = "connect", value = "Connect to a hoodie table")
-  public String connect(@ShellOption(value = {"--path"}, help = "Base Path of the table") final String path,
-                        @ShellOption(value = {"--layoutVersion"}, help = "Timeline Layout version", defaultValue = ShellOption.NULL) Integer layoutVersion,
-                        @ShellOption(value = {"--eventuallyConsistent"}, defaultValue = "false", help = "Enable eventual consistency") final boolean eventuallyConsistent,
-                        @ShellOption(value = {"--initialCheckIntervalMs"}, defaultValue = "2000", help = "Initial wait time for eventual consistency") final Integer initialConsistencyIntervalMs,
-                        @ShellOption(value = {"--maxWaitIntervalMs"}, defaultValue = "300000", help = "Max wait time for eventual consistency") final Integer maxConsistencyIntervalMs,
-                        @ShellOption(value = {"--maxCheckIntervalMs"}, defaultValue = "7", help = "Max checks for eventual consistency") final Integer maxConsistencyChecks) throws IOException {
-    HoodieCLI.setConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(eventuallyConsistent).withInitialConsistencyCheckIntervalMs(initialConsistencyIntervalMs)
-        .withMaxConsistencyCheckIntervalMs(maxConsistencyIntervalMs).withMaxConsistencyChecks(maxConsistencyChecks).build());
+  public String connect(
+      @ShellOption(value = {"--path"}, help = "Base Path of the table") final String path,
+      @ShellOption(value = {"--layoutVersion"}, help = "Timeline Layout version", defaultValue = ShellOption.NULL) Integer layoutVersion,
+      @ShellOption(value = {"--eventuallyConsistent"}, defaultValue = "false",
+          help = "Enable eventual consistency") final boolean eventuallyConsistent,
+      @ShellOption(value = {"--initialCheckIntervalMs"}, defaultValue = "2000",
+          help = "Initial wait time for eventual consistency") final Integer initialConsistencyIntervalMs,
+      @ShellOption(value = {"--maxWaitIntervalMs"}, defaultValue = "300000",
+          help = "Max wait time for eventual consistency") final Integer maxConsistencyIntervalMs,
+      @ShellOption(value = {"--maxCheckIntervalMs"}, defaultValue = "7",
+          help = "Max checks for eventual consistency") final Integer maxConsistencyChecks)
+      throws IOException {
+    HoodieCLI
+        .setConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(eventuallyConsistent)
+            .withInitialConsistencyCheckIntervalMs(initialConsistencyIntervalMs)
+            .withMaxConsistencyCheckIntervalMs(maxConsistencyIntervalMs).withMaxConsistencyChecks(maxConsistencyChecks)
+            .build());
     HoodieCLI.initConf();
     HoodieCLI.connectTo(path, layoutVersion);
     HoodieCLI.initFS(true);
@@ -90,13 +99,17 @@ public class TableCommand {
    * @param payloadClass Payload Class
    */
   @ShellMethod(key = "create", value = "Create a hoodie table if not present")
-  public String createTable(@ShellOption(value = {"--path"}, help = "Base Path of the table") final String path, @ShellOption(value = {"--tableName"}, help = "Hoodie Table Name") final String name,
-                            @ShellOption(value = {"--tableType"}, defaultValue = "COPY_ON_WRITE", help = "Hoodie Table Type. Must be one of : COPY_ON_WRITE or MERGE_ON_READ")
-                            final String tableTypeStr,
-                            @ShellOption(value = {"--archiveLogFolder"}, help = "Folder Name for storing archived timeline", defaultValue = ShellOption.NULL) String archiveFolder,
-                            @ShellOption(value = {"--layoutVersion"}, help = "Specific Layout Version to use", defaultValue = ShellOption.NULL) Integer layoutVersion,
-                            @ShellOption(value = {"--payloadClass"}, defaultValue = "org.apache.hudi.common.model.HoodieAvroPayload", help = "Payload Class") final String payloadClass)
-      throws IOException {
+  public String createTable(
+      @ShellOption(value = {"--path"}, help = "Base Path of the table") final String path,
+      @ShellOption(value = {"--tableName"}, help = "Hoodie Table Name") final String name,
+      @ShellOption(value = {"--tableType"}, defaultValue = "COPY_ON_WRITE",
+          help = "Hoodie Table Type. Must be one of : COPY_ON_WRITE or MERGE_ON_READ") final String tableTypeStr,
+      @ShellOption(value = {"--archiveLogFolder"}, help = "Folder Name for storing archived timeline",
+          defaultValue = ShellOption.NULL) String archiveFolder,
+      @ShellOption(value = {"--layoutVersion"}, help = "Specific Layout Version to use",
+          defaultValue = ShellOption.NULL) Integer layoutVersion,
+      @ShellOption(value = {"--payloadClass"}, defaultValue = "org.apache.hudi.common.model.HoodieAvroPayload",
+          help = "Payload Class") final String payloadClass) throws IOException {
 
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
@@ -114,8 +127,13 @@ public class TableCommand {
       throw new IllegalStateException("Table already existing in path : " + path);
     }
 
-    HoodieTableMetaClient.withPropertyBuilder().setTableType(tableTypeStr).setTableName(name).setArchiveLogFolder(archiveFolder).setPayloadClassName(payloadClass)
-        .setTimelineLayoutVersion(layoutVersion).initTable(HoodieCLI.conf, path);
+    HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(tableTypeStr)
+        .setTableName(name)
+        .setArchiveLogFolder(archiveFolder)
+        .setPayloadClassName(payloadClass)
+        .setTimelineLayoutVersion(layoutVersion)
+        .initTable(HoodieCLI.conf, path);
     // Now connect to ensure loading works
     return connect(path, layoutVersion, false, 0, 0, 0);
   }
@@ -140,7 +158,8 @@ public class TableCommand {
   /**
    * Refresh table metadata.
    */
-  @ShellMethod(key = {"refresh", "metadata refresh", "commits refresh", "cleans refresh", "savepoints refresh"}, value = "Refresh table metadata")
+  @ShellMethod(key = {"refresh", "metadata refresh", "commits refresh", "cleans refresh", "savepoints refresh"},
+      value = "Refresh table metadata")
   public String refreshMetadata() {
     HoodieCLI.refreshTableMetadata();
     return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
@@ -150,7 +169,9 @@ public class TableCommand {
    * Fetches table schema in avro format.
    */
   @ShellMethod(key = "fetch table schema", value = "Fetches latest table schema")
-  public String fetchTableSchema(@ShellOption(value = {"--outputFilePath"}, defaultValue = ShellOption.NULL, help = "File path to write schema") final String outputFilePath) throws Exception {
+  public String fetchTableSchema(
+      @ShellOption(value = {"--outputFilePath"}, defaultValue = ShellOption.NULL,
+              help = "File path to write schema") final String outputFilePath) throws Exception {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(client);
     Schema schema = tableSchemaResolver.getTableAvroSchema();
@@ -173,12 +194,14 @@ public class TableCommand {
   }
 
   @ShellMethod(key = "table update-configs", value = "Update the table configs with configs with provided file.")
-  public String updateTableConfig(@ShellOption(value = {"--props-file"}, help = "Path to a properties file on local filesystem") final String updatePropsFilePath) throws IOException {
+  public String updateTableConfig(
+      @ShellOption(value = {"--props-file"}, help = "Path to a properties file on local filesystem")
+      final String updatePropsFilePath) throws IOException {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Map<String, String> oldProps = client.getTableConfig().propsMap();
 
     Properties updatedProps = new Properties();
-    try (FileInputStream in = new FileInputStream(updatePropsFilePath)) {
+    try(FileInputStream in = new FileInputStream(updatePropsFilePath)){
       updatedProps.load(in);
     }
     Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
@@ -190,7 +213,9 @@ public class TableCommand {
   }
 
   @ShellMethod(key = "table delete-configs", value = "Delete the supplied table configs from the table.")
-  public String deleteTableConfig(@ShellOption(value = {"--comma-separated-configs"}, help = "Comma separated list of configs to delete.") final String csConfigs) {
+  public String deleteTableConfig(
+      @ShellOption(value = {"--comma-separated-configs"},
+              help = "Comma separated list of configs to delete.") final String csConfigs) {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Map<String, String> oldProps = client.getTableConfig().propsMap();
 
@@ -211,10 +236,15 @@ public class TableCommand {
     String[][] rows = new String[allPropKeys.size()][];
     int ind = 0;
     for (String propKey : allPropKeys) {
-      String[] row = new String[] {propKey, oldProps.getOrDefault(propKey, "null"), newProps.getOrDefault(propKey, "null")};
+      String[] row = new String[] {
+          propKey,
+          oldProps.getOrDefault(propKey, "null"),
+          newProps.getOrDefault(propKey, "null")
+      };
       rows[ind++] = row;
     }
-    return HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY, HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);
+    return HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY,
+        HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);
   }
 
   /**
