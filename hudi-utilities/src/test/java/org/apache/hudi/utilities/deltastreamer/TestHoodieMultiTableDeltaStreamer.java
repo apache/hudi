@@ -84,7 +84,6 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     HoodieDeltaStreamer.Config dsConfig = new HoodieDeltaStreamer.Config();
     TypedProperties tblProperties = new TypedProperties();
     HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
-    streamer.populateTransformerProps(dsConfig, tblProperties);
     assertNull(cfg.transformerClassNames);
   }
   
