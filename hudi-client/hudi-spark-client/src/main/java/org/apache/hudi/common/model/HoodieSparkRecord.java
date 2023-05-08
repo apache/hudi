@@ -50,6 +50,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
+import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
 import static org.apache.spark.sql.types.DataTypes.BooleanType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 
@@ -184,7 +185,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
     InternalRow mergeRow = new JoinedRow(data, (InternalRow) other.getData());
     UnsafeProjection projection =
-        HoodieInternalRowUtils.getCachedUnsafeProjection(targetStructType, targetStructType);
+        getCachedUnsafeProjection(targetStructType, targetStructType);
     return new HoodieSparkRecord(getKey(), projection.apply(mergeRow), targetStructType, getOperation(), this.currentLocation, this.newLocation, copy);
   }
 
@@ -243,14 +244,16 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
       Option<String> partitionNameOp,
-      Boolean populateMetaFields) {
+      Boolean populateMetaFields,
+      Option<Schema> schemaWithoutMetaFields) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
+    Option<StructType> structTypeWithoutMetaFields = schemaWithoutMetaFields.map(HoodieInternalRowUtils::getCachedSchema);
     if (populateMetaFields) {
       return convertToHoodieSparkRecord(structType, this, withOperation);
     } else if (simpleKeyGenFieldsOpt.isPresent()) {
-      return convertToHoodieSparkRecord(structType, this, simpleKeyGenFieldsOpt.get(), withOperation, Option.empty());
+      return convertToHoodieSparkRecord(structType, this, simpleKeyGenFieldsOpt.get(), withOperation, Option.empty(), structTypeWithoutMetaFields);
     } else {
-      return convertToHoodieSparkRecord(structType, this, withOperation, partitionNameOp);
+      return convertToHoodieSparkRecord(structType, this, withOperation, partitionNameOp, structTypeWithoutMetaFields);
     }
   }
 
@@ -339,7 +342,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       return (UnsafeRow) payload;
     }
 
-    UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, schema);
+    UnsafeProjection unsafeProjection = getCachedUnsafeProjection(schema, schema);
     return unsafeProjection.apply(payload);
   }
 
@@ -384,21 +387,21 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   private static HoodieRecord<InternalRow> convertToHoodieSparkRecord(StructType structType, HoodieSparkRecord record, boolean withOperationField) {
     return convertToHoodieSparkRecord(structType, record,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
-        withOperationField, Option.empty());
+        withOperationField, Option.empty(), Option.empty());
   }
 
   private static HoodieRecord<InternalRow> convertToHoodieSparkRecord(StructType structType, HoodieSparkRecord record, boolean withOperationField,
-      Option<String> partitionName) {
+      Option<String> partitionName, Option<StructType> structTypeWithoutMetaFields) {
     return convertToHoodieSparkRecord(structType, record,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
-        withOperationField, partitionName);
+        withOperationField, partitionName, structTypeWithoutMetaFields);
   }
 
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
   private static HoodieRecord<InternalRow> convertToHoodieSparkRecord(StructType structType, HoodieSparkRecord record, Pair<String, String> recordKeyPartitionPathFieldPair,
-      boolean withOperationField, Option<String> partitionName) {
+      boolean withOperationField, Option<String> partitionName, Option<StructType> structTypeWithoutMetaFields) {
     final String recKey = getValue(structType, recordKeyPartitionPathFieldPair.getKey(), record.data).toString();
     final String partitionPath = (partitionName.isPresent() ? partitionName.get() :
         getValue(structType, recordKeyPartitionPathFieldPair.getRight(), record.data).toString());
@@ -406,6 +409,13 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     HoodieOperation operation = withOperationField
         ? HoodieOperation.fromName(record.data.getString(structType.fieldIndex(HoodieRecord.OPERATION_METADATA_FIELD)))
         : null;
+
+    if (structTypeWithoutMetaFields.isPresent()) {
+      StructType structTypeNoMetaFields = structTypeWithoutMetaFields.get();
+      UnsafeRow rowNoMetaFields = getCachedUnsafeProjection(structType, structTypeNoMetaFields).apply(record.data);
+      return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), rowNoMetaFields, structTypeNoMetaFields, operation, record.copy);
+    }
+
     return new HoodieSparkRecord(new HoodieKey(recKey, partitionPath), record.data, structType, operation, record.copy);
   }
 

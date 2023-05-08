@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -481,7 +482,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
   private void initTableIfNotExists(ObjectPath tablePath, CatalogTable catalogTable) {
     Configuration flinkConf = Configuration.fromMap(catalogTable.getOptions());
-    final String avroSchema = AvroSchemaConverter.convertToSchema(catalogTable.getSchema().toPersistedRowDataType().getLogicalType()).toString();
+    final String avroSchema = AvroSchemaConverter.convertToSchema(
+        catalogTable.getSchema().toPersistedRowDataType().getLogicalType(),
+        AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
     flinkConf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, avroSchema);
 
     // stores two copies of options:
@@ -565,7 +568,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     // the metadata fields should be included to keep sync with the hive sync tool,
     // because since Hive 3.x, there is validation when altering table,
     // when the metadata fields are synced through the hive sync tool,
-    // a compatability issue would be reported.
+    // a compatibility issue would be reported.
     boolean withOperationField = Boolean.parseBoolean(table.getOptions().getOrDefault(FlinkOptions.CHANGELOG_ENABLED.key(), "false"));
     List<FieldSchema> allColumns = HiveSchemaUtils.toHiveFieldSchema(table.getSchema(), withOperationField);
 

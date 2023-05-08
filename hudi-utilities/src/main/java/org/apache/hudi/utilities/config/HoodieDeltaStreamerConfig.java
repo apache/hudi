@@ -26,13 +26,16 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
+import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
+
 /**
  * Delta Streamer related config.
  */
 @Immutable
 @ConfigClassProperty(name = "DeltaStreamer Configs",
     groupName = ConfigGroups.Names.DELTA_STREAMER,
-    description = "Configurations that control DeltaStreamer.")
+    areCommonConfigs = true,
+    description = "")
 public class HoodieDeltaStreamerConfig extends HoodieConfig {
 
   public static final String DELTA_STREAMER_CONFIG_PREFIX = "hoodie.deltastreamer.";
@@ -76,7 +79,7 @@ public class HoodieDeltaStreamerConfig extends HoodieConfig {
       .key(DELTA_STREAMER_CONFIG_PREFIX + "multiwriter.source.checkpoint.id")
       .noDefaultValue()
       .markAdvanced()
-      .withDocumentation("Unique Id to be used for multiwriter deltastreamer scenario. This is the "
+      .withDocumentation("Unique Id to be used for multi-writer deltastreamer scenario. This is the "
           + "scenario when multiple deltastreamers are used to write to the same target table. If you are just using "
           + "a single deltastreamer for a table then you do not need to set this config.");
 
@@ -93,4 +96,15 @@ public class HoodieDeltaStreamerConfig extends HoodieConfig {
       .withDocumentation("The path to which a particular table is ingested. The config is specific to HoodieMultiTableDeltaStreamer"
           + " and overrides path determined using option `--base-path-prefix` for a table. This config is ignored for a single"
           + " table deltastreamer");
+  public static final ConfigProperty<Boolean> SAMPLE_WRITES_ENABLED = ConfigProperty
+      .key(DELTA_STREAMER_CONFIG_PREFIX + "sample.writes.enabled")
+      .defaultValue(false)
+      .withDocumentation("Set this to true to sample from the first batch of records and write to the auxiliary path, before writing to the table."
+          + "The sampled records are used to calculate the average record size. The relevant write client will have `" + COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key()
+          + "` being overwritten by the calculated result.");
+  public static final ConfigProperty<Integer> SAMPLE_WRITES_SIZE = ConfigProperty
+      .key(DELTA_STREAMER_CONFIG_PREFIX + "sample.writes.size")
+      .defaultValue(5000)
+      .withDocumentation("Number of records to sample from the first write. To improve the estimation's accuracy, "
+          + "for smaller or more compressable record size, set the sample size bigger. For bigger or less compressable record size, set smaller.");
 }

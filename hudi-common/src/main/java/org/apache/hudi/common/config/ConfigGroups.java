@@ -26,7 +26,8 @@ package org.apache.hudi.common.config;
  */
 public class ConfigGroups {
   /**
-   * Config group names.
+   * Config group names. Please add the description of each group in
+   * {@link ConfigGroups#getDescription}.
    */
   public enum Names {
     ENVIRONMENT_CONFIG("Environment Config"),
@@ -142,6 +143,10 @@ public class ConfigGroups {
         break;
       case AWS:
         description = "Configurations specific to Amazon Web Services.";
+        break;
+      case DELTA_STREAMER:
+        description = "These set of configs are used for DeltaStreamer utility which provides "
+            + "the way to ingest from different sources such as DFS or Kafka.";
         break;
       default:
         description = "Please fill in the description for Config Group Name: " + names.name;

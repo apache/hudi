@@ -386,8 +386,9 @@ public class HoodieInputFormatUtils {
   }
 
   /**
-   * Takes in a list of filesStatus and a list of table metadatas. Groups the files status list
+   * Takes in a list of filesStatus and a list of table metadata. Groups the files status list
    * based on given table metadata.
+   *
    * @param fileStatuses
    * @param fileExtension
    * @param metaClientList

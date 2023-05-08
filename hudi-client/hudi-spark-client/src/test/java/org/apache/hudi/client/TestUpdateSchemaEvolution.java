@@ -19,8 +19,8 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -185,7 +185,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness implement
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaChangeOrder.avsc");
     final HoodieSparkTable table = HoodieSparkTable.create(config, context);
     String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"added_field\":1},\"number\":12";
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"added_field\":1,\"number\":12}";
     List<HoodieRecord> updateRecords = buildUpdateRecords(recordStr, insertResult.getFileId());
     String assertMsg = "UpdateFunction could not read records written with exampleSchema.avsc using the "
         + "exampleEvolvedSchemaChangeOrder.avsc as column order change";

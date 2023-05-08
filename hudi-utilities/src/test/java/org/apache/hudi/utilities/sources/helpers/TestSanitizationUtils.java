@@ -77,12 +77,12 @@ public class TestSanitizationUtils {
   @ParameterizedTest
   @MethodSource("provideDataFiles")
   public void testSanitizeDataset(String unsanitizedDataFile, String sanitizedDataFile, StructType unsanitizedSchema, StructType sanitizedSchema) {
-    Dataset<Row> expectedSantitizedDataset = spark.read().schema(sanitizedSchema).format("json").load(sanitizedDataFile);
+    Dataset<Row> expectedSanitizedDataset = spark.read().schema(sanitizedSchema).format("json").load(sanitizedDataFile);
     Dataset<Row> unsanitizedDataset = spark.read().schema(unsanitizedSchema).format("json").load(unsanitizedDataFile);
-    Dataset<Row> sanitizedDataset = SanitizationUtils.sanitizeColumnNamesForAvro(unsanitizedDataset,invalidCharMask);
+    Dataset<Row> sanitizedDataset = SanitizationUtils.sanitizeColumnNamesForAvro(unsanitizedDataset, invalidCharMask);
     assertEquals(unsanitizedDataset.count(), sanitizedDataset.count());
-    assertEquals(expectedSantitizedDataset.schema(), sanitizedDataset.schema());
-    assertEquals(expectedSantitizedDataset.collectAsList(), sanitizedDataset.collectAsList());
+    assertEquals(expectedSanitizedDataset.schema(), sanitizedDataset.schema());
+    assertEquals(expectedSanitizedDataset.collectAsList(), sanitizedDataset.collectAsList());
   }
 
   private void testSanitizeSchema(String unsanitizedSchema, Schema expectedSanitizedSchema) {
