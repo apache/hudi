@@ -31,7 +31,6 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import org.slf4j.Logger;
@@ -99,7 +98,7 @@ public class HoodieAvroKeyGeneratorFactory {
         throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + keyGeneratorType);
     }
 
-    if (!props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())) {
+    if (KeyGenUtils.enableAutoGenerateRecordKeys(props)) {
       return new AutoRecordGenWrapperAvroKeyGenerator(props, keyGenerator);
     } else {
       return keyGenerator;

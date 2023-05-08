@@ -29,6 +29,7 @@ import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.GlobalDeleteKeyGenerator;
 import org.apache.hudi.keygen.AutoRecordGenWrapperKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -75,7 +76,7 @@ public class HoodieSparkKeyGeneratorFactory {
 
   public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
     String keyGeneratorClass = getKeyGeneratorClassName(props);
-    boolean autoRecordKeyGen = !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
+    boolean autoRecordKeyGen = KeyGenUtils.enableAutoGenerateRecordKeys(props);
     try {
       KeyGenerator keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
       if (autoRecordKeyGen) {

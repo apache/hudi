@@ -282,7 +282,7 @@ public class DeltaSync implements Serializable, Closeable {
     this.props = props;
     this.userProvidedSchemaProvider = schemaProvider;
     this.processedSchema = new SchemaSet();
-    this.autoGenerateRecordKeys = !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
+    this.autoGenerateRecordKeys = KeyGenUtils.enableAutoGenerateRecordKeys(props);
     this.keyGenClassName = getKeyGeneratorClassName(new TypedProperties(props));
     refreshTimeline();
     // Register User Provided schema first

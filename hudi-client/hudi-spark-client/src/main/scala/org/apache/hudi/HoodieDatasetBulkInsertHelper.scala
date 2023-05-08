@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.SparkHoodieIndexFactory
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
 import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
@@ -66,7 +65,7 @@ object HoodieDatasetBulkInsertHelper
                            instantTime: String): Dataset[Row] = {
     val populateMetaFields = config.populateMetaFields()
     val schema = df.schema
-    val autoGenerateRecordKeys = !config.getProps.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
+    val autoGenerateRecordKeys = KeyGenUtils.enableAutoGenerateRecordKeys(config.getProps)
 
     val metaFields = Seq(
       StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, StringType),
@@ -83,13 +82,15 @@ object HoodieDatasetBulkInsertHelper
 
       val prependedRdd: RDD[InternalRow] =
         df.queryExecution.toRdd.mapPartitions { iter =>
+          val typedProps = new TypedProperties(config.getProps)
+          if (autoGenerateRecordKeys) {
+            typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()))
+            typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
+          }
           val sparkKeyGenerator =
-            ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps))
+            ReflectionUtils.loadClass(keyGeneratorClassName, typedProps)
               .asInstanceOf[BuiltinKeyGenerator]
               val keyGenerator: BuiltinKeyGenerator = if (autoGenerateRecordKeys) {
-                val typedProps = new TypedProperties(config.getProps)
-                typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()))
-                typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
                 new AutoRecordGenWrapperKeyGenerator(typedProps, sparkKeyGenerator).asInstanceOf[BuiltinKeyGenerator]
               } else {
                 sparkKeyGenerator

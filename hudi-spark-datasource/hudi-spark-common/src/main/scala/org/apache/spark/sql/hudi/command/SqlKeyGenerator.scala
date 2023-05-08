@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen._
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
@@ -50,7 +49,7 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
     }
   }
 
-  private lazy val autoRecordKeyGen = !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
+  private lazy val autoRecordKeyGen = KeyGenUtils.enableAutoGenerateRecordKeys(props)
   private lazy val complexKeyGen = if (autoRecordKeyGen) {
     new AutoRecordGenWrapperKeyGenerator(props, new ComplexKeyGenerator(props))
   } else {

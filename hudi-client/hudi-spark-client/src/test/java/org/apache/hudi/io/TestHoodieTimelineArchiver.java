@@ -663,7 +663,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
           } catch (InterruptedException e) {
             throw new HoodieException("Should not have thrown InterruptedException ", e);
           }
-          metaClient = HoodieTableMetaClient.reload(metaClient);
+          table.getMetaClient().reloadActiveTimeline();
         }
         return true;
       }, executors));
