@@ -4,9 +4,41 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Mon, 20 Mar 2023 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 26 Apr 2023 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Delta, Hudi, and Iceberg: The Data Lakehouse Trifecta]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/04/26/the-lakehouse-trifecta</link>
+            <guid>/2023/04/26/the-lakehouse-trifecta</guid>
+            <pubDate>Wed, 26 Apr 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://dzone.com/articles/delta-hudi-and-iceberg-the-data-lakehouse-trifecta">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Speed up your write latencies using Bucket Index in Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/04/07/Speed-up-your-write-latencies-using-Bucket-Index-in-Apache-Hudi</link>
+            <guid>/2023/04/07/Speed-up-your-write-latencies-using-Bucket-Index-in-Apache-Hudi</guid>
+            <pubDate>Fri, 07 Apr 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/speed-up-your-write-latencies-using-bucket-index-in-apache-hudi-2f7c297493dc">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Global vs Non-global index in Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/04/02/global-vs-non-global-index-in-apache-hudi</link>
+            <guid>/2023/04/02/global-vs-non-global-index-in-apache-hudi</guid>
+            <pubDate>Sun, 02 Apr 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/global-vs-non-global-index-in-apache-hudi-ac880b031cbc">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Spark ETL Chapter 8 with Lakehouse | Apache HUDI]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/03/23/Spark-ETL-Chapter-8-with-Lakehouse-Apache-HUDI</link>
+            <guid>/2023/03/23/Spark-ETL-Chapter-8-with-Lakehouse-Apache-HUDI</guid>
+            <pubDate>Thu, 23 Mar 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/plumbersofdatascience/spark-etl-chapter-8-with-lakehouse-apache-hudi-d4794b8a79e6">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Introducing native support for Apache Hudi, Delta Lake, and Apache Iceberg on AWS Glue for Apache Spark, Part 2: AWS Glue Studio Visual Editor]]></title>
             <link>https://hudi.apache.org/cn/blog/2023/03/20/Introducing-native-support-for-Apache Hudi-Delta-Lake-and-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark-Part-2-AWS-Glue-Studio-Visual-Editor</link>
@@ -16,16 +48,12 @@
             <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/part-2-glue-studio-visual-editor-introducing-native-support-for-apache-hudi-delta-lake-and-apache-iceberg-on-aws-glue-for-apache-spark/">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
-            <title><![CDATA[Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi]]></title>
+            <title><![CDATA[Setting Uber’s Transactional Data Lake in Motion with Incremental ETL Using Apache Hudi]]></title>
             <link>https://hudi.apache.org/cn/blog/2023/03/16/Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi</link>
             <guid>/2023/03/16/Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi</guid>
             <pubDate>Thu, 16 Mar 2023 00:00:00 GMT</pubDate>
-            <description><![CDATA[---]]></description>
-            <content:encoded><![CDATA[<hr/><p>title: &quot;Setting Uber’s Transactional Data Lake in Motion with Incremental ETL Using Apache Hudi&quot;
-authors: </p><ul><li>name: Vinoth Govindarajan</li><li>name: Saketh Chintapalli</li><li>name: Yogesh Saswade</li><li>name: Aayush Bareja
-category: blog
-image: /assets/images/blog/hudi-lakehouse-architecture-uber.png
-tags:</li><li>incremental pipeline</li><li>datalake</li><li>hudi</li><li>medallion architecture</li></ul><hr/><div url="https://www.uber.com/blog/ubers-lakehouse-architecture/">Redirecting... please wait!! </div>]]></content:encoded>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.uber.com/blog/ubers-lakehouse-architecture/">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Automate schema evolution at scale with Apache Hudi in AWS Glue | Amazon Web Services]]></title>
@@ -34,6 +62,14 @@ tags:</li><li>incremental pipeline</li><li>datalake</li><li>hudi</li><li>medalli
             <pubDate>Tue, 07 Feb 2023 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Introducing native support for Apache Hudi, Delta Lake, and Apache Iceberg on AWS Glue for Apache Spark, Part 1: Getting Started]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/01/27/Introducing-native-support-for-Apache-Hudi-Delta-Lake-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark</link>
+            <guid>/2023/01/27/Introducing-native-support-for-Apache-Hudi-Delta-Lake-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark</guid>
+            <pubDate>Fri, 27 Jan 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/part-1-getting-started-introducing-native-support-for-apache-hudi-delta-lake-and-apache-iceberg-on-aws-glue-for-apache-spark/">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Apache Hudi vs Delta Lake vs Apache Iceberg - Lakehouse Feature Comparison]]></title>

@@ -101,3 +101,5 @@ Data Summit Connect, May, 2021
 43. ["Petabyte-scale lakehouses with dbt and Apache Hudi"](https://youtu.be/aTn5dkm6rqQ) - By Vinoth Govindarajan and Vinoth Chandar.  Oct 17, 2022
 
 44. ["Build on Open Source Episode 7 - aws on Twitch"](https://www.twitch.tv/videos/1656012018) - By Vinoth Chandar. Nov 18th, 2022
+
+45. ["Apache Hudi on Amazon EMR"](https://pages.awscloud.com/rs/112-TZM-766/images/EV_analytics-sprint-week-apache-hundi-amazon-emr_Sep-2020.pdf) - By the AWS team. September 2020

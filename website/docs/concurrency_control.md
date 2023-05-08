@@ -51,10 +51,21 @@ There are 4 different lock providers that require different configurations to be
 
 **`FileSystem`** based lock provider
 
+FileSystem based lock provider supports multiple writers cross different jobs/applications based on atomic create/delete operations of the underlying filesystem.
+
+:::note
+FileSystem based lock provider is not supported with cloud storage like S3 or GCS.
+:::
+
 ```
 hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
-hoodie.write.lock.filesystem.path
+hoodie.write.lock.filesystem.path (optional)
+hoodie.write.lock.filesystem.expire (optional)
 ```
+
+When using the FileSystem based lock provider, by default, the lock file will store into `hoodie.base.path`+`/.hoodie/lock`. You may use a custom folder to store the lock file by specifying `hoodie.write.lock.filesystem.path`.
+
+In case the lock cannot release during job crash, you can set `hoodie.write.lock.filesystem.expire` (lock will never expire by default). You may also delete lock file manually in such situation.
 
 **`Zookeeper`** based lock provider
 

@@ -5,6 +5,50 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2023/04/26/the-lakehouse-trifecta",
+            "content_html": "<div url=\"https://dzone.com/articles/delta-hudi-and-iceberg-the-data-lakehouse-trifecta\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2023/04/26/the-lakehouse-trifecta",
+            "title": "Delta, Hudi, and Iceberg: The Data Lakehouse Trifecta",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-04-26T00:00:00.000Z",
+            "author": {
+                "name": "Andrey Gusarov"
+            }
+        },
+        {
+            "id": "/2023/04/07/Speed-up-your-write-latencies-using-Bucket-Index-in-Apache-Hudi",
+            "content_html": "<div url=\"https://medium.com/@simpsons/speed-up-your-write-latencies-using-bucket-index-in-apache-hudi-2f7c297493dc\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2023/04/07/Speed-up-your-write-latencies-using-Bucket-Index-in-Apache-Hudi",
+            "title": "Speed up your write latencies using Bucket Index in Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-04-07T00:00:00.000Z",
+            "author": {
+                "name": "Sivabalan Narayanan"
+            }
+        },
+        {
+            "id": "/2023/04/02/global-vs-non-global-index-in-apache-hudi",
+            "content_html": "<div url=\"https://medium.com/@simpsons/global-vs-non-global-index-in-apache-hudi-ac880b031cbc\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2023/04/02/global-vs-non-global-index-in-apache-hudi",
+            "title": "Global vs Non-global index in Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-04-02T00:00:00.000Z",
+            "author": {
+                "name": "Sivabalan Narayanan"
+            }
+        },
+        {
+            "id": "/2023/03/23/Spark-ETL-Chapter-8-with-Lakehouse-Apache-HUDI",
+            "content_html": "<div url=\"https://medium.com/plumbersofdatascience/spark-etl-chapter-8-with-lakehouse-apache-hudi-d4794b8a79e6\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2023/03/23/Spark-ETL-Chapter-8-with-Lakehouse-Apache-HUDI",
+            "title": "Spark ETL Chapter 8 with Lakehouse | Apache HUDI",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-03-23T00:00:00.000Z",
+            "author": {
+                "name": "Kalpan Shah"
+            }
+        },
+        {
             "id": "/2023/03/20/Introducing-native-support-for-Apache Hudi-Delta-Lake-and-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark-Part-2-AWS-Glue-Studio-Visual-Editor",
             "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/part-2-glue-studio-visual-editor-introducing-native-support-for-apache-hudi-delta-lake-and-apache-iceberg-on-aws-glue-for-apache-spark/\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/cn/blog/2023/03/20/Introducing-native-support-for-Apache Hudi-Delta-Lake-and-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark-Part-2-AWS-Glue-Studio-Visual-Editor",
@@ -17,11 +61,14 @@
         },
         {
             "id": "/2023/03/16/Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi",
-            "content_html": "<hr/><p>title: &quot;Setting Uber’s Transactional Data Lake in Motion with Incremental ETL Using Apache Hudi&quot;\nauthors: </p><ul><li>name: Vinoth Govindarajan</li><li>name: Saketh Chintapalli</li><li>name: Yogesh Saswade</li><li>name: Aayush Bareja\ncategory: blog\nimage: /assets/images/blog/hudi-lakehouse-architecture-uber.png\ntags:</li><li>incremental pipeline</li><li>datalake</li><li>hudi</li><li>medallion architecture</li></ul><hr/><div url=\"https://www.uber.com/blog/ubers-lakehouse-architecture/\">Redirecting... please wait!! </div>",
+            "content_html": "<div url=\"https://www.uber.com/blog/ubers-lakehouse-architecture/\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/cn/blog/2023/03/16/Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi",
-            "title": "Setting-Uber-Transactional-Data-Lake-in-Motion-with-Incremental-ETL-Using-Apache-Hudi",
-            "summary": "---",
-            "date_modified": "2023-03-16T00:00:00.000Z"
+            "title": "Setting Uber’s Transactional Data Lake in Motion with Incremental ETL Using Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-03-16T00:00:00.000Z",
+            "author": {
+                "name": "Vinoth Govindarajan"
+            }
         },
         {
             "id": "/2023/02/07/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue",
@@ -32,6 +79,17 @@
             "date_modified": "2023-02-07T00:00:00.000Z",
             "author": {
                 "name": "Subhro Bose"
+            }
+        },
+        {
+            "id": "/2023/01/27/Introducing-native-support-for-Apache-Hudi-Delta-Lake-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark",
+            "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/part-1-getting-started-introducing-native-support-for-apache-hudi-delta-lake-and-apache-iceberg-on-aws-glue-for-apache-spark/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2023/01/27/Introducing-native-support-for-Apache-Hudi-Delta-Lake-Apache-Iceberg-on-AWS-Glue-for-Apache-Spark",
+            "title": "Introducing native support for Apache Hudi, Delta Lake, and Apache Iceberg on AWS Glue for Apache Spark, Part 1: Getting Started",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-01-27T00:00:00.000Z",
+            "author": {
+                "name": "Akira Ajisaka, Noritaka Sekiyama and Savio Dsouza"
             }
         },
         {
