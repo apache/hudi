@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -37,6 +38,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -652,6 +655,31 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     String testInstant = "20210101120101";
     assertEquals(HoodieActiveTimeline.parseDateFromInstantTime(testInstant).getTime(),
         HoodieActiveTimeline.parseDateFromInstantTimeSafely(testInstant).get().getTime());
+  }
+
+  @Test
+  public void testInstantDateParsingWithCommitTimeZone() throws ParseException {
+    HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.UTC);
+    String testInstant = "20230508120101";
+    HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.UTC);
+    assertEquals("Mon May 08 20:01:01 CST 2023",
+        HoodieActiveTimeline.parseDateFromInstantTime(testInstant).toString());
+  }
+
+  @Test
+  public void testFormatDateWithCommitTimeZone() throws ParseException {
+    String testInstant = "20230508120101";
+    Date date = HoodieActiveTimeline.parseDateFromInstantTime(testInstant);
+
+    HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.LOCAL);
+    LocalDateTime localDateTime = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+    String defaultStr = HoodieInstantTimeGenerator.getInstantFromTemporalAccessor(localDateTime);
+    assertEquals(defaultStr, HoodieActiveTimeline.formatDate(date));
+
+    HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.UTC);
+    LocalDateTime utcDateTime = date.toInstant().atZone(ZoneId.of("UTC")).toLocalDateTime();
+    String utcStr = HoodieInstantTimeGenerator.getInstantFromTemporalAccessor(utcDateTime);
+    assertEquals(utcStr, HoodieActiveTimeline.formatDate(date));
   }
 
   /**
