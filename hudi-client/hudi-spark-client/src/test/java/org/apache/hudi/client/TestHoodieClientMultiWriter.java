@@ -547,7 +547,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class, names = {"MERGE_ON_READ"})
+  @EnumSource(value = HoodieTableType.class, names = {"MERGE_ON_READ", "COPY_ON_WRITE"})
   public void testMultiWriterWithAsyncLazyCleanRollback(HoodieTableType tableType) throws Exception {
     // create inserts X 1
     if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -589,14 +589,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     AtomicReference<Object> writeStatus1 = new AtomicReference<>(null);
     AtomicReference<Object> writeStatus2 = new AtomicReference<>(null);
 
-    // Create upserts, schedule cleaning, schedule compaction in parallel
     Future future1 = executor.submit(() -> {
       final int numRecords = 100;
       assertDoesNotThrow(() -> {
         writeStatus1.set(createCommitWithInserts(cfg, client1, "001", commitTime2, numRecords, false));
       });
     });
-    // Create upserts, schedule cleaning, schedule compaction in parallel
     Future future2 = executor.submit(() -> {
       final int numRecords = 100;
       assertDoesNotThrow(() -> {
@@ -607,6 +605,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     future1.get();
     future2.get();
 
+    final CountDownLatch commitCountDownLatch = new CountDownLatch(2);
     HoodieTableMetaClient tableMetaClient = client.getTableServiceClient().createMetaClient(true);
 
     // Get inflight instant stream before commit
@@ -621,6 +620,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       long start = System.currentTimeMillis();
       LOG.info(String.format("Start to commit instant %s", commitTime2));
       client1.commit(commitTime2, writeStatus1.get());
+      commitCountDownLatch.countDown();
       validInstants.add(commitTime2);
       LOG.info(String.format("commit the instant cost %d ms", System.currentTimeMillis() - start));
     });
@@ -629,14 +629,18 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       long start = System.currentTimeMillis();
       LOG.info(String.format("Start to commit instant %s", commitTime3));
       client2.commit(commitTime3, writeStatus2.get());
+      commitCountDownLatch.countDown();
       validInstants.add(commitTime3);
       LOG.info(String.format("commit the instant %s cost %d ms", commitTime3, System.currentTimeMillis() - start));
     });
 
     Future future3 = executor.submit(() -> {
-      // Sleep to let the writer complete the instants
-      assertDoesNotThrow(() -> Thread.sleep(6000));
-      LOG.info(String.format("Start to get instants to rollback", commitTime3));
+      try {
+        commitCountDownLatch.await(30000, TimeUnit.MILLISECONDS);
+      } catch (InterruptedException e) {
+        //
+      }
+      LOG.info("Start to get instants to rollback");
       List<String> instantsToRollback =
               client.getTableServiceClient().getInstantsToRollbackForLazyCleanPolicy(tableMetaClient, inflightInstants.stream());
       // No instants will be rollback though some instants may be detected as `expired`
