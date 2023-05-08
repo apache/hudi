@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class KeyGenUtils {
 
@@ -249,6 +250,16 @@ public class KeyGenUtils {
       }
     }
     return keyGenerator;
+  }
+
+  public static List<String> getRecordKeyFields(TypedProperties props) {
+    return Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
+        .map(recordKeyConfigValue ->
+            Arrays.stream(recordKeyConfigValue.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList())
+        ).orElse(Collections.emptyList());
   }
 
   /**
