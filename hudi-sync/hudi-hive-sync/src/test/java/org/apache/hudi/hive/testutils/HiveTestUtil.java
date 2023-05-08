@@ -67,6 +67,8 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.junit.platform.commons.JUnitException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -87,6 +89,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
@@ -102,6 +105,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 @SuppressWarnings("SameParameterValue")
 public class HiveTestUtil {
+  private static final Logger LOG = LoggerFactory.getLogger(HiveTestUtil.class);
 
   public static final String DB_NAME = "testdb";
   public static final String TABLE_NAME = "test1";
@@ -189,20 +193,54 @@ public class HiveTestUtil {
   public static void createCOWTable(String instantTime, int numberOfPartitions, boolean useSchemaFromCommitMetadata,
                                     String basePath, String databaseName, String tableName) throws IOException, URISyntaxException {
     Path path = new Path(basePath);
-    FileIOUtils.deleteDirectory(new File(basePath));
+    if (fileSystem.exists(path)) {
+      fileSystem.delete(path, true);
+    }
     HoodieTableMetaClient.withPropertyBuilder()
-            .setTableType(HoodieTableType.COPY_ON_WRITE)
-            .setTableName(tableName)
-            .setPayloadClass(HoodieAvroPayload.class)
-            .initTable(configuration, basePath);
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName(tableName)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .initTable(configuration, basePath);
 
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);
+    commitToTable(instantTime, numberOfPartitions, useSchemaFromCommitMetadata,
+        basePath, databaseName, tableName);
+  }
+
+  public static void commitToTable(
+      String instantTime, int numberOfPartitions, boolean useSchemaFromCommitMetadata)
+      throws IOException, URISyntaxException {
+    commitToTable(instantTime, numberOfPartitions, useSchemaFromCommitMetadata,
+        basePath, DB_NAME, TABLE_NAME);
+  }
+
+  public static void commitToTable(
+      String instantTime, int numberOfPartitions, boolean useSchemaFromCommitMetadata,
+      String basePath, String databaseName, String tableName) throws IOException, URISyntaxException {
     ZonedDateTime dateTime = ZonedDateTime.now();
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions, true,
-            useSchemaFromCommitMetadata, dateTime, instantTime, basePath);
+        useSchemaFromCommitMetadata, dateTime, instantTime, basePath);
     createdTablesSet.add(databaseName + "." + tableName);
     createCommitFile(commitMetadata, instantTime, basePath);
+  }
+
+  public static void removeCommitFromActiveTimeline(String instantTime, String actionType) {
+    List<Path> pathsToDelete = new ArrayList<>();
+    Path metaFolderPath = new Path(basePath, METAFOLDER_NAME);
+    String actionSuffix = "." + actionType;
+    pathsToDelete.add(new Path(metaFolderPath, instantTime + actionSuffix));
+    pathsToDelete.add(new Path(metaFolderPath, instantTime + actionSuffix + ".requested"));
+    pathsToDelete.add(new Path(metaFolderPath, instantTime + actionSuffix + ".inflight"));
+    pathsToDelete.forEach(path -> {
+      try {
+        if (fileSystem.exists(path)) {
+          fileSystem.delete(path, false);
+        }
+      } catch (IOException e) {
+        LOG.warn("Error deleting file: ", e);
+      }
+    });
   }
 
   public static void createCOWTable(String instantTime, int numberOfPartitions, boolean useSchemaFromCommitMetadata)
@@ -480,7 +518,7 @@ public class HiveTestUtil {
 
   public static void createCommitFile(HoodieCommitMetadata commitMetadata, String instantTime, String basePath) throws IOException {
     byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
-    Path fullPath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/"
         + HoodieTimeline.makeCommitFileName(instantTime));
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
@@ -489,7 +527,7 @@ public class HiveTestUtil {
 
   public static void createReplaceCommitFile(HoodieReplaceCommitMetadata commitMetadata, String instantTime) throws IOException {
     byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
-    Path fullPath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/"
         + HoodieTimeline.makeReplaceFileName(instantTime));
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
@@ -504,7 +542,7 @@ public class HiveTestUtil {
   private static void createCompactionCommitFile(HoodieCommitMetadata commitMetadata, String instantTime)
       throws IOException {
     byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
-    Path fullPath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/"
         + HoodieTimeline.makeCommitFileName(instantTime));
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
@@ -514,7 +552,7 @@ public class HiveTestUtil {
   private static void createDeltaCommitFile(HoodieCommitMetadata deltaCommitMetadata, String deltaCommitTime)
       throws IOException {
     byte[] bytes = deltaCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
-    Path fullPath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/"
         + HoodieTimeline.makeDeltaFileName(deltaCommitTime));
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);

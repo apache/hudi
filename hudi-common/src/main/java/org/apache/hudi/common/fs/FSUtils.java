@@ -225,7 +225,8 @@ public class FSUtils {
     String fullPartitionPathStr = fullPartitionPath.toString();
 
     if (!fullPartitionPathStr.startsWith(basePath.toString())) {
-      throw new IllegalArgumentException("Partition path does not belong to base-path");
+      throw new IllegalArgumentException("Partition path \"" + fullPartitionPathStr
+          + "\" does not belong to base-path \"" + basePath + "\"");
     }
 
     int partitionStartIndex = fullPartitionPathStr.indexOf(basePath.getName(),
