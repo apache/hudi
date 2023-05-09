@@ -109,9 +109,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
 
     val cfg = new BootstrapExecutorUtils.Config()
     cfg.setTableName(tableName)
-    if (database.isDefined) {
-      cfg.setDatabase(database.get)
-    }
+    cfg.setDatabase(database.getOrElse(sparkSession.sessionState.catalog.getCurrentDatabase))
     cfg.setTableType(tableType)
     cfg.setBasePath(basePath)
     cfg.setBaseFileFormat(baseFileFormat)
