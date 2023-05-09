@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Properties;
 
 /**
  * Base class that provides support for seamlessly applying changes captured via Debezium.
@@ -57,7 +58,7 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
     Option<IndexedRecord> insertValue = getInsertRecord(schema);
-    return insertValue.isPresent() ? handleDeleteOperation(insertValue.get()) : Option.empty();
+    return handleDeleteOperation(insertValue);
   }
 
   @Override
@@ -77,15 +78,32 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
 
   protected abstract boolean shouldPickCurrentRecord(IndexedRecord currentRecord, IndexedRecord insertRecord, Schema schema) throws IOException;
 
-  private Option<IndexedRecord> handleDeleteOperation(IndexedRecord insertRecord) {
-    boolean delete = false;
-    if (insertRecord instanceof GenericRecord) {
-      GenericRecord record = (GenericRecord) insertRecord;
-      Object value = HoodieAvroUtils.getFieldVal(record, DebeziumConstants.FLATTENED_OP_COL_NAME);
-      delete = value != null && value.toString().equalsIgnoreCase(DebeziumConstants.DELETE_OP);
+  @Override
+  public boolean isDeleted(Schema schema, Properties props) {
+    try {
+      Option<IndexedRecord> insertValue = getInsertValue(schema, props);
+      return !insertValue.isPresent() || checkDeleteMarker(insertValue.get());
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
+  }
 
-    return delete ? Option.empty() : Option.of(insertRecord);
+  private static Option<IndexedRecord> handleDeleteOperation(Option<IndexedRecord> insertRecordOpt) {
+    if (!insertRecordOpt.isPresent()) {
+      return Option.empty();
+    }
+    IndexedRecord insertRecord = insertRecordOpt.get();
+    return checkDeleteMarker(insertRecord) ? Option.empty() : insertRecordOpt;
+  }
+
+  private static boolean checkDeleteMarker(IndexedRecord record) {
+    boolean isDeleteRecord = false;
+    if (record instanceof GenericRecord) {
+      GenericRecord r = (GenericRecord) record;
+      Object value = HoodieAvroUtils.getFieldVal(r, DebeziumConstants.FLATTENED_OP_COL_NAME);
+      isDeleteRecord = value != null && value.toString().equalsIgnoreCase(DebeziumConstants.DELETE_OP);
+    }
+    return isDeleteRecord;
   }
 
   private Option<IndexedRecord> getInsertRecord(Schema schema) throws IOException {

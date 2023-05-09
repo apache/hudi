@@ -56,16 +56,22 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   /**
    *
    * Handle a possible delete - check for "D" in Op column and return empty row if found.
-   * @param insertValue The new row that is being "inserted".
+   * @param insertValueOpt The new row that is being "inserted".
    */
-  private Option<IndexedRecord> handleDeleteOperation(IndexedRecord insertValue) throws IOException {
-    boolean delete = false;
-    if (insertValue instanceof GenericRecord) {
-      GenericRecord record = (GenericRecord) insertValue;
-      delete = record.get(OP_FIELD) != null && record.get(OP_FIELD).toString().equalsIgnoreCase("D");
+  private Option<IndexedRecord> handleDeleteOperation(Option<IndexedRecord> insertValueOpt) {
+    if (!insertValueOpt.isPresent()) {
+      return Option.empty();
     }
+    return checkDeleteMarker(insertValueOpt.get()) ? Option.empty() : insertValueOpt;
+  }
 
-    return delete ? Option.empty() : Option.of(insertValue);
+  private static boolean checkDeleteMarker(IndexedRecord record) {
+    boolean isDeleteRecord = false;
+    if (record instanceof GenericRecord) {
+      GenericRecord r = (GenericRecord) record;
+      isDeleteRecord = r.get(OP_FIELD) != null && r.get(OP_FIELD).toString().equalsIgnoreCase("D");
+    }
+    return isDeleteRecord;
   }
 
   @Override
@@ -75,8 +81,7 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    IndexedRecord insertValue = super.getInsertValue(schema).get();
-    return handleDeleteOperation(insertValue);
+    return handleDeleteOperation(super.getInsertValue(schema));
   }
 
   @Override
@@ -88,10 +93,16 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
       throws IOException {
-    Option<IndexedRecord> insertValue = super.getInsertValue(schema);
-    if (!insertValue.isPresent()) {
-      return Option.empty();
+    return handleDeleteOperation(super.getInsertValue(schema));
+  }
+
+  @Override
+  public boolean isDeleted(Schema schema, Properties props) {
+    try {
+      Option<IndexedRecord> insertValue = getInsertValue(schema, props);
+      return !insertValue.isPresent() || checkDeleteMarker(insertValue.get());
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
-    return handleDeleteOperation(insertValue.get());
   }
 }
