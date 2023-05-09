@@ -49,6 +49,9 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   private final FileSystem fs;
 
+  private final String sourceFile;
+  private final String targetFile;
+
   protected Schema sourceSchema;
 
   protected Schema targetSchema;
@@ -56,14 +59,19 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   public FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_FILE_PROP));
-    String sourceFile = props.getString(Config.SOURCE_SCHEMA_FILE_PROP);
-    boolean shouldSanitize = SanitizationUtils.getShouldSanitize(props);
-    String invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
+    this.sourceFile = props.getString(Config.SOURCE_SCHEMA_FILE_PROP);
+    this.targetFile = props.getString(Config.TARGET_SCHEMA_FILE_PROP);
     this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
-    this.sourceSchema = readAvroSchemaFromFile(sourceFile, this.fs, shouldSanitize, invalidCharMask);
+    this.sourceSchema = parseSchema(this.sourceFile);
     if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {
-      this.targetSchema = readAvroSchemaFromFile(props.getString(Config.TARGET_SCHEMA_FILE_PROP), this.fs, shouldSanitize, invalidCharMask);
+      this.targetSchema = parseSchema(this.targetFile);
     }
+  }
+
+  private Schema parseSchema(String schemaFile){
+    boolean shouldSanitize = SanitizationUtils.getShouldSanitize(this.config);
+    String invalidCharMask = SanitizationUtils.getInvalidCharMask(this.config);
+    return readAvroSchemaFromFile(schemaFile, this.fs, shouldSanitize, invalidCharMask);
   }
 
   @Override
@@ -90,9 +98,10 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     return SanitizationUtils.parseAvroSchema(schemaStr, sanitizeSchema, invalidCharMask);
   }
 
-  // Per write batch, refresh the schema from the file
+  // Per write batch, refresh the schemas from the file
   @Override
   public void refresh() {
-    this.sourceSchema = readAvroSchemaFromFile(sourceFile, this.fs, shouldSanitize, invalidCharMask);
+    this.sourceSchema = parseSchema(this.sourceFile);
+    this.targetSchema = parseSchema(this.targetFile);
   }
 }

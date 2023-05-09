@@ -73,7 +73,12 @@ public class SchemaRegistryProvider extends SchemaProvider {
     public static final String SSL_KEY_PASSWORD_PROP = "schema.registry.ssl.key.password";
   }
 
-  protected Schema cachedSchema;
+  protected Schema cachedSourceSchema;
+  protected Schema cachedTargetSchema;
+
+  private final String srcSchemaRegistryUrl;
+  private final String targetSchemaRegistryUrl;
+
 
   @FunctionalInterface
   public interface SchemaConverter {
@@ -144,7 +149,9 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL_PROP));
+    this.srcSchemaRegistryUrl = props.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
+    this.targetSchemaRegistryUrl = props.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, this.srcSchemaRegistryUrl);
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(this.srcSchemaRegistryUrl));
     if (config.containsKey(Config.SSL_KEYSTORE_LOCATION_PROP)
         || config.containsKey(Config.SSL_TRUSTSTORE_LOCATION_PROP)) {
       setUpSSLStores();
@@ -173,35 +180,38 @@ public class SchemaRegistryProvider extends SchemaProvider {
     }
 
   }
-
+  
   @Override
   public Schema getSourceSchema() {
-    String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
     try {
-      if (cachedSchema == null) {
-        cachedSchema = parseSchemaFromRegistry(registryUrl);
+      if (cachedSourceSchema == null) {
+        cachedSourceSchema = parseSchemaFromRegistry(this.srcSchemaRegistryUrl);
       }
-      return cachedSchema;
+      return cachedSourceSchema;
     } catch (IOException ioe) {
-      throw new HoodieIOException("Error reading source schema from registry :" + registryUrl, ioe);
+      throw new HoodieIOException("Error reading source schema from registry :" + this.srcSchemaRegistryUrl, ioe);
     }
   }
 
   @Override
   public Schema getTargetSchema() {
-    String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
-    String targetRegistryUrl = config.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, registryUrl);
     try {
-      return parseSchemaFromRegistry(targetRegistryUrl);
+      if (cachedTargetSchema == null) {
+        cachedTargetSchema = parseSchemaFromRegistry(this.targetSchemaRegistryUrl);
+      }
+      return cachedTargetSchema;
     } catch (IOException ioe) {
-      throw new HoodieIOException("Error reading target schema from registry :" + registryUrl, ioe);
+      throw new HoodieIOException("Error reading target schema from registry :" + this.targetSchemaRegistryUrl, ioe);
     }
   }
+
   // Per SyncOnce call, the cachedschema for the provider is dropped and SourceSchema re-attained
   // Subsequent calls to getSourceSchema within the write batch should be cached.
   @Override
   public void refresh() {
-    cachedSchema = null;
+    cachedSourceSchema = null;
+    cachedTargetSchema = null;
     getSourceSchema();
+    getTargetSchema();
   }
 }

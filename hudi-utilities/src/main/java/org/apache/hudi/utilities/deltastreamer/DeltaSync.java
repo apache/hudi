@@ -429,6 +429,8 @@ public class DeltaSync implements Serializable, Closeable {
       result = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
           srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
 
+      // Should this be at the beginning or the end, will its placement potentially affect the commit
+      // TODO: write tests for this
       schemaProvider.refresh();
     }
 
