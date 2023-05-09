@@ -22,6 +22,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX
 import org.apache.hudi.HoodieBaseRelation.projectReader
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.spark.rdd.RDD
@@ -31,6 +32,25 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
+
+case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
+                                override val metaClient: HoodieTableMetaClient,
+                                override val optParams: Map[String, String],
+                                private val userSchema: Option[StructType],
+                                private val globPaths: Seq[Path],
+                                private val prunedDataSchema: Option[StructType] = None)
+  extends AbstractBaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, globPaths, prunedDataSchema) {
+
+  override type Relation = BaseFileOnlyRelation
+
+  override def imbueConfigs(sqlContext: SQLContext): Unit = {
+    super.imbueConfigs(sqlContext)
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+  }
+
+  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
+    this.copy(prunedDataSchema = Some(prunedSchema))
+}
 
 /**
  * [[BaseRelation]] implementation only reading Base files of Hudi tables, essentially supporting following querying
@@ -44,21 +64,25 @@ import org.apache.spark.sql.types.StructType
  * fact that it injects real partition's path as the value of the partition field, which Hudi ultimately persists
  * as part of the record payload. In some cases, however, partition path might not necessarily be equal to the
  * verbatim value of the partition path field (when custom [[KeyGenerator]] is used) therefore leading to incorrect
- * partition field values being written
+ * partition field values being written.
+ *
+ * Reason this is extracted as a standalone base class is such that both
+ * Snapshot and Incremental relations could inherit from it while both being Scala
+ * case classes
  */
-case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
-                                override val metaClient: HoodieTableMetaClient,
-                                override val optParams: Map[String, String],
-                                private val userSchema: Option[StructType],
-                                private val globPaths: Seq[Path],
-                                private val prunedDataSchema: Option[StructType] = None)
+abstract class AbstractBaseFileOnlyRelation(sqlContext: SQLContext,
+                                            metaClient: HoodieTableMetaClient,
+                                            optParams: Map[String, String],
+                                            userSchema: Option[StructType],
+                                            globPaths: Seq[Path],
+                                            prunedDataSchema: Option[StructType] = None)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema)
     with SparkAdapterSupport {
 
   case class HoodieBaseFileSplit(filePartition: FilePartition) extends HoodieFileSplit
 
   override type FileSplit = HoodieBaseFileSplit
-  override type Relation = BaseFileOnlyRelation
+
 
   // TODO(HUDI-3204) this is to override behavior (exclusively) for COW tables to always extract
   //                 partition values from partition path
@@ -114,8 +138,13 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
       .asInstanceOf[HoodieUnsafeRDD]
   }
 
-  protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[HoodieBaseFileSplit] = {
+  protected def collectFileSplits(partitionFilters: Seq[Expression],
+                                  dataFilters: Seq[Expression]): Seq[HoodieBaseFileSplit] = {
     val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
+    buildSplits(fileSlices)
+  }
+
+  protected def buildSplits(fileSlices: Seq[FileSlice]): Seq[HoodieBaseFileSplit] = {
     val fileSplits = fileSlices.flatMap { fileSlice =>
       // TODO fix, currently assuming parquet as underlying format
       val fs = fileSlice.getBaseFile.get.getFileStatus
