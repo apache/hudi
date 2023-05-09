@@ -19,7 +19,6 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.util.Option;
 
 import java.text.ParseException;
 import java.time.LocalDateTime;
@@ -58,7 +57,7 @@ public class HoodieInstantTimeGenerator {
   // when performing comparisons such as LESS_THAN_OR_EQUAL_TO
   private static final String DEFAULT_MILLIS_EXT = "999";
 
-  private static Option<HoodieTimelineTimeZone> commitTimeZoneOpt = Option.empty();
+  private static HoodieTimelineTimeZone commitTimeZone = HoodieTimelineTimeZone.LOCAL;
 
   /**
    * Returns next instant time that adds N milliseconds to the current time.
@@ -67,7 +66,6 @@ public class HoodieInstantTimeGenerator {
    * @param milliseconds Milliseconds to add to current time while generating the new instant time
    */
   public static String createNewInstantTime(long milliseconds) {
-    HoodieTimelineTimeZone commitTimeZone = commitTimeZoneOpt.get();
     return lastInstantTime.updateAndGet((oldVal) -> {
       String newCommitTime;
       do {
@@ -135,7 +133,7 @@ public class HoodieInstantTimeGenerator {
   }
 
   public static void setCommitTimeZone(HoodieTimelineTimeZone commitTimeZone) {
-    commitTimeZoneOpt = Option.of(commitTimeZone);
+    HoodieInstantTimeGenerator.commitTimeZone = commitTimeZone;
   }
 
   public static boolean isValidInstantTime(String instantTime) {
@@ -145,9 +143,5 @@ public class HoodieInstantTimeGenerator {
     } catch (NumberFormatException e) {
       return false;
     }
-  }
-
-  public static HoodieTimelineTimeZone getTimelineTimeZone() {
-    return commitTimeZoneOpt.get();
   }
 }
