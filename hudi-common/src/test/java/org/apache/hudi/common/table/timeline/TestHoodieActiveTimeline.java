@@ -661,8 +661,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   public void testInstantDateParsingWithCommitTimeZone() throws ParseException {
     HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.UTC);
     String testInstant = "20230508120101";
-    HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.UTC);
-    assertEquals("Mon May 08 20:01:01 CST 2023",
+    assertEquals("Mon May 08 12:01:01 UTC 2023",
         HoodieActiveTimeline.parseDateFromInstantTime(testInstant).toString());
   }
 
