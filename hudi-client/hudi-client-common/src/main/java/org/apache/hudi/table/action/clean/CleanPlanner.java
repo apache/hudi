@@ -219,7 +219,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   /**
    *  Verify whether file slice exists in savepointedFiles, check both base file and log files
    */
-  private boolean isFsExistInSavepointedFiles(FileSlice fs, List<String> savepointedFiles) {
+  private boolean isFileSliceExistInSavepointedFiles(FileSlice fs, List<String> savepointedFiles) {
     if (fs.getBaseFile().isPresent() && savepointedFiles.contains(fs.getBaseFile().get().getFileName())) {
       return true;
     }
@@ -270,7 +270,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       // Delete the remaining files
       while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
-        if (isFsExistInSavepointedFiles(nextSlice, savepointedFiles)) {
+        if (isFileSliceExistInSavepointedFiles(nextSlice, savepointedFiles)) {
           // do not clean up a savepoint data file
           continue;
         }
@@ -341,7 +341,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         for (FileSlice aSlice : fileSliceList) {
           Option<HoodieBaseFile> aFile = aSlice.getBaseFile();
           String fileCommitTime = aSlice.getBaseInstantTime();
-          if (isFsExistInSavepointedFiles(aSlice, savepointedFiles)) {
+          if (isFileSliceExistInSavepointedFiles(aSlice, savepointedFiles)) {
             // do not clean up a savepoint data file
             continue;
           }
@@ -435,7 +435,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
     return replacedGroups.flatMap(HoodieFileGroup::getAllFileSlices)
         // do not delete savepointed files  (archival will make sure corresponding replacecommit file is not deleted)
-        .filter(slice -> !isFsExistInSavepointedFiles(slice, savepointedFiles))
+        .filter(slice -> !isFileSliceExistInSavepointedFiles(slice, savepointedFiles))
         .flatMap(slice -> getCleanFileInfoForSlice(slice).stream())
         .collect(Collectors.toList());
   }
