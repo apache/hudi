@@ -38,7 +38,7 @@ import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.SparkAdapter
-import org.apache.spark.sql.sources.{BaseRelation, Filter}
+import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
@@ -128,14 +128,5 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
-  }
-
-  override def translateFilter(predicate: Expression,
-                               supportNestedPredicatePushdown: Boolean = false): Option[Filter] = {
-    if (supportNestedPredicatePushdown) {
-      throw new UnsupportedOperationException("Nested predicate push down is not supported")
-    }
-
-    DataSourceStrategy.translateFilter(predicate, supportNestedPredicatePushdown)
   }
 }
