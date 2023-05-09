@@ -27,6 +27,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.event.WriteResultEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.sink.utils.TimeWait;
@@ -204,7 +205,7 @@ public abstract class AbstractStreamWriteFunction<I>
         event.setTaskID(taskID);
         // The checkpoint succeed but the meta does not commit,
         // re-commit the inflight instant
-        this.eventGateway.sendEventToCoordinator(event);
+        this.eventGateway.sendEventToCoordinator(new WriteResultEvent(event, currentInstant));
         LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
         eventSent = true;
       }
@@ -215,7 +216,7 @@ public abstract class AbstractStreamWriteFunction<I>
   }
 
   protected void sendBootstrapEvent() {
-    this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
+    this.eventGateway.sendEventToCoordinator(WriteResultEvent.emptyBootstrap(taskID, currentInstant));
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
   }
 
