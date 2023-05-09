@@ -23,6 +23,7 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
 import org.apache.hudi.HoodieMergeOnReadRDD.CONFIG_INSTANTIATION_LOCK
 import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.spark.rdd.RDD
@@ -64,6 +65,9 @@ private[hudi] case class HoodieMergeOnReadBaseFileReaders(fullSchemaReader: Base
  * @param tableState table's state
  * @param mergeType type of merge performed
  * @param fileSplits target file-splits this RDD will be iterating over
+ * @param shouldEqualStartTimestamp whether to use the equals sign to filter the commitTime
+ * @param startTimestamp start timestamp to filter records
+ * @param endTimestamp end timestamp to filter records
  */
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
@@ -72,12 +76,21 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            requiredSchema: HoodieTableSchema,
                            tableState: HoodieTableState,
                            mergeType: String,
-                           @transient fileSplits: Seq[HoodieMergeOnReadFileSplit])
+                           @transient fileSplits: Seq[HoodieMergeOnReadFileSplit],
+                           shouldEqualStartTimestamp: Boolean,
+                           startTimestamp: String,
+                           endTimestamp: String)
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
   private val hadoopConfBroadcast = sc.broadcast(new SerializableWritable(config))
+
+  private val commitTimeMetadataFieldIdx = try {
+    requiredSchema.structTypeSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+  } catch {
+    case _: Exception => -1
+  }
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val partition = split.asInstanceOf[HoodieMergeOnReadPartition]
@@ -117,7 +130,19 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     }
 
     iter
-  }
+  }.filter(row =>
+    if (commitTimeMetadataFieldIdx < 0 ||
+      startTimestamp == null || startTimestamp.isEmpty || endTimestamp == null || endTimestamp.isEmpty) {
+      true
+    } else {
+      val commitTime = row.getString(commitTimeMetadataFieldIdx)
+      if (shouldEqualStartTimestamp) {
+        commitTime >= startTimestamp && commitTime <= endTimestamp
+      } else {
+        commitTime > startTimestamp && commitTime <= endTimestamp
+      }
+    }
+  )
 
   private def pickBaseFileReader(): BaseFileReader = {
     // NOTE: This is an optimization making sure that even for MOR tables we fetch absolute minimum
