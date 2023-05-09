@@ -33,6 +33,20 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 
+/**
+ * [[BaseRelation]] implementation only reading Base files of Hudi tables, essentially supporting following querying
+ * modes:
+ * <ul>
+ *  <li>For COW tables: Snapshot</li>
+ *  <li>For MOR tables: Read-optimized</li>
+ * </ul>
+ *
+ * NOTE: The reason this Relation is used in-liue of Spark's default [[HadoopFsRelation]] is primarily due to the
+ * fact that it injects real partition's path as the value of the partition field, which Hudi ultimately persists
+ * as part of the record payload. In some cases, however, partition path might not necessarily be equal to the
+ * verbatim value of the partition path field (when custom [[KeyGenerator]] is used) therefore leading to incorrect
+ * partition field values being written.
+ */
 case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
                                 override val metaClient: HoodieTableMetaClient,
                                 override val optParams: Map[String, String],
@@ -50,22 +64,86 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
 
   override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = Some(prunedSchema))
+
+  /**
+   * NOTE: We have to fallback to [[HadoopFsRelation]] to make sure that all of the Spark optimizations could be
+   * equally applied to Hudi tables, since some of those are predicated on the usage of [[HadoopFsRelation]],
+   * and won't be applicable in case of us using our own custom relations (one of such optimizations is [[SchemaPruning]]
+   * rule; you can find more details in HUDI-3896)
+   */
+  def toHadoopFsRelation: HadoopFsRelation = {
+    val enableFileIndex = HoodieSparkConfUtils.getConfigValue(optParams, sparkSession.sessionState.conf,
+      ENABLE_HOODIE_FILE_INDEX.key, ENABLE_HOODIE_FILE_INDEX.defaultValue.toString).toBoolean
+    if (enableFileIndex && globPaths.isEmpty) {
+      // NOTE: There are currently 2 ways partition values could be fetched:
+      //          - Source columns (producing the values used for physical partitioning) will be read
+      //          from the data file
+      //          - Values parsed from the actual partition path would be appended to the final dataset
+      //
+      //        In the former case, we don't need to provide the partition-schema to the relation,
+      //        therefore we simply stub it w/ empty schema and use full table-schema as the one being
+      //        read from the data file.
+      //
+      //        In the latter, we have to specify proper partition schema as well as "data"-schema, essentially
+      //        being a table-schema with all partition columns stripped out
+      val (partitionSchema, dataSchema) = if (shouldExtractPartitionValuesFromPartitionPath) {
+        (fileIndex.partitionSchema, fileIndex.dataSchema)
+      } else {
+        (StructType(Nil), tableStructSchema)
+      }
+
+      HadoopFsRelation(
+        location = fileIndex,
+        partitionSchema = partitionSchema,
+        dataSchema = dataSchema,
+        bucketSpec = None,
+        fileFormat = fileFormat,
+        optParams)(sparkSession)
+    } else {
+      val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
+      val extraReadPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
+      // NOTE: Spark is able to infer partitioning values from partition path only when Hive-style partitioning
+      //       scheme is used. Therefore, we fallback to reading the table as non-partitioned (specifying
+      //       partitionColumns = Seq.empty) whenever Hive-style partitioning is not involved
+      val partitionColumns: Seq[String] = if (tableConfig.getHiveStylePartitioningEnable.toBoolean) {
+        this.partitionColumns
+      } else {
+        Seq.empty
+      }
+
+      DataSource.apply(
+        sparkSession = sparkSession,
+        paths = extraReadPaths,
+        // Here we should specify the schema to the latest commit schema since
+        // the table schema evolution.
+        userSpecifiedSchema = userSchema.orElse(Some(tableStructSchema)),
+        className = fileFormatClassName,
+        options = optParams ++ Map(
+          // Since we're reading the table as just collection of files we have to make sure
+          // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
+          // while keeping previous versions of the files around as well.
+          //
+          // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
+          "mapreduce.input.pathFilter.class" -> classOf[HoodieROTablePathFilter].getName,
+
+          // We have to override [[EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH]] setting, since
+          // the relation might have this setting overridden
+          DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key -> shouldExtractPartitionValuesFromPartitionPath.toString,
+
+          // NOTE: We have to specify table's base-path explicitly, since we're requesting Spark to read it as a
+          //       list of globbed paths which complicates partitioning discovery for Spark.
+          //       Please check [[PartitioningAwareFileIndex#basePaths]] comment for more details.
+          PartitioningAwareFileIndex.BASE_PATH_PARAM -> metaClient.getBasePathV2.toString
+        ),
+        partitionColumns = partitionColumns
+      )
+        .resolveRelation()
+        .asInstanceOf[HadoopFsRelation]
+    }
+  }
 }
 
 /**
- * [[BaseRelation]] implementation only reading Base files of Hudi tables, essentially supporting following querying
- * modes:
- * <ul>
- *  <li>For COW tables: Snapshot</li>
- *  <li>For MOR tables: Read-optimized</li>
- * </ul>
- *
- * NOTE: The reason this Relation is used in-liue of Spark's default [[HadoopFsRelation]] is primarily due to the
- * fact that it injects real partition's path as the value of the partition field, which Hudi ultimately persists
- * as part of the record payload. In some cases, however, partition path might not necessarily be equal to the
- * verbatim value of the partition path field (when custom [[KeyGenerator]] is used) therefore leading to incorrect
- * partition field values being written.
- *
  * Reason this is extracted as a standalone base class is such that both
  * Snapshot and Incremental relations could inherit from it while both being Scala
  * case classes
@@ -162,82 +240,5 @@ abstract class AbstractBaseFileOnlyRelation(sqlContext: SQLContext,
 
     sparkAdapter.getFilePartitions(sparkSession, fileSplits, maxSplitBytes)
       .map(HoodieBaseFileSplit.apply)
-  }
-
-  /**
-   * NOTE: We have to fallback to [[HadoopFsRelation]] to make sure that all of the Spark optimizations could be
-   *       equally applied to Hudi tables, since some of those are predicated on the usage of [[HadoopFsRelation]],
-   *       and won't be applicable in case of us using our own custom relations (one of such optimizations is [[SchemaPruning]]
-   *       rule; you can find more details in HUDI-3896)
-   */
-  def toHadoopFsRelation: HadoopFsRelation = {
-    val enableFileIndex = HoodieSparkConfUtils.getConfigValue(optParams, sparkSession.sessionState.conf,
-      ENABLE_HOODIE_FILE_INDEX.key, ENABLE_HOODIE_FILE_INDEX.defaultValue.toString).toBoolean
-    if (enableFileIndex && globPaths.isEmpty) {
-      // NOTE: There are currently 2 ways partition values could be fetched:
-      //          - Source columns (producing the values used for physical partitioning) will be read
-      //          from the data file
-      //          - Values parsed from the actual partition path would be appended to the final dataset
-      //
-      //        In the former case, we don't need to provide the partition-schema to the relation,
-      //        therefore we simply stub it w/ empty schema and use full table-schema as the one being
-      //        read from the data file.
-      //
-      //        In the latter, we have to specify proper partition schema as well as "data"-schema, essentially
-      //        being a table-schema with all partition columns stripped out
-      val (partitionSchema, dataSchema) = if (shouldExtractPartitionValuesFromPartitionPath) {
-        (fileIndex.partitionSchema, fileIndex.dataSchema)
-      } else {
-        (StructType(Nil), tableStructSchema)
-      }
-
-      HadoopFsRelation(
-        location = fileIndex,
-        partitionSchema = partitionSchema,
-        dataSchema = dataSchema,
-        bucketSpec = None,
-        fileFormat = fileFormat,
-        optParams)(sparkSession)
-    } else {
-      val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
-      val extraReadPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
-      // NOTE: Spark is able to infer partitioning values from partition path only when Hive-style partitioning
-      //       scheme is used. Therefore, we fallback to reading the table as non-partitioned (specifying
-      //       partitionColumns = Seq.empty) whenever Hive-style partitioning is not involved
-      val partitionColumns: Seq[String] = if (tableConfig.getHiveStylePartitioningEnable.toBoolean) {
-        this.partitionColumns
-      } else {
-        Seq.empty
-      }
-
-      DataSource.apply(
-        sparkSession = sparkSession,
-        paths = extraReadPaths,
-        // Here we should specify the schema to the latest commit schema since
-        // the table schema evolution.
-        userSpecifiedSchema = userSchema.orElse(Some(tableStructSchema)),
-        className = fileFormatClassName,
-        options = optParams ++ Map(
-          // Since we're reading the table as just collection of files we have to make sure
-          // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
-          // while keeping previous versions of the files around as well.
-          //
-          // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
-          "mapreduce.input.pathFilter.class" -> classOf[HoodieROTablePathFilter].getName,
-
-          // We have to override [[EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH]] setting, since
-          // the relation might have this setting overridden
-          DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key -> shouldExtractPartitionValuesFromPartitionPath.toString,
-
-          // NOTE: We have to specify table's base-path explicitly, since we're requesting Spark to read it as a
-          //       list of globbed paths which complicates partitioning discovery for Spark.
-          //       Please check [[PartitioningAwareFileIndex#basePaths]] comment for more details.
-          PartitioningAwareFileIndex.BASE_PATH_PARAM -> metaClient.getBasePathV2.toString
-        ),
-        partitionColumns = partitionColumns
-      )
-        .resolveRelation()
-        .asInstanceOf[HadoopFsRelation]
-    }
   }
 }
