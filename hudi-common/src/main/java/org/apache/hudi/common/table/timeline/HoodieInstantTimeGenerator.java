@@ -31,7 +31,6 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoField;
 import java.time.temporal.TemporalAccessor;
 import java.util.Date;
-import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -97,7 +96,6 @@ public class HoodieInstantTimeGenerator {
 
       LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
       Instant instant = dt.atZone(getZoneId()).toInstant();
-      TimeZone.setDefault(TimeZone.getTimeZone(getZoneId()));
       return Date.from(instant);
     } catch (DateTimeParseException e) {
       throw new ParseException(e.getMessage(), e.getErrorIndex());
