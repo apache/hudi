@@ -25,7 +25,6 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.constant.KeyGeneratorType
-import org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME
 import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -110,7 +109,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
 
     val cfg = new BootstrapExecutorUtils.Config()
     cfg.setTableName(tableName)
-    cfg.setDatabase(database.getOrElse(META_SYNC_DATABASE_NAME.defaultValue()))
+    cfg.setDatabase(database.getOrElse(sparkSession.sessionState.catalog.getCurrentDatabase))
     cfg.setTableType(tableType)
     cfg.setBasePath(basePath)
     cfg.setBaseFileFormat(baseFileFormat)
