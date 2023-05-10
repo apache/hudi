@@ -76,7 +76,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.text.ParseException;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -489,7 +488,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         String latestCommitToArchive = instantsToArchive.get(instantsToArchive.size() - 1).getTimestamp();
         try {
           Instant latestCommitInstant = HoodieActiveTimeline.parseDateFromInstantTime(commitTimeline.lastInstant().get().getTimestamp()).toInstant();
-          ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(latestCommitInstant, ZoneId.systemDefault());
+          ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(latestCommitInstant, metaClient.getTableConfig().getTimelineTimezone().getZoneId());
           String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(config.getCleanerHoursRetained()).toInstant()));
           if (HoodieTimeline.compareTimestamps(latestCommitToArchive, GREATER_THAN_OR_EQUALS, earliestTimeToRetain)) {
             throw new HoodieIOException("Please align your archival configs based on cleaner configs. 'hoodie.keep.min.commits' : "
