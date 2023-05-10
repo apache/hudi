@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -215,6 +216,21 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   }
 
   /**
+   *  Verify whether file slice exists in savepointedFiles, check both base file and log files
+   */
+  private boolean isFileSliceExistInSavepointedFiles(FileSlice fs, List<String> savepointedFiles) {
+    if (fs.getBaseFile().isPresent() && savepointedFiles.contains(fs.getBaseFile().get().getFileName())) {
+      return true;
+    }
+    for (HoodieLogFile hoodieLogFile : fs.getLogFiles().collect(Collectors.toList())) {
+      if (savepointedFiles.contains(hoodieLogFile.getFileName())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Selects the older versions of files for cleaning, such that it bounds the number of versions of each file. This
    * policy is useful, if you are simply interested in querying the table, and you don't want too many versions for a
    * single file (i.e., run it with versionsRetained = 1)
@@ -253,8 +269,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       // Delete the remaining files
       while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
-        Option<HoodieBaseFile> dataFile = nextSlice.getBaseFile();
-        if (dataFile.isPresent() && savepointedFiles.contains(dataFile.get().getFileName())) {
+        if (isFileSliceExistInSavepointedFiles(nextSlice, savepointedFiles)) {
           // do not clean up a savepoint data file
           continue;
         }
@@ -325,7 +340,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         for (FileSlice aSlice : fileSliceList) {
           Option<HoodieBaseFile> aFile = aSlice.getBaseFile();
           String fileCommitTime = aSlice.getBaseInstantTime();
-          if (aFile.isPresent() && savepointedFiles.contains(aFile.get().getFileName())) {
+          if (isFileSliceExistInSavepointedFiles(aSlice, savepointedFiles)) {
             // do not clean up a savepoint data file
             continue;
           }
@@ -419,7 +434,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
     return replacedGroups.flatMap(HoodieFileGroup::getAllFileSlices)
         // do not delete savepointed files  (archival will make sure corresponding replacecommit file is not deleted)
-        .filter(slice -> !slice.getBaseFile().isPresent() || !savepointedFiles.contains(slice.getBaseFile().get().getFileName()))
+        .filter(slice -> !isFileSliceExistInSavepointedFiles(slice, savepointedFiles))
         .flatMap(slice -> getCleanFileInfoForSlice(slice).stream())
         .collect(Collectors.toList());
   }
