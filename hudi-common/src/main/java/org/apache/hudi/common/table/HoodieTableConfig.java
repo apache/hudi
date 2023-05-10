@@ -659,6 +659,10 @@ public class HoodieTableConfig extends HoodieConfig {
     return getString(KEY_GENERATOR_CLASS_NAME);
   }
 
+  public HoodieTimelineTimeZone getTimelineTimezone() {
+    return HoodieTimelineTimeZone.valueOf(getStringOrDefault(TIMELINE_TIMEZONE));
+  }
+
   public String getHiveStylePartitioningEnable() {
     return getStringOrDefault(HIVE_STYLE_PARTITIONING_ENABLE);
   }
