@@ -72,7 +72,7 @@ public class HoodieHFileRealtimeInputFormat extends HoodieMergeOnReadTableInputF
           // For e:g _hoodie_record_key would be missing and merge step would throw exceptions.
           // TO fix this, hoodie columns are appended late at the time record-reader gets built instead of construction
           // time.
-          HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf, Option.empty(), Option.empty());
+          HoodieRealtimeInputFormatUtils.addVirtualKeysProjection(jobConf, Option.empty());
 
           this.conf = jobConf;
           this.conf.set(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP, "true");

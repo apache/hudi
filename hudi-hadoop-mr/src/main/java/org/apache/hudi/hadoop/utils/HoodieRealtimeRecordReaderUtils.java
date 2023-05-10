@@ -257,10 +257,8 @@ public class HoodieRealtimeRecordReaderUtils {
     String[] fieldOrdersWithDups = fieldOrderCsv.isEmpty() ? new String[0] : fieldOrderCsv.split(",");
     Set<String> fieldOrdersSet = new LinkedHashSet<>(Arrays.asList(fieldOrdersWithDups));
     String[] fieldOrders = fieldOrdersSet.toArray(new String[0]);
-    List<String> fieldNames = fieldNameCsv.isEmpty() ? new ArrayList<>() : Arrays.stream(fieldNameCsv.split(","))
-        .filter(fn -> !partitioningFields.contains(fn)).collect(Collectors.toList());
+    List<String> fieldNames = fieldNameCsv.isEmpty() ? new ArrayList<>() : Arrays.stream(fieldNameCsv.split(",")).collect(Collectors.toList());
     Set<String> fieldNamesSet = new LinkedHashSet<>(fieldNames);
-    // Hive does not provide ids for partitioning fields, so check for lengths excluding that.
     if (fieldNamesSet.size() != fieldOrders.length) {
       throw new HoodieException(String
           .format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",

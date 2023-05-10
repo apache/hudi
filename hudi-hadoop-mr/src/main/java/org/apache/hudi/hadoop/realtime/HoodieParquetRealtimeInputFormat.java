@@ -40,6 +40,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Input Format, that provides a real-time view of data in a Hoodie table.
@@ -68,7 +71,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
     // add preCombineKey
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(realtimeSplit.getBasePath()).build();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    addProjectionToJobConf(realtimeSplit, jobConf, metaClient.getTableConfig().getPreCombineField());
+    addProjectionToJobConf(realtimeSplit, jobConf, tableConfig);
     LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
 
@@ -81,7 +84,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
         super.getRecordReader(split, jobConf, reporter));
   }
 
-  void addProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf, String preCombineKey) {
+  void addProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf, HoodieTableConfig tableConfig) {
     // Hive on Spark invokes multiple getRecordReaders from different threads in the same spark task (and hence the
     // same JVM) unlike Hive on MR. Due to this, accesses to JobConf, which is shared across all threads, is at the
     // risk of experiencing race conditions. Hence, we synchronize on the JobConf object here. There is negligible
@@ -100,10 +103,21 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
           // For e:g _hoodie_record_key would be missing and merge step would throw exceptions.
           // TO fix this, hoodie columns are appended late at the time record-reader gets built instead of construction
           // time.
+          List<String> fieldsToAdd = new ArrayList<>();
           if (!realtimeSplit.getDeltaLogPaths().isEmpty()) {
-            HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf, realtimeSplit.getVirtualKeyInfo(),
-                StringUtils.isNullOrEmpty(preCombineKey) ? Option.empty() : Option.of(preCombineKey));
+            HoodieRealtimeInputFormatUtils.addVirtualKeysProjection(jobConf, realtimeSplit.getVirtualKeyInfo());
+            String preCombineKey = tableConfig.getPreCombineField();
+            if (!StringUtils.isNullOrEmpty(preCombineKey)) {
+              fieldsToAdd.add(preCombineKey);
+            }
           }
+
+          Option<String[]> partitions = tableConfig.getPartitionFields();
+          if (partitions.isPresent()) {
+            fieldsToAdd.addAll(Arrays.asList(partitions.get()));
+          }
+          HoodieRealtimeInputFormatUtils.addProjectionField(jobConf, fieldsToAdd.toArray(new String[0]));
+
           jobConf.set(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP, "true");
           setConf(jobConf);
         }

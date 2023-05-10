@@ -70,7 +70,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       readColIdsPrefix = "";
     }
 
-    if (!readColNames.contains(fieldName)) {
+    if (!Arrays.asList(readColNames.split(",")).contains(fieldName)) {
       // If not already in the list - then add it
       conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNamesPrefix + fieldName);
       conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, readColIdsPrefix + fieldIndex);
@@ -83,7 +83,19 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     return conf;
   }
 
-  public static void addRequiredProjectionFields(Configuration configuration, Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo, Option<String> preCombineKeyOpt) {
+  public static void addProjectionField(Configuration conf, String[] fieldName) {
+    if (fieldName.length > 0) {
+      List<String> columnNameList = Arrays.stream(conf.get(serdeConstants.LIST_COLUMNS).split(",")).collect(Collectors.toList());
+      Arrays.stream(fieldName).forEach(field -> {
+        int index = columnNameList.indexOf(field);
+        if (index != -1) {
+          addProjectionField(conf, field, index);
+        }
+      });
+    }
+  }
+
+  public static void addVirtualKeysProjection(Configuration configuration, Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {
     // Need this to do merge records in HoodieRealtimeRecordReader
     if (!hoodieVirtualKeyInfo.isPresent()) {
       addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
@@ -96,18 +108,6 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
         addProjectionField(configuration, hoodieVirtualKey.getPartitionPathField().get(), hoodieVirtualKey.getPartitionPathFieldIndex().get());
       }
     }
-
-    if (preCombineKeyOpt.isPresent()) {
-      // infer col pos
-      String preCombineKey = preCombineKeyOpt.get();
-      List<String> columnNameList = Arrays.stream(configuration.get(serdeConstants.LIST_COLUMNS).split(",")).collect(Collectors.toList());
-      int pos = columnNameList.indexOf(preCombineKey);
-      if (pos != -1) {
-        addProjectionField(configuration, preCombineKey, pos);
-        LOG.info(String.format("add preCombineKey: %s to project columns with position %s", preCombineKey, pos));
-      }
-    }
-
   }
 
   public static boolean requiredProjectionFieldsExistInConf(Configuration configuration, Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {
