@@ -149,7 +149,7 @@ object AvroConversionUtils {
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
     val schemaConverters = sparkAdapter.getAvroSchemaConverters
     schemaConverters.toSqlType(avroSchema) match {
-      case (dataType, _) => dataType.asInstanceOf[StructType]
+      case (dataType, _, _) => dataType.asInstanceOf[StructType]
     }
   }
 
