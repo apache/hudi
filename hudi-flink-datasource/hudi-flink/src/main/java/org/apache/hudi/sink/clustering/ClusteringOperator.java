@@ -177,7 +177,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     final String instantTime = event.getClusteringInstantTime();
     final List<ClusteringOperation> clusteringOperations = event.getClusteringGroupInfo().getOperations();
     if (this.asyncClustering) {
-      // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
+      // executes the clustering task asynchronously to not block the checkpoint barrier propagate.
       executor.execute(
           () -> doClustering(instantTime, clusteringOperations),
           (errMsg, t) -> collector.collect(new ClusteringCommitEvent(instantTime, getFileIds(clusteringOperations), taskID)),

@@ -29,8 +29,10 @@ import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions;
 import org.apache.hadoop.fs.Path;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -193,6 +195,9 @@ public class FlinkClusteringConfig extends Configuration {
     conf.setInteger(FlinkOptions.CLUSTERING_MAX_NUM_GROUPS, config.maxNumGroups);
     conf.setInteger(FlinkOptions.CLUSTERING_TARGET_PARTITIONS, config.targetPartitions);
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
+
+    // execution checkpointing
+    conf.set(ExecutionCheckpointingOptions.CHECKPOINTING_INTERVAL, Duration.ofSeconds(config.minClusteringIntervalSeconds));
 
     // use synchronous clustering always
     conf.setBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED, false);
