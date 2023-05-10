@@ -27,6 +27,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
@@ -71,6 +72,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   protected String bootstrapType;
   protected Boolean dashPartitions;
   protected String tableType;
+  protected Integer nPartitions;
 
   protected static String[] dropColumns = {"_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",  "_hoodie_file_name", "city_to_state", "partition_path"};
 
@@ -94,11 +96,14 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     Boolean[] dashPartitions = {true};
     String[] tableType = {"COPY_ON_WRITE"};
     String[] bootstrapType = {"full", "metadata", "mixed"};
+    Integer[] nPartitions = {0, 1};
 
     for (String tt : tableType) {
       for (Boolean dash : dashPartitions) {
         for (String bt : bootstrapType) {
-          b.add(Arguments.of(bt, dash, tt));
+          for (Integer n : nPartitions) {
+            b.add(Arguments.of(bt, dash, tt, n));
+          }
         }
       }
     }
@@ -107,10 +112,11 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void runTests(String bootstrapType,Boolean dashPartitions, String tableType) {
+  public void runTests(String bootstrapType,Boolean dashPartitions, String tableType, Integer nPartitions) {
     this.bootstrapType = bootstrapType;
     this.dashPartitions = dashPartitions;
     this.tableType = tableType;
+    this.nPartitions = nPartitions;
     setupDirs();
 
     //do bootstrap
@@ -136,7 +142,9 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     options.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType);
     options.put(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), "true");
     options.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-    options.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
+    if (nPartitions > 0) {
+      options.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
+    }
     options.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
     if (tableType.equals("MERGE_ON_READ")) {
       options.put(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
@@ -149,7 +157,12 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     Map<String, String> options = basicOptions();
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL());
     options.put(HoodieBootstrapConfig.BASE_PATH.key(), bootstrapBasePath);
-    options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
+    if (nPartitions == 0) {
+      options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName());
+    } else {
+      options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
+    }
+
     switch (bootstrapType) {
       case "metadata":
         options.put(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key(), MetadataOnlyBootstrapModeSelector.class.getName());
@@ -216,7 +229,17 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .mode(SaveMode.Overwrite)
         .save(hudiBasePath);
 
-    inserts.write().partitionBy("partition_path").save(bootstrapBasePath);
+    switch (nPartitions) {
+      case 0:
+        inserts.write().save(bootstrapBasePath);
+        break;
+      case 1:
+        inserts.write().partitionBy("partition_path").save(bootstrapBasePath);
+        break;
+      default:
+        throw new RuntimeException();
+    }
+
   }
 
   public Dataset<Row> generateTestInserts() {
