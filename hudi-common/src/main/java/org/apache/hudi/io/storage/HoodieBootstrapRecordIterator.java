@@ -34,7 +34,6 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
 
   protected Schema schema;
 
-
   public HoodieBootstrapRecordIterator(ClosableIterator<HoodieRecord<T>> skeletonIterator,
                                        ClosableIterator<HoodieRecord<T>> dataFileIterator,
                                        Schema schema,
