@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -694,17 +695,75 @@ public class HoodieTableConfig extends HoodieConfig {
     return getLong(TABLE_CHECKSUM);
   }
 
-  public List<String> getMetadataPartitionsInflight() {
-    return StringUtils.split(
+  public Set<String> getMetadataPartitionsInflight() {
+    return new HashSet<>(StringUtils.split(
         getStringOrDefault(TABLE_METADATA_PARTITIONS_INFLIGHT, StringUtils.EMPTY_STRING),
-        CONFIG_VALUES_DELIMITER
-    );
+        CONFIG_VALUES_DELIMITER));
   }
 
   public Set<String> getMetadataPartitions() {
     return new HashSet<>(
         StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
             CONFIG_VALUES_DELIMITER));
+  }
+
+  /**
+   * @returns true if metadata table has been created and is being used for this dataset, else returns false.
+   */
+  public boolean isMetadataTableEnabled() {
+    return isMetadataPartitionEnabled(MetadataPartitionType.FILES);
+  }
+
+  /**
+   * Checks if metadata table is enabled and the specified partition has been initialized.
+   *
+   * @param partition The partition to check
+   * @returns true if the specific partition has been initialized, else returns false.
+   */
+  public boolean isMetadataPartitionEnabled(MetadataPartitionType partition) {
+    return getMetadataPartitions().contains(partition.getPartitionPath());
+  }
+
+  /**
+   * Enables or disables the specified metadata table partition.
+   *
+   * @param partition The partition
+   * @param enabled   If true, the partition is enabled, else disabled
+   */
+  public void setMetadataPartitionState(MetadataPartitionType partition, boolean enabled) {
+    ValidationUtils.checkArgument(!partition.getPartitionPath().contains(CONFIG_VALUES_DELIMITER),
+        "Metadata Table partition path cannot contain a comma: " + partition.getPartitionPath());
+    Set<String> partitions = getMetadataPartitions();
+    Set<String> partitionsInflight = getMetadataPartitionsInflight();
+    if (enabled) {
+      partitions.add(partition.getPartitionPath());
+      partitionsInflight.remove(partition.getPartitionPath());
+    } else if (partition.equals(MetadataPartitionType.FILES)) {
+      // file listing partition is required for all other partitions to work
+      // Disabling file partition will also disable all partitions
+      partitions.clear();
+      partitionsInflight.clear();
+    } else {
+      partitions.remove(partition.getPartitionPath());
+      partitionsInflight.remove(partition.getPartitionPath());
+    }
+    setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
+    setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
+  }
+
+  /**
+   * Enables the specified metadata table partition as inflight.
+   *
+   * @param partition The list of partitions to enable as inflight.
+   */
+  public void setMetadataPartitionsAsInflight(List<MetadataPartitionType> partitionTypes) {
+    Set<String> partitions = getMetadataPartitionsInflight();
+    partitionTypes.forEach(t -> {
+      ValidationUtils.checkArgument(!t.getPartitionPath().contains(CONFIG_VALUES_DELIMITER),
+          "Metadata Table partition path cannot contain a comma: " + t.getPartitionPath());
+      partitions.add(t.getPartitionPath());
+    });
+    setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
   }
 
   /**

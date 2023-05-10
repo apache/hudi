@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -170,6 +171,23 @@ public class HoodieMetadataWriteUtils {
           throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());
       }
     }
-    return builder.build();
+
+    HoodieWriteConfig metadataWriteConfig = builder.build();
+
+    // Inline compaction and auto clean is required as we do not expose this table outside
+    ValidationUtils.checkArgument(!metadataWriteConfig.isAutoClean(),
+        "Cleaning is controlled internally for Metadata table.");
+    ValidationUtils.checkArgument(!metadataWriteConfig.inlineCompactionEnabled(),
+        "Compaction is controlled internally for metadata table.");
+    // Auto commit is required
+    ValidationUtils.checkArgument(metadataWriteConfig.shouldAutoCommit(),
+        "Auto commit is required for Metadata Table");
+    ValidationUtils.checkArgument(metadataWriteConfig.getWriteStatusClassName().equals(FailOnFirstErrorWriteStatus.class.getName()),
+        "MDT should use " + FailOnFirstErrorWriteStatus.class.getName());
+    // Metadata Table cannot have metadata listing turned on. (infinite loop, much?)
+    ValidationUtils.checkArgument(!metadataWriteConfig.isMetadataTableEnabled(),
+        "File listing cannot be used for Metadata Table");
+
+    return metadataWriteConfig;
   }
 }

@@ -179,7 +179,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   @Override
   public void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
     try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter()) {
-      metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType, instantTime));
+      metadataWriter.update(metadata, instantTime);
     } catch (Exception e) {
       throw new HoodieException("Failed to update metadata", e);
     }
@@ -209,7 +209,9 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       // guard the metadata writer with concurrent lock
       try {
         this.txnManager.getLockManager().lock();
-        initMetadataWriter().close();
+        try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter()) {
+          metadataWriter.performTableServices(Option.empty());
+        }
       } catch (Exception e) {
         throw new HoodieException("Failed to initialize metadata table", e);
       } finally {
