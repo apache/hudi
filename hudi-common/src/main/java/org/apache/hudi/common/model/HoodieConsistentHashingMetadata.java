@@ -49,6 +49,7 @@ public class HoodieConsistentHashingMetadata implements Serializable {
    */
   public static final int HASH_VALUE_MASK = Integer.MAX_VALUE;
   public static final String HASHING_METADATA_FILE_SUFFIX = ".hashing_meta";
+  public static final String HASHING_METADATA_COMMIT_FILE_SUFFIX = ".commit";
 
   private final short version;
   private final String partitionPath;
