@@ -123,10 +123,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
       requiredSchema = requiredSchema,
       tableState = tableState,
       mergeType = mergeType,
-      fileSplits = fileSplits,
-      shouldEqualStartTimestamp = false,
-      startTimestamp = null,
-      endTimestamp = null)
+      fileSplits = fileSplits)
   }
 
   protected def createBaseFileReaders(tableSchema: HoodieTableSchema,

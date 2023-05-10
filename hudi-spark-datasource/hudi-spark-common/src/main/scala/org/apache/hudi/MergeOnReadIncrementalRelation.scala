@@ -88,9 +88,9 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       tableState = tableState,
       mergeType = mergeType,
       fileSplits = fileSplits,
-      shouldEqualStartTimestamp = shouldEqualStartTimestamp,
-      startTimestamp = filterStartTimestamp,
-      endTimestamp = filterEndTimestamp)
+      includeStartTime = includeStartTime,
+      startTimestamp = startTs,
+      endTimestamp = endTs)
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -181,25 +181,25 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
   }
 
-  protected lazy val (shouldEqualStartTimestamp, filterStartTimestamp) = if (startInstantArchived) {
+  protected lazy val (includeStartTime, startTs) = if (startInstantArchived) {
     (false, startTimestamp)
   } else {
     (true, includedCommits.head.getTimestamp)
   }
-  protected lazy val filterEndTimestamp = if (endInstantArchived) endTimestamp else includedCommits.last.getTimestamp
+  protected lazy val endTs: String = if (endInstantArchived) endTimestamp else includedCommits.last.getTimestamp
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
   // scan collected by this relation
   protected lazy val incrementalSpanRecordFilters: Seq[Filter] = {
     val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
 
-    val largerThanFilter = if (shouldEqualStartTimestamp) {
-      GreaterThan(HoodieRecord.COMMIT_TIME_METADATA_FIELD, filterStartTimestamp)
+    val largerThanFilter = if (includeStartTime) {
+      GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, startTs)
     } else {
-      GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, filterStartTimestamp)
+      GreaterThan(HoodieRecord.COMMIT_TIME_METADATA_FIELD, startTs)
     }
 
-    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, filterEndTimestamp)
+    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, endTs)
 
     Seq(isNotNullFilter, largerThanFilter, lessThanFilter)
   }
