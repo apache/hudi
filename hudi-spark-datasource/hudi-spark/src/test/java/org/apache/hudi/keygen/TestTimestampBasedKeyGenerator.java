@@ -20,7 +20,6 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -47,6 +46,13 @@ import java.math.BigDecimal;
 
 import scala.Function1;
 
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestTimestampBasedKeyGenerator {
@@ -88,9 +94,9 @@ public class TestTimestampBasedKeyGenerator {
     TypedProperties properties = new TypedProperties(this.properties);
 
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
-    properties.setProperty(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key(), timestampType);
-    properties.setProperty(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key(), dateFormat);
-    properties.setProperty(TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT.key(), timezone);
+    properties.setProperty(TIMESTAMP_TYPE_FIELD.key(), timestampType);
+    properties.setProperty(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), dateFormat);
+    properties.setProperty(TIMESTAMP_TIMEZONE_FORMAT.key(), timezone);
 
     if (scalarType != null) {
       properties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit", scalarType);
@@ -111,22 +117,22 @@ public class TestTimestampBasedKeyGenerator {
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
 
     if (timestampType != null) {
-      properties.setProperty(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key(), timestampType);
+      properties.setProperty(TIMESTAMP_TYPE_FIELD.key(), timestampType);
     }
     if (inputFormatList != null) {
-      properties.setProperty(TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key(), inputFormatList);
+      properties.setProperty(TIMESTAMP_INPUT_DATE_FORMAT.key(), inputFormatList);
     }
     if (inputFormatDelimiterRegex != null) {
-      properties.setProperty(TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX.key(), inputFormatDelimiterRegex);
+      properties.setProperty(TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX.key(), inputFormatDelimiterRegex);
     }
     if (inputTimezone != null) {
-      properties.setProperty(TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_TIMEZONE_FORMAT.key(), inputTimezone);
+      properties.setProperty(TIMESTAMP_INPUT_TIMEZONE_FORMAT.key(), inputTimezone);
     }
     if (outputFormat != null) {
-      properties.setProperty(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key(), outputFormat);
+      properties.setProperty(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), outputFormat);
     }
     if (outputTimezone != null) {
-      properties.setProperty(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), outputTimezone);
+      properties.setProperty(TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), outputTimezone);
     }
     return properties;
   }

@@ -19,7 +19,6 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -53,6 +52,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -639,11 +641,11 @@ public class TestHoodieTableFactory {
     final Configuration conf1 = tableSource1.getConf();
     assertThat(conf1.get(FlinkOptions.RECORD_KEY_FIELD), is("f0"));
     assertThat(conf1.get(FlinkOptions.KEYGEN_CLASS_NAME), is(TimestampBasedAvroKeyGenerator.class.getName()));
-    assertThat(conf1.getString(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key(), "dummy"),
+    assertThat(conf1.getString(TIMESTAMP_TYPE_FIELD.key(), "dummy"),
         is("EPOCHMILLISECONDS"));
-    assertThat(conf1.getString(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key(), "dummy"),
+    assertThat(conf1.getString(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), "dummy"),
         is(FlinkOptions.PARTITION_FORMAT_HOUR));
-    assertThat(conf1.getString(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), "dummy"),
+    assertThat(conf1.getString(TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), "dummy"),
         is("UTC"));
   }
 
