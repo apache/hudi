@@ -142,7 +142,11 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   public void loadCompletedInstantDetailsInMemory() {
     loadInstants(null, true,
-        record -> HoodieInstant.State.COMPLETED.toString().equals(record.get(ACTION_STATE).toString()));
+        record -> {
+          // Very old archived instants don't have action state set.
+          Object action = record.get(ACTION_STATE);
+          return action == null || HoodieInstant.State.COMPLETED.toString().equals(action.toString());
+        });
   }
 
   public void loadCompactionDetailsInMemory(String compactionInstantTime) {
@@ -151,9 +155,13 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   public void loadCompactionDetailsInMemory(String startTs, String endTs) {
     // load compactionPlan
-    loadInstants(new TimeRangeFilter(startTs, endTs), true, record ->
-        record.get(ACTION_TYPE_KEY).toString().equals(HoodieTimeline.COMPACTION_ACTION)
-            && HoodieInstant.State.INFLIGHT.toString().equals(record.get(ACTION_STATE).toString())
+    loadInstants(new TimeRangeFilter(startTs, endTs), true,
+        record -> {
+          // Older files don't have action state set.
+          Object action = record.get(ACTION_STATE);
+          return record.get(ACTION_TYPE_KEY).toString().equals(HoodieTimeline.COMPACTION_ACTION)
+            && (action == null || HoodieInstant.State.INFLIGHT.toString().equals(action.toString()));
+      }
     );
   }
 
