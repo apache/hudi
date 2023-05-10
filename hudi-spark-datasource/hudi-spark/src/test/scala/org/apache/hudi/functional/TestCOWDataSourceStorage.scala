@@ -19,7 +19,8 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.common.config.{HoodieMetadataConfig, TimestampKeyGeneratorConfig}
+import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
@@ -80,9 +81,9 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     val isTimestampBasedKeyGen: Boolean = classOf[TimestampBasedKeyGenerator].getName.equals(keyGenClass)
     if (isTimestampBasedKeyGen) {
       options += DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "_row_key"
-      options += TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key -> "DATE_STRING"
-      options += TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key -> "yyyy/MM/dd"
-      options += TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key -> "yyyyMMdd"
+      options += TIMESTAMP_TYPE_FIELD.key -> "DATE_STRING"
+      options += TIMESTAMP_INPUT_DATE_FORMAT.key -> "yyyy/MM/dd"
+      options += TIMESTAMP_OUTPUT_DATE_FORMAT.key -> "yyyyMMdd"
     }
     val dataGen = new HoodieTestDataGenerator(0xDEED)
     val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)

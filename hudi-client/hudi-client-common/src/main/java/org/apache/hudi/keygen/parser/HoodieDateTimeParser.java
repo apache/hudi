@@ -17,7 +17,6 @@
 
 package org.apache.hudi.keygen.parser;
 
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.KeyGenUtils;
@@ -33,6 +32,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.TimeZone;
 
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+
 public class HoodieDateTimeParser extends BaseHoodieDateTimeParser {
 
   private String configInputDateFormatList;
@@ -43,15 +49,14 @@ public class HoodieDateTimeParser extends BaseHoodieDateTimeParser {
 
   public HoodieDateTimeParser(TypedProperties config) {
     super(config);
-    KeyGenUtils.checkRequiredProperties(config,
-        Arrays.asList(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key(),
-            TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key()));
+    KeyGenUtils.checkRequiredProperties(
+        config, Arrays.asList(TIMESTAMP_TYPE_FIELD.key(), TIMESTAMP_OUTPUT_DATE_FORMAT.key()));
     this.inputDateTimeZone = getInputDateTimeZone();
   }
 
   private DateTimeFormatter getInputDateFormatter() {
     if (this.configInputDateFormatList.isEmpty()) {
-      throw new IllegalArgumentException(TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key() + " configuration is required");
+      throw new IllegalArgumentException(TIMESTAMP_INPUT_DATE_FORMAT.key() + " configuration is required");
     }
 
     DateTimeFormatter formatter = new DateTimeFormatterBuilder()
@@ -75,17 +80,17 @@ public class HoodieDateTimeParser extends BaseHoodieDateTimeParser {
 
   @Override
   public String getOutputDateFormat() {
-    return config.getString(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT.key());
+    return config.getString(TIMESTAMP_OUTPUT_DATE_FORMAT.key());
   }
 
   @Override
   public Option<DateTimeFormatter> getInputFormatter() {
     TimestampType timestampType = TimestampType.valueOf(
-        config.getString(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key()));
+        config.getString(TIMESTAMP_TYPE_FIELD.key()));
     if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
       KeyGenUtils.checkRequiredProperties(config,
-          Collections.singletonList(TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key()));
-      this.configInputDateFormatList = config.getString(TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key(), "");
+          Collections.singletonList(TIMESTAMP_INPUT_DATE_FORMAT.key()));
+      this.configInputDateFormatList = config.getString(TIMESTAMP_INPUT_DATE_FORMAT.key(), "");
       return Option.of(getInputDateFormatter());
     }
 
@@ -95,10 +100,10 @@ public class HoodieDateTimeParser extends BaseHoodieDateTimeParser {
   @Override
   public DateTimeZone getInputDateTimeZone() {
     String inputTimeZone;
-    if (config.containsKey(TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT.key())) {
-      inputTimeZone = config.getString(TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT.key(), "GMT");
+    if (config.containsKey(TIMESTAMP_TIMEZONE_FORMAT.key())) {
+      inputTimeZone = config.getString(TIMESTAMP_TIMEZONE_FORMAT.key(), "GMT");
     } else {
-      inputTimeZone = config.getString(TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_TIMEZONE_FORMAT.key(), "");
+      inputTimeZone = config.getString(TIMESTAMP_INPUT_TIMEZONE_FORMAT.key(), "");
     }
     return !inputTimeZone.trim().isEmpty() ? DateTimeZone.forTimeZone(TimeZone.getTimeZone(inputTimeZone)) : null;
   }
@@ -106,10 +111,10 @@ public class HoodieDateTimeParser extends BaseHoodieDateTimeParser {
   @Override
   public DateTimeZone getOutputDateTimeZone() {
     String outputTimeZone;
-    if (config.containsKey(TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT.key())) {
-      outputTimeZone = config.getString(TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT.key(), "GMT");
+    if (config.containsKey(TIMESTAMP_TIMEZONE_FORMAT.key())) {
+      outputTimeZone = config.getString(TIMESTAMP_TIMEZONE_FORMAT.key(), "GMT");
     } else {
-      outputTimeZone = config.getString(TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), "");
+      outputTimeZone = config.getString(TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), "");
     }
     return !outputTimeZone.trim().isEmpty() ? DateTimeZone.forTimeZone(TimeZone.getTimeZone(outputTimeZone)) : null;
   }

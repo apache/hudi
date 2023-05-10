@@ -18,7 +18,6 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
@@ -45,6 +44,10 @@ import java.util.concurrent.TimeUnit;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 
 /**
  * Avro Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
@@ -79,13 +82,12 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
 
   TimestampBasedAvroKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
     super(config, Option.ofNullable(recordKeyField), partitionPathField);
-    String dateTimeParserClass = config.getString(
-        TimestampKeyGeneratorConfig.DATE_TIME_PARSER.key(), HoodieDateTimeParser.class.getName());
+    String dateTimeParserClass = config.getString(DATE_TIME_PARSER.key(), HoodieDateTimeParser.class.getName());
     this.parser = KeyGenUtils.createDateTimeParser(config, dateTimeParserClass);
     this.inputDateTimeZone = parser.getInputDateTimeZone();
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
     this.outputDateFormat = parser.getOutputDateFormat();
-    this.timestampType = TimestampType.valueOf(config.getString(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key()));
+    this.timestampType = TimestampType.valueOf(config.getString(TIMESTAMP_TYPE_FIELD.key()));
 
     switch (this.timestampType) {
       case EPOCHMILLISECONDS:
@@ -95,8 +97,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
         timeUnit = SECONDS;
         break;
       case SCALAR:
-        String timeUnitStr = config.getString(
-            TimestampKeyGeneratorConfig.INPUT_TIME_UNIT.key(), TimeUnit.SECONDS.toString());
+        String timeUnitStr = config.getString(INPUT_TIME_UNIT.key(), TimeUnit.SECONDS.toString());
         timeUnit = TimeUnit.valueOf(timeUnitStr.toUpperCase());
         break;
       default:
@@ -130,7 +131,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       // {Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP} won't be null, it has been checked in the initialization process of
       // inputFormatter
       String delimiter = parser.getConfigInputDateFormatDelimiter();
-      String format = config.getString(TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key(), "").split(delimiter)[0];
+      String format = config.getString(TIMESTAMP_INPUT_DATE_FORMAT.key(), "").split(delimiter)[0];
 
       // if both input and output timeZone are not configured, use GMT.
       if (null != inputDateTimeZone) {
@@ -186,7 +187,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
     } else if (partitionVal instanceof CharSequence) {
       if (!inputFormatter.isPresent()) {
         throw new HoodieException("Missing input formatter. Ensure "
-            + TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key()
+            + TIMESTAMP_INPUT_DATE_FORMAT.key()
             + " config is set when timestampType is DATE_STRING or MIXED!");
       }
       DateTime parsedDateTime = inputFormatter.get().parseDateTime(partitionVal.toString());
@@ -211,7 +212,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   private long convertLongTimeToMillis(Long partitionVal) {
     if (timeUnit == null) {
       // should not be possible
-      throw new RuntimeException(TimestampKeyGeneratorConfig.INPUT_TIME_UNIT.key()
+      throw new RuntimeException(INPUT_TIME_UNIT.key()
           + " is not specified but scalar it supplied as time value");
     }
     return MILLISECONDS.convert(partitionVal, timeUnit);
