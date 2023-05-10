@@ -96,9 +96,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: "flink1.13"
-          - flinkProfile: "flink1.14"
-          - flinkProfile: "flink1.15"
           - flinkProfile: "flink1.16"
     steps:
       - uses: actions/checkout@v2
