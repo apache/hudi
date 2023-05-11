@@ -56,8 +56,7 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
   @Override
   public boolean hasNext() {
     checkState(skeletonIterator.hasNext() == dataFileIterator.hasNext());
-    return
-        skeletonIterator.hasNext();
+    return skeletonIterator.hasNext();
   }
 
   @Override

@@ -77,6 +77,7 @@ public class HoodieTestUtils {
     props.put(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE.key(), bootstrapIndexEnable);
     if (keyGenerator != null) {
       props.put("hoodie.datasource.write.keygenerator.class", keyGenerator);
+      props.put("hoodie.datasource.write.partitionpath.field", "datestr");
     }
     return init(getDefaultHadoopConf(), basePath, tableType, props);
   }
@@ -147,7 +148,8 @@ public class HoodieTestUtils {
             .setPayloadClass(HoodieAvroPayload.class);
 
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
-    if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
+    if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+        && !properties.containsKey("hoodie.datasource.write.partitionpath.field")) {
       builder.setPartitionFields("some_nonexistent_field");
     }
 

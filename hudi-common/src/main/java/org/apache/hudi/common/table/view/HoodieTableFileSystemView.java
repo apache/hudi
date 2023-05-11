@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -70,6 +71,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   /**
    * PartitionPath + File-Id to bootstrap base File (Index Only bootstrapped).
    */
+  protected ReentrantReadWriteLock bootstrapMapLock;
   protected Map<HoodieFileGroupId, BootstrapBaseFileMapping> fgIdToBootstrapBaseFile;
 
   /**
@@ -110,6 +112,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   @Override
   public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.partitionToFileGroupsMap = createPartitionToFileGroups();
+    this.bootstrapMapLock = new ReentrantReadWriteLock();
     super.init(metaClient, visibleActiveTimeline);
   }
 
@@ -326,44 +329,76 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   @Override
   protected boolean isBootstrapBaseFilePresentForFileId(HoodieFileGroupId fgId) {
-    return fgIdToBootstrapBaseFile.containsKey(fgId);
+    bootstrapMapLock.readLock().lock();
+    try {
+      return fgIdToBootstrapBaseFile.containsKey(fgId);
+    } finally {
+      bootstrapMapLock.readLock().unlock();
+    }
+
   }
 
   @Override
   void resetBootstrapBaseFileMapping(Stream<BootstrapBaseFileMapping> bootstrapBaseFileStream) {
     // Build fileId to bootstrap Data File
-    this.fgIdToBootstrapBaseFile = createFileIdToBootstrapBaseFileMap(bootstrapBaseFileStream
-        .collect(Collectors.toMap(BootstrapBaseFileMapping::getFileGroupId, x -> x)));
+    bootstrapMapLock.writeLock().lock();
+    try {
+      this.fgIdToBootstrapBaseFile = createFileIdToBootstrapBaseFileMap(bootstrapBaseFileStream
+          .collect(Collectors.toMap(BootstrapBaseFileMapping::getFileGroupId, x -> x)));
+    } finally {
+      bootstrapMapLock.writeLock().unlock();
+    }
   }
 
   @Override
   void addBootstrapBaseFileMapping(Stream<BootstrapBaseFileMapping> bootstrapBaseFileStream) {
-    bootstrapBaseFileStream.forEach(bootstrapBaseFile -> {
-      ValidationUtils.checkArgument(!fgIdToBootstrapBaseFile.containsKey(bootstrapBaseFile.getFileGroupId()),
-          "Duplicate FileGroupId found in bootstrap base file mapping. FgId :"
-              + bootstrapBaseFile.getFileGroupId());
-      fgIdToBootstrapBaseFile.put(bootstrapBaseFile.getFileGroupId(), bootstrapBaseFile);
-    });
+    bootstrapMapLock.writeLock().lock();
+    try {
+      bootstrapBaseFileStream.forEach(bootstrapBaseFile -> {
+        ValidationUtils.checkArgument(!fgIdToBootstrapBaseFile.containsKey(bootstrapBaseFile.getFileGroupId()),
+            "Duplicate FileGroupId found in bootstrap base file mapping. FgId :"
+                + bootstrapBaseFile.getFileGroupId());
+        fgIdToBootstrapBaseFile.put(bootstrapBaseFile.getFileGroupId(), bootstrapBaseFile);
+      });
+    } finally {
+      bootstrapMapLock.writeLock().unlock();
+    }
   }
 
   @Override
   void removeBootstrapBaseFileMapping(Stream<BootstrapBaseFileMapping> bootstrapBaseFileStream) {
-    bootstrapBaseFileStream.forEach(bootstrapBaseFile -> {
-      ValidationUtils.checkArgument(fgIdToBootstrapBaseFile.containsKey(bootstrapBaseFile.getFileGroupId()),
-          "Trying to remove a FileGroupId which is not found in bootstrap base file mapping. FgId :"
-              + bootstrapBaseFile.getFileGroupId());
-      fgIdToBootstrapBaseFile.remove(bootstrapBaseFile.getFileGroupId());
-    });
+    bootstrapMapLock.writeLock().lock();
+    try {
+      bootstrapBaseFileStream.forEach(bootstrapBaseFile -> {
+        ValidationUtils.checkArgument(fgIdToBootstrapBaseFile.containsKey(bootstrapBaseFile.getFileGroupId()),
+            "Trying to remove a FileGroupId which is not found in bootstrap base file mapping. FgId :"
+                + bootstrapBaseFile.getFileGroupId());
+        fgIdToBootstrapBaseFile.remove(bootstrapBaseFile.getFileGroupId());
+      });
+    } finally {
+      bootstrapMapLock.writeLock().unlock();
+    }
+
   }
 
   @Override
   protected Option<BootstrapBaseFileMapping> getBootstrapBaseFile(HoodieFileGroupId fileGroupId) {
-    return Option.ofNullable(fgIdToBootstrapBaseFile.get(fileGroupId));
+    bootstrapMapLock.readLock().lock();
+    try {
+      return Option.ofNullable(fgIdToBootstrapBaseFile.get(fileGroupId));
+    } finally {
+      bootstrapMapLock.readLock().unlock();
+    }
   }
 
   @Override
   Stream<BootstrapBaseFileMapping> fetchBootstrapBaseFiles() {
-    return fgIdToBootstrapBaseFile.values().stream();
+    bootstrapMapLock.readLock().lock();
+    try {
+      return fgIdToBootstrapBaseFile.values().stream();
+    } finally {
+      bootstrapMapLock.readLock().unlock();
+    }
   }
 
   @Override
