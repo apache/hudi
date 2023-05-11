@@ -33,7 +33,7 @@ class HiveSyncProcedure extends BaseProcedure with ProcedureBuilder
   with ProvidesHoodieConfig with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "metastore_uri", DataTypes.StringType, ""),
     ProcedureParameter.optional(2, "username", DataTypes.StringType, ""),
     ProcedureParameter.optional(3, "password", DataTypes.StringType, ""),
