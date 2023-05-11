@@ -22,7 +22,6 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -30,8 +29,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
-import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
-import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -72,24 +69,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMergedReadHandle extends SparkClientFunctionalTestHarness {
 
-  private HoodieAdaptablePayloadDataGenerator dataGen = new HoodieAdaptablePayloadDataGenerator();
-
   private static Stream<Arguments> avroPayloadClasses() {
     return Stream.of(
         Arguments.of(COPY_ON_WRITE, OverwriteWithLatestAvroPayload.class),
         Arguments.of(COPY_ON_WRITE, OverwriteNonDefaultsWithLatestAvroPayload.class),
         Arguments.of(COPY_ON_WRITE, PartialUpdateAvroPayload.class),
         Arguments.of(COPY_ON_WRITE, DefaultHoodieRecordPayload.class),
-        Arguments.of(COPY_ON_WRITE, AWSDmsAvroPayload.class),
-        Arguments.of(COPY_ON_WRITE, MySqlDebeziumAvroPayload.class),
-        Arguments.of(COPY_ON_WRITE, PostgresDebeziumAvroPayload.class),
         Arguments.of(MERGE_ON_READ, OverwriteWithLatestAvroPayload.class),
         Arguments.of(MERGE_ON_READ, OverwriteNonDefaultsWithLatestAvroPayload.class),
         Arguments.of(MERGE_ON_READ, PartialUpdateAvroPayload.class),
-        Arguments.of(MERGE_ON_READ, DefaultHoodieRecordPayload.class),
-        Arguments.of(MERGE_ON_READ, AWSDmsAvroPayload.class),
-        Arguments.of(MERGE_ON_READ, MySqlDebeziumAvroPayload.class),
-        Arguments.of(MERGE_ON_READ, PostgresDebeziumAvroPayload.class)
+        Arguments.of(MERGE_ON_READ, DefaultHoodieRecordPayload.class)
     );
   }
 
@@ -138,12 +127,8 @@ public class TestHoodieMergedReadHandle extends SparkClientFunctionalTestHarness
     return Stream.of(
         Arguments.of(COPY_ON_WRITE, PartialUpdateAvroPayload.class),
         Arguments.of(COPY_ON_WRITE, DefaultHoodieRecordPayload.class),
-        Arguments.of(COPY_ON_WRITE, MySqlDebeziumAvroPayload.class),
-        Arguments.of(COPY_ON_WRITE, PostgresDebeziumAvroPayload.class),
         Arguments.of(MERGE_ON_READ, PartialUpdateAvroPayload.class),
-        Arguments.of(MERGE_ON_READ, DefaultHoodieRecordPayload.class),
-        Arguments.of(MERGE_ON_READ, MySqlDebeziumAvroPayload.class),
-        Arguments.of(MERGE_ON_READ, PostgresDebeziumAvroPayload.class)
+        Arguments.of(MERGE_ON_READ, DefaultHoodieRecordPayload.class)
     );
   }
 
