@@ -22,8 +22,10 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
@@ -168,6 +170,12 @@ public class TestHoodieHiveCatalog {
     assertEquals(expectedTableSchema, tableSchema);
     assertEquals(Collections.singletonList("uuid"), table1.getUnresolvedSchema().getPrimaryKey().get().getColumnNames());
     assertEquals(Collections.singletonList("par1"), ((CatalogTable) table1).getPartitionKeys());
+
+    // validate the full name of table create schema
+    HoodieTableConfig tableConfig = StreamerUtil.getTableConfig(table1.getOptions().get(FlinkOptions.PATH.key()), hoodieCatalog.getHiveConf()).get();
+    Option<org.apache.avro.Schema> tableCreateSchema = tableConfig.getTableCreateSchema();
+    assertTrue(tableCreateSchema.isPresent(), "Table should have been created");
+    assertThat(tableCreateSchema.get().getFullName(), is("hoodie.test.test_record"));
 
     // validate explicit primary key
     options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "id");

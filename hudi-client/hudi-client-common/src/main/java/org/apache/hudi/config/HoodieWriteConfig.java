@@ -102,6 +102,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
+import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
 /**
@@ -340,7 +341,6 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> WRITE_BUFFER_LIMIT_BYTES_VALUE = ConfigProperty
       .key("hoodie.write.buffer.limit.bytes")
       .defaultValue(String.valueOf(4 * 1024 * 1024))
-      .markAdvanced()
       .markAdvanced()
       .withDocumentation("Size of in-memory buffer used for parallelizing network reads and lake storage writes.");
 
@@ -1453,7 +1453,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public int getCopyOnWriteRecordSizeEstimate() {
-    return getInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
+    return getInt(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
   }
 
   public boolean allowMultipleCleans() {
@@ -1916,6 +1916,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE);
   }
 
+  public int getGlobalIndexReconcileParallelism() {
+    return getInt(HoodieIndexConfig.GLOBAL_INDEX_RECONCILE_PARALLELISM);
+  }
+
   public int getBucketIndexNumBuckets() {
     return getIntOrDefault(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
   }
@@ -2267,14 +2271,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getFullBootstrapInputProvider() {
     return getString(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME);
-  }
-
-  public String getBootstrapKeyGeneratorClass() {
-    return getString(HoodieBootstrapConfig.KEYGEN_CLASS_NAME);
-  }
-
-  public String getBootstrapKeyGeneratorType() {
-    return getString(HoodieBootstrapConfig.KEYGEN_TYPE);
   }
 
   public String getBootstrapModeSelectorRegex() {

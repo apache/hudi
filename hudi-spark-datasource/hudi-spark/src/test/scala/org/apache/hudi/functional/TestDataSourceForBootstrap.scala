@@ -573,7 +573,7 @@ class TestDataSourceForBootstrap {
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
       .option(HoodieBootstrapConfig.BASE_PATH.key, srcPath)
-      .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+      .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
       .option(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key, classOf[FullRecordBootstrapModeSelector].getName)
       .option(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.key, classOf[SparkParquetBootstrapDataProvider].getName)
       .mode(SaveMode.Overwrite)
@@ -623,7 +623,7 @@ class TestDataSourceForBootstrap {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
       .option(HoodieBootstrapConfig.BASE_PATH.key, srcPath)
-      .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, bootstrapKeygenClass)
+      .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, bootstrapKeygenClass)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 

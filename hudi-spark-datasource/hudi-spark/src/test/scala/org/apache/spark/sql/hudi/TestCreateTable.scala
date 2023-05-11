@@ -1065,4 +1065,21 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test init HoodieCatalogTable class for non-Hudi table") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         | ) using parquet
+       """.stripMargin)
+    val exception = intercept[IllegalArgumentException] {
+      spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
+    }
+    assertTrue(exception.getMessage.contains(s"""$tableName is not a Hudi table"""))
+  }
 }

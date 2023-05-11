@@ -276,7 +276,17 @@ public class HoodieDeltaStreamer implements Serializable {
             + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
             + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
             + "allows a SQL query templated to be passed as a transformation function). "
-            + "Pass a comma-separated list of subclass names to chain the transformations.")
+            + "Pass a comma-separated list of subclass names to chain the transformations. If there are two or more "
+            + "transformers using the same config keys and expect different values for those keys, then transformer can include "
+            + "an identifier. E:g - tr1:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer. Here the identifier tr1 "
+            + "can be used along with property key like `hoodie.deltastreamer.transformer.sql.tr1` to identify properties related "
+            + "to the transformer. So effective value for `hoodie.deltastreamer.transformer.sql` is determined by key "
+            + "`hoodie.deltastreamer.transformer.sql.tr1` for this transformer. If identifier is used, it should "
+            + "be specified for all the transformers. Further the order in which transformer is applied is determined by the occurrence "
+            + "of transformer irrespective of the identifier used for the transformer. For example: In the configured value below "
+            + "tr2:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer,tr1:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer "
+            + ", tr2 is applied before tr1 based on order of occurrence."
+    )
     public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
@@ -394,6 +404,9 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--retry-last-pending-inline-clustering", "-rc"}, description = "Retry last pending inline clustering plan before writing to sink.")
     public Boolean retryLastPendingInlineClusteringJob = false;
+
+    @Parameter(names = {"--retry-last-pending-inline-compaction"}, description = "Retry last pending inline compaction plan before writing to sink.")
+    public Boolean retryLastPendingInlineCompactionJob = false;
 
     @Parameter(names = {"--cluster-scheduling-weight"}, description = "Scheduling weight for clustering as defined in "
         + "https://spark.apache.org/docs/latest/job-scheduling.html")

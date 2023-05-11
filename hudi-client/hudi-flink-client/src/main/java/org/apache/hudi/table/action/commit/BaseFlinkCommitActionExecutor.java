@@ -162,11 +162,6 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
     }
   }
 
-  @Override
-  protected boolean isWorkloadProfileNeeded() {
-    return true;
-  }
-
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(
       String partitionPath,

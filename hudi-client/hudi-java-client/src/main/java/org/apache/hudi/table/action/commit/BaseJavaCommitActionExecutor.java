@@ -88,11 +88,9 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords) {
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
 
-    WorkloadProfile workloadProfile = null;
-    if (isWorkloadProfileNeeded()) {
-      workloadProfile = new WorkloadProfile(buildProfile(inputRecords), table.getIndex().canIndexLogFiles());
-      LOG.info("Input workload profile :" + workloadProfile);
-    }
+    WorkloadProfile workloadProfile =
+            new WorkloadProfile(buildProfile(inputRecords), table.getIndex().canIndexLogFiles());
+    LOG.info("Input workload profile :" + workloadProfile);
 
     final Partitioner partitioner = getPartitioner(workloadProfile);
     try {
@@ -224,11 +222,6 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
     return Collections.emptyMap();
-  }
-
-  @Override
-  protected boolean isWorkloadProfileNeeded() {
-    return true;
   }
 
   @SuppressWarnings("unchecked")

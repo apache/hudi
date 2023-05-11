@@ -81,6 +81,7 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -94,6 +95,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
@@ -673,12 +675,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       for (DirectoryInfo dirInfo : processedDirectories) {
         if (!dirFilterRegex.isEmpty()) {
           final String relativePath = dirInfo.getRelativePath();
-          if (!relativePath.isEmpty()) {
-            Path partitionPath = new Path(datasetBasePath, relativePath);
-            if (partitionPath.getName().matches(dirFilterRegex)) {
-              LOG.info("Ignoring directory " + partitionPath + " which matches the filter regex " + dirFilterRegex);
-              continue;
-            }
+          if (!relativePath.isEmpty() && relativePath.matches(dirFilterRegex)) {
+            LOG.info("Ignoring directory " + relativePath + " which matches the filter regex " + dirFilterRegex);
+            continue;
           }
         }
 
@@ -729,21 +728,40 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount) throws IOException {
-    final HashMap<HeaderMetadataType, String> blockHeader = new HashMap<>();
-    blockHeader.put(HeaderMetadataType.INSTANT_TIME, instantTime);
+    // Remove all existing file groups or leftover files in the partition
+    final Path partitionPath = new Path(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath());
+    FileSystem fs = metadataMetaClient.getFs();
+    try {
+      final FileStatus[] existingFiles = fs.listStatus(partitionPath);
+      if (existingFiles.length > 0) {
+        LOG.warn("Deleting all existing files found in MDT partition " + metadataPartition.getPartitionPath());
+        fs.delete(partitionPath, true);
+        ValidationUtils.checkState(!fs.exists(partitionPath), "Failed to delete MDT partition " + metadataPartition);
+      }
+    } catch (FileNotFoundException e) {
+      // If the partition did not exist yet, it will be created below
+    }
+
     // Archival of data table has a dependency on compaction(base files) in metadata table.
     // It is assumed that as of time Tx of base instant (/compaction time) in metadata table,
     // all commits in data table is in sync with metadata table. So, we always start with log file for any fileGroup.
-    final HoodieDeleteBlock block = new HoodieDeleteBlock(new DeleteRecord[0], blockHeader);
 
     LOG.info(String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
         fileGroupCount, metadataPartition.getPartitionPath(), metadataPartition.getFileIdPrefix(), instantTime));
-    for (int i = 0; i < fileGroupCount; ++i) {
-      final String fileGroupFileId = String.format("%s%04d", metadataPartition.getFileIdPrefix(), i);
+    final List<String> fileGroupFileIds = IntStream.range(0, fileGroupCount)
+        .mapToObj(i -> String.format("%s%04d", metadataPartition.getFileIdPrefix(), i))
+        .collect(Collectors.toList());
+    ValidationUtils.checkArgument(fileGroupFileIds.size() == fileGroupCount);
+    engineContext.foreach(fileGroupFileIds, fileGroupFileId -> {
       try {
+        final HashMap<HeaderMetadataType, String> blockHeader = new HashMap<>();
+        blockHeader.put(HeaderMetadataType.INSTANT_TIME, instantTime);
+        final HoodieDeleteBlock block = new HoodieDeleteBlock(new DeleteRecord[0], blockHeader);
+
         HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
             .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
-            .withFileId(fileGroupFileId).overBaseCommit(instantTime)
+            .withFileId(fileGroupFileId)
+            .overBaseCommit(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
             .withFileSize(0L)
             .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
@@ -756,7 +774,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       } catch (InterruptedException e) {
         throw new HoodieException("Failed to created fileGroup " + fileGroupFileId + " for partition " + metadataPartition.getPartitionPath(), e);
       }
-    }
+    }, fileGroupFileIds.size());
   }
 
   public void dropMetadataPartitions(List<MetadataPartitionType> metadataPartitions) throws IOException {

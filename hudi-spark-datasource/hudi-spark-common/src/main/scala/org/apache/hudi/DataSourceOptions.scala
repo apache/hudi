@@ -115,13 +115,17 @@ object DataSourceReadOptions {
     .noDefaultValue()
     .withDocumentation("Instant time to start incrementally pulling data from. The instanttime here need not necessarily " +
       "correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. " +
-      "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM.")
+      "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `"
+      + HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key() + "` enabled, will use instant's "
+      + "`stateTransitionTime` to perform comparison.")
 
   val END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.end.instanttime")
     .noDefaultValue()
     .withDocumentation("Instant time to limit incrementally fetched data to. " +
-      "New data written with an instant_time <= END_INSTANTTIME are fetched out.")
+      "New data written with an instant_time <= END_INSTANTTIME are fetched out. Note that if `"
+      + HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key() + "` enabled, will use instant's "
+      + "`stateTransitionTime` to perform comparison.")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.schema.use.end.instanttime")
@@ -199,6 +203,9 @@ object DataSourceReadOptions {
     .withDocumentation("When doing an incremental query whether we should fall back to full table scans if file does not exist.")
 
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
+
+  val READ_BY_STATE_TRANSITION_TIME: ConfigProperty[Boolean] = HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME
+
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
@@ -284,8 +291,8 @@ object DataSourceWriteOptions {
       WriteOperationType.COMPACT.value,
       WriteOperationType.ALTER_SCHEMA.value
     )
-    .withDocumentation("Whether to do upsert, insert or bulkinsert for the write operation. " +
-      "Use bulkinsert to load new data into a table, and there on use upsert/insert. " +
+    .withDocumentation("Whether to do upsert, insert or bulk_insert for the write operation. " +
+      "Use bulk_insert to load new data into a table, and there on use upsert/insert. " +
       "bulk insert uses a disk based write path to scale to load large inputs without need to cache it.")
 
 
@@ -869,8 +876,8 @@ object DataSourceOptionsHelper {
    */
   def fetchMissingWriteConfigsFromTableConfig(tableConfig: HoodieTableConfig, params: Map[String, String]) : Map[String, String] = {
     val missingWriteConfigs = scala.collection.mutable.Map[String, String]()
-    if (!params.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) && tableConfig.getRecordKeyFieldProp != null) {
-      missingWriteConfigs ++= Map(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> tableConfig.getRecordKeyFieldProp)
+    if (!params.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) && tableConfig.getRawRecordKeyFieldProp != null) {
+      missingWriteConfigs ++= Map(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> tableConfig.getRawRecordKeyFieldProp)
     }
     if (!params.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) && tableConfig.getPartitionFieldProp != null) {
       missingWriteConfigs ++= Map(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> tableConfig.getPartitionFieldProp)
@@ -905,7 +912,7 @@ object DataSourceOptionsHelper {
   }
 
   def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
-    getKeyGeneratorClassNameFromType(inferKeyGeneratorType(recordsKeyFields, partitionFields))
+    getKeyGeneratorClassNameFromType(inferKeyGeneratorType(Option.ofNullable(recordsKeyFields), partitionFields))
   }
 
   implicit def convert[T, U](prop: ConfigProperty[T])(implicit converter: T => U): ConfigProperty[U] = {

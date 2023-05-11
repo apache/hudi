@@ -257,4 +257,56 @@ class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
       assertCached(spark.table(s"$tableName").select("id"), 0)
     }
   }
+
+  test("Test Savepoint with Log Only MOR Table") {
+    withRecordType()(withTempDir { tmp =>
+      // Create table with INMEMORY index to generate log only mor table.
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'INMEMORY',
+           |  hoodie.compact.inline = 'false',
+           |  hoodie.compact.inline.max.delta.commits = '1',
+           |  hoodie.clean.automatic = 'false'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000L)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001L)")
+
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 10, 1000L),
+        Seq(2, "a2", 10, 1001L)
+      )
+
+      // Create savepoint
+      val savePointTime = spark.sql(s"call show_commits(table => '$tableName')").sort("commit_time").collect().last.getString(0)
+      spark.sql(s"call create_savepoint('$tableName', '$savePointTime')")
+
+      // Run compaction
+      spark.sql(s"call run_compaction(table => '$tableName', op=> 'run')")
+
+      // Run clean
+      spark.sql(s"call run_clean(table => '$tableName', clean_policy => 'KEEP_LATEST_FILE_VERSIONS', file_versions_retained => 1)")
+
+      // Rollback to savepoint
+      spark.sql(s"call rollback_to_savepoint('$tableName', '$savePointTime')")
+
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 10, 1000L),
+        Seq(2, "a2", 10, 1001L)
+      )
+    })
+  }
 }

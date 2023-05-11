@@ -29,9 +29,9 @@ import java.util.function.Supplier
 
 class RollbackToSavepointProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None),
-    ProcedureParameter.optional(2, "path", DataTypes.StringType, None)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "instant_time", DataTypes.StringType),
+    ProcedureParameter.optional(2, "path", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
