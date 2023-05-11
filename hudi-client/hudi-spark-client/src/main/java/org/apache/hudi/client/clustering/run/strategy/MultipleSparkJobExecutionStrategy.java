@@ -18,14 +18,13 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
-import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.bootstrap.PartitionUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -54,7 +53,6 @@ import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
-import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -72,8 +70,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil;
-import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.BaseRelation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -379,16 +375,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       if (partitionFields.isPresent()) {
         int startOfPartitionPath = bootstrapFilePath.indexOf(bootstrapBasePath) + bootstrapBasePath.length() + 1;
         String partitionFilePath = bootstrapFilePath.substring(startOfPartitionPath, bootstrapFilePath.lastIndexOf("/"));
-        CachingPath bootstrapCachingPath = new CachingPath(bootstrapBasePath);
-        SparkParsePartitionUtil sparkParsePartitionUtil = SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkParsePartitionUtil();
-        partitionValues = HoodieSparkUtils.parsePartitionColumnValues(
-            partitionFields.get(),
-            partitionFilePath,
-            bootstrapCachingPath,
-            AvroConversionUtils.convertAvroSchemaToStructType(baseFileReader.getSchema()),
-            hadoopConf.get().get("timeZone", SQLConf.get().sessionLocalTimeZone()),
-            sparkParsePartitionUtil,
-            hadoopConf.get().getBoolean("spark.sql.sources.validatePartitionColumns", true));
+        partitionValues = PartitionUtils.getPartitionFieldVals(partitionFields, partitionFilePath, bootstrapBasePath, baseFileReader.getSchema(), hadoopConf.get());
       }
       baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
           baseFileReader,

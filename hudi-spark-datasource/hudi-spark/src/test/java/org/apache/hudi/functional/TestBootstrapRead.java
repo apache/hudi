@@ -46,7 +46,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -290,8 +289,9 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   }
 
   private static Dataset<Row> applyPartition(Dataset<Row> df, Integer n) {
-   return df.withColumn("partpath" + n,
-       functions.md5(functions.concat_ws( "," + n + ",", df.col("partition_path"),
-           functions.hash(df.col("_row_key")).mod(n))));
+    return df.withColumn("partpath" + n,
+        functions.md5(functions.concat_ws("," + n + ",",
+            df.col("partition_path"),
+            functions.hash(df.col("_row_key")).mod(n))));
   }
 }
