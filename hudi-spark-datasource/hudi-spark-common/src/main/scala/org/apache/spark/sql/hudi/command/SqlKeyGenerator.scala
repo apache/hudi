@@ -49,7 +49,12 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
     }
   }
 
-  private lazy val complexKeyGen = new ComplexKeyGenerator(props)
+  private lazy val autoRecordKeyGen = KeyGenUtils.enableAutoGenerateRecordKeys(props)
+  private lazy val complexKeyGen = if (autoRecordKeyGen) {
+    new AutoRecordGenWrapperKeyGenerator(props, new ComplexKeyGenerator(props))
+  } else {
+    new ComplexKeyGenerator(props)
+  }
   private lazy val originalKeyGen =
     Option(props.getString(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, null))
       .map { originalKeyGenClassName =>
@@ -61,7 +66,12 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
         keyGenProps.remove(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME)
         keyGenProps.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, convertedKeyGenClassName)
 
-        KeyGenUtils.createKeyGeneratorByClassName(keyGenProps).asInstanceOf[SparkKeyGeneratorInterface]
+        val keyGenerator = KeyGenUtils.createKeyGeneratorByClassName(keyGenProps).asInstanceOf[SparkKeyGeneratorInterface]
+        if (autoRecordKeyGen) {
+          new AutoRecordGenWrapperKeyGenerator(keyGenProps, keyGenerator.asInstanceOf[BuiltinKeyGenerator])
+        } else {
+          keyGenerator
+        }
       }
 
   override def getRecordKey(record: GenericRecord): String =

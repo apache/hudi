@@ -467,7 +467,7 @@ class TestHoodieSparkSqlWriter {
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
 
     // try write to Hudi
-    assertThrows[IOException] {
+    assertThrows[IllegalArgumentException] {
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableOpts - DataSourceWriteOptions.PARTITIONPATH_FIELD.key, df)
     }
   }
@@ -591,8 +591,8 @@ class TestHoodieSparkSqlWriter {
         HoodieBootstrapConfig.PARALLELISM_VALUE.key -> "4",
         DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL,
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-        HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
       initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true, initBasePath = false)
 
@@ -818,7 +818,7 @@ class TestHoodieSparkSqlWriter {
       spark.emptyDataFrame.write.format("hudi")
         .options(options)
         .option(HoodieBootstrapConfig.BASE_PATH.key, baseBootStrapPath)
-        .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getCanonicalName)
+        .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getCanonicalName)
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
         .option(HoodieBootstrapConfig.PARALLELISM_VALUE.key, "4")
         .mode(SaveMode.Overwrite).save(tempBasePath)

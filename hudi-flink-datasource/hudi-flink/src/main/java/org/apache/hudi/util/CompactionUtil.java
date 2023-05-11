@@ -28,18 +28,15 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
 
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Locale;
 
 /**
@@ -162,25 +159,6 @@ public class CompactionUtil {
     String path = HoodieTableMetadata.getMetadataTableBasePath(conf.getString(FlinkOptions.PATH));
     if (!StreamerUtil.tableExists(path, metaClient.getHadoopConf())) {
       conf.setBoolean(FlinkOptions.METADATA_ENABLED, false);
-    }
-  }
-
-  /**
-   * Cleans the metadata file for given instant {@code instant}.
-   */
-  public static void cleanInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
-    Path commitFilePath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
-    try {
-      if (metaClient.getFs().exists(commitFilePath)) {
-        boolean deleted = metaClient.getFs().delete(commitFilePath, false);
-        if (deleted) {
-          LOG.info("Removed instant " + instant);
-        } else {
-          throw new HoodieIOException("Could not delete instant " + instant);
-        }
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not remove requested commit " + commitFilePath, e);
     }
   }
 

@@ -18,14 +18,14 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.hudi.cli.BootstrapExecutorUtils
 import org.apache.hudi.cli.HDFSParquetImporterUtils.{buildProperties, readConfig}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.HoodieBootstrapConfig
+import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.constant.KeyGeneratorType
+import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -33,15 +33,14 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.Locale
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "table_type", DataTypes.StringType, None),
-    ProcedureParameter.required(2, "bootstrap_path", DataTypes.StringType, None),
-    ProcedureParameter.required(3, "base_path", DataTypes.StringType, None),
-    ProcedureParameter.required(4, "rowKey_field", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "table_type", DataTypes.StringType),
+    ProcedureParameter.required(2, "bootstrap_path", DataTypes.StringType),
+    ProcedureParameter.required(3, "base_path", DataTypes.StringType),
+    ProcedureParameter.required(4, "rowKey_field", DataTypes.StringType),
     ProcedureParameter.optional(5, "base_file_format", DataTypes.StringType, "PARQUET"),
     ProcedureParameter.optional(6, "partition_path_field", DataTypes.StringType, ""),
     ProcedureParameter.optional(7, "bootstrap_index_class", DataTypes.StringType, "org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex"),
@@ -94,10 +93,10 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key, bootstrapPath)
 
     if (!StringUtils.isNullOrEmpty(keyGeneratorClass) && KeyGeneratorType.getNames.contains(keyGeneratorClass.toUpperCase(Locale.ROOT))) {
-      properties.setProperty(HoodieBootstrapConfig.KEYGEN_TYPE.key, keyGeneratorClass.toUpperCase(Locale.ROOT))
+      properties.setProperty(HoodieWriteConfig.KEYGENERATOR_TYPE.key, keyGeneratorClass.toUpperCase(Locale.ROOT))
     }
     else {
-      properties.setProperty(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, keyGeneratorClass)
+      properties.setProperty(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, keyGeneratorClass)
     }
 
     properties.setProperty(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.key, fullBootstrapInputProvider)
@@ -110,9 +109,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
 
     val cfg = new BootstrapExecutorUtils.Config()
     cfg.setTableName(tableName)
-    if (database.isDefined) {
-      cfg.setDatabase(database.get)
-    }
+    cfg.setDatabase(database.getOrElse(sparkSession.sessionState.catalog.getCurrentDatabase))
     cfg.setTableType(tableType)
     cfg.setBasePath(basePath)
     cfg.setBaseFileFormat(baseFileFormat)

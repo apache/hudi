@@ -32,6 +32,7 @@ import java.util.List;
  */
 public abstract class BaseKeyGenerator extends KeyGenerator {
 
+  public static final String EMPTY_PARTITION = "";
   protected List<String> recordKeyFields;
   protected List<String> partitionPathFields;
   protected final boolean encodePartitionPath;
