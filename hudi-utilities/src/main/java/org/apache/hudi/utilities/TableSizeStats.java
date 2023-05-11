@@ -46,6 +46,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,14 +65,15 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Calculate and output file size stats of data files that were modified in the half-open interval [start date (--start-date parameter),
- * end date (--end-date parameter)). --num-days parameter can be used to select data files over last --num-days. If --start-date is
- * specified, --num-days will be ignored. If none of the date parameters are set, stats will be computed over all data files of all
- * partitions in the table. Note that date filtering is carried out only if the partition name has the format '[column name=]yyyy-M-d',
- * '[column name=]yyyy/M/d'. By default, only table level file size stats are printed. If --partition-status option is used, partition
- * level file size stats also get printed.
+ * This class provides file size updates for the latest files that hudi is consuming. These stats are at table level by default, but
+ * specifying --enable-partition-stats will also show stats at the partition level. If a start date (--start-date parameter) and/or
+ * end date (--end-date parameter) are specified, stats are based on files that were modified in the half-open interval
+ * [start date (--start-date parameter), end date (--end-date parameter)). --num-days parameter can be used to select data files over
+ * last --num-days. If --start-date is specified, --num-days will be ignored. If none of the date parameters are set, stats will be
+ * computed over all data files of all partitions in the table. Note that date filtering is carried out only if the partition name
+ * has the format '[column name=]yyyy-M-d', '[column name=]yyyy/M/d'.
  * <br><br>
- * The following stats are calculated:
+ * The following stats are produced by this class:
  * Number of files.
  * Total table size.
  * Minimum file size
@@ -130,7 +132,7 @@ public class TableSizeStats implements Serializable {
   }
 
   public static class Config implements Serializable {
-    @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = false)
+    @Parameter(names = {"--base-path", "-bp"}, description = "Base path for the table", required = false)
     public String basePath = null;
 
     @Parameter(names = {"--num-days", "-nd"}, description = "Consider files modified within this many days.", required = false)
@@ -142,7 +144,7 @@ public class TableSizeStats implements Serializable {
     @Parameter(names = {"--end-date", "-ed"}, description = "Consider files modified before this date.", required = false)
     public String endDate = null;
 
-    @Parameter(names = {"--partition-stats", "-ps"}, description = "Show partition-level stats besides table-level stats.", required = false)
+    @Parameter(names = {"--enable-partition-stats", "-ps"}, description = "Show partition-level stats besides table-level stats.", required = false)
     public boolean partitionStats = false;
 
     @Parameter(names = {"--props-path", "-pp"}, description = "Properties file containing base paths one per line", required = false)
@@ -172,7 +174,7 @@ public class TableSizeStats implements Serializable {
           + "   --num-days " + numDays + ", \n"
           + "   --start-date " + startDate + ", \n"
           + "   --end-date " + endDate + ", \n"
-          + "   --partition-stats " + partitionStats + ", \n"
+          + "   --enable-partition-stats " + partitionStats + ", \n"
           + "   --parallelism " + parallelism + ", \n"
           + "   --spark-master " + sparkMaster + ", \n"
           + "   --spark-memory " + sparkMemory + ", \n"
@@ -237,53 +239,20 @@ public class TableSizeStats implements Serializable {
     try {
       LOG.info(cfg.toString());
       LOG.info(" ****** Fetching table size stats ******");
-      // Set endDate to null by default.
-      LocalDate endDate = null;
-      if (cfg.endDate != null) {
-        try {
-          endDate = LocalDate.parse(cfg.endDate, DATE_FORMATTER);
-          LOG.info("Setting ending date to {}. ", endDate);
-        } catch (DateTimeParseException dtpe) {
-          throw new HoodieException("Unable to parse --end-date. ", dtpe);
-        }
-      } else {
-        LOG.info("End date is not specified: {}.", endDate);
-      }
 
-      // Set startDate to null by default.
-      LocalDate startDate = null;
-
-      // Set startDate to cfg.startDate if specified. cfg.startDate takes priority over cfg.numDays if both are specified.
-      if (cfg.startDate != null) {
-        startDate = LocalDate.parse(cfg.startDate, DATE_FORMATTER);
-        LOG.info("Setting starting date to {}.", startDate);
-      } else {
-        if (cfg.numDays == 0) {
-          LOG.info("Start date not specified: {}.", startDate);
-        } else if (cfg.numDays > 0) {
-          endDate = LocalDate.now();
-          startDate = endDate.minusDays(cfg.numDays);
-          LOG.info("Setting starting date to {} ({} - {} days). ", startDate, endDate, cfg.numDays);
-        } else {
-          throw new HoodieException("--num-days must specify a positive value.");
-        }
-      }
-
-      // Check if starting date is before ending date.
-      if (startDate != null && endDate != null && !startDate.isBefore(endDate)) {
-        throw new HoodieException("Starting date must be before ending date. Start Date: " + startDate + ", End Date: " + endDate);
-      }
+      // Determine starting and ending date intervals for filtering data files.
+      LocalDate[] dateInterval = getUserSpecifiedDateInterval(cfg);
 
       if (cfg.propsFilePath != null) {
         List<String> filePaths = getFilePaths(cfg.propsFilePath, jsc.hadoopConfiguration());
         for (String filePath : filePaths) {
-          logTableStats(filePath, startDate, endDate, cfg.partitionStats);
+          logTableStats(filePath, dateInterval, cfg.partitionStats);
         }
       } else {
         if (cfg.basePath == null) {
           throw new HoodieIOException("Base path needs to be set.");
         }
-        logTableStats(cfg.basePath, startDate, endDate, cfg.partitionStats);
+        logTableStats(cfg.basePath, dateInterval, cfg.partitionStats);
       }
 
     } catch (Exception e) {
@@ -291,7 +260,82 @@ public class TableSizeStats implements Serializable {
     }
   }
 
-  private List<String> getFilePaths(String propsPath, Configuration hadoopConf) {
+  private void logTableStats(String basePath, LocalDate[] dateInterval, boolean partitionStats) throws IOException {
+
+    LOG.warn("Processing table " + basePath);
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(false)
+        .build();
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath,
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+    SerializableConfiguration serializableConfiguration = new SerializableConfiguration(jsc.hadoopConfiguration());
+
+    List<String> allPartitions = tableMetadata.getAllPartitionPaths();
+
+    // As a sanity check, throw exception and exit early if date interval is specified, but the first partition does not have
+    // date.
+    if (dateInterval != null && getPartitionDate(allPartitions.get(0)) == null) {
+      throw new HoodieException(
+          "Cannot apply --start-date, --end-date, or --num-days when partition does not contain date. Interval: " + Arrays.toString(dateInterval) + ", Partition Name: " + allPartitions.get(0));
+    }
+
+    final Histogram tableHistogram = new Histogram(new UniformReservoir(1_000_000));
+    allPartitions.forEach(partition -> {
+      LocalDate partitionDate = null;
+      LocalDate startDate = null;
+      LocalDate endDate = null;
+      if (dateInterval != null) {
+        // Date interval is specified, so try to parse date out of partition name.
+        partitionDate = getPartitionDate(partition);
+        startDate = dateInterval[0];
+        endDate = dateInterval[1];
+      }
+
+      // Compute file size stats for all files in this partition if:
+      // 1. partition date is null (i.e partition name does not contain a date)
+      // 2. both start date and end date are null (not specified).
+      // 3. endDate is null (not specified) and partition date is equal to or after startDate.
+      // 4. startDate is null (not specified) and partition date is before endDate.
+      // 5. startDate and endDate are both specified and partition date lies in the range [startDate, endDate)
+      if (partitionDate == null
+          || (startDate == null && endDate == null)
+          || (endDate == null && (partitionDate.isEqual(startDate) || partitionDate.isAfter(startDate)))
+          || (startDate == null && partitionDate.isBefore(endDate))
+          || (startDate != null && endDate != null && ((partitionDate.isEqual(startDate) || partitionDate.isAfter(startDate)) && partitionDate.isBefore(endDate)))) {
+        HoodieTableMetaClient metaClientLocal = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(serializableConfiguration.get()).build();
+        HoodieMetadataConfig metadataConfig1 = HoodieMetadataConfig.newBuilder()
+            .enable(false)
+            .build();
+        HoodieTableFileSystemView fileSystemView = FileSystemViewManager
+            .createInMemoryFileSystemView(new HoodieLocalEngineContext(serializableConfiguration.get()),
+                metaClientLocal, metadataConfig1);
+        List<HoodieBaseFile> baseFiles = fileSystemView.getLatestBaseFiles(partition).collect(Collectors.toList());
+
+        // No need to collect partition level stats if user hasn't requested partition-level stats or if there are no partitions in this table.
+        final Histogram partitionHistogram = partitionStats && partition.trim().length() > 0 ? new Histogram(new UniformReservoir(1_000_000)) : null;
+        baseFiles.forEach(baseFile -> {
+          // Add file size to histogram since the file was modified within the specified date range.
+          if (partitionHistogram != null) {
+            partitionHistogram.update(baseFile.getFileSize());
+          }
+          tableHistogram.update(baseFile.getFileSize());
+        });
+
+        // Display file size distribution stats for partition
+        if (partitionHistogram != null) {
+          logStats("Partition stats [name: " + partition + (partitionDate != null ? ", has date: yes" : "") + "]", partitionHistogram);
+        }
+      }
+    });
+
+    // Display file size distribution stats for entire table.
+    logStats("Table stats [path: " + basePath + "]", tableHistogram);
+  }
+
+  private static List<String> getFilePaths(String propsPath, Configuration hadoopConf) {
     List<String> filePaths = new ArrayList<>();
     FileSystem fs = FSUtils.getFs(
         propsPath,
@@ -311,80 +355,70 @@ public class TableSizeStats implements Serializable {
     return filePaths;
   }
 
-  private void logTableStats(String basePath, LocalDate startDate, LocalDate endDate, boolean partitionStats) throws IOException {
-
-    LOG.warn("Processing table " + basePath);
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-        .enable(false)
-        .build();
-    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath,
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
-    SerializableConfiguration serializableConfiguration = new SerializableConfiguration(jsc.hadoopConfiguration());
-
-    List<String> allPartitions = tableMetadata.getAllPartitionPaths();
-
-    final Histogram tableHistogram = new Histogram(new UniformReservoir(1_000_000));
-    allPartitions.forEach(partition -> {
-      // Partition name should conform to date format if startDate and/or endDate are specified. Otherwise, we don't
-      // need to parse partition name as date.
-      String dateString = partition;
-      if (partition.contains("=")) {
-        // Partition name may be in the form of "<column>=<date>". Try parsing out date.
-        String[] parts = partition.split("=");
-        dateString = parts[1].trim();
-      }
-
-      LocalDate partitionDate = null;
+  private static LocalDate[] getUserSpecifiedDateInterval(Config cfg) {
+    // Set endDate to null by default.
+    LocalDate endDate = null;
+    if (cfg.endDate != null) {
       try {
-        if (startDate != null || endDate != null) {
-          partitionDate = LocalDate.parse(dateString, DATE_FORMATTER);
-        }
-        LOG.info("Parsed " + partition);
+        endDate = LocalDate.parse(cfg.endDate, DATE_FORMATTER);
+        LOG.info("Setting ending date to {}. ", endDate);
       } catch (DateTimeParseException dtpe) {
-        LOG.error("Partition name {} must conform to date format if --start-date, --end-date, or --num-days are specified. ", partition, dtpe);
+        throw new HoodieException("Unable to parse --end-date. ", dtpe);
       }
+    } else {
+      LOG.info("End date is not specified: {}.", endDate);
+    }
 
-      // Compute file size stats for all files in this partition if:
-      // 1. partition date is null (startDate and endDate are both null and not specified)
-      // 2. endDate is null (not specified) and partition date is equal to or after startDate.
-      // 3. startDate is null (not specified) and partition date is before endDate.
-      // 4. startDate and endDate are both specified and partition date lies in the range [startDate, endDate)
-      if (partitionDate == null
-          || (endDate == null && (partitionDate.isEqual(startDate) || partitionDate.isAfter(startDate)))
-          || (startDate == null && (partitionDate.isBefore(endDate)))
-          || (startDate != null && endDate != null && (partitionDate.isEqual(startDate) || partitionDate.isAfter(startDate) && partitionDate.isBefore(endDate)))) {
-        HoodieTableMetaClient metaClientLocal = HoodieTableMetaClient.builder()
-            .setBasePath(basePath)
-            .setConf(serializableConfiguration.get()).build();
-        HoodieMetadataConfig metadataConfig1 = HoodieMetadataConfig.newBuilder()
-            .enable(false)
-            .build();
-        HoodieTableFileSystemView fileSystemView = FileSystemViewManager
-            .createInMemoryFileSystemView(new HoodieLocalEngineContext(serializableConfiguration.get()),
-                metaClientLocal, metadataConfig1);
-        List<HoodieBaseFile> baseFiles = fileSystemView.getLatestBaseFiles(partition).collect(Collectors.toList());
-        final Histogram partitionHistogram = partitionStats ? new Histogram(new UniformReservoir(1_000_000)) : null;
-        baseFiles.forEach(baseFile -> {
-          // Add file size to histogram since the file was modified within the specified date range.
-          if (partitionHistogram != null) {
-            partitionHistogram.update(baseFile.getFileSize());
-          }
-          tableHistogram.update(baseFile.getFileSize());
-        });
+    // Set startDate to null by default.
+    LocalDate startDate = null;
 
-        // Display file size distribution stats for partition
-        if (partitionHistogram != null) {
-          printStats("Partition stats [name: " + partition + (partitionDate != null ? ", has date: yes" : "") + "]", partitionHistogram);
-        }
+    // Set startDate to cfg.startDate if specified. cfg.startDate takes priority over cfg.numDays if both are specified.
+    if (cfg.startDate != null) {
+      startDate = LocalDate.parse(cfg.startDate, DATE_FORMATTER);
+      LOG.info("Setting starting date to {}.", startDate);
+    } else {
+      if (cfg.numDays == 0) {
+        LOG.info("Start date not specified: {}.", startDate);
+      } else if (cfg.numDays > 0) {
+        endDate = LocalDate.now();
+        startDate = endDate.minusDays(cfg.numDays);
+        LOG.info("Setting starting date to {} ({} - {} days). ", startDate, endDate, cfg.numDays);
+      } else {
+        throw new HoodieException("--num-days must specify a positive value.");
       }
-    });
+    }
 
-    // Display file size distribution stats for entire table.
-    printStats("Table stats [path: " + basePath + "]", tableHistogram);
+    // Check if starting date is before ending date.
+    if (startDate != null && endDate != null && !startDate.isBefore(endDate)) {
+      throw new HoodieException("Starting date must be before ending date. Start Date: " + startDate + ", End Date: " + endDate);
+    }
+
+    return startDate == null && endDate == null ? null : new LocalDate[]{startDate, endDate};
   }
 
-  private static String getFormattedSize(double size) {
+  @Nullable
+  private static LocalDate getPartitionDate(String partition) {
+    // Partition name should conform to date format if startDate and/or endDate are specified. Otherwise, we don't
+    // need to parse partition name as date.
+    String dateString = partition;
+    if (partition.contains("=")) {
+      // Assume partition date format of "<column>=<date>" and try parsing out date.
+      String[] parts = partition.split("=");
+      if (parts != null && parts.length == 2) {
+        dateString = parts[1].trim();
+      }
+    }
+
+    LocalDate partitionDate = null;
+    try {
+      return LocalDate.parse(dateString, DATE_FORMATTER);
+    } catch (DateTimeParseException dtpe) {
+      LOG.error("Partition name {} must conform to date format if --start-date, --end-date, or --num-days are specified. ", partition, dtpe);
+    }
+    return partitionDate;
+  }
+
+  private static String getFileSizeUnit(double size) {
     int counter = 0;
     while (size > 1024 && counter < FILE_SIZE_UNITS.length) {
       size /= 1024;
@@ -394,18 +428,18 @@ public class TableSizeStats implements Serializable {
     return String.format("%.2f %s", size, FILE_SIZE_UNITS[counter]);
   }
 
-  private static void printStats(String header, Histogram histogram) {
+  private static void logStats(String header, Histogram histogram) {
     LOG.info(header);
     Snapshot snapshot = histogram.getSnapshot();
     LOG.info("Number of files: {}", snapshot.size());
-    LOG.info("Total table size: {}", getFormattedSize(Arrays.stream(snapshot.getValues()).sum()));
-    LOG.info("Minimum file size: {}", getFormattedSize(snapshot.getMin()));
-    LOG.info("Maximum file size: {}", getFormattedSize(snapshot.getMax()));
-    LOG.info("Average file size: {}", getFormattedSize(snapshot.getMean()));
-    LOG.info("Median file size: {}", getFormattedSize(snapshot.getMedian()));
-    LOG.info("P50 file size: {}", getFormattedSize(snapshot.getValue(0.5)));
-    LOG.info("P90 file size: {}", getFormattedSize(snapshot.getValue(0.9)));
-    LOG.info("P95 file size: {}", getFormattedSize(snapshot.getValue(0.95)));
-    LOG.info("P99 file size: {}", getFormattedSize(snapshot.getValue(0.99)));
+    LOG.info("Total table size: {}", getFileSizeUnit(Arrays.stream(snapshot.getValues()).sum()));
+    LOG.info("Minimum file size: {}", getFileSizeUnit(snapshot.getMin()));
+    LOG.info("Maximum file size: {}", getFileSizeUnit(snapshot.getMax()));
+    LOG.info("Average file size: {}", getFileSizeUnit(snapshot.getMean()));
+    LOG.info("Median file size: {}", getFileSizeUnit(snapshot.getMedian()));
+    LOG.info("P50 file size: {}", getFileSizeUnit(snapshot.getValue(0.5)));
+    LOG.info("P90 file size: {}", getFileSizeUnit(snapshot.getValue(0.9)));
+    LOG.info("P95 file size: {}", getFileSizeUnit(snapshot.getValue(0.95)));
+    LOG.info("P99 file size: {}", getFileSizeUnit(snapshot.getValue(0.99)));
   }
 }
