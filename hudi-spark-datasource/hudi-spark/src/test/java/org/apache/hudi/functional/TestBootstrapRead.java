@@ -27,6 +27,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
@@ -35,6 +36,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -44,6 +46,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,7 +77,8 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   protected String tableType;
   protected Integer nPartitions;
 
-  protected static String[] dropColumns = {"_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",  "_hoodie_file_name", "city_to_state", "partition_path"};
+  protected String[] partitionCols;
+  protected static String[] dropColumns = {"_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",  "_hoodie_file_name", "city_to_state"};
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -94,19 +98,23 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
     Boolean[] dashPartitions = {true};
-    String[] tableType = {"COPY_ON_WRITE"};
+    String[] tableType = {"COPY_ON_WRITE", "MERGE_ON_READ"};
     String[] bootstrapType = {"full", "metadata", "mixed"};
-    Integer[] nPartitions = {0, 1};
+    Integer[] nPartitions = {0, 1, 2};
 
     for (String tt : tableType) {
       for (Boolean dash : dashPartitions) {
         for (String bt : bootstrapType) {
           for (Integer n : nPartitions) {
-            b.add(Arguments.of(bt, dash, tt, n));
+            //can't be mixed bootstrap if it's nonpartitioned
+            if (!bt.equals("mixed") || n > 0) {
+              b.add(Arguments.of(bt, dash, tt, n));
+            }
           }
         }
       }
     }
+
     return b.build();
   }
 
@@ -142,8 +150,16 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     options.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType);
     options.put(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), "true");
     options.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-    if (nPartitions > 0) {
-      options.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
+    options.put("hoodie.embed.timeline.server", "false");
+    if (nPartitions == 0) {
+      options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName());
+    } else {
+      options.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), String.join(",", partitionCols));
+      if (nPartitions == 1) {
+        options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
+      } else {
+        options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), ComplexKeyGenerator.class.getName());
+      }
     }
     options.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
     if (tableType.equals("MERGE_ON_READ")) {
@@ -157,11 +173,6 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     Map<String, String> options = basicOptions();
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL());
     options.put(HoodieBootstrapConfig.BASE_PATH.key(), bootstrapBasePath);
-    if (nPartitions == 0) {
-      options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName());
-    } else {
-      options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
-    }
 
     switch (bootstrapType) {
       case "metadata":
@@ -172,11 +183,16 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         break;
       case "mixed":
         options.put(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key(), BootstrapRegexModeSelector.class.getName());
+        String regexPattern;
         if (dashPartitions) {
-          options.put(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_PATTERN.key(), "partition_path=2015-03-1[5-7]");
+          regexPattern = "partition_path=2015-03-1[5-7]";
         } else {
-          options.put(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_PATTERN.key(), "partition_path=2015%2F03%2F1[5-7]");
+          regexPattern = "partition_path=2015%2F03%2F1[5-7]";
         }
+        if (nPartitions > 1) {
+          regexPattern = regexPattern + "\\/.*";
+        }
+        options.put(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_PATTERN.key(), regexPattern);
         break;
       default:
         throw new RuntimeException();
@@ -211,8 +227,12 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     }
     Dataset<Row> hudiDf = sparkSession.read().options(readOpts).format("hudi").load(hudiBasePath);
     Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
-    compareDf(hudiDf.drop(dropColumns), bootstrapDf.drop(dropColumns));
-    compareDf(hudiDf.select("_row_key","partition_path"), bootstrapDf.select("_row_key","partition_path"));
+    if (nPartitions == 0) {
+      compareDf(hudiDf.drop(dropColumns), bootstrapDf.drop(dropColumns));
+      return;
+    }
+    compareDf(hudiDf.drop(dropColumns).drop(partitionCols), bootstrapDf.drop(dropColumns).drop(partitionCols));
+    compareDf(hudiDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
   }
 
   protected void compareDf(Dataset<Row> df1, Dataset<Row> df2) {
@@ -223,30 +243,28 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   protected void setupDirs()  {
     dataGen = new HoodieTestDataGenerator(dashPartitions ? dashPartitionPaths : slashPartitionPaths);
     Dataset<Row> inserts = generateTestInserts();
+    if (nPartitions > 0) {
+      partitionCols = new String[nPartitions];
+      partitionCols[0] = "partition_path";
+      for (int i = 1; i < partitionCols.length; i++) {
+        partitionCols[i] = "partpath" + (i + 1);
+      }
+      inserts.write().partitionBy(partitionCols).save(bootstrapBasePath);
+    } else {
+      inserts.write().save(bootstrapBasePath);
+    }
 
     inserts.write().format("hudi")
         .options(basicOptions())
         .mode(SaveMode.Overwrite)
         .save(hudiBasePath);
-
-    switch (nPartitions) {
-      case 0:
-        inserts.write().save(bootstrapBasePath);
-        break;
-      case 1:
-        inserts.write().partitionBy("partition_path").save(bootstrapBasePath);
-        break;
-      default:
-        throw new RuntimeException();
-    }
-
   }
 
   public Dataset<Row> generateTestInserts() {
     List<String> records = dataGen.generateInserts("000", nInserts).stream()
         .map(r -> recordToString(r).get()).collect(Collectors.toList());
     JavaRDD<String> rdd = jsc.parallelize(records);
-    return sparkSession.read().json(rdd);
+    return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
   }
 
   public Dataset<Row> generateTestUpdates(String instantTime) {
@@ -254,9 +272,25 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
       List<String> records = dataGen.generateUpdates(instantTime, nUpdates).stream()
           .map(r -> recordToString(r).get()).collect(Collectors.toList());
       JavaRDD<String> rdd = jsc.parallelize(records);
-      return sparkSession.read().json(rdd);
+      return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  public static Dataset<Row> addPartitionColumns(Dataset<Row> df, Integer nPartitions) {
+    if (nPartitions < 2) {
+      return df;
+    }
+    for (int i = 2; i <= nPartitions; i++) {
+      df = applyPartition(df, i);
+    }
+    return df;
+  }
+
+  private static Dataset<Row> applyPartition(Dataset<Row> df, Integer n) {
+   return df.withColumn("partpath" + n,
+       functions.md5(functions.concat_ws( "," + n + ",", df.col("partition_path"),
+           functions.hash(df.col("_row_key")).mod(n))));
   }
 }

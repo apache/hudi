@@ -25,6 +25,8 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import org.apache.avro.Schema;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterator<HoodieRecord<T>> {
 
   protected ClosableIterator<HoodieRecord<T>> skeletonIterator;
@@ -53,7 +55,9 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
 
   @Override
   public boolean hasNext() {
-    return skeletonIterator.hasNext() && dataFileIterator.hasNext();
+    checkState(skeletonIterator.hasNext() == dataFileIterator.hasNext());
+    return
+        skeletonIterator.hasNext();
   }
 
   @Override
