@@ -319,6 +319,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @return relative partition path and a flag to indicate if the path is complete (i.e., not a prefix)
    */
   private def composeRelativePartitionPath(staticPartitionColumnNameValuePairs: Seq[(String, (String, Any))]): String = {
+    // NOTE: Do not blindly use default value if tableConfig does not have the hiveStylePartitioningEnable config
+    checkState(metaClient.getTableConfig.getHiveStylePartitioningEnableOrNull != null)
     checkState(staticPartitionColumnNameValuePairs.nonEmpty)
 
     // Since static partition values might not be available for all columns, we compile

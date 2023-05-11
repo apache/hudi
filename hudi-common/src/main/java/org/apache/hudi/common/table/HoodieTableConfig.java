@@ -665,6 +665,16 @@ public class HoodieTableConfig extends HoodieConfig {
     return HoodieTimelineTimeZone.valueOf(getStringOrDefault(TIMELINE_TIMEZONE));
   }
 
+  /**
+   * Returns null if the HIVE_STYLE_PARTITION_ENABLE value is not defined in hoodie.properties/table config instead of using the default value.
+   * When trying to determine the partition format of the table, this method will not blindly return a default value if it is not defined in the tableConfig.
+   *
+   * @return HIVE_STYLE_PARTITIONING_ENABLE config value if defined in table config, else, return a null
+   */
+  public String getHiveStylePartitioningEnableOrNull() {
+    return getString(HIVE_STYLE_PARTITIONING_ENABLE);
+  }
+
   public String getHiveStylePartitioningEnable() {
     return getStringOrDefault(HIVE_STYLE_PARTITIONING_ENABLE);
   }
