@@ -86,6 +86,33 @@ import java.util.Properties;
  *      id      ts      name    price
  *      1       2       name_1  price_1
  * </pre>
+ *
+ * <p>Gotchas:
+ * <p>In cases where a batch of records is preCombine before combineAndGetUpdateValue with the underlying records to be updated located in parquet files, the end states of records might not be as how
+ * one will expect when applying a straightforward partial update.
+ *
+ * <p>Gotchas-Example:
+ * <pre>
+ *  -- Insertion order of records:
+ *  INSERT INTO t1 VALUES (1, 'a1', 10, 1000);                          -- (1)
+ *  INSERT INTO t1 VALUES (1, 'a1', 11, 999), (1, 'a1_0', null, 1001);  -- (2)
+ *
+ *  SELECT id, name, price, _ts FROM t1;
+ *  -- One would the results to return:
+ *  -- 1    a1_0    10.0    1001
+
+ *  -- However, the results returned are:
+ *  -- 1    a1_0    11.0    1001
+ *
+ *  -- This occurs as preCombine is applied on (2) first to return:
+ *  -- 1    a1_0    11.0    1001
+ *
+ *  -- And this then combineAndGetUpdateValue with the existing oldValue:
+ *  -- 1    a1_0    10.0    1000
+ *
+ *  -- To return:
+ *  -- 1    a1_0    11.0    1001
+ * </pre>
  */
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
 
