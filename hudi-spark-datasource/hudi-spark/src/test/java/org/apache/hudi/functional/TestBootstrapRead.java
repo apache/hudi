@@ -150,6 +150,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     options.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType);
     options.put(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), "true");
     options.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    //TODO: enable timeline server with [HUDI-6201]
     options.put("hoodie.embed.timeline.server", "false");
     if (nPartitions == 0) {
       options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName());
