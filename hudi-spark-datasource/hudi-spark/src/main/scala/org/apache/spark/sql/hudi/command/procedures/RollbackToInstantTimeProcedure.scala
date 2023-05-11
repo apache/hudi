@@ -32,8 +32,8 @@ import java.util.function.Supplier
 
 class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None))
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "instant_time", DataTypes.StringType))
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("rollback_result", DataTypes.BooleanType, nullable = true, Metadata.empty))

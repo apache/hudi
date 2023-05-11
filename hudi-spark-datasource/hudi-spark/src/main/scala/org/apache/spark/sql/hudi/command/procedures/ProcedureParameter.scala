@@ -54,8 +54,8 @@ object ProcedureParameter {
    * @param dataType the type of the parameter
    * @return the constructed stored procedure parameter
    */
-  def required(index: Int, name: String, dataType: DataType, default: Any): ProcedureParameterImpl = {
-    ProcedureParameterImpl(index, name, dataType, default, required = true)
+  def required(index: Int, name: String, dataType: DataType): ProcedureParameterImpl = {
+    ProcedureParameterImpl(index, name, dataType, null, required = true)
   }
 
   /**
@@ -63,9 +63,10 @@ object ProcedureParameter {
    *
    * @param name     the name of the parameter.
    * @param dataType the type of the parameter.
+   * @param default  the default value of the parameter.
    * @return the constructed optional stored procedure parameter
    */
-  def optional(index: Int, name: String, dataType: DataType, default: Any): ProcedureParameterImpl = {
+  def optional(index: Int, name: String, dataType: DataType, default: Any = null): ProcedureParameterImpl = {
     ProcedureParameterImpl(index, name, dataType, default, required = false)
   }
 }

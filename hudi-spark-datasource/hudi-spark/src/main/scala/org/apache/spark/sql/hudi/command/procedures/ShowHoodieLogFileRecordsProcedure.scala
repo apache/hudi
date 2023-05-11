@@ -37,8 +37,8 @@ import scala.collection.JavaConverters._
 
 class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuilder {
   override def parameters: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "log_file_path_pattern", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "log_file_path_pattern", DataTypes.StringType),
     ProcedureParameter.optional(2, "merge", DataTypes.BooleanType, false),
     ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 10)
   )

@@ -128,6 +128,14 @@ public interface TableFileSystemView {
         boolean includeFileSlicesInPendingCompaction);
 
     /**
+     * Stream all latest file slices with precondition that commitTime(file) before maxCommitTime.
+     *
+     * @param maxCommitTime Max Instant Time
+     * @return A {@link Map} of partition path to the latest file slices before maxCommitTime.
+     */
+    Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime);
+
+    /**
      * Stream all "merged" file-slices before on an instant time If a file-group has a pending compaction request, the
      * file-slice before and after compaction request instant is merged and returned.
      * 

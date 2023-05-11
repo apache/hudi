@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.Assertions.assertStreamEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class TestHoodieInstant extends HoodieCommonTestHarness {
 
@@ -74,6 +76,13 @@ public class TestHoodieInstant extends HoodieCommonTestHarness {
           timeline.getInstantsAsStream().filter(s -> s.getStateTransitionTime().isEmpty()).count());
     } finally {
       cleanMetaClient();
+    }
+  }
+
+  @Test
+  public void testHoodieTimelineTimeZone() {
+    for (HoodieTimelineTimeZone timeZone : HoodieTimelineTimeZone.values()) {
+      assertNotNull(timeZone.getZoneId());
     }
   }
 }

@@ -196,6 +196,12 @@ trait ProvidesHoodieConfig extends Logging {
       HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     )
+    // for auto record key gen
+    val recordKeyConfigValue = if (hoodieCatalogTable.primaryKeys.length > 1) {
+      hoodieCatalogTable.primaryKeys.mkString(",")
+    } else {
+      null
+    }
 
     val overridingOpts = extraOptions ++ Map(
       "path" -> path,
@@ -204,7 +210,7 @@ trait ProvidesHoodieConfig extends Logging {
       OPERATION.key -> operation,
       HIVE_STYLE_PARTITIONING.key -> hiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> urlEncodePartitioning,
-      RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
+      RECORDKEY_FIELD.key -> recordKeyConfigValue,
       PRECOMBINE_FIELD.key -> preCombineField,
       PARTITIONPATH_FIELD.key -> partitionFieldsStr
     )
