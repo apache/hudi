@@ -62,6 +62,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -264,7 +265,7 @@ public class TableSizeStats implements Serializable {
 
     LOG.warn("Processing table " + basePath);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-        .enable(false)
+        .enable(isMetadataEnabled(basePath, jsc))
         .build();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath,
@@ -333,6 +334,15 @@ public class TableSizeStats implements Serializable {
 
     // Display file size distribution stats for entire table.
     logStats("Table stats [path: " + basePath + "]", tableHistogram);
+  }
+
+  private static boolean isMetadataEnabled(String basePath, JavaSparkContext jsc) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(jsc.hadoopConfiguration()).build();
+
+    Set<String> partitions = metaClient.getTableConfig().getMetadataPartitions();
+    return !partitions.isEmpty() && partitions.contains("files");
   }
 
   private static List<String> getFilePaths(String propsPath, Configuration hadoopConf) {
