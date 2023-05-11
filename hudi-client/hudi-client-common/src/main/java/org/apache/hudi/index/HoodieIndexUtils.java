@@ -194,6 +194,7 @@ public class HoodieIndexUtils {
       throw new HoodieIndexException(config.getIndexClass() + " is not a subclass of HoodieIndex");
     }
     return (HoodieIndex) instance;
+  }
 
   /**
    * Read existing records based on the given partition path and {@link HoodieRecordLocation} info.
