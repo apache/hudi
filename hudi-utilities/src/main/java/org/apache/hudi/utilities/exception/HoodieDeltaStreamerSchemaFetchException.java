@@ -19,6 +19,11 @@
 package org.apache.hudi.utilities.exception;
 
 public class HoodieDeltaStreamerSchemaFetchException extends HoodieDeltaStreamerException {
+
+  public HoodieDeltaStreamerSchemaFetchException(String msg) {
+    super(msg);
+  }
+
   public HoodieDeltaStreamerSchemaFetchException(String msg, Throwable e) {
     super(msg, e);
   }

@@ -21,8 +21,8 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerSchemaFetchException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -183,7 +183,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
     try {
       return parseSchemaFromRegistry(registryUrl);
     } catch (IOException ioe) {
-      throw new HoodieIOException("Error reading source schema from registry :" + registryUrl, ioe);
+      throw new HoodieDeltaStreamerSchemaFetchException("Error reading source schema from registry :" + registryUrl, ioe);
     }
   }
 
@@ -194,7 +194,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
     try {
       return parseSchemaFromRegistry(targetRegistryUrl);
     } catch (IOException ioe) {
-      throw new HoodieIOException("Error reading target schema from registry :" + registryUrl, ioe);
+      throw new HoodieDeltaStreamerSchemaFetchException("Error reading target schema from registry :" + registryUrl, ioe);
     }
   }
 }

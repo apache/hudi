@@ -23,9 +23,9 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
@@ -92,7 +92,7 @@ public abstract class DebeziumSource extends RowSource {
     } catch (ClassNotFoundException e) {
       String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
       LOG.error(error);
-      throw new HoodieException(error, e);
+      throw new HoodieDeltaStreamerReadFromSourceException(error, e);
     }
 
     // Currently, debezium source requires Confluent/Kafka schema-registry to fetch the latest schema.
@@ -127,7 +127,7 @@ public abstract class DebeziumSource extends RowSource {
         return Pair.of(Option.of(dataset), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr);
       } catch (IOException exc) {
         LOG.error("Fatal error reading and parsing incoming debezium event", exc);
-        throw new HoodieException("Fatal error reading and parsing incoming debezium event", exc);
+        throw new HoodieDeltaStreamerReadFromSourceException("Fatal error reading and parsing incoming debezium event", exc);
       }
     }
   }

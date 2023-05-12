@@ -20,6 +20,10 @@ package org.apache.hudi.utilities.exception;
 
 public class HoodieDeltaStreamerReadFromSourceException extends HoodieDeltaStreamerException {
 
+  public HoodieDeltaStreamerReadFromSourceException(String msg) {
+    super(msg);
+  }
+
   public HoodieDeltaStreamerReadFromSourceException(String msg, Throwable e) {
     super(msg, e);
   }

@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerSchemaFetchException;
 import org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil;
 
 import org.apache.avro.Schema;
@@ -84,8 +85,13 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
   @Override
   public Schema getSourceSchema() {
     if (schema == null) {
-      Schema.Parser parser = new Schema.Parser();
-      schema = parser.parse(schemaString);
+      try {
+        Schema.Parser parser = new Schema.Parser();
+        schema = parser.parse(schemaString);
+      } catch (Exception e) {
+        throw new HoodieDeltaStreamerSchemaFetchException("Failed to parse schema", e);
+      }
+
     }
     return schema;
   }

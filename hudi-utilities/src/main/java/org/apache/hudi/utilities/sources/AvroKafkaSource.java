@@ -20,10 +20,9 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
@@ -71,14 +70,14 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
       props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName).getName());
       if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
         if (schemaProvider == null) {
-          throw new HoodieIOException("SchemaProvider has to be set to use KafkaAvroSchemaDeserializer");
+          throw new HoodieDeltaStreamerReadFromSourceException("SchemaProvider has to be set to use KafkaAvroSchemaDeserializer");
         }
         props.put(KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA, schemaProvider.getSourceSchema().toString());
       }
     } catch (ClassNotFoundException e) {
       String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
       LOG.error(error);
-      throw new HoodieException(error, e);
+      throw new HoodieDeltaStreamerReadFromSourceException(error, e);
     }
     this.offsetGen = new KafkaOffsetGen(props);
   }
@@ -88,7 +87,7 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
     JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD;
     if (deserializerClassName.equals(ByteArrayDeserializer.class.getName())) {
       if (schemaProvider == null) {
-        throw new HoodieException("Please provide a valid schema provider class when use ByteArrayDeserializer!");
+        throw new HoodieDeltaStreamerReadFromSourceException("Please provide a valid schema provider class when use ByteArrayDeserializer!");
       }
 
       //Don't want kafka offsets here so we use originalSchemaProvider

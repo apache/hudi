@@ -86,11 +86,8 @@ import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerMetaSyncException;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerReadFromSourceException;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerSchemaCompatibilityException;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerSchemaFetchException;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerTransformExecutionException;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerTransformPlanException;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerWriteException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -100,7 +97,6 @@ import org.apache.hudi.utilities.schema.SchemaSet;
 import org.apache.hudi.utilities.schema.SimpleSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
-import org.apache.hudi.utilities.util.StacktraceUtils;
 
 import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -409,28 +405,24 @@ public class DeltaSync implements Serializable, Closeable {
 
     if (srcRecordsWithCkpt != null) {
       final JavaRDD<HoodieRecord> recordsFromSource = srcRecordsWithCkpt.getRight().getRight();
-      try {
-        // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
-        // compactor
-        if (writeClient == null) {
-          this.schemaProvider = srcRecordsWithCkpt.getKey();
-          // Setup HoodieWriteClient and compaction now that we decided on schema
-          setupWriteClient(recordsFromSource);
-        } else {
-          Schema newSourceSchema = srcRecordsWithCkpt.getKey().getSourceSchema();
-          Schema newTargetSchema = srcRecordsWithCkpt.getKey().getTargetSchema();
-          if (!(processedSchema.isSchemaPresent(newSourceSchema))
-              || !(processedSchema.isSchemaPresent(newTargetSchema))) {
-            LOG.info("Seeing new schema. Source :" + newSourceSchema.toString(true)
-                + ", Target :" + newTargetSchema.toString(true));
-            // We need to recreate write client with new schema and register them.
-            reInitWriteClient(newSourceSchema, newTargetSchema, recordsFromSource);
-            processedSchema.addSchema(newSourceSchema);
-            processedSchema.addSchema(newTargetSchema);
-          }
+      // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
+      // compactor
+      if (writeClient == null) {
+        this.schemaProvider = srcRecordsWithCkpt.getKey();
+        // Setup HoodieWriteClient and compaction now that we decided on schema
+        setupWriteClient(recordsFromSource);
+      } else {
+        Schema newSourceSchema = srcRecordsWithCkpt.getKey().getSourceSchema();
+        Schema newTargetSchema = srcRecordsWithCkpt.getKey().getTargetSchema();
+        if (!(processedSchema.isSchemaPresent(newSourceSchema))
+            || !(processedSchema.isSchemaPresent(newTargetSchema))) {
+          LOG.info("Seeing new schema. Source :" + newSourceSchema.toString(true)
+              + ", Target :" + newTargetSchema.toString(true));
+          // We need to recreate write client with new schema and register them.
+          reInitWriteClient(newSourceSchema, newTargetSchema, recordsFromSource);
+          processedSchema.addSchema(newSourceSchema);
+          processedSchema.addSchema(newTargetSchema);
         }
-      } catch (Exception e) {
-        throw new HoodieDeltaStreamerSchemaFetchException("Failed to fetch schema", e);
       }
 
       // complete the pending clustering before writing to sink
@@ -534,22 +526,12 @@ public class DeltaSync implements Serializable, Closeable {
       // Transformation is needed. Fetch New rows in Row Format, apply transformation and then convert them
       // to generic records for writing
       InputBatch<Dataset<Row>> dataAndCheckpoint;
-      try {
-        dataAndCheckpoint = formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
-      } catch (Exception e) {
-        throw new HoodieDeltaStreamerSchemaFetchException("Failed to fetch schema", e);
-      }
+      dataAndCheckpoint = formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
 
-      Option<Dataset<Row>> transformed;
-      try {
-        transformed = dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
-      } catch (Exception e) {
-        throw new HoodieDeltaStreamerTransformPlanException("Invalid transformation specified", e);
-      }
+      Option<Dataset<Row>> transformed = dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
 
       transformed = formatAdapter.processErrorEvents(transformed,
           ErrorEvent.ErrorReason.CUSTOM_TRANSFORMER_FAILURE);
-
 
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       boolean reconcileSchema = props.getBoolean(DataSourceWriteOptions.RECONCILE_SCHEMA().key());
@@ -602,12 +584,7 @@ public class DeltaSync implements Serializable, Closeable {
       }
     } else {
       // Pull the data from the source & prepare the write
-      InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint;
-      try {
-        dataAndCheckpoint = formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit);
-      } catch (Exception e) {
-        throw new HoodieDeltaStreamerSchemaFetchException("Failed to fetch schema", e);
-      }
+      InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint = formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit);
 
       avroRDDOptional = dataAndCheckpoint.getBatch();
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
@@ -622,22 +599,11 @@ public class DeltaSync implements Serializable, Closeable {
       hoodieMetrics.updateMetricsForEmptyData(commitActionType);
       return null;
     }
-    try {
-      jssc.setJobGroup(this.getClass().getSimpleName(), "Checking if input is empty");
-      if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
-        LOG.info("No new data, perform empty commit.");
-        return Pair.of(schemaProvider, Pair.of(checkpointStr, jssc.emptyRDD()));
-      }
-    } catch (Exception e) {
-      StackTraceElement[] causeStacktrace = e.getCause() != null ? e.getCause().getStackTrace() : e.getStackTrace();
-      if (StacktraceUtils.getTransformerClassFromStackTrace(causeStacktrace) != null) {
-        throw new HoodieDeltaStreamerTransformExecutionException("Transformer failure", e);
-      } else if (StacktraceUtils.isSchemaCompatibilityIssue(causeStacktrace)) {
-        throw new HoodieDeltaStreamerSchemaCompatibilityException("Failed to read data into schema", e);
-      }
-      throw new HoodieDeltaStreamerReadFromSourceException("Failed to read data from source", e);
+    jssc.setJobGroup(this.getClass().getSimpleName(), "Checking if input is empty");
+    if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
+      LOG.info("No new data, perform empty commit.");
+      return Pair.of(schemaProvider, Pair.of(checkpointStr, jssc.emptyRDD()));
     }
-
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
     Set<String> partitionColumns = getPartitionColumns(keyGenerator, props);
@@ -681,8 +647,12 @@ public class DeltaSync implements Serializable, Closeable {
   }
 
   private JavaRDD<GenericRecord> getTransformedRDD(Dataset<Row> rowDataset, boolean reconcileSchema, Schema readerSchema) {
-    return HoodieSparkUtils.createRdd(rowDataset, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
-        Option.ofNullable(readerSchema)).toJavaRDD();
+    try {
+      return HoodieSparkUtils.createRdd(rowDataset, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+          Option.ofNullable(readerSchema)).toJavaRDD();
+    } catch (Exception e) {
+      throw new HoodieDeltaStreamerSchemaCompatibilityException("Failed to get transformed RDD", e);
+    }
   }
 
   /**

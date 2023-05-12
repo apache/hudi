@@ -20,6 +20,8 @@ package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerTransformExecutionException;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerTransformPlanException;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -47,17 +49,21 @@ public class SqlQueryBasedTransformer implements Transformer {
       TypedProperties properties) {
     String transformerSQL = properties.getString(SqlTransformerConfig.TRANSFORMER_SQL.key());
     if (null == transformerSQL) {
-      throw new IllegalArgumentException("Missing configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL.key() + ")");
+      throw new HoodieDeltaStreamerTransformPlanException("Missing configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL.key() + ")");
     }
 
-    // tmp table name doesn't like dashes
-    String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
-    LOG.info("Registering tmp table : " + tmpTable);
-    rowDataset.createOrReplaceTempView(tmpTable);
-    String sqlStr = transformerSQL.replaceAll(SRC_PATTERN, tmpTable);
-    LOG.debug("SQL Query for transformation : (" + sqlStr + ")");
-    Dataset<Row> transformed = sparkSession.sql(sqlStr);
-    sparkSession.catalog().dropTempView(tmpTable);
-    return transformed;
+    try {
+      // tmp table name doesn't like dashes
+      String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
+      LOG.info("Registering tmp table : " + tmpTable);
+      rowDataset.createOrReplaceTempView(tmpTable);
+      String sqlStr = transformerSQL.replaceAll(SRC_PATTERN, tmpTable);
+      LOG.debug("SQL Query for transformation : (" + sqlStr + ")");
+      Dataset<Row> transformed = sparkSession.sql(sqlStr);
+      sparkSession.catalog().dropTempView(tmpTable);
+      return transformed;
+    } catch (Exception e) {
+      throw new HoodieDeltaStreamerTransformExecutionException("Failed to apply sql query based transformer", e);
+    }
   }
 }

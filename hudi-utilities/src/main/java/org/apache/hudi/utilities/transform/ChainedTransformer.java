@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerTransformPlanException;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -103,7 +104,7 @@ public class ChainedTransformer implements Transformer {
   private void validateIdentifier(String id, Set<String> identifiers, String configuredTransformer) {
     ValidationUtils.checkArgument(StringUtils.nonEmpty(id), String.format("Transformer identifier is empty for %s", configuredTransformer));
     if (identifiers.contains(id)) {
-      throw new IllegalArgumentException(String.format("Duplicate identifier %s found for transformer %s", id, configuredTransformer));
+      throw new HoodieDeltaStreamerTransformPlanException(String.format("Duplicate identifier %s found for transformer %s", id, configuredTransformer));
     } else {
       identifiers.add(id);
     }

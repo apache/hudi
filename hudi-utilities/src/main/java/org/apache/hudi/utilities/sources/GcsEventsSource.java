@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.gcs.MessageBatch;
 import org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity;
@@ -197,7 +197,7 @@ public class GcsEventsSource extends RowSource {
       pubsubMessagesFetcher.sendAcks(messagesToAck);
       messagesToAck.clear();
     } catch (IOException e) {
-      throw new HoodieException("Error when acknowledging messages from Pubsub", e);
+      throw new HoodieDeltaStreamerReadFromSourceException("Error when acknowledging messages from Pubsub", e);
     }
   }
 

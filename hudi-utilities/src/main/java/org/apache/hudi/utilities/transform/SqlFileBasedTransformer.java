@@ -20,8 +20,9 @@ package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerTransformExecutionException;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerTransformPlanException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -70,7 +71,7 @@ public class SqlFileBasedTransformer implements Transformer {
 
     final String sqlFile = props.getString(SqlTransformerConfig.TRANSFORMER_SQL_FILE.key());
     if (null == sqlFile) {
-      throw new IllegalArgumentException(
+      throw new HoodieDeltaStreamerTransformPlanException(
           "Missing required configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL_FILE.key() + ")");
     }
 
@@ -96,7 +97,7 @@ public class SqlFileBasedTransformer implements Transformer {
       }
       return rows;
     } catch (final IOException ioe) {
-      throw new HoodieIOException("Error reading transformer SQL file.", ioe);
+      throw new HoodieDeltaStreamerTransformExecutionException("Error reading transformer SQL file.", ioe);
     } finally {
       sparkSession.catalog().dropTempView(tmpTable);
     }

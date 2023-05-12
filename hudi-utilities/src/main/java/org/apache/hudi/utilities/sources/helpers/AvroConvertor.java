@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerSchemaCompatibilityException;
 
 import com.google.protobuf.Message;
 import com.twitter.bijection.Injection;
@@ -108,9 +109,13 @@ public class AvroConvertor implements Serializable {
   }
 
   public GenericRecord fromJson(String json) {
-    initSchema();
-    initJsonConvertor();
-    return jsonConverter.convert(json, schema);
+    try {
+      initSchema();
+      initJsonConvertor();
+      return jsonConverter.convert(json, schema);
+    } catch (Exception e) {
+      throw new HoodieDeltaStreamerSchemaCompatibilityException("Failed to convert schema from json to avro", e);
+    }
   }
 
   public Either<GenericRecord,String> fromJsonWithError(String json) {
@@ -124,18 +129,31 @@ public class AvroConvertor implements Serializable {
   }
 
   public Schema getSchema() {
-    return new Schema.Parser().parse(schemaStr);
+    try {
+      return new Schema.Parser().parse(schemaStr);
+    } catch (Exception e) {
+      throw new HoodieDeltaStreamerSchemaCompatibilityException("Failed to parse json schema", e);
+    }
   }
 
   public GenericRecord fromAvroBinary(byte[] avroBinary) {
-    initSchema();
-    initInjection();
-    return recordInjection.invert(avroBinary).get();
+    try {
+      initSchema();
+      initInjection();
+      return recordInjection.invert(avroBinary).get();
+    } catch (Exception e) {
+      throw new HoodieDeltaStreamerSchemaCompatibilityException("Failed to get avro schema from avro binary", e);
+    }
+
   }
 
   public GenericRecord fromProtoMessage(Message message) {
-    initSchema();
-    return ProtoConversionUtil.convertToAvro(schema, message);
+    try {
+      initSchema();
+      return ProtoConversionUtil.convertToAvro(schema, message);
+    } catch (Exception e) {
+      throw new HoodieDeltaStreamerSchemaCompatibilityException("Failed to get avro schema from proto message", e);
+    }
   }
 
   /**
