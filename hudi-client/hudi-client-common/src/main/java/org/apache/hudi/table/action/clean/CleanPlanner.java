@@ -64,6 +64,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
+
 /**
  * Cleaner is responsible for garbage collecting older files in a given partition path. Such that
  * <p>
@@ -105,7 +107,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     // load all partitions in advance if necessary.
-    if (config.isMetadataTableEnabled()) {
+    if (shouldUseBatchLookup(config)) {
       LOG.info("Load all partitions and files into file system view in advance.");
       fileSystemView.loadAllPartitions();
     }
