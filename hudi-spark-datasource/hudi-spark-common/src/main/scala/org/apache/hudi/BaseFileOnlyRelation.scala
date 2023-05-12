@@ -175,17 +175,6 @@ abstract class AbstractBaseFileOnlyRelation(sqlContext: SQLContext,
 
   override lazy val mandatoryFields: Seq[String] = Seq.empty
 
-  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
-    this.copy(prunedDataSchema = Some(prunedSchema))
-
-  override def imbueConfigs(sqlContext: SQLContext): Unit = {
-    super.imbueConfigs(sqlContext)
-    // TODO Issue with setting this to true in spark 332
-    if (!HoodieSparkUtils.gteqSpark3_3_2) {
-      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
-    }
-  }
-
   protected override def composeRDD(fileSplits: Seq[HoodieBaseFileSplit],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
