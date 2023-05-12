@@ -133,11 +133,10 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     testTransformerSchemaValidationFails(transformerClassNames, expectedErrorMsg);
   }
 
-
   @Test
   public void testTransformerSchemaValidationFailsWithSchemaMismatch() {
-    String expectedErrorMsg = "Schema of transformed data does not match expected schema for transformer org.apache.hudi.utilities.deltastreamer.TestTransformer" +
-        "$AddColumnTransformerWithWrongTransformedSchema";
+    String expectedErrorMsg = "Schema of transformed data does not match expected schema for transformer org.apache.hudi.utilities.deltastreamer.TestTransformer"
+        + "$AddColumnTransformerWithWrongTransformedSchema";
     List<String> transformerClassNames = Collections.singletonList(
         AddColumnTransformerWithWrongTransformedSchema.class.getName());
     testTransformerSchemaValidationFails(transformerClassNames, "source.avsc", expectedErrorMsg);
