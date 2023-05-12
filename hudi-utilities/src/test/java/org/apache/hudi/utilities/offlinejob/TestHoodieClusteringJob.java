@@ -33,37 +33,14 @@ import org.apache.hudi.utilities.HoodieClusteringJob;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 
-public class TestOfflineHoodieClusteringJob extends HoodieOfflineJobTestBase {
-
-  protected HoodieClusteringJob initialHoodieClusteringJobClean(String tableBasePath, Boolean runSchedule, String scheduleAndExecute,
-                                                              Boolean isAutoClean) {
-    HoodieClusteringJob.Config clusterConfig = buildHoodieClusteringUtilConfig(tableBasePath,
-            runSchedule, scheduleAndExecute);
-    List<String> configs = new ArrayList<>();
-    configs.add(String.format("%s=%s", HoodieCleanConfig.AUTO_CLEAN.key(), isAutoClean));
-    configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), 1));
-    configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), 1));
-    clusterConfig.configs.addAll(configs);
-    return new HoodieClusteringJob(jsc, clusterConfig);
-  }
-
-  private HoodieClusteringJob.Config  buildHoodieClusteringUtilConfig(String basePath,
-                                                                Boolean runSchedule,
-                                                                String runningMode) {
-    HoodieClusteringJob.Config config = new HoodieClusteringJob.Config();
-    config.basePath = basePath;
-    config.runSchedule = runSchedule;
-    config.runningMode = runningMode;
-    config.configs.add("hoodie.metadata.enable=false");
-    return config;
-  }
-
+/**
+ * Test cases for {@link HoodieClusteringJob}.
+ */
+public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
   @Test
   public void testHoodieClusteringJobWithClean() throws Exception {
     String tableBasePath = basePath + "/asyncClustering";
@@ -100,7 +77,7 @@ public class TestOfflineHoodieClusteringJob extends HoodieOfflineJobTestBase {
 
     // offline clustering execute without clean
     HoodieClusteringJob hoodieCluster =
-        initialHoodieClusteringJobClean(tableBasePath, true, "scheduleAndExecute", false);
+        init(tableBasePath, true, "scheduleAndExecute", false);
     hoodieCluster.cluster(0);
     HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(1, tableBasePath, fs);
     HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(0, tableBasePath, fs);
@@ -110,9 +87,30 @@ public class TestOfflineHoodieClusteringJob extends HoodieOfflineJobTestBase {
 
     // offline clustering execute with sync clean
     hoodieCluster =
-        initialHoodieClusteringJobClean(tableBasePath, true, "scheduleAndExecute", true);
+        init(tableBasePath, true, "scheduleAndExecute", true);
     hoodieCluster.cluster(0);
     HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(2, tableBasePath, fs);
     HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(1, tableBasePath, fs);
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  private HoodieClusteringJob init(String tableBasePath, boolean runSchedule, String scheduleAndExecute, boolean isAutoClean) {
+    HoodieClusteringJob.Config clusterConfig = buildHoodieClusteringUtilConfig(tableBasePath, runSchedule, scheduleAndExecute, isAutoClean);
+    return new HoodieClusteringJob(jsc, clusterConfig);
+  }
+
+  private HoodieClusteringJob.Config  buildHoodieClusteringUtilConfig(String basePath, boolean runSchedule, String runningMode, boolean isAutoClean) {
+    HoodieClusteringJob.Config config = new HoodieClusteringJob.Config();
+    config.basePath = basePath;
+    config.runSchedule = runSchedule;
+    config.runningMode = runningMode;
+    config.configs.add("hoodie.metadata.enable=false");
+    config.configs.add(String.format("%s=%s", HoodieCleanConfig.AUTO_CLEAN.key(), isAutoClean));
+    config.configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), 1));
+    config.configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), 1));
+    return config;
   }
 }

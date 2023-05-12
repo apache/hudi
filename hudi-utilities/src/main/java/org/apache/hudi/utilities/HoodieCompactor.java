@@ -68,8 +68,7 @@ public class HoodieCompactor {
     this.props = cfg.propsFilePath == null
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
-
-    // Disable async-cleaning in offline compaction, we will always use sync-cleaning here.
+    // Disable async cleaning, will trigger synchronous cleaning manually.
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
   }
@@ -273,7 +272,7 @@ public class HoodieCompactor {
         }
       }
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
-      cleanAfterCompact(client);
+      clean(client);
       return UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
     }
   }
@@ -301,9 +300,8 @@ public class HoodieCompactor {
     return schema.toString();
   }
 
-  private void cleanAfterCompact(SparkRDDWriteClient client) {
+  private void clean(SparkRDDWriteClient<?> client) {
     if (client.getConfig().isAutoClean()) {
-      LOG.info("Start to clean synchronously.");
       client.clean();
     }
   }

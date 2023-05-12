@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -40,7 +41,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
   private static final Logger LOG = LoggerFactory.getLogger(UtilitiesTestBase.class);
@@ -58,43 +59,21 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
     dataGen = new HoodieTestDataGenerator();
   }
 
-  static class TestHelpers {
-
-    static void assertNCompletedCommits(int expected, String tablePath, FileSystem fs) {
-      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
-      HoodieTimeline timeline = meta.getActiveTimeline().getWriteTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
-      int numCommits = timeline.countInstants();
-      assertTrue(expected == numCommits, "Got=" + numCommits + ", exp =" + expected);
-    }
-
-    static void assertNCleanCommits(int expected, String tablePath, FileSystem fs) {
-      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
-      HoodieTimeline timeline = meta.getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
-      int numCleanCommits = timeline.countInstants();
-      assertTrue(expected == numCleanCommits, "Got=" + numCleanCommits + ", exp =" + expected);
-    }
-
-    static void assertNClusteringCommits(int expected, String tablePath, FileSystem fs) {
-      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
-      HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
-      int numCommits = timeline.countInstants();
-      assertTrue(expected == numCommits, "Got=" + numCommits + ", exp =" + expected);
-    }
-  }
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
 
   protected Properties getPropertiesForKeyGen(boolean populateMetaFields) {
     Properties properties = new Properties();
     properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
-    properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
-    properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
     properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
     return properties;
   }
 
+  @SuppressWarnings({"rawtypes", "unchecked"})
   protected List<WriteStatus> writeData(boolean isUpsert, String instant, int numRecords, boolean doCommit) {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     JavaRDD records = jsc.parallelize(dataGen.generateInserts(instant, numRecords), 2);
@@ -114,5 +93,34 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return writeStatuses;
+  }
+
+  // -------------------------------------------------------------------------
+  //  Inner Class
+  // -------------------------------------------------------------------------
+  static class TestHelpers {
+    static void assertNCompletedCommits(int expected, String tablePath, FileSystem fs) {
+      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
+      HoodieTimeline timeline = meta.getActiveTimeline().getWriteTimeline().filterCompletedInstants();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numCommits = timeline.countInstants();
+      assertEquals(expected, numCommits, "Got=" + numCommits + ", exp =" + expected);
+    }
+
+    static void assertNCleanCommits(int expected, String tablePath, FileSystem fs) {
+      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
+      HoodieTimeline timeline = meta.getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numCleanCommits = timeline.countInstants();
+      assertEquals(expected, numCleanCommits, "Got=" + numCleanCommits + ", exp =" + expected);
+    }
+
+    static void assertNClusteringCommits(int expected, String tablePath, FileSystem fs) {
+      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
+      HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numCommits = timeline.countInstants();
+      assertEquals(expected, numCommits, "Got=" + numCommits + ", exp =" + expected);
+    }
   }
 }

@@ -63,7 +63,7 @@ public class HoodieClusteringJob {
     this.props = StringUtils.isNullOrEmpty(cfg.propsFilePath)
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
-    // Disable async-cleaning in offline compaction, we will always use sync-cleaning here.
+    // Disable async cleaning, will trigger synchronous cleaning manually.
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
   }
@@ -220,7 +220,7 @@ public class HoodieClusteringJob {
         }
       }
       Option<HoodieCommitMetadata> commitMetadata = client.cluster(cfg.clusteringInstantTime).getCommitMetadata();
-      cleanAfterCluster(client);
+      clean(client);
       return UtilHelpers.handleErrors(commitMetadata.get(), cfg.clusteringInstantTime);
     }
   }
@@ -278,14 +278,13 @@ public class HoodieClusteringJob {
       LOG.info("The schedule instant time is " + instantTime.get());
       LOG.info("Step 2: Do cluster");
       Option<HoodieCommitMetadata> metadata = client.cluster(instantTime.get()).getCommitMetadata();
-      cleanAfterCluster(client);
+      clean(client);
       return UtilHelpers.handleErrors(metadata.get(), instantTime.get());
     }
   }
 
-  private void cleanAfterCluster(SparkRDDWriteClient client) {
+  private void clean(SparkRDDWriteClient<?> client) {
     if (client.getConfig().isAutoClean()) {
-      LOG.info("Start to clean synchronously.");
       client.clean();
     }
   }
